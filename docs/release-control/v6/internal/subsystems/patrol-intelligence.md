@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Pro default notice and the not-running header
+
+A Pro install that never chose a Patrol mode runs Ask first.
+`PatrolIntelligenceHeader.tsx` says so once, in
+`patrol-default-mode-notice`: Patrol investigates new warning and critical
+findings, proposes a fix, changes nothing without approval, and spends the
+operator's AI provider budget. Its two actions save `Ask first` or `Watch only`,
+and either save clears the notice. The notice renders only when
+`default_mode_applied` is true and the install is not plan-locked, so the free
+Patrol surface stays free of paid-capability copy. When Patrol is enabled but
+cannot run yet (the setup-only state), the header reads `Patrol is not running
+yet` instead of `Watching your infrastructure`, so the header no longer claims
+monitoring that is not happening. `usePatrolIntelligenceState.ts` accepts only an
+explicit `default_mode_applied: true`, so an older server never shows the notice.
+Proofs:
+`frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceHeader.render.test.tsx`
+and `frontend-modern/src/features/patrol/__tests__/usePatrolIntelligenceState.test.ts`.
+
 ### Manual suppression reversal — issue #2528
 
 Patrol Activity exposes the existing suppression collection independently of

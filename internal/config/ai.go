@@ -1026,6 +1026,23 @@ func (c *AIConfig) GetPatrolAutonomyLevel() string {
 	}
 }
 
+// PatrolAutonomyLevelChosen reports whether the operator has ever saved a
+// Patrol mode. Only explicit saves write the stored level.
+func (c *AIConfig) PatrolAutonomyLevelChosen() bool {
+	return strings.TrimSpace(c.PatrolAutonomyLevel) != ""
+}
+
+// ResolvedPatrolAutonomyLevel returns the operator's chosen Patrol mode, or
+// the default for an install that never chose one: Ask first when its licence
+// includes Patrol investigation, so Pro investigates by default, and Watch
+// only otherwise. It does not apply the licence clamp; callers still do.
+func (c *AIConfig) ResolvedPatrolAutonomyLevel(investigationEntitled bool) string {
+	if !c.PatrolAutonomyLevelChosen() && investigationEntitled {
+		return PatrolAutonomyApproval
+	}
+	return c.GetPatrolAutonomyLevel()
+}
+
 // GetEffectivePatrolAutonomy evaluates the requested Patrol mode against the
 // server-owned Autopilot acknowledgement and activation evidence. The legacy
 // PatrolFullModeUnlocked boolean is intentionally passed only so the evaluator

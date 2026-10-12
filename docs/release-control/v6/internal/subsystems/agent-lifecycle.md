@@ -64,6 +64,12 @@ Unraid/QNAP/Linux/PowerShell, TLS/identity/repetition/cleanup and containing
 publication remain separate obligations; this source proof does not resolve
 #1099 or claim installed restoration.
 
+### Pro Patrol default adds no agent authority
+
+The Patrol autonomy handler change only reports whether the Pro Ask first
+default applies (`default_mode_applied`). It adds no agent route, command or
+execution authority; Ask first still requires approval before any change.
+
 ### TrueNAS SCALE removal retires every owned middleware boot task before recovery erasure
 
 TrueNAS SCALE has an independent activation owner: its Init/Shutdown bootstrap

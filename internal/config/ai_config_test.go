@@ -1383,3 +1383,30 @@ func TestAssistantControlProjectionPreservesSavedPolicy(t *testing.T) {
 		}
 	}
 }
+
+func TestResolvedPatrolAutonomyLevelDefaultsOnlyNeverChosenLicensedInstalls(t *testing.T) {
+	tests := []struct {
+		name     string
+		stored   string
+		licensed bool
+		chosen   bool
+		want     string
+	}{
+		{name: "never chose, licensed", stored: "", licensed: true, chosen: false, want: PatrolAutonomyApproval},
+		{name: "never chose, unlicensed", stored: "", licensed: false, chosen: false, want: PatrolAutonomyMonitor},
+		{name: "blank counts as never chose", stored: "  ", licensed: true, chosen: false, want: PatrolAutonomyApproval},
+		{name: "chose watch only, licensed", stored: PatrolAutonomyMonitor, licensed: true, chosen: true, want: PatrolAutonomyMonitor},
+		{name: "chose autopilot, licensed", stored: PatrolAutonomyFull, licensed: true, chosen: true, want: PatrolAutonomyFull},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &AIConfig{PatrolAutonomyLevel: tt.stored}
+			if got := cfg.PatrolAutonomyLevelChosen(); got != tt.chosen {
+				t.Fatalf("PatrolAutonomyLevelChosen() = %v, want %v", got, tt.chosen)
+			}
+			if got := cfg.ResolvedPatrolAutonomyLevel(tt.licensed); got != tt.want {
+				t.Fatalf("ResolvedPatrolAutonomyLevel(%v) = %q, want %q", tt.licensed, got, tt.want)
+			}
+		})
+	}
+}

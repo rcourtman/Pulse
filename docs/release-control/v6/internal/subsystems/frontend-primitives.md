@@ -20,6 +20,13 @@
 
 ## Purpose
 
+### Patrol header default-mode notice uses existing primitives
+
+The Pro default notice in `PatrolIntelligenceHeader.tsx` is a `role="status"`
+block with two plain buttons that call the existing autonomy save. It adds no
+shared primitive, badge or banner variant, and it wraps on phone widths with
+44px targets.
+
 ### Canonical VM History respects native filesystem power state (12 October 2026)
 
 The canonical resource drawer uses `getWorkloadGuestDiskRead`, the same VM

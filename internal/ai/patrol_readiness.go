@@ -215,7 +215,7 @@ func (s *Service) PatrolRuntimeReadiness() PatrolConfigReadiness {
 		return base
 	}
 
-	selectedMode := cfg.GetPatrolAutonomyLevel()
+	selectedMode := cfg.ResolvedPatrolAutonomyLevel(s.PatrolInvestigationLicensed())
 	var suitability PatrolModeSuitability
 	switch selectedMode {
 	case config.PatrolAutonomyApproval:
