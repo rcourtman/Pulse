@@ -264,9 +264,15 @@ that client's resources:
 - **API**: `POST /api/admin/reports/generate` (single resource) and
   `POST /api/admin/reports/generate-multi` (up to 50 resources per report),
   returning PDF or CSV. In shared-process mode, scope with `X-Pulse-Org-ID`
-  or an org-bound token. `GET /api/admin/reports/generate` with query
-  parameters still returns a single-resource report, but never adds the
-  Pulse Assistant narrative.
+  or an org-bound token. Report generation uses `settings:read`. For
+  single-resource and fleet PDF narration, an API token also needs
+  `ai:execute` (or full access). Without it, the report still succeeds with a
+  deterministic summary and no AI provider call; a single-resource PDF also
+  explains the missing scope. Browser sessions and server-run schedules keep
+  their existing narration behaviour. AI budgets still apply. GET and CSV
+  never use AI narration: `GET /api/admin/reports/generate` with query
+  parameters still returns a single-resource report without the Pulse
+  Assistant narrative.
 - **Schedules**: `GET`/`POST /api/admin/reports/schedules`,
   `PUT`/`DELETE /api/admin/reports/schedules/{id}`, and
   `POST /api/admin/reports/schedules/{id}/run`. Schedules can target explicit

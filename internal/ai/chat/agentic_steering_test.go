@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -306,9 +307,27 @@ func TestService_ExecuteStream_SteeredMessagePersists(t *testing.T) {
 
 	var execErr error
 	doneCh := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	// A failed assertion must not remove the session directory while the
+	// streaming worker still writes it, or leave a question waiting forever.
+	// Keep the completion deadline below unchanged; on failure retain stacks
+	// instead of hiding a slow or blocked persistence path with a longer wait.
+	goroutineStacks := func() string {
+		buf := make([]byte, 64<<10)
+		n := runtime.Stack(buf, true)
+		return string(buf[:n])
+	}
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-doneCh:
+		case <-time.After(5 * time.Second):
+			t.Errorf("ExecuteStream worker did not stop after cancellation:\n%s", goroutineStacks())
+		}
+	})
 	go func() {
 		defer close(doneCh)
-		execErr = svc.ExecuteStream(context.Background(), ExecuteRequest{SessionID: sessionID, Prompt: "check the cluster"}, callback)
+		execErr = svc.ExecuteStream(ctx, ExecuteRequest{SessionID: sessionID, Prompt: "check the cluster"}, callback)
 	}()
 
 	require.Eventually(t, func() bool {
@@ -332,7 +351,7 @@ func TestService_ExecuteStream_SteeredMessagePersists(t *testing.T) {
 	select {
 	case <-doneCh:
 	case <-time.After(5 * time.Second):
-		t.Fatal("ExecuteStream did not complete")
+		t.Fatalf("ExecuteStream did not complete:\n%s", goroutineStacks())
 	}
 	require.NoError(t, execErr)
 

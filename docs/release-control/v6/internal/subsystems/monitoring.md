@@ -17,6 +17,27 @@
 
 ## Purpose
 
+### Cluster endpoint membership belongs to its client
+
+`NewClusterClient` snapshots the supplied endpoint slice before registering
+shared guest-command aliases or starting health and trust checks. After the
+constructor returns, reusing caller configuration storage cannot replace live
+failover targets, declare a new first-use TLS member, or route a guest read
+outside its registered serial channel. Routing, health recovery and trust
+admission use that same client-owned snapshot. Order, duplicate entries and
+nil/empty inputs retain their previous semantics; actual configuration changes
+still construct a replacement client rather than editing an existing client
+through a borrowed slice.
+
+`TestClusterClientEndpointOwnershipContract` exercises pinned ordinary reads,
+typed TLS mismatch/first-use refusal, all six guest-read paths while a response
+body is in flight, independent-guest and completed-command resumption, input
+shape and concurrent caller reuse. Its fixtures use only synthetic credentials
+and local sockets. Endpoint URLs, saved pins, CA/opt-out and first-use policy,
+alias equivalence, backup locks, uncertainty fences and non-replay are unchanged.
+This is source-bound admission safety, not native workload thaw, Windows restart
+recovery, the cause of a reported guest failure, or installed/release acceptance.
+
 ### Repeatable resource wiring publishes a complete binding once
 
 Router and tenant initialization applies saved notification policy before the
@@ -645,14 +666,42 @@ required; all responses in this fixture are synthetic.
 
 ### Guest-agent coordination around backups — issue #2439
 
-A completed OS-info outcome keeps its existing suppression semantics even when
+A completed OS-info outcome keeps its suppression semantics even when
 the later agent-version read is deferred. Unsupported OS-info still disables
-that optional command; ordinary completed failures still accumulate towards
-the existing three-failure limit, and a supported reply resets that count.
+that optional command; ordinary completed command failures still accumulate
+towards the existing three-failure limit, and a supported reply resets that count.
+Actual HTTP 401/403 or exact command-bound stopped-agent rejections did not
+exercise OS-info and therefore do not accumulate towards permanent suppression.
+They preserve prior command failures and normal refresh/backoff timing; they
+neither renew retained identity nor establish a Windows observation. Once ordinary
+access/agent availability returns, an eligible accepted OS reply can recover
+the identity and cross-platform memory classification without a Pulse restart.
+Quoted status/diagnosis text does not grant this distinction. Unsupported,
+repeated completed-failure and uncertain-command safety suppression is retained.
 Only these safety fields are retained on version deferral: partial network/OS
 metadata is not published, old identity is not made fresh, and the shared pause
 and configured retry backoff remain in force. A network or OS-info deferral
 does not establish another completed OS-info failure.
+
+Metadata-cache cleanup judges inactivity separately from the last accepted
+useful observation. A guest that is still being polled keeps its OS-info failure
+count and unsupported-command suppression even when network/version replies
+are empty, fail, or are deferred. Cache access is process-local bookkeeping:
+it cannot renew useful metadata or OS evidence, make retained Windows identity
+current, satisfy fallback eligibility, change backoff, or admit a guest command.
+The janitor never evicts an in-flight fetch. Idle cache/access entries still
+expire after ten minutes; legacy entries use their original useful timestamp.
+Explicit unavailable-agent invalidation and instance retirement remove access
+bookkeeping while retaining outstanding fetch ownership.
+
+`TestGuestMetadataCleanupSuppressionContract` exercises both ordinary collectors
+with single/cluster HTTP clients, cold/retained caches, unsupported and repeated
+completed failures, a janitor pass between polls, and network/version recovery
+without repeating the suppressed OS request. The idle/invalidation/concurrent
+cleanup contracts in `monitor_host_agents_test.go` verify bounded idle eviction,
+in-flight ownership, cross-instance isolation and unchanged observation ages.
+These are synthetic source controls, not native guest/backup recovery or proof
+of the cause or resolution of #2439, #2619 or #2822.
 
 `guest_metadata_suppression_test.go` covers cold and retained caches, threshold
 accumulation, supported reset and earlier deferrals. Its real HTTP fixture
@@ -661,6 +710,15 @@ version request, then ordinary disk/network/version resumption without another
 suppressed OS-info request and with fresh disk History. It changes no native
 guest, backup policy, lock admission, cooldown, retry or single-attempt rule.
 These source controls do not establish native recovery or a reported cause.
+
+`TestGuestMetadataRejectionRecoveryContract` verifies typed rejections with cold
+and retained caches, prior genuine failures, unchanged backoff and fresh OS
+receipt requirements. Both ordinary collectors and single/cluster HTTP clients
+recover Windows OS, individual NTFS volumes and disk History after a stopped-agent
+fixture, without dispatching Linux-only memory reads on the recovered Windows
+guest. Existing suppression, backup-lock and shared uncertainty contracts remain
+required. These synthetic source controls do not establish native restart/thaw,
+the cause of #2822/#2619, or installed/released recovery.
 
 The process-local admission table remains capped at 4,096 endpoint/VMID
 entries. Expired entries replaced by a new admission consume no extra slot;
@@ -701,8 +759,12 @@ callers, share fail-fast per-guest admission within this Pulse process. Clients
 for the same endpoint and configured cluster aliases coordinate across methods;
 VMIDs remain serial through node migration. Other VMs and independent endpoints
 remain independent. No guest payload or credentials enter coordination state.
-Coordination keys treat DNS hostname case, numeric/default HTTP(S) ports and
-equivalent IPv6 spellings as the same configured origin. Alias registration
+Coordination keys treat DNS hostname case, numeric/default HTTP(S) ports,
+equivalent IPv6 spellings and unzoned IPv4-mapped spellings of the same numeric
+IPv4 address as the same channel. The mapped-address equivalence applies only
+to guest admission, not saved certificate-pin identity or first-use trust.
+Compatible IPv6, NAT64, DNS aliases and zoned addresses are not unmapped.
+Alias registration
 uses that same key, including when a standalone request is already in flight
 or two configured alias groups are joined. Scheme, non-default port, base-path
 case, IPv6 zone and VMID still separate independent sources. No DNS lookup or
@@ -714,6 +776,13 @@ cannot queue follow-up commands through another spelling. Other VMs, independent
 origins and known-completed resumption retain normal admission. These source
 controls do not establish native QGA completion, thaw or restart protection;
 the existing process-local one-minute uncertainty pause is unchanged.
+`pkg/proxmox/guest_agent_ipv4mapped_test.go` additionally crosses a real IPv4
+loopback listener through both numeric address forms, in both directions,
+without a custom dialer. All six read methods share in-flight and uncertainty
+refusals; fresh cluster clients and migrated node names retain the same VMID
+fence. Other VMs and ordinary non-QGA status remain readable, and refusals do
+not renew the original uncertainty deadline. The canonical cluster API tests
+keep distinct saved pins and the existing declared-member/no-replacement policy.
 Before each command and before returning its fully received bounded payload,
 Pulse reads the operation lock from VM config. Any nonempty lock (not just
 backup), missing/malformed config or an unverifiable lock defers the command.
@@ -901,6 +970,56 @@ in-flight ownership and preserves normal refresh/backoff scheduling. Deliberate
 cache invalidation on agent unavailability also discards its obsolete scheduling
 deadline, so a later available poll can begin a fresh metadata lifecycle; it
 never discards an outstanding fetch owner or the shared Proxmox command fence.
+
+Invalidation and PVE instance retirement also cancel that owner's context and
+mark its lifecycle obsolete until the fetch actually returns. A late network,
+OS or version reply cannot recreate identity, OS-command suppression, useful/OS
+evidence or refresh/backoff deadlines after either operation. Publication and
+invalidation share one lock order, and fallback metadata is re-read within the
+reserved lifecycle rather than copied from the pre-admission cache snapshot.
+Slot waiting is cancelled without releasing another fetch's slot. Cancellation
+is not proof that a consumed QGA command stopped: the existing shared transport
+uncertainty fence still applies to new polling and independent diagnostics.
+There are no persistent generation tombstones; the invalidated owner is removed
+only on completion. Other instance/VM keys and ordinary new-lifecycle discovery
+remain independent.
+
+`guest_metadata_lifecycle_test.go` covers late synthetic replies at every
+enrichment stage, cold/retained caches, explicit invalidation/retirement, late
+OS-suppression/version-deferral publication, slot waiting and independent
+new-lifecycle recovery. Direct and cluster HTTP clients cover cancellation of
+consumed incomplete bodies, no further commands, preserved diagnostic/caller
+cooldown and independent VM discovery, without shortening or replaying that
+fence. These are source lifecycle/safety controls, not native thaw, restart or
+every-volume/History recovery evidence.
+
+Guest memory fallback has its own per-instance/node/VM read owner, protected
+by the same lock as its short-lived cache. An overlapping refresh defers rather
+than dispatching a second read. Explicit metadata invalidation, known agent
+unavailability (even while display metadata is fresh), an observed non-running
+VM and PVE connection retirement cancel an outstanding memory context and
+discard both successful memory samples and negative backoff. A new start or
+re-added connection must obtain its own sample. Retirement matches the complete
+instance component, not a connection-name prefix. Ordinary backup-lock and
+transport deferral retain the original successful sample and its age.
+
+The obsolete read still owns its key until it actually returns. Its late
+success, empty result or error cannot recreate a sample/backoff or escape as a
+new observation. Cancelled callers likewise do not create a negative guest
+sample. Publication and invalidation are serialized; completion releases the
+owner with no persistent generation tombstones. None of these operations
+releases, shortens or retries the Proxmox transport's consumed-command fence.
+Independent VMs, PVE/status memory and linked Pulse-agent evidence remain usable.
+
+`guest_memory_lifecycle_test.go` covers successful/negative cache invalidation,
+late replies, overlapping reads, cancelled admission and ordinary recovery.
+`guest_memory_lifecycle_http_test.go` covers consumed-body cancellation through
+direct/cluster clients, preserved diagnostic uncertainty and independent VMs;
+both ordinary collectors publish new restart samples through canonical JSON
+and memory History. `TestRetiredQGAMemoryCannotAlterIndependentAgentEvidence`
+checks connection-scoped removal and unchanged independent agent reports and
+linked memory selection. These are synthetic source lifecycle controls, not
+native OS/disks/History recovery, backup thaw or reporter #2762 attribution.
 
 `guest_metadata_reservation_test.go` exercises real HTTP enrichment with cold
 and retained caches, active and expired scheduling holds, early unverified-lock
@@ -2755,6 +2874,8 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 22. `pkg/proxmox/zfs.go`
 22a. `pkg/pbs/client.go`
 23. `internal/monitoring/guest_memory_sources.go`
+23a. `internal/monitoring/guest_memory_agent.go`
+23b. `internal/monitoring/guest_memory_lifecycle.go`
 24. `internal/monitoring/guest_memory_stability.go`
 25. `internal/monitoring/monitor_polling_vm.go`
 26. `internal/monitoring/monitor_pve_guest_builders.go`

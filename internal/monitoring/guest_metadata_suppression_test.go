@@ -187,8 +187,11 @@ func TestGuestMetadataOSInfoSuppressionHTTPPollLifecycle(t *testing.T) {
 								w.WriteHeader(http.StatusInternalServerError)
 								fmt.Fprint(w, `{"data":null,"message":"VM 105 qmp command 'guest-get-osinfo' failed - guest agent command failed: Failed to open file '/etc/os-release': No such file or directory"}`)
 							} else {
-								w.WriteHeader(http.StatusForbidden)
-								fmt.Fprint(w, `{"data":null,"message":"permission denied"}`)
+								// A permission refusal did not exercise OS-info and
+								// belongs to the rejection/recovery contract. Keep
+								// this fixture on the other completed-error path.
+								w.WriteHeader(http.StatusBadRequest)
+								fmt.Fprint(w, `{"data":null,"message":"OS info request failed"}`)
 							}
 						case strings.HasSuffix(r.URL.Path, "/info"):
 							versionCalls.Add(1)

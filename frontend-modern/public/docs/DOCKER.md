@@ -301,7 +301,69 @@ returning to the old image alone does not undo a data migration.
 
 ### Check a failed or pending workload update
 
-A failed banner or missing receipt does not tell you whether the update ran.
+Start with the **existing error and action stage**, not another click on Update:
+
+- **Planning refused:** “Docker / Podman command agent is not connected” on the
+  planning request means Pulse could not find a matching admitted live command
+  channel and refused that plan before dispatch. The planning response can be
+  HTTP 409, but 409 alone has other causes. This does **not** establish what an
+  earlier action did; use the command-channel checks below for this refusal.
+- **Action sent, receipt pending:** “The action was sent once” or a pending
+  durable receipt means the outcome is uncertain, even beside a failed banner.
+  Use the existing receipt and workload-state checks below, without dispatching
+  another update.
+- **Stage unknown:** a failed banner alone does not tell you whether the update
+  ran. Retain that uncertainty; do not assume nothing changed or repeat the
+  action to find out. Use existing observations where safe.
+
+#### Command agent is not connected
+
+Open **Settings → Infrastructure → Agent Doctor**, expand the **affected Docker
+host**, and inspect the existing **Privilege** wording. This is the agent for
+the workload, not necessarily the host running Pulse. `commands monitoring-only`
+describes a local command ceiling; `commands command-capable` and `credential
+grants exec` describe local authority and credential scope, **not a connected
+session**. A missing Privilege line is unknown, not proof that commands are off.
+Fresh monitoring or an available image update does not prove command transport.
+
+`root` identifies the collector's OS user, not its server-side permission.
+`commands legacy` identifies an older, unmarked compatibility profile; it does
+not establish that commands are enabled. `monitoring credential` means the
+known collector credential has no execution scope and cannot authenticate the
+legacy command channel. Do not add execution rights to that token as a repair.
+
+Inspect **Action runner** separately. `Credential not issued` and `Runner not
+connected` describe the separate typed runner, not monitoring health. An absent
+runner alone does not rule out an authorised legacy command connection. If
+**Safe collector not confirmed** is shown, that is not proof of a broken
+collector or permission to convert it merely to clear the update error.
+
+For a command-enabled, execution-scoped legacy connection, follow the existing
+[command-channel connection and admission checks](UNIFIED_AGENT.md#commands-enabled-but-remote-control-blocked).
+A monitoring-only setup is intentional when you only need readings and update
+detection; do not enable commands, broaden a token, change Proxmox permissions
+or loosen TLS merely to diagnose the refusal. Keep saved identity and credentials
+intact; do not reinstall or retry the workload update as a connection test.
+
+You can keep working monitoring and manage any needed update through your usual
+Docker or Podman administration tool, after checking the workload's existing
+image/state and recovery path. Deliberately opting into Pulse-managed changes
+is a separate trust decision: the
+[agent privilege model](AGENT_SECURITY.md#agent-privilege-model) explains the
+legacy combined command profile, and the
+[least-privilege profile](AGENT_SECURITY.md#least-privilege-agent-profile)
+describes the supported separate runner. Neither is a diagnostic prerequisite;
+do not change a working profile just to obtain evidence.
+
+For help, retain the original error, time and stage plus the existing command
+authority/scope and Action runner wording, or say it is unavailable. If relevant,
+say whether command execution was deliberately selected at installation;
+unknown is valid. Share only those distinctions, not a full Agent Doctor report,
+token hint, agent ID or service configuration.
+The connection refusal does not settle an earlier missing receipt.
+
+#### Action was sent or its outcome is unknown
+
 Use your normal Docker administration shell **on the host running the affected
 container**, not a shell inside Pulse or on an unrelated Proxmox host. Use the
 same Docker context as that workload; do not change socket permissions or enable

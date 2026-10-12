@@ -736,6 +736,43 @@ describe('GuestRow', () => {
       expect(row.querySelector('[data-metric-rate-pair]')).toBeNull();
     });
 
+    it.each(['bars', 'sparklines'] as const)(
+      'withdraws stopped VM filesystem usage in %s even without a read reason',
+      (mode) => {
+        const [guest, setGuest] = createSignal(makeGuest());
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                visibleColumnIds={['name', 'disk']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        const row = container.querySelector('tr');
+        setGuest(makeGuest({ status: 'stopped', diskStatusReason: undefined }));
+        const cell = container.querySelector('[data-workload-col="disk"]')!;
+        expect(screen.queryByTestId('disk-bar')).toBeNull();
+        expect(cell).toHaveTextContent('Unavailable');
+        expect(cell).toHaveAccessibleDescription();
+        expect(cell.getAttribute('title')).toBe(
+          'Guest filesystem stats unavailable while the VM is stopped.',
+        );
+        const chart = cell.querySelector('[role="img"]');
+        if (chart) expect(chart.getAttribute('aria-label')).not.toMatch(/current 50%/);
+        setGuest(makeGuest({ disk: makeDisk({ usage: 0, used: 0 }) }));
+        expect(container.querySelector('tr')).toBe(row);
+        expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+        if (mode === 'bars') expect(screen.getByTestId('disk-bar')).toBeInTheDocument();
+        else
+          expect(cell.querySelector('[role="img"]')?.getAttribute('aria-label')).toMatch(
+            /current 0%/,
+          );
+      },
+    );
+
     it('shows dash when disk data is unavailable', () => {
       renderGuestRow({
         guest: makeGuest({ disk: { total: 0, used: 0, free: 0, usage: 0 } }),

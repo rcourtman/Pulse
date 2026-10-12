@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -177,6 +178,10 @@ func sanitizeEndpointError(errMsg string) string {
 // endpointFingerprints is an optional map of endpoint URL -> TLS fingerprint for per-node certificate verification.
 // This enables TOFU (Trust On First Use) for clusters with unique self-signed certs per node.
 func NewClusterClient(name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string) *ClusterClient {
+	// The caller may reuse configuration storage after construction. Keep live
+	// routing and first-use trust on the same membership snapshot registered for
+	// guest-command coordination, including during initial health checks.
+	endpoints = slices.Clone(endpoints)
 	registerGuestAgentEndpoints(config.Host, endpoints)
 	// The client owns subsequent first-use captures. Do not mutate the caller's
 	// saved trust map or let another client overwrite it without our mutex.
@@ -230,9 +235,10 @@ func clusterEndpointKey(endpoint string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	// Reuse the origin/base-path identity used for guest coordination, without
-	// joining cluster aliases or changing the actual request/TLS authority.
-	return guestAgentEndpointKey(u.String())
+	// Keep the existing TLS origin/base-path identity, without joining cluster
+	// aliases or guest admission's IPv4-mapped equivalence. Serializing guest
+	// work is not permission to share saved pins across request authorities.
+	return proxmoxEndpointKey(u.String(), false)
 }
 
 func (cc *ClusterClient) knownEndpointFingerprintLocked(endpoint string) (string, bool) {

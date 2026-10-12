@@ -2,24 +2,19 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { renderDocMarkdown } from '../docMarkdown';
+import { createGuideFixture } from './guideFixture';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const identityFragment = '#monitoring-is-mixed-between-proxmox-installations';
 
-function renderGuide(name: string): HTMLElement {
+const renderGuide = createGuideFixture((name) => {
   // Optional exact-base inputs exercise the former shipped advice without
   // changing the committed candidate being checked in the proof VM.
   const directory =
     process.env.PULSE_PROXMOX_IDENTITY_GUIDE_INPUT_DIRECTORY ??
     path.join(repoRoot, 'frontend-modern/public/docs');
-  const article = document.createElement('article');
-  article.innerHTML = renderDocMarkdown(
-    readFileSync(path.join(directory, `${name}.md`), 'utf8'),
-    name,
-  );
-  return article;
-}
+  return readFileSync(path.join(directory, `${name}.md`), 'utf8');
+});
 
 function sectionAt(article: HTMLElement, fragment: string): HTMLElement {
   const heading = article.querySelector(fragment);

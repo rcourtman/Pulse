@@ -752,20 +752,17 @@ recover_pulse_after_failed_replacement() {
 
 # Read the unit-file inventory for exact unit names. systemd exits 1 and prints
 # nothing at all, on stdout or stderr, when none of the named unit files exist,
-# which is every fresh host. That is an empty inventory. A timeout, a signal, or
-# any status that comes with output or a message is a failed inventory, so a real
-# failure still cannot pass as absence. A second read separates the two cases.
+# which is every fresh host. That is an empty inventory. A timeout, a signal,
+# another failed status, or exit 1 with output or a message remains a failure.
+# Capture both streams in the same read:
+# a later silent sample must never discard an earlier diagnostic.
 unit_file_inventory() {
-    local out="" again="" rc=0 rc2=0
-    out=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$@" 2>/dev/null) || rc=$?
+    local out="" rc=0
+    # Keep trailing newlines: an emitted blank line is not a silent exit 1.
+    out=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$@" 2>&1; rc=$?; printf '.'; exit "$rc") || rc=$?
+    out="${out%.}"
     if (( rc == 1 )) && [[ -z "$out" ]]; then
-        again=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$@" 2>&1) || rc2=$?
-        if (( rc2 == 0 )); then
-            out="$again"
-            rc=0
-        elif (( rc2 == 1 )) && [[ -z "$again" ]]; then
-            rc=0
-        fi
+        rc=0
     fi
     printf '%s' "$out"
     return "$rc"

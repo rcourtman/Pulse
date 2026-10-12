@@ -1,6 +1,7 @@
 import { type Component, For, Show, createMemo } from 'solid-js';
 import type { ResourceChange } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   getResourceChangePresentation,
   getResourceChangeSourceAdapterPresentation,
@@ -23,6 +24,7 @@ interface ResourceChangeSummaryProps {
 }
 
 export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (props) => {
+  const now = useRelativeTimeNow();
   const sortedChanges = createMemo(() => sortResourceChangesByObservedAt(props.changes ?? []));
   const maxChanges = () => props.maxChanges ?? sortedChanges().length;
   const visibleChanges = createMemo(() => sortedChanges().slice(0, maxChanges()));
@@ -112,6 +114,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
                         {formatRelativeTime(change.observedAt, {
                           compact: true,
                           emptyText: 'just now',
+                          now: now(),
                         })}
                       </p>
                       <Show when={change.actor}>

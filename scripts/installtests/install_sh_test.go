@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -4569,16 +4570,18 @@ func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("installer service discovery/caller controls: %v\n%s", err, out)
 	}
-	// systemd exits 1 and prints nothing when no named unit file exists, which is every
-	// fresh host. These controls must have actually run and passed, with both the
-	// confined double and real systemctl over an empty unit root, for the installer and
-	// the unattended updater: a skipped or deleted control would hide a refusing installer.
+	// Do not let deleting a fresh-host or failure-retention control silently
+	// leave this all-method fixture green. Real systemctl remains optional on
+	// platforms without it; the portable production-function controls do not.
 	for _, name := range []string{
 		"test_fresh_host_no_matching_unit_files_is_an_empty_inventory",
 		"test_partial_failed_inventory_is_not_absence",
+		"test_first_inventory_failure_is_not_replaced_by_silent_absence",
+		"test_only_silent_exit_one_is_admitted_as_absence",
+		"test_blank_line_output_is_not_a_silent_failed_inventory",
 	} {
-		if !regexp.MustCompile(regexp.QuoteMeta(name) + ` \(.*\) \.\.\. ok`).Match(out) {
-			t.Fatalf("service discovery control %s did not run and pass:\n%s", name, out)
+		if !strings.Contains(string(out), name+" (__main__.ServiceDiscovery."+name+") ... ok") {
+			t.Fatalf("required service inventory control %s did not pass:\n%s", name, out)
 		}
 	}
 	// The real-systemctl control needs systemctl: it must pass where systemctl exists
@@ -5496,6 +5499,13 @@ esac
 `)
 			script := `source "$AUTO_UPDATER"
 log() { printf '[%s] %s\n' "$1" "${*:2}"; }
+# This URL/handoff fixture has script binaries and a simulated manager,
+# not a managed process. Record the exact verifier handoff; real owned
+# process identity and fail-closed transactions are required separately.
+verify_update_running_executable() {
+    [[ "$1" == pulse-url-fixture ]] || return 97
+    printf '%s\n' "$1" >> "$FIXTURE_DIR/process-readback.log"
+}
 # Relocate only the helper's temporary files, keeping creation/mode/cleanup real.
 mktemp() {
     local -a args=("$@")
@@ -5536,6 +5546,14 @@ fi
 				if call != "show pulse-url-fixture --no-pager --property=LoadState --property=ActiveState" {
 					t.Fatalf("unexpected manager mutation or query: %s\n%s", call, out)
 				}
+			}
+			processReadback, processErr := os.ReadFile(filepath.Join(tmpDir, "process-readback.log"))
+			if tc.admitted && tc.state == "active" {
+				if processErr != nil || string(processReadback) != "pulse-url-fixture\n" {
+					t.Fatalf("active verifier handoff did not use the selected service: %v\n%s", processErr, processReadback)
+				}
+			} else if !os.IsNotExist(processErr) {
+				t.Fatalf("inactive/refused transaction reached process verification: %v\n%s", processErr, processReadback)
 			}
 			temporary, err := os.ReadDir(filepath.Join(tmpDir, "tmp"))
 			if err != nil || len(temporary) != 0 {
@@ -7941,11 +7959,40 @@ ACTION_RUNNER_TOKEN_FILE="` + paths[3] + `"
 ACTION_RUNNER_CONFIG_DIR="` + filepath.Dir(paths[3]) + `"
 ACTION_RUNNER_STATE_DIR="` + filepath.Dir(paths[4]) + `"
 EXIT_GENERAL=1
-systemctl() { printf '%s\n' "$*" >> "` + serviceLog + `"; return 0; }
+runner_stopped=false runner_disabled=false
+timeout() {
+    [[ "$1 $2 $3 $4" == '-k 1 5 systemctl' ]] || return 90
+    shift 4
+    systemctl "$@"
+}
+systemctl() {
+    printf '%s\n' "$*" >> "` + serviceLog + `"
+    case "$1" in
+        show)
+            if [[ "$runner_stopped" == true ]]; then
+                printf 'ActiveState=inactive\n'
+            else
+                printf 'ActiveState=active\n'
+            fi
+            if [[ "$runner_disabled" == true ]]; then
+                printf 'UnitFileState=disabled\n'
+            else
+                printf 'UnitFileState=enabled\n'
+            fi
+            printf 'LoadState=loaded\n'
+            ;;
+        stop) runner_stopped=true ;;
+        disable) runner_disabled=true ;;
+        *) return 91 ;;
+    esac
+}
 revoke_action_runner_credential() { return 1; }
 log_error() { printf 'ERROR: %s\n' "$1" >&2; }
 log_info() { printf 'INFO: %s\n' "$1"; }
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit "$2"; }
+` + extractInstallShellFunction(t, "read_agent_removal_unit_state") + `
+` + extractInstallShellFunction(t, "confirm_agent_unit_quiescent") + `
+` + extractInstallShellFunction(t, "quiesce_agent_units_for_removal") + `
 ` + extractInstallShellFunction(t, "teardown_action_runner_service") + `
 teardown_action_runner_service
 `
@@ -8265,4 +8312,111 @@ func TestInstallSHLegacyAgentIDRecoveryAccountsForEveryByte(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Run the production Unix removal gate through private state/service/transport
+// doubles. Native platform installation and actual transport remain separate.
+func TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_uninstall_state.py"), "-v")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Unix removal state controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_missing_url_retains_every_credential_representation_without_a_request",
+		"test_server_refusal_unknown_or_other_identity_retains_service_and_state",
+		"test_systemd_refusal_precedes_remote_removal_and_every_local_mutation",
+		"test_exact_confirmation_precedes_process_service_and_state_teardown",
+		"test_credential_free_local_only_removal_needs_no_url_or_request",
+		"test_server_confirmation_does_not_grant_unknown_path_removal",
+		"test_noninteractive_input_token_survives_missing_url_refusal",
+		"test_noninteractive_input_token_survives_unconfirmed_removal",
+		"test_confirmed_removal_retains_caller_owned_input_token",
+		"test_confirmed_removal_deletes_runtime_token_only_with_authorised_state",
+		"test_noninteractive_input_token_survives_root_refusal",
+		"test_interactive_input_token_is_read_only_at_ingress",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.UnixUninstallState."+name+") ... ok") {
+			t.Fatalf("Unix removal control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 12 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete Unix removal state verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}
+
+func TestInstallSHSystemdTeardownRequiresObservedQuiescence(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_systemd_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("systemd teardown refusal controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_unknown_read_stop_and_disable_retain_every_artifact",
+		"test_unsettled_or_unknown_states_never_authorise_deletion",
+		"test_helper_socket_and_service_are_reconciled_together",
+		"test_known_quiescence_allows_only_owned_teardown",
+		"test_failed_revocation_retains_stopped_runner_recovery_material",
+		"test_full_batch_reconciles_earlier_activation_sources",
+		"test_real_read_timeout_stops_its_owned_child",
+		"test_timeout_probe_keeps_prepared_tool_and_refuses_missing_preparation",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentSystemdTeardown."+name+") ... ok") {
+			t.Fatalf("systemd teardown control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 8 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete systemd teardown verdict:\n%s", output)
+	}
+	entry, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	uninstall := strings.SplitN(string(entry), "# --- Uninstall Logic ---", 2)[1]
+	quiesce := strings.Index(uninstall, "quiesce_agent_units_for_removal")
+	if quiesce < 0 || quiesce >= strings.Index(uninstall, "if ! uninstall_collector_registration;") ||
+		quiesce >= strings.Index(uninstall, "pkill -f") {
+		t.Fatal("full removal must quiesce every affected systemd unit before remote removal or process mutation")
+	}
+	t.Logf("%s", output)
+}
+
+func TestInstallSHOpenRCTeardownRequiresObservedQuiescence(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix shell/OpenRC controls; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_openrc_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("OpenRC teardown refusal controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_stop_and_disable_refusals_retain_every_local_file",
+		"test_failed_partial_or_diagnostic_observations_are_not_replaced_by_another_read",
+		"test_independent_post_stop_and_runlevel_reads_are_mandatory",
+		"test_refused_manager_cannot_start_remote_or_local_removal",
+		"test_quiescence_precedes_server_process_and_state_mutation",
+		"test_server_refusal_keeps_stopped_disabled_recovery_without_restart",
+		"test_late_manager_refusal_keeps_recovery_after_confirmed_remote_removal",
+		"test_known_stopped_state_and_every_runlevel_allow_only_selected_teardown",
+		"test_absent_and_repeated_removal_need_manager_and_process_absence",
+		"test_unexpected_service_paths_refuse_before_stop_or_deletion",
+		"test_source_selection_and_caller_order_have_one_bounded_observation_per_operation",
+		"test_real_status_timeout_stops_its_owned_child_without_erasure",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentOpenRCTeardown."+name+") ... ok") {
+			t.Fatalf("OpenRC teardown control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 12 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete OpenRC teardown verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
 }

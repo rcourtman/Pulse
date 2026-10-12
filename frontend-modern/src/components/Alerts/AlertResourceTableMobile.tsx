@@ -407,7 +407,15 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                       {getAlertResourceLabel(resource)}
                     </div>
                     <Show when={resource.subtitle}>
-                      <div class="text-xs text-slate-500 truncate">{resource.subtitle}</div>
+                      <div
+                        class="text-xs text-muted"
+                        classList={{
+                          truncate: !resource.readingMessage,
+                          'whitespace-normal break-words': Boolean(resource.readingMessage),
+                        }}
+                      >
+                        {resource.subtitle}
+                      </div>
                     </Show>
                   </div>
                 </div>
@@ -486,6 +494,11 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                   </Show>
                 </div>
               </div>
+              <Show when={resource.readingMessage}>
+                <p class="text-xs text-muted whitespace-normal break-words">
+                  {resource.readingMessage}
+                </p>
+              </Show>
 
               <Show when={relaxedTriggerSummary()}>
                 {(summary) => (

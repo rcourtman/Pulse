@@ -20,7 +20,7 @@ if [[ $# -ne 1 || ! $1 =~ ^[1-9][0-9]{0,8}$ ]]; then
 fi
 vmid=$1
 
-for command in qm timeout python3; do
+for command in qm timeout python3 bash; do
     if ! command -v "$command" >/dev/null 2>&1; then
         printf 'Required command unavailable: %s. Run on the owning Proxmox host.\n' "$command" >&2
         exit 1
@@ -39,7 +39,7 @@ read_failure() {
 }
 
 read_bounded() {
-    local operation=$1 destination=$2 limit=$3 response reader_code producer_code
+    local operation=$1 destination=$2 limit=$3 response reader_code producer_code code
     shift 3
     # Validate bytes before Bash command substitution can discard NULs or
     # trailing newlines. Close oversized replies after limit + 1 bytes; never
@@ -48,8 +48,16 @@ read_bounded() {
     # independently, even when they happen to use the same exit code.
     response=$(
         set +e
-        timeout --signal=TERM --kill-after=2s 10s "$@" 2>/dev/null |
-            python3 -I -c '
+        # The deadline belongs to the complete pipeline. A producer can exit
+        # while a descendant retains stdout, or the response reader can stall.
+        # KILL ends only this local read group, including TERM-resistant readers;
+        # a grace period can lose them when their collection shell exits first.
+        timeout --signal=KILL 10s bash -s -- "$limit" "$@" 2>/dev/null <<'PULSE_VM_READ'
+limit=$1
+shift
+set +e
+"$@" </dev/null 2>/dev/null |
+    python3 -I -c '
 import sys
 limit = int(sys.argv[1])
 data = sys.stdin.buffer.read(limit + 1)
@@ -63,8 +71,15 @@ if b"\0" in data:
     sys.exit(81)
 sys.stdout.buffer.write(data)
 ' "$limit" 2>/dev/null
-        codes=("${PIPESTATUS[@]}")
-        printf '\nVM_READ_STATUS %s %s' "${codes[0]}" "${codes[1]}"
+codes=("${PIPESTATUS[@]}")
+printf '\nVM_READ_STATUS %s %s' "${codes[0]}" "${codes[1]}"
+PULSE_VM_READ
+        code=$?
+        if [[ $code -ne 0 ]]; then
+            # A deadline or failed collection shell has no complete response.
+            # Keep that exit separate from any bytes buffered before it failed.
+            printf '\nVM_READ_STATUS %s 0' "$code"
+        fi
     )
     read -r producer_code reader_code <<< "${response##*$'\nVM_READ_STATUS '}"
     case "$reader_code" in

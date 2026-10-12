@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -72,11 +72,57 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   resetAIRuntimeState();
   vi.clearAllMocks();
 });
 
 describe('ResourceDetailDrawer snapshot ownership', () => {
+  it('ages unchanged observed and occurred times in the mounted change history', async () => {
+    const start = Date.parse('2026-10-11T11:00:00Z');
+    vi.useFakeTimers({ now: start });
+    const change = {
+      id: 'held-change',
+      resourceId: 'held-resource',
+      kind: 'config_update' as const,
+      observedAt: new Date(start - 60_000).toISOString(),
+      occurredAt: new Date(start - 120_000).toISOString(),
+      reason: 'Retained config observation',
+      sourceType: 'platform_event' as const,
+      confidence: 'high' as const,
+    };
+    const initial = snapshot({ id: 'held-resource', recentChanges: [change] });
+    const [resource, setResource] = createSignal(initial);
+    render(() => <ResourceDetailDrawer resource={resource()} presentation="table-row" />);
+    await vi.advanceTimersByTimeAsync(0);
+    const section = screen.getByTestId('resource-change-history-section');
+    expect(section).toHaveTextContent('1 min ago');
+    expect(section).toHaveTextContent('Occurred 2 mins ago');
+    fireEvent.click(within(section).getByRole('button', { name: /Filter/ }));
+    const filter = within(section).getByRole('combobox', { name: 'Change kind' });
+    filter.focus();
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(section).toHaveTextContent('2 hours ago');
+    expect(section).toHaveTextContent('Occurred 2 hours ago');
+    expect(filter).toHaveFocus();
+    expect(screen.getByTestId('resource-change-history-section')).toBe(section);
+    expect(resource().recentChanges).toEqual([change]);
+    expect(requests.facets).not.toHaveBeenCalled();
+    setResource({
+      ...initial,
+      recentChanges: [
+        { ...change, observedAt: new Date(Date.now()).toISOString(), occurredAt: undefined },
+      ],
+    });
+    expect(section).toHaveTextContent('0s ago');
+    expect(section).not.toHaveTextContent('Occurred');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(section).toHaveTextContent('1 min ago');
+    setResource({ ...initial, recentChanges: [] });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(screen.queryByText('Retained config observation')).not.toBeInTheDocument();
+  });
+
   it('updates derived identity, current metrics and the History target without remounting a same-ID drawer', () => {
     const [resource, setResource] = createSignal(snapshot());
     render(() => <ResourceDetailDrawer resource={resource()} presentation="table-row" />);

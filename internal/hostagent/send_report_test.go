@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -267,6 +268,114 @@ func TestAgentProcess_UnauthorizedResponseDoesNotBuffer(t *testing.T) {
 	}
 	if !strings.Contains(logBuf.String(), "rejected this agent's API token") {
 		t.Fatalf("expected 401 log to be actionable, got %q", logBuf.String())
+	}
+}
+
+// An HTTP status is not a credential-loss diagnosis. These controls exercise
+// the live and buffered rejection paths, then ordinary recovery with the same
+// credential; neither a new token nor disabling host monitoring is required.
+func TestHostReportingAuthGuidanceAndSameCredentialRecovery(t *testing.T) {
+	t.Parallel()
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		for _, buffered := range []bool{false, true} {
+			name := http.StatusText(status) + "/current"
+			if buffered {
+				name = http.StatusText(status) + "/buffered"
+			}
+			t.Run(name, func(t *testing.T) {
+				const token = "synthetic-report-credential-not-for-logs"
+				const responseSecret = "synthetic-upstream-body-not-for-logs"
+				var responseStatus, accepted atomic.Int32
+				responseStatus.Store(int32(status))
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path != agentReportEndpoint || r.Header.Get("X-API-Token") != token || r.Header.Get("Authorization") != "Bearer "+token {
+						t.Error("ordinary report changed its endpoint or credential")
+					}
+					code := int(responseStatus.Load())
+					w.WriteHeader(code)
+					if code == http.StatusOK {
+						accepted.Add(1)
+						_, _ = io.WriteString(w, `{"success":true}`)
+					} else {
+						_, _ = io.WriteString(w, responseSecret)
+					}
+				}))
+				defer server.Close()
+
+				var logs bytes.Buffer
+				primaryAcknowledgements := 0
+				a := &Agent{
+					cfg: Config{APIToken: token, AgentID: "auth-diagnostic-agent", CommandAuthorityProfile: CommandAuthorityMonitoringOnly,
+						OnPrimaryReportAccepted: func() { primaryAcknowledgements++ }},
+					logger: zerolog.New(&logs), httpClient: server.Client(), trimmedPulseURL: server.URL,
+					reportBuffer: utils.New[agentshost.Report](8),
+				}
+				report := agentshost.Report{Agent: agentshost.AgentInfo{ID: "auth-diagnostic-agent"}}
+				if buffered {
+					a.reportBuffer.Push(report)
+				}
+				if err := a.deliverPrimaryReport(context.Background(), report); err != nil {
+					t.Fatal("rejection unexpectedly stopped ordinary collection")
+				}
+				assertSafeReportAuthLog(t, logs.String(), server.URL, status, false, token, responseSecret)
+				if !a.reportBuffer.IsEmpty() || primaryAcknowledgements != 0 || accepted.Load() != 0 {
+					t.Fatal("rejected report was buffered or treated as accepted")
+				}
+
+				responseStatus.Store(http.StatusOK)
+				if err := a.deliverPrimaryReport(context.Background(), report); err != nil {
+					t.Fatal("ordinary reporting did not recover")
+				}
+				if primaryAcknowledgements != 1 || accepted.Load() != 1 || !a.lastAuthFailureLog.IsZero() || !a.reportBuffer.IsEmpty() {
+					t.Fatal("successful current report did not restore acceptance and reset the diagnostic throttle")
+				}
+				if a.cfg.APIToken != token || a.cfg.AgentID != report.Agent.ID || a.cfg.EnableCommands || a.cfg.CommandAuthorityProfile != CommandAuthorityMonitoringOnly {
+					t.Fatal("authentication guidance changed credentials, identity or command authority")
+				}
+			})
+		}
+	}
+}
+
+func assertSafeReportAuthLog(t *testing.T, logs, pulseURL string, status int, observer bool, secrets ...string) {
+	t.Helper()
+	for _, secret := range secrets {
+		if strings.Contains(logs, secret) {
+			t.Fatal("authentication diagnostic disclosed a credential or response body")
+		}
+	}
+	for _, claim := range []string{"Re-run the agent install", "mint a fresh token", "mint a correctly scoped token", "restored/reinstalled", "upgraded (for example", "Set PULSE_ENABLE_HOST=false", "until the token is replaced"} {
+		if strings.Contains(logs, claim) {
+			t.Fatal("authentication diagnostic prescribed credential churn or guessed a cause")
+		}
+	}
+	found := false
+	for _, line := range strings.Split(strings.TrimSpace(logs), "\n") {
+		var entry map[string]any
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatal("diagnostic is not a structured log entry")
+		}
+		if entry["status_code"] != float64(status) {
+			continue
+		}
+		found = true
+		if entry["endpoint"] != agentReportEndpoint {
+			t.Fatal("diagnostic lost the failed reporting endpoint")
+		}
+		message, _ := entry["message"].(string)
+		if observer || status == http.StatusUnauthorized {
+			if entry["pulse_url"] != pulseURL || !strings.Contains(message, "API Access record") || !strings.Contains(message, "status alone does not identify the cause") || !strings.Contains(message, "do not share token values or service files") && !strings.Contains(message, "or share token values or service files") {
+				t.Fatal("diagnostic omitted its safe instance/record distinction or disclosure warning")
+			}
+		} else if !strings.Contains(message, "agent:report") || !strings.Contains(message, "Command execution permission is not needed") || !strings.Contains(message, "Do not disable host monitoring or reinstall") {
+			t.Fatal("forbidden diagnostic did not preserve host monitoring and least privilege")
+		}
+		if !strings.Contains(message, "dropped while") {
+			t.Fatal("diagnostic did not explain the current delivery consequence")
+		}
+	}
+	if !found {
+		t.Fatal("diagnostic lost the observed HTTP status")
 	}
 }
 

@@ -94,7 +94,7 @@ class SetupAccessDocsTest(unittest.TestCase):
                     subprocess.run(["bash", "-n", "-c", block], check=True, capture_output=True)
 
     def test_private_file_preparation_preserves_existing_token(self):
-        command = recipe("KUBERNETES", 'vi "$HOME/.config/pulse/kubernetes-agent-token"')
+        command = recipe("KUBERNETES", 'vi "$token_file"')
         with tempfile.TemporaryDirectory(prefix="setup docs ") as temporary:
             home = Path(temporary)
             tools = home / "tools"
@@ -109,12 +109,80 @@ class SetupAccessDocsTest(unittest.TestCase):
                     token.write_text(TEST_TOKEN + "\n")
                     token.chmod(0o644)
                     token.parent.chmod(0o755)
-                result = subprocess.run(["bash", "-eu", "-c", command], env=env, capture_output=True, timeout=10)
+                result = subprocess.run(["bash", "-c", command], env=env, capture_output=True, timeout=10)
                 self.assertEqual(result.returncode, 0, result.stderr.decode())
                 self.assertEqual(stat.S_IMODE(token.stat().st_mode), 0o600)
                 self.assertEqual(stat.S_IMODE(token.parent.stat().st_mode), 0o700)
                 self.assertEqual(token.read_text(), TEST_TOKEN + "\n" if existing else "")
                 self.assertNotIn(TEST_TOKEN.encode(), result.stdout + result.stderr)
+
+    def test_unsafe_paths_stop_before_editor_or_cluster_contact(self):
+        # Execute the exact copied blocks, without implicit caller errexit.
+        # A pre-existing linked file or parent must not be chmodded/read/written.
+        for needle in ('vi "$token_file"', '--from-file=PULSE_TOKEN='):
+            command = recipe("KUBERNETES", needle)
+            for placement in (".config", ".config/pulse", ".config/pulse/kubernetes-agent-token"):
+                for kind in ("symlink", "dangling-symlink", "fifo", "directory", "regular-parent"):
+                    token_path = placement.endswith("kubernetes-agent-token")
+                    if (kind == "directory" and not token_path) or (kind == "regular-parent" and token_path):
+                        continue
+                    with self.subTest(recipe=needle, path=placement, kind=kind), tempfile.TemporaryDirectory() as temporary:
+                        home = Path(temporary)
+                        path = home / placement
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        outside = home / "untouched"
+                        outside.mkdir(mode=0o755)
+                        outside.chmod(0o755)
+                        witness = outside / "kubernetes-agent-token"
+                        witness.write_text(TEST_TOKEN)
+                        witness.chmod(0o644)
+                        if kind == "symlink":
+                            path.symlink_to(witness if token_path else outside)
+                        elif kind == "dangling-symlink":
+                            path.symlink_to(home / "must-not-be-created")
+                        elif kind == "fifo":
+                            os.mkfifo(path)
+                        elif kind == "directory":
+                            path.mkdir()
+                        else:
+                            path.write_text("not a directory")
+                        tools = home / "tools"
+                        tools.mkdir()
+                        receipt = home / "unsafe-operation"
+                        for name in ("vi", "kubectl"):
+                            tool = tools / name
+                            tool.write_text('#!/bin/sh\nprintf called >> "$OPERATION_RECEIPT"\nexit 23\n')
+                            tool.chmod(0o700)
+                        env = {**os.environ, "HOME": str(home), "PATH": f"{tools}:{os.environ['PATH']}",
+                               "OPERATION_RECEIPT": str(receipt)}
+                        result = subprocess.run(["bash", "-c", command], env=env, capture_output=True, timeout=10)
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertFalse(receipt.exists(), "unsafe path must stop before editor or kubectl")
+                        self.assertEqual(witness.read_text(), TEST_TOKEN)
+                        self.assertEqual(stat.S_IMODE(witness.stat().st_mode), 0o644)
+                        self.assertEqual(stat.S_IMODE(outside.stat().st_mode), 0o755)
+                        self.assertFalse((home / "must-not-be-created").exists())
+                        self.assertNotIn(TEST_TOKEN.encode(), result.stdout + result.stderr)
+
+    def test_preparation_failures_do_not_continue_to_editor(self):
+        for failed in ("mkdir", "chmod", "touch", "vi"):
+            with self.subTest(failed=failed), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary)
+                tools = home / "tools"
+                tools.mkdir()
+                receipt = home / "editor-called"
+                for name in (failed, "vi"):
+                    tool = tools / name
+                    tool.write_text('#!/bin/sh\n' +
+                                    ('printf called > "$EDITOR_RECEIPT"\n' if name == "vi" else '') +
+                                    'exit 23\n')
+                    tool.chmod(0o700)
+                env = {**os.environ, "HOME": str(home), "PATH": f"{tools}:{os.environ['PATH']}",
+                       "EDITOR_RECEIPT": str(receipt)}
+                result = subprocess.run(["bash", "-c", recipe("KUBERNETES", 'vi "$token_file"')],
+                                        env=env, capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 23)
+                self.assertEqual(receipt.exists(), failed == "vi")
 
     def run_secret(self, home: Path, fail: str = "", empty: bool = False):
         private = home / ".config/pulse"
@@ -178,6 +246,23 @@ class SetupAccessDocsTest(unittest.TestCase):
                          "does not provision API tokens", "not inherently encrypted", "RBAC",
                          "restarting the agent pods", "forcing the conflict"):
             self.assertIn(boundary, content)
+
+    def test_diagnosis_distinguishes_reporting_rbac_and_usage_without_privilege_escalation(self):
+        text = " ".join(guide("KUBERNETES").split("## 4. Troubleshooting", 1)[1].split())
+        for boundary in ("existing status", "bounded, locally reviewed", "HTTP 401/403", "exact denied API resource",
+                         "does not grant Kubernetes API permissions", "Do not add `cluster-admin`",
+                         "`metrics.k8s.io`", "inventory-only", "missing usage is not zero",
+                         "separate, deliberate node-telemetry choice", "retain certificate verification",
+                         "not proof that Pulse accepted a fresh report", "Do not reapply the Secret",
+                         "enable Debug", "kubeconfigs", "full logs private", "redacted error",
+                         "consistent aliases", "unknowns", "TROUBLESHOOTING.md#collect-diagnostics-safely"):
+            self.assertIn(boundary, text)
+        self.assertNotIn("Ensure `securityContext.privileged: true`", text)
+        self.assertNotIn("kubectl logs -l", text)
+        source = (ROOT / "internal/kubernetesagent/agent.go").read_text()
+        for boundary in ('"/apis/metrics.k8s.io/v1beta1/nodes"', '"/apis/metrics.k8s.io/v1beta1/pods"',
+                         "continuing with inventory-only report", "kubernetes access forbidden (RBAC)"):
+            self.assertIn(boundary, source)
 
     def test_cloud_uses_existing_private_file_installation_not_server_installer(self):
         content = " ".join(guide("CLOUD").split())

@@ -7,39 +7,50 @@ to v5 to follow this page.
 
 ## Before You Upgrade
 
-- Create an encrypted config backup: **Settings → System → Recovery → Create Backup** (older versions labeled this **Backups**)
-- Confirm you can access the host/container console (for rollback and bootstrap token retrieval)
-- Review the v5 release notes on GitHub before upgrading
+- Keep a private, consistent backup of the existing installation, including its
+  active data, encryption key and deployment configuration. **Create Backup** in
+  **Settings → System → Recovery** (older versions labelled this **Backups**) is
+  a configuration export, **not a full-state backup**: it excludes history and
+  agent enrolment state. Follow [full-state recovery](MIGRATION.md#full-state-recovery)
+  for the backup scope; do not copy live data or assume an updater snapshot is complete.
+- Confirm existing administrator access to Pulse and its host/container console.
+  Preserve login, agent identities, credentials and connection state; an upgrade
+  does not require another first-time setup.
+- Choose an actually [published software release](https://github.com/rcourtman/Pulse/releases)
+  and read its notes and recovery instructions. A historical v5 packet, tag,
+  draft or Helm-chart release is not the current server download. Keep the
+  installation's private Pro runtime if it uses one.
 
 ## Upgrade Paths
 
 ### systemd and Proxmox LXC installs
 
-Preferred path:
+Use **Settings → System → Updates** where supported. For CLI updates, follow
+[the current manual update procedure](INSTALL.md#manual-update): it checks the
+helper's ownership and preserves the existing service and data/config paths.
+The name `/bin/update` alone does not identify the helper; do not execute an
+absent or unknown helper or install over a custom deployment with default paths.
+Work inside the existing Pulse LXC, not on the Proxmox host.
 
-- **Settings → System → Updates**
-
-If you prefer CLI, use the installed update helper for the target version:
-
-```bash
-sudo /bin/update --version vX.Y.Z
-```
-
-`/bin/update` is installed by the supported systemd and Proxmox LXC server installer. If your host does not have it yet, follow the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+If a community helper selects a chart instead of server software, follow
+[chart-selection recovery](AUTO_UPDATE.md#a-helper-selects-a-helm-chart-release).
+Do not recreate the LXC, supply a GitHub token or bypass signatures. Agent
+installation and updates are separate: use the [trusted-instance agent
+procedure](UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas), not the server's top-level installer.
 
 ### Docker
 
-```bash
-docker pull rcourtman/pulse:vX.Y.Z
-docker compose up -d
-```
+Follow [Docker updates](DOCKER.md#-updates) for the existing Compose service and
+an explicit published image tag. Preserve its mounted data, credentials and
+collector options. A successful pull does not replace the running container;
+do not replace a private Pro image with a public one or recreate unrelated services.
 
 ### Kubernetes (Helm)
 
-```bash
-helm repo update
-helm upgrade pulse pulse/pulse -n pulse
-```
+Follow [the current Helm installation guidance](INSTALL.md#1-kubernetes-helm),
+preserving the existing release, namespace, values and persistent volumes.
+Chart packaging and the server image are separate versions; do not use a chart
+asset to update a systemd or LXC server.
 
 ## Post-Upgrade Checklist
 
@@ -70,35 +81,36 @@ report or put it in a URL.
 
 ### Sensor proxy removal
 
-The `pulse-sensor-proxy` from v4 is no longer needed — temperature monitoring is now handled by the unified agent. If you had the sensor proxy installed on your Proxmox hosts, remove it **on each host** after upgrading:
+The retired `pulse-sensor-proxy` is separate from the unified agent and Pulse
+server. Upgrading the server does not remove it. Existing selfheal timers can
+produce recurring task errors, but a missing temperature is not a reason to
+run cleanup, remove a node or repeat setup.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | \
-  sudo bash -s -- --uninstall --purge --local-only
-```
+**Cleanup can interrupt workloads, not just temperature collection.** It edits
+affected LXC configurations and can stop and start running LXCs, including
+Pulse. `--local-only` prevents cluster SSH; it does not restrict cleanup to one
+container. An authorised Proxmox administrator must identify the affected
+workloads, preserve private recovery evidence and schedule their maintenance
+before running the inspected local helper. Do not pipe a web response into a
+privileged shell.
 
-If you deleted the old node from Pulse and want the cleanup to also remove the old `pulse-monitor@pam` API user and tokens before reinstalling, add `--remove-proxmox-access`.
-
-Run the local-only command on every Proxmox node that carried the proxy. The
-optional cluster-wide mode uses strict OpenSSH host-key verification and
-requires already-provisioned user/system known_hosts trust (or an explicit
-`--ssh-known-hosts /path/to/known_hosts` file); it never accepts unknown keys.
-
-See the [Legacy Cleanup](TEMPERATURE_MONITORING.md#legacy-cleanup-if-upgrading) section in the temperature monitoring docs for the full cleanup details.
-
-Skipping this step will leave a selfheal timer running on the host that generates recurring `TASK ERROR` entries in the Proxmox task log.
+Use the [complete legacy cleanup procedure](TEMPERATURE_MONITORING.md#legacy-cleanup-if-upgrading)
+for private download/inspection, prior-active-state recording, local execution
+and verified restoration. It deliberately preserves proxy state, configuration,
+logs and the service account. Do not add `--purge` or `--remove-proxmox-access`
+to make cleanup succeed: they can erase recovery evidence or delete the
+`pulse-monitor@pam` API user and tokens still used by current connections.
+Neither is required to stop the retired proxy. Cleanup is not a cluster-wide
+uninstall; retain unrelated SSH trust and monitoring access.
 
 ### Temperature monitoring in containers
 
-If Pulse runs in a container and you are relying on SSH-based temperature collection, move to the agent or run Pulse on the host. SSH-based collection from containers is intended for dev/test only (use `PULSE_DEV_ALLOW_CONTAINER_SSH=true` if you must).
-
-Preferred option:
-
-- Install the unified agent (`pulse-agent`) on Proxmox hosts with `--enable-proxmox`
-
-Alternative option:
-
-- Run Pulse outside a container and use SSH-based temperature collection (restricted `sensors -j` keys)
+For current installations, follow [verified HTTPS and token-file agent setup](TEMPERATURE_MONITORING.md#recommended-pulse-agent-proxmox)
+on the monitored Proxmox host. Keep the server's deployment separate from the
+collector's. Do not move a working server, enable development-only container
+SSH or reinstall an agent just to diagnose a missing temperature. Existing
+restricted SSH collection is a separate path; the [temperature guide](TEMPERATURE_MONITORING.md)
+explains its trust and missing-reading limits.
 
 ### Backups not showing (PVE)
 

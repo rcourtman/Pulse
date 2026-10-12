@@ -1,5 +1,6 @@
 # Deployment Installability Contract
 
+
 ## Contract Metadata
 
 ```json
@@ -14,6 +15,111 @@
 ```
 
 ## Purpose
+
+### OpenRC removal retains recovery on an unconfirmed manager result
+
+The OpenRC agent-removal path must finish stop and all-runlevel disable with
+independent status/inventory readback before server deregistration or local
+mutation. A failed, partial, diagnostic-bearing or unknown observation cannot
+be treated as absence or retried for a more favourable sample. Teardown rechecks
+after the remote operation, before any recovery directory is deleted, so a late
+manager refusal retains local recovery even if remote removal completed.
+Known absent/repeated removal requires manager and process-absence evidence;
+no unrelated init file, service or runlevel is removed. No failed partial stop
+is restarted automatically and no credential or transport authority changes.
+
+The registered `scripts/installtests/install_sh_test.go` artifact requires all
+twelve `agent_openrc_teardown.py` production-function/caller controls, including
+custom runlevels, stopped/refused/unknown states, post-remote refusal, exact
+cleanup ordering, path exclusions, and real bounded timeout-child termination.
+The manager and transport are closed models, with deletion confined to owned
+private files. Required containing CI, native OpenRC compatibility, real saved
+install/TLS, Windows and other-manager acceptance remain separate; this does
+not establish published or installed Linux/PowerShell #1099 recovery.
+
+### Linux agent removal native boundary
+
+The existing Unified Agent Native Verification job now runs the unchanged Unix
+removal functions against actual systemd on its fresh public hosted Linux x64
+and ARM64 runners, before acquiring compiler/frontend dependencies. Its fixed
+private fixtures cover refused stop/read/revocation, socket/batch activation,
+observed quiescence, recovery-file retention, confirmed deletion and repeated
+absence. The exact source, extracted-function digest, per-phase independent unit
+and prior-process observations, file-retention verdicts and terminal cleanup are
+retained in a seven-day bounded JSON artifact even when the native command fails.
+No default-Pulse unit, existing installation, worker/self-hosted host, service
+credential or production endpoint is admitted; root execution belongs to that
+new hosted VM only. No missing or green-only receipt establishes acceptance.
+
+`TestNativeAgentRemovalSystemdRecipeRuntime` requires discriminating portable
+lab/recipe controls, including rejected worker admission, preserved pre-existing
+units, missing/duplicate observations, successful commands without actual active
+identity or quiescence, omitted final batch readback and failed cleanup. The
+native result still requires the containing job's terminal artifact and logs.
+Runner revocation is deliberately a closed fixture, not authenticated transport
+proof; signed installed-agent/Windows/service-manager/customer recovery remain
+separate. See the agent-lifecycle contract for the exact fixture boundaries.
+
+
+### Agent systemd teardown refuses unobserved stops and activation sources
+
+`scripts/install.sh` must not discard unit files, helper credentials or runner
+recovery state merely because stop/disable was attempted. It uses a five-second
+read/stop/disable deadline with a one-second kill bound, requires complete
+diagnostic-free combined property reads, and independently confirms inactive,
+non-enabled units. Genuine absent/inactive units require no stop or disable.
+Known masks remain masks; unknown/transitional/refused or still-enabled state
+blocks deletion. The completion sentinel preserves trailing blank diagnostics.
+
+Full uninstall reconciles collector, runner and both helper activation units
+before server removal or process mutation, then each shared teardown function
+checks its own complete affected set before erasure. Runner revocation still
+requires the exact saved credential and a successful durable server result.
+Failure retains local recovery files and reports the service-state reconciliation
+needed next, without claiming a partial stop was restored or automatically
+starting anything. Missing-URL refusal, caller-owned token-file retention,
+signature/TLS policy and non-systemd platforms are unchanged.
+
+The registered `scripts/installtests/install_sh_test.go` removal-state artifact
+executes `agent_systemd_teardown.py` production-function refusal/ordering controls
+and `agent_uninstall_state.py` caller controls. A hanging private systemctl double
+also exercises the actual timeout and verifies its child is gone. Native service
+and installed/removal acceptance remain separate from these confined controls.
+
+### Unix removal retains credentials when connection recovery is incomplete
+
+After existing installed-state recovery, the unified Unix installer checks for
+collector credentials before considering whether a Pulse URL was recovered.
+Any inline credential or selected/runtime/legacy/helper token-file entry,
+including an empty or unreadable file, broken symlink or FIFO, requires
+an authenticated exact-record removal confirmation before local teardown.
+A missing URL fails with a credential-safe same-instance recovery message;
+it cannot turn credential-bearing removal into the local-only path. No
+transport request, process stop, service stop or state deletion follows that
+refusal. Server refusal, unknown confirmation and identity mismatch retain
+state as before; confirmation does not widen trusted path-removal authority.
+Credential-free removal remains local-only, with or without a saved URL.
+
+`TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing` runs the
+production argument parser, token-file ingress, admission, credential-presence,
+record-confirmation and initial state-directory cleanup through
+`agent_uninstall_state.py`. Its forty-eight confined cases use private files
+and service/transport doubles, not a privileged installer or native service
+manager. The legacy shell reader's root ownership is projected onto the private
+fixture owner; root refusal runs as the ordinary proof user. These checks do not
+establish Windows, actual TLS, saved-state discovery, a published fix or
+whole-issue installed removal acceptance.
+
+Reading `--token-file` is read-only, including in non-interactive mode and
+before permission checks. Supplying a credential does not grant ownership of
+its file: a missing URL, root refusal, refused or unknown server result, or
+identity mismatch cannot erase it. Confirmed removal retains a caller-owned
+file outside the authorised runtime state directory; tokens inside that state
+are removed only by its existing post-confirmation path-authorised cleanup.
+Installer-created temporary credentials still belong to the installer cleanup
+trap. Generated setup commands already remove their own private bootstrap
+files; this does not remove that caller-owned cleanup or widen token/TLS trust.
+
 
 ### Docker server update plans preserve the saved deployment
 
@@ -54,13 +160,21 @@ Successful absence is what systemd reports on a fresh host: `systemctl
 list-unit-files` exits 1 and prints nothing, on stdout or stderr, when none of
 the named unit files exist. The installer, the unattended updater and the
 auto-update mask check share one inventory read that accepts exactly that
-silent exit 1 as an empty inventory, after a second read confirms no output and
-no message. A timeout, a signal, any other status, or an exit 1 that carries
+silent exit 1 as an empty inventory from one complete combined stdout/stderr
+read. A timeout, a signal, any other status, or an exit 1 that carries
 output or a message remains a failed inventory. The fixture doubles must model
 that status: a silent exit 1 is absence, an exit 1 with a message is failure,
 and `systemctl --root` over an empty unit root exercises the real status. A
 double that reports absence as exit 0 hides the defect that made every fresh
-install refuse.
+install refuse. A failed first observation must not be replaced by a later
+silent read: both producers retain its message and refuse without querying
+again. The registered installer and unattended-updater Go fixture hooks keep
+the fresh-host, failed-first-read, other-silent-status and nonempty-blank-line
+controls mandatory; command substitution must not trim a nonempty failed read
+into apparent silence. Both readers retain the fixed five-second deadline and
+one-second kill grace. No extra query or retry is introduced.
+The installer hook still exercises the real empty systemctl fixture where
+available. This does not establish native installation or an LXC stop cause.
 
 The standalone unattended updater uses the same bounded name/state admission
 before passing its explicit service identity to the installer. It checks the
@@ -125,6 +239,16 @@ overwrite them. The collector drains installer output even after a log-write
 failure, retains the first failure across later successful writes, and includes
 a final line without a newline. It must not close the installer pipe early or
 admit an update because a later write hid missing diagnostic evidence.
+
+The production `log()` primitive attempts both its system logger and stdout
+sinks and returns the first failed sink's exit even under a conditional caller
+that disables Bash errexit. A successful stdout write cannot conceal a failed
+logger write, nor a successful logger conceal failed stdout. Confined controls
+keep `log()` intact, substitute only the external logger and exercise closed
+stdout; the connected collector control drains more than a pipe buffer through
+an early, later or final unterminated-line logger failure, records both pipeline
+exits and preserves the existing verified restoration/prior-active rules. These
+controls do not establish a host journal's availability or #2785's stop cause.
 A failed collector does not establish installer failure; zero exits establish
 pipeline completion only, not version, service or update acceptance.
 The existing signed transaction and confined service-state tests
@@ -134,6 +258,36 @@ unterminated final evidence with unchanged prior-activity, mask, backup and
 restoration safeguards. These facts
 cannot reconstruct exits or signals from an earlier interrupted attempt, or
 identify who stopped a host.
+
+### Active service state cannot stand in for the running executable
+
+After installed-version and active-state verification, the unattended updater
+compares the selected executable with the actual Linux `/proc/MainPID/exe` bytes.
+Two complete, bounded observations of the exact unit's LoadState, ActiveState
+and positive MainPID must surround that comparison and retain the same active
+PID. Successful recovery of a previously active unit has the same requirement
+before releasing its rollback backup. Equivalent bytes at a custom or symlinked
+path are admitted; replacing an old process's on-disk path is not proof that
+that process uses the replacement. A broken primary executable never falls
+back to an unrelated legacy file.
+
+Missing, duplicated, extra, failed or timed-out observations, an unavailable or
+different executable, a zero/malformed PID, or an identity/activity change leave
+the backup retained and current service alone for manual reconciliation. They
+cannot claim update/restoration success and grant no additional start, stop,
+rollback, mask/permission change or retry. A previously inactive unit that
+remains inactive still needs only installed-file verification; if it becomes
+active, its actual running executable must be checked too.
+
+`TestAutoUpdateServiceStateFailsClosed` requires the production-path success and
+restore refusal controls. `TestAutoUpdateRunningExecutableIdentity` requires
+Linux owned-process byte/readback/deadline controls: they run a private
+executable, atomically replace its path and inspect its real `/proc` entry.
+They do not use a native manager or install Pulse. Existing signed/manager-double
+matrices keep that distinction explicit. The containing hosted systemd recipe
+supplies real-Pulse/source/native evidence; this source repair alone establishes
+neither that result nor #2785's stop cause, published historical upgrade, timer
+sandbox or authenticated browser recovery.
 
 ### Current-source unattended transactions have a native CI check
 
@@ -146,6 +300,17 @@ mask/enablement, installed and running executable hashes, healthy served version
 persistent-file hashes, restoration mode, backup disposition and owned cleanup.
 Seven phases cover forward/manual reverse, failed active/inactive/masked installs,
 invalid signatures and an incomplete restore that retains its backup without start.
+
+The independent active-runtime oracle brackets its process-byte read with two
+matching systemd observations after API readiness, including load, activity,
+positive decimal PID and mask/enablement. Both the running executable and the
+final installed executable must match the authenticated fixture hash, not just
+each other. A changed/failed observation, disappearing process or destination
+drift refuses the phase without any service-control action. Portable
+`test_runtime_readback_rejects_post_comparison_drift` controls reject each drift,
+including equally wrong running/installed bytes; the Go harness requires its
+completed verdict. These are acceptance-oracle controls, not a native systemd
+result or evidence of the cause of a customer interruption.
 
 The test uses signed local archives/installers and an ephemeral test signer.
 The signer is newly generated in this attempt's private directory, must be an
@@ -1452,6 +1617,47 @@ race-enabled backend release suite must run serially. Both suites saturate the
 dedicated worker when combined; concurrent execution can stretch otherwise
 passing monitoring tests into load-induced failures and must not be used as a
 release-latency optimization.
+
+### Provider-MSP unlicensed startup uses one Compose configuration
+
+The provider bundle leaves `CP_PROVIDER_MSP_LICENSE_FILE` blank when evaluation
+issuance is deliberately skipped or unavailable. Both pre-issuance and final
+setup validation use the same shipped Compose file: a blank host path mounts
+`/dev/null` as the required unused secret source and leaves the daemon licence
+path unset; a supplied path maps to `/run/secrets/provider_msp_license` and must
+validate. Setup no longer substitutes an explicit empty licence path only for
+its first configuration parse. Image pins, Docker proxy, storage guardrails,
+least-privilege mounts and all Stripe/Relay exclusions are unchanged.
+
+The `Provider MSP startup` PR/main workflow uses exact-source credential-free
+checkout and the declared Go/Node graphs on a disposable hosted Linux VM. It
+builds real API assets and the release daemon using only synthetic test licences,
+then runs the opt-in `TestProviderMSPProductionStartup` Compose transport. Missing
+Docker/Compose fails; a skipped test cannot satisfy the job. The test checks actual
+mounted secrets, licensed/unlicensed readiness and authenticated plan limits,
+account/owner persistence across clean restarts, explicit licence/configuration
+refusals, and owned container/network/volume teardown. It does not use an edge
+router, customer data, production Docker socket, licence service or release
+publisher. The offline process transport verifies the daemon but is not proof of
+the native Compose mount or a full provider installation/tenant lifecycle.
+
+The startup acceptance helper treats only command stdout as machine readback.
+Successful Compose stderr warnings remain in the test log, never in container
+identities, published loopback ports, mount hashes, bootstrap facts or teardown
+inventories. Failed commands still fail acceptance and retain both output streams.
+`TestProviderMSPStartupCommandReadbackSeparatesStderr` exercises all six readback
+shapes with a real child process that emits an unset-variable warning;
+`TestProviderMSPStartupCommandFailureRetainsBothStreams` verifies non-zero exit
+and diagnostic retention. These offline controls do not establish hosted Compose
+readiness, mounted-secret identity, persisted restart or clean owned teardown.
+
+The Linux-only startup fixture and its command controls must be excluded at
+compile time on other platforms. A runtime platform skip cannot prevent the
+control-plane's Unix-only dependencies from breaking Windows installer checks.
+`TestProviderMSPStartupFixturesStayLinuxOnly` exercises Go's file-selection
+rules for Linux, Windows and macOS; cross-compilation of the complete installer
+test package must also succeed. This does not substitute for execution of the
+Windows lifecycle controls or macOS installer and logging checks on native CI.
 
 ## Canonical Files
 
@@ -6935,6 +7141,16 @@ for per-client single-resource reports and say a `GET` with query parameters
 still returns the report without the Pulse Assistant narrative, matching the
 server, which lets only `POST` narrate. Install, upgrade and provider bundle
 delivery are unchanged.
+The same per-client report help distinguishes generation's `settings:read`
+scope from narration's additional `ai:execute` permission for API tokens, for
+single-resource and fleet PDFs alike. A token without spending authority still
+gets a deterministic report, not a generation failure or an instruction to
+broaden monitoring permissions. GET/CSV never narrate, while browser sessions,
+server-run schedules and budgets keep their existing rules. Canonical and
+shipped MSP copy must match; `docsLinks.test.ts` checks the rendered permission,
+fallback and unchanged-surface guidance. The production Docs/router browser
+fixture checks both API and MSP report sections on desktop and touch phone
+without API requests, mutations or provider calls.
 
 ### Convergence log-reader compatibility (5 September 2026)
 
@@ -7625,6 +7841,21 @@ either omitted graph input or a later exclusion. Existing real-build ordering,
 Linux helper, Windows exit/service and installer checks remain unchanged. This
 is admission coverage, not a local Windows/macOS verdict or installed recovery.
 
+### Native server-upgrade source admission (11 October 2026)
+
+The native Unix installer inventory already exercises the root `install.sh`,
+`scripts/pulse-auto-update.sh`, and their service-state/log-sink, systemd-oracle
+and service-discovery Python fixtures. Both push-to-main and PR path filters
+now admit those five exact inputs, so changing one alone cannot bypass the
+existing native matrix. Agent install triggers, jobs, tools, assertions and
+deadlines are unchanged; no unrelated script or UI path is added.
+
+`TestNativeInstallerWorkflowAdmitsServerUpgradeSource` decodes each event and
+rejects deletion or exclusion of each input independently. Existing installer
+tool/partition and frontend-preparation controls still require the complete
+Unix inventory. This fixes check admission, not a macOS verdict, published-key
+installation, LXC restoration or the cause of a customer's stopped update.
+
 ### Bounded Docker module-proxy recovery (7 October 2026)
 
 The Docker backend builder uses `scripts/go-mod-download.sh` with the same
@@ -7696,3 +7927,20 @@ or failed parsers, failed transport with a plausible body, redirects, pins and
 downgrade refusal. Existing extracted-function tests include the shared selector.
 These are source-level selection controls, not native installation, published
 release acceptance or a repair to a third-party community helper.
+
+
+### Combined-batch native fixture reconciliation (11 October 2026)
+
+The real provider-MSP startup fixture is Linux-only at compile time, matching
+its existing Linux transport admission. Its cloud-control-plane import must not
+pull Unix filesystem types into Windows installer test compilation. Windows
+installer and lifecycle tests remain enabled; the startup fixture still runs in
+the Linux process proof and hosted Compose job.
+
+Successful command stdout alone supplies container identities, published ports
+and bootstrap facts. Stderr warnings remain logged evidence, never arguments to
+the next Docker command. Failure diagnostics retain both streams and the original
+nonzero exit. `TestProviderMSPStartupCommandSeparatesDiagnostics` checks three
+consumer shapes with controlled successful stderr; it is not Docker acceptance.
+Hosted mounted-secret/readiness/persistence/refusal/cleanup checks remain required.
+Frontend fixture reformatting retains all assertions and changes no runtime UI.

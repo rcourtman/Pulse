@@ -12,9 +12,11 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { unixBootstrapTestSource } from './unixBootstrapTestSource';
 import {
   buildUnixAgentInstallCommand,
   buildWindowsAgentInstallCommand,
+  buildWindowsAgentUninstallCommand,
   normalizeInstallerBaseUrl,
   resolveAgentCommandPlatform,
   resolveInstallerBaseUrl,
@@ -541,6 +543,105 @@ const runPrivateUnix = (
     timeout: 20000,
   });
 
+// Join the real generated terminal prompt to the canonical installer's writer,
+// rather than stopping at the recording installer's copy of the hand-off file.
+// Downloads, preflight and root/sudo remain simulated. This does not run the
+// agent, authenticate a server request or establish installed recovery.
+describe('terminal-to-runtime token-file preservation', { timeout: 25_000 }, () => {
+  const original = '0123456789abcdef'.repeat(4);
+  const duplicated = original.slice(0, 24) + original.slice(20, 24) + original.slice(24);
+  const legacy = 'legacy-synthetic-token.with-dashes_12345';
+
+  it.each(['0', '1000'])(
+    'preserves correct, same-hint duplicated and legacy input through the real writer (uid=%s)',
+    (uid) => {
+      const source = readFileSync(join(process.cwd(), '..', 'scripts', 'install.sh'), 'utf8');
+      const start = source.indexOf('ensure_runtime_token_file() {');
+      const end = source.indexOf('\nclear_proxmox_state_if_needed() {', start);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      const writer = source.slice(start, end);
+      expect(duplicated.slice(0, 6)).toBe(original.slice(0, 6));
+      expect(duplicated.slice(-4)).toBe(original.slice(-4));
+      expect(duplicated).not.toBe(original);
+
+      for (const [name, inputs] of [
+        ['correct', [original, original]],
+        ['duplicated-middle then original restoration', [duplicated, original, original]],
+        ['legacy', [legacy, legacy]],
+      ] as const) {
+        const fixture = makeUnixFixture();
+        try {
+          const installerPath = join(fixture.dir, 'installer');
+          const recorder = readFileSync(installerPath, 'utf8');
+          const copy = '  cat "$token_file" > "$CAPTURE"';
+          expect(recorder).toContain(copy);
+          writeFileSync(
+            installerPath,
+            recorder.replace(
+              copy,
+              `${copy}
+  PULSE_TOKEN=$(cat "$token_file")
+  TMP_FILES=(); ENROLL=false; EXIT_GENERAL=1
+  log_info() { :; }; fail() { exit 1; }
+  ${writer}
+  ensure_runtime_token_file "$SAVED_STATE"
+  printf %s "$RUNTIME_TOKEN_CHANGED" > "$SAVED_CHANGED"`,
+            ),
+          );
+          const state = join(fixture.dir, 'saved-state');
+          const command = buildUnixAgentInstallCommand({
+            baseUrl: 'https://pulse.invalid',
+            token: original,
+            extraArgs: ['--enable-host'],
+          });
+          for (const [phase, input] of inputs.entries()) {
+            const history = join(fixture.dir, `history-${phase}`);
+            const result = runPrivateUnix(
+              command,
+              input,
+              {
+                ...fixture.env(uid),
+                SAVED_STATE: state,
+                SAVED_CHANGED: join(fixture.dir, 'saved-changed'),
+              },
+              history,
+            );
+            expect(result.status, result.stdout + result.stderr).toBe(0);
+            expect(readFileSync(join(fixture.dir, 'capture'), 'utf8')).toBe(input);
+            expect(readFileSync(join(state, 'token'), 'utf8')).toBe(input);
+            expect(readFileSync(join(fixture.dir, 'saved-changed'), 'utf8')).toBe(
+              phase === 0 || input !== inputs[phase - 1] ? 'true' : 'false',
+            );
+            expect(execFileSync('stat', ['-c', '%a', state], { encoding: 'utf8' }).trim()).toBe(
+              '700',
+            );
+            expect(
+              execFileSync('stat', ['-c', '%a', join(state, 'token')], { encoding: 'utf8' }).trim(),
+            ).toBe('600');
+            expect(readFileSync(join(fixture.dir, 'secret-env'), 'utf8')).toBe(':');
+            for (const text of [
+              command,
+              readFileSync(join(fixture.dir, 'argv'), 'utf8'),
+              readFileSync(history, 'utf8'),
+              result.stdout,
+              result.stderr,
+            ]) {
+              expect(text).not.toContain(input);
+            }
+            assertUnixCleanup(fixture.dir);
+            console.info(
+              `terminal/writer uid=${uid} case=${name} phase=${phase} bytes=${input.length} exact=true private=true cleaned=true`,
+            );
+          }
+        } finally {
+          fixture.close();
+        }
+      }
+    },
+  );
+});
+
 // The PTY has a 15s deadline and its caller a 20s ceiling. Let both return
 // their terminal/cleanup assertions before Vitest's enclosing budget expires.
 describe('credential-free Unix lifecycle execution', { timeout: 25_000 }, () => {
@@ -749,4 +850,150 @@ describe('credential-free Unix lifecycle execution', { timeout: 25_000 }, () => 
       }
     },
   );
+});
+
+describe('saved-credential uninstall commands', () => {
+  it.each(['unused-new-install-token', null])(
+    'never asks for installation credentials (%s)',
+    (token) => {
+      const command = buildUnixAgentInstallCommand({
+        baseUrl: 'https://download.invalid',
+        token,
+        tokenFilePath: 'unused-relative-file',
+        extraArgs: ['--uninstall'],
+      });
+      const child = unixBootstrapTestSource(command);
+      expect(command).not.toContain('unused-new-install-token');
+      expect(command).not.toContain('unused-relative-file');
+      expect(command).not.toContain('Pulse agent token');
+      expect(command).not.toContain('--token');
+      expect(command).not.toContain('--url');
+      expect(command).not.toContain('--preflight-only');
+      expect(child).toContain(
+        'unset PULSE_TOKEN PULSE_TOKEN_FILE PULSE_URL PULSE_AGENT_ID PULSE_HOSTNAME',
+      );
+      expect(command).toContain('https://download.invalid/install.sh');
+    },
+  );
+
+  it.each([0, 17])(
+    'executes the actual Unix command without a terminal and retains installer exit %s',
+    (exit) => {
+      const dir = mkdtempSync(join(tmpdir(), 'pulse-uninstall-command-'));
+      const bin = join(dir, 'bin');
+      mkdirSync(bin);
+      try {
+        writeFileSync(join(bin, 'id'), '#!/bin/sh\nprintf 0\n', { mode: 0o700 });
+        writeFileSync(
+          join(bin, 'curl'),
+          `#!/bin/sh
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = -o ]; then cp "$RECORDER" "$2"; exit 0; fi
+  shift
+done
+exit 31
+`,
+          { mode: 0o700 },
+        );
+        // Only a recorder is downloaded. No production installer or sudo runs.
+        const recorder = join(dir, 'recorder');
+        writeFileSync(
+          recorder,
+          `#!/bin/bash
+printf '%s\\n' "$@" > "$ARGV"
+printf '%s:%s:%s:%s:%s:%s:%s:%s' "\${PULSE_TOKEN-}" "\${PULSE_TOKEN_FILE-}" "\${PULSE_URL-}" "\${PULSE_AGENT_ID-}" "\${PULSE_HOSTNAME-}" "\${PULSE_INSECURE_SKIP_VERIFY-}" "\${PULSE_CACERT-}" "\${PULSE_SERVER_FINGERPRINT-}" > "$ENV_CAPTURE"
+exit "$EXPECTED_EXIT"
+`,
+        );
+        const command = buildUnixAgentInstallCommand({
+          baseUrl: 'https://download.invalid',
+          token: 'not-an-uninstall-credential',
+          caCertPath: '/explicit/ca.pem',
+          extraArgs: ['--uninstall', "--agent-id 'saved-id'", "--hostname 'saved.example'"],
+        });
+        const result = spawnSync('bash', ['-c', command], {
+          encoding: 'utf8',
+          timeout: 5000,
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH}`,
+            RECORDER: recorder,
+            ARGV: join(dir, 'argv'),
+            ENV_CAPTURE: join(dir, 'environment'),
+            EXPECTED_EXIT: String(exit),
+            PULSE_TOKEN: 'ambient-install-secret',
+            PULSE_TOKEN_FILE: '/wrong/file',
+            PULSE_URL: 'https://wrong.invalid',
+            PULSE_AGENT_ID: 'wrong-id',
+            PULSE_HOSTNAME: 'wrong-host',
+            PULSE_INSECURE_SKIP_VERIFY: 'true',
+            PULSE_CACERT: '/wrong/ca',
+            PULSE_SERVER_FINGERPRINT: 'wrong-pin',
+          },
+        });
+        expect(result.status, result.stdout + result.stderr).toBe(exit);
+        expect(result.stdout + result.stderr).not.toContain('ambient-install-secret');
+        expect(readFileSync(join(dir, 'environment'), 'utf8')).toBe(':::::::');
+        expect(readFileSync(join(dir, 'argv'), 'utf8').trim().split('\n')).toEqual([
+          '--uninstall',
+          '--agent-id',
+          'saved-id',
+          '--hostname',
+          'saved.example',
+          '--non-interactive',
+          '--cacert',
+          '/explicit/ca.pem',
+        ]);
+        // The parent shell retains its inherited value; clearing is child-only.
+        const sentinel = execFileSync('bash', ['-c', command + '; printf %s "$PULSE_TOKEN"'], {
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH}`,
+            RECORDER: recorder,
+            ARGV: join(dir, 'argv'),
+            ENV_CAPTURE: join(dir, 'environment'),
+            EXPECTED_EXIT: '0',
+            PULSE_TOKEN: 'parent-sentinel',
+          },
+          encoding: 'utf8',
+          timeout: 5000,
+        });
+        expect(sentinel).toBe('parent-sentinel');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('Windows binds empty credential parameters and escaped identity without mutating environment', () => {
+    const command = buildWindowsAgentUninstallCommand({
+      baseUrl: 'https://download.invalid/',
+      agentId: "agent'$()",
+      hostname: "host'$name",
+      caCertPath: "C:\\trust\\host's.pem",
+    });
+    expect(command).toContain('https://download.invalid/install.ps1');
+    expect(command).toContain("-Uninstall $true -Url '' -Token '' -TokenFile ''");
+    expect(command).toContain("-AgentId 'agent''$()' -Hostname 'host''$name'");
+    expect(command).toContain(
+      "-Insecure $false -CACertPath 'C:\\trust\\host''s.pem' -ServerFingerprint ''",
+    );
+    expect(command).toContain("LoadCertificate('C:\\trust\\host''s.pem')");
+    expect(command).toContain('-PreflightOnly $false');
+    expect(command).not.toContain('$env:');
+    expect(command).not.toContain('\n');
+    expect(command).toContain('ForEach-Object { & ([scriptblock]::Create($_))');
+  });
+
+  it('HTTP download does not grant an insecure saved-server uninstall', () => {
+    expect(
+      buildUnixAgentInstallCommand({
+        baseUrl: 'http://download.invalid',
+        extraArgs: ['--uninstall'],
+      }),
+    ).not.toContain(' --insecure');
+    expect(buildWindowsAgentUninstallCommand({ baseUrl: 'http://download.invalid' })).toContain(
+      '-Insecure $false',
+    );
+  });
 });

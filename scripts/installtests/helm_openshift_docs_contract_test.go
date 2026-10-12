@@ -42,8 +42,33 @@ func openShiftDocsIssues(docs string) []string {
 	require(commands[1][1], "--set openShift.kubernetesAgent.clusterID=")
 	require(commands[1][1], "--set agent.secretEnv.name=pulse-agent-env")
 	require(commands[1][1], "--set 'agent.secretEnv.keys[0]=PULSE_TOKEN'")
-	require(docs, "create secret generic pulse-agent-env")
-	require(docs, `--from-file=PULSE_TOKEN="$HOME/.config/pulse/kubernetes-agent-token"`)
+	// The guide now validates the owner/private-file path before either
+	// provisioning pipeline. Bind the input to that same command block, not a
+	// literal HOME path or a precaution elsewhere in the document.
+	var secretCommands []string
+	for _, command := range regexp.MustCompile("(?s)```bash\n(.*?)```").FindAllStringSubmatch(docs, -1) {
+		if strings.Contains(command[1], "create secret generic pulse-agent-env") {
+			secretCommands = append(secretCommands, command[1])
+		}
+	}
+	if len(secretCommands) != 1 {
+		issues = append(issues, "need one validated private-file Secret creation block")
+	} else {
+		for _, value := range []string{
+			`set -euo pipefail`,
+			`config_dir="$HOME/.config/pulse"`,
+			`token_file="$config_dir/kubernetes-agent-token"`,
+			`[ -L "$token_file" ]`,
+			`[ ! -f "$token_file" ]`,
+			`[ ! -O "$token_file" ]`,
+			`[ ! -r "$token_file" ]`,
+			`[ ! -s "$token_file" ]`,
+			`chmod 600 "$token_file"`,
+			`--from-file=PULSE_TOKEN="$token_file"`,
+		} {
+			require(secretCommands[0], value)
+		}
+	}
 	// Inspect shell blocks only: prose warns against these unsafe arguments.
 	unsafe := regexp.MustCompile(`--from-literal=(?:PULSE_TOKEN|API_TOKENS?)=|--set(?:-string)?\s+(?:agent|server)\.secretEnv\.data\.`)
 	for _, command := range regexp.MustCompile("(?s)```bash\n(.*?)```").FindAllStringSubmatch(docs, -1) {
@@ -73,7 +98,16 @@ func TestOpenShiftDocsKeepBootstrapAndPrivateSecret(t *testing.T) {
 		{"secret creation", "create secret generic pulse-agent-env", "create secret generic wrong-agent-env"},
 		{"secret reference", "agent.secretEnv.name=pulse-agent-env", "agent.secretEnv.name=wrong-agent-env"},
 		{"secret key", "agent.secretEnv.keys[0]=PULSE_TOKEN", "agent.secretEnv.keys[0]=WRONG_TOKEN"},
-		{"private-file input", `--from-file=PULSE_TOKEN="$HOME/.config/pulse/kubernetes-agent-token"`, "--from-literal=PULSE_TOKEN=synthetic-not-a-secret"},
+		{"private-file input", `--from-file=PULSE_TOKEN="$token_file"`, "--from-literal=PULSE_TOKEN=synthetic-not-a-secret"},
+		{"private directory", `config_dir="$HOME/.config/pulse"`, `config_dir="/tmp/shared"`},
+		{"bound private file", `token_file="$config_dir/kubernetes-agent-token"`, `token_file="/tmp/shared-token"`},
+		{"linked token", `[ -L "$token_file" ]`, `[ -L "$unrelated" ]`},
+		{"regular token", `[ ! -f "$token_file" ]`, `[ ! -f "$unrelated" ]`},
+		{"owned token", `[ ! -O "$token_file" ]`, `[ ! -O "$unrelated" ]`},
+		{"readable token", `[ ! -r "$token_file" ]`, `[ ! -r "$unrelated" ]`},
+		{"empty token", `[ ! -s "$token_file" ]`, `[ ! -s "$unrelated" ]`},
+		{"private mode", `chmod 600 "$token_file"`, `chmod 644 "$token_file"`},
+		{"pipeline failure", `set -euo pipefail`, `set -eu`},
 		{"Helm token value", "--set agent.secretEnv.name=pulse-agent-env", "--set-string agent.secretEnv.data.PULSE_TOKEN=synthetic-not-a-secret"},
 	} {
 		t.Run(change.name, func(t *testing.T) {

@@ -3096,6 +3096,37 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+### Retained Machines and Debug status (11 October 2026)
+
+The Machines row status, health chip counts and selected filter membership
+read the same existing classifier and shared clock. A held online agent is
+Degraded in the toolbar once its row becomes Stale under the unchanged five-minute
+fallback; clock ticks neither renew its report nor set its canonical stale flag.
+The row retains identity and metric values, and an actual report or offline
+status still updates its presentation and membership. Explicit warning/Unknown
+rows are Degraded, red rows are Offline, and unclassified muted rows remain
+visible in All without being promoted to Healthy or Offline. Search and the
+route-owned selected filter survive reclassification; no new posture card is
+added. Attention sorting classifies each input
+resource once per call, retains the priority/name order and never caches status
+across calls or mutates the input inventory.
+
+Debug source status, error and last-seen are reactive by section ID even when
+source payload sections stay mounted. New status records withdraw obsolete
+errors; absent/invalid timestamps do not acquire an age. Source payload,
+disclosure and focus survive status-only updates and quiet age ticks.
+
+Verification: the Machines table, standalone page-model and Debug relative-age
+tests cover the retained-row boundary, per-resource classification count,
+arriving/withdrawn reports, unknown/offline membership and ordinary source-status
+replacement. `browser-tests/machines-health-filters.cjs` compares chip counts,
+Healthy/Degraded clicks and selected results on the composed parent and final
+desktop/phone sources; `browser-tests/pr2600-monitoring.cjs`
+compares exact-parent and repaired production surfaces on desktop Chromium and
+touch-phone WebKit using synthetic local data. It establishes presentation,
+not a probe, guest thaw/writes/liveness/restoration, native collector recovery,
+whole-fleet CPU relief, publication or release availability.
+
 ### AI Discovery removed (2026-10-11)
 
 AI Discovery, the model-backed service-identification layer, is gone. The

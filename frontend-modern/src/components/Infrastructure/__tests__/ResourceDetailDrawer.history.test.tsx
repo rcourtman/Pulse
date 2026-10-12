@@ -249,6 +249,171 @@ describe('ResourceDetailDrawer change history section', () => {
     }
   });
 
+  it('reactively withdraws stopped VM disk carriers without discarding History or independent readings', async () => {
+    resetCreateNonSuspendingQueryCacheForTest();
+    const source = baseResource({
+      id: 'native-power-vm',
+      type: 'vm',
+      platformType: 'proxmox-pve',
+      metricsTarget: { resourceType: 'vm', resourceId: 'power:pve:101' },
+      cpu: { current: 10 },
+      memory: {
+        current: 0,
+        observation: { state: 'current', source: 'agent', observedAt: '2026-10-10T00:00:00Z' },
+      },
+      disk: { current: 90 },
+      proxmox: { runtimeStatus: 'running' },
+    });
+    const read = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
+      resourceType: 'vm',
+      resourceId: 'power:pve:101',
+      range: '24h',
+      start: Date.parse('2026-10-10T00:00:00Z'),
+      end: Date.parse('2026-10-10T01:00:00Z'),
+      source: 'store',
+      metrics: {},
+    });
+    const [resource, setResource] = createSignal(source);
+    const view = render(() => (
+      <ResourceDetailDrawer resource={resource()} presentation="table-row" />
+    ));
+    try {
+      fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+      await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+      const chart = view.container.querySelector('[data-history-group="utilization"]')!;
+      expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+        '90.0%current',
+      );
+      for (const diskStatusReason of ['', 'prev-agent-busy']) {
+        setResource({
+          ...source,
+          lastSeen: source.lastSeen + 3600000,
+          proxmox: { runtimeStatus: 'stopped', diskStatusReason },
+        });
+        expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
+        expect(chart.querySelector('[data-history-last-known="disk"]')).toBeNull();
+        expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+          'Guest filesystem stats unavailable while the VM is stopped.',
+        );
+        expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
+          '0.0%current',
+        );
+        expect(chart.querySelector('[data-history-current="cpu"]')).toHaveTextContent(
+          '10.0%current',
+        );
+      }
+      setResource({ ...source, status: 'offline', disk: { current: 0 } });
+      expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent('0.0%current');
+      expect(chart.querySelector('[data-history-deferred="disk"]')).toBeNull();
+      expect(view.container.querySelector('[data-history-group="utilization"]')).toBe(chart);
+      expect(chart.querySelector('path')).toBeNull();
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
+    } finally {
+      view.unmount();
+      read.mockRestore();
+      resetCreateNonSuspendingQueryCacheForTest();
+    }
+  });
+
+  it.each(['vm', 'system-container'] as const)(
+    'keeps the mounted %s History on the selected filesystem producer',
+    async (type) => {
+      resetCreateNonSuspendingQueryCacheForTest();
+      const disks = [{ mountpoint: '/', total: 100, used: 62, free: 38 }];
+      const source = baseResource({
+        id: 'linked-filesystem-guest',
+        type,
+        platformType: 'proxmox-pve',
+        status: 'online',
+        metricsTarget: { resourceType: type, resourceId: 'linked:pve:105' },
+        cpu: { current: 10 },
+        memory: {
+          current: 0,
+          observation: { state: 'current', source: 'agent', observedAt: '2026-10-12T00:00:00Z' },
+        },
+        disk: { current: 62 },
+        proxmox: { runtimeStatus: 'running', diskStatusReason: 'agent-not-running' },
+        agent: { agentId: 'in-guest', stale: false, disks },
+      });
+      const read = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
+        resourceType: type,
+        resourceId: 'linked:pve:105',
+        range: '24h',
+        start: Date.parse('2026-10-12T00:00:00Z'),
+        end: Date.parse('2026-10-12T01:00:00Z'),
+        source: 'store',
+        metrics: {},
+      });
+      const [resource, setResource] = createSignal(source);
+      const view = render(() => (
+        <ResourceDetailDrawer resource={resource()} presentation="table-row" />
+      ));
+      try {
+        fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+        await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+        const chart = view.container.querySelector('[data-history-group="utilization"]')!;
+        expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+          '62.0%current',
+        );
+        expect(chart.querySelector('[data-history-deferred="disk"]')).toBeNull();
+        setResource({
+          ...source,
+          lastSeen: source.lastSeen + 3600000,
+          agent: { ...source.agent, stale: true },
+        });
+        expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
+        expect(chart.querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
+          '62.0%last known',
+        );
+        expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+          'The Pulse Agent in this guest stopped reporting.',
+        );
+        setResource({
+          ...source,
+          proxmox: { runtimeStatus: 'running', disks, diskStatusReason: 'prev-vm-locked' },
+        });
+        if (type === 'vm') {
+          expect(chart.querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
+            '62.0%last known',
+          );
+          expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+            'VM operation lock',
+          );
+        } else {
+          expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+            '62.0%current',
+          );
+          expect(chart.querySelector('[data-history-deferred="disk"]')).toBeNull();
+        }
+        setResource({ ...source, proxmox: { runtimeStatus: 'stopped' } });
+        expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
+        expect(chart.querySelector('[data-history-last-known="disk"]')).toBeNull();
+        expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+          'unavailable',
+        );
+        setResource({ ...source, disk: { current: 0 }, status: 'offline' });
+        expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+          '0.0%current',
+        );
+        expect(chart.querySelector('[data-history-deferred="disk"]')).toBeNull();
+        expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
+          '0.0%current',
+        );
+        expect(chart.querySelector('[data-history-current="cpu"]')).toHaveTextContent(
+          '10.0%current',
+        );
+        expect(view.container.querySelector('[data-history-group="utilization"]')).toBe(chart);
+        expect(chart.querySelector('path')).toBeNull();
+        expect(read).toHaveBeenCalledTimes(1);
+      } finally {
+        view.unmount();
+        read.mockRestore();
+        resetCreateNonSuspendingQueryCacheForTest();
+      }
+    },
+  );
+
   it('keeps current readings separate from stored history samples', () => {
     expect(guestDrawerHistorySource).toContain('currentMetrics');
     expect(guestDrawerHistorySource).toContain('No stored history in this range');

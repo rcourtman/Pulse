@@ -1,5 +1,55 @@
 # 🔧 Troubleshooting Guide
 
+## Choose the affected workflow
+
+Start with the symptom below, using observations you already have. A restart,
+reinstall or new diagnostic run is not a prerequisite for getting help.
+
+**If a guest is unresponsive, a backup is in freeze/thaw, or an earlier guest
+request's state is uncertain, read [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+first.** Do not run Diagnostics, force guest-agent probes or repeat a backup to
+fill a report. A successful backup task or responsive console alone does not
+establish safe recovery.
+
+- **Cannot sign in:** use [local password recovery](TROUBLESHOOTING.md#i-forgot-my-password)
+  or [401 and login failures](TROUBLESHOOTING.md#cannot-login--401-unauthorized),
+  according to the existing authentication method. Do not delete configuration
+  or repeat first-time setup.
+- **Update failed or its result is uncertain:** start with
+  [Pulse server update checks](AUTO_UPDATE.md#update-failed). An update of a
+  monitored container is a different job; use
+  [Docker workload update checks](DOCKER.md#check-a-failed-or-pending-workload-update).
+  Preserve the current state and rollback evidence; do not repeat the attempt.
+- **Agent host is missing or reporting is rejected:** check the existing
+  [agent authentication and reporting evidence](UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403)
+  before replacing a token or reinstalling. Installer success is not an accepted
+  report.
+- **Guest readings are missing or disagree:** distinguish
+  [current, retained and unavailable disks](VM_DISK_MONITORING.md#current-retained-and-unavailable-disk-readings)
+  from [guest memory pressure](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful).
+  Unknown is not zero, and a working Pulse Agent view does not prove API recovery.
+- **Proxmox data belongs to the wrong host, or healthy jobs look Pending:** use
+  [cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations)
+  or [replication status checks](TROUBLESHOOTING.md#replication-jobs-are-pending-stale-or-missing).
+  Do not rename, remove or re-enrol resources to create evidence.
+- **TrueNAS readings are stale or absent:** use
+  [TrueNAS data checks](TRUENAS.md#stale-truenas-data), keeping the platform API
+  and Pulse Agent paths separate.
+- **Pulse itself uses more memory, CPU or disk writes:** use
+  [memory baseline and growth checks](TROUBLESHOOTING.md#memory-use-keeps-growing)
+  or [CPU and write-rate checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).
+  Guest usage and database size are different measurements.
+- **Notification Test works but alerts do not arrive:** follow
+  [ordinary delivery checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
+  Do not trigger an alert or replay the queue just to complete a report.
+- **Private information was posted:** follow
+  [disclosure containment](TROUBLESHOOTING.md#if-you-already-posted-private-information).
+  Deleting the public copy does not revoke a credential.
+
+If none fits, use [Getting Help](TROUBLESHOOTING.md#-getting-help).
+Review evidence locally before sharing it; unknown or unavailable details are
+valid, and a full configuration, journal or network export is not required.
+
 ## ⚡ Quick Fixes
 
 ### I forgot my password
@@ -336,8 +386,16 @@ sudo systemctl disable --now pulse-agent.service
 ```
 
 If the Pulse server is still reachable, use its generated uninstall command so
-the agent can deregister cleanly. Otherwise, stopping the service is the safe
-first step before platform-local cleanup.
+the agent can deregister cleanly. If it is unreachable or the saved server URL
+is missing, **stopping retries is not completed removal or credential
+revocation**. Keep the agent's saved identity, credentials, connection files and
+needed logs private and intact; do not reinstall, create a new token or delete
+state to bypass a removal refusal. Temporary loss of connectivity does not
+establish that the server is gone. Follow the
+[saved-state removal guidance](UNIFIED_AGENT.md#uninstall) before local cleanup;
+Unix credential-bearing removal needs confirmation from the same trusted Pulse
+instance. The stop command above is for systemd, not Windows or other service
+managers.
 
 #### Filter Pulse's systemd journal by severity
 

@@ -10,6 +10,25 @@ import {
 } from '@/utils/workloadGuestPresentation';
 
 describe('workloadGuestPresentation', () => {
+  it.each([undefined, '', 'prev-agent-busy'])(
+    'does not promote a stopped VM’s retained numbers without a current read (%s)',
+    (diskStatusReason) => {
+      for (const disksFromAgent of [undefined, true]) {
+        expect(
+          getWorkloadGuestDiskRead({ status: 'stopped', diskStatusReason, disksFromAgent }, true),
+        ).toEqual({
+          state: 'unavailable',
+          message: getWorkloadGuestDiskStatusMessage('vm-stopped'),
+          needsAction: false,
+        });
+      }
+    },
+  );
+
+  it('keeps stopped LXC platform storage separate from in-guest VM readings', () => {
+    expect(getWorkloadGuestDiskRead({ status: 'stopped' }, false).state).toBe('current');
+  });
+
   it.each(['permission-denied', 'prev-permission-denied'])(
     'keeps %s separate from permission expansion and guest health',
     (reason) => {

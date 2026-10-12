@@ -1,5 +1,8 @@
-import { render, screen } from '@solidjs/testing-library';
-import { describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { createSignal } from 'solid-js';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
 import { ResourceChangeSummary } from '../ResourceChangeSummary';
 
@@ -99,5 +102,52 @@ describe('ResourceChangeSummary', () => {
     expect(screen.queryByText('Platform event')).toBeNull();
     expect(screen.queryByText('Proxmox adapter')).toBeNull();
     expect(screen.queryByText('Heuristic')).toBeNull();
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
+describe('held change-summary ages', () => {
+  it('ages an unchanged record without rebuilding its link or changing the evidence', () => {
+    const start = Date.parse('2026-10-11T11:00:00Z');
+    vi.useFakeTimers({ now: start });
+    const change = {
+      id: 'held-change',
+      resourceId: 'guest-a',
+      kind: 'config_update' as const,
+      observedAt: new Date(start - 60_000).toISOString(),
+      reason: 'Changed retention',
+      sourceType: 'platform_event' as const,
+      confidence: 'high' as const,
+    };
+    const [changes, setChanges] = createSignal([change]);
+    const view = render(() => (
+      <ResourceChangeSummary
+        title="Recent changes"
+        changes={changes()}
+        buildResourceHref={(id) => `/infrastructure/${id}`}
+      />
+    ));
+    const link = screen.getByRole('link', { name: 'Open resource guest-a in Infrastructure' });
+    link.focus();
+    expect(view.container).toHaveTextContent('1m ago');
+    vi.advanceTimersByTime(2 * 3_600_000);
+    expect(view.container).toHaveTextContent('2h ago');
+    expect(link).toHaveFocus();
+    expect(screen.getByRole('link', { name: link.getAttribute('aria-label')! })).toBe(link);
+    expect(changes()).toEqual([change]);
+    setChanges([{ ...change, observedAt: new Date(Date.now()).toISOString() }]);
+    expect(view.container).toHaveTextContent('just now');
+    vi.advanceTimersByTime(2 * RELATIVE_TIME_TICK_MS);
+    expect(view.container).toHaveTextContent('1m ago');
+    setChanges([]);
+    vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+    expect(
+      screen.getByText('No canonical changes were recorded in the last 24 hours.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Changed retention')).not.toBeInTheDocument();
   });
 });

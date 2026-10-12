@@ -305,6 +305,77 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
         self.assertIn("Check for receipt", ui)
         self.assertIn("refreshReceipt()", ui)
 
+    def test_workload_refusal_help_is_stage_qualified_and_matches_planning_source(self):
+        text = section("DOCKER", "Check a failed or pending workload update", "###")
+        stages = text.split("#### Command agent is not connected", 1)[0]
+        for phrase in ("**existing error and action stage**", "**Planning refused:**",
+                       "planning request", "refused that plan before dispatch",
+                       "409 alone has other causes", "earlier action did",
+                       "**Action sent, receipt pending:**", "even beside a failed banner",
+                       "**Stage unknown:**", "repeat the\n  action to find out"):
+            self.assertIn(phrase, stages)
+        self.assertNotIn("```", stages)
+        executor = (ROOT / "internal/api/docker_container_action_executor.go").read_text()
+        self.assertIn('"command_agent_disconnected", "Docker / Podman command agent is not connected."', executor)
+        lifecycle = (ROOT / "internal/actionlifecycle/service.go").read_text()
+        planning = lifecycle.split("func (s *Service) PlanWithOptions(", 1)[1].split(
+            "\nfunc ", 1)[0]
+        refusal = planning.index("checker.CheckActionAvailable(")
+        self.assertLess(refusal, planning.index("checker.CheckActionFeasible("))
+        self.assertLess(refusal, planning.index("persistPlanAudit("))
+        self.assertIn("&AvailabilityRefusedError", planning[refusal:planning.index("persistPlanAudit(")])
+
+    def test_disconnected_workload_help_reads_authority_without_widening_it(self):
+        text = section("DOCKER", "Command agent is not connected", "####")
+        flat = " ".join(text.split())
+        for phrase in ("**affected Docker host**", "not necessarily the host running Pulse",
+                       "`commands monitoring-only`", "`commands command-capable`",
+                       "**not a connected session**", "missing Privilege line is unknown",
+                       "do not enable commands, broaden a token, change Proxmox permissions",
+                       "do not reinstall or retry the workload update as a connection test",
+                       "not a full Agent Doctor report, token hint, agent ID",
+                       "does not settle an earlier missing receipt"):
+            self.assertIn(phrase, flat)
+        self.assertNotIn("```", text)
+        self.assertIn("UNIFIED_AGENT.md#commands-enabled-but-remote-control-blocked", text)
+        model = (ROOT / "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts").read_text()
+        self.assertIn("commands ${authority}", model)
+        self.assertIn("'credential grants exec' : 'monitoring credential'", model)
+        doctor = (ROOT / "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx").read_text()
+        self.assertIn("· Privilege: {target.privilegeLabel}", doctor)
+
+    def test_legacy_monitoring_help_does_not_require_runner_migration_or_more_logs(self):
+        docker = " ".join(section("DOCKER", "Command agent is not connected", "####").split())
+        for phrase in (
+            "`root` identifies the collector's OS user", "`commands legacy`",
+            "does not establish that commands are enabled", "`monitoring credential`",
+            "cannot authenticate the legacy command channel",
+            "Do not add execution rights to that token as a repair",
+            "`Credential not issued` and `Runner not connected`",
+            "An absent runner alone does not rule out an authorised legacy command connection",
+            "not proof of a broken collector", "your usual Docker or Podman administration tool",
+            "Neither is a diagnostic prerequisite", "unknown is valid",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, docker)
+        model = (ROOT / "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts").read_text()
+        for label in ("Credential not issued", "Runner not connected"):
+            self.assertIn(label, model)
+        self.assertIn("privilege.actionRunnerCredentialIssued", model)
+        self.assertIn("privilege.actionRunnerConnected", model)
+        self.assertIn("!privilege.credentialExec", model)
+
+        unified = " ".join(section("UNIFIED_AGENT", "Commands enabled but remote control blocked", "###").split())
+        for phrase in (
+            "DOCKER.md#command-agent-is-not-connected",
+            "without widening a token or converting the collector",
+            "an authorised command connection was intended",
+            "Do not collect more logs just to confirm the known monitoring scope",
+        ):
+            self.assertIn(phrase, unified)
+        self.assertEqual(guide("UNIFIED_AGENT"),
+                         (ROOT / "frontend-modern/public/docs/UNIFIED_AGENT.md").read_text())
+
     def test_update_failure_entry_reuses_bounded_readers_before_any_recovery(self):
         text = " ".join(section("AUTO_UPDATE", "Update failed", "###").split())
         for phrase in ("**Pulse server**", "UNIFIED_AGENT.md#auto-update",

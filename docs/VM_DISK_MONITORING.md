@@ -408,7 +408,7 @@ pass; do not clear or bypass a guest-read pause to test recovery.
 The current `scripts/test-vm-disk.sh` helper reads only local VM status and
 current configuration, with bounded timeouts and byte limits. It sends **no guest-agent
 commands**, reads no guest files, and changes no service, lock or ACL. It requires
-local `qm`, `timeout` and Python 3; it downloads nothing. Use it
+local `qm`, Bash, GNU `timeout` and Python 3; it downloads nothing. Use it
 on the VM's owning Proxmox host with an account permitted to read that local
 configuration (normally through `sudo`).
 
@@ -430,6 +430,11 @@ Status replies are limited to 256 bytes and configuration to 64 KiB. Oversized
 or corrupt replies fail without interpreting a truncated prefix, printing raw
 configuration or saving it to disk. Inspect the configuration privately rather
 than retrying with guest-agent probes.
+Each read has a ten-second hard deadline covering both `qm` and its response
+reader. If either stalls, only that local collection group is stopped, including
+readers that ignore TERM or retain an open output pipe. No VM, guest agent or
+service is stopped. A timeout is an incomplete preflight, not an absent lock;
+do not remove the deadline or repeat it against an unresponsive host.
 **A successful preflight does not verify disk freshness, guest-agent
 responsiveness or thaw.**
 

@@ -1089,8 +1089,17 @@ const filterAgentMachineResources = (
   resources: Resource[],
   search: string,
   status: PlatformResourceStatusFilter,
+  nowMs: number,
 ): Resource[] =>
-  filterPlatformResources(resources, '', status).filter((machine) =>
+  filterPlatformResources(resources, '', status, (machine) => {
+    // Health is the row's current presentation, not its last reported status.
+    // Never write this derived classification back into the canonical resource.
+    const variant = getStandaloneResourceStatusIndicator(machine, nowMs).variant;
+    if (variant === 'success') return 'online';
+    if (variant === 'warning') return 'degraded';
+    if (variant === 'danger') return 'offline';
+    return 'unknown';
+  }).filter((machine) =>
     matchesAgentMachineSearch(machine, search, systemLabelFor, agentVersionFor),
   );
 
@@ -1264,7 +1273,8 @@ export const AgentsMachinesTable: Component<{
   const tableState = createPlatformTableFilterState({
     resources: visibleMachineResources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterAgentMachineResources,
+    filter: (resources, search, status) =>
+      filterAgentMachineResources(resources, search, status, now()),
     externalSearch: props.externalSearch,
     onExternalSearchChange: props.onExternalSearchChange,
     externalStatus: props.externalStatus,
@@ -1568,7 +1578,7 @@ export const AgentsMachinesTable: Component<{
                         : '';
                       return `Agent has stopped reporting.${when} Re-run the install command from the Pulse UI to refresh its token.`;
                     };
-                    const indicator = () => getStandaloneResourceStatusIndicator(machine);
+                    const indicator = () => getStandaloneResourceStatusIndicator(machine, now());
                     const canRenderMetrics = () => indicator().variant !== 'danger';
                     const telemetryFallback = () =>
                       canRenderMetrics()
@@ -1708,8 +1718,8 @@ export const AgentsMachinesTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
-                                title={machine.status || 'unknown'}
-                                ariaHidden
+                                title={indicator().label}
+                                ariaLabel={indicator().label}
                               />
                               <ResourceNameWithWebInterfaceLink
                                 name={name()}

@@ -4985,14 +4985,25 @@ func (m *Monitor) cleanupRemovedHostAgents(now time.Time) {
 }
 
 // cleanupGuestMetadataCache removes stale guest metadata cache and limiter entries.
-// Entries older than 2x the cache TTL (10 minutes) are removed to prevent unbounded growth
-// when VMs are deleted or moved.
+// Idle entries older than 2x the cache TTL (10 minutes) are removed to prevent
+// unbounded growth when VMs are deleted or moved. A successful observation's age
+// is not cache activity: empty/failed metadata must not erase an active guest's
+// OS-info failure counter or known-unsupported command suppression.
 func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 	const maxAge = 2 * guestMetadataCacheTTL // 10 minutes
 
+	// Serialize the activity check with touches and reservations. No caller holds
+	// the metadata lock while acquiring the limiter lock; this order also keeps
+	// in-flight ownership intact throughout a sweep.
+	m.guestMetadataLimiterMu.Lock()
+	defer m.guestMetadataLimiterMu.Unlock()
 	m.guestMetadataMu.Lock()
 	for key, entry := range m.guestMetadataCache {
-		if now.Sub(entry.fetchedAt) > maxAge {
+		activityAt := m.guestMetadataLastAccess[key]
+		if entry.fetchedAt.After(activityAt) {
+			activityAt = entry.fetchedAt // Also supports legacy/seeded cache entries.
+		}
+		if m.guestMetadataInFlight[key] == nil && now.Sub(activityAt) > maxAge {
 			delete(m.guestMetadataCache, key)
 			log.Debug().
 				Str("key", key).
@@ -5002,11 +5013,14 @@ func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 	}
 	m.guestMetadataMu.Unlock()
 
-	m.guestMetadataLimiterMu.Lock()
-	defer m.guestMetadataLimiterMu.Unlock()
+	for key, accessedAt := range m.guestMetadataLastAccess {
+		if m.guestMetadataInFlight[key] == nil && now.Sub(accessedAt) > maxAge {
+			delete(m.guestMetadataLastAccess, key)
+		}
+	}
 	for key, nextAllowed := range m.guestMetadataLimiter {
 		// Keep near-term limiter state; remove long-idle keys.
-		if now.Sub(nextAllowed) > maxAge {
+		if m.guestMetadataInFlight[key] == nil && now.Sub(nextAllowed) > maxAge {
 			delete(m.guestMetadataLimiter, key)
 			log.Debug().
 				Str("key", key).

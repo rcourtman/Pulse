@@ -204,6 +204,75 @@ class SecurityDocsTest(unittest.TestCase):
             self.assertIn(boundary, guide)
         self.assertNotIn("token values masked with `***` in all outputs", guide)
 
+    def test_security_checks_use_existing_bounded_evidence_not_broad_log_recipes(self):
+        source = DOC.read_text()
+        audit = source.split("#### Auditing Your Deployment\n", 1)[1].split("\n---\n", 1)[0]
+        checklist = source.split("### Verification Checklist\n", 1)[1].split("\n## ", 1)[0]
+        self.assertNotRegex(audit + checklist,
+                            r"(?:systemctl status|journalctl|docker logs|ls /home/|```bash)")
+        for link in ("docs/TEMPERATURE_MONITORING.md#check-existing-linux-readings-safely",
+                     "docs/VM_DISK_MONITORING.md#backup-safety"):
+            self.assertIn(link, audit)
+        for link in ("docs/TROUBLESHOOTING.md#inspect-notification-logs",
+                     "docs/TROUBLESHOOTING.md#if-you-already-posted-private-information"):
+            self.assertIn(link, checklist)
+        guide = " ".join((audit + checklist).split())
+        for boundary in ("does not prove", "does not revoke", "full service definitions",
+                         "container inspections", "Copy as cURL", "partial hint match"):
+            self.assertIn(boundary, guide)
+
+    def test_logging_defaults_and_file_only_rotation_match_server_source(self):
+        source = DOC.read_text()
+        logging = source.split("### Runtime Logging Configuration\n", 1)[1].split("\n## ", 1)[0]
+        rows = dict(re.findall(r"^\| `(LOG_[A-Z_]+)` \| [^|]+ \| (.*?) \|$",
+                               logging, re.MULTILINE))
+        config = (ROOT / "internal/config/config.go").read_text()
+        defaults = dict(re.findall(r'envconfig:"(LOG_[A-Z_]+)" default:"([^"]*)"', config))
+        self.assertEqual(set(rows), set(defaults))
+        self.assertEqual({key: ("Unset" if not value else f"`{value}`")
+                          for key, value in defaults.items()}, rows)
+        writer = (ROOT / "internal/logging/logging.go").read_text()
+        self.assertRegex(writer, r'func newRollingFileWriter\(cfg Config\).*?\{\s*'
+                                r'path := strings.TrimSpace\(cfg.FilePath\)\s*'
+                                r'if path == "" \{\s*return nil, nil')
+        guide = " ".join(logging.split())
+        for boundary in ("only when `LOG_FILE` is configured", "systemd journal",
+                         "container logs", "browser log buffer", "separate **Audit Log**",
+                         "Zero or negative", "do not disable cleanup",
+                         "do not redact", "do not delete logs or shorten retention"):
+            self.assertIn(boundary, guide)
+        self.assertNotIn("manage audit log retention", guide)
+
+    def test_logging_changes_preserve_the_existing_deployment_and_runtime_distinction(self):
+        logging = DOC.read_text().split("### Runtime Logging Configuration\n", 1)[1].split("\n## ", 1)[0]
+        # Environment-file settings are not a new-install command or a shell
+        # script containing a systemd [Service] stanza.
+        self.assertNotIn("```bash", logging)
+        guide = " ".join(logging.split())
+        for boundary in ("server-wide threshold immediately", "at startup unless `LOG_LEVEL`",
+                         "docs/CONFIGURATION.md#log-levels", "environment file or drop-in",
+                         "inside the Pulse container", "recreate/redeploy",
+                         "`docker restart` does not apply it", "same image",
+                         "persistent data mounts", "credentials and other settings"):
+            self.assertIn(boundary, guide)
+
+    def test_debug_display_and_support_bundle_guidance_does_not_invite_replay_or_disclosure(self):
+        source = DOC.read_text()
+        logging = source.split("### Runtime Logging Configuration\n", 1)[1].split("\n## ", 1)[0]
+        observability = source.split("### Scheduler Health API\n", 1)[1].split("\n### ", 1)[0]
+        self.assertNotIn("Enable debug logging temporarily", source)
+        guide = " ".join(logging.split())
+        for boundary in ("Debug is not a prerequisite", "repeat the failed action",
+                         "previous working level", "not proof of underlying recovery",
+                         "**Pause Stream**", "**Clear Log Output**", "only the browser display",
+                         "complete log file", "configuration and environment information",
+                         "Keep it private", "locally reviewed, redacted excerpts",
+                         "backups, freeze/thaw", "unresponsive-host incident"):
+            self.assertIn(boundary, guide)
+        for section in (logging, observability):
+            self.assertIn("docs/TROUBLESHOOTING.md#collect-diagnostics-safely", section)
+        self.assertIn("not proof that every workload or collector is healthy", observability)
+
 
 if __name__ == "__main__":
     unittest.main()

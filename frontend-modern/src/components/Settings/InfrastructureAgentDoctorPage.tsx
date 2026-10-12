@@ -941,9 +941,8 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                     This agent was removed from Pulse, but the agent software may
                                     still be installed on its host. Finish detaching it by running
                                     the uninstall command on the affected host itself. Pulse does
-                                    not run commands remotely. For Unix commands that require a
-                                    token, run the command first, then paste the separately revealed
-                                    token at its silent prompt. Never insert it into the command.
+                                    not run commands remotely. Removal uses the host's saved
+                                    connection and credentials. Do not generate a new token.
                                   </p>
                                   <For each={handoff().commands}>
                                     {(entry) => (

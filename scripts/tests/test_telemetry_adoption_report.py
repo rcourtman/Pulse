@@ -887,13 +887,40 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             REPO_ROOT / "frontend-modern/public/docs/SECURITY.md",
         )
 
+        self.assertEqual(security_docs[0].read_bytes(), security_docs[1].read_bytes())
+
+        def check(content):
+            self.assertIn("Settings → Infrastructure → Install on a host", content)
+            self.assertNotIn("Settings → Agents → Installation commands", content)
+            self.assertNotIn("Settings -> Agents -> Installation commands", content)
+            # The current guide uses the safe host-install surface and
+            # instance-served manual route, not the old alternate page label.
+            # Retain each safety distinction in that actual migration section.
+            migration = " ".join(content.split("Preferred option (no SSH keys, no proxy wiring):", 1)[1]
+                                 .split("Legacy sensor proxy (removed):", 1)[0].split())
+            for boundary in (
+                "separately revealed credential out of the copied command",
+                "silent prompt on that host", "private token-file route",
+                "agent installer served by your Pulse instance",
+                "verified HTTPS address", "`--token-file` and `--enable-proxmox`",
+                "installs the server, not the agent",
+                "Do not pipe an unchecked HTTP response into a privileged shell",
+                "or disable certificate verification",
+            ):
+                self.assertIn(boundary, migration)
+
         for path in security_docs:
             with self.subTest(path=path.relative_to(REPO_ROOT)):
                 content = path.read_text(encoding="utf-8")
-                self.assertIn("Settings → Infrastructure → Install on a host", content)
-                self.assertIn("Proxmox or Machines page", content)
-                self.assertNotIn("Settings → Agents → Installation commands", content)
-                self.assertNotIn("Settings -> Agents -> Installation commands", content)
+                check(content)
+                for boundary in ("Settings → Infrastructure → Install on a host",
+                                 "agent installer served by your", "verified HTTPS address",
+                                 "`--token-file`", "separately", "Do not pipe an unchecked HTTP response"):
+                    with self.subTest(removed=boundary):
+                        changed = content.replace(boundary, "removed safety boundary")
+                        self.assertNotEqual(changed, content)
+                        with self.assertRaises(AssertionError):
+                            check(changed)
 
     def test_summarize_rows_uses_latest_install_state_and_splits_release_validation(self) -> None:
         now = datetime.now(timezone.utc).replace(microsecond=0)

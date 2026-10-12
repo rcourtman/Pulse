@@ -76,6 +76,7 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 	if m == nil || instanceName == "" {
 		return
 	}
+	m.retireGuestMemoryCache(instanceName)
 
 	if m.taskQueue != nil {
 		m.taskQueue.Remove(InstanceTypePVE, instanceName)
@@ -138,6 +139,12 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 	}
 	m.diagMu.Unlock()
 
+	m.guestMetadataLimiterMu.Lock()
+	for key := range m.guestMetadataInFlight {
+		if strings.HasPrefix(key, instanceName+"|") {
+			m.invalidateGuestMetadataFetchLocked(key)
+		}
+	}
 	m.guestMetadataMu.Lock()
 	for key := range m.guestMetadataCache {
 		if strings.HasPrefix(key, instanceName+"|") {
@@ -146,10 +153,14 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 	}
 	m.guestMetadataMu.Unlock()
 
-	m.guestMetadataLimiterMu.Lock()
 	for key := range m.guestMetadataLimiter {
 		if strings.HasPrefix(key, instanceName+"|") {
 			delete(m.guestMetadataLimiter, key)
+		}
+	}
+	for key := range m.guestMetadataLastAccess {
+		if strings.HasPrefix(key, instanceName+"|") {
+			delete(m.guestMetadataLastAccess, key)
 		}
 	}
 	m.guestMetadataLimiterMu.Unlock()

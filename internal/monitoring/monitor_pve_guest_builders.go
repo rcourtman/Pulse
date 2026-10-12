@@ -266,9 +266,14 @@ func (m *Monitor) buildVMFromClusterResource(
 	if res.Type == "qemu" && state.diskUsed == 0 && state.diskTotal > 0 && res.Status == "running" {
 		state.diskUsage = -1
 	}
-	if res.Status != "running" && state.diskTotal > 0 {
-		state.diskUsage = -1
-		state.diskStatusReason = "vm-stopped"
+	if res.Status != "running" {
+		// A subsequent start must obtain its own guest memory observation rather
+		// than inherit a success or failure from before this stopped poll.
+		m.clearGuestMemoryCache(instanceName, res.Node, res.VMID)
+		if state.diskTotal > 0 {
+			state.diskUsage = -1
+			state.diskStatusReason = "vm-stopped"
+		}
 	}
 
 	// For running VMs, always try to get filesystem info from guest agent

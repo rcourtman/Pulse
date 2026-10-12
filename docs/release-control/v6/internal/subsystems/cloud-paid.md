@@ -150,6 +150,31 @@ contract: an agent outside the monitored site performs the check and reports
 its result to Pulse, while Pulse remains the alerting authority. Commercial
 copy must not imply that the external agent independently sends alerts.
 
+### Provider-hosted production evaluation and renewal startup
+
+A provider-hosted MSP control plane may start in production without a host
+licence only on `msp_eval` (two client workspaces). Unsigned environment settings
+cannot select paid limits. Pulse-hosted MSP production still requires its licence
+path. Explicit empty, truncated, oversized or invalid licence files are not an
+invitation to evaluate. Existing valid-renewal precedence, signature/MSP-tier and
+lease-key binding checks, lapse behaviour, Stripe exclusions and tenant isolation
+are unchanged.
+
+A provider that first ran unlicensed must read its persisted signed renewal on
+restart even when the original host secret remains unused. An invalid persisted
+renewal with no host licence refuses startup rather than silently dropping to
+evaluation. This is the existing refresh/startup path, not a new purchase or
+entitlement surface.
+
+`TestLoadConfig_ProviderHostedMSPUnlicensedProduction`, the explicit-invalid and
+renewal controls, plus `TestProviderMSPProductionStartup` cover these boundaries.
+The opt-in daemon test builds the actual release command with an ephemeral test
+issuer and checks private status, plan/limit readback, account/owner persistence,
+readiness across restarts and graceful stop. Hosted Compose execution additionally
+checks the real `/dev/null` placeholder and signed-file mounts, refused startup,
+and owned container/network/volume cleanup. Process-only VM execution does not
+establish Compose mounts, tenant provisioning or installed provider recovery.
+
 ## Canonical Files
 
 1. `pkg/licensing/features.go`

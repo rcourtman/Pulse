@@ -504,20 +504,69 @@ These are stored in `system.json` and managed via the UI.
 
 ### Auto-Import (Bootstrap)
 
-You can auto-import an encrypted backup on first startup. This is useful for automated provisioning and test environments.
+Startup import is for deliberately provisioning an **isolated destination**,
+not resetting an existing installation. It uses the same encrypted
+[configuration-transfer scope](MIGRATION.md#configuration-transfer) as the
+Recovery settings form, not a full-state backup. Included settings and API-token
+records are **replaced, not merged**; imported SSO settings can also change access.
+
+The startup gate requires an **empty data directory** (`PULSE_DATA_DIR`, or
+the deployment default), or a destination that does not yet exist. A regular
+`.env` file for destination-local deployment overrides is the only exception.
+Existing settings, API-token records, sessions, encryption keys, organisation
+directories and unknown contents all prevent startup import, even without
+`nodes.enc`. Unreadable directories and symbolic links are not treated as empty.
+The importer checks the destination again before writing, but this is **not a
+lock against another running Pulse process**. Do not delete `nodes.enc` or
+other state, change the data path or remove credentials to force an import;
+resolve an unexpected path or access failure first.
+For an existing installation, use the
+[reviewed transfer procedure](MIGRATION.md#transfer-the-included-configuration)
+instead, with a private backup of the destination before replacing settings.
 
 | Variable | Description |
 | ---------- | ------------- |
-| `PULSE_INIT_CONFIG_DATA` | Base64 or raw contents of an export bundle (auto-imports on first start) |
-| `PULSE_INIT_CONFIG_FILE` | Path to an export bundle on disk (auto-imports on first start) |
+| `PULSE_INIT_CONFIG_DATA` | Encrypted export contents; used only when `PULSE_INIT_CONFIG_FILE` is unset |
+| `PULSE_INIT_CONFIG_FILE` | Path to the private encrypted export, readable by the Pulse service; takes precedence over `PULSE_INIT_CONFIG_DATA` |
 | `PULSE_INIT_CONFIG_PASSPHRASE` | Passphrase for the export bundle (required) |
 
-> **Note**: `PULSE_INIT_CONFIG_URL` is only supported by the hidden `pulse config auto-import` command, not by the server startup auto-import.
+An unreadable or invalid file fails the attempt; it does **not** fall back to
+the data variable. `PULSE_INIT_CONFIG_URL` is not supported by server startup;
+the separate hidden `pulse config auto-import` command has a different path.
+Keep the input archive **outside the destination data directory**. An archive
+placed inside it also makes the destination nonempty; startup skips import
+and retains those contents. Use a separate private file or read-only mount,
+not deletion of useful destination state.
 
-Configuration import restores server-side agent credentials, but it cannot
-change the primary Pulse URL persisted on remote agents. When restoring onto a
-server with a different address, retarget those agents after import. See
-[Moving Pulse to a new address](UNIFIED_AGENT.md#moving-pulse-to-a-new-address).
+Keep the export owner-only and its passphrase in the deployment's private
+credential source, separate from the backup. Do not put a passphrase or bundle
+in command arguments, URLs, shared Compose files, logs or issue reports;
+base64 is not redaction. Startup has no passphrase-file variable. For an
+interactive transfer, use the authenticated Recovery form instead.
+
+Before enabling startup import, preserve the intact source and any useful
+destination state. Isolate the trial destination from agents and notification
+destinations: imported settings can activate monitoring and delivery. Keep only
+one active installation at cutover, with independent outage coverage.
+
+**A running server is not proof that import succeeded.** A returned import
+error is logged and startup continues with normal configuration loading, which
+can itself fail. Review the existing error privately, stop the trial destination
+on an unexpected result, and reconcile its state before another attempt. Do not
+repeat import, replay notifications or induce a workload action to test recovery.
+After verifying the intended settings and access, remove only the three
+`PULSE_INIT_CONFIG_*` settings above from the deployment's managed source so a
+later start cannot reuse them. Apply environment changes through the existing
+deployment during suitable maintenance, preserving its image, data and other
+credentials; a Docker restart alone does not apply a changed environment.
+
+Configuration transfer includes API-token records, but **not server-side agent
+inventory or enrolment state**, local login credentials or monitoring history.
+It cannot change the primary URL saved on remote agents. If the address changes,
+follow [agent retargeting](UNIFIED_AGENT.md#moving-pulse-to-a-new-address),
+preserving each agent's identity, credential and TLS trust. Verify fresh admission
+and ordinary reports before retiring the source; imported records alone do not
+establish agent recovery.
 
 ### Developer/Test Overrides (Environment Variables)
 

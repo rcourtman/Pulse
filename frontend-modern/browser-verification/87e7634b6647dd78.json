@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "e6276c755717d665067b8a0c16f54a8fe1698018",
+  "verified_at": "2026-10-11T17:09:42.515868Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "6bcf8552e8424c6eb84c646c71c2b40444ccfa33481452526064270a1437600c",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts": "42cbf2e575918e2eb16ac40e1b600a66df3aa64d043a68ff15b86e09e5836ea2",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx": "7173f1c57fe9ed069f90a341149683fd003e6e5fc5b0ff49875c7b9a29db52db"
+  },
+  "routes": [
+    "/browser-tests/pr2600-monitoring.html?surface=machines (production Machines page plus production-helper classification control; not an application route or removed Machines posture card)",
+    "/browser-tests/pr2600-monitoring.html?surface=debug (production Debug component and derived state; synthetic local evidence)"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 950
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 matches integration lock; Chromium 141.0.7390.37 light desktop and WebKit 26.0 dark touch phone. Four exact-parent controls and four repaired groups, ten captures for each, all inspected. Not a physical phone, full application, native collector, guest recovery, installed result, publication or release.",
+    "After the unchanged five-minute report boundary a retained Machines dot turns amber and agrees with the production posture-classification helper and a same-instant remount; the parent retained dot stays green. The current Machines page has no posture card; this fixture does not restore one. Canonical online status/filter counts and agent stale flag are unchanged. Browser host metrics are unavailable in the synthetic REST projection; preservation of actual CPU bars is a component-test control, not a browser claim.",
+    "Quiet clock advancement preserves original snapshot, retained row and focus, without clock-triggered read or write. Ordinary initial canonical REST revalidation and remount reads remain. No unexpected API read, off-origin request, page error, console error or page-level horizontal overflow; browsers and server close."
+  ],
+  "interactions": [
+    "Desktop Enter and phone tap expand the Proxmox source. Numeric/ISO source status records arrive without replacing production-derived payload sections; status, error and last-seen update while section DOM, expansion, focus and original payload remain. Parent summaries retain old status/error despite the arriving record.",
+    "New source timestamps continue ageing. Invalid/withdrawn status records remove obsolete error/age without inventing freshness. The old guest deferral payload is preserved; source status availability is not independent thaw, every-covered writes/liveness or restoration."
+  ]
+}

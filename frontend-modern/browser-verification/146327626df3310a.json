@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "6626f51131790a6798821dff9c40094d418b1560",
+  "verified_at": "2026-10-11T10:45:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx": "da57d9cd5eee01072104c2fadafb53880ac737a5c238f6aa248f8af786072677"
+  },
+  "routes": [
+    "/browser-tests/source-evidence-age.html (synthetic production ResourceDetailDrawer/Debug and Overview, not an added application route)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 950
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 matches integration lock; Chromium 141.0.7390.37 desktop/light and WebKit 26.0 phone/dark. Production drawer/state/CSS on final source bytes with local synthetic snapshots; no native guest or server.",
+    "Held Proxmox/Agent lastSeen ages advance from one/two minutes to two hours while original timestamp, payload, deferred/stale status and backup precaution remain unchanged. Real Overview agrees; no new observation inferred.",
+    "Ordinary same-resource platformData replacement removes the old error/source and reads available with the new server timestamp, then ages that unchanged timestamp to one minute.",
+    "Missing/invalid source times show no invented age; missing status remains unknown. Six screenshots inspected: initial, two-hour held feed and missing-times states for each engine. No horizontal page overflow, page errors, API requests/writes or off-origin traffic."
+  ],
+  "interactions": [
+    "Desktop Enter and phone tap enter Debug, open native Proxmox details and copy JSON. Source disclosure and focused summary survive clock ticks without remount.",
+    "Copy JSON twice around two simulated hours: exact same JSON, source timestamp and disk deferral; no read, write, restart or probe.",
+    "Switch to Overview and back with the unchanged resource; source age stays correct. Replace local same-resource snapshot and check new server status/error/source removal and subsequent aging.",
+    "Supply missing/invalid timestamps; unmount, advance time and remount drawer, then open Debug again. No exception or invented currentness."
+  ]
+}

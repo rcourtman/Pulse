@@ -14,11 +14,69 @@ def upgrade_guide():
     return (ROOT / "docs" / GUIDE).read_text(encoding="utf-8")
 
 
-def section(heading):
-    return upgrade_guide().split(heading, 1)[1].split("\n### ", 1)[0]
+def section(heading, text=None):
+    return (upgrade_guide() if text is None else text).split(heading, 1)[1].split("\n### ", 1)[0]
 
 
 class UpgradeV5DocsTest(unittest.TestCase):
+    def assert_current_upgrade_routes(self, text):
+        paths = text.split("## Upgrade Paths", 1)[1].split("## Post-Upgrade Checklist", 1)[0]
+        self.assertNotRegex(paths, r"```(?:bash|sh|shell)\b",
+                            "Historical shortcuts must not bypass current update safeguards")
+        for boundary in ("INSTALL.md#manual-update", "helper's ownership",
+                         "existing service and data/config paths", "absent or unknown helper",
+                         "inside the existing Pulse LXC", "AUTO_UPDATE.md#a-helper-selects-a-helm-chart-release",
+                         "UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas",
+                         "DOCKER.md#-updates", "explicit published image tag", "mounted data",
+                         "private Pro image", "unrelated services", "INSTALL.md#1-kubernetes-helm",
+                         "release, namespace, values and persistent volumes"):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, " ".join(paths.split()))
+
+    def assert_safe_proxy_retirement_entry(self, text):
+        cleanup = section("### Sensor proxy removal", text)
+        self.assertNotRegex(cleanup, r"```(?:bash|sh|shell)\b",
+                            "Use the existing inspected procedure, not an inline privileged shortcut")
+        for boundary in ("can stop and start running LXCs", "including Pulse",
+                         "does not restrict cleanup to one container", "authorised Proxmox administrator",
+                         "private recovery evidence", "schedule their maintenance",
+                         "Do not pipe a web response into a privileged shell",
+                         "TEMPERATURE_MONITORING.md#legacy-cleanup-if-upgrading",
+                         "prior-active-state recording", "verified restoration",
+                         "preserves proxy state, configuration, logs and the service account",
+                         "Do not add `--purge` or `--remove-proxmox-access`",
+                         "tokens still used by current connections", "Neither is required",
+                         "not a cluster-wide uninstall"):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, " ".join(cleanup.split()))
+
+    def test_upgrade_paths_use_current_owned_procedures_not_mutating_shortcuts(self):
+        self.assert_current_upgrade_routes(upgrade_guide())
+
+    def test_proxy_retirement_preserves_access_evidence_and_workload_scope(self):
+        self.assert_safe_proxy_retirement_entry(upgrade_guide())
+
+    def test_configuration_export_is_not_the_full_upgrade_recovery_backup(self):
+        before = upgrade_guide().split("## Before You Upgrade", 1)[1].split("## Upgrade Paths", 1)[0]
+        for boundary in ("private, consistent backup", "active data, encryption key",
+                         "configuration export", "not a full-state backup", "excludes history",
+                         "agent enrolment state", "MIGRATION.md#full-state-recovery",
+                         "do not copy live data", "does not require another first-time setup",
+                         "actually", "published software release", "private Pro runtime"):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, " ".join(before.split()))
+
+    def test_missing_temperature_does_not_require_deployment_or_development_ssh_changes(self):
+        temperature = section("### Temperature monitoring in containers")
+        self.assertNotIn("PULSE_DEV_ALLOW_CONTAINER_SSH=", temperature)
+        self.assertNotRegex(temperature, r"```(?:bash|sh|shell)\b")
+        for boundary in ("TEMPERATURE_MONITORING.md#recommended-pulse-agent-proxmox",
+                         "verified HTTPS and token-file", "Do not move a working server",
+                         "enable development-only container SSH", "reinstall an agent",
+                         "just to diagnose", "restricted SSH collection is a separate path"):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, " ".join(temperature.split()))
+
     def test_shipped_help_matches_source(self):
         self.assertEqual((ROOT / "docs" / GUIDE).read_bytes(),
                          (ROOT / "frontend-modern/public/docs" / GUIDE).read_bytes())

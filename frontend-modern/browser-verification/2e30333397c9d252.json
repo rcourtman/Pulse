@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "35bb23bebf3035bd40288090347844367cd65999",
+  "verified_at": "2026-10-11T21:53:58.341043Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "6b98bafd9b2f4f38fa73fb62ffe748fa790016ea7e7f99209e371ed0ce0bc604",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "f39433ce16a18416fa6d26184810a535d90d6a15834c1dfd4c81ab80d0ba3734"
+  },
+  "routes": [
+    "Existing Infrastructure installer and removed Agent Doctor in /browser-tests/agent-uninstall.html; production components with synthetic local API doubles, not an application route"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Copy-style correction of two sentences only, following source-75eyr39h at this exact parent: 271 affected tests/type-check passed before two user-copy semicolons failed lint. Both sentences now use properly capitalised separate sentences. Command behaviour is unchanged.",
+    "Fresh exact-final hashes and Chromium 141.0.7390.37 desktop/light plus WebKit 26.0 touch-phone/dark were checked with Playwright 1.56.1 (unchanged integration-lock parity). Twelve copied commands per viewport pass across Installer, removed Linux/Windows Doctor and source manager, before/after explicit synthetic install generation, canonical identity/selected CA and optional auth. All ten latest captures inspected.",
+    "Only explicit synthetic install generation writes once per complete cohort. Removal mints/posts nothing, no unexpected/off-origin request, page/console error or horizontal page overflow. Copy/display parity and keyboard activation hold; browser/server close.",
+    "Earlier complete original-base parent/final matrix, conditional-guidance and intermediate punctuation renders remain separate. This new receipt binds this changed copy to its own parent; the other three runtime files still match their earlier in-range receipt. No physical phone, PowerShell/native removal, publication or release proof is inferred."
+  ],
+  "interactions": [
+    "Expand uninstall without unlocking install, copy both families using Enter and compare displayed/copy text.",
+    "Expand and copy both removed Agent Doctor host-local handoffs; inspect saved-credential and no-new-token sentences.",
+    "Explicitly generate synthetic install token, copy removal again, set download CA/canonical identity, reload optional auth and copy both actual source manager commands."
+  ]
+}

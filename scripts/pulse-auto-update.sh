@@ -22,8 +22,16 @@ PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+Bldz
 log() {
     local level=$1
     shift
-    logger -t "$LOG_TAG" -p "user.$level" "$@"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $@"
+    local logger_status=0 output_status=0
+    # Conditional callers disable errexit throughout this function. Try both
+    # sinks, but never let successful stdout hide a failed journal write (or
+    # vice versa). The installer collector owns draining and the first error.
+    logger -t "$LOG_TAG" -p "user.$level" "$@" || logger_status=$?
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $@" || output_status=$?
+    if [[ "$logger_status" != 0 ]]; then
+        return "$logger_status"
+    fi
+    return "$output_status"
 }
 
 release_signature_key_available() {
@@ -314,20 +322,17 @@ version_greater_than() {
 
 # Read the unit-file inventory for exact unit names. systemd exits 1 and prints
 # nothing at all, on stdout or stderr, when none of the named unit files exist.
-# That is an empty inventory. A timeout, a signal, or any status that comes with
-# output or a message is a failed inventory, so a real failure still cannot pass
-# as absence. A second read separates the two cases.
+# That is an empty inventory. A timeout, a signal, another failed status, or
+# exit 1 with output or a message remains a failure. Capture both streams in
+# the same read: a later silent sample must
+# never discard an earlier diagnostic.
 unit_file_inventory() {
-    local out="" again="" rc=0 rc2=0
-    out=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$@" 2>/dev/null) || rc=$?
+    local out="" rc=0
+    # Keep trailing newlines: an emitted blank line is not a silent exit 1.
+    out=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$@" 2>&1; rc=$?; printf '.'; exit "$rc") || rc=$?
+    out="${out%.}"
     if (( rc == 1 )) && [[ -z "$out" ]]; then
-        again=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$@" 2>&1) || rc2=$?
-        if (( rc2 == 0 )); then
-            out="$again"
-            rc=0
-        elif (( rc2 == 1 )) && [[ -z "$again" ]]; then
-            rc=0
-        fi
+        rc=0
     fi
     printf '%s' "$out"
     return "$rc"
@@ -417,6 +422,63 @@ read_update_service_state() {
         active|inactive|failed|activating|deactivating|reloading|refreshing|maintenance) printf '%s\n' "$state" ;;
         *) log error "Unknown Pulse service state ($service_name); no service action is safe" >&2; return 1 ;;
     esac
+}
+
+# Active alone can describe an old executable left running after replacement.
+# Read one complete tuple so a missing/recycled process is not update evidence.
+read_update_service_main_pid() {
+    local service_name=$1 observation="" line="" load="" state="" pid=""
+    local seen_load=false seen_state=false seen_pid=false
+    if ! observation=$(LC_ALL=C timeout -k 1 5 systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState --property=MainPID 2>/dev/null); then
+        log error "Cannot read running Pulse identity ($service_name); reconcile service state before recovery" >&2
+        return 1
+    fi
+    while IFS= read -r line; do
+        case "$line" in
+            LoadState=*)
+                [[ "$seen_load" == false ]] || return 1
+                seen_load=true; load=${line#LoadState=} ;;
+            ActiveState=*)
+                [[ "$seen_state" == false ]] || return 1
+                seen_state=true; state=${line#ActiveState=} ;;
+            MainPID=*)
+                [[ "$seen_pid" == false ]] || return 1
+                seen_pid=true; pid=${line#MainPID=} ;;
+            *) return 1 ;;
+        esac
+    done <<< "$observation"
+    if [[ "$seen_load" != true || "$seen_state" != true || "$seen_pid" != true ||
+          ( "$load" != loaded && "$load" != masked ) || "$state" != active ||
+          ! "$pid" =~ ^[1-9][0-9]*$ ]]; then
+        log error "Incomplete running Pulse identity ($service_name); reconcile service state before recovery" >&2
+        return 1
+    fi
+    printf '%s\n' "$pid"
+}
+
+# Never restart/roll back merely because process readback is unavailable or
+# differs. Keep the backup and current service for explicit reconciliation.
+# Byte comparison admits an equivalent executable at a custom/symlinked path,
+# but not a VERSION sidecar or an old process whose on-disk path was replaced.
+verify_update_running_executable() {
+    local service_name=$1 binary="" before_pid="" after_pid=""
+    if [[ -e "$INSTALL_DIR/bin/pulse" || -L "$INSTALL_DIR/bin/pulse" ]]; then
+        binary="$INSTALL_DIR/bin/pulse"
+    else
+        binary="$INSTALL_DIR/pulse"
+    fi
+    before_pid=$(read_update_service_main_pid "$service_name") || return 2
+    if [[ ! -f "$binary" || ! -x "$binary" ]] ||
+       ! timeout -k 1 5 cmp -s -- "$binary" "/proc/$before_pid/exe"; then
+        log error "Cannot confirm running Pulse matches the installed executable ($service_name)" >&2
+        return 2
+    fi
+    after_pid=$(read_update_service_main_pid "$service_name") || return 2
+    if [[ "$before_pid" != "$after_pid" ]]; then
+        log error "Running Pulse identity changed during verification ($service_name)" >&2
+        return 2
+    fi
+    return 0
 }
 
 # Only a fresh, settled observation permits an explicit start. Return 2 for
@@ -652,6 +714,12 @@ perform_update() {
                 elif [[ "$service_result" != 0 ]]; then
                     log error "Pulse service did not come back up after update"
                 else
+                    if ! verify_update_running_executable "$service_name"; then
+                        retain_backup="true"
+                        restart_allowed="false"
+                        log error "Running Pulse executable is unverified; backup retained at $backup_dir; reconcile service state before recovery"
+                        return 1
+                    fi
                     update_accepted="true"
                 fi
             else
@@ -659,7 +727,15 @@ perform_update() {
                 # not the obligation to observe the installed unit safely.
                 service_state=$(read_update_service_state "$service_name") || service_state="unknown"
                 case "$service_state" in
-                    active|inactive|failed) update_accepted="true" ;;
+                    active)
+                        if ! verify_update_running_executable "$service_name"; then
+                            retain_backup="true"
+                            restart_allowed="false"
+                            log error "Running Pulse executable is unverified; backup retained at $backup_dir; reconcile service state before recovery"
+                            return 1
+                        fi
+                        update_accepted="true" ;;
+                    inactive|failed) update_accepted="true" ;;
                     *)
                         retain_backup="true"
                         restart_allowed="false"
@@ -724,6 +800,10 @@ perform_update() {
     if [[ "$service_was_active" == "true" ]]; then
         if ! start_update_service_if_stopped "$service_name" || ! wait_for_service_active "$service_name" 20; then
             log error "Restored Pulse could not be started; backup retained at $backup_dir; manual recovery required"
+            return 1
+        fi
+        if ! verify_update_running_executable "$service_name"; then
+            log error "Restored running Pulse executable is unverified; backup retained at $backup_dir; manual recovery required"
             return 1
         fi
     fi

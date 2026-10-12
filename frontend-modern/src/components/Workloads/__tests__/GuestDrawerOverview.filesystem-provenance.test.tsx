@@ -71,6 +71,27 @@ const filesystemRow = () => screen.getByText(path).closest('tr')!;
 afterEach(cleanup);
 
 describe('filesystem details do not promote retained usage to current health', () => {
+  it('withdraws stopped VM usage without waiting for a read-error reason', () => {
+    const [value, setValue] = createSignal(guest());
+    render(() => <GuestDrawerOverview {...props(value())} />);
+    const details = screen.getByTestId('guest-technical-details');
+    expect(within(filesystemRow()).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '90');
+    setValue({ ...value(), status: 'stopped', diskStatusReason: undefined });
+    expect(within(filesystemRow()).queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(within(filesystemRow()).getByText('Usage unavailable · ?/10.0 GB · EXT4')).toBeVisible();
+    expect(
+      screen.getByText('Guest filesystem stats unavailable while the VM is stopped.'),
+    ).toBeVisible();
+    expect(screen.getByTestId('guest-technical-details')).toBe(details);
+    // Restarting the guest cannot clear an explicit provider read deferral.
+    setValue({ ...value(), status: 'running', diskStatusReason: 'prev-agent-busy' });
+    expect(within(filesystemRow()).getByText(/^Last known 90%/)).toBeVisible();
+    expect(within(filesystemRow()).queryByRole('progressbar')).not.toBeInTheDocument();
+    setValue(guest({ disks: [{ ...disk, used: 3 * 1024 ** 3, usage: 30 }] }));
+    expect(within(filesystemRow()).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '30');
+    expect(screen.getByTestId('guest-technical-details')).toBe(details);
+  });
+
   it.each(['permission-denied', 'prev-permission-denied'])(
     'shows scoped-access guidance for %s and clears it only on a new reading',
     (reason) => {

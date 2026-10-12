@@ -20,6 +20,30 @@
 
 ## Purpose
 
+### Canonical VM History respects native filesystem power state (12 October 2026)
+
+The canonical resource drawer uses `getWorkloadGuestDiskRead`, the same VM
+filesystem admission as Workloads and Alerts. Proxmox `runtimeStatus` takes
+precedence over canonical status from a linked source; absent native state
+falls back to canonical status, with `offline` treated as stopped. A stopped
+VM exposes neither a current disk/usage fallback nor a last-known disk carrier,
+even with a `prev-` reason or refreshed Last seen. The stopped explanation is
+visible beside History. Running retained/unavailable reads keep their existing
+distinction; an accepted zero is still current.
+
+Stored history remains inspectable, and independent CPU/memory/network metrics,
+LXC platform storage and non-Proxmox resources do not inherit VM filesystem
+rules. Power/read snapshot changes do not initiate a History refresh or a guest
+operation. This does not establish thaw, writes, restart recovery or release
+availability.
+
+`resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts` covers native
+and fallback state, platform scopes, zero, reason precedence and independent
+resource types. `ResourceDetailDrawer.history.test.tsx` connects reactive
+same-ID snapshots to the production drawer and History client. The production
+desktop Chromium/phone WebKit fixture `browser-tests/resource-stopped-filesystem.cjs`
+also preserves stored observations and trusted keyboard inspection.
+
 ### Existing alert History distinguishes failed reads from empty results
 
 The History tab renders fixed non-provider error copy in a `role="alert"`
@@ -1343,6 +1367,19 @@ layouts, scoped filtering, day selection and later inventory replacement.
 
 
 Compact Coverage age cells use the existing metadata-size text and reclaim numeric-age gutters so the full Unknown word stays visible even beside a Job column at 320px; text-range checks account for cell padding, not only the outer box.
+
+### Removal copy actions are independent of install unlock state
+
+The existing Infrastructure installer, source-manager and removed Agent Doctor
+controls copy removal commands before or after installation-token generation,
+without minting, displaying or embedding another credential. Displayed command
+and copied text must agree. Guidance describes saved host connection/credentials
+and does not present the saved Unix helper as an offline authentication bypass.
+The `agent-uninstall.cjs` parent/final desktop and touch-phone matrix exercises
+these production components with synthetic API data, including selected trust,
+canonical identity, optional authentication and installation's separate token
+gate. No route, navigation entry or remote-execution surface is added; native
+removal/failure retention and containing publication remain separate evidence.
 
 ## Canonical Files
 
@@ -4484,6 +4521,47 @@ resolves late` in
     `frontend-modern/src/hooks/__tests__/createNonSuspendingQuery.test.tsx`.
 
 ## Current State
+
+### Retained monitoring status remains reactive (11 October 2026)
+
+The existing Machines status dot subscribes to the shared relative-time clock
+for the unchanged five-minute agent-report fallback, agreeing with the
+standalone classification helper without a new report, row timer or API read.
+Machines health chip counts and selected results now use that same classifier
+at the same clock instant rather than the canonical last-reported status.
+Healthy excludes warning/stale rows, Degraded includes them and Offline retains
+the existing danger precedence. Muted/unclassified rows stay in All only.
+The status dot tooltip and accessible name expose that same current label
+(Online, Stale or Offline), not an online tooltip on an amber retained row.
+The canonical status, stale flag and timestamps remain observations, not derived
+health. Search, route-owned selection and removal behaviour are unchanged.
+The shared FilterButtonGroup keys buttons by logical value rather than transient
+option-object identity. Count, label, disabled, icon and order updates keep the
+same focused button while its option survives; withdrawn keys retire normally.
+Numeric and string values stay distinct, and selection uses the current entry.
+FilterButtonGroup.test.tsx covers those replacement/reorder/removal boundaries;
+FilterToolbar.test.tsx covers the live segmented-control label projection and
+forwarded selection at the shared wrapper boundary;
+the Machines clock/selection control exercises the production toolbar on desktop
+and touch-phone browsers.
+Attention sort classifies once per resource per call, preserving priority and
+numeric-name ordering without keeping a cross-call status cache. Debug source
+summaries read current status/error/last-seen by section ID, not a record captured
+when a retained payload section first mounted. Disclosure, focus and payload
+remain owned by that section.
+
+The Machines, standalone model and Debug relative-age regression controls,
+plus `browser-tests/pr2600-monitoring.cjs` on desktop and touch-phone engines,
+cover clock-only staleness and arriving status replacement. These are
+synthetic source/presentation checks, not collector, workload recovery,
+whole-fleet performance, installed or release acceptance.
+`browser-tests/machines-health-filters.cjs` additionally covers expanded phone
+filters, exact freshness boundary, Healthy/Degraded clicks, arriving/withdrawn
+reports and preserved URL/search. The Proxmox identity and TrueNAS error guide
+checks still render the complete shipped guides through the production renderer;
+their per-suite fixture reuses only identical source/path renders, returns
+isolated clones and invalidates changed input. No renderer, guide bytes,
+assertions or test deadlines are weakened.
 
 ### AI Discovery removed (2026-10-11)
 
@@ -9266,3 +9344,59 @@ level at 0 instead of restating factory values. Per-resource rows render a
 muted dash for metrics an override cannot store (Docker container restart and
 memory-limit rules, every PMG threshold). No shared primitive, table component
 or layout changes.
+
+### Stopped VM filesystem presentation (12 October 2026)
+
+`getWorkloadGuestDiskRead` treats an explicitly stopped VM as having no current
+in-guest filesystem reading, even when a power-state update has no
+`diskStatusReason` and the resource retains numeric disk fields. The same rule
+applies to Proxmox and linked Pulse-agent producers. Workload bars, accessible
+sparkline values, filesystem details, capacity sorting and the current History
+legend all consume that shared decision. Stored History is not removed or
+rewritten. On restart, an explicit `prev-` read deferral remains last known until
+fresh source evidence clears it; a real measured zero is still current.
+
+This does not impose VM semantics on stopped LXC platform storage, alter
+collection, probe a guest, or establish thaw, covered-filesystem writes or native
+restart recovery. Regressions cover the helper, both row modes, details,
+History and the native-facet-to-workload mapping with an unaffected second site.
+
+### Filesystem read provenance reaches alert settings (12 October 2026)
+
+The Alerts Guest Filesystems projection now consumes the Workloads read
+admission instead of treating retained numeric fields as a current reading.
+Explicit native stopped-VM state and unavailable reads withdraw usage; retained
+reads are labelled Last known. The shared threshold row/card display a wrapping
+`readingMessage` next to the reading, including before a missing saved mount
+has another sample, while preserving threshold values and override identities.
+Independent LXC platform storage and fresh zero remain unchanged.
+
+Verification connects `useThresholdsGuestData.test.ts`, both layouts in
+`ResourceTable.test.tsx`, and the production hook/table/editor browser fixture
+`guest-filesystem-thresholds.cjs`. Presentation proof is not native guest
+recovery, thaw/writes/liveness, alert delivery or installed/released acceptance.
+
+### Canonical History follows the filesystem producer (12 October 2026)
+
+On Proxmox VMs and system containers, canonical History uses the same
+filesystem-ownership rule as Workloads: Proxmox's filesystem list takes
+precedence (including an explicit empty list); the linked Pulse agent owns
+the fallback only when that list is absent and its own list is present.
+A current linked-agent reading is not deferred by an unrelated QEMU read
+failure, and a silent linked agent's retained aggregate is never current
+just because the platform keeps the resource online. Native stopped state
+still withdraws in-guest carriers from either producer; stopped LXC platform
+storage and unrelated platform metrics remain independent.
+
+The existing aggregate is qualified, not recalculated from filesystem rows.
+Missing aggregates remain absent, measured zero remains usable, and neither
+Last seen nor a QEMU recovery renews a silent agent's report. Stored History,
+memory/CPU/network/IO, collection and guest commands are unchanged.
+
+Verification: `resourceDetailDrawerMetricsHistoryModel.linked-filesystems.test.ts`
+and mounted `ResourceDetailDrawer.history.test.tsx` connect live/silent agents,
+provider precedence, stopping/recovery and zero. The local
+`linked-guest-history.cjs` browser fixture uses the production canonical drawer,
+Workloads snapshot adapter/drawer, History and CSS on desktop and phone, with
+synthetic GET responses. These controls do not establish native restart, thaw,
+covered-filesystem writes, installed recovery or containing software.

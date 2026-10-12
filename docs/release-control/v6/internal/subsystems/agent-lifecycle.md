@@ -15,6 +15,141 @@
 
 ## Purpose
 
+### OpenRC removal confirms stopped and unlinked state before erasure
+
+OpenRC removal must observe a complete, diagnostic-free runlevel inventory and
+a matching bounded service status before remote deregistration or local erasure.
+Started services require a successful stop; every configured runlevel, including
+operator-selected levels other than `default`, must be disabled. Independent
+inventory and status readback must confirm no runlevel activation and a stopped
+service. A status exit alone is insufficient: the matching colour-free status
+line is required. Failed, empty, duplicate, malformed, diagnostic-bearing or
+unknown observations refuse without obtaining a replacement sample.
+
+After confirmed server removal, OpenRC teardown rechecks these conditions before
+removing its init script, process state or recovery directories. A late refusal
+can therefore follow remote removal, but must still retain all local recovery
+files; it does not restore a previously stopped service. Missing init scripts
+require both manager absence and an independent silent process-absence result.
+Linked, non-regular or non-executable init paths cannot authorise teardown.
+
+`TestInstallSHOpenRCTeardownRequiresObservedQuiescence` runs the actual production
+functions and initial uninstall caller through `agent_openrc_teardown.py`, using
+closed OpenRC/transport/process models and only owned temporary deletion targets.
+It requires every refusal, final-readback, custom-runlevel, late-refusal, no-op,
+path and ordering control, plus a real timeout that stops its owned child.
+These are confined source controls, not native OpenRC, signed installed-agent,
+real TLS, Windows, other service-manager or whole-issue #1099 acceptance.
+
+### Systemd agent removal retains recovery material until quiescence is observed
+
+Unix agent removal must confirm the collector, action runner and privileged
+helper socket/service are inactive and not enabled before server deregistration,
+process termination or local erasure. Missing saved connection information still
+refuses before stopping a working installation. Each systemd read is one bounded,
+combined stdout/stderr observation with exactly LoadState, ActiveState and
+UnitFileState, including a completion sentinel so trailing blank diagnostics
+cannot be discarded. Failed, incomplete, diagnostic-bearing, duplicate, unknown
+or transitional observations refuse removal. Known absent/inactive units are
+no-ops; stop and disable success require independent state readback.
+
+The complete affected set is read again after the stop sequence. Shared collector,
+helper and runner teardown functions enforce the same boundary for their other
+callers. Helper service and socket are reconciled together; runner credential
+revocation follows confirmed quiescence and still precedes local deletion.
+An unavailable manager cannot authorise deleting an existing runner. No partial
+stop is automatically restarted, no new mask is installed, and no trust, credential
+scope, non-systemd teardown or Windows behaviour changes.
+
+`TestInstallSHSystemdTeardownRequiresObservedQuiescence` executes the actual shell
+functions with closed systemd doubles and only owned temporary deletion targets.
+It covers failed/ignored stop and disable, malformed/refused reads, socket and
+batch reactivation, authorised teardown and retained failed-revocation material;
+the real timeout control confirms its owned child terminates. The existing
+saved-state removal controls also require refusal before remote or local mutation.
+These are exact-source controls, not native systemd installation, TLS, published
+availability or resolution of Linux/PowerShell #1099.
+
+`unified-agent-native.yml` additionally requires `agent_removal_systemd.py` on
+both new public hosted Linux runners, before compiler/frontend preparation. The
+ordinary runner binds a clean exact checkout; the root lab receives no ambient
+credentials and refuses workers, self-hosted/container runs, existing Pulse
+state and pre-existing fixture units. It extracts the six production removal
+functions unchanged and binds their bytes in a bounded terminal receipt.
+
+Its fixed synthetic units exercise active collector teardown, real helper socket
+activation, runner deletion only after fixture revocation, real refused stops,
+unavailable-user-manager read refusal, stopped/retained failed-revocation state,
+an earlier runner reactivated by a later unit's real ExecStop, and absent/repeated
+removal. Independent systemd/property and prior-PID observations must agree with
+the intended phase; recovery file hashes, no repeated synthetic revocation and
+owned unit/process/fixture cleanup are retained. Cleanup failure fails the job.
+The absent-user-manager adapter is an injected read-failure condition, not a
+production system-bus diagnosis. Unit names, credential files and services are
+synthetic: this does not establish signed agent installation, real TLS/exact-token
+revocation, published availability, Windows acceptance or reporter recovery.
+`TestNativeAgentRemovalSystemdRecipeRuntime` exercises the lab and mandatory CI
+recipe with closed manager models; those portable controls are not a native pass.
+
+### Unix removal retains credentials when connection recovery is incomplete
+
+After existing installed-state recovery, the unified Unix installer checks for
+collector credentials before considering whether a Pulse URL was recovered.
+Any inline credential or selected/runtime/legacy/helper token-file entry,
+including an empty or unreadable file, broken symlink or FIFO, requires
+an authenticated exact-record removal confirmation before local teardown.
+A missing URL fails with a credential-safe same-instance recovery message;
+it cannot turn credential-bearing removal into the local-only path. No
+transport request, process stop, service stop or state deletion follows that
+refusal. Server refusal, unknown confirmation and identity mismatch retain
+state as before; confirmation does not widen trusted path-removal authority.
+Credential-free removal remains local-only, with or without a saved URL.
+
+`TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing` runs the
+production argument parser, token-file ingress, admission, credential-presence,
+record-confirmation and initial state-directory cleanup through
+`agent_uninstall_state.py`. Its forty-eight confined cases use private files
+and service/transport doubles, not a privileged installer or native service
+manager. The legacy shell reader's root ownership is projected onto the private
+fixture owner; root refusal runs as the ordinary proof user. These checks do not
+establish Windows, actual TLS, saved-state discovery, a published fix or
+whole-issue installed removal acceptance.
+
+Reading `--token-file` is read-only, including in non-interactive mode and
+before permission checks. Supplying a credential does not grant ownership of
+its file: a missing URL, root refusal, refused or unknown server result, or
+identity mismatch cannot erase it. Confirmed removal retains a caller-owned
+file outside the authorised runtime state directory; tokens inside that state
+are removed only by its existing post-confirmation path-authorised cleanup.
+Installer-created temporary credentials still belong to the installer cleanup
+trap. Generated setup commands already remove their own private bootstrap
+files; this does not remove that caller-owned cleanup or widen token/TLS trust.
+
+
+### Selected agent credential files retain their own authority
+
+The real agent flag-loading path resolves a non-empty explicit `--token` before
+`--token-file`, then `PULSE_TOKEN`, then the resolved instance's implicit token
+file. An environment fallback must not become the direct flag's default and
+shadow the operator's selected file. A selected unreadable or empty file stops
+startup with a credential-safe error rather than borrowing another credential
+or starting unauthenticated. Implicit token-optional startup remains supported.
+With enrolment enabled, an existing non-empty `runtime.token` still takes
+precedence and permits restart even when the bootstrap file has been removed.
+Token contents remain opaque: surrounding whitespace is trimmed, but quotes
+and shell assignments are not interpreted or repaired into credentials.
+
+`TestLoadConfigTokenSources` covers actual flag parsing, source priority,
+selected-file failure, custom state, enrolment, identity, TLS verification and
+monitoring-only command ceilings. `TestResolveTokenSelectedFileReadErrorIsPrivate`
+checks that file errors expose neither the configured path nor its contents.
+`TestHostAgentCredentialFileHandoff` joins the authenticated host issuer, actual
+installer token-writer function, private file modes, compiled agent and trusted
+HTTPS lookup/report routes. It checks normal process restart, credential
+last-use, identity continuity, environment non-use and adverse representations.
+That synthetic process journey does not exercise the terminal prompt, complete
+privileged installer, a reporter's configuration or installed recovery.
+
 A legacy client echoing the projected `controlled` mode into an unrelated AI
 settings PUT must retain a stored `autonomous` preference and its existing
 legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
@@ -33,6 +168,38 @@ Existing agent report/command and shared capability vocabularies remain
 unchanged, including their separate approval and entitlement enforcement.
 
 ### QGA query-eligibility provenance stays internal
+
+Metadata-cache activity is monitor-owned housekeeping, not an agent report,
+heartbeat or successful QGA observation. Cleanup retains active OS-command
+safety state without refreshing guest evidence; idle activity expires and
+explicit unavailable-agent invalidation or PVE instance retirement removes it.
+The existing enrollment, credentials, machine identity, reporting and command
+protocols remain unchanged. `TestGuestMetadataIdleCleanupContract` and the
+activity invalidation/concurrent-cleanup controls in
+`internal/monitoring/monitor_host_agents_test.go` verify this shared boundary;
+they are not installed agent or native guest-recovery proof.
+
+Explicit metadata invalidation and PVE instance retirement cancel an active
+enrichment context without releasing its owner early. Late replies cannot
+repopulate the old lifecycle's cache, OS-command safety state or retry timing;
+new polling and diagnostics still honour the shared consumed-command uncertainty
+fence. This remains an internal monitor lifecycle, with no change to agent
+identity, credentials or the command protocol.
+`internal/monitoring/guest_metadata_lifecycle_test.go` verifies cold/retained
+late replies, both invalidation routes, direct/cluster HTTP cancellation,
+independent keys and ordinary new-lifecycle recovery. It is not installed
+removal, native guest recovery or evidence that a cancelled guest command stopped.
+
+Guest memory read ownership is also internal monitor state, not agent protocol
+or enrolment. Retiring a PVE connection removes only its QGA memory samples and
+backoff and cancels its outstanding memory reads without releasing their
+transport uncertainty. Independent Pulse-agent reports, machine/token identity
+and linked-agent memory selection are unchanged. An unavailable or stopped QGA
+guest cannot carry its old successful/negative sample into a new start.
+`TestRetiredQGAMemoryCannotAlterIndependentAgentEvidence` in
+`internal/monitoring/monitor_host_agents_test.go` verifies this separation and
+complete connection-name matching; memory lifecycle HTTP controls preserve the
+consumed-command fence. This is not installed removal or native recovery proof.
 
 The shared VM model's `GuestAgentEvidence` is monitor-owned source-time
 coordination, not agent input or a public field. It prevents retained guest
@@ -1046,6 +1213,33 @@ Proxmox node and backup-server setup may request an explicitly insecure
 Unified Agent installer command. The choice must remain off by default, be
 visible at the point where the command is generated, and affect both the
 installer download and the agent's subsequent Pulse TLS connection.
+
+### Copied removal uses the installed credential, not installation input
+
+Every existing uninstall copy surface (installer, source management and removed
+Agent Doctor handoff) must work without minting or revealing an install token.
+Unix `--uninstall` skips preflight, private token input and token-file bootstrap;
+it clears inherited lifecycle credentials/identity/trust in its child only and
+lets the installed connection recover its own server, credential and pin.
+Explicit canonical identity and selected CA/insecure settings remain supported;
+an HTTP download alone must not weaken the saved HTTPS connection.
+
+Windows removal invokes the downloaded script with typed uninstall and empty
+credential/connection parameters, so ambient install variables cannot shadow
+saved state. Its download uses only selected trust, restores the TLS callback
+and does not assign shell environment variables. Identity and paths are quoted
+as literals. Installation's private-input/preflight path remains separate.
+`agentInstallCommand.test.ts` executes a terminal-free Unix recorder and retains
+its success/failure exit and inherited-state boundaries; the real composed hook
+and Doctor model prove all token/platform/identity branches. The parent/final
+`agent-uninstall.cjs` browser matrix checks real copy callers, displayed/copy
+parity, no issuance on removal and unchanged install gating.
+
+These are command-generation/controlled-browser proofs, not native uninstall.
+Unix's existing durable authenticated deregistration-before-teardown boundary
+is unchanged. Windows installer confirmation/failure retention remains owned
+by Delivery: its current suppressed unregister failure is not made safe by a
+token-free command. No copy receipt establishes installed removal or a release.
 
 ## Canonical Files
 
@@ -4490,6 +4684,28 @@ checks that used to work anonymously keep working, and
 `--disable-registry-credentials` / `PULSE_DISABLE_REGISTRY_CREDENTIALS`
 keeps detection anonymous-only without reading the store or executing
 helpers.
+
+### Docker Hub image aliases use the manifest API
+
+Docker / Podman image metadata lookup treats bare, `docker.io`,
+`index.docker.io`, `registry.docker.io` and `registry-1.docker.io` Hub
+references equivalently: manifests use HTTPS `registry-1.docker.io`, token
+negotiation retains the Hub service and repository-only pull scope, and a
+single-component official repository gains `library/`. Explicit ports and
+other registry hosts retain their own repository paths and authentication.
+Equivalent Hub references share a platform-specific cache, not a cache across
+different architectures. Stored Hub credentials retain the legacy index-key
+lookup and never enter metadata reports; only the negotiated token is attached
+to manifest requests. Digest-pinned images and every Hub spelling of the
+Pulse-managed repository remain outside generic update detection.
+
+Normalization must not weaken non-manifest refusal, turn registry failures into
+update availability, change local RepoDigest/index/platform comparison, or run
+an image update. `TestDockerHubReferenceRouting`,
+`TestDockerHubAliasLookupContract`, `TestDockerHubAliasLookupFailures` and
+`TestDockerHubAliasesPreserveManagedAndPinnedExclusions` pin these boundaries
+with synthetic registry transport and credential files. They establish source
+behaviour, not live Hub, installed-agent or reporter recovery.
 
 ### Governed action readiness remains outside agent lifecycle authority
 
@@ -9504,3 +9720,31 @@ the primary of its earliest-created link, so lists that differ only in a time
 can leave a different row standing. Agent registration, enrolment, install, update,
 removal, report identity and continuity are unchanged, and real-mode
 resolution still goes through the live registry.
+
+
+### Reporting authentication errors do not prescribe credential replacement
+
+Host reporting's 401 diagnostic identifies the configured endpoint and directs
+an operator to the existing API Access record and issuing instance, not a
+presumed restore/upgrade loss or another installation. A 403 directs the operator
+to `agent:report` and endpoint policy without disabling host monitoring or
+requesting command execution. Observer reporting retains its destination, status
+and endpoint and never requires replacement solely from an HTTP status.
+Rejected current/buffered reports still drop rather than grow a queue; ordinary
+polling may recover with the same credential. Primary readiness, observer
+isolation, diagnostic throttles and command ceilings are unchanged.
+`TestHostReportingAuthGuidanceAndSameCredentialRecovery` and
+`TestObserverAuthGuidanceAndSameCredentialRecovery` cover both statuses, current
+and buffered primary paths, record/instance guidance, secret/body non-disclosure
+and same-credential recovery. These synthetic HTTP controls do not establish an
+installed host's cause or reporting recovery.
+
+
+### Upstream diagnostics visibility composition (11 October 2026)
+
+Agent diagnostics may not expose other organizations' API-token records to a narrow token caller. The diagnostics token list uses the existing caller-management authority; no agent reporting, install, command or credential scope is broadened. Session callers retain their existing diagnostic authority.
+
+The accepted upstream `diagnostics_token_visibility_test.go` controls and API
+reference route checks cover caller filtering and the documented authority.
+Final-source checks must retain this upstream behavior beside the reviewed
+reporting/help repairs; source proof is not installed credential recovery.

@@ -20,7 +20,7 @@ import {
 } from '@/features/storageBackups/diskTemperaturePresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getMemoryObservationPresentation } from '@/utils/memoryObservation';
-import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
+import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
 
 const finiteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
@@ -173,10 +173,27 @@ const memoryReading = (resource: Resource) =>
     isProxmoxGuest(resource),
   );
 
-const diskReadReason = (resource: Resource): string | undefined =>
-  resource.type === 'vm' && isProxmoxGuest(resource)
-    ? resource.proxmox?.diskStatusReason || undefined
-    : undefined;
+const guestDiskReading = (resource: Resource) => {
+  if (!isProxmoxGuest(resource)) return null;
+  // A linked source can keep the canonical resource online while Proxmox
+  // reports the VM stopped. Judge filesystem carriers by the native state,
+  // using the same read admission as Workloads and Alerts, not Last seen.
+  const status = (asTrimmedString(resource.proxmox?.runtimeStatus) || resource.status)
+    .trim()
+    .toLowerCase();
+  return getWorkloadGuestDiskRead(
+    {
+      status: status === 'offline' ? 'stopped' : status,
+      diskStatusReason: resource.proxmox?.diskStatusReason,
+      // Match the Workloads projection: the linked agent owns filesystem
+      // readings only when Proxmox supplied no filesystem list. Its own
+      // reporting lease then qualifies them, not the unrelated QGA failure.
+      disksFromAgent: resource.proxmox?.disks == null && resource.agent?.disks != null,
+      agentStale: resource.agent?.stale === true,
+    },
+    resource.type === 'vm',
+  );
+};
 
 // A physical disk's reading and its collection state both live on
 // physicalDisk, so read them only together: websocket rows carry no top-level
@@ -203,14 +220,14 @@ export const getResourceMetricsHistoryDeferredMetrics = (
       message: memory.message,
     };
   }
-  const reason = diskReadReason(resource);
-  if (reason) {
+  const disk = guestDiskReading(resource);
+  if (disk && disk.state !== 'current') {
     metrics.disk = {
       lastKnownValue:
-        reason.startsWith('prev-') && resource.disk
+        disk.state === 'last-known' && resource.disk
           ? finiteMetric(getDiskPercent(resource))
           : undefined,
-      message: getWorkloadGuestDiskStatusMessage(reason),
+      message: disk.message,
     };
   }
   if (!isResourceTemperatureCurrent(resource)) {
@@ -232,7 +249,11 @@ export const getResourceMetricsHistoryDeferredMetrics = (
 export const getResourceMetricsHistoryCurrentMetrics = (
   resource: Resource,
 ): Record<string, number | undefined> => {
-  const diskPercent = resource.disk ? finiteMetric(getDiskPercent(resource)) : undefined;
+  const disk = guestDiskReading(resource);
+  const diskPercent =
+    resource.disk && (!disk || disk.state === 'current')
+      ? finiteMetric(getDiskPercent(resource))
+      : undefined;
   const temperature = isResourceTemperatureCurrent(resource)
     ? finiteMetric(resourceTemperature(resource))
     : undefined;
@@ -243,7 +264,7 @@ export const getResourceMetricsHistoryCurrentMetrics = (
       resource.memory && (!memory || memory.state === 'current')
         ? finiteMetric(getMemoryPercent(resource))
         : undefined,
-    disk: diskReadReason(resource) ? undefined : diskPercent,
+    disk: diskPercent,
     usage: diskPercent,
     netin: finiteMetric(resource.network?.rxBytes),
     netout: finiteMetric(resource.network?.txBytes),

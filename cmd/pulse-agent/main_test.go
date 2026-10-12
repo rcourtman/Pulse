@@ -903,7 +903,10 @@ func TestResolveToken(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := resolveTokenInternal(tc.tokenFlag, tc.tokenFileFlag, tc.envToken, tc.stateDir, fakeReadFile)
+			got, err := resolveTokenInternal(tc.tokenFlag, tc.tokenFileFlag, tc.envToken, tc.stateDir, fakeReadFile)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if got != tc.expected {
 				t.Fatalf("%s: expected %q, got %q", tc.name, tc.expected, got)
 			}
@@ -911,18 +914,124 @@ func TestResolveToken(t *testing.T) {
 	}
 
 	t.Run("truly empty", func(t *testing.T) {
-		got := resolveTokenInternal("", "", "", customStateDir, fakeReadFileNoDefault)
+		got, err := resolveTokenInternal("", "", "", customStateDir, fakeReadFileNoDefault)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if got != "" {
 			t.Fatalf("expected empty, got %q", got)
 		}
 	})
 
 	t.Run("custom state never borrows default token", func(t *testing.T) {
-		got := resolveTokenInternal("", "", "", filepath.Join(string(filepath.Separator), "missing-custom"), fakeReadFile)
+		got, err := resolveTokenInternal("", "", "", filepath.Join(string(filepath.Separator), "missing-custom"), fakeReadFile)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if got != "" {
 			t.Fatalf("custom state unexpectedly borrowed default token %q", got)
 		}
 	})
+}
+
+// Exercise flag parsing as well as the resolver: a resolver-only test cannot
+// detect an environment value accidentally installed as the --token default.
+func TestLoadConfigTokenSources(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		args         []string
+		envToken     string
+		fileToken    string
+		runtimeToken string
+		want         string
+		wantError    string
+	}{
+		{name: "selected file beats environment", args: []string{"--token-file", "FILE"}, envToken: "environment-token", fileToken: "file-token", want: "file-token"},
+		{name: "selected file without environment", args: []string{"--token-file=FILE"}, fileToken: "file-token", want: "file-token"},
+		{name: "single dash file beats environment", args: []string{"-token-file", "FILE"}, envToken: "environment-token", fileToken: "file-token", want: "file-token"},
+		{name: "explicit token beats file and environment", args: []string{"--token-file", "FILE", "--token", "argument-token"}, envToken: "environment-token", fileToken: "file-token", want: "argument-token"},
+		{name: "explicit token does not read lower priority file", args: []string{"--token", "argument-token", "--token-file", "MISSING"}, envToken: "environment-token", want: "argument-token"},
+		{name: "empty token flag does not mask selected file", args: []string{"--token=", "--token-file", "FILE"}, envToken: "environment-token", fileToken: "file-token", want: "file-token"},
+		{name: "environment beats implicit state file", envToken: "environment-token", want: "environment-token"},
+		{name: "implicit custom state file", want: "state-token"},
+		{name: "outer whitespace remains accepted", args: []string{"--token-file", "FILE"}, fileToken: " \tfile-token\r\n", want: "file-token"},
+		{name: "quotes are not part of the file format", args: []string{"--token-file", "FILE"}, fileToken: `"file-token"`, want: `"file-token"`},
+		{name: "assignment is not decoded as a credential", args: []string{"--token-file", "FILE"}, fileToken: "PULSE_TOKEN=file-token", want: "PULSE_TOKEN=file-token"},
+		{name: "missing selected file refuses environment and state fallback", args: []string{"--token-file", "MISSING"}, envToken: "environment-token", wantError: "cannot read --token-file"},
+		{name: "directory selected as a file refuses fallback", args: []string{"--token-file", "DIRECTORY"}, envToken: "environment-token", wantError: "cannot read --token-file"},
+		{name: "empty selected file refuses fallback", args: []string{"--token-file", "FILE"}, envToken: "environment-token", wantError: "--token-file is empty"},
+		{name: "whitespace selected file refuses fallback", args: []string{"--token-file", "FILE"}, fileToken: " \t\r\n", envToken: "environment-token", wantError: "--token-file is empty"},
+		{name: "enrollment restart keeps runtime credential", args: []string{"--enroll", "--token-file", "FILE", "--token", "argument-token"}, envToken: "environment-token", fileToken: "bootstrap-token", runtimeToken: "runtime-token\n", want: "runtime-token"},
+		{name: "enrollment restart survives removed bootstrap file", args: []string{"--enroll", "--token-file", "MISSING"}, runtimeToken: "runtime-token", want: "runtime-token"},
+		{name: "first enrollment still uses selected bootstrap", args: []string{"--enroll", "--token-file", "FILE"}, envToken: "environment-token", fileToken: "bootstrap-token", want: "bootstrap-token"},
+		{name: "empty runtime credential does not mask file failure", args: []string{"--enroll", "--token-file", "MISSING"}, runtimeToken: " \n", wantError: "cannot read --token-file"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stateDir := t.TempDir()
+			file := filepath.Join(stateDir, "selected-token")
+			for name, content := range map[string]string{"token": "state-token", "selected-token": tc.fileToken} {
+				if err := os.WriteFile(filepath.Join(stateDir, name), []byte(content), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.runtimeToken != "" {
+				if err := os.WriteFile(filepath.Join(stateDir, "runtime.token"), []byte(tc.runtimeToken), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			args := []string{"--url", "https://pulse.example.test", "--state-dir", stateDir, "--agent-id", "retained-agent-id", "--command-authority", "monitoring-only"}
+			for _, arg := range tc.args {
+				arg = strings.ReplaceAll(arg, "FILE", file)
+				arg = strings.ReplaceAll(arg, "MISSING", filepath.Join(stateDir, "missing-token"))
+				arg = strings.ReplaceAll(arg, "DIRECTORY", stateDir)
+				args = append(args, arg)
+			}
+			cfg, err := loadConfig(args, func(key string) string {
+				if key == "PULSE_TOKEN" {
+					return tc.envToken
+				}
+				return ""
+			})
+			if tc.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("expected actionable selected-file error, got %v", err)
+				}
+				for _, private := range []string{stateDir, "environment-token", "state-token", tc.fileToken} {
+					if private != "" && strings.Contains(err.Error(), private) {
+						t.Fatal("selected-file error disclosed private configuration")
+					}
+				}
+				if cfg.APIToken != "" {
+					t.Fatal("failed configuration retained a fallback credential")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.APIToken != tc.want {
+				t.Fatal("wrong credential source selected")
+			}
+			if cfg.EnableCommands || cfg.InsecureSkipVerify || !cfg.EnableHost || cfg.AgentID != "retained-agent-id" || cfg.StateDir != stateDir || cfg.CommandAuthorityProfile != hostagent.CommandAuthorityMonitoringOnly {
+				t.Fatal("credential selection changed identity, trust or monitoring-only authority")
+			}
+		})
+	}
+}
+
+func TestResolveTokenSelectedFileReadErrorIsPrivate(t *testing.T) {
+	calls := 0
+	readFile := func(path string) ([]byte, error) {
+		calls++
+		return nil, &os.PathError{Op: "open", Path: path, Err: os.ErrPermission}
+	}
+	got, err := resolveTokenInternal("", "private-path-with-token-value", "environment-token", "/implicit-state", readFile)
+	if err == nil || got != "" || calls != 1 {
+		t.Fatal("selected-file failure fell through to another credential source")
+	}
+	if strings.Contains(err.Error(), "private-path") || strings.Contains(err.Error(), "token-value") {
+		t.Fatal("selected-file error disclosed the configured path")
+	}
 }
 
 func TestCleanupDockerAgent(t *testing.T) {

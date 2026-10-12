@@ -18,6 +18,50 @@
 
 ## Purpose
 
+### Startup provisioning cannot replace retained access
+
+`pkg/server/server.go` admits environment-selected startup import only into an
+absent or empty resolved data directory; a regular deployment `.env` is the
+only allowed pre-start entry. Existing non-Proxmox settings, token/session
+records, encryption keys, tenant directories and unknown contents all block it.
+Admission uses the same `NormalizeStorageDir` path as persistence before any
+filesystem probe: raw symlink/`..` traversal must not inspect an empty peer while
+the importer writes a different existing destination, and a trailing separator
+must not hide a final directory link. Canonical destination credential validation
+and live/dangling link spellings have explicit regression controls.
+Directory inspection errors, non-directories and symlinks are not absence.
+Admission reads no file contents and creates no persistence/key. The importer
+rechecks before creating persistence or writing and audits a classified refusal
+without a path, archive or passphrase. This is not cross-process exclusion:
+provision an isolated destination and keep the source archive outside it.
+
+`TestStartupImportRetainsNonProxmoxAccess` exercises ordinary configuration
+loading, retained agent-token validation and session/key bytes through both
+production startup helpers. It also proves that deliberate `ImportConfig`
+transfer still replaces the included records while keeping excluded local state.
+`auto_import_destination_test.go` covers blank provisioning, `.env`, all
+observed/unknown destination types, uncertain access, pre-write recheck and
+file precedence/refusal. Encrypted export scope and authenticated Recovery
+authorisation are unchanged; source proof is not installed transfer acceptance.
+
+### Explicit agent credential-file failure does not borrow authority
+
+The `cmd/pulse-agent/main.go` flag loader keeps `PULSE_TOKEN` separate from an
+explicit `--token` so an environment value cannot shadow `--token-file`. A
+selected unreadable or empty credential file stops startup without disclosing
+the file path or contents and without substituting environment/state authority.
+Non-empty direct tokens retain first priority; implicit token-optional startup
+and enrolled runtime-token restart remain supported. Opaque credential contents
+are not interpreted as shell assignments or unquoted on the operator's behalf.
+
+Actual flag-loading/error controls are `TestLoadConfigTokenSources` and
+`TestResolveTokenSelectedFileReadErrorIsPrivate`. The synthetic trusted-HTTPS
+`TestHostAgentCredentialFileHandoff` also checks no request on selected-file
+failure, no environment credential use, no token in agent logs, preserved
+monitoring-only scopes/commands and ordinary process identity continuity.
+Neither this local journey nor a credential's inventory entry establishes
+authentication or recovery of an unobserved installed agent.
+
 ### Infrastructure credentials remain within the configured HTTP origin
 
 The shared `tlsutil.CreateHTTPClientWithTimeout` transport permits redirects
@@ -3245,3 +3289,17 @@ aliases a reference can resolve through), so a reference resolves to the same
 canonical ID for as long as the fixture structure holds. Outside mock mode it
 is the read state the resolver used before. No authentication, authorization, token or
 tenant-isolation path is touched.
+
+
+### Reporting rejection guidance preserves credentials and command ceilings
+
+`internal/hostagent/agent.go` no longer treats 401 as proof of lost upgrade or
+restore credentials or prescribes reinstall/replacement. Primary and observer
+reporting direct operators to the existing credential's issuing instance,
+record and endpoint policy without logging token values or response bodies.
+A 403 does not call for disabling host monitoring or adding command authority.
+Request authentication, TLS/HTTP opt-ins, token scopes, identities, buffers and
+command ceilings are unchanged. The host and observer auth-guidance recovery
+controls in `send_report_test.go` and `observer_delivery_test.go` verify observed
+status/endpoint, non-disclosure and resumed ordinary reporting with the same
+credential. They are not a credential inventory probe or native recovery proof.

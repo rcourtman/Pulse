@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Show, createSignal } from 'solid-js';
 import type { AIChatExplanationRequest } from '@/stores/aiChat';
 import type { ChatMessage, ModelInfo, ModelRouteRecoveryOption } from '../types';
@@ -673,12 +673,33 @@ describe('AIChat', () => {
     });
 
     it('disables transcript actions until the current session has messages', () => {
+      const labels = [
+        'Fork current Assistant session',
+        'Copy last Assistant answer',
+        'Copy Assistant transcript',
+        'Export Assistant transcript',
+      ];
+      // Unrelated controls must not satisfy or make the header oracle ambiguous.
+      // Both rendered roots are owned by the suite's normal cleanup.
+      render(() => (
+        <aside>
+          {labels.map((label) => (
+            <button aria-label={label}>Unrelated action</button>
+          ))}
+        </aside>
+      ));
       renderChat();
 
-      expect(screen.getByRole('button', { name: 'Fork current Assistant session' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Copy last Assistant answer' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Copy Assistant transcript' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Export Assistant transcript' })).toBeDisabled();
+      const actions = within(screen.getByTestId('assistant-header-actions'));
+      // Enumerate visible button roles once, rather than repeat a whole-panel
+      // role/visibility scan for each label. Keep names and disabled state gating.
+      const visibleButtons = actions.getAllByRole('button');
+      for (const label of labels) {
+        const button = actions.getByLabelText(label);
+        expect(visibleButtons).toContain(button);
+        expect(button).toHaveAccessibleName(label);
+        expect(button).toBeDisabled();
+      }
     });
 
     it('copies the latest Assistant answer from the header', async () => {

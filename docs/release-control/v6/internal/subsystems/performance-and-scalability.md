@@ -15,6 +15,31 @@
 
 ## Purpose
 
+### Guest memory alerts do not translate unrelated samples (12 October 2026)
+
+When the Workloads row uses host-relative memory, its existing guest drawer
+explains that alert percentages use guest allocation while the row uses host
+capacity. The alert retains its own message, evaluated value, observation time,
+clear rule and hover evidence. The basis explanation is visible detail, not a
+percentage calculated from the guest's latest bytes and the host's latest
+capacity: even current values need not describe the alert's observation, and
+retained or unavailable values must not acquire authority from a poll refresh.
+
+Guest-relative rows and non-memory alerts keep their existing attention copy.
+The row's own memory calculations, observation qualification and accepted zero,
+collection and threshold evaluation remain unchanged. This does not establish
+native recovery, ordinary notification delivery or released availability.
+
+`guestDrawerAlertMemoryBasis.test.ts` covers current/retained/unavailable/unknown
+observations, independent host capacity and alert-owned evaluation phases.
+`GuestDrawerOverview.alertMemoryBasis.test.tsx` covers same-guest updates and
+basis selection in the mounted production attention panel; `GuestDrawer.test.tsx`
+retains the connected full-drawer regression. The desktop/phone production
+fixture `browser-tests/guest-alert-memory-basis.cjs` also exercises the row and
+native basis selector. Browser acceptance must be recorded separately; adding
+the fixture does not establish a passing browser run.
+
+
 ### Workloads node attribution preserves instance/node boundaries
 
 Workloads uses an encoded instance/node tuple for UI node scopes, grouping and

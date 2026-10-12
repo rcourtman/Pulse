@@ -20,6 +20,8 @@ export interface Resource {
   type?: string;
   resourceType?: string;
   subtitle?: string;
+  /** Explanation beside a non-current reading; not threshold or alert state. */
+  readingMessage?: string;
   thresholds?: AlertResourceThresholdMap;
   defaults?: AlertResourceThresholdMap;
   disabled?: boolean;

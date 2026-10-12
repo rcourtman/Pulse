@@ -1,9 +1,9 @@
 import { createContext, useContext, type ParentComponent } from 'solid-js';
 import type { Connection } from '@/api/connections';
 import {
-  buildPowerShellInstallScriptBootstrap,
   buildUnixAgentInstallCommand,
   buildWindowsAgentInstallCommand,
+  buildWindowsAgentUninstallCommand,
   powerShellQuote,
   resolveAgentCommandPlatform,
 } from '@/utils/agentInstallCommand';
@@ -79,12 +79,10 @@ export const useInfrastructureOperationsState = (
 
   const getUninstallCommand = (row?: AgentUninstallIdentity) => {
     const url = installState.selectedAgentUrl();
-    const token = resolvedCommandToken();
     const agentId = getCanonicalUninstallAgentId(row);
     const hostname = getCanonicalUninstallHostname(row);
     return buildUnixAgentInstallCommand({
       baseUrl: url,
-      token,
       insecure: installState.insecureMode(),
       caCertPath: selectedCustomCaPath(),
       extraArgs: [
@@ -96,24 +94,13 @@ export const useInfrastructureOperationsState = (
   };
 
   const getWindowsUninstallCommand = (row?: AgentUninstallIdentity) => {
-    const url = installState.selectedAgentUrl();
-    const token = resolvedCommandToken();
-    const transportEnv = getPowerShellTransportEnv();
-    const agentId = getCanonicalUninstallAgentId(row);
-    const hostname = getCanonicalUninstallHostname(row);
-    const identityEnv: string[] = [];
-    if (agentId) {
-      identityEnv.push(`$env:PULSE_AGENT_ID="${powerShellQuote(agentId)}"`);
-    }
-    if (hostname) {
-      identityEnv.push(`$env:PULSE_HOSTNAME="${powerShellQuote(hostname)}"`);
-    }
-    const prefixParts = [...transportEnv, ...identityEnv];
-    const prefix = prefixParts.length > 0 ? `${prefixParts.join('; ')}; ` : '';
-    if (token) {
-      return `${prefix}$env:PULSE_URL="${powerShellQuote(url)}"; $env:PULSE_TOKEN="${powerShellQuote(token)}"; $env:PULSE_UNINSTALL="true"; ${buildPowerShellInstallScriptBootstrap(url)}`;
-    }
-    return `${prefix}$env:PULSE_URL="${powerShellQuote(url)}"; $env:PULSE_UNINSTALL="true"; ${buildPowerShellInstallScriptBootstrap(url)}`;
+    return buildWindowsAgentUninstallCommand({
+      baseUrl: installState.selectedAgentUrl(),
+      insecure: installState.insecureMode(),
+      caCertPath: selectedCustomCaPath(),
+      agentId: getCanonicalUninstallAgentId(row),
+      hostname: getCanonicalUninstallHostname(row),
+    });
   };
 
   const getPlatformUninstallCommand = (platform: AgentPlatform, row?: AgentUninstallIdentity) => {

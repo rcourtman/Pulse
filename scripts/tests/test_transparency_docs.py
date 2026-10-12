@@ -60,6 +60,45 @@ class TransparencyDocsTest(unittest.TestCase):
                 self.assertNotIn("Automated support replies are sent", text)
                 self.assertIn("[topic-integrity triage contract](ISSUE_TRIAGE.md)", text)
 
+    def test_resolution_needs_every_reported_symptom_not_a_component_pass(self):
+        for path, text in self.documents():
+            with self.subTest(document=path):
+                self.assertIn("reporter confirms recovery", text)
+                self.assertIn("no reported symptom left unresolved", text)
+                self.assertIn("one recovered screen or a merged fix", text)
+                self.assertIn("duplicate, need their own explanation", text)
+                self.assertIn("demand-ledger entry is not an implemented feature", text)
+
+    def test_timeout_starts_with_containing_stable_release_contact(self):
+        for path, text in self.documents():
+            with self.subTest(document=path):
+                self.assertIn("fix for every reported symptom ships in a stable release", text)
+                self.assertIn("closed after 14 days without a reply and can be reopened", text)
+                self.assertIn("start with that stable-release retest reply", text)
+                self.assertIn("not the fix commit, a beta or a release candidate", text)
+                self.assertIn("at least 14 days without any reply from the reporter", text)
+                self.assertIn("no other person reporting the same problem since that retest request", text)
+
+    def test_timeout_is_not_confirmed_resolution_and_has_explicit_exclusions(self):
+        for path, text in self.documents():
+            with self.subTest(document=path):
+                self.assertIn("`closed-needs-retest-timeout` label", text)
+                self.assertIn("**not confirmed resolution**", text)
+                self.assertIn("does not apply to feature requests", text)
+                self.assertIn("issues labelled `needs-human`", text)
+                self.assertIn("an unfixed or unexplained symptom", text)
+
+    def test_contesting_a_close_preserves_the_report_and_safe_existing_evidence(self):
+        for path, text in self.documents():
+            with self.subTest(document=path):
+                self.assertIn("original issue rather than filing it again", text)
+                self.assertIn("which symptom remains", text)
+                self.assertIn("version already observed", text)
+                self.assertIn("unknown details are valid and credentials stay private", text)
+                self.assertIn("do not repeat an outage, update or backup", text)
+                self.assertIn("grounds to reopen the issue", text)
+                self.assertIn("TROUBLESHOOTING.md#collect-diagnostics-safely", text)
+
     def test_standing_authority_preserves_review_and_mechanical_releases(self):
         for path, text in self.documents():
             with self.subTest(document=path):

@@ -1,4 +1,5 @@
-import { For, Show, splitProps } from 'solid-js';
+import { For, Show, createMemo, splitProps } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   getFilterButtonGroupButtonClass,
   getFilterButtonGroupClass,
@@ -26,6 +27,11 @@ export function FilterButtonGroup<T extends string | number>(props: FilterButton
     'disabled',
   ]);
   const filterButtonGroup = useFilterButtonGroupState(props);
+  // Counts/labels are refreshed by callers with new option objects. The
+  // logical value owns the button, so those updates cannot discard focus.
+  const optionsByValue = createMemo(
+    () => new Map(local.options.map((option) => [option.value, option] as const)),
+  );
   const groupLabel = () => local.ariaLabel ?? divProps['aria-label'] ?? 'Filter Options';
 
   return (
@@ -40,10 +46,23 @@ export function FilterButtonGroup<T extends string | number>(props: FilterButton
           {local.label}
         </span>
       </Show>
-      <For each={local.options}>
-        {(option) => {
-          const Icon = option.icon;
-          const renderedLabel = () => option.visualLabel ?? option.label;
+      <For each={[...optionsByValue().keys()]}>
+        {(value) => {
+          const initialOption = optionsByValue().get(value)!;
+          // Keep a retiring child safe until For removes its withdrawn key.
+          const option = () => optionsByValue().get(value) ?? initialOption;
+          const renderedLabel = () => option().visualLabel ?? option().label;
+          const accessibleLabel = () => {
+            const entry = option();
+            return (
+              entry.ariaLabel ??
+              (entry.visualLabel
+                ? undefined
+                : entry.count === undefined
+                  ? entry.label
+                  : `${entry.label}, ${entry.count.toLocaleString()}`)
+            );
+          };
           const iconClass = () =>
             filterButtonGroup.variant() === 'compact'
               ? 'h-3 w-3'
@@ -52,49 +71,44 @@ export function FilterButtonGroup<T extends string | number>(props: FilterButton
           return (
             <button
               type="button"
-              aria-label={
-                option.ariaLabel ??
-                (option.visualLabel
-                  ? undefined
-                  : option.count === undefined
-                    ? option.label
-                    : `${option.label}, ${option.count.toLocaleString()}`)
-              }
-              title={option.title}
-              onClick={() => filterButtonGroup.handleOptionClick(option)}
+              aria-label={accessibleLabel()}
+              title={option().title}
+              onClick={() => filterButtonGroup.handleOptionClick(option())}
               class={getFilterButtonGroupButtonClass(
                 filterButtonGroup.variant(),
-                filterButtonGroup.isOptionActive(option),
-                filterButtonGroup.isOptionDisabled(option),
-                option.tone,
+                filterButtonGroup.isOptionActive(option()),
+                filterButtonGroup.isOptionDisabled(option()),
+                option().tone,
               )}
-              aria-pressed={filterButtonGroup.isOptionActive(option)}
-              disabled={filterButtonGroup.isOptionDisabled(option)}
+              aria-pressed={filterButtonGroup.isOptionActive(option())}
+              disabled={filterButtonGroup.isOptionDisabled(option())}
             >
-              {option.leading}
-              {Icon && <Icon class={iconClass()} />}
+              {option().leading}
+              <Show when={option().icon}>
+                {(Icon) => <Dynamic component={Icon()} class={iconClass()} />}
+              </Show>
               <span class="inline-flex items-baseline gap-1.5 whitespace-nowrap">
                 <Show
-                  when={option.visualLabel}
+                  when={option().visualLabel}
                   fallback={
                     filterButtonGroup.variant() === 'prominent' ? (
-                      <span>{option.label}</span>
+                      <span>{option().label}</span>
                     ) : (
                       <>
-                        <span class="hidden sm:inline">{option.label}</span>
-                        <span class="sm:hidden">{getFilterButtonGroupCompactLabel(option)}</span>
+                        <span class="hidden sm:inline">{option().label}</span>
+                        <span class="sm:hidden">{getFilterButtonGroupCompactLabel(option())}</span>
                       </>
                     )
                   }
                 >
                   <span>{renderedLabel()}</span>
                 </Show>
-                <Show when={option.count !== undefined}>
+                <Show when={option().count !== undefined}>
                   <span
                     class="inline-block text-[11px] font-semibold leading-4 tabular-nums"
                     aria-hidden="true"
                   >
-                    {option.count!.toLocaleString()}
+                    {option().count!.toLocaleString()}
                   </span>
                 </Show>
               </span>

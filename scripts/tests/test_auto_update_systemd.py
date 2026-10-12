@@ -19,7 +19,7 @@ native = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(native)
 WORKFLOW = ROOT / ".github/workflows/build-and-test.yml"
 STEP = "Check current-source unattended recovery on native systemd"
-FIXTURE_COMMANDS = ("bash", "tar", "chmod", "mv", "timeout")
+FIXTURE_COMMANDS = ("bash", "tar", "chmod", "mv", "timeout", "cmp")
 LINUX_CONTROL = "test_connected_signed_archive_and_recovery_controls_without_host_manager"
 LINUX_ONLY_REASON = "Linux server ELF execution; portable controls remain required on macOS"
 
@@ -280,7 +280,7 @@ class NativeContracts(unittest.TestCase):
                     lab.state = unittest.mock.Mock(return_value={**state, "ActiveState": "inactive"})
                     with self.assertRaises(RuntimeError): lab.assert_runtime("v0.0.2", "inactive")
                     continue
-                lab.state = unittest.mock.Mock(side_effect=[state, observed])
+                lab.state = unittest.mock.Mock(side_effect=[state, observed, observed])
                 order = []
                 def response(url, **kwargs):
                     endpoint = url.rsplit("/", 1)[-1]
@@ -301,6 +301,70 @@ class NativeContracts(unittest.TestCase):
                         self.assertEqual(lab.assert_runtime("v0.0.2", "active"), observed)
                 self.assertEqual(order[:2], ["health", "version"])
                 self.assertEqual(order[2:], [] if mutation == "stopped-after-readiness" else ["process"])
+
+    def test_runtime_readback_rejects_post_comparison_drift(self):
+        # Portable manager/API observations, never native acceptance. Keep the
+        # final oracle independent of the updater's own executable verifier.
+        mutations = ("", "pid", "activity", "load", "enablement", "installed",
+                     "equally-wrong-bytes", "missing-process", "failed-readback")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                lab = self.make_phase(directory)
+                state = dict(LoadState="loaded", ActiveState="active", UnitFileState="disabled", MainPID="2")
+                final = state.copy()
+                changes = {
+                    "pid": {"MainPID": "3"},
+                    "activity": {"ActiveState": "inactive", "MainPID": "0"},
+                    "load": {"LoadState": "not-found"},
+                    "enablement": {"UnitFileState": "masked"},
+                }
+                final.update(changes.get(mutation, {}))
+                end = OSError("confined manager read failed") if mutation == "failed-readback" else final
+                lab.state = unittest.mock.Mock(side_effect=[state, state, end])
+                binary = lab.root / "install/bin/pulse"
+                expected = lab.receipt["binaries"]["v0.0.2"]
+                original_digest = native.digest
+                def process_digest(path):
+                    if str(path) == "/proc/2/exe":
+                        if mutation == "missing-process":
+                            raise FileNotFoundError("confined missing process")
+                        if mutation in ("installed", "equally-wrong-bytes"):
+                            binary.write_bytes(b"changed during executable readback\n")
+                        return original_digest(binary) if mutation == "equally-wrong-bytes" else expected
+                    return original_digest(path)
+                def response(url, **kwargs):
+                    return io.BytesIO(json.dumps({"status": "healthy"} if url.endswith("/health")
+                                                 else {"version": "v0.0.2"}).encode())
+                with patch.object(native, "digest", side_effect=process_digest), \
+                     patch.object(native.urllib.request, "urlopen", side_effect=response), \
+                     patch.object(lab, "run", side_effect=AssertionError("readback cannot control a service")):
+                    if mutation:
+                        with self.assertRaises((RuntimeError, OSError)):
+                            lab.assert_runtime("v0.0.2", "active")
+                        self.assertEqual(lab.receipt["phases"], [])
+                    else:
+                        self.assertEqual(lab.assert_runtime("v0.0.2", "active"), state)
+                        self.assertEqual(lab.state.call_count, 3)
+
+        # Refuse malformed or non-active manager identity before constructing
+        # a process path, even when a digest double would otherwise match.
+        for pid, load in (("0", "loaded"), ("-2", "loaded"), ("02", "loaded"),
+                          ("2/../1", "loaded"), ("unknown", "loaded"), ("2", "masked")):
+            with self.subTest(pid=pid, load=load), tempfile.TemporaryDirectory() as directory:
+                lab = self.make_phase(directory)
+                state = dict(LoadState=load, ActiveState="active", UnitFileState="disabled", MainPID=pid)
+                lab.state = unittest.mock.Mock(return_value=state)
+                original_digest = native.digest
+                def no_process_digest(path):
+                    if str(path).startswith("/proc/"):
+                        raise AssertionError("invalid manager identity reached process-byte read")
+                    return original_digest(path)
+                def response(url, **kwargs):
+                    return io.BytesIO(json.dumps({"status": "healthy"} if url.endswith("/health")
+                                                 else {"version": "v0.0.2"}).encode())
+                with patch.object(native, "digest", side_effect=no_process_digest), \
+                     patch.object(native.urllib.request, "urlopen", side_effect=response):
+                    with self.assertRaises(RuntimeError): lab.assert_runtime("v0.0.2", "active")
 
     def test_cleanup_never_deletes_preexisting_unowned_scratch(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -428,10 +492,12 @@ if name == "sudo":
     @unittest.skipUnless(sys.platform.startswith("linux"), LINUX_ONLY_REASON)
     def test_connected_signed_archive_and_recovery_controls_without_host_manager(self):
         # Same orchestration and production shell functions, real signatures and
-        # ELF staging. Only this test replaces the manager, account/chown and
-        # unit output path. It is not native or real-Pulse runtime acceptance.
+        # ELF staging. This test replaces the manager, its process-byte readback,
+        # account/chown and unit path. /proc/123/exe maps only to the executable
+        # snapshot made by that simulated manager's start. Real owned /proc
+        # checks run separately; this is not native/real-Pulse acceptance.
         manager = r'''#!/usr/bin/python3
-import os, pathlib, sys
+import os, pathlib, shutil, sys
 root = pathlib.Path(os.environ["PULSE_NATIVE_ROOT"])
 # Tool startup must have an existing owned home, not create the lab before
 # NativeLab has admitted and claimed its scratch root (as on macOS).
@@ -450,6 +516,9 @@ if args[0] == "show":
 elif args[0] in ("start", "stop"):
  if args[0] == "start" and load != "loaded": sys.exit(1)
  statefile.write_text("active" if args[0] == "start" else "inactive")
+ process_bytes = root / "mock-managed-executable"
+ if args[0] == "start": shutil.copyfile(root / "install/bin/pulse", process_bytes)
+ else: process_bytes.unlink(missing_ok=True)
  if args[0] == "start" and not (root / "data/.encryption.key").exists():
   (root / "data/.encryption.key").write_text("synthetic persistence marker, not a key\n")
 elif args[0] == "mask": unit.symlink_to("/dev/null")
@@ -476,13 +545,18 @@ elif args[0] not in ("daemon-reload", "reset-failed"): sys.exit(97)
             tool_trace = base / "selected-tools.jsonl"
             for name, executable in selected.items():
                 # Record only tool identity, never shell arguments or key/log
-                # bytes. Execute the actual supplied GNU utility, not a double.
+                # bytes. Execute the actual supplied GNU utility; only the
+                # manager double's fixed process path is redirected below.
                 tool = tools / name
                 tool.write_text(f'''#!{sys.executable}
 import json, os, pathlib, sys
 with pathlib.Path({str(tool_trace)!r}).open('a') as receipt:
     receipt.write(json.dumps({name!r}) + '\\n')
-os.execv({executable!r}, [{executable!r}, *sys.argv[1:]])
+arguments = sys.argv[1:]
+if {name!r} == 'cmp' and '/proc/123/exe' in arguments:
+    arguments = [str(pathlib.Path(os.environ['PULSE_NATIVE_ROOT']) / 'mock-managed-executable')
+                 if arg == '/proc/123/exe' else arg for arg in arguments]
+os.execv({executable!r}, [{executable!r}, *arguments])
 ''')
                 tool.chmod(0o700)
             path = tools / "systemctl"; path.write_text(manager); path.chmod(0o755)

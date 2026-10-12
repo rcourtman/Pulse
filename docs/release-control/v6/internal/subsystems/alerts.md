@@ -4855,3 +4855,30 @@ only for usable live status, leaving non-metric rows unchanged. The ten-minute
 stale boundary, evaluated breach date, legacy fallback, clear rule and operator
 memory basis remain independent. This does not infer collection or recovery.
 Mounted drawer controls and lazy-copy tests cover this boundary.
+
+
+### Guest filesystem settings do not assert current readings (12 October 2026)
+
+The existing Proxmox Guest Filesystems settings rows use
+`getWorkloadGuestDiskRead` for the same provider read/power-state admission as
+Workloads. A `prev-` read reason labels retained usage **Last known**; an
+unavailable read or explicitly stopped VM withdraws used bytes and percentage,
+without deleting mount identity, saved overrides or threshold controls. Native
+`runtimeStatus` takes precedence over a canonical resource held online by
+another source. Independent LXC platform storage does not inherit VM-only
+read reasons. A new accepted reading clears the explanation, including zero.
+
+The shared desktop row and phone card display the optional `readingMessage`
+as wrapping text beside the reading, not hover-only or truncated guidance.
+Missing filesystem samples keep saved settings editable with an explicit
+unavailable label. Existing numeric serialization, identity, persistence,
+active-alert linkage, edit-time row stabilisation and threshold evaluation
+remain unchanged. This presentation does not change collection, issue guest
+commands, prove thaw/writes/liveness, or establish installed/released recovery.
+
+Verification: `useThresholdsGuestData.test.ts` covers every fixed read reason,
+power/read replacement, LXC and source independence, unknown-reason privacy and
+saved-override retention. `ResourceTable.test.tsx` covers visible/reactive text
+in both layouts. `browser-tests/guest-filesystem-thresholds.cjs` connects the
+production hook, table and editors on desktop Chromium and phone WebKit,
+including scoped refusal text, custom settings and same-VMID/mount separation.

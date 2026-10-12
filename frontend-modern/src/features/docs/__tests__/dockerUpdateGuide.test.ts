@@ -25,6 +25,93 @@ function section(article: HTMLElement, id: string): string {
 }
 
 describe('shipped monitored-container update guide', () => {
+  it('separates a legacy monitoring credential from independent runner posture and operator intent', () => {
+    const text = section(renderGuide(), 'command-agent-is-not-connected');
+    for (const phrase of [
+      "root identifies the collector's OS user, not its server-side permission",
+      'commands legacy identifies an older, unmarked compatibility profile',
+      'cannot authenticate the legacy command channel',
+      'Do not add execution rights to that token as a repair',
+      'Credential not issued and Runner not connected',
+      'An absent runner alone does not rule out an authorised legacy command connection',
+      'not proof of a broken collector',
+      'your usual Docker or Podman administration tool',
+      'Neither is a diagnostic prerequisite',
+      'unknown is valid',
+    ]) {
+      expect(text).toContain(phrase);
+    }
+  });
+
+  it('links deliberate command-profile choices to shipped security guidance rather than a forced conversion', () => {
+    const article = renderGuide();
+    const security = document.createElement('article');
+    security.innerHTML = renderDocMarkdown(
+      readFileSync(path.join(repoRoot, 'docs/AGENT_SECURITY.md'), 'utf8'),
+      'AGENT_SECURITY',
+    );
+    for (const id of ['agent-privilege-model', 'least-privilege-agent-profile']) {
+      expect(article.querySelector(`a[href="/docs/AGENT_SECURITY#${id}"]`)).not.toBeNull();
+      expect(security.querySelector(`#${id}`)).not.toBeNull();
+    }
+  });
+
+  it('separates a refused plan from a sent or unknown action before any shell check', () => {
+    const article = renderGuide();
+    const checks = section(article, 'check-a-failed-or-pending-workload-update');
+    for (const phrase of [
+      'existing error and action stage',
+      'refused that plan before dispatch',
+      '409 alone has other causes',
+      'does not establish what an earlier action did',
+      'outcome is uncertain, even beside a failed banner',
+      'do not assume nothing changed',
+      'A missing Privilege line is unknown',
+      'not a connected session',
+      'do not enable commands, broaden a token',
+      'do not reinstall or retry the workload update as a connection test',
+      'not a full Agent Doctor report, token hint, agent ID',
+    ]) {
+      expect(checks).toContain(phrase);
+    }
+    const stages = article.querySelector('#check-a-failed-or-pending-workload-update')!;
+    const commands = article.querySelector('#command-agent-is-not-connected')!;
+    const uncertain = article.querySelector('#action-was-sent-or-its-outcome-is-unknown')!;
+    const firstShellCheck = uncertain.nextElementSibling!.nextElementSibling!.nextElementSibling!;
+    expect(firstShellCheck.tagName).toBe('PRE');
+    for (const [before, after] of [
+      [stages, commands],
+      [commands, uncertain],
+      [uncertain, firstShellCheck],
+    ]) {
+      expect(before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    }
+  });
+
+  it('hands command-capable hosts to the actual shipped connection guide, not an install command', () => {
+    const article = renderGuide();
+    const link = Array.from(article.querySelectorAll('a')).find(
+      (anchor) => anchor.textContent === 'command-channel connection and admission checks',
+    );
+    expect(link?.getAttribute('href')).toBe(
+      '/docs/UNIFIED_AGENT#commands-enabled-but-remote-control-blocked',
+    );
+    expect(link?.hasAttribute('data-doc-link')).toBe(true);
+    expect(link?.hasAttribute('target')).toBe(false);
+    const agentGuide = document.createElement('article');
+    agentGuide.innerHTML = renderDocMarkdown(
+      readFileSync(path.join(repoRoot, 'frontend-modern/public/docs/UNIFIED_AGENT.md'), 'utf8'),
+      'UNIFIED_AGENT',
+    );
+    expect(agentGuide.querySelector(link!.hash)?.textContent).toBe(
+      'Commands enabled but remote control blocked',
+    );
+    expect(section(agentGuide, link!.hash.slice(1))).toContain('not a connected session');
+    expect(guide).toBe(
+      readFileSync(path.join(repoRoot, 'frontend-modern/public/docs/DOCKER.md'), 'utf8'),
+    );
+  });
+
   it('places independent data backup and deployment-manager limits before the action', () => {
     const article = renderGuide();
     const precautions = section(article, 'before-updating-a-workload');

@@ -1387,6 +1387,7 @@ type Monitor struct {
 	rrdCacheMu                 sync.RWMutex // Protects short-lived guest memory caches.
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
 	vmAgentMemCache            map[string]agentMemCacheEntry
+	vmAgentMemInFlight         map[string]*guestMemoryFetch    // Guarded by rrdCacheMu; retained until the read returns, even after invalidation.
 	removedDockerHosts         map[string]time.Time            // Track deliberately removed Docker hosts (ID -> removal time)
 	dockerTokenBindings        map[string]string               // Track token ID -> Docker host identity bindings to enforce uniqueness
 	dockerIdentityFlaps        map[string]*identityFlapTracker // Track per-host identity flapping (cloned VMs sharing machine-id)
@@ -1405,7 +1406,8 @@ type Monitor struct {
 	guestMetadataCache         map[string]guestMetadataCacheEntry
 	guestMetadataLimiterMu     sync.Mutex
 	guestMetadataLimiter       map[string]time.Time
-	guestMetadataInFlight      map[string]bool // Guarded by guestMetadataLimiterMu; released only on fetch completion.
+	guestMetadataInFlight      map[string]*guestMetadataFetch // Guarded by guestMetadataLimiterMu; retained until fetch completion, even after invalidation.
+	guestMetadataLastAccess    map[string]time.Time           // Guarded by guestMetadataLimiterMu; cache activity, never guest evidence.
 	guestMetadataSlots         chan struct{}
 	guestMetadataMinRefresh    time.Duration
 	guestMetadataRefreshJitter time.Duration
@@ -2021,6 +2023,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		dockerCommandIndex:         make(map[string]string),
 		guestMetadataCache:         make(map[string]guestMetadataCacheEntry),
 		guestMetadataLimiter:       make(map[string]time.Time),
+		guestMetadataLastAccess:    make(map[string]time.Time),
 		guestMetadataMinRefresh:    minRefresh,
 		guestMetadataRefreshJitter: jitter,
 		guestMetadataRetryBackoff:  retryBackoff,

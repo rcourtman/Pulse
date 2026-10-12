@@ -657,6 +657,19 @@ report request and response shapes are unchanged.
 `TestContractDeployEnrolledCollectorReducesItsAuthorityAfterItsFirstReport`
 in `internal/api/contract_test.go` pins report, then reduction.
 
+### Saved-credential uninstall copy handoffs
+
+Existing installer, source-manager and removed Agent Doctor copy actions do not
+request an install token for removal. The composed operations hook carries
+canonical ID/hostname into the appropriate saved-state command family; no
+endpoint, payload, API-token scope, server removal authentication or identity
+matching changes. `infrastructureAgentDoctorModel.test.ts` composes every
+removed-platform handoff with the real command closure, preserving exact
+identity and keeping installation credentials out. The shared command proof
+executes a terminal-free Unix recorder and inspects explicit Windows parameter
+binding. Browser evidence is UI-only; server/native deregistration and Windows
+failure retention require their own owner result, not source acceptance.
+
 ## Canonical Files
 
 1a. `docs/API.md`
@@ -10228,6 +10241,30 @@ be able to spend AI budget. The reporting catalog advertises the transport as
 it. `generate-multi` and the manual schedule run endpoint
 (`POST /api/admin/reports/schedules/{id}/run`) were already POST-only; due
 schedules run from the server's scheduler, not an HTTP request.
+POST alone does not authorise narration by an API token. Both the
+single-resource and fleet generation paths use `resolveNarrator`, whose shared
+gate calls `reportCallerMayUseAI` before resolving AI narrators: a token must
+carry `ai:execute` (including full-access
+tokens), in addition to the route's `settings:read` generation scope. A
+read-only token still receives the report, but with deterministic narration
+and an existing-service-only findings lookup, never an AI service resolution
+or provider call. The single-resource scope fallback uses
+`scopeLimitedReportNarrator` and explains the missing scope; the fleet fallback
+leaves `FleetNarrator` nil for the engine's heuristic summary. Browser sessions
+and server-run schedules carry no API token and keep their existing narration
+behaviour. An API-token-triggered schedule run shares the fleet narration gate;
+its separate `settings:write` route scope and all schedule/budget rules remain
+unchanged. GET stays deterministic even for tokens permitted to spend AI budget.
+The canonical API/MSP references and their shipped mirrors distinguish read
+permission, narration permission, and GET/CSV behaviour. `docsLinks.test.ts`
+checks both method/scope branches and renders that guidance rather than
+requiring the old whitespace-sensitive, unconditional POST branch.
+`TestSingleReportAINarrationNeedsAIExecuteForTokens` and
+`TestFleetReportAINarrationNeedsAIExecuteForTokens` exercise browser, read-only,
+read-plus-monitoring, AI-execution, and full-access callers.
+`TestSingleReportGETNeverUsesAIRegardlessOfTokenScopes` crosses those same
+callers with GET and proves no narration/service resolution, the GET-specific
+heuristic note, and preservation of existing findings.
 `TestContract_SingleReportAINarrationRequiresPOST` pins the rule on a real
 engine: GET, HEAD, PUT and DELETE make no narrator call and no AI service
 resolution, while POST makes one of each.
@@ -12117,3 +12154,13 @@ unchanged. The mounted Settings test holds source/target identities fixed and
 checks one initial list call while the expiry is crossed.
 An expired loaded check reads Stale rather than Online in an amber badge;
 intentional pause and the dedicated stopped-probe label still take precedence.
+
+
+### Upstream diagnostics visibility composition (11 October 2026)
+
+Diagnostics token listings follow the same caller authority as token administration: API-token callers see only records they may manage in their organizations, and sessions retain their existing authority. The diagnostic endpoint does not elevate a narrow monitoring credential into an instance-wide token inventory. Single and fleet PDF narration use the shared ai:execute gate; report permission alone yields deterministic output, and CSV never invokes narration.
+
+The accepted upstream `diagnostics_token_visibility_test.go` controls and API
+reference route checks cover caller filtering and the documented authority.
+Final-source checks must retain this upstream behavior beside the reviewed
+reporting/help repairs; source proof is not installed credential recovery.

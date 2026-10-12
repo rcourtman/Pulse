@@ -106,6 +106,19 @@ class AgentAuthDocsTest(unittest.TestCase):
                      "missing record", "service is presenting the same token"):
             self.assertIn(fact, text)
 
+    def test_matching_hint_is_not_whole_credential_equality(self):
+        text = " ".join(section().split())
+        for fact in ("matching token hint", "only the visible ends", "whole token",
+                     "duplicated or missing characters in the middle",
+                     "does not establish which step introduced the error",
+                     "Legacy token formats remain supported",
+                     "do not replace a token merely because its length or format differs"):
+            self.assertIn(fact, text)
+        comparison = (ROOT / "pkg/auth/token.go").read_text().split(
+            "func CompareAPIToken(", 1)[1].split("\n}", 1)[0]
+        self.assertIn("HashAPIToken(token)", comparison)
+        self.assertIn("subtle.ConstantTimeCompare", comparison)
+
     def test_missing_record_check_registers_once_before_touching_the_agent(self):
         text = " ".join(section().split())
         install = (ROOT / "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx").read_text()
@@ -162,6 +175,65 @@ class AgentAuthDocsTest(unittest.TestCase):
                      "retain which screen generated it", "do not generate another token",
                      "broaden its permissions, reinstall or probe the agent"):
             self.assertIn(fact, text)
+
+    def test_file_format_guidance_matches_the_literal_reader_without_requesting_a_secret(self):
+        text = " ".join(section().split())
+        source = (ROOT / "cmd/pulse-agent/main.go").read_text()
+        reader = source.split("func resolveTokenInternal(", 1)[1].split(
+            "// 3. PULSE_TOKEN", 1)[0]
+        self.assertIn("readFile(tokenFileFlag)", reader)
+        self.assertIn("strings.TrimSpace(string(content))", reader)
+        self.assertNotIn("strings.Trim(", reader)
+        self.assertNotIn("strings.TrimPrefix(", reader)
+        validator = (ROOT / "internal/config/api_tokens.go").read_text().split(
+            "func (c *Config) ValidateAPIToken(", 1)[1].split(
+            "// IsValidAPIToken", 1)[0]
+        self.assertIn("auth.CompareAPIToken(rawToken, record.Hash)", validator)
+        self.assertLess(validator.index("auth.CompareAPIToken"), validator.index("LastUsedAt = &now"))
+        for fact in ("Token-file format is not shell syntax", "not a diagnosis from `Never`",
+                     "not** interpret shell syntax, strip quotes", "The quotes remain part",
+                     "The prefix remains part", "does not prove it matches",
+                     "rejected credential can leave that record showing `Never`",
+                     "Use how the file was saved or an existing private observation",
+                     "say **unknown**", "not the value, length, hint, screenshot or file",
+                     "Do not print, source, upload or edit", "merely to classify it",
+                     "not proof of accepted reporting"):
+            self.assertIn(fact, text)
+        self.assertIn("#token-file-format-is-not-shell-syntax", DOC.read_text())
+
+    def test_first_install_checks_the_whole_current_host_token_privately(self):
+        guide = DOC.read_text(encoding="utf-8")
+        preparation = " ".join(guide.split("### Private-file installation: Linux, macOS and NAS", 1)[1]
+                               .split("2. Replace", 1)[0].split())
+        issuance = (ROOT / "internal/api/agenttokens/install.go").read_text()
+        self.assertIn("rawToken, err := internalauth.GenerateAPIToken()", issuance)
+        generator = (ROOT / "pkg/auth/token.go").read_text().split(
+            "func GenerateAPIToken()", 1)[1].split("// HashAPIToken", 1)[0]
+        self.assertIn("make([]byte, 32)", generator)
+        self.assertIn("hex.EncodeToString(bytes)", generator)
+        for fact in ("Before a first installation", "complete value privately",
+                     "not only its visible ends", "64 lowercase hexadecimal",
+                     "duplicated characters", "internal space or newline",
+                     "not every legacy, manually supplied or bootstrap credential",
+                     "matching shape alone does not authenticate",
+                     "commands, terminal output, screenshots and reports"):
+            self.assertIn(fact, preparation)
+
+    def test_bare_file_can_be_damaged_without_changing_its_hint(self):
+        text = " ".join(section().split())
+        metadata = (ROOT / "internal/config/api_tokens.go").read_text()
+        prefix = metadata.split("func tokenPrefix(", 1)[1].split("// tokenSuffix", 1)[0]
+        suffix = metadata.split("func tokenSuffix(", 1)[1].split("// HasAPITokens", 1)[0]
+        self.assertIn("value[:6]", prefix)
+        self.assertIn("value[len(value)-4:]", suffix)
+        for fact in ("Bare does not mean intact", "Duplicated or missing characters",
+                     "whitespace inside a bare value", "trimming the file's ends does not repair",
+                     "first six and last four characters", "middle characters can leave both ends matching",
+                     "do not prove full equality", "intended Pulse instance or accepted reporting",
+                     "Do not apply this shape check to other token families",
+                     "rotate a working credential because it looks different"):
+            self.assertIn(fact, text)
+        self.assertIn("#private-file-installation-linux-macos-and-nas", section())
 
 
 if __name__ == "__main__":

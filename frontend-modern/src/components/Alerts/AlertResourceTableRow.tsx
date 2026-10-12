@@ -277,7 +277,10 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
       </TableCell>
 
       <TableCell class={getPlatformTableCellClassForKind('name')}>
-        <div class="flex items-center gap-2 min-w-0">
+        <div
+          class="flex items-center gap-2 min-w-0"
+          classList={{ 'flex-wrap': Boolean(props.resource.readingMessage) }}
+        >
           <Show
             when={props.resource.type === 'agent'}
             fallback={
@@ -319,6 +322,11 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             </span>
           </Show>
         </div>
+        <Show when={props.resource.readingMessage}>
+          <p class="mt-1 max-w-prose text-xs text-muted whitespace-normal break-words">
+            {props.resource.readingMessage}
+          </p>
+        </Show>
         <Show when={isEditing()}>
           <FormTextarea
             id={`note-${props.resource.id}`}

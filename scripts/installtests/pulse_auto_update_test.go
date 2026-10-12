@@ -35,6 +35,8 @@ func TestAutoUpdateNativeSystemdHarnessContracts(t *testing.T) {
 		"test_signer_creation_refuses_adoption_wrong_type_owner_or_failed_mode",
 		"test_real_verifier_accepts_fixture_and_refuses_tampering",
 		"test_phase_cannot_accept_wrong_bytes_state_mask_persistence_or_backup",
+		"test_managed_process_identity_follows_served_readiness_and_rejects_residuals",
+		"test_runtime_readback_rejects_post_comparison_drift",
 		"test_connected_linux_control_is_required_without_macho_or_validator_bypass",
 	} {
 		if results[name] != "ok" {
@@ -113,6 +115,10 @@ func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_service_discovery.py"), "-v",
+		"ServiceDiscovery.test_fresh_host_no_matching_unit_files_is_an_empty_inventory",
+		"ServiceDiscovery.test_first_inventory_failure_is_not_replaced_by_silent_absence",
+		"ServiceDiscovery.test_only_silent_exit_one_is_admitted_as_absence",
+		"ServiceDiscovery.test_blank_line_output_is_not_a_silent_failed_inventory",
 		"ServiceDiscovery.test_automatic_helper_preserves_exact_names_and_explicit_instances",
 		"ServiceDiscovery.test_automatic_helper_cannot_short_read_the_installer_handoff",
 		"ServiceDiscovery.test_automatic_helper_refuses_before_backup_or_installer_even_in_or_list",
@@ -135,7 +141,7 @@ func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {
 func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v")
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateServiceState")
 	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -144,10 +150,13 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 	// Keep the collector controls part of actual package acceptance, not just
 	// an optional Python check. A green fixture with these methods removed
 	// would otherwise silently lose early-failure and final-line coverage.
-	for _, name := range []string{
+	required := []string{
+		"test_success_cannot_claim_unverified_running_executable",
+		"test_rollback_keeps_backup_until_restored_running_executable_matches",
 		"test_early_collector_failure_survives_later_success_and_drains_installer",
 		"test_unterminated_final_installer_line_is_collected_and_its_failure_retained",
-	} {
+	}
+	for _, name := range required {
 		passed := false
 		for _, line := range strings.Split(string(out), "\n") {
 			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
@@ -160,12 +169,76 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 	}
 }
 
+// Keep the full real-sink matrix mandatory, but give it its own existing-size
+// bound rather than exhausting the service-state suite's manager deadlines.
+func TestAutoUpdateLogSinkFailures(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateLogSinks")
+	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("unattended real-log sink controls: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_logger_double_keeps_complete_argument_frames_and_exit_sequence",
+		"test_real_log_retains_each_sink_failure_in_conditional_calls",
+		"test_real_logger_failure_drains_installer_and_preserves_recovery",
+	} {
+		passed := false
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
+				passed = true
+			}
+		}
+		if !passed {
+			t.Fatalf("required real-log sink control %s did not pass:\n%s", name, out)
+		}
+	}
+}
+
+// A real owned process retains its old executable after its disk path changes.
+// This tests Linux process identity, not a native systemd/application journey.
+func TestAutoUpdateRunningExecutableIdentity(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux /proc executable identity; portable transaction controls remain required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "RunningExecutable")
+	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("running executable identity controls: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_actual_process_not_replaced_disk_path_is_checked",
+		"test_complete_stable_main_pid_tuple_is_required",
+		"test_identity_read_timeout_is_bounded_and_owned_process_is_reaped",
+	} {
+		passed := false
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
+				passed = true
+			}
+		}
+		if !passed {
+			t.Fatalf("required running executable control %s did not pass:\n%s", name, out)
+		}
+	}
+}
+
 func extractAutoUpdateServiceFunctions(t *testing.T) string {
 	t.Helper()
 	var functions []string
 	for _, name := range []string{"read_update_service_state", "start_update_service_if_stopped", "stop_update_service_for_rollback", "wait_for_service_active", "ensure_service_restarted"} {
 		functions = append(functions, extractAutoUpdateFunction(t, name))
 	}
+	// These pure-shell controls have simulated service state and script
+	// executables, not a managed process. The registered Python controls
+	// exercise real owned /proc entries and fail-closed transaction wiring;
+	// containing source CI separately checks actual systemd/Pulse processes.
+	functions = append(functions, "verify_update_running_executable() { return 0; }")
 	return strings.Join(functions, "\n")
 }
 
@@ -873,6 +946,9 @@ func runAutoUpdateTransactionScenario(t *testing.T, fault, outcome, layout, acti
 	script := `
 set -euo pipefail
 source "$UPDATER_UNDER_TEST"
+# This signed transaction matrix simulates the manager. Running-process
+# identity is exercised by the real owned-process Python controls, not here.
+verify_update_running_executable() { return 0; }
 INSTALL_DIR="$FIXTURE_DIR/install"
 CONFIG_DIR="$FIXTURE_DIR/config"
 mkdir -p "$INSTALL_DIR/bin" "$CONFIG_DIR" "$FIXTURE_DIR/tmp" "$FIXTURE_DIR/original"

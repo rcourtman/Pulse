@@ -987,17 +987,16 @@ func (a *Agent) deliverPrimaryReport(ctx context.Context, report agentshost.Repo
 				Err(err).
 				Str("endpoint", statusErr.Endpoint).
 				Int("status_code", statusErr.StatusCode).
-				Msg("Failed to send Unified Agent report (403 Forbidden). API token may lack 'Unified Agent reporting' scope. Set PULSE_ENABLE_HOST=false if host monitoring is not needed.")
+				Msg("Failed to send Unified Agent report (403 Forbidden). Check the existing credential's 'Unified Agent reporting' (agent:report) scope and the endpoint's access policy. Command execution permission is not needed for host reporting. Do not disable host monitoring or reinstall solely on this error. Reports are dropped while reporting access is denied.")
 			a.releaseCommandChannelWithoutReports()
 			return nil
 		}
 		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusUnauthorized {
-			// 401 means the server does not recognise this agent's API token
-			// (for example after a Pulse restore or a v5 -> v6 upgrade that did
-			// not carry the token across). Retrying with the same token loops
-			// forever, so drop the report instead of buffering it and surface an
-			// actionable error the operator can act on. Throttle it so a
-			// permanently rejected token does not flood the log.
+			// The endpoint rejected authentication, but the status alone does
+			// not identify a lost credential, wrong instance or upstream policy.
+			// Drop rejected reports rather than growing an undeliverable buffer.
+			// Ordinary future polls can recover with the same credential after
+			// access is restored; throttle the diagnostic while rejection lasts.
 			a.logAuthFailure(statusErr)
 			return nil
 		}
@@ -1067,7 +1066,9 @@ func (a *Agent) deliverObserverReport(ctx context.Context, observer *observerRep
 					Str("destination", observer.target.Name).
 					Str("role", "observer").
 					Str("pulse_url", observer.target.PulseURL).
-					Msg("Pulse observer rejected its API token; reports for this destination are dropped until the token is replaced")
+					Int("status_code", statusErr.StatusCode).
+					Str("endpoint", statusErr.Endpoint).
+					Msg("Pulse observer rejected host reporting. Check this destination's configured Pulse URL, existing API Access record and access policy; this status alone does not identify the cause. Do not replace credentials solely on this error or share token values or service files. Reports for this destination are dropped while access is rejected.")
 			}
 			return
 		}
@@ -1129,10 +1130,10 @@ func (a *Agent) logAuthFailure(statusErr *reportHTTPStatusError) {
 		Int("status_code", statusCode).
 		Str("pulse_url", a.trimmedPulseURL)
 	if statusCode == http.StatusForbidden {
-		event.Msg("Pulse rejected this agent's API token (403 Forbidden). The token may lack the Unified Agent reporting scope. Re-run the agent install command from the Pulse UI to mint a correctly scoped token. Reports are dropped until the token is replaced.")
+		event.Msg("Pulse rejected this agent's API token (403 Forbidden). Check the existing credential's Unified Agent reporting (agent:report) scope and the endpoint's access policy. Command execution permission is not needed for host reporting. Do not disable host monitoring or reinstall solely on this error. Reports are dropped while reporting access is denied.")
 		return
 	}
-	event.Msg("Pulse rejected this agent's API token (401 Unauthorized). The token is no longer valid on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across. Re-run the agent install command from the Pulse UI to mint a fresh token. Reports are dropped until the token is replaced.")
+	event.Msg("Pulse rejected this agent's API token (401 Unauthorized). Check that the configured Pulse URL targets the instance where the existing credential was issued, then check its API Access record for expiry or revocation. This status alone does not identify the cause; an upstream authentication layer can also reject the request. Do not reinstall or replace credentials solely on this error, and do not share token values or service files. Reports are dropped while authentication is rejected.")
 }
 
 func (a *Agent) flushBuffer(ctx context.Context) {
@@ -1153,9 +1154,8 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 			var statusErr *reportHTTPStatusError
 			if errors.As(err, &statusErr) &&
 				(statusErr.StatusCode == http.StatusUnauthorized || statusErr.StatusCode == http.StatusForbidden) {
-				// The token is rejected; buffered reports will never be
-				// accepted with it. Drop them so the buffer cannot grow
-				// unbounded across restarts, and surface the actionable error.
+				// Drop reports refused by the endpoint so the buffer cannot grow
+				// unbounded, without diagnosing the cause or changing credentials.
 				a.logAuthFailure(statusErr)
 				if statusErr.StatusCode == http.StatusForbidden {
 					a.releaseCommandChannelWithoutReports()

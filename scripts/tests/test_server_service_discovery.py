@@ -39,6 +39,10 @@ if args[0] == "list-unit-files":
     if mode == "real":
         os.execv(os.environ["REAL_SYSTEMCTL"],
                  [os.environ["REAL_SYSTEMCTL"], "--root=" + str(f / "root")] + args)
+    if mode == "first-error-then-absent":
+        if len((f / "calls").read_text().splitlines()) == 1:
+            os.write(2, b"Failed to get unit file list: Input/output error\n")
+        sys.exit(1)
     if mode == "hang":
         time.sleep(30)
     if mode == "large":
@@ -77,7 +81,16 @@ sys.exit(97)
 
 HARNESS = r'''
 source "$INSTALLER"
-if [[ "$PRODUCER" == updater ]]; then source "$UPDATER"; fi
+if [[ "$PRODUCER" == updater ]]; then
+    source "$UPDATER"
+    # Discovery/handoff uses a manager double and fake script executables,
+    # not a managed process. Check the callback's selected service here;
+    # real process identity is mandatory in the separate updater controls.
+    verify_update_running_executable() {
+        printf '%s\n' "$1" > "$FIXTURE/process-readback-service"
+        [[ "$1" == pulse-backend ]]
+    }
+fi
 print_header() { :; }
 print_info() { echo "$*" >&2; }
 print_warn() { echo "$*" >&2; }
@@ -240,6 +253,8 @@ class ServiceDiscovery(unittest.TestCase):
                         units=[p.name for p in (f / "units").iterdir()],
                         installer_service=(f / "installer-service").read_text()
                         if (f / "installer-service").exists() else None,
+                        process_readback_service=(f / "process-readback-service").read_text()
+                        if (f / "process-readback-service").exists() else None,
                         broken_pipe=(f / "broken-pipe").exists())
 
     def assert_refused(self, e):
@@ -292,6 +307,30 @@ class ServiceDiscovery(unittest.TestCase):
             with self.subTest(rows=rows, err=err):
                 self.assert_refused(self.run_fixture(rows=rows, err=err, query_exit=1))
 
+    def test_first_inventory_failure_is_not_replaced_by_silent_absence(self):
+        for producer in ("installer", "updater"):
+            with self.subTest(producer=producer):
+                e = self.run_fixture(producer=producer, mode="first-error-then-absent")
+                self.assert_refused(e)
+                self.assertEqual(e["calls"], [QUERY],
+                                 "A failed read must not be replaced by a second sample")
+
+    def test_only_silent_exit_one_is_admitted_as_absence(self):
+        for producer in ("installer", "updater"):
+            for code in (2, 124, 137):
+                with self.subTest(producer=producer, code=code):
+                    e = self.run_fixture(producer=producer, query_exit=code)
+                    self.assert_refused(e)
+                    self.assertEqual(e["calls"], [QUERY])
+
+    def test_blank_line_output_is_not_a_silent_failed_inventory(self):
+        for producer in ("installer", "updater"):
+            for rows, err in (("\n", ""), ("", "\n"), ("\n\n", "\n")):
+                with self.subTest(producer=producer, rows=rows, err=err):
+                    e = self.run_fixture(producer=producer, rows=rows, err=err, query_exit=1)
+                    self.assert_refused(e)
+                    self.assertEqual(e["calls"], [QUERY])
+
     def test_fresh_host_no_matching_unit_files_is_an_empty_inventory(self):
         # systemd exits 1 and prints nothing when none of the named unit files exist, which is
         # every fresh host. The installer and the update helper must both select the default.
@@ -300,8 +339,8 @@ class ServiceDiscovery(unittest.TestCase):
                 e = self.run_fixture(producer=producer, query_exit=1)
                 self.assertEqual(e["result"].returncode, 0, e["result"].stderr)
                 self.assertEqual(e["result"].stdout, "SERVICE=pulse\n")
-                # The second read is what tells a silent absence from a failure with a message.
-                self.assertEqual(e["calls"], [QUERY, QUERY])
+                # Absence is decided from one complete stdout/stderr observation.
+                self.assertEqual(e["calls"], [QUERY])
 
     def test_malformed_duplicate_impostor_and_unknown_inventory_stop(self):
         for rows in ["pulse-backendXservice enabled\n", "pulse-backend.service.extra enabled\n",
@@ -375,6 +414,7 @@ class ServiceDiscovery(unittest.TestCase):
         e = self.run_fixture(producer="updater", mode="large", flow="automatic")
         self.assertEqual(e["result"].returncode, 0, e["result"].stderr)
         self.assertEqual(e["installer_service"], "pulse-backend\n")
+        self.assertEqual(e["process_readback_service"], "pulse-backend\n")
         self.assertEqual(e["binary"], e["new"])
         self.assertEqual(e["calls"][0], QUERY)
         self.assertFalse(e["broken_pipe"])

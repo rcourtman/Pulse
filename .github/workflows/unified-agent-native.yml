@@ -25,6 +25,14 @@ on:
       - 'frontend-modern/src/utils/__tests__/agentInstallCommand.windows.test.ts'
       - 'scripts/install.sh'
       - 'scripts/install.ps1'
+      # The Unix installer inventory also executes server/update fixtures.
+      # Keep direct source and Python fixture edits in native admission.
+      - 'install.sh'
+      - 'scripts/pulse-auto-update.sh'
+      - 'scripts/tests/test_auto_update_service_state.py'
+      - 'scripts/tests/test_auto_update_systemd.py'
+      - 'scripts/tests/test_agent_removal_systemd.py'
+      - 'scripts/tests/test_server_service_discovery.py'
       - 'scripts/installtests/**'
       - 'go.mod'
       - 'go.sum'
@@ -50,6 +58,12 @@ on:
       - 'frontend-modern/src/utils/__tests__/agentInstallCommand.windows.test.ts'
       - 'scripts/install.sh'
       - 'scripts/install.ps1'
+      - 'install.sh'
+      - 'scripts/pulse-auto-update.sh'
+      - 'scripts/tests/test_auto_update_service_state.py'
+      - 'scripts/tests/test_auto_update_systemd.py'
+      - 'scripts/tests/test_agent_removal_systemd.py'
+      - 'scripts/tests/test_server_service_discovery.py'
       - 'scripts/installtests/**'
       - 'go.mod'
       - 'go.sum'
@@ -91,6 +105,35 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # These are real manager/deletion checks, not the installer doubles. Run
+      # before compiler/frontend acquisition so unrelated preparation cannot
+      # hide Linux removal safety. Only the new public hosted runner is mutated.
+      - name: Check agent removal on native systemd
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          git diff --exit-code HEAD
+          python3 -m unittest discover -s scripts/tests -p test_agent_removal_systemd.py -v
+          sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C \
+            GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted GITHUB_REPOSITORY=rcourtman/Pulse \
+            EXPECTED_SOURCE_SHA="$EXPECTED_SOURCE_SHA" RUNNER_TEMP="$RUNNER_TEMP" \
+            python3 scripts/installtests/agent_removal_systemd.py \
+              --receipt "$RUNNER_TEMP/pulse-agent-removal.json"
+
+      - name: Retain bounded native agent removal receipt
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-agent-removal-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pulse-agent-removal.json
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0

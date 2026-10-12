@@ -954,20 +954,28 @@ delivery for all resources.
   - Endpoint fails closed if URL validation runtime is unavailable.
 
 ### Advanced Reporting (Pro)
+
+Report generation uses `settings:read`. For single-resource and fleet PDF
+narration, an API token also needs `ai:execute` (or full access). Without it,
+the report still succeeds with a deterministic summary and no AI provider call;
+a single-resource PDF also explains the missing scope. Browser sessions and
+server-run schedules keep their existing narration behaviour. AI budgets still
+apply. GET and CSV never use AI narration.
+
 - `GET /api/admin/reports/catalog` (admin, `settings:read`)
   - Returns the canonical reporting catalog for the settings surface, including locked-state teaser copy, enabled-surface guidance copy, performance-report options, canonical single-report filename subject, canonical fallback filename date style, and the nested VM inventory export definition.
   - Metadata route: readable without the `advanced_reporting` feature so locked admin surfaces can render the same reporting definition before upsell.
 - `POST /api/admin/reports/generate` (admin, `settings:read`)
   - Body fields: `format` (pdf/csv, default `pdf`), `resourceType`, `resourceId`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
   - If `title` is omitted, the backend applies the canonical default title for that resource report.
-  - When Pulse Assistant is configured, the configured AI provider narrates a PDF's executive summary; each narration counts against the AI budget and appears in AI usage. If the call fails, times out or the budget is spent, the PDF falls back to the deterministic summary. CSV output is never narrated. The settings UI uses this method.
+  - When narration is permitted and Pulse Assistant is configured, the configured AI provider narrates a PDF's executive summary; each narration counts against the AI budget and appears in AI usage. If the call fails, times out or the budget is spent, the PDF falls back to the deterministic summary. CSV output is never narrated. The settings UI uses this method.
   - API-token callers also need the `ai:execute` scope for AI narration. With only `settings:read` the report is still produced, with the deterministic summary and a note saying why.
 - `GET /api/admin/reports/generate` (admin, `settings:read`)
   - Takes the same fields as query params and returns the same report, except that it never calls an AI provider: a PDF carries the deterministic summary and a note saying AI narration needs `POST`. Other methods return `405` with `Allow: GET, POST`.
 - `POST /api/admin/reports/generate-multi` (admin, `settings:read`)
   - Body fields: `resources` (1-50 entries of `{resourceType,resourceId}`), `format`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
   - If `title` is omitted, the backend applies the canonical default fleet report title.
-  - AI narration of the fleet summary follows the same rule as single reports: API-token callers need `ai:execute`, otherwise the deterministic summary is used.
+  - AI narration of the fleet summary follows the same rule as single reports: API-token callers need `ai:execute`, otherwise the deterministic summary is used. CSV output is never narrated.
 - `GET /api/admin/reports/inventory/vms/export` (admin, `settings:read`)
   - Query params: `format` (`csv` only; optional and defaults to `csv`)
   - Exports the current fleet-wide VM inventory as spreadsheet-friendly CSV using the canonical runtime model.

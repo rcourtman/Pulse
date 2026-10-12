@@ -31,6 +31,7 @@ def compact(value):
 class AgentUninstallDocsTest(unittest.TestCase):
     # Supports read-only actual-parent discrimination without editing source.
     text = None
+    troubleshooting_text = None
 
     def setUp(self):
         self.help = section(self.text)
@@ -81,10 +82,35 @@ class AgentUninstallDocsTest(unittest.TestCase):
             self.assertIn(fact, self.words)
         runner = self.installer.split("teardown_action_runner_service() {", 1)[1].split(
             "\nteardown_openrc_agent_service", 1)[0]
-        self.assertLess(runner.index('systemctl stop'), runner.index('revoke_action_runner_credential'))
+        self.assert_runner_quiescence_before_revocation(runner)
         self.assertLess(runner.index('revoke_action_runner_credential'), runner.index('rm -f'))
         self.assertIn('every local artifact was retained', runner)
         self.assertIn('fail "Action runner removal requires a successful credential revocation', runner)
+
+    def assert_runner_quiescence_before_revocation(self, runner):
+        # Stop/disable/readback now belong to the shared teardown helper. Bind
+        # this help to its fail-closed call, not the removed direct stop command.
+        call = 'quiesce_agent_units_for_removal "${ACTION_RUNNER_NAME}.service"'
+        self.assertIn(call + ' ||\n\t\t\tfail ', runner)
+        self.assertLess(runner.index(call), runner.index('revoke_action_runner_credential'))
+        helper = self.installer.split('quiesce_agent_units_for_removal() {', 1)[1].split('\n}\n', 1)[0]
+        self.assertIn('systemctl stop "$unit" >/dev/null 2>&1 || return 1', helper)
+        self.assertIn('systemctl disable "$unit" >/dev/null 2>&1 || return 1', helper)
+        self.assertEqual(helper.count('confirm_agent_unit_quiescent "$unit" || return 1'), 2)
+
+    def test_runner_guidance_rejects_missing_late_or_ignored_quiescence(self):
+        runner = self.installer.split('teardown_action_runner_service() {', 1)[1].split('\n}\n', 1)[0]
+        call = 'quiesce_agent_units_for_removal "${ACTION_RUNNER_NAME}.service"'
+        mutations = (
+            runner.replace(call, ':'),
+            runner.replace(call, ':').replace('if revoke_action_runner_credential; then',
+                'if revoke_action_runner_credential; then\n\t\t\t' + call + ' ||\n\t\t\tfail "late" 1'),
+            runner.replace(call + ' ||', call + ' || true #'),
+        )
+        for changed in mutations:
+            with self.subTest(mutation=mutations.index(changed)):
+                with self.assertRaises(AssertionError):
+                    self.assert_runner_quiescence_before_revocation(changed)
 
     def test_partial_failures_platform_differences_and_unknowns_remain_explicit(self):
         for fact in ("Windows removes the service first", "failed server notification",
@@ -103,6 +129,51 @@ class AgentUninstallDocsTest(unittest.TestCase):
         self.assertEqual(commands, ['& $installerFile -Uninstall $true\n'])
         self.assertIn('[bool]$Uninstall = $false', (ROOT / "scripts/install.ps1").read_text())
         self.assertNotIn('Remove-Item', self.help)
+
+    def test_missing_url_refusal_preserves_same_instance_recovery(self):
+        for fact in (
+            "Do not attempt removal if a collector credential remains but the saved Pulse URL is missing",
+            "current Unix installer refuses before stopping services or deleting local state",
+            "older served or prepared script may not have this refusal",
+            "do not rerun uninstall to test it",
+            "Keep the saved identity, credentials and connection files",
+            "do not erase them to force a local-only removal",
+            "provide `--url` for the same trusted Pulse instance",
+            "without a token on the command line",
+            "A different server or a new token cannot confirm removal of the original record",
+            "Retry only after restoring that connection",
+            "keep certificate verification enabled",
+            "Credential-free Unix state can still be removed locally",
+        ):
+            self.assertIn(fact, self.words)
+        # Bind the help to production admission, not a hypothetical policy.
+        admission = self.removal.split("if collector_credential_state_present; then", 1)[1]
+        missing_url = admission.split('if [[ -z "$PULSE_URL" ]]; then', 1)[1].split("\n        fi", 1)[0]
+        self.assertIn("local credentials and services were retained", missing_url)
+        self.assertIn("same trusted Pulse instance", missing_url)
+        self.assertLess(admission.index("uninstall_collector_registration"),
+                        admission.index("teardown_action_runner_service"))
+
+    def test_orphan_service_stop_is_not_destructive_cleanup_or_revocation(self):
+        text = self.troubleshooting_text
+        if text is None:
+            text = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        heading = "#### Removed Pulse server but `pulse-agent` still logs connection failures\n"
+        advice = text.split(heading, 1)[1].split("\n#### ", 1)[0]
+        for fact in (
+            "stopping retries is not completed removal or credential revocation",
+            "saved identity, credentials, connection files and needed logs private and intact",
+            "do not reinstall, create a new token or delete state",
+            "Temporary loss of connectivity does not establish that the server is gone",
+            "UNIFIED_AGENT.md#uninstall",
+            "confirmation from the same trusted Pulse instance",
+            "systemd, not Windows or other service managers",
+        ):
+            self.assertIn(fact, compact(advice))
+        commands = re.findall(r"```bash\n(.*?)```", advice, re.DOTALL)
+        self.assertEqual(commands, ["sudo systemctl disable --now pulse-agent.service\n"])
+        self.assertEqual((ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes(),
+                         (ROOT / "docs/TROUBLESHOOTING.md").read_bytes())
 
     def test_copied_unix_commands_select_only_the_requested_route_and_keep_failures(self):
         commands = re.findall(r"```bash\n(.*?)```", self.help, re.DOTALL)

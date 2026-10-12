@@ -2,6 +2,7 @@ package hostagent
 
 import (
 	"context"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 
 var unraidVersionPattern = regexp.MustCompile(`\b\d+(?:\.\d+)+(?:[-+._][A-Za-z0-9]+)*\b|\b\d+\b`)
 var proxmoxPVEVersionPattern = regexp.MustCompile(`(?i)\bpve-manager/([^/\s]+)`)
+var linuxOSReleaseIDPattern = regexp.MustCompile(`^[a-z0-9._-]+$`)
 
 const proxmoxPVEOSName = "Proxmox VE"
 const proxmoxPVEVersionCommandTimeout = 10 * time.Second
@@ -37,7 +39,45 @@ func resolveHostOSIdentity(collector SystemCollector, osName, osVersion string) 
 		return resolvedDetectedHostOSIdentity(name, version, currentVersion, false)
 	}
 
+	// Package-presence heuristics can misidentify ordinary distributions: for
+	// example, Debian can install raspi-config without becoming Raspbian (#2854).
+	// Keep appliance detection above authoritative distro metadata, and retain
+	// the collector's version (which can be more precise than VERSION_ID).
+	if name := detectLinuxDistributionOSName(collector); name != "" {
+		return name, currentVersion
+	}
+
 	return currentName, currentVersion
+}
+
+func detectLinuxDistributionOSName(collector SystemCollector) string {
+	data, err := collector.ReadFile("/etc/os-release")
+	if os.IsNotExist(err) {
+		data, err = collector.ReadFile("/usr/lib/os-release")
+	}
+	if err != nil {
+		return ""
+	}
+
+	// os-release is data, not a shell script. Only its machine-readable ID is
+	// needed; do not evaluate expansions or substitute NAME/ID_LIKE (a family).
+	// /etc takes precedence as a whole, even when its ID is unavailable.
+	id := ""
+	for _, line := range strings.Split(string(data), "\n") {
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok || strings.TrimSpace(key) != "ID" {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if len(value) >= 2 && (value[0] == '"' || value[0] == '\'') && value[len(value)-1] == value[0] {
+			value = value[1 : len(value)-1]
+		}
+		if !linuxOSReleaseIDPattern.MatchString(value) {
+			return ""
+		}
+		id = value
+	}
+	return id
 }
 
 func resolvedDetectedHostOSIdentity(name, version, currentVersion string, allowVersionFallback bool) (string, string) {

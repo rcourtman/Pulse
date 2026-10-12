@@ -132,6 +132,20 @@ optional for host-local data.
    )
    ```
 
+   This is a plain token file, **not a shell script or `.env` file**. Do not
+   include `PULSE_TOKEN=`, `export`, comments or surrounding quotes. For an
+   existing authentication failure, use the [token-file format guidance](#token-file-format-is-not-shell-syntax)
+   before changing the saved credential or running another installation.
+
+   Before a first installation, check the complete value privately against the
+   token just generated, not only its visible ends. Current **Infrastructure →
+   Install on a host** tokens contain exactly **64 lowercase hexadecimal
+   characters** (`0–9`, `a–f`); duplicated characters or an internal space or
+   newline are not part of that value. This describes that generator, not every
+   legacy, manually supplied or bootstrap credential. A matching shape alone
+   does not authenticate a token. Keep the value out of commands, terminal
+   output, screenshots and reports.
+
 2. Replace `https://pulse.example.com` with your Pulse server's HTTPS address
    in both the download and installation commands. Download to a new private
    file. This ignores local curl settings, accepts only HTTP **200** over HTTPS,
@@ -557,6 +571,15 @@ health/metrics endpoint over the network. Use `--health-addr ""` or
 
 **Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → the `token` file in the state directory (`<state-dir>/token`; the default state directory is `/var/lib/pulse-agent` on Linux and macOS and `%ProgramData%\Pulse` on Windows).
 
+An explicitly selected token file must be readable by the agent service and
+contain a non-empty bare token, not quotes or a `PULSE_TOKEN=` assignment.
+Surrounding whitespace is ignored. A missing, unreadable or empty selected file
+stops startup rather than using an environment or implicit state-file token.
+The startup error does not print the file path or token. With `--enroll`, a
+previously stored non-empty `runtime.token` still takes precedence, so removing
+the bootstrap file does not break ordinary agent restarts. Do not share token
+contents, service environment contents or token hints when asking for help.
+
 ### Agent log level
 
 The default `info` level records normal lifecycle and connection messages.
@@ -913,8 +936,19 @@ On Linux systemd, full removal also tears down the separately installed action
 runner and typed helper. If only remediation should stop, use the runner-only
 path below instead. Unix removal with a known Pulse URL and an existing
 collector credential requires authenticated server confirmation before local
-collector teardown. Missing connection state can leave only local removal;
-it is not proof that Pulse removed the record or revoked every credential.
+collector teardown. **Do not attempt removal if a collector credential remains
+but the saved Pulse URL is missing.** The current Unix installer refuses before
+stopping services or deleting local state. An older served or prepared script
+may not have this refusal; do not rerun uninstall to test it. Keep the saved
+identity, credentials and connection files; do not erase
+them to force a local-only removal. Recover the original connection state or
+provide `--url` for the **same trusted Pulse instance** to the inspected
+installer, without a token on the command line. A different server or a new
+token cannot confirm removal of the original record. Retry only after restoring
+that connection; keep certificate verification enabled.
+
+Credential-free Unix state can still be removed locally, but local cleanup is
+not proof that Pulse removed a server record or revoked every credential.
 
 For Windows, use the [privately prepared PowerShell installer](#windows-powershell-run-as-administrator)
 in an Administrator session, not the Unix script. Use the same prepared
@@ -1104,9 +1138,12 @@ agent host, or inspect an already retained excerpt privately. Distinguish:
   status and redacted error, separately from the lookup failure.
 
 If both lookup and host reporting return 401, this is not a lookup-only failure.
-The host log's restore/upgrade explanation is generic, not an established cause
-for that installation. If you already tried reinstalling, do not repeat it to
-collect evidence; check the intended token record below first.
+An older host log's restore/upgrade explanation is generic, not an established
+cause for that installation. If you already tried reinstalling, do not repeat it
+to collect evidence; check the intended token record below first. A 401 alone
+does not require a replacement credential, and a 403 is not a reason to disable
+host monitoring or enable command execution. Ordinary reporting can recover with
+the same credential after the endpoint's access is restored.
 
 A running local service or successful-looking installer output does not prove
 that Pulse accepted a fresh report. No host-report error in the selected log
@@ -1155,6 +1192,55 @@ current registration, not persistence across a server restart, successful
 credential hand-off or accepted host reports. Retain the existing installation
 while those remaining distinctions are investigated. A listed record with
 `Never` is not, by itself, a reason to mint a replacement.
+
+#### Token-file format is not shell syntax
+
+If the intended record exists with the host scopes but lookup and reporting
+still return 401, keep credential selection separate from file contents.
+`--token-file` names a file; it does not establish which credential reached
+Pulse. An environment or explicit-token override is a separate possibility,
+not a diagnosis from `Never`.
+
+The agent trims whitespace at the beginning and end of a token file. It does
+**not** interpret shell syntax, strip quotes or extract a value from an
+assignment. These file forms therefore mean different things:
+
+| File form | What the agent reads |
+| --- | --- |
+| Bare token, possibly followed by a newline | The token value; this does not prove it matches the intended record or Pulse instance. |
+| Token surrounded by single or double quotes | The quotes remain part of the credential. |
+| Assignment prefix such as `PULSE_TOKEN=` or `export` | The prefix remains part of the credential; this is not an environment-file parser. |
+| Duplicated or missing characters, or whitespace inside a bare value | These change the credential; trimming the file's ends does not repair them. |
+| Unknown | The format and cause remain unknown; no new installation is needed to complete a report. |
+
+Quotes or a prefix can cause rejection even when the intended record has the
+right scopes. A rejected credential can leave that record showing `Never`;
+this does not identify the cause of a particular installation's failure.
+
+**Bare does not mean intact.** For a token from the current **Infrastructure →
+Install on a host** generator, privately check the 64-character lowercase
+hexadecimal shape described in [private-file installation](#private-file-installation-linux-macos-and-nas).
+
+A matching token hint confirms only the visible ends, not the whole token.
+The inventory's **Hint** shows only the first six and last four characters:
+duplicated or changed middle characters can leave both ends matching.
+Pulse authenticates the whole token: duplicated or missing characters in the
+middle can still cause rejection. Finding such a difference does not establish
+which step introduced the error. Even an intact shape and matching hint
+do not prove full equality, the intended Pulse instance or accepted reporting.
+
+Legacy token formats remain supported; do not replace a token merely because
+its length or format differs from a newly generated one. Do not apply this
+shape check to other token families or rotate a working credential because it
+looks different.
+
+Use how the file was saved or an existing private observation. If you cannot
+safely tell, say **unknown**. If asked, report only **bare**, **quoted**,
+**prefixed** or **unknown**, not the value, length, hint, screenshot or file.
+Do not print, source, upload or edit the installed token file, restart the
+service, generate a replacement or reinstall merely to classify it. A bare
+value still leaves credential selection, server record and instance matching
+to investigate; it is not proof of accepted reporting.
 
 If asked about the inventory, report only whether the record exists and the
 relevant metadata; do not share the token or its hint. Keep service environments,
@@ -1395,8 +1481,23 @@ monitoring report or **Automatic updates ready** also does not prove that this
 separate WebSocket channel is working. Changing Proxmox API permissions cannot
 repair a Pulse command-channel connection.
 
+Before treating this as a connection failure, read the existing **Privilege**
+and **Action runner** lines. `root` is the collector's OS user; `commands legacy`
+is a compatibility profile, not proof that commands are enabled. A
+`monitoring credential` cannot authenticate the legacy command channel.
+`Credential not issued` or `Runner not connected` concerns the separate typed
+runner, not collector health; an absent runner alone does not exclude an
+authorised legacy command connection. Use the
+[workload-update authority guidance](DOCKER.md#command-agent-is-not-connected)
+to distinguish these cases without widening a token or converting the collector.
+Keep an intentionally monitoring-only installation unchanged. Choosing an
+execution-capable installation is a separate trust decision, not a connection
+test; remember whether that choice was made, or say it is unknown.
+
 For a systemd agent, inspect the recent journal **locally on the affected node**
-with the [bounded agent log reader](#collect-agent-logs-safely).
+with the [bounded agent log reader](#collect-agent-logs-safely) only when an
+authorised command connection was intended and its failure stage is still
+unknown. Do not collect more logs just to confirm the known monitoring scope.
 
 Look for **Connected and registered with Pulse command server**, or
 **WebSocket connection failed repeatedly, reconnecting** and its error. A
