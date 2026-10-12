@@ -730,3 +730,12 @@ Pulse v6 should be:
 2. extension-oriented instead of patch-oriented
 3. enforced by tests and guardrails
 4. obvious for both humans and agents to continue correctly
+
+### Inherited merge content
+
+Staged qualification compares each file’s Git mode and object ID with the
+merged parents. Exact inherited states, including deletions, keep their parent
+qualification. New resolutions and mode changes remain current work and must
+satisfy their owning contract and proof requirements. Range checks still
+qualify the complete proposed change. Combined frontend content needs a fresh
+browser receipt in a subsequent non-merge commit.

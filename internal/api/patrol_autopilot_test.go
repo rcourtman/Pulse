@@ -448,3 +448,56 @@ func TestPatrolAutopilotStoreUnavailableDoesNotChangeModeOrFabricateEvidence(t *
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestPatrolAutonomyReportsTheProDefault pins the GET projection of the Pro
+// default: a licensed install that never chose a mode reports Ask first with
+// default_mode_applied, an explicit Watch only choice is reported as chosen,
+// and an unlicensed install stays in Watch only without the flag.
+func TestPatrolAutonomyReportsTheProDefault(t *testing.T) {
+	cases := []struct {
+		name        string
+		stored      string
+		licensed    bool
+		wantLevel   string
+		wantDefault bool
+	}{
+		{name: "licensed, never chose", stored: "", licensed: true, wantLevel: config.PatrolAutonomyApproval, wantDefault: true},
+		{name: "licensed, chose watch only", stored: config.PatrolAutonomyMonitor, licensed: true, wantLevel: config.PatrolAutonomyMonitor, wantDefault: false},
+		{name: "unlicensed, never chose", stored: "", licensed: false, wantLevel: config.PatrolAutonomyMonitor, wantDefault: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			persistence := config.NewConfigPersistence(tmp)
+			cfg := config.NewDefaultAIConfig()
+			cfg.PatrolAutonomyLevel = tc.stored
+			if err := persistence.SaveAIConfig(*cfg); err != nil {
+				t.Fatalf("SaveAIConfig: %v", err)
+			}
+			handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
+			handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: tc.licensed})
+			if err := handler.defaultAIService.LoadConfig(); err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+
+			rec := httptest.NewRecorder()
+			handler.HandleGetPatrolAutonomy(rec, newLoopbackRequest(http.MethodGet, "/api/ai/patrol/autonomy", nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+			}
+			var resp PatrolAutonomyResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if resp.EffectiveAutonomyLevel != tc.wantLevel || resp.RequestedAutonomyLevel != tc.wantLevel {
+				t.Fatalf("requested/effective = %q/%q, want %q", resp.RequestedAutonomyLevel, resp.EffectiveAutonomyLevel, tc.wantLevel)
+			}
+			if resp.DefaultModeApplied != tc.wantDefault {
+				t.Fatalf("default_mode_applied = %v, want %v", resp.DefaultModeApplied, tc.wantDefault)
+			}
+			if got := handler.defaultAIService.GetEffectivePatrolAutonomyLevel(); got != tc.wantLevel {
+				t.Fatalf("service runs %q, response says %q", got, tc.wantLevel)
+			}
+		})
+	}
+}

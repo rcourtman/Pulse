@@ -320,12 +320,12 @@ describe('GuestDrawer', () => {
     const details = technicalDetails();
     expect(details.getByText('Backup time unavailable: invalid timestamp.')).toBeVisible();
     expect(details.queryByText('No completed backup found')).not.toBeInTheDocument();
-    expect(details.queryByText('Today')).not.toBeInTheDocument();
+    expect(details.queryByText('1 hour ago')).not.toBeInTheDocument();
     setGuest({ ...guest(), lastBackup: Date.now() + 86_400_000, backupInProgress: true });
     expect(details.getByText(/timestamp is in the future/)).toBeVisible();
     expect(details.getByText('Running · not completed yet')).toBeVisible();
     setGuest({ ...guest(), lastBackup: Date.now() - 3600_000, backupInProgress: false });
-    expect(details.getByText('Today')).toBeVisible();
+    expect(details.getByText('1 hour ago')).toBeVisible();
     expect(details.queryByText(/unavailable/)).not.toBeInTheDocument();
     setGuest({ ...guest(), lastBackup: 0 });
     expect(details.getByText('No completed backup found')).toBeVisible();
@@ -721,7 +721,9 @@ describe('GuestDrawer', () => {
 
       await fireEvent.pointerLeave(plot);
 
-      expect(within(utilizationChart).queryByTestId('guest-history-hover-time')).toBeNull();
+      expect(within(utilizationChart).getByTestId('guest-history-hover-time')).toHaveTextContent(
+        'Latest stored',
+      );
       expect(utilizationChart).toHaveTextContent('20.0%');
       expect(utilizationChart).toHaveTextContent('30.0%');
       expect(utilizationChart).toHaveTextContent('40.0%');
@@ -1010,17 +1012,17 @@ describe('GuestDrawer', () => {
       vi.setSystemTime(new Date('2026-03-02T12:00:00Z'));
     });
 
-    it('shows "Today" for a backup from today', () => {
+    it('shows elapsed hours for a recent backup', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
       expect(screen.getByText('Last completed backup')).toBeInTheDocument();
-      expect(technicalDetails().getByText('Today')).toBeInTheDocument();
+      expect(technicalDetails().getByText('2 hours ago')).toBeInTheDocument();
     });
 
-    it('shows "Yesterday" for a 1-day-old backup', () => {
+    it('shows elapsed days for a 1-day-old backup', () => {
       const yesterday = new Date('2026-03-01T12:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: yesterday })} onClose={vi.fn()} />);
-      expect(technicalDetails().getByText('Yesterday')).toBeInTheDocument();
+      expect(technicalDetails().getByText('1d ago')).toBeInTheDocument();
     });
 
     it('shows "Xd ago" for older backups', () => {
@@ -1053,7 +1055,7 @@ describe('GuestDrawer', () => {
     it('applies green color for recent backups', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
-      const ageCell = technicalDetails().getByText('Today').closest('td');
+      const ageCell = technicalDetails().getByText('2 hours ago').closest('td');
       expect(ageCell).toHaveClass('text-emerald-700');
     });
 
@@ -1079,7 +1081,7 @@ describe('GuestDrawer', () => {
 
     it.each([
       ['2026-02-20T12:00:00Z', '10d ago', 'text-amber-700'],
-      ['2026-03-02T10:00:00Z', 'Today', 'text-emerald-700'],
+      ['2026-03-02T10:00:00Z', '2 hours ago', 'text-emerald-700'],
     ])('preserves completed backup age and tone during a new backup (%s)', (date, age, tone) => {
       solidRender(() => (
         <GuestDrawer
@@ -1107,7 +1109,9 @@ describe('GuestDrawer', () => {
       expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
       setGuest({ ...guest(), lastBackup: new Date('2026-03-02T10:00:00Z').getTime() });
       expect(technicalDetails().queryByText('No completed backup found')).not.toBeInTheDocument();
-      expect(technicalDetails().getByText('Today').closest('td')).toHaveClass('text-emerald-700');
+      expect(technicalDetails().getByText('2 hours ago').closest('td')).toHaveClass(
+        'text-emerald-700',
+      );
       expect(container.querySelector('[data-testid="guest-technical-details"]')).toBe(drawer);
     });
 

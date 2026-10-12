@@ -251,6 +251,8 @@ export interface PatrolAutonomySettings {
   autopilot_acknowledgement: PatrolAutopilotStatus;
   investigation_budget: number; // Max turns per investigation (5-30)
   investigation_timeout_sec: number; // Max seconds per investigation (60-600)
+  /** True when the install never chose a mode and Pro runs Ask first by default. */
+  default_mode_applied?: boolean;
 }
 
 export interface PatrolAutonomyUpdate {

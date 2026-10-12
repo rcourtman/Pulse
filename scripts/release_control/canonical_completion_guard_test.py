@@ -1,4 +1,5 @@
 import io
+import canonical_completion_guard
 import json
 import os
 import subprocess
@@ -158,6 +159,45 @@ def first_matching_policy_id(rule: dict, rel: str) -> str:
 
 
 class CanonicalCompletionGuardTest(unittest.TestCase):
+    def test_staged_scope_keeps_resolutions_and_modes_but_not_inherited_merge_work(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            env = os.environ.copy()
+            strip_local_git_env(env)
+            env["GIT_CONFIG_GLOBAL"] = os.devnull
+            env["GIT_CONFIG_SYSTEM"] = os.devnull
+
+            def git(*args: str) -> None:
+                subprocess.run(
+                    ["git", "-c", "user.name=Proof Fixture", "-c", "user.email=proof@example.invalid", *args],
+                    cwd=root, env=env, check=True, capture_output=True, text=True,
+                )
+
+            git("init", "-b", "main")
+            for name in ("resolved.go", "mode.go", "removed.go", "old name.go"):
+                (root / name).write_text("base\n", encoding="utf-8")
+            git("add", "resolved.go", "mode.go", "removed.go", "old name.go")
+            git("commit", "-m", "Base fixture")
+            git("checkout", "-b", "reviewed")
+            (root / "resolved.go").write_text("reviewed\n", encoding="utf-8")
+            (root / "inherited.go").write_text("reviewed\n", encoding="utf-8")
+            git("rm", "removed.go")
+            git("mv", "old name.go", "new name.go")
+            git("add", "resolved.go", "inherited.go")
+            git("commit", "-m", "Reviewed fixture")
+            git("checkout", "main")
+            git("merge", "--no-commit", "--no-ff", "reviewed")
+            (root / "resolved.go").write_text("combined resolution\n", encoding="utf-8")
+            git("add", "resolved.go")
+            git("update-index", "--chmod=+x", "mode.go")
+            with patch("canonical_completion_guard.REPO_ROOT", root):
+                self.assertEqual(canonical_completion_guard.git_staged_files(), ["mode.go", "resolved.go"])
+            git("reset", "--hard", "HEAD")
+            (root / "resolved.go").write_text("reviewed\n", encoding="utf-8")
+            git("add", "resolved.go")
+            with patch("canonical_completion_guard.REPO_ROOT", root):
+                self.assertEqual(canonical_completion_guard.git_staged_files(), ["resolved.go"])
+
     def test_registry_exists_and_contains_required_subsystems(self):
         self.assertTrue(SUBSYSTEM_REGISTRY.exists())
         rules = load_subsystem_rules()

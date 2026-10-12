@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Patrol autonomy reports the Pro default
+
+`GET /api/ai/patrol/autonomy` adds `default_mode_applied`. It is true only when
+the install never saved a Patrol mode and holds a positive investigation
+licence; then `requested_autonomy_level` and `effective_autonomy_level` both
+read `approval`. Any save, including the monitor-only save, writes the level and
+the flag reads false from then on. Older clients ignore the field, and no other
+autonomy payload field changes meaning, and `getPatrolAutonomySettings` returns
+the flag unchanged. Proofs: `internal/api/patrol_autopilot_test.go`
+(`TestPatrolAutonomyReportsTheProDefault`) and
+`frontend-modern/src/api/__tests__/patrol.test.ts`.
+
 ### AI guest memory projections preserve uncertainty
 
 Existing AI get/list/topology responses carry selected guest memory evidence:

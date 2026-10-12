@@ -75,6 +75,7 @@ interface GuestDrawerHistoryGroupChartProps {
   range: HistoryTimeRange;
   sourceKey: string;
   timeBounds: GuestDrawerHistoryTimeBounds | null;
+  touchInspection: boolean;
 }
 
 const GUEST_DRAWER_HISTORY_MAX_POINTS = 240;
@@ -218,6 +219,18 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
   const inspectionId = `history-inspection-${createUniqueId()}`;
   createEffect(
     on(
+      () => props.touchInspection,
+      (touch, previousTouch) => {
+        // Native touch scrubbing need not focus the input. Give inspection
+        // back to the mouse when no focused control still owns the selection.
+        if (previousTouch && !touch && document.activeElement?.id !== inspectionId) {
+          setSelectedTimestamp(null);
+        }
+      },
+    ),
+  );
+  createEffect(
+    on(
       () => props.sourceKey,
       () => {
         setHoverTimestamp(null);
@@ -259,6 +272,10 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       ? null
       : findClosestGuestDrawerHistoryTimestamp(observationTimes(), hovered);
   });
+  // The default legend is a single dated observation too. Independent latest
+  // values would combine different times (or a live fallback) into a tuple
+  // which never existed, disagreeing with the chart's accessible description.
+  const readoutTimestamp = createMemo(() => activeTimestamp() ?? observationTimes().at(-1) ?? null);
   const observationValueText = (timestamp: number | undefined): string => {
     if (timestamp === undefined) return 'No stored history observations.';
     const values = series().map((item) => {
@@ -327,25 +344,16 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       .filter((item): item is NonNullable<typeof item> => item !== null);
   });
   const hoverX = createMemo(() => hoveredSeries()[0]?.x ?? null);
-  const hoveredByMetric = createMemo(() => {
-    const byMetric = new Map<string, ReturnType<typeof hoveredSeries>[number]>();
-    for (const item of hoveredSeries()) {
-      byMetric.set(item.metric, item);
-    }
-    return byMetric;
-  });
   const displaySeries = createMemo(() =>
     series().map((item, index) => {
-      const hovered = hoveredByMetric().get(item.metric);
+      const timestamp = readoutTimestamp();
+      const point = item.points.find((point) => point.timestamp === timestamp);
       const deferred = props.deferredMetrics?.[item.metric];
       const fallbackValue = deferred
         ? deferred.lastKnownValue
         : props.currentMetrics?.[item.metric];
       const isFallback =
-        activeTimestamp() === null &&
-        item.points.length === 0 &&
-        typeof fallbackValue === 'number' &&
-        Number.isFinite(fallbackValue);
+        timestamp === null && typeof fallbackValue === 'number' && Number.isFinite(fallbackValue);
       return {
         ...item,
         deferred,
@@ -353,21 +361,25 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         isCurrent: isFallback && !deferred,
         isLastKnown: isFallback && Boolean(deferred) && !deferred?.valueLabel,
         isUnknown: isFallback && deferred?.valueLabel === 'freshness unknown',
-        valueLabel: hovered
-          ? getGuestDrawerHistoryValueLabel([hovered.point], item.unit)
-          : activeTimestamp() !== null
+        valueLabel: point
+          ? getGuestDrawerHistoryValueLabel([point], item.unit)
+          : timestamp !== null
             ? '-'
-            : item.points.length > 0
-              ? getGuestDrawerHistoryValueLabel(item.points, item.unit)
-              : typeof fallbackValue === 'number' && Number.isFinite(fallbackValue)
-                ? formatHistoryChartTooltipValue(fallbackValue, item.unit)
-                : '-',
+            : typeof fallbackValue === 'number' && Number.isFinite(fallbackValue)
+              ? formatHistoryChartTooltipValue(fallbackValue, item.unit)
+              : '-',
       };
     }),
   );
-  const hoverTimeLabel = createMemo(() => {
-    const timestamp = activeTimestamp();
-    return timestamp === null ? '' : formatHistoryChartTimeLabel(timestamp, props.range);
+  const readoutTime = createMemo(() => {
+    const timestamp = readoutTimestamp();
+    if (timestamp === null) return null;
+    const date = new Date(timestamp);
+    return {
+      label: formatHistoryChartTimeLabel(timestamp, props.range),
+      dateTime: date.toISOString(),
+      fullLabel: date.toLocaleString(),
+    };
   });
 
   const handleHoverMove = (event: MouseEvent & { currentTarget: SVGSVGElement }) => {
@@ -395,18 +407,22 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       data-history-group={props.group.id}
     >
       <div class="mb-2 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-        <div class="inline-flex items-baseline gap-2">
+        <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
           <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
             {props.group.label}
           </h4>
-          <Show when={hoverTimeLabel()}>
-            {(label) => (
-              <span
+          <Show when={readoutTime()}>
+            {(time) => (
+              <time
                 class="text-[10px] font-semibold tabular-nums text-base-content"
                 data-testid="guest-history-hover-time"
+                dateTime={time().dateTime}
+                title={time().fullLabel}
+                aria-label={`Stored observation: ${time().fullLabel}`}
               >
-                {label()}
-              </span>
+                {activeTimestamp() === null ? 'Latest stored · ' : 'Stored · '}
+                {time().label}
+              </time>
             )}
           </Show>
         </div>
@@ -439,6 +455,14 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           </For>
         </div>
       </div>
+
+      <Show
+        when={
+          readoutTimestamp() !== null && displaySeries().some((item) => item.valueLabel === '-')
+        }
+      >
+        <p class="mb-2 text-xs text-muted">A dash means no stored observation at this time.</p>
+      </Show>
 
       <For each={displaySeries().filter((item) => item.deferred)}>
         {(item) => (
@@ -629,7 +653,12 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         )}
       </Show>
       <Show when={observationTimes().length > 1}>
-        <div class="mt-2">
+        {/* Keep native keyboard and assistive-technology access while hiding
+            mouse-redundant controls. Touch also reveals them on hybrid devices. */}
+        <div
+          class={`mt-2 ${props.touchInspection ? '' : '[@media(hover:hover)_and_(pointer:fine)]:not-focus-within:sr-only'}`}
+          data-testid="guest-history-inspection-control"
+        >
           <label for={inspectionId} class="flex justify-between gap-2 text-[10px] text-muted">
             <span>Inspect history</span>
             <span aria-hidden="true">
@@ -646,7 +675,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             max={observationTimes().length - 1}
             step="1"
             value={selectedIndex()}
-            class="h-11 w-full cursor-pointer rounded-xs focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-6"
+            class={`h-11 w-full cursor-pointer rounded-xs focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${props.touchInspection ? '' : '[@media(hover:hover)_and_(pointer:fine)]:h-6'}`}
             onFocus={() => {
               setHoverTimestamp(null);
               setSelectedTimestamp(observationTimes()[selectedIndex()] ?? null);
@@ -667,6 +696,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
 };
 
 export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) => {
+  const [touchInspection, setTouchInspection] = createSignal(false);
   onMount(() => {
     void loadRuntimeCapabilities();
   });
@@ -746,7 +776,13 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
       when={props.target}
       fallback={<div class="py-6 text-center text-sm text-muted">History unavailable</div>}
     >
-      <div class="space-y-3">
+      <div
+        class="space-y-3"
+        onPointerDown={(event) => setTouchInspection(event.pointerType === 'touch')}
+        onPointerMove={(event) => {
+          if (event.pointerType === 'mouse') setTouchInspection(false);
+        }}
+      >
         <Show
           when={!locked()}
           fallback={
@@ -803,6 +839,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                     range={props.range}
                     sourceKey={`${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`}
                     timeBounds={timeBounds()}
+                    touchInspection={touchInspection()}
                   />
                 )}
               </For>

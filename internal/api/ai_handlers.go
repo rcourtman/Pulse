@@ -7780,6 +7780,9 @@ type PatrolAutonomyResponse struct {
 	AutopilotStatus         unifiedresources.PatrolAutopilotStatus `json:"autopilot_acknowledgement"`
 	InvestigationBudget     int                                    `json:"investigation_budget"`
 	InvestigationTimeoutSec int                                    `json:"investigation_timeout_sec"`
+	// DefaultModeApplied is true when the install never chose a Patrol mode
+	// and its licence includes investigation, so it runs Ask first by default.
+	DefaultModeApplied bool `json:"default_mode_applied"`
 }
 
 type patrolAutopilotAcknowledgementRequest struct {
@@ -7900,9 +7903,15 @@ func (h *AISettingsHandler) mutatePatrolAutopilotConfig(ctx context.Context, mut
 	return nil
 }
 
-func patrolAutonomyResponseForConfig(cfg *config.AIConfig, orgID string, policy unifiedresources.PatrolAutopilotServerPolicy, hasAutoFix bool) PatrolAutonomyResponse {
-	requested := cfg.GetPatrolAutonomyLevel()
+// patrolAutonomyResponseForConfig projects the stored settings. defaultApplied
+// is the runtime's own decision (never chosen and positively licensed), so the
+// response cannot disagree with the mode Patrol actually runs.
+func patrolAutonomyResponseForConfig(cfg *config.AIConfig, orgID string, policy unifiedresources.PatrolAutopilotServerPolicy, hasAutoFix, defaultApplied bool) PatrolAutonomyResponse {
+	requested := cfg.ResolvedPatrolAutonomyLevel(defaultApplied)
 	effective, status := cfg.GetEffectivePatrolAutonomyWithPolicy(orgID, policy)
+	if defaultApplied {
+		effective = config.PatrolAutonomyApproval
+	}
 	if !hasAutoFix {
 		effective = config.PatrolAutonomyMonitor
 		status.Active = false
@@ -7916,6 +7925,7 @@ func patrolAutonomyResponseForConfig(cfg *config.AIConfig, orgID string, policy 
 		AutopilotStatus:         status,
 		InvestigationBudget:     cfg.GetPatrolInvestigationBudget(),
 		InvestigationTimeoutSec: int(cfg.GetPatrolInvestigationTimeout().Seconds()),
+		DefaultModeApplied:      defaultApplied,
 	}
 }
 
@@ -7938,7 +7948,8 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 	}
 
 	hasAutoFix := aiService.HasLicenseFeature(featureAIAutoFixValue)
-	settings := patrolAutonomyResponseForConfig(cfg, GetOrgID(r.Context()), h.currentPatrolAutopilotServerPolicy(), hasAutoFix)
+	defaultApplied := !cfg.PatrolAutonomyLevelChosen() && aiService.PatrolInvestigationLicensed()
+	settings := patrolAutonomyResponseForConfig(cfg, GetOrgID(r.Context()), h.currentPatrolAutopilotServerPolicy(), hasAutoFix, defaultApplied)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(settings)
@@ -8191,7 +8202,8 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.Respons
 		writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save Pulse Patrol autonomy settings", nil)
 		return
 	}
-	settings := patrolAutonomyResponseForConfig(aiService.GetConfig(), GetOrgID(r.Context()), h.currentPatrolAutopilotServerPolicy(), aiService.HasLicenseFeature(featureAIAutoFixValue))
+	// The monitor-only save always stores an explicit choice, so no default applies.
+	settings := patrolAutonomyResponseForConfig(aiService.GetConfig(), GetOrgID(r.Context()), h.currentPatrolAutopilotServerPolicy(), aiService.HasLicenseFeature(featureAIAutoFixValue), false)
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
 		"success":  true,
 		"settings": settings,

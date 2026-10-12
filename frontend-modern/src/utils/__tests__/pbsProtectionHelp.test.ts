@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { renderDocMarkdown } from '@/features/docs/docMarkdown';
+import type { RecoverableArtifact } from '@/features/proxmox/proxmoxBackupRecoveryModel';
+import { artifactStateLabel } from '@/features/proxmox/proxmoxBackupsTableShared';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
@@ -24,12 +26,14 @@ describe('PBS protection disagreement help', () => {
       render(guide, 'PBS').querySelector('#backups-are-visible-but-coverage-says-unprotected'),
     ).not.toBeNull();
     const rows = [...article().querySelectorAll('tbody tr')].map((row) => row.textContent);
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(4);
     expect(rows[0]).toContain('subject-linked backup evidence');
     expect(rows[0]).toContain('not identity proof');
     expect(rows[1]).toContain('not a successful restore');
     expect(rows[1]).toContain('every covered disk');
-    expect(rows[2]).toContain('not instructions to change backups');
+    expect(rows[2]).toContain("restore point's State");
+    expect(rows[2]).toContain('not the workload');
+    expect(rows[3]).toContain('not instructions to change backups');
     expect(text()).toContain("PBS's own backup and verification records");
     expect(text()).toContain('do not assume either a failed backup or working protection');
   });
@@ -47,6 +51,11 @@ describe('PBS protection disagreement help', () => {
       'server, datastore, namespace (including root), guest type/ID and backup time',
     );
     expect(steps[1]).toContain('confirm the owning installation');
+    expect(steps[1]).toContain('choose the newest point whose Source is PBS');
+    expect(steps[1]).toContain('Created time and State');
+    expect(steps[1]).toContain('Hover the Created age for its absolute timestamp');
+    expect(steps[1]).toContain('if unavailable, keep the time unknown');
+    expect(steps[1]).toContain('refresh time is not a matching backup timestamp');
     expect(steps[1]).toContain('guest snapshot is not a PBS backup');
     expect(steps[2]).toContain('protection explanation');
     expect(article().querySelector('pre')).toBeNull();
@@ -54,6 +63,49 @@ describe('PBS protection disagreement help', () => {
     expect(coverage).toContain('Job {evidenceQualityLabel(provider.jobState)}');
     expect(coverage).toContain('History {evidenceQualityLabel(provider.historyCompleteness)}');
     expect(coverage).toContain('Access {evidenceQualityLabel(provider.permissions)}');
+  });
+
+  it('distinguishes the available observations without claiming a PBS cause or verification failure', () => {
+    expect(text()).toContain('an older or absent point in Pulse is an inventory discrepancy');
+    expect(text()).toContain(
+      'Unverified on the matching point means Pulse has no successful verification evidence',
+    );
+    expect(text()).toContain("does not prove that PBS's verification job failed");
+    expect(text()).toContain(
+      'Verified with a workload still needing attention is a separate assessment disagreement',
+    );
+    expect(text()).toContain('retain its explanation and Provider evidence');
+    expect(text()).toContain("Job OK is not an individual point's verification result");
+    expect(text()).toContain('without running Diagnostics or another verification');
+  });
+
+  it('keeps the Protected caution truthful for every hidden verification value', () => {
+    const point: RecoverableArtifact = {
+      id: 'fixture-point',
+      nativeId: 'fixture-point',
+      sourceKind: 'pbs',
+      sourceLabel: 'PBS',
+      workload: {
+        key: 'fixture-guest',
+        type: 'vm',
+        typeLabel: 'VM',
+        vmid: '100',
+        label: 'Fixture VM',
+      },
+      createdAt: '2026-10-12T02:00:00Z',
+      location: 'fixture / (root)',
+      detail: '',
+      protected: true,
+    };
+    for (const verified of [true, false, undefined]) {
+      expect(artifactStateLabel({ ...point, verified })).toBe('Protected');
+    }
+    expect(artifactStateLabel({ ...point, protected: false, verified: true })).toBe('Verified');
+    expect(artifactStateLabel({ ...point, protected: false, verified: false })).toBe('Unverified');
+    expect(text()).toContain(
+      'Protected point leaves its verification state unknown from that label alone',
+    );
+    expect(text()).toContain("displays the backup's protected flag before its verification state");
   });
 
   it('prevents destructive diagnostics and an assumed freshness-policy cause', () => {

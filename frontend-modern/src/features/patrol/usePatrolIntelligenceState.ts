@@ -124,6 +124,7 @@ export function usePatrolIntelligenceState() {
   const [requestedAutonomyLevel, setRequestedAutonomyLevel] =
     createSignal<PatrolAutonomyLevel>('monitor');
   const [autopilotStatus, setAutopilotStatus] = createSignal<PatrolAutopilotStatus | null>(null);
+  const [defaultModeApplied, setDefaultModeApplied] = createSignal(false);
   const [autopilotDialogOpen, setAutopilotDialogOpen] = createSignal(false);
   const [isUpdatingAutonomy, setIsUpdatingAutonomy] = createSignal(false);
   const [activityRefreshTrigger, setActivityRefreshTrigger] = createSignal(0);
@@ -466,6 +467,7 @@ export function usePatrolIntelligenceState() {
       const settings = await getPatrolAutonomySettings();
       if (!settings) return;
       setRequestedAutonomyLevel(settings.requested_autonomy_level);
+      setDefaultModeApplied(settings.default_mode_applied === true);
       setAutonomyLevel(settings.effective_autonomy_level);
       setAutopilotStatus(settings.autopilot_acknowledgement);
       setInvestigationBudget(settings.investigation_budget);
@@ -739,6 +741,7 @@ export function usePatrolIntelligenceState() {
     activeTab,
     autonomyLevel,
     requestedAutonomyLevel,
+    defaultModeApplied,
     autopilotStatus,
     autopilotDialogOpen,
     acknowledgeAndActivateAutopilot,

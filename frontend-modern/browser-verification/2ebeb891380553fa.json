@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "0d8ade2b3b8cf73a60eb9efe07534e45f1d7072a",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "801aa50aec4c0ec7b801f4f14da60ef9c9a56a886f6df3f509f3fc844ecf4dca",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "66ada43fb44fcdbdbbde5640f21ed92d84115f27011a4d49bdcc8b711e0dc088",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "f3a446f40d39212d00dcbef049918297f211fdf5b8ee3b96094bf6438cbe17a9"
+  },
+  "routes": [
+    "/tmp/backup-clock/index.html (isolated existing production guest drawer/table fixture, no product route added)"
+  ],
+  "states": [
+    "unchanged VM/LXC completion across a saved one-hour freshness boundary",
+    "default 24-hour policy covered by connected source controls",
+    "running/ended activity separate from prior completion",
+    "new completion then passive minute ageing",
+    "absent/invalid/future timestamps",
+    "previous-calendar-day completion"
+  ],
+  "interactions": [
+    "read synthetic saved policy through actual AlertsAPI/store",
+    "advance passive browser clock without API requests; both drawer and table reclassify",
+    "Manage/Overview round trip retains original completed time",
+    "replace completion evidence without remounting the workload",
+    "keyboard and touch open existing table evidence; Escape closes and restores focus",
+    "inspect six final PNG captures with native view_image at original detail"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-12T16:49:58.639554Z",
+  "proof_scope": "Read-only synthetic alert policy through real AlertsAPI/store, guest drawer state/model/Overview, existing backup table badge and production CSS. Passive Playwright clocks, no native backup/recovery or availability claim.",
+  "browser_proof": {
+    "checks": 32,
+    "loaded_production_hashes": 115,
+    "captures": 6,
+    "client_exit": 0,
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "name": "desktop-light",
+        "version": "141.0.7390.37",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      {
+        "name": "phone-dark",
+        "version": "26.0",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        }
+      }
+    ],
+    "cleanup": {
+      "desktop-light-context": "closed",
+      "desktop-light-browser": "closed",
+      "phone-dark-context": "closed",
+      "phone-dark-browser": "closed",
+      "server": "closed"
+    },
+    "dossier": "RECEIPTS.md / browser/result.json and native-image-review.json"
+  }
+}

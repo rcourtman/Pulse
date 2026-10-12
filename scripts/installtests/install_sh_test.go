@@ -8463,3 +8463,80 @@ func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 	}
 	t.Logf("%s", output)
 }
+
+func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("DSM Upstart shell controls; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_upstart_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("DSM Upstart retirement and production EXIT cleanup controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_refused_manager_precedes_remote_and_state_erasure",
+		"test_failed_empty_partial_diagnostic_status_cannot_authorise_removal",
+		"test_effective_disabled_config_is_required_after_override_reload",
+		"test_independent_process_inventory_rejects_orphan_or_unavailable_read",
+		"test_untrusted_config_override_and_prior_retirement_refuse_without_changes",
+		"test_concurrent_override_file_or_directory_is_not_replaced_or_written_inside",
+		"test_missing_tools_refuse_without_remote_or_erasure",
+		"test_remote_refusal_keeps_stopped_disabled_recovery_without_restart",
+		"test_late_manager_refusal_retains_recovery_after_remote_confirmation",
+		"test_unconfirmed_job_retirement_restores_exact_config_and_retains_manual",
+		"test_concurrent_config_is_not_clobbered_and_original_staged_recovery_is_retained",
+		"test_confirmed_job_absence_precedes_selected_local_erasure",
+		"test_absent_stopped_and_repeated_removal_require_observed_manager_absence",
+		"test_source_selection_keeps_upstart_out_of_sysv_and_before_erasure",
+		"test_real_status_timeout_stops_owned_child_without_erasure",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentUpstartTeardown."+name+") ... ok") {
+			t.Fatalf("DSM Upstart control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 15 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete DSM Upstart verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}
+
+func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("TrueNAS SCALE shell controls; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_truenas_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("TrueNAS SCALE boot-task ownership/retirement controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_unavailable_or_untrusted_task_inventory_cannot_remove_recovery",
+		"test_foreign_or_indirect_bootstrap_is_not_mutated",
+		"test_missing_activation_target_cannot_hide_an_owned_task",
+		"test_bootstrap_symlink_directory_or_writable_file_refuses_before_mutation",
+		"test_missing_tools_are_not_local_only_removal_permission",
+		"test_every_matching_task_is_disabled_and_independently_observed_before_stop",
+		"test_partial_refused_ignored_or_reactivated_disable_retains_recovery",
+		"test_unit_or_process_uncertainty_keeps_stopped_task_recovery",
+		"test_task_activation_during_systemd_stop_refuses_before_remote",
+		"test_server_refusal_retains_disabled_tasks_and_all_recovery_without_restart",
+		"test_changed_or_refused_post_remote_inventory_precedes_first_deletion",
+		"test_partial_refused_ignored_or_recreated_task_deletion_keeps_recovery",
+		"test_all_owned_tasks_retire_before_state_erasure_and_unrelated_task_survives",
+		"test_disabled_absent_missing_bootstrap_and_repeated_removal_are_observed",
+		"test_ordinary_linux_state_is_not_appliance_evidence",
+		"test_process_read_exposes_only_roles_and_real_timeout_child_is_stopped",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentTrueNASTeardown."+name+") ... ok") {
+			t.Fatalf("TrueNAS SCALE control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 16 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete TrueNAS SCALE verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}

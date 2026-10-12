@@ -26,6 +26,7 @@ import {
   getGuestDrawerMemoryReading,
   getGuestDrawerGuestReadPresentation,
   isGuestDrawerVM,
+  type GuestDrawerBackupPresentation,
 } from './guestDrawerModel';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import { WORKLOAD_ACTION_AGENT_LABEL } from './workloadAgentReadiness';
@@ -59,11 +60,7 @@ interface GuestDrawerOverviewProps {
   networkInterfaces: NonNullable<GuestDrawerProps['guest']['networkInterfaces']>;
   nestedWorkloadContext?: NestedWorkloadContext;
   normalizedTags: string[];
-  backupPresentation: {
-    ageClass: string;
-    ageLabel: string;
-    dateLabel: string;
-  } | null;
+  backupPresentation: GuestDrawerBackupPresentation | null;
   diskThresholds?: MetricDisplayThresholds | null;
   workloadActionAgentTitle: string;
   parentMemoryTotal?: GuestDrawerProps['parentMemoryTotal'];
@@ -143,7 +140,23 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           // backup. Keep its activity separate from the last completed age.
           makeDetailRow('Last completed backup', protectionPresentation().label, {
             tone: protectionPresentation().tone,
+            layout: 'stacked',
             wrap: true,
+            valueContent: (
+              <>
+                <span class="block whitespace-normal wrap-break-word text-left leading-snug">
+                  {protectionPresentation().label}
+                </span>
+                <Show when={props.backupPresentation?.completedAt}>
+                  <time
+                    class="mt-1 block whitespace-normal wrap-break-word text-left font-normal leading-snug text-muted"
+                    dateTime={props.backupPresentation?.completedAt}
+                  >
+                    {props.backupPresentation?.dateLabel}
+                  </time>
+                </Show>
+              </>
+            ),
           }),
           makeDetailRow(
             'Backup activity',

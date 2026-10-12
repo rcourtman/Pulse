@@ -4010,6 +4010,14 @@ unchanged cap and no live-recovery read. `guestHistorySegments.test.ts` pins
 complete point preservation at the existing request bound. Neither claims a
 timing benchmark, fleet CPU attribution or native incident relief.
 
+The default stored-history legend resolves one latest timestamp from that
+same bounded, normalized panel index, then looks up each configured series at
+that time. It does not join unrelated latest or live values, add collection or
+fetch missing siblings. The 240-point cap, 30-second poll, query coordinates,
+cache and segment geometry remain unchanged. Mounted readout, pointer and
+sparse controls verify only explicit query refreshes and correctly qualified
+empty-panel fallback; this is not a timing or native-recovery claim.
+
 
 ### Accessible Workloads backup evidence
 
@@ -4085,3 +4093,21 @@ notification is introduced. Current snapshot/delta fast paths retain their
 existing scope; only availability complete-record replacement changes, never
 other partial provider facets or independent metric updates. This is truthful
 presentation and scoped invalidation, not a measured whole-fleet CPU saving.
+
+### Open guest drawers age completed backups passively (12 October 2026)
+
+`useGuestDrawerState` derives completed-backup age and policy tone from the
+existing shared 30-second clock, not just a new guest snapshot. This adds a
+clock subscription for the mounted drawer, not a timer per row, network read,
+refresh, guest probe or alert evaluation. Disposal releases the subscription.
+The supplied completed timestamp is immutable under ticks and backup activity;
+only replacement completion evidence changes it. Configured fresh/stale hours
+retain their existing inclusive boundaries and unknown/absent distinctions.
+
+`GuestDrawer.backup-clock.test.tsx` covers passive default/custom policy
+crossings, unchanged completion time, tab round trips, later completion,
+future/backwards-clock uncertainty and timer disposal. Connected
+`GuestDrawer.test.tsx` and `guestDrawerModel.branchcov2.test.ts` retain existing
+backup-activity, configured policy and caution/absence controls. Browser proof
+uses the real read-only AlertsAPI/store and existing drawer/table badge with
+synthetic timestamps, not native backup safety, guest recovery or availability.

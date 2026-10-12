@@ -249,9 +249,13 @@ describe('GuestDrawerHistory filesystem provenance', () => {
       expect.stringContaining('Disk no observation.'),
     );
     fireEvent.blur(slider);
-    expect(utilization().querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
-      '50.0%last known',
+    expect(utilization().querySelector('[data-history-last-known="disk"]')).toBeNull();
+    expect(utilization()).toHaveTextContent('Disk-');
+    expect(within(utilization()).getByTestId('guest-history-hover-time')).toHaveAttribute(
+      'datetime',
+      new Date(end).toISOString(),
     );
+    expect(utilization().querySelector('[data-history-deferred="disk"]')).toBeVisible();
   });
 
   it('withdraws retained context only with fresh same-source data, without refetch or remount', async () => {

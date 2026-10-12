@@ -48,7 +48,7 @@ class UnixUninstallState(unittest.TestCase):
         # Stop before unrelated platform boot/log cleanup; never run it on a host.
         entry = source.split("# --- Uninstall Logic ---\n", 1)[1].split(
             "    # Remove least-privilege helper artifacts.", 1)[0] + "fi\n"
-        names = ("collector_credential_state_present", "uninstall_collector_registration",
+        names = ("truenas_scale_agent_removal_present", "collector_credential_state_present", "uninstall_collector_registration",
                  "remove_authorized_runtime_dir", "remove_agent_state_dir",
                  "remove_privileged_helper_state_dir", "remove_safe_profile_state_dir", "fail")
         with tempfile.TemporaryDirectory() as temporary:
