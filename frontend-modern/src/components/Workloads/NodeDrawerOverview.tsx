@@ -1,4 +1,6 @@
+import { Show } from 'solid-js';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import { HelpIcon } from '@/components/shared/HelpIcon';
 import { TechnicalDetailsSection } from '@/components/shared/TechnicalDetailsDisclosure';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import {
@@ -6,6 +8,7 @@ import {
   compactDetailSections,
   makeDetailRow,
   type DetailRow,
+  type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import type { Alert, Disk, HostGPUSensor, Node, Temperature } from '@/types/api';
@@ -338,38 +341,60 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
       },
     ]);
 
-  const overviewSections = () => {
-    const primaryTemperature = getCpuTemperature(props.node.temperature);
-    const updates = updateEvidence();
-    const temperatureClass =
-      typeof primaryTemperature === 'number'
-        ? getTemperatureTextClass(primaryTemperature, props.temperatureThresholds)
-        : '';
-    return compactDetailSections([
-      {
-        label: 'Operator context',
-        rows: compactDetailRows([
-          makeDetailRow('Platform', versionLabel() ? `PVE ${versionLabel()}` : null),
-          makeDetailRow(
-            'Pulse coverage',
-            linkedAgentId() ? `Agent ${stripAgentPrefix(linkedAgentId())}` : 'PVE API only',
-          ),
-          updates
-            ? makeDetailRow('Updates', updates.value, {
-                tone: updates.tone,
-                title: updates.title,
-              })
-            : null,
-          typeof primaryTemperature === 'number' &&
-          (temperatureClass.includes('yellow') || temperatureClass.includes('red'))
-            ? makeDetailRow('Temperature', formatTemperature(primaryTemperature), {
-                tone: temperatureClass.includes('red') ? 'danger' : 'warning',
-              })
-            : null,
-        ]),
-      },
-    ]);
+  const updateAccessGuidance = (
+    <Show when={updateEvidence()?.helpContentId}>
+      <div class="space-y-1 text-left text-[11px] font-normal text-muted">
+        <p class="whitespace-normal wrap-anywhere">
+          Update checks use separate Proxmox access. Other monitoring can still work.
+        </p>
+        <HelpIcon
+          contentId="updates.proxmox.access"
+          triggerLabel="Why update checks are unavailable"
+          size="xs"
+          class="-ml-2"
+        />
+      </div>
+    </Show>
+  );
+
+  // Keep the interactive guidance owned by the drawer, rather than rebuilding
+  // its section and help state whenever node readings or relative ages change.
+  const operatorContextSection: DetailSection = {
+    label: 'Operator context',
+    get rows() {
+      const primaryTemperature = getCpuTemperature(props.node.temperature);
+      const updates = updateEvidence();
+      const temperatureClass =
+        typeof primaryTemperature === 'number'
+          ? getTemperatureTextClass(primaryTemperature, props.temperatureThresholds)
+          : '';
+      return compactDetailRows([
+        makeDetailRow('Platform', versionLabel() ? `PVE ${versionLabel()}` : null),
+        makeDetailRow(
+          'Pulse coverage',
+          linkedAgentId() ? `Agent ${stripAgentPrefix(linkedAgentId())}` : 'PVE API only',
+        ),
+        updates
+          ? makeDetailRow('Updates', updates.value, {
+              tone: updates.tone,
+              title: updates.title,
+              wrap: true,
+            })
+          : null,
+        typeof primaryTemperature === 'number' &&
+        (temperatureClass.includes('yellow') || temperatureClass.includes('red'))
+          ? makeDetailRow('Temperature', formatTemperature(primaryTemperature), {
+              tone: temperatureClass.includes('red') ? 'danger' : 'warning',
+            })
+          : null,
+      ]);
+    },
+    get footerContent() {
+      return updateEvidence()?.helpContentId ? updateAccessGuidance : undefined;
+    },
   };
+
+  const overviewSections = () => [operatorContextSection];
 
   return (
     <div class="space-y-3">
