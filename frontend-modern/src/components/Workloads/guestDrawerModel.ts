@@ -97,21 +97,12 @@ export const getGuestDrawerAlertAttention = (
     return copy;
   }
 
-  const used = context.guest.memory?.used;
-  const hostTotal = context.parentMemoryTotal;
-  const hostShare =
-    typeof used === 'number' &&
-    Number.isFinite(used) &&
-    used >= 0 &&
-    typeof hostTotal === 'number' &&
-    Number.isFinite(hostTotal) &&
-    hostTotal > 0
-      ? formatPercent((used / hostTotal) * 100)
-      : null;
-  const comparison = hostShare
-    ? `guest allocation · ${hostShare} of host capacity`
-    : 'guest allocation · row uses host capacity';
-  return { ...copy, message: `${copy.message} (${comparison})` };
+  // The alert owns its evaluated reading and time. Today's guest bytes and
+  // parent capacity cannot translate that observation, even when current;
+  // retained or unavailable bytes are still less suitable. Explain the two
+  // bases without inserting an unrelated number into the alert's evidence.
+  const comparison = 'Alert percentages use guest allocation. The table row uses host capacity.';
+  return { ...copy, detail: [copy.detail, comparison].filter(Boolean).join(' ') };
 };
 
 const getGuestDrawerDiskUsage = (guest: Guest): number | undefined => {

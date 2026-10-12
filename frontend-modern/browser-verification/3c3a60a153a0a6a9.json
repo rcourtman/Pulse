@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "base_sha": "c104d52111fc89ef03b987d27a969338ead24e52",
+  "verified_at": "2026-10-12T06:08:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "1b2cd2cfa12e2b41e071bd566f21fedc4c100d20cf64a2df6ce5941ba24cf4e3"
+  },
+  "routes": [
+    "Workloads guest row -> existing guest drawer / Overview / Needs attention (production components in local fixture)"
+  ],
+  "states": [
+    "Retained guest memory, unavailable usage and a current reading unlike the alert: own 86.6% remains unchanged, separate visible basis explanation, no unrelated host percentage",
+    "Alert-owned live 72% and 85% trigger, existing 70% clear rule, CPU control unchanged",
+    "Guest/host basis selection preserves final row calculations 25%/13%, with no basis note in guest mode",
+    "Accepted current zero with missing host capacity cannot rewrite alert evidence",
+    "Light desktop and dark phone: no page overflow, no page errors, only local GET API fixtures"
+  ],
+  "interactions": [
+    "Desktop production disclosure focused and opened with Enter",
+    "Phone production row opened by touch",
+    "Native basis select -> guest, keyboard ArrowDown/Enter -> host; waited for existing 320ms AnimatedNumber final values",
+    "Same mounted guest receives synthetic memory/alert/capacity updates without remounting or guest commands"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900,
+      "browser": "141.0.7390.37",
+      "name": "chromium-desktop-light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "26.0",
+      "name": "webkit-phone-dark"
+    }
+  ],
+  "evidence": {
+    "command": "pulse-worker-browser frontend-modern/browser-tests/guest-alert-memory-basis.cjs",
+    "playwright": "1.56.1",
+    "integration_lock_version": "1.56.1",
+    "completed_checks": 14,
+    "fixture_sha256": {
+      "frontend-modern/browser-tests/guest-alert-memory-basis.cjs": "60ed7baf4655d6ef6c8bd22861c34656afc9179ba7319cc399d2721a495b8fa4",
+      "frontend-modern/browser-tests/guest-alert-memory-basis.html": "2fcc8143faae35fc7089bebc175d2db21602acdefc88cff4541a96ad731df580",
+      "frontend-modern/browser-tests/guest-alert-memory-basis.tsx": "b5636592102b26918702f86e6ddbd84f59e335a5854a423c1c661f50c9be134c"
+    },
+    "runtime_sha256": {
+      "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "1b2cd2cfa12e2b41e071bd566f21fedc4c100d20cf64a2df6ce5941ba24cf4e3",
+      "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "604deee9674aa3d97e45ccf7bc5b8c5dda27017dee2f235c107750911d2981b7",
+      "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "606c8b9ba04b171dd21a94968e07ab0ad5e04205e9d4c11791529898d12684b8",
+      "frontend-modern/src/components/Workloads/GuestRow.tsx": "b0074114ab442df633b24008fbb5eaebb7bb4a8ad3fc9e0ba0e7d139951b76fb",
+      "frontend-modern/src/features/alerts/metricAlertPresentation.ts": "69a853de4a91ccf56ec693b843450488c64a0684712567835a0d09f5a283db28",
+      "frontend-modern/src/utils/memoryObservation.ts": "73d7c187a92141a8eb757cb9f09c091351ea78b6381a0cc87a0d9da0877dd01f"
+    },
+    "captures": [
+      {
+        "name": "chromium-desktop-light-retained.png",
+        "sha256": "52f3c1e321861a83e7cd549204448646933fce3adc04544534883372adf539b4",
+        "viewed": true
+      },
+      {
+        "name": "chromium-desktop-light-unavailable.png",
+        "sha256": "39dca441ff6a9a64c3ec98b40bda9c9b0a6f45dc531aace02b02c91a8a2e961b",
+        "viewed": true
+      },
+      {
+        "name": "chromium-desktop-light-live-alert.png",
+        "sha256": "38c6d5d890e7aed5a91f9a3bf89dde44047c2cc1ad9cc21d9818464291e49786",
+        "viewed": true
+      },
+      {
+        "name": "chromium-desktop-light-guest-basis.png",
+        "sha256": "367da1013bed00d909f64f432d799f9618f78387d123bafb8eef927a99e744e1",
+        "viewed": true
+      },
+      {
+        "name": "webkit-phone-dark-retained.png",
+        "sha256": "14c34090992f07dc3a47950b4ce58802c2a3b840103f90ce721e1dbe5137f8d2",
+        "viewed": true
+      },
+      {
+        "name": "webkit-phone-dark-unavailable.png",
+        "sha256": "3dd001fc0b85ff327a6711162f0495f1a3e58dd9f79bd6fbf4beb05e5e1e933e",
+        "viewed": true
+      },
+      {
+        "name": "webkit-phone-dark-live-alert.png",
+        "sha256": "7a08705e7483513f8d78fbe1b76dd416f4477441ebb34a6ddb4fef3abb9d8370",
+        "viewed": true
+      },
+      {
+        "name": "webkit-phone-dark-guest-basis.png",
+        "sha256": "922d0022cb3ded040fced1d8db2872b46c69752301e895e5671c37e59d330ef0",
+        "viewed": true
+      }
+    ],
+    "cleanup": {
+      "browsers": true,
+      "server": true
+    },
+    "result_sha256": "4455ca89fedb7b16c4c555a38584ee5d7ab97f18448f5fc83d29e6699993a0bf",
+    "prior_attempt": "First attempt failed after four desktop alert checks because it asserted final 25% during the existing number animation (observed 16%). Fixture waits for final displayed value; no runtime, animation, deadline or threshold change."
+  },
+  "limits": "Production row/drawer/presentation/CSS with synthetic observations and local GET replies. No guest command, native recovery, ordinary notification delivery, reporter confirmation or released availability."
+}

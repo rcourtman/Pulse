@@ -538,7 +538,7 @@ describe('GuestDrawer', () => {
     expect(screen.queryByTestId('guest-manage-tab')).not.toBeInTheDocument();
   });
 
-  it('reconciles a guest-allocation memory alert with the host-relative row value', () => {
+  it('explains guest-allocation alerts without translating them from another memory sample', () => {
     solidRender(() => (
       <GuestDrawer
         guest={makeGuest({
@@ -571,9 +571,13 @@ describe('GuestDrawer', () => {
       />
     ));
 
+    expect(screen.getByText('VM memory at 86.6%')).toBeInTheDocument();
     expect(
-      screen.getByText('VM memory at 86.6% (guest allocation · 16% of host capacity)'),
+      screen.getByText('Alert percentages use guest allocation. The table row uses host capacity.'),
     ).toBeInTheDocument();
+    expect(screen.getByTestId('drawer-attention-section')).not.toHaveTextContent(
+      '16% of host capacity',
+    );
   });
 
   it('leads with the live reading when an open alert holds below its trigger', () => {
