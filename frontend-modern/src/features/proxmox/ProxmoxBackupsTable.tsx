@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
-import { useLocation, useSearchParams } from '@solidjs/router';
+import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useProtectionPostures } from '@/hooks/useProtectionPostures';
@@ -467,6 +467,30 @@ export const ProxmoxBackupsTable: Component<{
     const query = params.toString();
     return `${buildProxmoxBackupsPath(next)}${query ? `?${query}` : ''}`;
   };
+  // The health strip's counts that name a posture filter toggle it. From the
+  // date view a count opens Coverage already filtered to those workloads.
+  const navigate = useNavigate();
+  const postureSegmentFilter = (posture: Exclude<CoverageFilterValue, 'all'>) => {
+    const pressed = view() === 'coverage' && coverageFilter() === posture;
+    // A zero count would only open an empty list.
+    if (!pressed && liveHealthSummary()[posture] === 0) return {};
+    return {
+      pressed,
+      onSelect: () => {
+        const next = coverageFilter() === posture && view() === 'coverage' ? 'all' : posture;
+        if (routeView() === 'coverage') {
+          setCoverageFilter(next);
+          return;
+        }
+        // By date, or Coverage chosen only by the health fallback: land on the
+        // Coverage route so the view cannot flip back when the counts change.
+        const target = new URL(backupViewPath('coverage'), 'https://pulse.invalid');
+        if (next === 'all') target.searchParams.delete(PROXMOX_BACKUPS_QUERY_PARAMS.posture);
+        else target.searchParams.set(PROXMOX_BACKUPS_QUERY_PARAMS.posture, next);
+        navigate(`${target.pathname}${target.search}`);
+      },
+    };
+  };
   const backupViewTabs = createMemo(() =>
     BACKUP_VIEW_TABS.map((tab) => ({ ...tab, path: backupViewPath(tab.id) })),
   );
@@ -738,12 +762,14 @@ export const ProxmoxBackupsTable: Component<{
               {
                 key: 'protected',
                 value: liveHealthSummary().protected,
+                ...postureSegmentFilter('protected'),
                 label: 'protected',
                 toneClass: 'bg-emerald-500',
               },
               {
                 key: 'attention',
                 value: liveHealthSummary().attention,
+                ...postureSegmentFilter('attention'),
                 label: 'attention',
                 toneClass: 'bg-amber-500',
                 muted: liveHealthSummary().attention === 0,
@@ -751,6 +777,7 @@ export const ProxmoxBackupsTable: Component<{
               {
                 key: 'unprotected',
                 value: liveHealthSummary().unprotected,
+                ...postureSegmentFilter('unprotected'),
                 label: 'unprotected',
                 toneClass: 'bg-red-500',
                 muted: liveHealthSummary().unprotected === 0,
@@ -758,6 +785,7 @@ export const ProxmoxBackupsTable: Component<{
               {
                 key: 'unknown',
                 value: liveHealthSummary().unknown,
+                ...postureSegmentFilter('unknown'),
                 label: 'unknown',
                 toneClass: 'bg-slate-400',
                 muted: liveHealthSummary().unknown === 0,
