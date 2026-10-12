@@ -143,6 +143,43 @@ func TestGuestPollOwnershipRetirementWaitsForAdmittedPublication(t *testing.T) {
 	}
 }
 
+func TestGuestPollOwnershipDeadlineDoesNotExtendRuntimeAuthority(t *testing.T) {
+	for _, expired := range []string{"caller", "runtime"} {
+		t.Run(expired, func(t *testing.T) {
+			c := &guestPollOwnershipClient{}
+			m := guestPollOwnershipMonitor(t, c)
+			// Install a live deadline, admit the cycle, then observe its expiry.
+			// The test waits on the actual signal, not a favourable timed repeat.
+			deadlineCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+			defer cancel()
+			parent := context.Background()
+			if expired == "runtime" {
+				m.setRuntimeContext(deadlineCtx, nil)
+			} else {
+				parent = deadlineCtx
+			}
+			ctx, owner := m.beginPVEGuestPoll(parent, "site-a", c)
+			if owner == nil {
+				t.Fatal("live registered cycle not admitted")
+			}
+			defer m.finishPVEGuestPoll("site-a", owner)
+			stagePVEGuestEffect(ctx, func() { m.recordGuestSnapshot("site-a", "qemu", "node", 105, GuestMemorySnapshot{Name: "collected"}) })
+			<-deadlineCtx.Done()
+			m.publishPVEGuests(ctx, "site-a", []models.VM{{ID: "site-a:node:105", Instance: "site-a", VMID: 105, Node: "node"}}, nil)
+			want := 1
+			if expired == "runtime" {
+				want = 0
+			}
+			if len(m.state.GetSnapshot().VMs) != want || len(m.GetDiagnosticSnapshots().Guests) != want {
+				t.Error("caller-budget and runtime-authority deadlines were conflated")
+			}
+			if _, next := m.beginPVEGuestPoll(deadlineCtx, "site-a", c); next != nil {
+				t.Error("expired deadline admitted a new collection")
+			}
+		})
+	}
+}
+
 func (c *guestPollOwnershipClient) GetVMs(ctx context.Context, _ string) ([]proxmox.VM, error) {
 	c.wait(ctx, "inventory")
 	var rows []proxmox.VM
