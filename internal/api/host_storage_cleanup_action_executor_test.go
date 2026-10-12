@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 type fakeHostStorageCleanupAgent struct {
@@ -162,6 +163,50 @@ func TestHostStorageCleanupReconcileDelayedTerminalReceiptPreservesAgentAttested
 	}
 	if !receipt.ReceivedAt.Equal(receivedAt) || receipt.TransportRequestID != attempt.ID {
 		t.Fatalf("receipt=%#v", receipt)
+	}
+}
+
+func TestPatrolFullModeRunsStorageCleanupThroughCanonicalLifecycle(t *testing.T) {
+	now := time.Now().UTC()
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{hostStorageCleanupActionResource(now)}})
+	agents := verifiedHostStorageCleanupAgent()
+	h.SetActionExecutor(newRoutedActionExecutor(h, newHostStorageCleanupActionExecutor(h, agents)))
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	if err := store.SetResourceOperatorState(unified.ResourceOperatorState{
+		CanonicalID: "agent:host-cleanup",
+		AutoRemediationPolicy: unified.AutoRemediationPolicy{
+			Enabled: true, CapabilityNames: []string{hostStorageCleanupCapability},
+		},
+		SetAt: now, SetBy: "operator@example.com",
+	}); err != nil {
+		t.Fatalf("SetResourceOperatorState: %v", err)
+	}
+	broker := NewPatrolActionBroker("default", h, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+		return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "full", FullModeUnlocked: true}, nil
+	})
+	disposition, err := broker.Submit(context.Background(), aicontracts.ActionProposal{
+		ProposalID: "proposal-cleanup", FindingID: "finding-disk-pressure", InvestigationID: "investigation-disk-pressure",
+		ResourceID: "agent:host-cleanup", CapabilityName: hostStorageCleanupCapability, Reason: "Reclaim the package cache on the pressured filesystem",
+	})
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if disposition.State != string(unified.ActionStateCompleted) || disposition.VerificationStatus != string(unified.VerificationVerified) {
+		t.Fatalf("disposition = %#v", disposition)
+	}
+	if len(agents.requests) != 1 || agents.requests[0].Operation != agentexec.HostStorageCleanupOperationPackageCache {
+		t.Fatalf("typed agent requests = %#v", agents.requests)
+	}
+	audit, found, err := store.GetActionAudit(disposition.ActionID)
+	if err != nil || !found {
+		t.Fatalf("GetActionAudit: found=%v err=%v", found, err)
+	}
+	if len(audit.Approvals) != 1 || audit.Approvals[0].Actor != patrolActionPolicyActor || audit.Approvals[0].Method != unified.MethodPolicy || audit.Result == nil || audit.VerificationOutcome.Status != unified.VerificationVerified {
+		t.Fatalf("audit = %#v", audit)
 	}
 }
 

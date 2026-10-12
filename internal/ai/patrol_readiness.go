@@ -220,6 +220,10 @@ func (s *Service) PatrolRuntimeReadiness() PatrolConfigReadiness {
 	switch selectedMode {
 	case config.PatrolAutonomyApproval:
 		suitability = advisor.Modes.Approval
+	case config.PatrolAutonomyAssisted:
+		suitability = advisor.Modes.Assisted
+	case config.PatrolAutonomyFull:
+		suitability = advisor.Modes.Full
 	default:
 		suitability = advisor.Modes.Monitor
 	}

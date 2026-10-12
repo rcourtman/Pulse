@@ -145,6 +145,9 @@ func TestRunPatrolModelReadinessWithProvider_VerifiesMonitorAndApproval(t *testi
 	if result.Dimensions.ContextQuality.Passed != 2 {
 		t.Fatalf("unexpected context evidence: %+v", result.Dimensions.ContextQuality)
 	}
+	if result.Modes.Assisted.Status != PatrolModeNotAssessed || result.Modes.Full.Status != PatrolModeNotAssessed {
+		t.Fatalf("higher autonomy must remain unassessed: %+v", result.Modes)
+	}
 	if provider.calls != 4 {
 		t.Fatalf("stream calls = %d, want 4", provider.calls)
 	}
@@ -403,6 +406,14 @@ func TestPatrolRuntimeReadinessUsesAdvisorForSelectedAutonomyMode(t *testing.T) 
 	if readiness.Ready || readiness.Status != PatrolReadinessNotReady {
 		t.Fatalf("selected Ask-first mode should be blocked by failed continuation: %+v", readiness)
 	}
+
+	cfg.PatrolAutonomyLevel = config.PatrolAutonomyAssisted
+	result.CacheKey = service.patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
+	service.recordPatrolModelReadiness(result, time.Now().Add(time.Millisecond))
+	readiness = service.PatrolRuntimeReadiness()
+	if !readiness.Ready || readiness.Status != PatrolReadinessWarning {
+		t.Fatalf("unassessed higher autonomy should remain advisory in the MVP: %+v", readiness)
+	}
 }
 
 func TestRunPatrolModelReadinessWithProvider_IncompleteContinuationIsNotLatencyFailure(t *testing.T) {
@@ -451,7 +462,7 @@ func TestPatrolReadinessCacheCorrectsLegacyIncompleteLatency(t *testing.T) {
 	if cached.Dimensions.Latency.Status != PatrolModelReadinessNotAssessed || cached.Modes.Monitor.Status != PatrolModeNotAssessed {
 		t.Fatalf("legacy incomplete probe still misclassified: %+v", cached)
 	}
-	for _, mode := range []string{config.PatrolAutonomyMonitor, config.PatrolAutonomyApproval} {
+	for _, mode := range []string{config.PatrolAutonomyMonitor, config.PatrolAutonomyApproval, config.PatrolAutonomyAssisted, config.PatrolAutonomyFull} {
 		cfg.PatrolAutonomyLevel = mode
 		cached.CacheKey = reloaded.patrolModelReadinessCacheKey(cfg, cached.Provider, cached.Model)
 		reloaded.recordPatrolModelReadiness(*cached, at.Add(time.Second))

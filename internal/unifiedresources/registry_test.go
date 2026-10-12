@@ -9281,6 +9281,10 @@ func TestPhysicalDiskOperatorStateIsNotCarriedAcrossASerialSplit(t *testing.T) {
 			retired := ResourceOperatorState{
 				CanonicalID: unscoped, LifecycleState: LifecycleStateRetired, MonitoringMode: MonitoringModeMuted,
 				NeverAutoRemediate: true, Criticality: CriticalityHigh, Note: "retired after the RMA",
+				AutoRemediationPolicy: AutoRemediationPolicy{
+					Enabled: true, CapabilityNames: []string{"restart"},
+					Window: &AutoRemediationWindow{Timezone: "UTC", StartMinute: 60, EndMinute: 120},
+				},
 				MaintenanceStartAt: &windowStart, MaintenanceEndAt: &windowEnd, MaintenanceReason: "shelf swap",
 				SetAt: now, SetBy: "operator",
 			}

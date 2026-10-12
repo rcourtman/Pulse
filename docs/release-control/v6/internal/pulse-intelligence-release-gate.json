@@ -46,7 +46,7 @@
       "non_mutating_proof_commands": [
         {
           "id": "rg-02-lifecycle-admission",
-          "argv": ["go", "test", "./internal/actionlifecycle", "./internal/api", "-run", "TestConcurrentExecuteAdmitsExecutorExactlyOnceMemoryStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceSQLiteStore|TestMemoryStoreConcurrentDuplicateExecuteAtClaimBoundaryCallsExecutorOnce|TestSQLiteConcurrentDuplicateExecuteAtClaimBoundaryCallsExecutorOnce|TestPatrolActionBrokerNeverExecutesWhateverTheCapabilityEligibility", "-count=1"]
+          "argv": ["go", "test", "./internal/actionlifecycle", "./internal/api", "-run", "TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallyMemoryStore|TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallySQLite|TestPatrolActionBrokerDispatchTimePolicyRevocation", "-count=1"]
         }
       ],
       "mutation_gated_commands": []
@@ -76,7 +76,7 @@
       "non_mutating_proof_commands": [
         {
           "id": "rg-04-policy-plan-hash",
-          "argv": ["go", "test", "./internal/actionlifecycle", "./internal/api", "-run", "TestHumanApprovalSurvivesAutomaticPolicyRevocationMemoryStore|TestHumanApprovalSurvivesAutomaticPolicyRevocationSQLite|TestEmergencyStopBlocksHumanAdmissionMemoryStore|TestEmergencyStopBlocksHumanAdmissionSQLite|TestExecuteAdmissionLinearizesWithOperatorLockSaveMemoryStore|TestExecuteAdmissionLinearizesWithOperatorLockSaveSQLite", "-count=1"]
+          "argv": ["go", "test", "./internal/actionlifecycle", "./internal/api", "-run", "TestExecuteUnderPolicyBarrierRevocationsMemoryStore|TestExecuteUnderPolicyBarrierRevocationsSQLite|TestHumanApprovalSurvivesAutomaticPolicyRevocationMemoryStore|TestHumanApprovalSurvivesAutomaticPolicyRevocationSQLite|TestEmergencyStopBlocksHumanAndPolicyAdmissionMemoryStore|TestEmergencyStopBlocksHumanAndPolicyAdmissionSQLite", "-count=1"]
         }
       ],
       "mutation_gated_commands": []
@@ -98,18 +98,24 @@
     },
     {
       "id": "RG-06",
-      "title": "Patrol never executes without an operator decision",
+      "title": "Limited unattended autonomy release authorization",
       "owner": "task-08",
-      "required_evidence_tier": "integration",
+      "required_evidence_tier": "real-lab",
       "requires_triple_zero": true,
       "allows_ancestor_provenance": false,
       "non_mutating_proof_commands": [
         {
-          "id": "rg-06-operator-decision-only",
-          "argv": ["go", "test", "./internal/api", "./internal/actionlifecycle", "-run", "Test(PatrolActionBrokerNeverExecutesWhateverTheCapabilityEligibility|PatrolActionBrokerRecordsCapabilityOnlyPolicyProvenance|Contract_PatrolActionBrokerOnlyPlans|GatePatrolAutonomyUpdateRefusesRetiredLevels|LegacyPolicyApprovalCannotExecuteAfterRestart)", "-count=1"]
+          "id": "rg-06-autonomy-authority",
+          "argv": ["go", "test", "./internal/api", "./internal/actionlifecycle", "-run", "Test(PatrolFullModeRunsStorageCleanupThroughCanonicalLifecycle|PatrolFullModeRunsHostUpdateThroughCanonicalLifecycle|PatrolAutopilotAcknowledgementAPIRejectsPublicAuthorityAndAPIToken|PatrolAutopilotActivationRequiresCurrentBoundAcknowledgement|PatrolAutopilotVersionRotationAndRevocationRaceFailClosed|PatrolAutopilotStoreUnavailableDoesNotChangeModeOrFabricateEvidence|EmergencyStopBlocksHumanAndPolicyAdmissionMemoryStore|EmergencyStopBlocksHumanAndPolicyAdmissionSQLite)", "-count=1"]
         }
       ],
-      "mutation_gated_commands": []
+      "mutation_gated_commands": [
+        {
+          "id": "rg-06-colima-autonomy-lab",
+          "argv": ["python3", "scripts/intelligence_lab/patrol_autonomy_colima.py", "--run-id", "<release-id>", "--sha", "<full-release-sha>", "--repo", "<clean-git-archive>", "--artifact-dir", "<external-artifact-dir>", "--scratch-dir", "<external-scratch-dir>"],
+          "authorization": "EXPLICIT_RELEASE_REQUIRED"
+        }
+      ]
     },
     {
       "id": "RG-07",

@@ -166,6 +166,7 @@ describe('ResourceMonitoringPolicyAction', () => {
       lifecycleState: 'active',
       intentionallyOffline: true,
       neverAutoRemediate: false,
+      autoRemediationPolicy: { enabled: false, capabilityNames: [] },
       setAt: '2026-08-11T09:00:00Z',
     });
     operatorStateMock.set.mockResolvedValue({});

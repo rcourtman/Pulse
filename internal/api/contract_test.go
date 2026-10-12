@@ -614,9 +614,10 @@ func TestContract_ActionExecutorAdmissionRequiresDurableAttemptAndSendCAS(t *tes
 	}
 	src := string(service)
 	admission := strings.Index(src, "store.RecordActionExecutionAdmission(started, startEvent, attempt)")
+	policyAdmission := strings.Index(src, "store.RecordActionPolicyExecutionAdmission(started, approvedEvent, startEvent, attempt)")
 	started := strings.Index(src, "store.MarkActionDispatchStarted(attempt.ID, owner, s.now())")
 	dispatch := strings.Index(src, "s.Executor.ExecuteAction(withDispatchAttempt(ctx, attempt), record)")
-	if admission < 0 || started < 0 || dispatch < 0 || admission > started || started > dispatch {
+	if admission < 0 || policyAdmission < 0 || started < 0 || dispatch < 0 || admission > started || started > dispatch {
 		t.Fatal("executor dispatch must follow atomic attempt admission and the one-shot pre-send CAS")
 	}
 }
@@ -1085,6 +1086,7 @@ func TestContract_PatrolAutonomyCommunityMonitorUpdatePayload(t *testing.T) {
 		t.Fatalf("expected success response, got %+v", resp)
 	}
 	if resp.Settings.AutonomyLevel != config.PatrolAutonomyMonitor ||
+		resp.Settings.FullModeUnlocked ||
 		resp.Settings.InvestigationBudget != 5 ||
 		resp.Settings.InvestigationTimeoutSec != 60 {
 		t.Fatalf("unexpected monitor update settings: %+v", resp.Settings)
@@ -23921,7 +23923,7 @@ func TestProUpdateBrokerWiringContract(t *testing.T) {
 	}
 }
 
-func TestContract_PatrolActionBrokerOnlyPlans(t *testing.T) {
+func TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned(t *testing.T) {
 	source, err := os.ReadFile("patrol_action_broker.go")
 	if err != nil {
 		t.Fatalf("read patrol_action_broker.go: %v", err)
@@ -23943,12 +23945,28 @@ func TestContract_PatrolActionBrokerOnlyPlans(t *testing.T) {
 			t.Fatalf("patrol_action_broker.go must pin typed broker snippet %q", snippet)
 		}
 	}
-	// Patrol only plans. Every fix waits for an operator decision, so the
-	// broker never records a decision, executes through the lifecycle, or
-	// dispatches directly.
-	for _, forbidden := range []string{"ExecuteAction(", "ExecuteCommand(", ".Execute(", ".Decide(", "ExecuteUnderPolicy", "MethodPolicy"} {
+	for _, required := range []string{
+		"autoAuthorizationDecision",
+		"evaluatePatrolActionPolicy",
+		"loadPatrolActionPolicyInputs",
+		"policyAuthorizationLease",
+		"AutoAuthorizeLowRisk",
+		"AllowsAutoRemediationAt",
+		"ExecuteUnderPolicy",
+		"pulse_patrol_policy",
+	} {
+		if !strings.Contains(src, required) {
+			t.Fatalf("patrol_action_broker.go must keep core policy authorization guard %q", required)
+		}
+	}
+	if strings.Count(src, "evaluatePatrolActionPolicy(") < 4 {
+		t.Fatal("planning, direct evaluation, and dispatch lease must share one Patrol policy evaluator")
+	}
+	// Enterprise/model code still cannot dispatch directly. Core may call
+	// only the canonical lifecycle decision/execute methods after policy.
+	for _, forbidden := range []string{"ExecuteAction(", "ExecuteCommand("} {
 		if strings.Contains(src, forbidden) {
-			t.Fatalf("patrol_action_broker.go must only plan; found %q", forbidden)
+			t.Fatalf("patrol_action_broker.go must not bypass the lifecycle via %q", forbidden)
 		}
 	}
 }

@@ -191,9 +191,10 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleDeleteSuppressionRule)))
 	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetDismissedFindings)))
 
-	// Patrol Autonomy - GET stays in core; PUT is extension-gated for the
-	// investigation (approval) mode while the free adapter persists
-	// findings-only monitor settings.
+	// Patrol Autonomy - GET stays in core; PUT is extension-gated for premium
+	// modes while the free adapter persists findings-only monitor settings.
+	r.mux.HandleFunc("/api/ai/patrol/autonomy/acknowledgements", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleCreatePatrolAutopilotAcknowledgement)))
+	r.mux.HandleFunc("/api/ai/patrol/autonomy/acknowledgements/", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleRevokePatrolAutopilotAcknowledgement)))
 	r.mux.HandleFunc("/api/ai/patrol/autonomy", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
@@ -926,10 +927,11 @@ func (p *patrolConfigAdapter) GetPatrolInvestigationTimeout() time.Duration {
 	return cfg.GetPatrolInvestigationTimeout()
 }
 
-// GetPatrolFullModeUnlocked is kept for the extension contract. Patrol no
-// longer has a self-executing full mode, so it is never unlocked.
 func (p *patrolConfigAdapter) GetPatrolFullModeUnlocked() bool {
-	return false
+	if p.svc == nil {
+		return false
+	}
+	return p.svc.GetEffectivePatrolAutonomyLevel() == config.PatrolAutonomyFull
 }
 
 func (p *patrolConfigAdapter) GetPatrolAutonomyLevel() string {
@@ -957,15 +959,39 @@ type patrolConfigUpdateAdapter struct {
 var _ aicontracts.PatrolConfigUpdater = (*patrolConfigUpdateAdapter)(nil)
 
 func (u *patrolConfigUpdateAdapter) SaveAutonomySettings(ctx context.Context, level string, unlocked bool, budget, timeoutSec int) error {
-	_ = unlocked // retired full-mode input from the extension contract; never authority.
+	_ = unlocked // legacy extension input is compatibility data, never authority.
 	if ctx == nil {
 		ctx = u.ctx
 	}
 	if u == nil || u.handler == nil || !config.IsValidPatrolAutonomyLevel(level) {
 		return fmt.Errorf("invalid Patrol autonomy update")
 	}
-	return u.handler.mutatePatrolAutonomyConfig(ctx, func(cfg *config.AIConfig) (bool, error) {
+	return u.handler.mutatePatrolAutopilotConfig(ctx, func(cfg *config.AIConfig, policy unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
 		changed := cfg.PatrolAutonomyLevel != level || cfg.PatrolInvestigationBudget != budget || cfg.PatrolInvestigationTimeoutSec != timeoutSec
+		if level == config.PatrolAutonomyFull {
+			activationRequest, ok := patrolAutopilotActivationFromContext(ctx)
+			if !ok {
+				return false, &unifiedresources.PatrolAutopilotContractError{Code: unifiedresources.PatrolAutopilotStatusAcknowledgementRequired}
+			}
+			binding, bindingChanged, err := unifiedresources.BindPatrolAutopilotActivation(
+				cfg.PatrolAutopilotAcknowledgements,
+				cfg.PatrolAutopilotRevocations,
+				cfg.PatrolAutopilotActivation,
+				activationRequest.AcknowledgementID,
+				activationRequest.Actor,
+				policy,
+			)
+			if err != nil {
+				return false, err
+			}
+			changed = changed || bindingChanged || !cfg.PatrolFullModeUnlocked
+			cfg.PatrolAutopilotActivation = &binding
+			cfg.PatrolFullModeUnlocked = true
+		} else {
+			changed = changed || cfg.PatrolAutopilotActivation != nil || cfg.PatrolFullModeUnlocked
+			cfg.PatrolAutopilotActivation = nil
+			cfg.PatrolFullModeUnlocked = false
+		}
 		cfg.PatrolAutonomyLevel = level
 		cfg.PatrolInvestigationBudget = budget
 		cfg.PatrolInvestigationTimeoutSec = timeoutSec
@@ -975,7 +1001,9 @@ func (u *patrolConfigUpdateAdapter) SaveAutonomySettings(ctx context.Context, le
 
 func (u *patrolConfigUpdateAdapter) ReloadConfig(ctx context.Context) error {
 	// SaveAutonomySettings publishes the persisted autonomy fields while the
-	// policy-mutation lock is still held, so a second reload is a no-op.
+	// Task 04 policy-mutation lock is still held. A second reload would split
+	// activation/revocation from the runtime boundary and is intentionally a
+	// no-op for this adapter.
 	return nil
 }
 

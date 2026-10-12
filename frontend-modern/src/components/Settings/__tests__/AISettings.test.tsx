@@ -930,7 +930,7 @@ describe('Assistant saved-control compatibility', () => {
       const saved = {
         ...baseSettings(),
         control_level: level,
-        patrol_autonomy_level: 'approval',
+        patrol_autonomy_level: 'full',
       };
       getSettingsMock.mockResolvedValue(saved);
       updateSettingsMock.mockResolvedValue(saved);
@@ -1476,6 +1476,8 @@ describe('AISettings provider save failure context', () => {
       modes: {
         monitor: { status: 'verified', summary: 'Verified.' },
         approval: { status: 'not_suitable', summary: 'Continuation failed.' },
+        assisted: { status: 'not_assessed', summary: 'Extended canary required.' },
+        full: { status: 'not_assessed', summary: 'Governed canary required.' },
       },
       metadata: { context_window: 32768, quantization_level: 'Q4_K_M' },
       recorded_at: '2026-07-13T08:00:00Z',
@@ -1490,9 +1492,9 @@ describe('AISettings provider save failure context', () => {
     expect(screen.getByText('Tool protocol')).toBeInTheDocument();
     expect(screen.getByText('Context quality')).toBeInTheDocument();
     expect(screen.getByText('Autonomy suitability')).toBeInTheDocument();
-    expect(screen.getByText('Ask first')).toBeInTheDocument();
-    expect(screen.queryByText('Safe auto-fix')).not.toBeInTheDocument();
-    expect(screen.queryByText('Autopilot')).not.toBeInTheDocument();
+    expect(screen.getByText('Safe auto-fix')).toBeInTheDocument();
+    expect(screen.getByText('Autopilot')).toBeInTheDocument();
+    expect(screen.getAllByText('Not assessed')).toHaveLength(2);
     expect(screen.getByText(/Context 32,768 tokens/)).toBeInTheDocument();
     expect(runPatrolModelReadinessMock).toHaveBeenCalledWith(
       { model: 'ollama:qwen3:8b' },
@@ -1534,6 +1536,8 @@ describe('AISettings provider save failure context', () => {
       modes: {
         monitor: { status: 'not_suitable', summary: 'Protocol failed.' },
         approval: { status: 'not_suitable', summary: 'Protocol failed.' },
+        assisted: { status: 'not_assessed', summary: 'Extended canary required.' },
+        full: { status: 'not_assessed', summary: 'Governed canary required.' },
       },
       recorded_at: '2026-07-13T08:00:00Z',
       recorded_at_unix: 1783929600,

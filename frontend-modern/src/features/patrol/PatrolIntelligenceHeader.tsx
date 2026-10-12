@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import { CountdownTimer } from '@/components/patrol';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
+import { Button } from '@/components/shared/Button';
 import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import { settingsTabPath } from '@/components/Settings/settingsNavigationModel';
@@ -29,6 +30,7 @@ import {
   resolvePatrolBlockedActionCause,
   type PatrolIntelligenceState,
 } from './usePatrolIntelligenceState';
+import { PatrolAutopilotAcknowledgementDialog } from './PatrolAutopilotAcknowledgementDialog';
 
 export { PATROL_AUTONOMY_POLICY_PRESENTATION } from './patrolControlPresentation';
 
@@ -37,8 +39,18 @@ const PATROL_MODE_ANCHOR_HASHES = new Set([
   `#${PATROL_OPERATIONS_LOOP_ANCHOR}`,
 ]);
 
+export function getPatrolAutopilotExpiry(expiresAt?: string | null): Date | null {
+  if (!expiresAt?.trim()) return null;
+  const expiry = new Date(expiresAt);
+  if (!Number.isFinite(expiry.getTime()) || expiry.getUTCFullYear() <= 1) return null;
+  return expiry;
+}
+
 export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
+  const autopilotExpiry = createMemo(() =>
+    getPatrolAutopilotExpiry(state.autopilotStatus()?.expiresAt),
+  );
   const headerMeta = createMemo(() =>
     getPatrolPageHeaderMeta({
       autonomyLevel: state.autonomyLevel(),
@@ -151,7 +163,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       !autonomyAvailability().actionLabel,
   );
   const autonomyLevelOptions = createMemo<FilterOption<PatrolAutonomyLevel>[]>(() =>
-    (['monitor', 'approval'] as const).map((level) => {
+    (['monitor', 'approval', 'assisted', 'full'] as const).map((level) => {
       const presentation = PATROL_AUTONOMY_POLICY_PRESENTATION[level];
       const lockedPaidMode = state.autoFixLocked() && level !== 'monitor';
       return {
@@ -231,6 +243,40 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
           Saving Patrol mode
         </div>
       </Show>
+      <Show when={state.requestedAutonomyLevel() !== state.autonomyLevel()}>
+        <div
+          role="status"
+          class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          Requested {PATROL_AUTONOMY_POLICY_PRESENTATION[state.requestedAutonomyLevel()].label}.
+          Effective mode is {selectedAutonomyPolicy().label}. Server status:{' '}
+          {state.autopilotStatus()?.code.replace(/_/g, ' ') || 'unavailable'}.
+        </div>
+      </Show>
+      <Show when={state.autopilotStatus()?.active && state.autopilotStatus()?.acknowledgementId}>
+        <div class="mt-3 flex flex-col gap-2 rounded-md border border-border bg-surface px-3 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <span class="font-semibold">
+              Autopilot acknowledgement v{state.autopilotStatus()?.acknowledgementVersion}
+            </span>
+            <span class="ml-2 text-muted">
+              Active for this identity
+              <Show when={autopilotExpiry()}>
+                {(expiry) => <> until {expiry().toLocaleString()}</>}
+              </Show>
+              .
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="dangerOutline"
+            disabled={state.isUpdatingAutonomy()}
+            onClick={() => void state.revokeAutopilot()}
+          >
+            Revoke Autopilot
+          </Button>
+        </div>
+      </Show>
     </>
   );
 
@@ -248,6 +294,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
 
   return (
     <div class="space-y-4">
+      <PatrolAutopilotAcknowledgementDialog state={state} />
       <PageHeader
         id="patrol-title"
         description={headerMeta().description}

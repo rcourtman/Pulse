@@ -207,8 +207,8 @@ func TestNormalizePatrolAutonomyLevelForTelemetry(t *testing.T) {
 		"":           config.PatrolAutonomyMonitor,
 		"monitor":    config.PatrolAutonomyMonitor,
 		"approval":   config.PatrolAutonomyApproval,
-		" Assisted ": config.PatrolAutonomyMonitor,
-		"full":       config.PatrolAutonomyMonitor,
+		" Assisted ": config.PatrolAutonomyAssisted,
+		"full":       config.PatrolAutonomyFull,
 		"autonomous": config.PatrolAutonomyMonitor,
 		"garbage":    config.PatrolAutonomyMonitor,
 	}

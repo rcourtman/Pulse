@@ -23,6 +23,7 @@ type resourceOperatorStateAPI struct {
 	LifecycleState           string                              `json:"lifecycleState"`
 	IntentionallyOffline     bool                                `json:"intentionallyOffline"`
 	NeverAutoRemediate       bool                                `json:"neverAutoRemediate"`
+	AutoRemediationPolicy    unified.AutoRemediationPolicy       `json:"autoRemediationPolicy"`
 	MaintenanceStartAt       *time.Time                          `json:"maintenanceStartAt,omitempty"`
 	MaintenanceEndAt         *time.Time                          `json:"maintenanceEndAt,omitempty"`
 	MaintenanceRecurrence    *unified.RecurringMaintenanceWindow `json:"maintenanceRecurrence,omitempty"`
@@ -55,6 +56,7 @@ func toResourceOperatorStateAPI(state unified.ResourceOperatorState) resourceOpe
 		LifecycleState:        string(state.LifecycleState),
 		IntentionallyOffline:  state.IntentionallyOffline,
 		NeverAutoRemediate:    state.NeverAutoRemediate,
+		AutoRemediationPolicy: state.AutoRemediationPolicy,
 		MaintenanceStartAt:    state.MaintenanceStartAt,
 		MaintenanceEndAt:      state.MaintenanceEndAt,
 		MaintenanceRecurrence: state.MaintenanceRecurrence,
@@ -144,6 +146,7 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 			LifecycleState:        unified.ResourceLifecycleState(payload.LifecycleState),
 			IntentionallyOffline:  payload.IntentionallyOffline,
 			NeverAutoRemediate:    payload.NeverAutoRemediate,
+			AutoRemediationPolicy: payload.AutoRemediationPolicy,
 			MaintenanceStartAt:    payload.MaintenanceStartAt,
 			MaintenanceEndAt:      payload.MaintenanceEndAt,
 			MaintenanceRecurrence: payload.MaintenanceRecurrence,

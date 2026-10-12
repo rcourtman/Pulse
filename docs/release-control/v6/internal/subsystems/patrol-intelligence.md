@@ -152,11 +152,13 @@ decision queue. The mode selector is keyboard navigable and retains the stable
 Patrol route rather than inventing API filters or lifecycle states.
 
 `patrolHomePresentation.ts` owns the deterministic projection from effective
-autonomy and typed attention evidence into operator decisions. Patrol never
-acts on its own, so every current active issue is a decision for the operator
-in both Watch only and Ask first; the mode only chooses the stated reason
-(`getPatrolAttentionDecisions`). No issue is presented as continuing without a
-decision. This is presentation of existing authority, never a new grant of
+autonomy and typed attention evidence into `needs user` versus `can continue`
+work. Watch-only and ask-first modes keep current active issues operator-visible.
+Safe-auto-fix and Autopilot may keep an issue quiet only when evidence is fresh
+and complete and at least one eligible governed action can proceed without a
+new approval. Unknown or stale evidence, failed or unknown verification,
+ineligible or absent actions, policy denial, and outstanding approval remain
+interruptions. This is presentation of existing authority, never a new grant of
 authority or a bypass around planning, feasibility, approval, dispatch, and
 verification.
 
@@ -314,10 +316,15 @@ capability and validator rather than executing proposal JSON generically; until
 such a runtime records a healthy installed observer, the saved objective
 truthfully remains uncovered.
 
-Autopilot and its server-owned acknowledgement were retired on 2026-10-12
-(see "Patrol fix modes retired" under Current State). The Patrol page has no
-acknowledgement dialog, revocation control, or requested-versus-effective
-notice; `frontend-modern/src/api/patrol.ts` carries no acknowledgement calls.
+Desktop Autopilot activation consumes the server-owned acknowledgement
+contract through `frontend-modern/src/api/patrol.ts` and
+`PatrolAutopilotAcknowledgementDialog.tsx`. The UI displays requested versus
+effective mode, records the current acknowledgement version before full-mode
+activation, exposes revocation, and treats expiry, revocation, version drift,
+and activation races as server-authored demotion. Proof is
+`PatrolAutopilotAcknowledgementDialog.test.tsx`,
+`usePatrolIntelligenceState.test.ts`, and desktop journey 82. This statement
+does not certify mobile or physical-device behavior.
 
 Open work descriptions are Patrol-owned operator guidance. They may mention the
 visible next step, approvals, and verification results when those words help the
@@ -411,10 +418,10 @@ or historical proof/counting for resolved-only work.
    mode must describe the capability positively, such as Patrol checking
    infrastructure and reporting issues only.
    It must not frame the free/monitor boundary as evidence recording,
-   proof collection, or a disabled version of remediation. The paid mode label
-   must stay the short operator choice `Ask first` and must not reintroduce
-   the retired `Safe auto-fix` or `Autopilot` modes or Pro-matrix labels such
-   as `Ask before changes`, `Auto-fix safe issues`, or `Policy autopilot`.
+   proof collection, or a disabled version of remediation. Paid mode labels
+   must stay short operator choices (`Ask first`, `Safe auto-fix`,
+   `Autopilot`) and must not reintroduce Pro-matrix labels such as
+   `Ask before changes`, `Auto-fix safe issues`, or `Policy autopilot`.
    Plan-locked Patrol controls must keep the working surface on the positive
    Watch-only capability and must not surface paid modes, disabled paid-mode
    buttons, compact Pro badges, a paid-mode matrix, or any paid-mode disclosure.
@@ -614,9 +621,13 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    Intelligence settings and external-agent surfaces own MCP setup/readiness,
    while API security owns only the scoped-token creation surface they link to.
    Patrol mode labels and details must match the backend execution policy:
-   no mode runs a fix without an operator decision. Compact Patrol mode labels
-   must remain understandable mode decisions (`Watch only`, `Ask first`), not
-   shorthand such as `Ask` that makes the operator infer what Patrol will do.
+   assisted mode may say it can run low-risk fixes explicitly allowed by policy,
+   but it must not imply that warning severity alone makes a command safe;
+   high-risk, critical, destructive, or unknown-risk fixes remain approval-bound
+   unless the operator has selected a broader autonomy level. Compact Patrol
+   mode labels must remain understandable mode decisions (`Watch only`,
+   `Ask first`, `Safe auto-fix`, `Autopilot`), not shorthand such as `Ask` or
+   `Safe` that makes the operator infer what Patrol will do.
    The current-work and findings-workspace descriptions must derive from the
    active Patrol mode and lock state, not from a generic all-capability
    sentence. Watch-only installs must not advertise investigation, approvals, or
@@ -1315,22 +1326,6 @@ contract.
 
 ## Current State
 
-### Patrol fix modes retired (2026-10-12)
-
-Patrol no longer runs a fix on its own. The `assisted` (Safe auto-fix) and
-`full` (Autopilot) modes are gone, leaving `monitor` (Watch only) and
-`approval` (Ask first). A saved `assisted`, `full`, or `autonomous` level reads
-as `approval` (`AIConfig.GetPatrolAutonomyLevel`), and the paid update route
-refuses to save one (`GatePatrolAutonomyUpdate`). The Autopilot
-acknowledgement store, routes and dialog, the broker's automatic
-authorization, the lifecycle's policy execution path
-(`ExecuteUnderPolicy`, policy leases) and the per-resource automatic-action
-allowlist were removed. The core broker now only plans: `Plan` and `Submit`
-both persist a pending or planned action and return, and every fix runs only
-through an operator decision and execution in the Actions lifecycle.
-Investigation in Ask first is unchanged. Release gate RG-06 now proves this
-operator-decision-only invariant instead of limited unattended autonomy.
-
 ### AI Discovery removed (2026-10-11)
 
 AI Discovery, the model-backed service-identification layer, is gone. The
@@ -1541,13 +1536,24 @@ forking a Patrol-local form or save path.
 
 The Patrol page keeps the Patrol mode policy on its own header, not on
 Settings > Pulse Intelligence > Patrol: the first configurable decision remains
-how far Patrol goes after it finds an issue (`Watch only`, `Ask first`), and
-there must be only one visible chooser for that decision.
-The per-resource automatic-action allowlist and its drawer editor were retired
-with the self-executing modes; Never auto-remediate remains the per-resource
-lock for every actor. Pending Patrol actions record only the capability
-authority in the server-authored action `policyDecision`; tenant and resource
-reason codes stay decodable so historical records still validate.
+what Patrol may handle automatically (`Watch only`, `Ask first`,
+`Safe auto-fix`, `Autopilot`), and there must be only one visible chooser for
+that decision.
+Per-resource automatic-action scope is configured in the canonical resource
+drawer, not duplicated on the Patrol page. The drawer may expose only
+capabilities whose backend contract declares auto-authorization eligibility,
+requires an explicit capability allowlist, and may collect an optional daily
+time/timezone window. Patrol mode remains the tenant-wide upper bound: a
+resource opt-in cannot widen Watch only or Ask first, admit elevated work in
+Safe auto-fix, bypass the full-mode unlock, or override Never auto-remediate.
+Pending Patrol actions snapshot the bounded capability, tenant Patrol, and
+resource operator authorities actually consulted at planning into the
+server-authored action `policyDecision`. Its typed reason codes and revisions
+are explanatory evidence for Task 11, including unavailable, missing,
+emergency-stop, mode, allowlist, Never, and window posture. Planning and
+dispatch share one pure evaluator, but dispatch re-fetches current inputs and
+persists a separate authorization lease; the snapshot cannot authorize an
+automatic action or suppress current-policy revocation.
 Commercial, runtime, and documentation copy that describes this same decision
 must also use those visible labels and the umbrella name `Patrol mode`, not
 the retired `Only watch`, `Fix safe issues`, `Full control`, or generic
@@ -1708,7 +1714,8 @@ preserving the blocked reason and cause in Patrol status. When the
 safe-remediation entitlement is not effective, the Patrol header must present
 findings-only `monitor` as the effective mode and the Patrol control state
 owner must refuse any investigation/remediation level when a save starts;
-the `monitor` save it does send is accepted without the entitlement, so an
+the `monitor` save it does send is accepted without the entitlement, and the
+API clears stale full-mode unlock and Autopilot activation state on it, so an
 expired or downgraded plan cannot turn a recoverable control review into a
 Pro-only save failure. Patrol renders no inline error
 surface for these failures today: switching Patrol on or off while it is not
@@ -1721,9 +1728,14 @@ The Patrol mode selector in that header must compose the shared
 rebuilding a local active-button group. When the header shows Patrol mode
 options, it renders the selector in the segmented layout inside its `Mode and
 automation` disclosure; a constrained surface that hosts it may use the shared
-prominent layout so both mode labels remain readable without inventing a
-Patrol-local selector. Patrol owns the default visible two-level policy
-presentation (`Watch only`, `Ask first`) and entitlement locks. The shared primitive owns pressed-state semantics,
+prominent layout so all four mode labels remain readable without inventing a
+Patrol-local selector. Patrol owns the default visible four-level
+policy presentation (`Watch only`, `Ask first`, `Safe auto-fix`,
+`Autopilot`), entitlement locks, and the rule that choosing the highest
+Autopilot level opens the acknowledgement dialog and saves `full` only with a
+recorded `acknowledgement_id` (the API derives the compatibility
+`full_mode_unlocked` value itself), while saving any lower level lets the API
+clear the Autopilot activation. The shared primitive owns pressed-state semantics,
 disabled-option behavior, and active/inactive selector styling.
 That same Patrol-owned presentation rule also applies to the findings empty
 state: `frontend-modern/src/components/AI/FindingsPanel.tsx` must not treat
@@ -2615,9 +2627,15 @@ health, and legacy protocol versions cannot advance the finding to
 `fix_verified`. The agent may wait for a health transition within the bounded
 action timeout, but it must never repeat the mutation while waiting.
 
-The server-derived effective Autopilot mode and its acknowledgement were
-retired on 2026-10-12. A saved `full`, `assisted`, or `autonomous` level reads
-as `approval`, and Patrol submits proposals that are only planned.
+Patrol now consumes the server-derived effective Autopilot mode. Requested
+`full` is admitted only with a current persisted human acknowledgement and
+exact activation for the same actor credential and organization; legacy
+booleans, revocation, expiry, version rotation, and malformed evidence fall
+back to approval mode before policy-authorized action submission. The accepted
+limits explicitly allow inconclusive verification and never turn execution
+success into outcome truth. Task 11 still owns acknowledgement presentation,
+cancel/no-submit browser proof, and device coverage; M7 remains open until that
+work and Task 12 certification are complete.
 
 APT Patrol findings preserve the backend-owned finding `key` through the
 canonical frontend store. Presentation recognizes only the exact bounded update
@@ -2659,7 +2677,7 @@ Autonomy writes use the complementary authoritative-read rule. A successful
 acknowledgement, so `usePatrolIntelligenceState.ts` always reloads
 `GET /api/ai/patrol/autonomy` before updating visible control state. The page
 must not read optional nested autonomy fields from the write response or claim
-a mode is active before the server-derived effective mode is loaded.
+Autopilot is active before the server-derived effective mode is loaded.
 
 Reconciliation is generation-aware and cancellable. Route changes, retries, or
 superseding starts cancel the old timer; stale completions cannot overwrite the

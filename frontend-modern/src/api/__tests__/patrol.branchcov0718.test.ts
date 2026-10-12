@@ -201,8 +201,24 @@ describe('patrol api — uncovered branch coverage', () => {
     it('GETs /api/ai/patrol/autonomy and returns the parsed settings verbatim', async () => {
       const payload = {
         autonomy_level: 'approval',
-        requested_autonomy_level: 'approval',
+        requested_autonomy_level: 'full',
         effective_autonomy_level: 'approval',
+        full_mode_unlocked: false,
+        autopilot_acknowledgement: {
+          code: 'acknowledgement_required',
+          active: false,
+          currentVersion: 3,
+          acceptedScope: [],
+          acceptedLimits: {
+            policyAllowlistRequired: true,
+            emergencyStopHonored: true,
+            approvalFloorsHonored: true,
+            verificationReconciledWhenSupported: true,
+            evidenceClassDisclosed: true,
+            inconclusiveOutcomeAllowed: false,
+            executionSuccessIsNotOutcomeTruth: true,
+          },
+        },
         investigation_budget: 15,
         investigation_timeout_sec: 300,
       };

@@ -91,6 +91,7 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
 const getPatrolStatusMock = vi.fn();
 const getPatrolAutonomySettingsMock = vi.fn();
 const updatePatrolAutonomySettingsMock = vi.fn();
+const createPatrolAutopilotAcknowledgementMock = vi.fn();
 const triggerPatrolRunMock = vi.fn();
 const getPatrolRunHistoryMock = vi.fn();
 const apiFetchJSONMock = vi.fn();
@@ -141,6 +142,9 @@ vi.mock('@/api/patrol', () => ({
   getPatrolStatus: (...args: unknown[]) => getPatrolStatusMock(...args),
   getPatrolAutonomySettings: (...args: unknown[]) => getPatrolAutonomySettingsMock(...args),
   updatePatrolAutonomySettings: (...args: unknown[]) => updatePatrolAutonomySettingsMock(...args),
+  createPatrolAutopilotAcknowledgement: (...args: unknown[]) =>
+    createPatrolAutopilotAcknowledgementMock(...args),
+  revokePatrolAutopilotAcknowledgement: vi.fn(),
   triggerPatrolRun: (...args: unknown[]) => triggerPatrolRunMock(...args),
   getPatrolRunHistory: (...args: unknown[]) => getPatrolRunHistoryMock(...args),
   getPatrolObjectives: vi.fn().mockResolvedValue([]),
@@ -489,6 +493,22 @@ const defaultPatrolAutonomySettings = (overrides: Record<string, unknown> = {}) 
   autonomy_level: 'monitor',
   requested_autonomy_level: 'monitor',
   effective_autonomy_level: 'monitor',
+  full_mode_unlocked: false,
+  autopilot_acknowledgement: {
+    code: 'not_requested',
+    active: false,
+    currentVersion: 1,
+    acceptedScope: [],
+    acceptedLimits: {
+      policyAllowlistRequired: true,
+      emergencyStopHonored: true,
+      approvalFloorsHonored: true,
+      verificationReconciledWhenSupported: true,
+      evidenceClassDisclosed: true,
+      inconclusiveOutcomeAllowed: true,
+      executionSuccessIsNotOutcomeTruth: true,
+    },
+  },
   investigation_budget: 15,
   investigation_timeout_sec: 300,
   ...overrides,
@@ -585,6 +605,7 @@ describe('AIIntelligence entitlement gating', () => {
     getPatrolStatusMock.mockReset();
     getPatrolAutonomySettingsMock.mockReset();
     updatePatrolAutonomySettingsMock.mockReset();
+    createPatrolAutopilotAcknowledgementMock.mockReset();
     triggerPatrolRunMock.mockReset();
     getPatrolRunHistoryMock.mockReset();
     apiFetchJSONMock.mockReset();
@@ -610,6 +631,15 @@ describe('AIIntelligence entitlement gating', () => {
     getPatrolAutonomySettingsMock.mockResolvedValue(defaultPatrolAutonomySettings());
     updatePatrolAutonomySettingsMock.mockResolvedValue({
       settings: defaultPatrolAutonomySettings(),
+    });
+    createPatrolAutopilotAcknowledgementMock.mockResolvedValue({
+      created: true,
+      acknowledgement: {
+        ...defaultPatrolAutonomySettings().autopilot_acknowledgement,
+        code: 'active',
+        active: true,
+        acknowledgementId: 'ack-test',
+      },
     });
     triggerPatrolRunMock.mockResolvedValue(undefined);
     getPatrolRunHistoryMock.mockResolvedValue([]);
@@ -1213,14 +1243,15 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.queryByRole('link', { name: 'Open Pro downloads' })).not.toBeInTheDocument();
     });
 
-    it('saves only Watch only while governed fixes are locked', async () => {
+    it('saves only Watch only, without an unlock field, while governed fixes are locked', async () => {
       useLicensedCommunityRuntime();
-      // A previous entitlement left the paid mode in memory.
+      // A previous entitlement left a paid mode and the compatibility unlock in memory.
       getPatrolAutonomySettingsMock.mockResolvedValue(
         defaultPatrolAutonomySettings({
-          autonomy_level: 'approval',
-          requested_autonomy_level: 'approval',
-          effective_autonomy_level: 'approval',
+          autonomy_level: 'assisted',
+          requested_autonomy_level: 'assisted',
+          effective_autonomy_level: 'assisted',
+          full_mode_unlocked: true,
         }),
       );
 
@@ -1234,14 +1265,17 @@ describe('AIIntelligence entitlement gating', () => {
         'aria-pressed',
         'true',
       );
-      expect(modes.getByRole('button', { name: 'Ask first' })).toBeDisabled();
-      fireEvent.click(modes.getByRole('button', { name: 'Ask first' }));
-      expect(modes.queryByRole('button', { name: 'Safe auto-fix' })).toBeNull();
-      expect(modes.queryByRole('button', { name: 'Autopilot' })).toBeNull();
+      for (const paidMode of ['Ask first', 'Safe auto-fix', 'Autopilot']) {
+        expect(modes.getByRole('button', { name: paidMode })).toBeDisabled();
+        fireEvent.click(modes.getByRole('button', { name: paidMode }));
+      }
+      expect(screen.queryByRole('dialog', { name: 'Activate Autopilot' })).toBeNull();
       expect(updatePatrolAutonomySettingsMock).not.toHaveBeenCalled();
 
       fireEvent.click(modes.getByRole('button', { name: 'Watch only' }));
 
+      // The browser sends no full_mode_unlocked field; the API clears stale
+      // unlock and Autopilot activation state on every non-Autopilot save.
       await waitFor(() => {
         expect(updatePatrolAutonomySettingsMock).toHaveBeenCalledTimes(1);
       });
@@ -1310,8 +1344,8 @@ describe('AIIntelligence entitlement gating', () => {
     });
 
     expect(screen.getByRole('button', { name: 'Ask first' })).not.toBeDisabled();
-    expect(screen.queryByRole('button', { name: 'Safe auto-fix' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Autopilot' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Safe auto-fix' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Autopilot' })).not.toBeDisabled();
     expect(
       screen.getByText(
         'Patrol checks infrastructure and reports issues only. It does not start fixes.',
@@ -1320,6 +1354,14 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText('Patrol handles')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Limits' })).not.toBeInTheDocument();
     expect(screen.queryByText('Hard limits')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Autopilot' }));
+
+    // Autopilot no longer switches directly; it opens the acknowledgement
+    // dialog and the mode stays where it was until the user records one.
+    expect(await screen.findByRole('dialog', { name: 'Activate Autopilot' })).toBeInTheDocument();
+    expect(updatePatrolAutonomySettingsMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Close Autopilot acknowledgement' }));
 
     expect(screen.getByRole('link', { name: 'Open Patrol settings' })).toHaveAttribute(
       'href',
@@ -1333,38 +1375,54 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
   });
 
-  it('reconciles Patrol mode from the authoritative GET after a compact paid-runtime receipt', async () => {
+  it('reconciles Autopilot from the authoritative GET after a compact paid-runtime receipt', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
     getPatrolAutonomySettingsMock.mockImplementation(async () =>
       updatePatrolAutonomySettingsMock.mock.calls.length > 0
         ? defaultPatrolAutonomySettings({
-            autonomy_level: 'approval',
-            requested_autonomy_level: 'approval',
-            effective_autonomy_level: 'approval',
+            autonomy_level: 'full',
+            requested_autonomy_level: 'full',
+            effective_autonomy_level: 'full',
+            full_mode_unlocked: true,
+            autopilot_acknowledgement: {
+              ...defaultPatrolAutonomySettings().autopilot_acknowledgement,
+              code: 'active',
+              active: true,
+              acknowledgementId: 'ack-test',
+            },
           })
         : defaultPatrolAutonomySettings(),
     );
     // The private paid runtime returns this intentionally compact receipt.
-    // Effective mode truth comes from the following GET.
+    // Effective mode and acknowledgement truth come from the following GET.
     updatePatrolAutonomySettingsMock.mockResolvedValue({
       success: true,
-      settings: { autonomy_level: 'approval' },
+      settings: {
+        autonomy_level: 'full',
+        full_mode_unlocked: true,
+      },
     });
 
     render(() => <AIIntelligence />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ask first' }));
+    const autopilotButton = await screen.findByRole('button', { name: 'Autopilot' });
+    fireEvent.click(autopilotButton);
+    fireEvent.click(
+      await screen.findByRole('checkbox', {
+        name: /I understand and accept these Autopilot limits/,
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Record acknowledgement and activate' }));
 
     await waitFor(() => {
       expect(updatePatrolAutonomySettingsMock).toHaveBeenCalledWith(
-        expect.objectContaining({ autonomy_level: 'approval' }),
+        expect.objectContaining({ autonomy_level: 'full', acknowledgement_id: 'ack-test' }),
       );
       expect(getPatrolAutonomySettingsMock.mock.calls.length).toBeGreaterThan(1);
-      expect(screen.getByRole('button', { name: 'Ask first' })).toHaveAttribute(
-        'aria-pressed',
-        'true',
+      expect(notificationSuccessMock).toHaveBeenCalledWith(
+        'Autopilot acknowledgement recorded and mode activated.',
       );
       expect(notificationErrorMock).not.toHaveBeenCalled();
     });
@@ -2038,8 +2096,8 @@ describe('AIIntelligence entitlement gating', () => {
       ),
     ).toBeInTheDocument();
     expect(patrolControl.getByRole('button', { name: 'Ask first' })).not.toBeDisabled();
-    expect(patrolControl.queryByRole('button', { name: 'Safe auto-fix' })).toBeNull();
-    expect(patrolControl.queryByRole('button', { name: 'Autopilot' })).toBeNull();
+    expect(patrolControl.getByRole('button', { name: 'Safe auto-fix' })).not.toBeDisabled();
+    expect(patrolControl.getByRole('button', { name: 'Autopilot' })).not.toBeDisabled();
     expect(patrolControl.queryByRole('button', { name: 'Limits' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Current mode:/)).not.toBeInTheDocument();
     expect(screen.queryByText('Patrol status')).not.toBeInTheDocument();

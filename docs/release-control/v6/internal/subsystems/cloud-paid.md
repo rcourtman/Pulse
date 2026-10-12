@@ -1516,15 +1516,6 @@ its estate is, and no estate data crosses the bootstrap.
     scope-limited session even when kiosk is off.
 ## Current State
 
-### Pro copy names Ask first only (2026-10-12)
-
-Patrol's Safe auto-fix and Autopilot modes were retired, so
-`frontend-modern/src/utils/selfHostedPlans.ts` no longer advertises them: the
-Pro entitlement summary names "Patrol Ask first mode (investigations and
-approved fixes)", and the comparison copy says Patrol proposes fixes the
-operator approves, then verifies the result. The `ai_autofix` capability key
-and its licence-server display name are unchanged.
-
 The approved commercial contract is recorded in
 `docs/release-control/v6/internal/records/commercial-offer-lifecycle-contract-2026-07-14.md`.
 The local self-hosted license server now has an atomic commercial projection

@@ -1425,24 +1425,3 @@ func TestSendAllowsRedirectedEndpointUnderTest(t *testing.T) {
 		t.Fatalf("redirected endpoint received %d pings, want 1", got)
 	}
 }
-
-// TestPatrolAutonomyTelemetryReportsOnlyCurrentModes pins the privacy
-// contract after Patrol's Safe auto-fix (assisted) and Autopilot (full) modes
-// were retired: an install reports only monitor or approval, whatever value
-// reaches the normalizer.
-func TestPatrolAutonomyTelemetryReportsOnlyCurrentModes(t *testing.T) {
-	cases := map[string]string{
-		"approval":   "approval",
-		" Approval ": "approval",
-		"monitor":    "monitor",
-		"":           "monitor",
-		"assisted":   "monitor",
-		"full":       "monitor",
-		"autonomous": "monitor",
-	}
-	for in, want := range cases {
-		if got := NormalizePatrolAutonomyLevelForTelemetry(in); got != want {
-			t.Errorf("NormalizePatrolAutonomyLevelForTelemetry(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
