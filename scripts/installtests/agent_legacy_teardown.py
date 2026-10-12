@@ -44,7 +44,12 @@ v = json.loads(path.read_text())
 role, a = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
 fault = v['fault']
 remote = (root / 'events').exists() and 'remote:remove' in (root / 'events').read_text()
-def save(): path.write_text(json.dumps(v))
+def save():
+    # The production operation is bounded by timeout. A killed model writer
+    # must not truncate the observation record used to judge retained files.
+    pending = root / 'model.pending'
+    pending.write_text(json.dumps(v))
+    pending.replace(path)
 def event(s):
     with (root / 'events').open('a') as f: f.write(s + '\n')
 if role == 'ps':
@@ -195,7 +200,9 @@ uninstall_collector_registration() {
     python3 - <<'END'
 import json, os, pathlib
 p = pathlib.Path(os.environ['FIXTURE']) / 'model.json'; v = json.loads(p.read_text())
-if v['fault'] == 'refused-stop-after-remote': v['state'] = 'started'; p.write_text(json.dumps(v))
+if v['fault'] == 'refused-stop-after-remote':
+    v['state'] = 'started'
+    pending = p.parent / 'model.pending'; pending.write_text(json.dumps(v)); pending.replace(p)
 END
     [[ "$REPLY" == confirmed ]]
 }
@@ -234,7 +241,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
     def snapshot(root):
         result = {}
         for p in root.rglob("*"):
-            if p.name in ("model.json", "events", "timed-pid") or "tools" in p.parts: continue
+            if p.name in ("model.json", "model.pending", "events", "timed-pid") or "tools" in p.parts: continue
             info = p.lstat()
             data = os.readlink(p) if stat.S_ISLNK(info.st_mode) else (p.read_bytes() if stat.S_ISREG(info.st_mode) else None)
             result[str(p.relative_to(root))] = (info.st_mode, info.st_ino, data)
