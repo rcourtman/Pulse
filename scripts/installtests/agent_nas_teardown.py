@@ -83,6 +83,9 @@ if role == 'kill':
     assert len(args) == 2 and args[0] == '-TERM', args
     pid = int(args[1]); assert pid in (100, 101), 'unrelated process signalled'
     event('signal:' + str(pid))
+    boot = root / ('flash/autorun.sh' if v['platform'] == 'QNAP' else 'go')
+    active = boot.exists() and '# Pulse Agent' in boot.read_text()
+    event('boot:present-at-signal' if active else 'boot:absent-at-signal')
     if fault == 'refused-watchdog-stop' and pid == 100: sys.exit(1)
     if fault == 'refused-collector-stop' and pid == 101: sys.exit(1)
     if pid == 100 and fault != 'ignored-watchdog-stop': v['watchdog'] = False
@@ -203,6 +206,7 @@ truenas_scale_agent_removal_present() { return 1; }
 collector_credential_state_present() { [[ -e "$STATE_DIR/runtime.token" ]]; }
 uninstall_collector_registration() {
     printf 'remote:remove\n' >> "$EVENTS"
+    python3 -c 'import json,os,pathlib; r=pathlib.Path(os.environ["FIXTURE"]); v=json.loads((r/"model.json").read_text()); b=r/("flash/autorun.sh" if v["platform"]=="QNAP" else "go"); e=[]; e += ["remote:processes-active"] if v["watchdog"] or v["collector"] else []; e += ["remote:boot-present"] if b.exists() and "# Pulse Agent" in b.read_text() else []; f=(r/"events").open("a"); f.write("\n".join(e)+("\n" if e else "")); f.close()'
     if [[ "$FAULT" == late-boot ]]; then
         cp "$NAS_REMOVAL_BOOT_RECOVERY/original" "$BOOT_PATH"
     elif [[ "$FAULT" == late-process ]]; then
@@ -332,6 +336,9 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                 self.assertLess(r[2].index('signal:101'), r[2].index('remote:remove'))
                 self.assertLess(r[2].index('remote:remove'), r[2].index('state:remove'))
                 self.assertNotIn('unchecked:process-stop', r[2]); self.assertFalse(r[5]['watchdog'] or r[5]['collector'])
+                self.assertEqual(r[2].count('boot:absent-at-signal'), 2)
+                for illegal in ('boot:present-at-signal', 'remote:processes-active', 'remote:boot-present'):
+                    self.assertNotIn(illegal, r[2])
                 for key in ('unrelated', 'legacy', 'legacy/telegraf'): self.assertEqual(r[3][key], r[4][key])
                 self.assertIn(b'bash /other/start-pulse-agent-prod.sh\n', r[6]); self.assertIn(b'echo after\n', r[6])
                 self.assertNotIn(b'# Pulse Agent\n', r[6]); self.assertNotIn(b'# Pulse Agent bootstrap', r[6]); self.assertEqual(r[8], {})
