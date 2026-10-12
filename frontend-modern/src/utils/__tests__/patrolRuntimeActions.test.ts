@@ -3,11 +3,31 @@ import {
   getPatrolProviderSettingsAction,
   getPatrolSetupAction,
   getPatrolSetupHint,
+  isPatrolConfigLevelCause,
+  isPatrolConnectCause,
   PATROL_BUDGET_EXHAUSTED_CAUSE,
   PATROL_PROVIDER_SETTINGS_ACTION,
 } from '@/utils/patrolRuntimeActions';
 
 describe('patrolRuntimeActions', () => {
+  it('names the causes the Patrol page can fix in place by connecting a provider', () => {
+    expect(isPatrolConfigLevelCause('provider_not_configured')).toBe(true);
+    expect(isPatrolConfigLevelCause('assistant_disabled')).toBe(true);
+    expect(isPatrolConfigLevelCause('provider_auth')).toBe(false);
+    expect(isPatrolConnectCause('provider_auth')).toBe(true);
+    expect(isPatrolConnectCause('provider_not_configured')).toBe(true);
+    expect(isPatrolConnectCause('model_unsupported_tools')).toBe(false);
+    for (const cause of [
+      'model_unsupported_tools',
+      PATROL_BUDGET_EXHAUSTED_CAUSE,
+      'none',
+      '',
+      undefined,
+    ]) {
+      expect(isPatrolConfigLevelCause(cause)).toBe(false);
+    }
+  });
+
   it('centralizes the Patrol provider settings action', () => {
     expect(PATROL_PROVIDER_SETTINGS_ACTION).toEqual({
       label: 'Check Patrol model',
@@ -20,7 +40,8 @@ describe('patrolRuntimeActions', () => {
   });
 
   it('routes config-level causes to Provider & Models instead of the model check', () => {
-    for (const cause of ['assistant_disabled', 'provider_not_configured']) {
+    // A refused key is fixed where the key lives, not by re-running the model check.
+    for (const cause of ['assistant_disabled', 'provider_not_configured', 'provider_auth']) {
       expect(getPatrolSetupAction(cause)).toEqual({
         label: 'Open Provider & Models',
         href: '/settings/pulse-intelligence/provider',

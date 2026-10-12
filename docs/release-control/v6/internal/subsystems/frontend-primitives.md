@@ -20,6 +20,14 @@
 
 ## Purpose
 
+### Patrol setup panel uses existing form primitives
+
+`PatrolSetupPanel.tsx` builds the provider choice from `SelectionCardGroup`
+(compact), the inputs from the shared form classes, results from
+`InlineNotice`, and actions from `Button`. It adds no shared primitive; at
+phone width the cards stack two per row and the action buttons keep 44px
+targets.
+
 ### Patrol header default-mode notice uses existing primitives
 
 The Pro default notice in `PatrolIntelligenceHeader.tsx` is a `role="status"`

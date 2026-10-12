@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Patrol setup panel reuses existing AI endpoints
+
+The Patrol page setup panel adds no endpoint or payload field. It calls
+`PUT /api/settings/ai/update` (provider key or Ollama URL with `enabled`,
+then `patrol_model`, `model` only when empty, and `patrol_interval_minutes`
+only when the cost model slows the untouched default), `POST
+/api/ai/test/{provider}`, `GET /api/ai/models`, `GET
+/api/ai/patrol/model-guidance`, `GET /api/ai/patrol/cost-preview` and `POST
+/api/ai/patrol/readiness`, with the same meanings Provider & Models and
+Patrol settings rely on.
+
 ### Patrol autonomy reports the Pro default
 
 `GET /api/ai/patrol/autonomy` adds `default_mode_applied`. It is true only when

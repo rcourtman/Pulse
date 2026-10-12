@@ -15,6 +15,38 @@
 
 ## Purpose
 
+### One-page Patrol setup on the Patrol page
+
+When Patrol is blocked because no provider is connected, Pulse Intelligence
+is off, or the provider refused the saved key (`provider_auth`),
+`PatrolIntelligenceWorkspace.tsx` shows `PatrolSetupPanel.tsx` inside the
+setup card instead of a link to Provider & Models. The panel covers the two
+routes most paid installs use: a cloud API key (Anthropic, OpenAI, Gemini,
+DeepSeek, OpenRouter) or Ollama. It names the model Pulse will use from the
+Patrol model guidance table and prices it with the cost preview before
+anything is saved, at the schedule it will save: a per-token model on the
+untouched 6-hour default gets the same slower schedule picking it on Patrol
+settings proposes. Connect writes the key or Ollama URL with `enabled: true`,
+runs the provider test that Provider & Models runs (the model list hides a
+refused key behind an empty list; only a `provider_*` cause stops setup,
+because the test probes the provider's default model and a model-level cause
+is what setup is about to replace), picks the guided model from the
+provider's own list (best guidance level, undated alias first, never a
+caution model), saves it as the Patrol model (and as the shared model only
+when there is none), then runs the Patrol model check and shows its verdict.
+Ready means the check verified a Patrol mode; the panel then offers `Run
+Patrol now`, which re-reads Patrol state before the run gate. Once started,
+the panel stays mounted until the operator finishes, because polling flips
+the readiness cause mid-setup. The saved key is cleared from the page after
+connect. Subscription CLIs, custom endpoints, other providers and model
+overrides stay on Provider & Models, linked from the panel. `provider_auth`
+also routes the setup action to Provider & Models instead of the model check.
+`patrolSetupModel.ts` holds the pure decisions. Proofs:
+`frontend-modern/src/features/patrol/__tests__/patrolSetupModel.test.ts`,
+`frontend-modern/src/features/patrol/__tests__/PatrolSetupPanel.render.test.tsx`,
+`frontend-modern/src/features/patrol/__tests__/patrolControlPresentation.test.ts`
+and `frontend-modern/src/utils/__tests__/patrolRuntimeActions.test.ts`.
+
 ### Pro default notice and the not-running header
 
 A Pro install that never chose a Patrol mode runs Ask first.
@@ -148,6 +180,8 @@ sources, and retains the note as operator context.
 37. `frontend-modern/src/features/patrol/patrolHomePresentation.ts`
 38. `frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx`
 39. `frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx`
+40. `frontend-modern/src/features/patrol/PatrolSetupPanel.tsx`
+41. `frontend-modern/src/features/patrol/patrolSetupModel.ts`
 
 ## Shared Boundaries
 

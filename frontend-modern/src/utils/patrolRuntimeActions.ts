@@ -15,6 +15,18 @@ export const PATROL_PROVIDER_SETTINGS_ACTION: PatrolRuntimeActionPresentation = 
 // Provider & Models, where the enable toggle and API key / Ollama fields live.
 const PATROL_CONFIG_LEVEL_CAUSES = new Set(['assistant_disabled', 'provider_not_configured']);
 
+/** True when Patrol is blocked because no provider is connected or AI is off. */
+export const isPatrolConfigLevelCause = (cause?: string): boolean =>
+  !!cause && PATROL_CONFIG_LEVEL_CAUSES.has(cause);
+
+// The provider refused the saved key. Reconnecting fixes it, so the Patrol
+// page offers its setup panel rather than the model check.
+export const PATROL_PROVIDER_AUTH_CAUSE = 'provider_auth';
+
+/** True when the Patrol page's own setup panel is the fix for the block. */
+export const isPatrolConnectCause = (cause?: string): boolean =>
+  isPatrolConfigLevelCause(cause) || cause === PATROL_PROVIDER_AUTH_CAUSE;
+
 export const getPatrolProviderSettingsAction = (): PatrolRuntimeActionPresentation => ({
   ...PATROL_PROVIDER_SETTINGS_ACTION,
 });
@@ -28,7 +40,7 @@ export const getPatrolSetupAction = (cause?: string): PatrolRuntimeActionPresent
   if (cause === PATROL_BUDGET_EXHAUSTED_CAUSE) {
     return { label: 'Raise the cost budget', href: settingsTabPath('system-ai') };
   }
-  if (cause && PATROL_CONFIG_LEVEL_CAUSES.has(cause)) {
+  if (isPatrolConnectCause(cause)) {
     return { label: 'Open Provider & Models', href: settingsTabPath('system-ai') };
   }
   return { ...PATROL_PROVIDER_SETTINGS_ACTION };
@@ -40,7 +52,7 @@ export const getPatrolSetupHint = (cause?: string): string => {
   if (cause === PATROL_BUDGET_EXHAUSTED_CAUSE) {
     return '';
   }
-  if (cause && PATROL_CONFIG_LEVEL_CAUSES.has(cause)) {
+  if (isPatrolConnectCause(cause)) {
     return '';
   }
   return 'Open Patrol settings and run the model check. Provider connectivity can be healthy even when the selected model cannot use Patrol tools.';

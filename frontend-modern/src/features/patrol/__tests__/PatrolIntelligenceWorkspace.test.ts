@@ -27,6 +27,22 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
     expect(workspaceSource).not.toContain('trust.dismissed_as_noise');
   });
 
+  it('connects a provider in place for config-level causes and keeps setup through polling', () => {
+    expect(workspaceSource).toContain(
+      'when={setupPanelActive() || isPatrolConnectCause(setupCause())}',
+    );
+    expect(workspaceSource).toContain('<PatrolSetupPanel');
+    expect(workspaceSource).toContain('getPatrolSetupInitialProvider(');
+    expect(workspaceSource).toContain('(state.shouldShowPatrolSetupOnly() || setupPanelActive())');
+    // The first run waits for readiness to be re-read, or the run gate stays shut.
+    expect(workspaceSource).toContain(
+      'void state.handleRefreshPatrol().then(() => state.handleRunPatrol());',
+    );
+    expect(workspaceSource).toContain(
+      "setupPanelActive() ? 'Set up Patrol' : 'Patrol cannot run yet'",
+    );
+  });
+
   it('does not invent trust signals not on FindingsTrustSummary', () => {
     // No mention of arbitrary keys like "patrol_score" or "health_grade".
     expect(workspaceSource).not.toMatch(/trust\.patrol_score/);
