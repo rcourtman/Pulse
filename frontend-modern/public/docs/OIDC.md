@@ -29,9 +29,10 @@ successful sign-in or administrator access.
    the [HTTPS/proxy configuration](REVERSE_PROXY.md#before-configuring-the-proxy)
    before signing in, without disabling certificate or origin checks.
 4. **Verify without replacing the working login.** In a separate browser
-   session, sign in as an intended administrator and check access to Security
-   settings. Where you already have suitable users, also check an intended
-   non-admin's read-only access and refusal for an excluded user. Do not change
+   session, sign in as an intended administrator and check administrator controls
+   in Security settings. Where you already have suitable users, also check that
+   an intended non-admin cannot use administrator controls and that an excluded
+   user is refused. Do not change
    settings to test privileges. A successful provider **Test** checks discovery,
    not the callback, user claims or resulting permissions. Keep the independent
    administrator path until these checks pass; do not clear restrictions to

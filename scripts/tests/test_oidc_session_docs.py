@@ -30,6 +30,7 @@ def assert_callback_setup(case, guide):
     case.assertEqual(positions, sorted(positions))
     for marker in ("Show access restrictions & role mapping", "New UI providers are enabled on save",
                    "do not register a guessed ID", "not the callback, user claims",
+                   "an intended non-admin cannot use administrator controls",
                    "does not create or restore local credentials"):
         case.assertIn(marker, setup)
 
