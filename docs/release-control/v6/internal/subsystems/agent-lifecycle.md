@@ -30,12 +30,24 @@ state as before; confirmation does not widen trusted path-removal authority.
 Credential-free removal remains local-only, with or without a saved URL.
 
 `TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing` runs the
-production admission, credential-presence, record-confirmation and initial
-state-directory cleanup functions through `agent_uninstall_state.py`. Its
-seventeen confined cases use private files and service/transport doubles,
-not a privileged installer or native service manager. These checks do not
+production argument parser, token-file ingress, admission, credential-presence,
+record-confirmation and initial state-directory cleanup through
+`agent_uninstall_state.py`. Its forty-eight confined cases use private files
+and service/transport doubles, not a privileged installer or native service
+manager. The legacy shell reader's root ownership is projected onto the private
+fixture owner; root refusal runs as the ordinary proof user. These checks do not
 establish Windows, actual TLS, saved-state discovery, a published fix or
 whole-issue installed removal acceptance.
+
+Reading `--token-file` is read-only, including in non-interactive mode and
+before permission checks. Supplying a credential does not grant ownership of
+its file: a missing URL, root refusal, refused or unknown server result, or
+identity mismatch cannot erase it. Confirmed removal retains a caller-owned
+file outside the authorised runtime state directory; tokens inside that state
+are removed only by its existing post-confirmation path-authorised cleanup.
+Installer-created temporary credentials still belong to the installer cleanup
+trap. Generated setup commands already remove their own private bootstrap
+files; this does not remove that caller-owned cleanup or widen token/TLS trust.
 
 
 ### Selected agent credential files retain their own authority
