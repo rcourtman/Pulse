@@ -5003,7 +5003,7 @@ func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 		if entry.fetchedAt.After(activityAt) {
 			activityAt = entry.fetchedAt // Also supports legacy/seeded cache entries.
 		}
-		if !m.guestMetadataInFlight[key] && now.Sub(activityAt) > maxAge {
+		if m.guestMetadataInFlight[key] == nil && now.Sub(activityAt) > maxAge {
 			delete(m.guestMetadataCache, key)
 			log.Debug().
 				Str("key", key).
@@ -5014,13 +5014,13 @@ func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 	m.guestMetadataMu.Unlock()
 
 	for key, accessedAt := range m.guestMetadataLastAccess {
-		if !m.guestMetadataInFlight[key] && now.Sub(accessedAt) > maxAge {
+		if m.guestMetadataInFlight[key] == nil && now.Sub(accessedAt) > maxAge {
 			delete(m.guestMetadataLastAccess, key)
 		}
 	}
 	for key, nextAllowed := range m.guestMetadataLimiter {
 		// Keep near-term limiter state; remove long-idle keys.
-		if !m.guestMetadataInFlight[key] && now.Sub(nextAllowed) > maxAge {
+		if m.guestMetadataInFlight[key] == nil && now.Sub(nextAllowed) > maxAge {
 			delete(m.guestMetadataLimiter, key)
 			log.Debug().
 				Str("key", key).

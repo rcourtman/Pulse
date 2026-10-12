@@ -971,6 +971,28 @@ cache invalidation on agent unavailability also discards its obsolete scheduling
 deadline, so a later available poll can begin a fresh metadata lifecycle; it
 never discards an outstanding fetch owner or the shared Proxmox command fence.
 
+Invalidation and PVE instance retirement also cancel that owner's context and
+mark its lifecycle obsolete until the fetch actually returns. A late network,
+OS or version reply cannot recreate identity, OS-command suppression, useful/OS
+evidence or refresh/backoff deadlines after either operation. Publication and
+invalidation share one lock order, and fallback metadata is re-read within the
+reserved lifecycle rather than copied from the pre-admission cache snapshot.
+Slot waiting is cancelled without releasing another fetch's slot. Cancellation
+is not proof that a consumed QGA command stopped: the existing shared transport
+uncertainty fence still applies to new polling and independent diagnostics.
+There are no persistent generation tombstones; the invalidated owner is removed
+only on completion. Other instance/VM keys and ordinary new-lifecycle discovery
+remain independent.
+
+`guest_metadata_lifecycle_test.go` covers late synthetic replies at every
+enrichment stage, cold/retained caches, explicit invalidation/retirement, late
+OS-suppression/version-deferral publication, slot waiting and independent
+new-lifecycle recovery. Direct and cluster HTTP clients cover cancellation of
+consumed incomplete bodies, no further commands, preserved diagnostic/caller
+cooldown and independent VM discovery, without shortening or replaying that
+fence. These are source lifecycle/safety controls, not native thaw, restart or
+every-volume/History recovery evidence.
+
 `guest_metadata_reservation_test.go` exercises real HTTP enrichment with cold
 and retained caches, active and expired scheduling holds, early unverified-lock
 and cancelled-slot exits, independent VMs and ordinary resumption. The existing
