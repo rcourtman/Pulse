@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "123652e29bf2598fca65ddbc2d543789919beb53",
+  "verified_at": "2026-10-12T09:33:16Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/memoryObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/memoryObservation.ts": "ea36675771aed0b5ba55f7f6ad69a58ccbf5153d75592e55a7ac8720a8993a59"
+  },
+  "routes": [
+    "/tmp/memory-setup-safety/index.html",
+    "/tmp/memory-setup-safety/index.html?lxc"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production useWorkloads canonical snapshot mapper, GuestRow, GuestDrawer and CSS with synthetic VM/LXC snapshots; no native guest operation",
+    "Current cache-inclusive memory retains the 94% reading and original source/time; setup precaution precedes conditional advice",
+    "Backup-active, last-known and freshness-unknown readings retain the precaution; advancing Last seen cannot renew memory",
+    "Unavailable is N/A with no setup note; measured zero remains current; a cache-aware agent removes the unneeded note",
+    "VM guidance keeps QEMU Linux-only; container guidance suggests Pulse only; no pressure or guaranteed recovery claim"
+  ],
+  "interactions": [
+    "Chromium 141.0.7390.37 desktop light: keyboard row disclosure/control activation and real memory-bar pointer tooltip",
+    "WebKit 26.0 phone dark: touch row expansion and snapshot controls; visible stacked About this reading note",
+    "40 grouped checks, 12 captures inspected, no overflow/page or console errors/API writes/external requests; browser and server closed"
+  ]
+}

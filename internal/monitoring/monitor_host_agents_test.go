@@ -31,6 +31,33 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
+func TestGuestPollOwnershipRuntimeDoesNotWithdrawIndependentAgentEvidence(t *testing.T) {
+	c := &guestPollOwnershipClient{cpu: .1}
+	m := guestPollOwnershipMonitor(t, c)
+	m.state.UpsertHost(models.Host{ID: "independent", Hostname: "agent", Status: "online", LastSeen: time.Now(), Memory: models.Memory{Total: 1000, Used: 300, Free: 700, Usage: 30}})
+	hosts := m.state.GetSnapshot().Hosts
+	key := guestMetadataCacheKey("site-a", "node", 105)
+	metadata := guestMetadataCacheEntry{osName: "OpenBSD", osInfoFailureCount: guestAgentOSInfoFailureThreshold, osInfoSkip: true, fetchedAt: time.Now().Add(-time.Minute)}
+	m.guestMetadataCache = map[string]guestMetadataCacheEntry{key: metadata}
+	memKey := guestMemoryCacheKey("site-a", "node", 105)
+	memory := agentMemCacheEntry{info: memoryLifecycleSample(4096), fetchedAt: time.Now().Add(-time.Minute)}
+	m.vmAgentMemCache = map[string]agentMemCacheEntry{memKey: memory}
+	ctx, owner := m.beginPVEGuestPoll(context.Background(), "site-a", c)
+	if owner == nil {
+		t.Fatal("registered cycle not admitted")
+	}
+	defer m.finishPVEGuestPoll("site-a", owner)
+	stagePVEGuestEffect(ctx, func() { m.recordGuestSnapshot("site-a", "qemu", "node", 105, GuestMemorySnapshot{Name: "obsolete"}) })
+	m.setRuntimeContext(context.Background(), nil)
+	m.publishPVEGuests(ctx, "site-a", nil, nil)
+	if owner.ctx.Err() == nil || len(m.GetDiagnosticSnapshots().Guests) != 0 || !reflect.DeepEqual(m.state.GetSnapshot().Hosts, hosts) {
+		t.Fatal("runtime withdrawal admitted obsolete guest evidence or withdrew independent agent memory")
+	}
+	if !reflect.DeepEqual(m.guestMetadataCache[key], metadata) || m.vmAgentMemCache[memKey] != memory {
+		t.Fatal("runtime withdrawal erased OS-command safety or renewed accepted cache age")
+	}
+}
+
 func TestNewMonitorRoutesStartupCustomSensorWarningBeforeStart(t *testing.T) {
 	monitor, err := New(&config.Config{DataPath: t.TempDir()})
 	if err != nil {

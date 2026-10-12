@@ -1306,6 +1306,8 @@ type Monitor struct {
 	mockUnifiedViewFixtureAt   time.Time // fixture freshness the published view was built from
 	mockUnifiedViewValid       bool
 	pveClients                 map[string]PVEClientInterface
+	pveGuestPublicationMu      sync.RWMutex             // Orders guest publication with connection/runtime replacement and retirement.
+	pveGuestPolls              map[string]*pveGuestPoll // Guarded by m.mu; canceled cycles retain ownership until completion unless the binding ends.
 	pbsClients                 map[string]*pbs.Client
 	pmgClients                 map[string]*pmg.Client
 	availabilityStatuses       map[string]AvailabilityProbeStatus
@@ -1504,8 +1506,13 @@ type Monitor struct {
 }
 
 func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
+	m.pveGuestPublicationMu.Lock()
+	defer m.pveGuestPublicationMu.Unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	for name := range m.pveGuestPolls {
+		m.cancelPVEGuestPollLocked(name)
+	}
 	// A new runtime invalidates detached replication reads even when the old
 	// caller has not yet canceled its parent context.
 	for name, poll := range m.pveReplicationPolls {

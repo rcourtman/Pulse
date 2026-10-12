@@ -7297,3 +7297,41 @@ and never queue behind a warm ingest; a cold read still builds its first registr
 consume-once replacement-store controls, refused and skipped drains, read-provider
 re-entry, and duplicate/loss assertions, alongside the original initialization,
 tenant withdrawal, saved first-alert policy and joined-shutdown controls.
+
+### Guest-cycle publication ownership (12 October 2026)
+
+The production guest cycle stages diagnostic snapshots, alert evaluations,
+backup-template eligibility and History until both VM/container collections are
+ready. It admits publication only while its registered PVE client and cycle
+remain current. Retirement, transport replacement and a new runtime cancel
+outstanding guest cycles and order their state changes against any already
+admitted publication; late inventories/details cannot recreate or erase the
+replacement's guest readings. An interrupted inventory does not grant fallback.
+One cycle per live binding owns collection until it completes, including when
+its caller is cancelled. Another connection can still advance independently.
+
+Deep-enrichment/caller-deadline expiry is distinct from explicit parent-cycle
+cancellation: already collected authoritative inventory still publishes even
+when local assembly outlasts the caller budget. No new read or fallback is
+admitted after deadline expiry. An
+accepted collection retains existing failed-node/grace rules, empty-inventory
+handling and metric/source/age policy. Focused builder and collector entry points
+retain their existing immediate effects. No guest operation lock, consumed-read
+uncertainty, timeout, permission, TLS policy or automatic retry is relaxed.
+Client replacement is not a guest reboot and does not erase accepted cache age
+or OS-command safety state. Remote collection holds no publication lock; effects
+run without the monitor state mutex held. The guest publication gate does not
+claim ownership of node, storage, backup-job or native Docker-command collection.
+
+`guest_poll_ownership_test.go`, `diagnostic_snapshots_test.go`,
+`monitor_host_agents_test.go`, `proxmox_guest_snapshot_coherence_test.go` and
+`proxmox_large_cluster_poll_budget_test.go` cover late replies on both enumeration
+routes, cancellation/retirement/runtime/client changes, complete staged readings,
+History and breach continuity, independent agents, single-flight/recovery,
+retirement ordering and bounded-detail inventory. These are controlled source
+proofs, not native restart, independent thaw, installed or release acceptance.
+
+The canonical Docker-ingest source guard follows both guest enumeration routes
+through `publishPVEGuests` to the canonical state update. Publication reconciliation
+updates its former direct-call assertions without changing Docker ingestion or
+the runtime ownership gate; the behavioral withdrawal controls remain required.

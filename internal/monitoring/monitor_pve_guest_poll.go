@@ -53,7 +53,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		log.Debug().Err(err).Str("instance", instanceName).Msg("cluster/resources not available, falling back to traditional polling")
 		return false
 	}
-	m.updatePVEBackupTemplateSubjectsFromClusterResources(instanceName, resources)
+	stagePVEGuestEffect(ctx, func() { m.updatePVEBackupTemplateSubjectsFromClusterResources(instanceName, resources) })
 	enrichmentCtx, cancelEnrichment := pveGuestEnrichmentContext(ctx)
 	defer cancelEnrichment()
 
@@ -81,9 +81,8 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	// Publish the complete guest generation only after both VM and container
 	// collection/enrichment has finished. Empty authoritative results still
 	// remove genuinely deleted guests.
-	m.state.UpdateGuestsForInstance(instanceName, allVMs, allContainers)
-
-	m.recordGuestMetrics(allVMs, allContainers, cycleStart)
+	stagePVEGuestEffect(ctx, func() { m.recordGuestMetrics(allVMs, allContainers, cycleStart) })
+	m.publishPVEGuests(ctx, instanceName, allVMs, allContainers)
 
 	log.Debug().
 		Str("instance", instanceName).
@@ -387,22 +386,24 @@ func (m *Monitor) handleClusterVMResource(
 	}
 
 	// Trigger guest metadata migration if old format exists
-	if m.guestMetadataStore != nil {
-		m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, res.Node, res.VMID)
-	}
+	stagePVEGuestEffect(ctx, func() {
+		if m.guestMetadataStore != nil {
+			m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, res.Node, res.VMID)
+		}
 
-	m.recordGuestSnapshot(instanceName, vm.Type, res.Node, res.VMID, GuestMemorySnapshot{
-		Name:           vm.Name,
-		Status:         vm.Status,
-		RetrievedAt:    sampleTime,
-		MemorySource:   memorySource,
-		FallbackReason: guestMemoryFallbackReason(memorySource),
-		Memory:         vm.Memory,
-		Raw:            guestRaw,
-		Notes:          snapshotNotes,
+		m.recordGuestSnapshot(instanceName, vm.Type, res.Node, res.VMID, GuestMemorySnapshot{
+			Name:           vm.Name,
+			Status:         vm.Status,
+			RetrievedAt:    sampleTime,
+			MemorySource:   memorySource,
+			FallbackReason: guestMemoryFallbackReason(memorySource),
+			Memory:         vm.Memory,
+			Raw:            guestRaw,
+			Notes:          snapshotNotes,
+		})
+
+		m.checkGuestAlertsForVM(instanceName, vm)
 	})
-
-	m.checkGuestAlertsForVM(instanceName, vm)
 
 	return vm, true
 }
@@ -422,21 +423,23 @@ func (m *Monitor) handleClusterContainerResource(
 	}
 
 	// Trigger guest metadata migration if old format exists
-	if m.guestMetadataStore != nil {
-		m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, res.Node, res.VMID)
-	}
+	stagePVEGuestEffect(ctx, func() {
+		if m.guestMetadataStore != nil {
+			m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, res.Node, res.VMID)
+		}
 
-	m.recordGuestSnapshot(instanceName, container.Type, res.Node, res.VMID, GuestMemorySnapshot{
-		Name:           container.Name,
-		Status:         container.Status,
-		RetrievedAt:    sampleTime,
-		MemorySource:   memorySource,
-		FallbackReason: guestMemoryFallbackReason(memorySource),
-		Memory:         container.Memory,
-		Raw:            guestRaw,
+		m.recordGuestSnapshot(instanceName, container.Type, res.Node, res.VMID, GuestMemorySnapshot{
+			Name:           container.Name,
+			Status:         container.Status,
+			RetrievedAt:    sampleTime,
+			MemorySource:   memorySource,
+			FallbackReason: guestMemoryFallbackReason(memorySource),
+			Memory:         container.Memory,
+			Raw:            guestRaw,
+		})
+
+		m.alertManager.CheckGuest(container, instanceName)
 	})
-
-	m.alertManager.CheckGuest(container, instanceName)
 
 	return container, true
 }

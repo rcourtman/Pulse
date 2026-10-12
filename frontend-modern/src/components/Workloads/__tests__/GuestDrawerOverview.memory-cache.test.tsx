@@ -79,6 +79,9 @@ describe('guest drawer cache-inclusive memory note', () => {
     expect(note).toHaveTextContent('a high percentage alone does not mean it is short of memory');
     expect(note).toHaveTextContent('Pulse agent in the VM');
     expect(note).toHaveTextContent('QEMU guest agent on a Linux VM');
+    expect(note).toHaveTextContent(
+      'Defer agent setup, restarts and live guest-agent probes during backups or a guest incident.',
+    );
   });
 
   it('follows the guest when a better source replaces the cache-inclusive one', () => {
@@ -112,6 +115,23 @@ describe('guest drawer cache-inclusive memory note', () => {
     const note = screen.getByText('About this reading').closest('tr')!;
     expect(note).toHaveTextContent('Pulse agent in the container');
     expect(note).not.toHaveTextContent('QEMU');
+    expect(note).toHaveTextContent('during backups or a guest incident');
+  });
+
+  it('does not remove the setup precaution when a backup ends or the reading becomes retained', () => {
+    const [value, setValue] = createSignal(
+      guest('status-mem', { backupInProgress: true, diskStatusReason: 'prev-vm-locked' }),
+    );
+    render(() => <GuestDrawerOverview {...overviewProps(value())} />);
+    const note = () => screen.getByText('About this reading').closest('tr')!;
+    expect(note()).toHaveTextContent('during backups or a guest incident');
+    setValue(guest('status-mem'));
+    expect(note()).toHaveTextContent('during backups or a guest incident');
+    const retained = guest('status-mem');
+    retained.memory.observation!.state = 'last-known';
+    setValue(retained);
+    expect(note()).toHaveTextContent('during backups or a guest incident');
+    expect(screen.getByText('Memory reading').closest('tr')).toHaveTextContent('Last known');
   });
 
   it.each(['guest-agent-meminfo', 'agent'])(
