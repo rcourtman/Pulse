@@ -115,6 +115,10 @@ func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_service_discovery.py"), "-v",
+		"ServiceDiscovery.test_fresh_host_no_matching_unit_files_is_an_empty_inventory",
+		"ServiceDiscovery.test_first_inventory_failure_is_not_replaced_by_silent_absence",
+		"ServiceDiscovery.test_only_silent_exit_one_is_admitted_as_absence",
+		"ServiceDiscovery.test_blank_line_output_is_not_a_silent_failed_inventory",
 		"ServiceDiscovery.test_automatic_helper_preserves_exact_names_and_explicit_instances",
 		"ServiceDiscovery.test_automatic_helper_cannot_short_read_the_installer_handoff",
 		"ServiceDiscovery.test_automatic_helper_refuses_before_backup_or_installer_even_in_or_list",
