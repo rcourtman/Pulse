@@ -64,6 +64,40 @@ afterEach(cleanup);
 
 describe('guest agent coverage requires current state, not cached metadata', () => {
   it.each([
+    'available',
+    'expected-unreachable',
+    'not-running',
+    'disabled',
+    'future-state-private-detail',
+    '',
+  ])('makes the %s explanation visible without hovering', (state) => {
+    const value = guest({ guestAgentStatus: state, agentVersion: '9.2' });
+    render(() => <GuestDrawerOverview {...overviewProps(value)} />);
+    const presentation = getGuestDrawerGuestReadPresentation(value)!;
+    expect(within(readRow()).getByText(presentation.detail)).toBeVisible();
+    expect(readRow()).not.toHaveTextContent('future-state-private-detail');
+    expect(readRow().querySelector('[tabindex]')).toBeNull();
+  });
+
+  it('updates the visible explanation without repeating the deferred safety notice', () => {
+    const [value, setValue] = createSignal(guest({ guestAgentStatus: 'available' }));
+    render(() => <GuestDrawerOverview {...overviewProps(value())} />);
+    const availableDetail = getGuestDrawerGuestReadPresentation(value())!.detail;
+    expect(within(readRow()).getByText(availableDetail)).toBeVisible();
+    setValue({ ...value(), lock: 'backup', diskStatusReason: 'prev-vm-locked' });
+    expect(within(readRow()).getByText('Deferred')).toBeVisible();
+    expect(within(readRow()).queryByText(availableDetail)).not.toBeInTheDocument();
+    expect(
+      within(readRow()).queryByText(getGuestDrawerGuestReadPresentation(value())!.detail),
+    ).not.toBeInTheDocument();
+    setValue({ ...value(), lock: '', diskStatusReason: '', guestAgentStatus: 'not-running' });
+    expect(
+      within(readRow()).getByText(getGuestDrawerGuestReadPresentation(value())!.detail),
+    ).toBeVisible();
+    expect(within(readRow()).queryByText(availableDetail)).not.toBeInTheDocument();
+  });
+
+  it.each([
     ['deferred', 'Deferred'],
     ['expected-unreachable', 'Unreachable'],
     ['not-running', 'Not running'],
