@@ -2745,15 +2745,10 @@ app-container routing and Docker-only actions. `frontend-modern/src/hooks/useWor
 `frontend-modern/src/components/Workloads/workloadTopology.ts`, and
 `frontend-modern/src/components/Workloads/useGuestRowState.ts` must preserve a
 canonical app-container navigation path while keeping Docker runtime action
-identifiers explicit. Discovery affordances on the Workloads drawer must follow
-the canonical `discoveryTarget` contract, not generic app-container host
-fallbacks. Guest-drawer manual discovery run controls must route through the
-shared `DiscoveryTab` manual-run action and the canonical target identifiers
-instead of adding Workloads-local discovery trigger state. TrueNAS
-app-containers may reuse runtime metadata such as image and
-runtime strings, but they must not inherit Docker-only update affordances or
-agent-only Discovery tabs on the Workloads row path unless the unified
-resource contract explicitly supplies discovery ownership.
+identifiers explicit. Agent resource context follows backend-authored
+`discoveryTarget` coordinates. TrueNAS app-containers may reuse image and
+runtime metadata, while Docker-only update actions remain scoped to
+Docker-managed workloads.
 That same row-and-selection boundary also requires canonical app-container
 identity to stay intact on the workload surface. Workload rows, deep links,
 drawer selection, anomaly correlation, and route-state filters must key on the
@@ -3437,35 +3432,6 @@ other than `will_fix_later`. The newer `AutoResolved` attribution flag
 on the same UnifiedFinding shape stays a fixed-size `bool` in the same
 struct, so the operator-vs-Pulse closure attribution adds no per-row
 allocation pressure on the same hot path.
-That same Workloads drawer boundary now also owns passive discovery
-surfacing in the overview. `useGuestDrawerState.ts` may issue a single
-`GET /api/discovery/{type}/{target}/{id}` per drawer open through
-`getDiscovery` to populate an "Identified Service" card in
-`GuestDrawerOverview.tsx`, but must never trigger a scan or modify
-discovery state — manual scans, progress UI, and approval prompts stay
-owned by `DiscoveryTab` and `useDiscoveryTabState`. Render is gated by
-`getDiscoveryIdentifiedSummary` so empty or low-signal records collapse
-the card entirely instead of mounting an empty container. The drawer
-fetch must reuse the existing `discoveryTarget` derivation (resource
-type, agent id, resource id) rather than re-implementing target
-resolution, so workloads without canonical discovery ownership (e.g.
-TrueNAS app-containers without explicit `discoveryTarget`) skip the
-fetch cleanly.
-Observed service version, source labels, observed age, and suggested web
-URL candidates may be rendered from that same cached discovery summary,
-but they must not add a second discovery request, route-level Suspense
-dependency, row-time endpoint probe, or auto-save mutation. Suggested
-URLs remain copy/open/adopt affordances only; persisting them as a
-workload link stays a user action through the existing Web Interface URL
-field. For Docker-managed app-containers, that field must receive the stable
-host-plus-container-name metadata ID rather than the runtime container ID, while
-the row and drawer still use the canonical workload ID for all non-metadata
-state.
-The compact provenance marker for those values is presentation-only. It
-may identify already-loaded Discovery fields, but must not introduce
-additional discovery fetches, provider lookups, endpoint probes, or
-per-row layout measurement on the Workloads hot path.
-
 The canonical Workloads table mobile floor is 36rem. The mobile table branch
 must preserve that intrinsic width inside its existing scroll shell instead of
 combining it with `min-w-full`, which allows the operational columns to
