@@ -4,6 +4,12 @@ This changelog describes the changes since `v6.6.0-beta.1`. Stable `v6.5.0` rema
 
 ## Changes since v6.5.0
 
+- Warm the pulse-agent build before the pinned release API shards (#2875)
+- Make guest-read safety explanations readable without hover (#2874)
+- Unify alert metric editing across responsive layouts (#2873)
+- Keep guest readings current and preserve recovery during agent removal (#2872)
+- Restore Patrol's Safe auto-fix and Autopilot modes (#2871)
+- Release v6.6.0-beta.2 (#2870)
 - Teach the pre-release metadata test about a second beta (#2869)
 - Explain backup freshness without changing alert policy (#2868)
 - Retry registry reads when verifying release container images (#2866)
