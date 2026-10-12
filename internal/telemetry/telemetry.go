@@ -486,8 +486,9 @@ type Ping struct {
 	PulseIntelligencePatrolInvestigations30d                       int    `json:"pulse_intelligence_patrol_investigations_30d"`
 	PulseIntelligencePatrolResolvedFindings30d                     int    `json:"pulse_intelligence_patrol_resolved_findings_30d"`
 	PulseIntelligencePatrolBlockedCause                            string `json:"pulse_intelligence_patrol_blocked_cause,omitempty"`
-	// Effective Patrol autonomy level after licence and Autopilot
-	// acknowledgement gating: monitor, approval, assisted, or full.
+	// Effective Patrol autonomy level after licence gating: monitor or
+	// approval. Releases before the self-executing modes were retired could
+	// also report assisted or full.
 	PulseIntelligencePatrolAutonomyLevel string `json:"pulse_intelligence_patrol_autonomy_level"`
 	// Coarse 30-day Patrol token volume from the local usage ledger. Closed
 	// buckets only; exact totals, prices, providers, and models stay local.
@@ -819,9 +820,8 @@ type PulseIntelligenceActionSnapshot struct {
 	// runtime.
 	PatrolBlockedCause string
 	// PatrolAutonomyLevel is the effective Patrol autonomy level after
-	// licence and Autopilot acknowledgement gating: monitor, approval,
-	// assisted, or full. Empty means the AI service was unavailable and the
-	// sender reports monitor.
+	// licence gating: monitor or approval. Empty means the AI service was
+	// unavailable and the sender reports monitor.
 	PatrolAutonomyLevel string
 }
 

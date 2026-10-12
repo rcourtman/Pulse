@@ -176,8 +176,6 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
     return [
       { label: 'Watch only', value: r.modes.monitor },
       { label: 'Ask first', value: r.modes.approval },
-      { label: 'Safe auto-fix', value: r.modes.assisted },
-      { label: 'Autopilot', value: r.modes.full },
     ];
   };
 

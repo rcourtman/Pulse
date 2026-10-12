@@ -51,8 +51,6 @@ func TestBranchcov0723AmPatrolConfigAdapterIsValidAutonomyLevel(t *testing.T) {
 	validLevels := []string{
 		config.PatrolAutonomyMonitor,
 		config.PatrolAutonomyApproval,
-		config.PatrolAutonomyAssisted,
-		config.PatrolAutonomyFull,
 	}
 	for _, level := range validLevels {
 		t.Run("valid/"+level, func(t *testing.T) {
@@ -68,7 +66,10 @@ func TestBranchcov0723AmPatrolConfigAdapterIsValidAutonomyLevel(t *testing.T) {
 	}{
 		{"empty", ""},
 		{"unknown_level", "supervised"},
-		{"wrong_case_upper", "FULL"},
+		{"wrong_case_upper", "APPROVAL"},
+		{"retired_assisted", "assisted"},
+		{"retired_full", "full"},
+		{"retired_autonomous", "autonomous"},
 		{"wrong_case_capitalised", "Monitor"},
 		{"whitespace_padded", " monitor "},
 	}

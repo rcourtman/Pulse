@@ -228,7 +228,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               resourceId={props.resource.id}
               resourceType={props.resource.type}
               platformType={props.resource.platformType}
-              capabilities={props.resource.capabilities}
             />
             <Show when={drawer.hasAccessContext()}>
               <ResourceAccessDisclosure resource={props.resource} drawer={drawer} />

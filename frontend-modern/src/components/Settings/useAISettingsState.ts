@@ -811,8 +811,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         modes: {
           monitor: { status: 'not_assessed', summary: 'Not assessed.' },
           approval: { status: 'not_assessed', summary: 'Not assessed.' },
-          assisted: { status: 'not_assessed', summary: 'Extended verification required.' },
-          full: { status: 'not_assessed', summary: 'Governed canary required.' },
         },
         recorded_at: new Date().toISOString(),
         recorded_at_unix: Math.floor(Date.now() / 1000),

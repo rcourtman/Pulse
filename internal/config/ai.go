@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
-	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // AuthMethod represents how Anthropic authentication is performed
@@ -117,15 +116,12 @@ type AIConfig struct {
 	// These control whether AI can take actions on infrastructure (start/stop VMs, containers, etc.)
 	ControlLevel string `json:"control_level,omitempty"` // "read_only", "controlled", "autonomous"
 
-	// Patrol Autonomy settings - controls automatic investigation and remediation of findings
-	PatrolAutonomyLevel             string                                            `json:"patrol_autonomy_level,omitempty"` // "monitor", "approval", "assisted", "full"
-	PatrolFullModeUnlocked          bool                                              `json:"patrol_full_mode_unlocked"`       // Legacy wire/storage compatibility only; never authority for effective full mode.
-	PatrolAutopilotAcknowledgements []unifiedresources.PatrolAutopilotAcknowledgement `json:"patrol_autopilot_acknowledgements,omitempty"`
-	PatrolAutopilotRevocations      []unifiedresources.PatrolAutopilotRevocation      `json:"patrol_autopilot_revocations,omitempty"`
-	PatrolAutopilotActivation       *unifiedresources.PatrolAutopilotActivation       `json:"patrol_autopilot_activation,omitempty"`
-	PatrolActionEmergencyStop       bool                                              `json:"patrol_action_emergency_stop"`               // Blocks new human and policy action admission; does not imply rollback
-	PatrolInvestigationBudget       int                                               `json:"patrol_investigation_budget,omitempty"`      // Max evidence calls per investigation (default: 10)
-	PatrolInvestigationTimeoutSec   int                                               `json:"patrol_investigation_timeout_sec,omitempty"` // Max seconds per investigation (default: 300)
+	// Patrol Autonomy settings - controls whether Patrol investigates findings.
+	// Patrol never executes fixes itself; proposals wait for operator approval.
+	PatrolAutonomyLevel           string `json:"patrol_autonomy_level,omitempty"`            // "monitor" or "approval"
+	PatrolActionEmergencyStop     bool   `json:"patrol_action_emergency_stop"`               // Blocks new human and policy action admission; does not imply rollback
+	PatrolInvestigationBudget     int    `json:"patrol_investigation_budget,omitempty"`      // Max evidence calls per investigation (default: 10)
+	PatrolInvestigationTimeoutSec int    `json:"patrol_investigation_timeout_sec,omitempty"` // Max seconds per investigation (default: 300)
 
 }
 
@@ -162,12 +158,8 @@ const (
 const (
 	// PatrolAutonomyMonitor - Detect issues and create findings, no automatic investigation
 	PatrolAutonomyMonitor = "monitor"
-	// PatrolAutonomyApproval - Spawn Chat sessions to investigate, queue ALL fixes for user approval
+	// PatrolAutonomyApproval - Investigate findings and queue every proposed fix for operator approval
 	PatrolAutonomyApproval = "approval"
-	// PatrolAutonomyAssisted - Auto-fix warnings, critical findings still need approval
-	PatrolAutonomyAssisted = "assisted"
-	// PatrolAutonomyFull - Full autonomy, auto-fix everything including critical (user accepts risk)
-	PatrolAutonomyFull = "full"
 )
 
 // Default patrol investigation settings
@@ -1010,55 +1002,19 @@ func IsValidControlLevel(level string) bool {
 	return agentcapabilities.IsValidControlLevel(level)
 }
 
-// GetPatrolAutonomyLevel returns the patrol autonomy level, defaulting to "monitor" if not set
+// GetPatrolAutonomyLevel returns the patrol autonomy level, defaulting to "monitor" if not set.
+// The retired self-executing modes ("assisted", "full" and the older
+// "autonomous") resolve to "approval": Patrol keeps investigating, and every
+// proposed fix waits for an operator.
 func (c *AIConfig) GetPatrolAutonomyLevel() string {
-	if c.PatrolAutonomyLevel == "" {
-		return PatrolAutonomyMonitor
-	}
 	switch c.PatrolAutonomyLevel {
-	case PatrolAutonomyMonitor, PatrolAutonomyApproval, PatrolAutonomyAssisted, PatrolAutonomyFull:
+	case PatrolAutonomyMonitor, PatrolAutonomyApproval:
 		return c.PatrolAutonomyLevel
-	// Migration: treat old "autonomous" as new "full"
-	case "autonomous":
-		return PatrolAutonomyFull
+	case "assisted", "full", "autonomous":
+		return PatrolAutonomyApproval
 	default:
 		return PatrolAutonomyMonitor
 	}
-}
-
-// GetEffectivePatrolAutonomy evaluates the requested Patrol mode against the
-// server-owned Autopilot acknowledgement and activation evidence. The legacy
-// PatrolFullModeUnlocked boolean is intentionally passed only so the evaluator
-// can report that it was ignored; it can never authorize full mode.
-func (c *AIConfig) GetEffectivePatrolAutonomy(orgID string, now time.Time) (string, unifiedresources.PatrolAutopilotStatus) {
-	return c.GetEffectivePatrolAutonomyWithPolicy(orgID, unifiedresources.CurrentPatrolAutopilotServerPolicy(now))
-}
-
-func (c *AIConfig) GetEffectivePatrolAutonomyWithPolicy(orgID string, policy unifiedresources.PatrolAutopilotServerPolicy) (string, unifiedresources.PatrolAutopilotStatus) {
-	if c == nil {
-		contract, _ := unifiedresources.PatrolAutopilotContractForVersion(policy.CurrentVersion)
-		return PatrolAutonomyMonitor, unifiedresources.PatrolAutopilotStatus{
-			Code:           unifiedresources.PatrolAutopilotStatusAcknowledgementRequired,
-			CurrentVersion: policy.CurrentVersion,
-			AcceptedScope:  contract.AcceptedScope,
-			AcceptedLimits: contract.AcceptedLimits,
-		}
-	}
-	return unifiedresources.EvaluatePatrolAutopilot(
-		c.GetPatrolAutonomyLevel(),
-		PatrolAutonomyApproval,
-		strings.TrimSpace(orgID),
-		c.PatrolFullModeUnlocked,
-		c.PatrolAutopilotAcknowledgements,
-		c.PatrolAutopilotRevocations,
-		c.PatrolAutopilotActivation,
-		policy,
-	)
-}
-
-func (c *AIConfig) IsPatrolFullModeActive(orgID string, now time.Time) bool {
-	level, status := c.GetEffectivePatrolAutonomy(orgID, now)
-	return level == PatrolAutonomyFull && status.Active
 }
 
 // GetPatrolInvestigationBudget returns the maximum evidence calls per investigation.
@@ -1094,7 +1050,7 @@ func (c *AIConfig) GetPatrolInvestigationTimeout() time.Duration {
 // IsValidPatrolAutonomyLevel checks if a patrol autonomy level string is valid
 func IsValidPatrolAutonomyLevel(level string) bool {
 	switch level {
-	case PatrolAutonomyMonitor, PatrolAutonomyApproval, PatrolAutonomyAssisted, PatrolAutonomyFull:
+	case PatrolAutonomyMonitor, PatrolAutonomyApproval:
 		return true
 	default:
 		return false

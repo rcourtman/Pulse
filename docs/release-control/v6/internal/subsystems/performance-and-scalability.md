@@ -1941,6 +1941,14 @@ without contention or cross-delivery.
 
 ## Current State
 
+### Docker host drawer drops the retired capability hand-off (2026-10-12)
+
+`DockerHostDrawer.tsx` no longer passes the host's capability list to
+`ResourceOperatorStateSection`: that list fed only the per-resource
+automatic-action allowlist, which was retired with Patrol's self-executing
+modes. The drawer mounts the same section with less input and no new work on
+the Docker hot path.
+
 ### Retained component state in bounded platform windows
 
 `PlatformWindowedRows` and `PlatformWindowedList` retain one keyed renderer

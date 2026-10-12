@@ -1351,7 +1351,7 @@ func TestAssistantControlProjectionPreservesSavedPolicy(t *testing.T) {
 			t.Run(level+map[bool]string{true: "/entitled", false: "/unentitled"}[allowed], func(t *testing.T) {
 				cfg := NewDefaultAIConfig()
 				cfg.ControlLevel = level
-				cfg.PatrolAutonomyLevel = PatrolAutonomyFull
+				cfg.PatrolAutonomyLevel = PatrolAutonomyApproval
 				cfg.PatrolActionEmergencyStop = true
 				before := *cfg
 				want := ControlLevelReadOnly
@@ -1367,7 +1367,7 @@ func TestAssistantControlProjectionPreservesSavedPolicy(t *testing.T) {
 				if cfg.IsAutonomous() != (level == ControlLevelAutonomous) {
 					t.Fatal("legacy approval-admission posture changed")
 				}
-				if cfg.GetPatrolAutonomyLevel() != PatrolAutonomyFull {
+				if cfg.GetPatrolAutonomyLevel() != PatrolAutonomyApproval {
 					t.Fatal("Assistant projection changed Patrol mode")
 				}
 			})

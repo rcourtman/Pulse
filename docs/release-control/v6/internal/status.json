@@ -4051,14 +4051,14 @@
           ]
         },
         {
-          "id": "ra35-dispatch-time-policy-revocation",
+          "id": "ra35-human-admission-policy-boundary",
           "run": [
             "go",
             "test",
             "./internal/actionlifecycle",
             "./internal/api",
             "-run",
-            "TestExecuteUnderPolicyBarrierRevocationsMemoryStore|TestExecuteUnderPolicyBarrierRevocationsSQLite|TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallyMemoryStore|TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallySQLite|TestHumanApprovalSurvivesAutomaticPolicyRevocationMemoryStore|TestHumanApprovalSurvivesAutomaticPolicyRevocationSQLite|TestEmergencyStopBlocksHumanAndPolicyAdmissionMemoryStore|TestEmergencyStopBlocksHumanAndPolicyAdmissionSQLite|TestLegacyPolicyApprovalWithoutLeaseFailsClosedAfterRestart|TestQueuedPolicyActionRevalidatesAfterSQLiteRestart|TestPatrolActionBrokerDispatchTimePolicyRevocation",
+            "TestHumanApprovalSurvivesAutomaticPolicyRevocationMemoryStore|TestHumanApprovalSurvivesAutomaticPolicyRevocationSQLite|TestEmergencyStopBlocksHumanAdmissionMemoryStore|TestEmergencyStopBlocksHumanAdmissionSQLite|TestLegacyPolicyApprovalCannotExecuteAfterRestart",
             "-count=1"
           ]
         },
@@ -4072,7 +4072,7 @@
             "./internal/hostagent",
             "./internal/unifiedresources",
             "-run",
-            "TestAPTCacheCleanupDetectorProposalApprovalDispatchAuditAndFindingReconciliation|TestAPTCacheCleanupCallbackLossServerRestartReconcilesTerminalAuditAndFindingWithoutResend|TestHostStorageCleanupReconcileDelayedTerminalReceiptPreservesAgentAttestedEvidenceWithoutResend|TestHostStorageCleanupPartialTruthIsNonRollbackableAndRequiresRescan|TestPatrolFullModeRunsStorageCleanupThroughCanonicalLifecycle|TestExecuteHostStorageCleanupRoundTripUsesPathAndCommandFreeEnvelope|TestStorageCleanupManagerApplyUsesClosedAPTCatalogAndVerifiesBytes|TestStorageCleanupManagerFailurePhasesPreserveMeasuredEffect|TestStorageCleanupManagerRefusesFingerprintDriftBeforeMutation|TestHostStorageCleanupTargetDiskUsesLongestContainingMount",
+            "TestAPTCacheCleanupDetectorProposalApprovalDispatchAuditAndFindingReconciliation|TestAPTCacheCleanupCallbackLossServerRestartReconcilesTerminalAuditAndFindingWithoutResend|TestHostStorageCleanupReconcileDelayedTerminalReceiptPreservesAgentAttestedEvidenceWithoutResend|TestHostStorageCleanupPartialTruthIsNonRollbackableAndRequiresRescan|TestExecuteHostStorageCleanupRoundTripUsesPathAndCommandFreeEnvelope|TestStorageCleanupManagerApplyUsesClosedAPTCatalogAndVerifiesBytes|TestStorageCleanupManagerFailurePhasesPreserveMeasuredEffect|TestStorageCleanupManagerRefusesFingerprintDriftBeforeMutation|TestHostStorageCleanupTargetDiskUsesLongestContainingMount",
             "-count=1"
           ]
         },
@@ -4337,7 +4337,7 @@
             "./internal/actionlifecycle",
             "./internal/api",
             "-run",
-            "TestMemoryStoreCreateActionAuditConcurrentReturnsCurrent|TestSQLiteStoreCreateActionAuditConcurrentAcrossTwoInstances|TestSQLiteStoreActionTransitionCASAcrossTwoInstances|TestSQLiteStoreConcurrentExecutionStartAcrossTwoInstancesHasOneWinner|TestSQLiteStoreCreateActionAuditRollsBackWhenInitialEventInsertFails|TestSQLiteStoreActionDecisionRollsBackWhenDecisionEventInsertFails|TestSQLiteStoreActionDecisionRollsBackWhenResultingTransitionInsertFails|TestSQLiteStoreLifecycleRestartPreservesMonotonicState|TestSQLiteStoreRestartDoesNotReadmitExecutingAction|TestConcurrentPlanReplayCannotRewindTerminalActionMemoryStore|TestConcurrentPlanReplayCannotRewindTerminalActionSQLiteStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceMemoryStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceSQLiteStore|TestPlanReplayRejectsConflictingOriginForDeterministicActionID|TestPatrolActionBrokerBarrierReplayAdmitsExecutorExactlyOnce|TestPatrolActionBrokerTerminalReplayPreservesAuditAndEvents|TestPatrolActionReconciliationHydratesTerminalAuditAfterRestart|TestPatrolActionReconciliationCannotRegressFromOutOfOrderCallback",
+            "TestMemoryStoreCreateActionAuditConcurrentReturnsCurrent|TestSQLiteStoreCreateActionAuditConcurrentAcrossTwoInstances|TestSQLiteStoreActionTransitionCASAcrossTwoInstances|TestSQLiteStoreConcurrentExecutionStartAcrossTwoInstancesHasOneWinner|TestSQLiteStoreCreateActionAuditRollsBackWhenInitialEventInsertFails|TestSQLiteStoreActionDecisionRollsBackWhenDecisionEventInsertFails|TestSQLiteStoreActionDecisionRollsBackWhenResultingTransitionInsertFails|TestSQLiteStoreLifecycleRestartPreservesMonotonicState|TestSQLiteStoreRestartDoesNotReadmitExecutingAction|TestConcurrentPlanReplayCannotRewindTerminalActionMemoryStore|TestConcurrentPlanReplayCannotRewindTerminalActionSQLiteStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceMemoryStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceSQLiteStore|TestPlanReplayRejectsConflictingOriginForDeterministicActionID|TestPatrolActionBrokerNeverExecutesWhateverTheCapabilityEligibility|TestPatrolActionReconciliationHydratesTerminalAuditAfterRestart|TestPatrolActionReconciliationCannotRegressFromOutOfOrderCallback",
             "-count=1"
           ]
         }
@@ -4513,7 +4513,7 @@
             "./internal/relay",
             "./pkg/aicontracts",
             "-run",
-            "TestExecutorTupleNilNilPersistsInconclusiveContractViolation|TestExecutorTupleResultAndErrorIsContractViolation|TestExecutorTuplePostDispatchErrorPreservesReceiptPending|TestActionResultV2EventFindingContextTelemetryProjectionMatrix|TestActionResultV2JSONContractSnapshot|TestMalformedStoredActionResultV2CannotProjectSuccessOrVerification|TestPatrolActionBrokerTerminalReplayPreservesAuditAndEvents|TestPatrolActionReconciliationHydratesTerminalAuditAfterRestart|TestPatrolActionReconciliationCannotRegressFromOutOfOrderCallback|TestCanonicalActionOutcomeNotificationMatrix|TestActionBrokerPolicyMetadataCarriesNoAuthorizationMethod",
+            "TestExecutorTupleNilNilPersistsInconclusiveContractViolation|TestExecutorTupleResultAndErrorIsContractViolation|TestExecutorTuplePostDispatchErrorPreservesReceiptPending|TestActionResultV2EventFindingContextTelemetryProjectionMatrix|TestActionResultV2JSONContractSnapshot|TestMalformedStoredActionResultV2CannotProjectSuccessOrVerification|TestPatrolActionBrokerNeverExecutesWhateverTheCapabilityEligibility|TestPatrolActionReconciliationHydratesTerminalAuditAfterRestart|TestPatrolActionReconciliationCannotRegressFromOutOfOrderCallback|TestCanonicalActionOutcomeNotificationMatrix|TestActionBrokerPolicyMetadataCarriesNoAuthorizationMethod",
             "-count=1"
           ]
         }
@@ -4558,7 +4558,7 @@
     },
     {
       "id": "RA39",
-      "summary": "Patrol Autopilot activation is server-owned: a static per-version contract registry preserves immutable historical scope and limits while effective full mode requires a current-version human acknowledgement bound to organization, actor, credential, and an atomic activation; rotation requires new evidence, and legacy booleans, stale or malformed evidence, cross-tenant records, API tokens, and revoked acknowledgements fail closed without rewriting authority history.",
+      "summary": "Patrol has no self-executing mode: Safe auto-fix (assisted) and Autopilot (full) were retired on 2026-10-12. A saved assisted, full, or autonomous level reads as approval, both autonomy update routes refuse those levels, and the core Patrol action broker only plans, so every Patrol fix waits for an operator decision and execution through the canonical action lifecycle.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
@@ -4585,16 +4585,15 @@
       "release_gate_ids": [],
       "proof_commands": [
         {
-          "id": "ra39-server-owned-patrol-autopilot-activation",
+          "id": "ra39-patrol-operator-decision-only",
           "run": [
             "go",
             "test",
-            "./internal/unifiedresources",
-            "./internal/config",
-            "./internal/ai",
             "./internal/api",
+            "./internal/actionlifecycle",
+            "./internal/config",
             "-run",
-            "TestPatrolAutopilot|TestEvaluatePatrolAutopilot|TestAIConfigPatrolAutopilot|TestServicePatrolAutopilotPolicyProviderControlsRuntimeVersion|TestGetPatrolSystemPrompt_ModeSwitch|TestRouterRouteInventory|TestProtectedAPIRoutesRejectUnauthenticatedRequests",
+            "Test(PatrolActionBrokerNeverExecutesWhateverTheCapabilityEligibility|PatrolActionBrokerRecordsCapabilityOnlyPolicyProvenance|Contract_PatrolActionBrokerOnlyPlans|GatePatrolAutonomyUpdateRefusesRetiredLevels|LegacyPolicyApprovalCannotExecuteAfterRestart|AIConfig_ControlAndPatrolLevelValidation)",
             "-count=1"
           ]
         }
@@ -4602,24 +4601,34 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "internal/api/patrol_autopilot_test.go",
-          "kind": "file",
-          "evidence_tier": "test-proof"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/config/patrol_autopilot_persistence_test.go",
-          "kind": "file",
-          "evidence_tier": "test-proof"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/unifiedresources/patrol_autopilot.go",
+          "path": "internal/api/ai_handlers.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "internal/unifiedresources/patrol_autopilot_test.go",
+          "path": "internal/api/ai_handlers_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/patrol_action_broker.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/patrol_action_broker_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/ai.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/ai_additional_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         }
@@ -4627,7 +4636,7 @@
     },
     {
       "id": "RA40",
-      "summary": "Pending governed actions expose one server-authored, versioned policy-decision provenance object: bounded capability and applicable tenant/resource authorities, source revisions, scope, approval requirement, and stable reason codes are immutable plan-hash inputs and durable audit/API evidence, while dispatch still requires a fresh Task 04 authorization lease and current-policy recheck.",
+      "summary": "Pending governed actions expose one server-authored, versioned policy-decision provenance object: bounded capability and applicable tenant/resource authorities, source revisions, scope, approval requirement, and stable reason codes are immutable plan-hash inputs and durable audit/API evidence, while dispatch requires a human decision and current-policy recheck; Patrol plans carry only the capability authority since the 2026-10-12 retirement of the self-executing modes.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
@@ -4662,7 +4671,7 @@
             "./internal/actionlifecycle",
             "./internal/api",
             "-run",
-            "TestActionPolicyDecision|TestMemoryStoreActionAuditReadsDeepCopyPolicyProvenance|TestMemoryStoreActionStateQueryDeepCopiesPolicyProvenance|TestActionPolicyDecisionProvenanceHasOneOwner|TestCanonicalActionPlanConstructionCannotBypassPolicyProvenancePlanner|TestPlannerPolicyDecisionChangesPlanHashWithoutReusingExecutionAuthority|TestActionPolicyProvenanceParticipatesInFreshnessWithoutAuthorizingDispatch|TestHandlePlanActionBindsActorAndPlanHashToAuthenticatedOrg|TestHandlePlanActionRejectsClientSuppliedPolicyProvenance|TestApprovalPlanInfoRejectsMalformedCanonicalPolicyDecision|TestPatrolActionBrokerSnapshotsTenantResourceAndCapabilityPolicyAtPlanTime|TestPatrolActionBrokerDispatchTimePolicyRevocation|TestContract_ActionPlanJSONSnapshot|TestContract_ActionPlanAuditLifecycleSnapshot|TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned",
+            "TestActionPolicyDecision|TestMemoryStoreActionAuditReadsDeepCopyPolicyProvenance|TestMemoryStoreActionStateQueryDeepCopiesPolicyProvenance|TestActionPolicyDecisionProvenanceHasOneOwner|TestCanonicalActionPlanConstructionCannotBypassPolicyProvenancePlanner|TestPlannerPolicyDecisionChangesPlanHashWithoutReusingExecutionAuthority|TestActionPolicyProvenanceParticipatesInFreshness|TestHandlePlanActionBindsActorAndPlanHashToAuthenticatedOrg|TestHandlePlanActionRejectsClientSuppliedPolicyProvenance|TestApprovalPlanInfoRejectsMalformedCanonicalPolicyDecision|TestPatrolActionBrokerRecordsCapabilityOnlyPolicyProvenance|TestContract_ActionPlanJSONSnapshot|TestContract_ActionPlanAuditLifecycleSnapshot|TestContract_PatrolActionBrokerOnlyPlans",
             "-count=1"
           ]
         }
@@ -6995,12 +7004,6 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/api/patrol_autopilot_test.go",
-          "kind": "file",
-          "evidence_tier": "test-proof"
-        },
-        {
-          "repo": "pulse",
           "path": "internal/api/testdata/rg09/apt_workflows_colima.py",
           "kind": "file",
           "evidence_tier": "test-proof"
@@ -7008,12 +7011,6 @@
         {
           "repo": "pulse",
           "path": "internal/api/testdata/rg09/test_apt_workflows_colima.py",
-          "kind": "file",
-          "evidence_tier": "test-proof"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/config/patrol_autopilot_persistence_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },
@@ -7081,22 +7078,6 @@
           "path": "internal/unifiedresources/adapters_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/unifiedresources/patrol_autopilot.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/unifiedresources/patrol_autopilot_test.go",
-          "kind": "file",
-          "evidence_tier": "test-proof"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/unifiedresources/resource_operator_state_policy_test.go",
-          "kind": "file"
         },
         {
           "repo": "pulse",

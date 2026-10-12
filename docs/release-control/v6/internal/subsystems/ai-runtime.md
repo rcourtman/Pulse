@@ -25,6 +25,19 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Patrol fix modes retired (2026-10-12)
+
+Patrol's runtime keeps two modes, `monitor` and `approval`.
+`AIConfig.GetPatrolAutonomyLevel` reads a saved `assisted`, `full`, or
+`autonomous` level as `approval`, `IsValidPatrolAutonomyLevel` accepts only the
+two current levels, and `Service.GetEffectivePatrolAutonomyLevel` clamps to
+`monitor` without the `ai_autofix` entitlement. The Autopilot acknowledgement
+persistence, the server policy provider, the autonomous qualification mode and
+its `await_autonomous` decision were removed. The extension contract
+(`pkg/aicontracts.PatrolConfigAccessor`) keeps `GetPatrolFullModeUnlocked`,
+which now always reports false. Readiness reports only Watch only and Ask
+first suitability.
+
 ### Guest memory remains qualified through tools and local observers
 
 The existing guest get/list/topology tools and Assistant inventory context carry
@@ -109,7 +122,7 @@ vocabulary, entitlement checks and legacy `IsAutonomous` approval-admission
 remain intact; removing that legacy check would relax command approval.
 Chat's control tool saves typed plans to Actions without execution. Scoped
 handoff flags, execute authority, policy and action lifecycle
-review/run/verification remain necessary; Patrol mode/Autopilot is separate.
+review/run/verification remain necessary; Patrol mode is separate.
 Unrelated Settings saves compare normalised values and preserve saved legacy
 preferences. Runtime, real encrypted-settings roundtrip/API, mounted component
 and public-help controls cover this boundary; no installed action is proved.
@@ -742,10 +755,10 @@ Coverage warnings must stay action-oriented: they may tell the operator to run
 Patrol to check everything, but must not ask for a "full issue list" or otherwise
 expose backend full-run vocabulary as the product instruction.
 Patrol model-facing system prompts must derive the active control-mode block
-from the effective `patrol_autonomy_level`, after license and full-mode-lock
-clamping, so Watch only, Ask first, Safe auto-fix, and Autopilot give the model
-the same investigate, approval, execution, and verification boundaries enforced
-by the orchestrator. Prompt copy must not fall back to the legacy
+from the effective `patrol_autonomy_level`, after license clamping, so Watch
+only and Ask first give the model the same investigate, approval, and
+verification boundaries enforced by the orchestrator; a retired saved
+`assisted` or `full` level prompts as Ask first. Prompt copy must not fall back to the legacy
 `patrol_auto_fix` boolean or the retired "observe only" / "auto-fix mode"
 framing.
 Patrol's Watch evidence includes provider-reported failed health checks, backup
@@ -4017,9 +4030,8 @@ query...`, and `Reading storage...` before streamed tool arguments are
    contextual and external-agent access paths over the same governed
    capabilities.
    Public overview, safety, and onboarding copy must use the same visible
-   Patrol mode labels as the product (`Watch only`, `Ask first`,
-   `Safe auto-fix`, `Autopilot`) and must not reintroduce the retired
-   `Only watch`, `Ask before changes`, `Fix safe issues`,
+   Patrol mode labels as the product (`Watch only`, `Ask first`) and must not
+   reintroduce the retired `Safe auto-fix`, `Autopilot`, `Only watch`, `Ask before changes`, `Fix safe issues`,
    `Auto-fix safe issues`, `Full control`, or `Policy autopilot` labels as
    customer-facing names.
    The public overview must also preserve the model-owned AI boundary: Pulse
@@ -4350,8 +4362,7 @@ resolve canonical/source IDs and unique aliases before collection, reject
    as Patrol mode rather than Patrol configuration.
    Monitor-only Patrol autonomy saves are part of the same runtime gate:
    when the safe-remediation extension or entitlement is unavailable, the
-   API must clear stale full-mode unlock and Autopilot activation state while
-   clamping autonomy back to `monitor` (the monitor-only handler in
+   API must clamp autonomy back to `monitor` (the monitor-only handler in
    `internal/api/ai_handlers.go` without the extension, the
    `SaveAutonomySettings` adapter in `internal/api/router_routes_ai_relay.go`
    behind the paid handler), and the browser state owner must refuse a paid
@@ -4894,8 +4905,7 @@ suitability. Apply the shared cost budget and record probe token usage under
 `patrol_readiness`. Persist only sanitized scores, timings, and model metadata;
 invalidate evidence when the selected provider, model, credential, endpoint, or
 relevant timeout budget changes. Monitor/Watch and Approval/Ask First may be
-verified independently, while Safe auto-fix and Autopilot remain explicitly
-unassessed until deterministic remediation evals exist.
+verified independently; they are the only Patrol modes.
 
 A cancelled run is not provider evidence. The runtime failure classifier
 (`internal/ai/patrol_runtime_failure.go`) must classify mid-run cancellation as
@@ -5084,8 +5094,9 @@ separate findings. Verification is
 `go test ./internal/ai -run 'TestPatrolService_GetAllFindings|TestPatrolService_GetFindingsForResource|TestPatrolService_GetAllFindingsIncludingResolved'`.
 
 Public Pulse Intelligence overview, safety, and onboarding copy now use the
-same visible Patrol mode labels as the product: `Watch only`,
-`Ask first`, `Safe auto-fix`, and `Autopilot`. The legacy `Only watch`,
+same visible Patrol mode labels as the product: `Watch only` and
+`Ask first`. The retired `Safe auto-fix` and `Autopilot` modes and the legacy
+`Only watch`,
 `Ask before changes`, `Fix safe issues`, `Auto-fix safe issues`,
 `Full control`, and `Policy autopilot` names may remain only as historical
 context or compatibility implementation details, not as customer-facing Patrol
@@ -6267,13 +6278,10 @@ capability eligibility, persisted per-resource allowlist/window, remediation
 lock, and the canonical lifecycle. Enterprise receives the resulting pending
 or terminal disposition, including honest verification status, but never an
 authorization primitive. `OrchestratorDeps.ActionBroker` carries the seam and is
-Policy-authorized submission enters `actionlifecycle.ExecuteUnderPolicy`; the
-broker may evaluate eligibility to decide whether to attempt automatic
-admission, but it cannot persist approval or call an executor itself. The
-lifecycle re-evaluates the full policy under the shared admission coordinator
-and atomically persists the typed authorization lease, policy approval, and
-executing transition. Revocation before that transition produces zero dispatch
-and no policy approval. Human approvals remain semantically separate.
+Since the 2026-10-12 fix-mode retirement the broker only plans: there is no
+policy-authorized submission, `actionlifecycle.ExecuteUnderPolicy` and the
+typed authorization lease are gone, and every proposal waits for a human
+decision and execution through the lifecycle.
 `OrchestratorDeps.ActionBroker` carries the seam and is
 now REQUIRED: the enterprise factory disables the orchestrator when it is
 absent rather than falling back. The command-execution side doors are
@@ -7420,7 +7428,10 @@ requires one match, but scoring must not fail an otherwise exact causal
 diagnosis merely because the model used the provider-visible equivalent rather
 than the injector's verb. These alternatives are fixed in the manifest before
 execution and never inferred from the model response or its tool path.
-An autonomous remediation scenario uses the explicit `await_autonomous`
+The autonomous remediation scenario and its `await_autonomous` decision were
+retired with Patrol's self-executing modes on 2026-10-12; the history below
+describes the removed behaviour.
+An autonomous remediation scenario used the explicit `await_autonomous`
 decision. It requires effective Full autonomy (the manifest's legacy
 `autonomous` spelling aliases to `full`), and the qualification client sends no
 approval decision and no execute request. It waits for the independently
@@ -7575,8 +7586,9 @@ overwrite one another's mutable runtime context.
 That same Patrol runtime boundary owns Community monitor-mode autonomy saves.
 The open-source/free `PUT /api/ai/patrol/autonomy` adapter may persist
 findings-only `monitor` configuration and the governed investigation budget /
-timeout clamps, but it must continue to reject `approval`, `assisted`, and
-`full` autonomy with the canonical safe-remediation license response.
+timeout clamps, but it must continue to reject `approval` with the canonical
+safe-remediation license response and refuse the retired `assisted` and `full`
+levels as invalid.
 Every successful autonomy mutation must publish the persisted investigation
 budget and timeout to the already-wired tenant investigation orchestrator
 before a newly triggered finding can be admitted. Requiring a server restart,
@@ -7919,9 +7931,14 @@ must be derived from canonical truth rather than reconstructed locally. The
 typed disposition retains the serialized canonical two-axis result so the
 legacy single outcome is never the sole durable/read-model truth.
 
-### Server-owned Patrol Autopilot activation
+### Server-owned Patrol Autopilot activation (retired 2026-10-12)
 
-Patrol full mode is now an effective server decision, not the stored
+Autopilot, its acknowledgement store and activation, and the
+`patrol_full_mode_unlocked` field were removed when Patrol's self-executing
+modes were retired; a saved `full` level reads as `approval`. The record below
+describes the removed behaviour.
+
+Patrol full mode was an effective server decision, not the stored
 `patrol_full_mode_unlocked` compatibility boolean. The runtime evaluates a
 versioned acknowledgement and activation bound to one human actor credential
 and organization; missing, stale, expired, revoked, malformed, cross-tenant,

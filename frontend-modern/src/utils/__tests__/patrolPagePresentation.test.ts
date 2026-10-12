@@ -49,12 +49,5 @@ describe('patrolPagePresentation', () => {
       description:
         'Ask first: Patrol investigates and prepares fixes, but every change waits for approval.',
     });
-    expect(getPatrolPageHeaderMeta({ autonomyLevel: 'assisted' })).toMatchObject({
-      description: 'Safe auto-fix: Patrol may run low- or medium-risk fixes allowed by policy.',
-    });
-    expect(getPatrolPageHeaderMeta({ autonomyLevel: 'full' })).toMatchObject({
-      description:
-        'Autopilot: Patrol may act automatically within policy and still asks when approval is required.',
-    });
   });
 });

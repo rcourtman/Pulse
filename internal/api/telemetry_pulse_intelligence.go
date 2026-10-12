@@ -50,8 +50,8 @@ func pulseIntelligencePatrolBlockedCauseForTelemetry(status ai.PatrolStatus) str
 }
 
 // pulseIntelligencePatrolAutonomyLevel returns the effective Patrol autonomy
-// level for the default tenant after licence and Autopilot acknowledgement
-// gating, bounded to the four released modes. An install without an AI
+// level for the default tenant after licence gating, bounded to the released
+// modes (monitor and approval). An install without an AI
 // service reports monitor, which is what the runtime enforces in that state.
 func (r *Router) pulseIntelligencePatrolAutonomyLevel() string {
 	if r == nil || r.aiSettingsHandler == nil {

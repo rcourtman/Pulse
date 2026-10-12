@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -223,7 +224,6 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.True(t, resp.Success)
 	require.Equal(t, config.PatrolAutonomyMonitor, resp.Settings.AutonomyLevel)
-	require.False(t, resp.Settings.FullModeUnlocked)
 	require.Equal(t, 5, resp.Settings.InvestigationBudget)
 	require.Equal(t, 60, resp.Settings.InvestigationTimeoutSec)
 	require.NotContains(t, rec.Body.String(), "max_turns", "wire-compatible investigation_budget must not expose the derived model-turn ceiling")
@@ -231,7 +231,6 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	saved, err := persistence.LoadAIConfig()
 	require.NoError(t, err)
 	require.Equal(t, config.PatrolAutonomyMonitor, saved.PatrolAutonomyLevel)
-	require.False(t, saved.PatrolFullModeUnlocked)
 	require.Equal(t, 5, saved.PatrolInvestigationBudget)
 	require.Equal(t, 60, saved.PatrolInvestigationTimeoutSec)
 	require.Equal(t, 1, policyMutationCalls)
@@ -245,7 +244,7 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	require.Contains(t, premiumRec.Body.String(), "limited to Monitor")
 }
 
-func TestMutatePatrolAutopilotConfigReconcilesBacklogOnlyWhenLeavingMonitor(t *testing.T) {
+func TestMutatePatrolAutonomyConfigReconcilesBacklogOnlyWhenLeavingMonitor(t *testing.T) {
 	tmp := t.TempDir()
 	persistence := config.NewConfigPersistence(tmp)
 	aiCfg := config.NewDefaultAIConfig()
@@ -266,12 +265,12 @@ func TestMutatePatrolAutopilotConfigReconcilesBacklogOnlyWhenLeavingMonitor(t *t
 	orchestrator := &stubInvestigationOrchestrator{investigateCh: make(chan string, 2)}
 	patrol.SetInvestigationOrchestrator(orchestrator)
 
-	setApproval := func(cfg *config.AIConfig, _ unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
+	setApproval := func(cfg *config.AIConfig) (bool, error) {
 		changed := cfg.PatrolAutonomyLevel != config.PatrolAutonomyApproval
 		cfg.PatrolAutonomyLevel = config.PatrolAutonomyApproval
 		return changed, nil
 	}
-	require.NoError(t, handler.mutatePatrolAutopilotConfig(context.Background(), setApproval))
+	require.NoError(t, handler.mutatePatrolAutonomyConfig(context.Background(), setApproval))
 	select {
 	case findingID := <-orchestrator.investigateCh:
 		require.Equal(t, "backlog-warning", findingID)
@@ -279,30 +278,30 @@ func TestMutatePatrolAutopilotConfigReconcilesBacklogOnlyWhenLeavingMonitor(t *t
 		t.Fatal("leaving Watch Only did not reconcile the actionable finding backlog")
 	}
 
-	require.NoError(t, handler.mutatePatrolAutopilotConfig(context.Background(), setApproval))
+	require.NoError(t, handler.mutatePatrolAutonomyConfig(context.Background(), setApproval))
 	select {
 	case findingID := <-orchestrator.investigateCh:
 		t.Fatalf("no-op paid-mode save retriggered finding %q", findingID)
 	case <-time.After(50 * time.Millisecond):
 	}
 
-	setMonitor := func(cfg *config.AIConfig, _ unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
+	setMonitor := func(cfg *config.AIConfig) (bool, error) {
 		changed := cfg.PatrolAutonomyLevel != config.PatrolAutonomyMonitor
 		cfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
 		return changed, nil
 	}
-	require.NoError(t, handler.mutatePatrolAutopilotConfig(context.Background(), setMonitor))
+	require.NoError(t, handler.mutatePatrolAutonomyConfig(context.Background(), setMonitor))
 	select {
 	case findingID := <-orchestrator.investigateCh:
 		t.Fatalf("demotion to Watch Only retriggered finding %q", findingID)
 	case <-time.After(50 * time.Millisecond):
 	}
 
-	updateBudget := func(cfg *config.AIConfig, _ unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
+	updateBudget := func(cfg *config.AIConfig) (bool, error) {
 		cfg.PatrolInvestigationBudget++
 		return true, nil
 	}
-	require.NoError(t, handler.mutatePatrolAutopilotConfig(context.Background(), updateBudget))
+	require.NoError(t, handler.mutatePatrolAutonomyConfig(context.Background(), updateBudget))
 	select {
 	case findingID := <-orchestrator.investigateCh:
 		t.Fatalf("Watch Only control update retriggered finding %q", findingID)
@@ -3718,7 +3717,7 @@ func TestAISettingsHandler_PatrolModelReadiness_AssistantDisabledReturnsDimensio
 	assert.Equal(t, ai.PatrolModelReadinessProbeVersion, response.ProbeVersion)
 	assert.Equal(t, ai.PatrolFailureCauseAssistantDisabled, response.Cause)
 	assert.Equal(t, ai.PatrolModelReadinessNotAssessed, response.Dimensions.ToolProtocol.Status)
-	assert.Equal(t, ai.PatrolModeNotAssessed, response.Modes.Assisted.Status)
+	assert.Equal(t, ai.PatrolModeNotAssessed, response.Modes.Approval.Status)
 	assert.NotZero(t, response.RecordedAtUnix)
 }
 
@@ -3827,7 +3826,7 @@ func TestAssistantSettingsProjectionAndUnrelatedSave(t *testing.T) {
 				persistence := config.NewConfigPersistence(tmp)
 				cfg := config.NewDefaultAIConfig()
 				cfg.ControlLevel = level
-				cfg.PatrolAutonomyLevel = config.PatrolAutonomyFull
+				cfg.PatrolAutonomyLevel = "full"
 				cfg.PatrolActionEmergencyStop = true
 				cfg.PatrolAutoFix = true
 				require.NoError(t, persistence.SaveAIConfig(*cfg))
@@ -3857,7 +3856,7 @@ func TestAssistantSettingsProjectionAndUnrelatedSave(t *testing.T) {
 						wantStored = config.ControlLevelControlled
 					}
 					require.Equal(t, wantStored, persisted.ControlLevel, "unrelated save must preserve preference")
-					require.Equal(t, config.PatrolAutonomyFull, persisted.PatrolAutonomyLevel)
+					require.Equal(t, "full", persisted.PatrolAutonomyLevel)
 					require.True(t, persisted.PatrolActionEmergencyStop)
 					require.True(t, persisted.PatrolAutoFix)
 					require.Zero(t, refreshes)
@@ -3907,7 +3906,7 @@ func TestAssistantProjectedModeEchoPreservesLegacyPolicy(t *testing.T) {
 			persistence := config.NewConfigPersistence(tmp)
 			cfg := config.NewDefaultAIConfig()
 			cfg.ControlLevel = config.ControlLevelAutonomous
-			cfg.PatrolAutonomyLevel = config.PatrolAutonomyFull
+			cfg.PatrolAutonomyLevel = "full"
 			cfg.PatrolActionEmergencyStop = true
 			require.NoError(t, persistence.SaveAIConfig(*cfg))
 			handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
@@ -3928,7 +3927,7 @@ func TestAssistantProjectedModeEchoPreservesLegacyPolicy(t *testing.T) {
 			require.Equal(t, config.ControlLevelAutonomous, persisted.ControlLevel, "a mode echo must not change legacy command admission")
 			require.Equal(t, licensed, handler.defaultAIService.IsAutonomous(), "legacy entitlement/approval selection is unchanged")
 			require.Equal(t, 120, persisted.RequestTimeoutSeconds)
-			require.Equal(t, config.PatrolAutonomyFull, persisted.PatrolAutonomyLevel)
+			require.Equal(t, "full", persisted.PatrolAutonomyLevel)
 			require.True(t, persisted.PatrolActionEmergencyStop)
 			// Explicit opt-out and a later opt-in remain real mode changes.
 			for _, level := range []string{config.ControlLevelReadOnly, config.ControlLevelControlled} {
@@ -3940,6 +3939,41 @@ func TestAssistantProjectedModeEchoPreservesLegacyPolicy(t *testing.T) {
 				require.Equal(t, level, persisted.ControlLevel)
 				require.False(t, handler.defaultAIService.IsAutonomous())
 			}
+		})
+	}
+}
+
+// TestGatePatrolAutonomyUpdateRefusesRetiredLevels pins the retirement of
+// Patrol's self-executing modes at the paid update route: a retired level is
+// refused before the extension handler runs, and a current level reaches it
+// with the request body intact.
+func TestGatePatrolAutonomyUpdateRefusesRetiredLevels(t *testing.T) {
+	handler := &AISettingsHandler{}
+	for _, level := range []string{"assisted", "full", "autonomous", " Full "} {
+		t.Run("retired/"+level, func(t *testing.T) {
+			called := false
+			gated := handler.GatePatrolAutonomyUpdate(func(http.ResponseWriter, *http.Request) { called = true })
+			rec := httptest.NewRecorder()
+			gated(rec, httptest.NewRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(`{"autonomy_level":"`+level+`"}`)))
+			require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+			require.Contains(t, rec.Body.String(), "invalid_autonomy_level")
+			require.False(t, called, "retired level reached the extension handler")
+		})
+	}
+	for _, level := range []string{config.PatrolAutonomyMonitor, config.PatrolAutonomyApproval} {
+		t.Run("current/"+level, func(t *testing.T) {
+			body := `{"autonomy_level":"` + level + `","investigation_budget":10}`
+			var forwarded string
+			gated := handler.GatePatrolAutonomyUpdate(func(w http.ResponseWriter, r *http.Request) {
+				raw, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
+				forwarded = string(raw)
+				w.WriteHeader(http.StatusNoContent)
+			})
+			rec := httptest.NewRecorder()
+			gated(rec, httptest.NewRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(body)))
+			require.Equal(t, http.StatusNoContent, rec.Code)
+			require.Equal(t, body, forwarded)
 		})
 	}
 }
