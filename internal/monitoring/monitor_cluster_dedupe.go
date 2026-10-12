@@ -130,13 +130,13 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 	m.mu.Unlock()
 
 	m.diagMu.Lock()
-	for key := range m.nodeSnapshots {
-		if strings.HasPrefix(key, instanceName+"|") {
+	for key, snapshot := range m.nodeSnapshots {
+		if snapshot.Instance == instanceName {
 			delete(m.nodeSnapshots, key)
 		}
 	}
-	for key := range m.guestSnapshots {
-		if strings.HasPrefix(key, instanceName+"|") {
+	for key, snapshot := range m.guestSnapshots {
+		if snapshot.Instance == instanceName {
 			delete(m.guestSnapshots, key)
 		}
 	}
@@ -144,25 +144,25 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 
 	m.guestMetadataLimiterMu.Lock()
 	for key := range m.guestMetadataInFlight {
-		if strings.HasPrefix(key, instanceName+"|") {
+		if guestMetadataCacheBelongsToInstance(key, instanceName) {
 			m.invalidateGuestMetadataFetchLocked(key)
 		}
 	}
 	m.guestMetadataMu.Lock()
 	for key := range m.guestMetadataCache {
-		if strings.HasPrefix(key, instanceName+"|") {
+		if guestMetadataCacheBelongsToInstance(key, instanceName) {
 			delete(m.guestMetadataCache, key)
 		}
 	}
 	m.guestMetadataMu.Unlock()
 
 	for key := range m.guestMetadataLimiter {
-		if strings.HasPrefix(key, instanceName+"|") {
+		if guestMetadataCacheBelongsToInstance(key, instanceName) {
 			delete(m.guestMetadataLimiter, key)
 		}
 	}
 	for key := range m.guestMetadataLastAccess {
-		if strings.HasPrefix(key, instanceName+"|") {
+		if guestMetadataCacheBelongsToInstance(key, instanceName) {
 			delete(m.guestMetadataLastAccess, key)
 		}
 	}

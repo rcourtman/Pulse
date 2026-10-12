@@ -621,6 +621,19 @@ func guestMetadataCacheKey(instanceName, nodeName string, vmid int) string {
 	return fmt.Sprintf("%s|%s|%d", instanceName, nodeName, vmid)
 }
 
+// PVE node names and VM IDs cannot contain '|', but connection labels can.
+// Read the two fixed suffixes from the right: "site|other" is not owned by
+// "site". Retirement must never erase another connection's command-safety
+// state, cancel its fetch, or discard its refresh/backoff deadline.
+func guestMetadataCacheBelongsToInstance(key, instanceName string) bool {
+	end := strings.LastIndexByte(key, '|')
+	if end < 0 {
+		return false
+	}
+	end = strings.LastIndexByte(key[:end], '|')
+	return end >= 0 && key[:end] == instanceName
+}
+
 func (m *Monitor) clearGuestMetadataCache(instanceName, nodeName string, vmid int) {
 	if m == nil {
 		return

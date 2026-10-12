@@ -314,8 +314,8 @@ func TestMonitor_ConsolidateDuplicateClusters_RetiresRemovedStandaloneRuntimeSta
 		backupPermissionWarnings: map[string]string{"minipc-standalone": "warn"},
 		nodeLastOnline:           map[string]time.Time{"minipc-standalone-minipc": time.Now()},
 		nodePendingUpdatesCache:  map[string]pendingUpdatesCache{"minipc-standalone-minipc": {count: 1, checkedAt: time.Now()}},
-		nodeSnapshots:            map[string]NodeMemorySnapshot{"minipc-standalone|minipc": {RetrievedAt: time.Now()}},
-		guestSnapshots:           map[string]GuestMemorySnapshot{"minipc-standalone|qemu|minipc|100": {RetrievedAt: time.Now()}},
+		nodeSnapshots:            map[string]NodeMemorySnapshot{"minipc-standalone|minipc": {Instance: "minipc-standalone", RetrievedAt: time.Now()}},
+		guestSnapshots:           map[string]GuestMemorySnapshot{"minipc-standalone|qemu|minipc|100": {Instance: "minipc-standalone", RetrievedAt: time.Now()}},
 		guestMetadataCache:       map[string]guestMetadataCacheEntry{"minipc-standalone|minipc|100": {fetchedAt: time.Now()}},
 		guestMetadataLimiter:     map[string]time.Time{"minipc-standalone|minipc|100": time.Now().Add(time.Minute)},
 	}

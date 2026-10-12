@@ -17,6 +17,26 @@
 
 ## Purpose
 
+### Connection retirement preserves unrelated guest safety state
+
+Retiring a consolidated PVE connection cancels and clears only its own guest
+metadata lifecycle. Connection labels may contain `|`; matching a label prefix
+cannot establish ownership. The metadata key's two fixed node/VMID suffixes
+are read from the right, while diagnostic memory snapshots use their recorded
+`Instance`. A separate `site|other` connection keeps its outstanding owner,
+OS-command suppression, original observations and refresh/backoff deadlines
+when `site` is retired. The retired connection's cancelled fetch still owns
+its key until completion, and shared transport uncertainty is never cleared.
+
+`TestGuestMetadataRetirementOwnershipContract` covers exact cleanup, nested and
+Unicode labels, diagnostic origins and in-flight HTTP bodies at all three
+metadata stages. `TestGuestMetadataRetirementPollingKeepsSuppression` exercises
+both clients and ordinary collectors: no reissued suppressed OS command, no
+unrelated identity loss, and continued independent filesystem/CPU/memory reads.
+Wire formats, TTLs, guest-command/backup-lock/TLS fences and stored History are
+unchanged. These are synthetic source controls, not native thaw/restart recovery,
+a reporter's failure cause or installed/release acceptance.
+
 ### Rate refusals cannot permanently disable guest OS discovery
 
 An observed HTTP 429 from guest OS-info preserves the existing OS-command
