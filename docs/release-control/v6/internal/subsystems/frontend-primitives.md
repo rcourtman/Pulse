@@ -8644,6 +8644,16 @@ active locale rather than the English-only `formatRelativeTime`. Proofs live
 in `frontend-modern/src/i18n/__tests__/i18n.test.ts` and
 `frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts`.
 
+### Alert overview rows place Investigate by the shared breakpoint
+
+`AlertOverviewAlertCard` reads the shared `useBreakpoint()` hook to decide
+where the Investigate split button renders: on the row from `sm` up, inside
+the More disclosure below it. It renders one instance rather than two
+CSS-hidden copies, so no menu id is duplicated, and it adds no resize
+listener of its own. Snooze never moves, so its dialog state survives a
+breakpoint crossing. The More button keeps its existing catalog labels and
+sets `aria-controls` only while its region is rendered.
+
 ### Alert groups use the shared localization boundary
 
 Alert group disclosure and group acknowledgement copy routes through
