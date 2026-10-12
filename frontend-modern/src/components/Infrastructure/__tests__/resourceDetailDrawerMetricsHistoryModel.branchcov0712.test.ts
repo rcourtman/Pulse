@@ -165,6 +165,85 @@ describe('canonical drawer History honours selected guest observation provenance
       expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBe(50);
     },
   );
+
+  it.each(['stopped', ' STOPPED ', 'offline'])(
+    'withdraws native %s VM disk carriers before considering a retained read reason',
+    (runtimeStatus) => {
+      for (const diskStatusReason of ['', 'prev-agent-busy']) {
+        const value = resource('current', 0);
+        value.proxmox = { runtimeStatus, diskStatusReason };
+        expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({
+          disk: undefined,
+          usage: undefined,
+          memory: 0,
+          cpu: 10,
+          netin: 0,
+        });
+        expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toEqual({
+          lastKnownValue: undefined,
+          message: 'Guest filesystem stats unavailable while the VM is stopped.',
+        });
+        value.lastSeen += 3600000;
+        expect(getResourceMetricsHistoryDeferredMetrics(value).disk.lastKnownValue).toBeUndefined();
+      }
+    },
+  );
+
+  it('uses native running state over canonical offline, keeping accepted zero current', () => {
+    const value = resource('current');
+    value.status = 'offline';
+    value.proxmox = { runtimeStatus: ' RUNNING ', diskStatusReason: '' };
+    value.disk = { current: 0 };
+    expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({ disk: 0, usage: 0 });
+    expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toBeUndefined();
+    value.proxmox.diskStatusReason = 'vm-stopped';
+    expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBeUndefined();
+    expect(getResourceMetricsHistoryDeferredMetrics(value).disk.lastKnownValue).toBeUndefined();
+  });
+
+  it.each([undefined, '', '   '])(
+    'uses canonical offline only when native state is absent (%s)',
+    (runtimeStatus) => {
+      const value = resource('current');
+      value.status = 'offline';
+      value.proxmox = { runtimeStatus };
+      expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBeUndefined();
+      expect(getResourceMetricsHistoryDeferredMetrics(value).disk.message).toContain(
+        'VM is stopped',
+      );
+    },
+  );
+
+  it('honours native power for a VM with Proxmox among its platform scopes', () => {
+    const value = resource('current');
+    value.platformType = 'agent';
+    value.platformScopes = ['agent', 'proxmox-pve'];
+    value.proxmox = { runtimeStatus: 'stopped' };
+    expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBeUndefined();
+    expect(getResourceMetricsHistoryDeferredMetrics(value).disk.lastKnownValue).toBeUndefined();
+  });
+
+  it.each(['system-container', 'storage', 'disk', 'agent'] as const)(
+    'does not apply VM filesystem power/read rules to independent %s metrics',
+    (type) => {
+      const value = resource('current');
+      value.type = type;
+      value.status = 'offline';
+      value.proxmox = { runtimeStatus: 'stopped', diskStatusReason: 'prev-agent-busy' };
+      expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({ disk: 50, usage: 50 });
+      expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toBeUndefined();
+    },
+  );
+
+  it('leaves a vSphere-only VM independent of Proxmox power/read metadata', () => {
+    const value = resource('current');
+    value.platformType = 'vmware-vsphere';
+    value.platformScopes = ['vmware-vsphere'];
+    value.status = 'offline';
+    value.proxmox = { runtimeStatus: 'stopped', diskStatusReason: 'prev-agent-busy' };
+    expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({ disk: 50, usage: 50 });
+    expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toBeUndefined();
+  });
 });
 
 describe('getResourceMetricsHistoryTarget branch coverage', () => {
