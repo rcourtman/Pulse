@@ -17,6 +17,27 @@
 
 ## Purpose
 
+### PBS password renewal publishes one complete shared session
+
+Concurrent reads of an expired PBS password session share one in-flight
+authentication attempt. Ticket, CSRF token and expiry are published together;
+each ordinary request uses one complete tuple. Only renewal is shared: the
+subsequent API reads remain independent, and a cancelled waiter cannot cancel
+the owner. Caller cancellation and deadlines stay context errors, not credential
+refusals, including token reads that never attempt a login. Joined callers receive the owner's failure without reissuing it;
+a later ordinary call may try again. JSON authentication and the existing
+400/415 form fallback retain their semantics. Tokens do not acquire session
+authority, and API 401/403 replies remain terminal without adding a replay.
+
+`pkg/pbs/auth_session_concurrency_test.go` exercises pinned local HTTPS expiry,
+encoding fallback/refusal, malformed responses, independent reads, cookie/CSRF
+pairing, owner/waiter cancellation and ordinary later recovery. Its accepted
+node/datastore responses also consume through the canonical PBS projection.
+TLS pins/CA/opt-out and redirect policy, credentials, ticket lifetime, provider
+permissions, wire shapes, polling schedules, guest/backup fences and stored
+History are unchanged. These synthetic controls do not establish an installed
+connection, native recovery or the cause of a reported PBS/guest failure.
+
 ### Connection retirement preserves unrelated guest safety state
 
 Retiring a consolidated PVE connection cancels and clears only its own guest
