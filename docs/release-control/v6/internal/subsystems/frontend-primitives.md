@@ -268,13 +268,13 @@ writes, guest liveness, service restoration or reporter recovery.
 
 ### Node drawer CPU temperature reads the backend reading
 
-The node drawer's CPU temperature trend card, its Summary temperature row and
+The node drawer's Thermals chart reading, its Summary temperature row and
 `getNodeDrawerCurrentMetrics` read `Node.cpuTemperature`, the backend's
-primary CPU reading, which the history line beneath the card records under the
-same rule. `getCpuTemperature` (a frontend maximum over package, CPU maximum
-and cores) is removed from `utils/temperature.ts`; no drawer may rebuild a
-headline from `temperature` details. Proof: `NodeDrawer.test.tsx` (the card
-shows the backend value while the details hold a hotter core) and the
+primary CPU reading, which the chart's stored line records under the same
+rule. `getCpuTemperature` (a frontend maximum over package, CPU maximum and
+cores) is removed from `utils/temperature.ts`; no drawer may rebuild a reading
+from `temperature` details. Proof: `NodeDrawer.test.tsx` (the chart's live
+fallback shows the backend value while the details hold a hotter core) and the
 `nodeDrawerModel` branch tests.
 
 ### Drawer attention detail line and temperature alert floor — issue #2068
@@ -5456,31 +5456,41 @@ The Proxmox guest and node drawers (`GuestDrawerOverview.tsx`,
 2026-10-13 (demand ledger "Drawer Overview leads with attention and trends",
 a named bet): a grid of equal-weight inventory cards buried the drawer's job.
 Their Overview leads with active alerts (or one "No active alerts" line), then
-24h trend cards for the metrics the row shows, which add the time dimension
-the row lacks rather than restating it. Any warning- or danger-toned detail row
+the resource's history charts (`GuestDrawerHistory`, lazy-loaded) opening on
+24 hours with the range picker beside them. These drawers have no History tab:
+by maintainer decision on 2026-10-13 the tab was removed because it repeated
+Overview's charts at another range in another style. The charts poll only
+while Overview shows, and before any history is stored they show the live
+reading, qualified "current" or "last known". An active alert on a charted
+metric tones that reading and, when it carries a numeric trigger, draws it as
+a dashed line in its severity colour; `getDrawerChartAlerts` maps alert types
+to chart metrics and converts I/O triggers from the alert engine's MiB/s to
+the charts' bytes per second. Any
+warning- or danger-toned detail row
 is lifted into a "Worth checking" section in front, whichever section owns it,
 so demotion never hides a reason a reading cannot be trusted. Guest
 filesystems, physical disks, RAID, node GPU and NVMe sensor readings (which
 carry no heat tone of their own), and any availability check that is not both
 healthy and fresh stay visible; "availability checks passing" is said only of
-fresh healthy evidence. Trend cards withhold the live value of an offline or
-stale node, and a guest's withdrawn memory reading shows no bytes either.
-A node card is coloured only by the node's own alerts, which
+fresh healthy evidence. An offline or stale node says so in one line above
+its charts, which then take no live fallback reading, and a guest's withdrawn
+memory reading shows no memory size either.
+A node chart draws alert lines only for the node's own alerts, which
 `ProxmoxNodesTable.tsx` passes as `ownAlerts` by identity match; the drawer's
 `alerts` list also carries its guests' alerts through the node-name match. A
-one-line facts strip carries OS, address, a healthy last completed backup and
-tags. The complete inventory sits in a closed "Details"
+one-line facts strip carries OS, the amounts the charts' percentages are of
+(guest vCPUs and used-of-total RAM and disk; node CPUs and used-of-total RAM
+and root disk, capacity only while its readings are withheld), address, a
+healthy last completed backup and tags. The complete inventory sits in a closed "Details"
 `TechnicalDetailsDisclosure` with `keepMounted`, so its rows stay in the
 document for find-in-page and tests while hidden. Other drawers keep the rule
 above until that bet is graded. "Worth checking" renders through
-`DrawerExceptionList.tsx` directly under the alerts line, above the trend
-cards: one compact label/value line per lifted row with the shared
-`detailValueToneClass` tone, not a card per section. Each trend card marks its
-headline value "now" and states its range as "24h low–high", so the live
-number is not read as the last point of the stored line. A guest memory reading
-from a cache-inclusive source says "may include cache" on the Memory card
-itself; the full note (why, and what to do) is the Details row "About this
-reading" and appears once. `DetailSectionTable` keeps the single bordered table at narrow widths
+`DrawerExceptionList.tsx` directly under the alerts line, above the charts:
+one compact label/value line per lifted row with the shared
+`detailValueToneClass` tone, not a card per section. A guest memory reading
+from a cache-inclusive source says "may include cache" beside its RAM amount
+in the facts strip; the full note (why, and what to do) is the Details row
+"About this reading" and appears once. `DetailSectionTable` keeps the single bordered table at narrow widths
 where density matters, then presents those same canonical rows as bounded
 section cards on desktop. Desktop cards share the available row width, stretch
 to the same row height, and use stable three- or four-column tracks. An

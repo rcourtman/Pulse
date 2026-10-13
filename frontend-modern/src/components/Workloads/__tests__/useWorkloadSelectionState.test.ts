@@ -532,15 +532,15 @@ describe('useWorkloadSelectionState', () => {
     ] as WorkloadGuest[]);
     const { result } = renderHook(() => useWorkloadSelectionState({ filteredGuests: guests }));
     result.setSelectedGuestId('stable-resource');
-    result.selectedGuestDrawerState.setActiveTab('history');
+    result.selectedGuestDrawerState.setActiveTab('manage');
     result.selectedGuestDrawerState.setHistoryRange('12h');
     setGuests([{ id: 'stable-resource', node: 'node-2' }] as WorkloadGuest[]);
     result.setSelectedGuestId('stable-resource');
-    expect(result.selectedGuestDrawerState.activeTab()).toBe('history');
+    expect(result.selectedGuestDrawerState.activeTab()).toBe('manage');
     expect(result.selectedGuestDrawerState.historyRange()).toBe('12h');
     result.setSelectedGuestId('independent-clone');
     expect(result.selectedGuestDrawerState.activeTab()).toBe('overview');
-    expect(result.selectedGuestDrawerState.historyRange()).toBe('7d');
+    expect(result.selectedGuestDrawerState.historyRange()).toBe('24h');
     result.selectedGuestDrawerState.setActiveTab('manage');
     result.clearPinnedSummaryScope();
     expect(result.selectedGuestDrawerState.activeTab()).toBe('overview');

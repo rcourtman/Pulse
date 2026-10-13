@@ -2892,16 +2892,16 @@ local bar geometry, or render a bar for the negative unknown-usage sentinel.
 `GuestDrawerOverview.tsx` renders the `Filesystems` section on its own, in
 front of the collapsed Details, so the mount-point list never shares a card
 row with shorter sections; tags render as chips in the Overview facts strip
-rather than as a `Tags` detail section. The Overview's 24h trend cards
-(`DrawerTrendCards.tsx`, lazy-loaded out of the WorkloadsSurface chunk) and
-the History tab read one query from `guestDrawerHistoryQuery.ts` with one cache
-key, and each mounts only while its tab is visible: the node drawer's History
-no longer stays mounted and polling while hidden. Because those cards already
-cover the last 24 hours, the guest and node drawers open History on
-`TRENDED_DRAWER_HISTORY_DEFAULT_RANGE` (7 days, within the free plan's
-retention) rather than repeating them; a 24h History selection reuses the
-cards' cached read. Drawers without trend cards (Docker host, resource
-detail) keep the 24h `GUEST_DRAWER_HISTORY_DEFAULT_RANGE`.
+rather than as a `Tags` detail section. The guest and node drawers chart
+history on Overview itself: `GuestDrawerOverview.tsx` and
+`NodeDrawerOverview.tsx` lazy-load `GuestDrawerHistory` out of the
+WorkloadsSurface chunk, open it on the 24h `GUEST_DRAWER_HISTORY_DEFAULT_RANGE`
+and pass `enabled={false}` while Manage shows, so one query from
+`guestDrawerHistoryQuery.ts` polls only while the charts are visible. These
+drawers have no History tab, so there is no second read of the same resource
+at another range (the deleted `DrawerTrendCards.tsx` and the History tab each
+held one). Docker host and resource-detail drawers keep their History tab on
+the same 24h default.
 Panel width alone does not make mount paths readable. Filesystem disk rows must
 opt into the shared `layout: 'stacked'` presentation so their full mount path
 wraps above usage and progress at desktop and phone widths. Shared-prefix paths
@@ -4012,8 +4012,9 @@ Round dot markers (zero-length round-capped strokes) and the in-place
 node per observation beyond the marker's two paths, and the readout no longer
 inserts or removes a line as the inspected time changes.
 Numeric gridline labels are computed from the scale the panel already holds;
-the compact "Worth checking" list and the trend cards' "now" and "24h low–high"
-labels reuse rows and ranges already derived. None adds a read or timer.
+the compact "Worth checking" list reuses rows already derived, and an alert's
+dashed trigger line reuses the alert the drawer already holds. None adds a read
+or timer.
 
 The default stored-history legend resolves one latest timestamp from that
 same bounded, normalized panel index, then looks up each configured series at

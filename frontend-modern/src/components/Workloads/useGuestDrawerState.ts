@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { HistoryTimeRange } from '@/api/charts';
@@ -25,7 +25,7 @@ import {
   hasGuestDrawerFilesystemDetails,
   hasGuestDrawerOsInfo,
   normalizeGuestDrawerTags,
-  TRENDED_DRAWER_HISTORY_DEFAULT_RANGE,
+  GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   type GuestDrawerViewState,
   type GuestDrawerProps,
   type GuestDrawerTab,
@@ -39,7 +39,7 @@ import {
 export function createGuestDrawerViewState(): GuestDrawerViewState {
   const [activeTab, setActiveTab] = createSignal<GuestDrawerTab>('overview');
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
-    TRENDED_DRAWER_HISTORY_DEFAULT_RANGE,
+    GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   );
   return {
     activeTab,
@@ -48,7 +48,7 @@ export function createGuestDrawerViewState(): GuestDrawerViewState {
     setHistoryRange,
     reset: () => {
       setActiveTab('overview');
-      setHistoryRange(TRENDED_DRAWER_HISTORY_DEFAULT_RANGE);
+      setHistoryRange(GUEST_DRAWER_HISTORY_DEFAULT_RANGE);
     },
   };
 }
@@ -117,12 +117,6 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   const switchTab = (tab: GuestDrawerTab) => {
     setActiveTab(tab);
   };
-
-  createEffect(() => {
-    if (activeTab() === 'history' && !hasHistorySupport()) {
-      setActiveTab('overview');
-    }
-  });
 
   return {
     activeTab,

@@ -25,6 +25,9 @@ vi.mock('@/stores/license', () => ({
 }));
 
 import { NodeDrawer } from './NodeDrawer';
+// Overview loads its charts lazily; warm the module so a cold transform does
+// not outlast the tests' waits.
+import './GuestDrawerHistory';
 
 // Details is closed by default; a warning row is lifted out of it into
 // Worth checking, so read the whole Overview with Details open.
@@ -152,7 +155,7 @@ describe('NodeDrawer', () => {
     const technical = openTechnicalDetails();
 
     expect(screen.getByText('Overview')).toBeInTheDocument();
-    expect(screen.getByText('History')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'History' })).toBeNull();
     expect(screen.getByText('Manage')).toBeInTheDocument();
     expect(technical.queryByText('System')).toBeNull();
     expect(technical.getAllByText('Platform').length).toBeGreaterThan(0);
@@ -319,13 +322,12 @@ describe('NodeDrawer', () => {
         })}
       />
     ));
-    await fireEvent.click(screen.getByText('History'));
     await waitFor(() =>
       expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledWith(
         expect.objectContaining({
           resourceType: 'node',
           resourceId: 'cluster-pve-native',
-          range: '7d',
+          range: '24h',
         }),
       ),
     );
@@ -345,14 +347,12 @@ describe('NodeDrawer', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByText('History'));
-
     await waitFor(() => {
       expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledWith(
         expect.objectContaining({
           resourceType: 'node',
           resourceId: 'homelab-pve-node-1',
-          range: '7d',
+          range: '24h',
         }),
       );
     });
@@ -374,14 +374,12 @@ describe('NodeDrawer', () => {
   it('keeps agent history and disk throughput when a Unified Agent is linked', async () => {
     render(() => <NodeDrawer node={makeNode({ linkedAgentId: 'agent:pve-node-1' })} />);
 
-    await fireEvent.click(screen.getByText('History'));
-
     await waitFor(() => {
       expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledWith(
         expect.objectContaining({
           resourceType: 'agent',
           resourceId: 'pve-node-1',
-          range: '7d',
+          range: '24h',
         }),
       );
     });
@@ -396,8 +394,23 @@ describe('NodeDrawer', () => {
   });
 });
 
-describe('NodeDrawer Overview trends', () => {
-  it('lists Worth checking as one line under the alerts line, above the trend cards', async () => {
+const EMPTY_HISTORY = {
+  resourceType: 'agent',
+  resourceId: 'pve-node-1',
+  range: '24h',
+  start: 1,
+  end: 3,
+  metrics: {},
+  source: 'store',
+};
+
+const utilizationChart = async () =>
+  (await screen.findAllByTestId('guest-history-group-chart')).find(
+    (chart) => chart.dataset.historyGroup === 'utilization',
+  )!;
+
+describe('NodeDrawer Overview charts', () => {
+  it('lists Worth checking as one line under the alerts line, above the charts', async () => {
     render(() => (
       <NodeDrawer
         node={makeNode({
@@ -406,10 +419,10 @@ describe('NodeDrawer Overview trends', () => {
         })}
       />
     ));
-    const cpu = await screen.findByTestId('drawer-trend-card-cpu');
+    const chart = await utilizationChart();
     const worth = screen.getByTestId('node-drawer-exceptions');
     expect(
-      worth.compareDocumentPosition(cpu) & window.Node.DOCUMENT_POSITION_FOLLOWING,
+      worth.compareDocumentPosition(chart) & window.Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     const row = within(worth).getByText('Updates').closest('tr')!;
     expect(row).toHaveTextContent('Unavailable · Proxmox source unavailable');
@@ -428,29 +441,32 @@ describe('NodeDrawer Overview trends', () => {
     threshold: 85,
   });
 
-  it("marks a trend card only for the node's own alert, not a guest's on the same node", async () => {
+  it("draws an alert line only for the node's own alert, not a guest's on the same node", async () => {
     render(() => <NodeDrawer node={makeNode()} alerts={[guestAlert]} />);
-    const memory = await screen.findByTestId('drawer-trend-card-memory');
+    const chart = await utilizationChart();
     // The guest's alert is still listed under Needs attention.
     expect(screen.getByText('VM memory at 85.4%')).toBeInTheDocument();
-    expect(memory).not.toHaveClass('border-amber-400');
-    expect(screen.queryByTestId('drawer-trend-threshold')).toBeNull();
+    expect(chart.querySelector('[data-history-threshold]')).toBeNull();
   });
 
-  it("draws the node's own memory alert on its memory card", async () => {
+  it("draws the node's own memory alert on the utilization chart", async () => {
     render(() => <NodeDrawer node={makeNode()} alerts={[makeAlert(), guestAlert]} />);
-    const memory = await screen.findByTestId('drawer-trend-card-memory');
-    expect(memory).toHaveClass('border-amber-400');
-    expect(await within(memory).findByTestId('drawer-trend-threshold')).toBeInTheDocument();
+    const chart = await utilizationChart();
+    const line = chart.querySelector('[data-history-threshold="memory"]');
+    expect(line).toHaveClass('text-amber-500');
+    expect(line).toHaveTextContent('Memory alert at 90.0%');
   });
 
   it("does not present an offline node's last readings as live", async () => {
-    render(() => <NodeDrawer node={makeNode({ status: 'offline' })} />);
-    const cpu = await screen.findByTestId('drawer-trend-card-cpu');
-    expect(within(cpu).getByText('not current')).toBeInTheDocument();
-    expect(cpu).toHaveTextContent('Node is offline. Showing its history only.');
-    // No used-of-total bytes beside a withheld reading.
-    expect(screen.getByTestId('drawer-trend-card-memory').textContent).not.toMatch(/ of /);
+    chartsApiMocks.getMetricsHistory.mockResolvedValue(EMPTY_HISTORY);
+    render(() => <NodeDrawer node={makeNode({ status: 'offline', cpuTemperature: 65 })} />);
+    await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled());
+    expect(screen.getByTestId('node-drawer-readings-withheld')).toHaveTextContent(
+      'Node is offline. Showing its history only.',
+    );
+    await screen.findAllByText('No stored history in this range');
+    expect(document.querySelector('[data-history-current]')).toBeNull();
+    expect(document.querySelector('[data-history-last-known]')).toBeNull();
   });
 
   it('keeps NVMe and GPU sensor readings visible rather than inside closed Details', () => {
@@ -478,12 +494,12 @@ describe('NodeDrawer Overview trends', () => {
       threshold: 95,
     });
     render(() => <NodeDrawer node={makeNode()} alerts={[nodeAlert]} ownAlerts={[nodeAlert]} />);
-    const memory = await screen.findByTestId('drawer-trend-card-memory');
-    expect(memory).toHaveClass('border-red-400');
-    expect(await within(memory).findByTestId('drawer-trend-threshold')).toBeInTheDocument();
+    const chart = await utilizationChart();
+    expect(chart.querySelector('[data-history-threshold="memory"]')).toHaveClass('text-red-500');
   });
 
   it('labels retained node memory as last known instead of live', async () => {
+    chartsApiMocks.getMetricsHistory.mockResolvedValue(EMPTY_HISTORY);
     render(() => (
       <NodeDrawer
         node={makeNode({
@@ -497,24 +513,31 @@ describe('NodeDrawer Overview trends', () => {
         })}
       />
     ));
-    const memory = await screen.findByTestId('drawer-trend-card-memory');
-    expect(within(memory).getByText('last known')).toBeInTheDocument();
-    expect(within(memory).getByText('40.0%')).toBeInTheDocument();
+    const chart = await utilizationChart();
+    await within(chart).findByText('No stored history in this range');
+    expect(chart.querySelector('[data-history-last-known="memory"]')).toHaveTextContent(
+      'Memory40.0%last known',
+    );
+    expect(chart.querySelector('[data-history-current="memory"]')).toBeNull();
   });
 
   it('does not show a filled-in zero for a node with no disk measurement', async () => {
+    chartsApiMocks.getMetricsHistory.mockResolvedValue(EMPTY_HISTORY);
     render(() => (
       <NodeDrawer node={makeNode({ disk: { total: 0, used: 0, free: 0, usage: 0 } })} />
     ));
-    const disk = await screen.findByTestId('drawer-trend-card-disk');
-    expect(within(disk).queryByText('0.0%')).toBeNull();
-    expect(within(disk).getByText('—')).toBeInTheDocument();
+    const chart = await utilizationChart();
+    await within(chart).findByText('No stored history in this range');
+    expect(chart).toHaveTextContent('Disk-');
+    expect(chart).not.toHaveTextContent('Disk0.0%');
+    expect(screen.getByTestId('node-drawer-facts')).not.toHaveTextContent('root disk');
   });
 
-  it("headlines the backend's primary CPU temperature, the reading its line records", async () => {
+  it("charts the backend's primary CPU temperature, the reading its history records", async () => {
     // The details carry a hotter core than the backend's primary reading. The
-    // card must show the backend value: the history beneath it was recorded
-    // under the backend rule, so a recomputed headline would disagree with it.
+    // chart must fall back to the backend value: its history is recorded under
+    // the backend rule, so a recomputed reading would disagree with it.
+    chartsApiMocks.getMetricsHistory.mockResolvedValue(EMPTY_HISTORY);
     render(() => (
       <NodeDrawer
         node={makeNode({
@@ -530,29 +553,91 @@ describe('NodeDrawer Overview trends', () => {
         })}
       />
     ));
-    const temperature = await screen.findByTestId('drawer-trend-card-temperature');
-    expect(within(temperature).getByText('44°C')).toBeInTheDocument();
-    expect(temperature.textContent).not.toContain('51');
+    const charts = await screen.findAllByTestId('guest-history-group-chart');
+    const thermals = charts.find((chart) => chart.dataset.historyGroup === 'thermals')!;
+    await within(thermals).findByText('No stored history in this range');
+    const reading = thermals.querySelector('[data-history-current="temperature"]');
+    expect(reading).toHaveTextContent('44°C');
+    expect(reading?.textContent).not.toContain('51');
   });
 
-  it('opens History on the week, since the Overview cards already cover 24 hours', async () => {
+  it('shows live readings on a healthy node before any history is stored', async () => {
+    chartsApiMocks.getMetricsHistory.mockResolvedValue(EMPTY_HISTORY);
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          cpu: 37,
+          memory: { total: 8000, used: 4000, free: 4000, usage: 50 },
+          disk: { total: 1000, used: 250, free: 750, usage: 25 },
+        })}
+      />
+    ));
+    const chart = await utilizationChart();
+    await within(chart).findByText('No stored history in this range');
+    expect(chart.querySelector('[data-history-current="cpu"]')).toHaveTextContent(
+      'CPU37.0%current',
+    );
+    expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+      'Disk25.0%current',
+    );
+    const facts = screen.getByTestId('node-drawer-facts');
+    expect(facts).toHaveTextContent(/of 7\.81 KB RAM/);
+    expect(facts).toHaveTextContent(/250 B of 1000 B root disk/);
+  });
+
+  it("states only an offline node's capacity, not a used amount that reads as live", async () => {
+    render(() => <NodeDrawer node={makeNode({ status: 'offline' })} />);
+    const facts = screen.getByTestId('node-drawer-facts');
+    expect(facts).toHaveTextContent('RAM');
+    expect(facts.textContent).not.toMatch(/ of .*RAM/);
+  });
+
+  it('tones a reading for an alert that carries no numeric trigger, without a line', async () => {
+    const nodeAlert = makeAlert({ threshold: undefined, level: 'critical' });
+    render(() => <NodeDrawer node={makeNode()} alerts={[nodeAlert]} ownAlerts={[nodeAlert]} />);
+    const chart = await utilizationChart();
+    await waitFor(() => expect(chart.querySelector('path[data-history-series]')).not.toBeNull());
+    expect(chart.querySelector('[data-history-threshold]')).toBeNull();
+    const memoryReading = chart.querySelector('span[class*="text-red-700"]');
+    expect(memoryReading).not.toBeNull();
+  });
+
+  it('describes an alert trigger to assistive technology, not only in an SVG title', async () => {
+    render(() => <NodeDrawer node={makeNode()} alerts={[makeAlert()]} ownAlerts={[makeAlert()]} />);
+    const chart = await utilizationChart();
+    const plot = within(chart).getByRole('img', { name: 'Utilization history' });
+    await waitFor(() =>
+      expect(plot).toHaveAccessibleDescription(/Memory warning alert at 90\.0%\./),
+    );
+  });
+
+  it('opens the charts on 24 hours with the range picker beside them', async () => {
     render(() => <NodeDrawer node={makeNode()} />);
-    await screen.findByTestId('drawer-trend-card-cpu');
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    await utilizationChart();
+    expect(screen.getByTestId('guest-history-range-control')).toHaveValue('24h');
+    fireEvent.change(screen.getByTestId('guest-history-range-control'), {
+      target: { value: '7d' },
+    });
     await waitFor(() =>
       expect(chartsApiMocks.getMetricsHistory.mock.calls.map(([params]) => params.range)).toEqual([
         '24h',
         '7d',
       ]),
     );
-    expect(screen.getByTestId('guest-history-range-control')).toHaveValue('7d');
   });
 
-  it('reads the 24h trend once while Overview shows and mounts History only on demand', async () => {
-    render(() => <NodeDrawer node={makeNode()} />);
-    await screen.findByTestId('drawer-trend-card-cpu');
-    await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1));
-    expect(chartsApiMocks.getMetricsHistory.mock.calls[0][0]).toMatchObject({ range: '24h' });
-    expect(screen.queryByTestId('guest-history-group-chart')).toBeNull();
+  it('reads history once while Overview shows and stops reading behind Manage', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(() => <NodeDrawer node={makeNode()} />);
+      await utilizationChart();
+      await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1));
+      expect(chartsApiMocks.getMetricsHistory.mock.calls[0][0]).toMatchObject({ range: '24h' });
+      fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
