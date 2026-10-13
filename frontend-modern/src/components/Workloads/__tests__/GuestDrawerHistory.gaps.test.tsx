@@ -61,9 +61,7 @@ describe('drawer History does not join missing stored observations', () => {
     expect(paths('#10b981')).toHaveLength(0);
     expect(marks('disk')).toHaveLength(2);
     expect(note()).toHaveTextContent('Missing observations: Memory, Disk.');
-    expect(note()).toHaveTextContent(
-      'Lines stop where a series has no reading at another stored time in this panel.',
-    );
+    expect(note()).toHaveTextContent('Lines break where a reading is missing.');
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 

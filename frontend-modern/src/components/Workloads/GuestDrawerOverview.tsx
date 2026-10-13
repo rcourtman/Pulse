@@ -12,6 +12,7 @@ import {
   TechnicalDetailsSection,
 } from '@/components/shared/TechnicalDetailsDisclosure';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import { DrawerExceptionList } from './DrawerExceptionList';
 import type { Alert } from '@/types/api';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
 import { HOST_AGENT_STOPPED_REPORTING_REASON } from '@/components/Infrastructure/resourceDetailMappers';
@@ -389,7 +390,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
     if (!memory || !hasReading || memory.usageUnavailable || !((memory.total ?? 0) > 0)) {
       return undefined;
     }
-    return `${formatBytes(memory.used ?? 0)} of ${formatBytes(memory.total ?? 0)}`;
+    const bytes = `${formatBytes(memory.used ?? 0)} of ${formatBytes(memory.total ?? 0)}`;
+    // The short qualifier sits on the number it qualifies; the full note (why,
+    // and what to do) is the Details row "About this reading".
+    return memoryReading()?.mayIncludeCache ? `${bytes} · may include cache` : bytes;
   };
   const diskDetail = () => {
     const disk = props.guest.disk;
@@ -465,6 +469,8 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         </p>
       </Show>
 
+      <DrawerExceptionList testId="guest-drawer-exceptions" rows={exceptionRows()} />
+
       <Show when={props.historyTarget}>
         <Suspense fallback={<div class="h-28" aria-hidden="true" />}>
           <DrawerTrendCards
@@ -473,22 +479,6 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             cards={trendCards()}
           />
         </Suspense>
-      </Show>
-      {/* Visible text, not a tooltip: the caveat and what to do about it
-          must reach touch and keyboard users too. */}
-      <Show when={memoryReading()?.cacheNote}>
-        {(note) => (
-          <p data-testid="drawer-memory-reading-note" class="text-xs leading-snug text-muted">
-            {note()}
-          </p>
-        )}
-      </Show>
-
-      <Show when={exceptionRows().length > 0}>
-        <TechnicalDetailsSection
-          dataTestId="guest-drawer-exceptions"
-          sections={[{ label: 'Worth checking', rows: exceptionRows() }]}
-        />
       </Show>
 
       <Show when={sectionsByLabel().filesystems.length > 0}>

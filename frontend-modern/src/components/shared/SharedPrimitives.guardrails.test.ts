@@ -8765,6 +8765,16 @@ describe('shared primitive guardrails', () => {
     // disclosure that holds a surface's complete record (drawer Details).
     expect(disclosureSource).toContain('<Show when={props.keepMounted || expanded()}>');
     expect(disclosureSource).toContain('keepMounted?: boolean;');
+    // The drawer's compact Worth checking list reuses the detail-row tone
+    // mapping rather than keeping a local palette that could drift.
+    expect(readFrontendSource('src/components/shared/DetailSectionTable.tsx')).toContain(
+      'export const detailValueToneClass',
+    );
+    const exceptionListSource = readFrontendSource(
+      'src/components/Workloads/DrawerExceptionList.tsx',
+    );
+    expect(exceptionListSource).toContain('detailValueToneClass(row.tone)');
+    expect(exceptionListSource).not.toMatch(/text-(amber|rose|red)-700/);
     expect(disclosureSource).toContain('sections?: DetailSection[]');
     expect(disclosureSource).toContain('<DetailSectionTable');
     expect(disclosureSource).toContain('export const TechnicalDetailsSection');
