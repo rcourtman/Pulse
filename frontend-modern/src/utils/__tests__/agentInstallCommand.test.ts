@@ -31,7 +31,8 @@ describe('agentInstallCommand', () => {
 
     expect(command).toContain("--url 'http://pulse.example:7655'");
     expect(command).toContain('token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)');
-    expect(command).toContain('sudo bash -c');
+    expect(command).toContain('set -- sudo');
+    expect(command).toContain('\"$@\" bash -c');
     expect(command).not.toContain('token-123');
     expect(command).toContain('--token-file "$token_file"');
     expect(command).toContain('--insecure');
@@ -60,7 +61,7 @@ describe('agentInstallCommand', () => {
     });
 
     const preflightIndex = command.indexOf('--preflight-only');
-    const sudoIndex = command.indexOf('sudo bash -c');
+    const sudoIndex = command.indexOf('\"$@\" bash -c');
 
     expect(command).toContain('bootstrap_dir=$(mktemp -d /tmp/pulse-bootstrap.XXXXXX)');
     expect(command).toContain('trap cleanup EXIT');
@@ -336,6 +337,21 @@ const variants = [
 ];
 
 describe('single-line Unix install commands', () => {
+  it.each(variants)('keeps one private body below the usual terminal line limit: %j', (options) => {
+    const command = buildUnixAgentInstallCommand({
+      ...options,
+      token: 'present',
+      extraArgs: [
+        '--update',
+        '--enable-docker',
+        "--agent-id 'agent-42'",
+        "--hostname 'node.example'",
+      ],
+    });
+    expect(Buffer.byteLength(command, 'utf8')).toBeLessThan(4096);
+    expect(command.match(/bash -c /g)).toHaveLength(1);
+    expect(command).toContain('set -- sudo');
+  });
   it.each(variants)('survives text-input normalization: %j', (options) => {
     const command = buildUnixAgentInstallCommand(options);
     const input = document.createElement('input');
@@ -391,7 +407,8 @@ if history:
     env.update(HISTFILE=history, HISTSIZE="100", HISTFILESIZE="100", HISTCONTROL="", PS1="PULSE_TEST$ ")
 program = ["bash", "--noprofile", "--norc", "-i"] if history else ["sh", "-c", p["command"]]
 child = subprocess.Popen(program, stdin=slave, stdout=slave, stderr=slave, preexec_fn=session, env=env)
-if history: os.write(master, (p["command"] + "\\n").encode())
+command_sent = not bool(history)
+exit_sent = False
 os.close(slave)
 output = b""
 sent = False
@@ -406,6 +423,17 @@ while time.monotonic() < deadline:
             raise
         if not chunk: break
         output += chunk
+        # A human pastes after the caller's prompt. Injecting a longer command
+        # while the PTY is still in its startup canonical mode can truncate it
+        # before Bash has even entered readline.
+        if history and not command_sent and output.endswith(b"PULSE_TEST$ "):
+            os.write(master, (p["command"] + "\\n").encode())
+            command_sent = True
+            continue
+        # Do not queue exit while the private reader/installer owns the tty.
+        if history and sent and not exit_sent and output.endswith(b"PULSE_TEST$ "):
+            os.write(master, b"exit\\n")
+            exit_sent = True
         # The interactive shell's echo of the command line quotes the prompt
         # text too, so a chunk can end there long before the bootstrap runs.
         # Only the bootstrap's own stty -echo (recorded by the stty fixture)
@@ -424,15 +452,13 @@ while time.monotonic() < deadline:
             else:
                 os.write(master, (p["input"] + "\\n").encode())
             sent = True
-            if history: os.write(master, b"exit\\n")
     if child.poll() is not None and not ready: break
 else:
     os.killpg(child.pid, signal.SIGKILL)
     output += b"\\nPTY fixture deadline expired\\n"
 code = child.wait()
 final_tty = termios.tcgetattr(tty_watch)
-mode_mask = termios.ECHO | termios.ICANON
-if (initial_tty[3] & mode_mask) != (final_tty[3] & mode_mask):
+if initial_tty != final_tty:
     output += b"\\nBootstrap did not restore terminal echo/canonical mode\\n"
     code = 1
 if echo_at_prompt:
@@ -444,7 +470,8 @@ sys.stdout.buffer.write(output)
 sys.exit(code if code >= 0 else 128 - code)
 `;
 
-const makeUnixFixture = () => {
+type TtyTool = 'stty' | 'busybox' | 'both' | 'none' | 'busybox-without-stty';
+const makeUnixFixture = (ttyTool: TtyTool = 'stty', isolatedPath = false) => {
   const dir = mkdtempSync(join(tmpdir(), 'pulse-private-unix-'));
   chmodSync(dir, 0o700);
   const trace = join(dir, 'trace');
@@ -454,10 +481,37 @@ const makeUnixFixture = () => {
   const fake = (name: string, body: string) => {
     writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o700 });
   };
-  fake(
-    'stty',
-    'if [ \"$1\" = -echo ]; then echo \"$PPID\" > \"$READER_PID\"; fi; exec /bin/stty \"$@\"',
-  );
+  const ttyBody = `
+printf '%s\\n' "$0 $*" >> "$TTY_TRACE"
+[ "$FAIL_AT:$1" != tty-state:-g ] || exit 1
+[ "$FAIL_AT:$1" != tty-state-empty:-g ] || exit 0
+[ "$FAIL_AT:$1" != tty-echo:-echo ] || exit 1
+if [ "$FAIL_AT" = tty-restore ] && [ "$1" != -g ] && [ "$1" != -echo ] && [ ! -e "$RESTORE_FAILED" ]; then
+  : > "$RESTORE_FAILED"; exit 1
+fi
+if [ "$1" = -echo ]; then echo "$PPID" > "$READER_PID"; fi
+`;
+  if (ttyTool === 'stty' || ttyTool === 'both') fake('stty', ttyBody + 'exec /bin/stty "$@"');
+  if (ttyTool === 'busybox' || ttyTool === 'both')
+    fake(
+      'busybox',
+      `[ "$1" = stty ] || exit 127; shift
+${ttyBody}
+# CI's shim exercises dispatch/modes without adding a package dependency.
+# Source proof supplies an actual static BusyBox binary as an explicit input.
+if [ -n "\${PULSE_TEST_BUSYBOX:-}" ]; then exec "$PULSE_TEST_BUSYBOX" stty "$@"; fi
+exec /bin/stty "$@"`,
+    );
+  if (ttyTool === 'busybox-without-stty') fake('busybox', 'exit 127');
+  if (isolatedPath) {
+    // No /bin in PATH: an accidentally inherited standalone stty must not
+    // turn the absent-tool control into a successful prompt.
+    for (const program of ['bash', 'sh', 'python3', 'cp', 'cat', 'stat', 'dirname', 'rm', 'rmdir'])
+      symlinkSync(
+        execFileSync('which', [program], { encoding: 'utf8' }).trim(),
+        join(bin, program),
+      );
+  }
   fake('id', 'if [ "$1" = -u ]; then echo "$FAKE_UID"; else exec /usr/bin/id "$@"; fi');
   fake(
     'sudo',
@@ -507,7 +561,7 @@ if [ "$FAIL_AT" = TERM ] || [ "$FAIL_AT" = HUP ]; then kill -s "$FAIL_AT" "$PPID
     trace,
     env: (uid = '0', failure = '') => ({
       ...process.env,
-      PATH: `${bin}:${process.env.PATH}`,
+      PATH: isolatedPath ? bin : `${bin}:${process.env.PATH}`,
       FAKE_UID: uid,
       FAIL_AT: failure,
       TRACE: trace,
@@ -517,6 +571,8 @@ if [ "$FAIL_AT" = TERM ] || [ "$FAIL_AT" = HUP ]; then kill -s "$FAIL_AT" "$PPID
       CAPTURE: join(dir, 'capture'),
       SECRET_ENV: join(dir, 'secret-env'),
       READER_PID: join(dir, 'reader-pid'),
+      TTY_TRACE: join(dir, 'tty-trace'),
+      RESTORE_FAILED: join(dir, 'restore-failed'),
       PULSE_TOKEN: '',
     }),
     close: () => rmSync(dir, { recursive: true, force: true }),
@@ -850,6 +906,130 @@ describe('credential-free Unix lifecycle execution', { timeout: 25_000 }, () => 
       }
     },
   );
+});
+
+describe('terminal-control portability', { timeout: 25_000 }, () => {
+  const command = () =>
+    buildUnixAgentInstallCommand({ baseUrl: 'https://pulse.invalid', token: 'present' });
+
+  it.each(['stty', 'busybox', 'both'] as const)(
+    'keeps maximum input private and restores modes with %s',
+    (tool) => {
+      const fixture = makeUnixFixture(tool, true);
+      const input = 'portable-private-'.padEnd(4096, 'x');
+      const history = join(fixture.dir, 'history');
+      try {
+        const result = runPrivateUnix(command(), input, fixture.env(), history);
+        expect(result.status, result.stdout + result.stderr).toBe(0);
+        expect(readFileSync(join(fixture.dir, 'capture'), 'utf8')).toBe(input);
+        expect(readFileSync(join(fixture.dir, 'secret-env'), 'utf8')).toBe(':');
+        const trace = readFileSync(join(fixture.dir, 'tty-trace'), 'utf8');
+        expect(trace).toContain(`${tool === 'busybox' ? 'busybox' : 'stty'} -g`);
+        if (tool === 'both') expect(trace).not.toContain('busybox');
+        for (const text of [
+          result.stdout,
+          result.stderr,
+          readFileSync(history, 'utf8'),
+          readFileSync(join(fixture.dir, 'argv'), 'utf8'),
+        ])
+          expect(text).not.toContain(input);
+        assertUnixCleanup(fixture.dir);
+      } finally {
+        fixture.close();
+      }
+    },
+  );
+
+  it.each(['blank', 'overflow', 'HUP', 'INT', 'TERM'])(
+    'refuses %s with applet-only input, without leaks or leftover modes/files',
+    (failure) => {
+      const fixture = makeUnixFixture('busybox', true);
+      const input = failure === 'overflow' ? 'x'.repeat(10000) + 'PRIVATE_OVERFLOW_SENTINEL' : '';
+      const history = join(fixture.dir, 'history');
+      try {
+        const result = runPrivateUnix(
+          command(),
+          input,
+          fixture.env(),
+          history,
+          ['HUP', 'INT', 'TERM'].includes(failure) ? failure : undefined,
+        );
+        expect(result.status, result.stdout + result.stderr).not.toBe(0);
+        expect(result.stdout).not.toMatch(/deadline expired|did not restore/);
+        expect(existsSync(join(fixture.dir, 'capture'))).toBe(false);
+        for (const text of [result.stdout, result.stderr, readFileSync(history, 'utf8')])
+          expect(text).not.toMatch(/PRIVATE_OVERFLOW_SENTINEL|x{512}/);
+        assertUnixCleanup(fixture.dir);
+      } finally {
+        fixture.close();
+      }
+    },
+  );
+
+  it.each([
+    ['none', '', 'Silent token input requires stty or BusyBox stty'],
+    ['busybox-without-stty', '', 'Cannot read terminal settings'],
+    ['stty', 'tty-state', 'Cannot read terminal settings'],
+    ['busybox', 'tty-state', 'Cannot read terminal settings'],
+    ['stty', 'tty-state-empty', 'Cannot read terminal settings'],
+    ['busybox', 'tty-state-empty', 'Cannot read terminal settings'],
+    ['stty', 'tty-echo', 'Cannot disable terminal echo'],
+    ['busybox', 'tty-echo', 'Cannot disable terminal echo'],
+    ['stty', 'tty-restore', 'Cannot restore terminal settings'],
+    ['busybox', 'tty-restore', 'Cannot restore terminal settings'],
+  ] as const)(
+    'diagnoses %s/%s without pretending a real TTY is missing',
+    (tool, failure, error) => {
+      const fixture = makeUnixFixture(tool, true);
+      try {
+        const result = runPrivateUnix(command(), 'private-input', fixture.env('0', failure));
+        expect(result.status, result.stdout + result.stderr).not.toBe(0);
+        expect(result.stdout).toContain(error);
+        expect(result.stdout).toMatch(/no installation was attempted/i);
+        expect(result.stdout).not.toMatch(
+          /A terminal is required|command not found|deadline expired|did not restore|private-input/,
+        );
+        expect(existsSync(join(fixture.dir, 'capture'))).toBe(false);
+        assertUnixCleanup(fixture.dir);
+      } finally {
+        fixture.close();
+      }
+    },
+  );
+
+  it.each(['stty', 'busybox', 'none'] as const)('no TTY fails before selecting %s', (tool) => {
+    const fixture = makeUnixFixture(tool, true);
+    try {
+      const result = spawnSync('sh', ['-c', command()], { env: fixture.env(), encoding: 'utf8' });
+      expect(result.status, result.stdout + result.stderr).not.toBe(0);
+      expect(result.stderr).toContain('A terminal is required');
+      expect(result.stderr).toContain('private token-file command');
+      expect(existsSync(join(fixture.dir, 'tty-trace'))).toBe(false);
+      expect(existsSync(join(fixture.dir, 'capture'))).toBe(false);
+      assertUnixCleanup(fixture.dir);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it('uses the existing private-file handoff with neither TTY nor terminal utilities', () => {
+    const fixture = makeUnixFixture('none', true);
+    try {
+      const file = join(fixture.dir, 'operator-token');
+      writeFileSync(file, 'file-input', { mode: 0o600 });
+      const cmd = buildUnixAgentInstallCommand({
+        baseUrl: 'https://pulse.invalid',
+        tokenFilePath: file,
+      });
+      const result = spawnSync('sh', ['-c', cmd], { env: fixture.env(), encoding: 'utf8' });
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+      expect(readFileSync(join(fixture.dir, 'capture'), 'utf8')).toBe('file-input');
+      expect(readFileSync(file, 'utf8')).toBe('file-input');
+      assertUnixCleanup(fixture.dir);
+    } finally {
+      fixture.close();
+    }
+  });
 });
 
 describe('saved-credential uninstall commands', () => {

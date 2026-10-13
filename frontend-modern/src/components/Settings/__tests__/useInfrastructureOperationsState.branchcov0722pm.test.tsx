@@ -167,7 +167,8 @@ describe('useInfrastructureOperationsState command-building closures', () => {
       state.setCustomAgentUrl(HTTPS_URL);
       const cmd = state.getUninstallCommand();
       expect(cmd).toContain('--uninstall');
-      expect(cmd).toContain('sudo bash -c');
+      expect(cmd).toContain('set -- sudo');
+      expect(cmd).toContain('\"$@\" bash -c');
       expect(cmd).not.toContain('--preflight-only');
       expect(cmd).not.toContain('| bash');
       expect(cmd).not.toContain("--token '");
@@ -634,7 +635,8 @@ describe('useInfrastructureOperationsState command-building closures', () => {
       const cmd = state.getAgentConnectionUpgradeCommand(baseConnection, [], 'linux');
 
       expect(cmd).toContain('--update');
-      expect(cmd).toContain('sudo bash -c');
+      expect(cmd).toContain('set -- sudo');
+      expect(cmd).toContain('\"$@\" bash -c');
       expect(cmd).not.toContain('--token-file');
       expect(cmd).not.toContain('token_dir=');
       dispose();
