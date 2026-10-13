@@ -890,6 +890,37 @@ func TestApplyStorageFallbackAndRecordNodeMetrics_PersistsTemperatureHistory(t *
 	}
 }
 
+// A node fed by a linked agent carries its package above CPUMax (CPUMax is
+// built from cores there). Node history records the hottest reading, the same
+// value the node's resource temperature and its agent's history carry.
+func TestApplyStorageFallbackAndRecordNodeMetrics_RecordsPrimaryCPUTemperature(t *testing.T) {
+	monitor := &Monitor{
+		state:          models.NewState(),
+		metricsHistory: NewMetricsHistory(16, time.Hour),
+		alertManager:   alerts.NewManager(),
+	}
+	nodes := []models.Node{{
+		ID:       "pve1-node2",
+		Name:     "node2",
+		Instance: "pve1",
+		Status:   "online",
+		Temperature: &models.Temperature{
+			Available:  true,
+			HasCPU:     true,
+			CPUPackage: 61,
+			CPUMax:     57,
+			Cores:      []models.CoreTemp{{Core: 0, Temp: 55}, {Core: 1, Temp: 57}},
+		},
+	}}
+
+	monitor.applyStorageFallbackAndRecordNodeMetrics("pve1", nil, nodes, nil, nil)
+
+	points := monitor.metricsHistory.GetNodeMetrics("pve1-node2", "temperature", time.Hour)
+	if len(points) != 1 || points[0].Value != 61 {
+		t.Fatalf("temperature history = %+v, want one point at 61C", points)
+	}
+}
+
 // Exercise the registry's real manual merge, followed by the next guest poll's
 // fallback lookup. A healthy platform row must not revive an offline agent.
 func TestCorrelatedGuestMemoryNextPoll(t *testing.T) {

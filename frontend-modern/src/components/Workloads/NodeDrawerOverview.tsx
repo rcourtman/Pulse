@@ -23,7 +23,7 @@ import { formatBytes, formatRelativeTime, normalizeDiskArray } from '@/utils/for
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getMemoryObservationPresentation } from '@/utils/memoryObservation';
 import { getProxmoxUpdateEvidencePresentation } from '@/utils/proxmoxUpdateEvidence';
-import { formatTemperature, getCpuTemperature, getTemperatureTextClass } from '@/utils/temperature';
+import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
 import { buildDrawerDiskListItems } from './DrawerDiskListCard';
 import type { DrawerTrendCardConfig } from './DrawerTrendCards';
@@ -394,7 +394,7 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     ]);
 
   const overviewSections = () => {
-    const primaryTemperature = getCpuTemperature(props.node.temperature);
+    const primaryTemperature = props.node.cpuTemperature;
     const updates = updateEvidence();
     const temperatureClass =
       typeof primaryTemperature === 'number'
@@ -494,7 +494,8 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
         : undefined;
     const memoryCurrent = memoryDeferred ? undefined : memoryValue;
     const diskMeasured = (disk?.total ?? 0) > 0;
-    const temperature = getCpuTemperature(props.node.temperature);
+    // The backend's primary reading, recorded under the same rule as the line.
+    const temperature = props.node.cpuTemperature;
     return [
       card(
         'cpu',

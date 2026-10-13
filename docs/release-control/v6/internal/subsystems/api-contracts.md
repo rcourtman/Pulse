@@ -5763,9 +5763,15 @@ agent/node chart metric for Proxmox node drawers. Agent-backed nodes request
 `resourceType=agent` with the linked agent identity; API-only nodes request
 `resourceType=node` with the canonical Proxmox node identity so node history is
 not routed through an agent compatibility alias. `resourceType=agent` may serve
-the current host-agent CPU package temperature as a live fallback when persisted
+the current host-agent primary CPU temperature as a live fallback when persisted
 history is still cold, while `resourceType=node` may serve the Proxmox node
 temperature fallback from the same `/api/metrics-store/history` response shape.
+Both live fallbacks use `models.PrimaryCPUTemperatureCelsius` (the hottest
+usable package, CPU-maximum or core reading) and its sensor-map form, the rule
+the stored series and the unified resource temperature use; `router.go` keeps
+no local copy. The frontend `Node.cpuTemperature` field carries that resource
+value to the node drawer, which must not recompute a headline from the
+temperature details.
 The transport remains the existing metrics-history payload; it must not add a
 Proxmox-only chart endpoint or drawer-local temperature response contract.
 Host sensor summaries also carry optional `thermalState` for platforms such as

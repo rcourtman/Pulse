@@ -1345,6 +1345,14 @@ Unified Agent installer command. The choice must remain off by default, be
 visible at the point where the command is generated, and affect both the
 installer download and the agent's subsequent Pulse TLS connection.
 
+### Agent temperature history follows the shared primary CPU rule
+
+`monitor_agents.go` records an agent's `temperature` history with
+`models.HostSensorPrimaryCPUTemperatureCelsius`, the hottest usable `cpu*`
+sensor key, so the series matches the agent resource temperature and the
+linked node's reading. Report ingest, lease, removal and re-enrollment are
+unchanged; only the value chosen from an accepted report's sensor map moved.
+
 ### Copied removal uses the installed credential, not installation input
 
 Every existing uninstall copy surface (installer, source management and removed

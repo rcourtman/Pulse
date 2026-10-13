@@ -69,6 +69,7 @@ function makeNode(overrides: Partial<Node> = {}): Node {
       hasCPU: true,
       lastUpdate: new Date().toISOString(),
     },
+    cpuTemperature: 65,
     temperatureMonitoringEnabled: true,
     lastSeen: new Date().toISOString(),
     connectionHealth: 'online',
@@ -508,6 +509,30 @@ describe('NodeDrawer Overview trends', () => {
     const disk = await screen.findByTestId('drawer-trend-card-disk');
     expect(within(disk).queryByText('0.0%')).toBeNull();
     expect(within(disk).getByText('—')).toBeInTheDocument();
+  });
+
+  it("headlines the backend's primary CPU temperature, the reading its line records", async () => {
+    // The details carry a hotter core than the backend's primary reading. The
+    // card must show the backend value: the history beneath it was recorded
+    // under the backend rule, so a recomputed headline would disagree with it.
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          cpuTemperature: 44,
+          temperature: {
+            cpuPackage: 44,
+            cpuMax: 51,
+            cores: [{ core: 0, temp: 51 }],
+            available: true,
+            hasCPU: true,
+            lastUpdate: new Date().toISOString(),
+          },
+        })}
+      />
+    ));
+    const temperature = await screen.findByTestId('drawer-trend-card-temperature');
+    expect(within(temperature).getByText('44°C')).toBeInTheDocument();
+    expect(temperature.textContent).not.toContain('51');
   });
 
   it('opens History on the week, since the Overview cards already cover 24 hours', async () => {
