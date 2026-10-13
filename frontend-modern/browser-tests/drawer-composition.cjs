@@ -77,8 +77,8 @@ async function box(locator) {
         if (url.pathname === '/api/license/runtime-capabilities') return route.fulfill({ json: { capabilities: [], hosted_mode: false, max_history_days: 7, runtime: { build: 'free' }, blocked_capabilities: [] } });
         return route.fulfill({ json: { success: true, data: [], alerts: [], anomalies: [], config: null } });
       });
-      const capture = async (suffix, target = page) => {
-        const file = `${name}-${suffix}.png`; await target.screenshot({ path: output + '/' + file, fullPage: true });
+      const capture = async (suffix, target = page, fullPage = true) => {
+        const file = `${name}-${suffix}.png`; await target.screenshot({ path: output + '/' + file, fullPage });
         result.captures.push({ file, bytes: fs.statSync(output + '/' + file).size, sha256: hash(fs.readFileSync(output + '/' + file)) });
       };
       const noOverflow = async () => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
@@ -161,7 +161,8 @@ async function box(locator) {
       const docDigest = await docsPage.evaluate(async () => { const b = await (await fetch('/docs/TROUBLESHOOTING.md')).arrayBuffer(); return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', b))).map((x) => x.toString(16).padStart(2, '0')).join(''); });
       assert.equal(docDigest, binding.artifacts['docs/TROUBLESHOOTING.md']);
       record.updateDoc = { url: docsPage.url(), sha256: docDigest };
-      await capture('node-docs', docsPage); await docsPage.close();
+      await docsPage.getByRole('heading', { name: 'Proxmox pending-update access', exact: true }).scrollIntoViewIfNeeded();
+      await capture('node-docs', docsPage, false); await docsPage.close();
       await page.keyboard.press('Escape'); await help.waitFor({ state: 'hidden' }); assert.equal(await trigger.evaluate((e) => e === document.activeElement), true);
       await activate(nodeDetails.locator('summary')); assert.notEqual(await nodeDetails.getAttribute('open'), null);
       await activate(nodeDetails.locator('summary')); assert.equal(await nodeDetails.getAttribute('open'), null);
