@@ -1711,17 +1711,14 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         server_updates = normalize_ws(
             upgrade_guide.split("### systemd and Proxmox LXC installs", 1)[1].split("\n### ", 1)[0]
         )
-        self.assertIn("sudo /bin/update --version vX.Y.Z", server_updates)
-        self.assertIn(
-            "only when `/bin/update` was installed by the Pulse server installer",
-            server_updates,
-        )
-        self.assertIn("community-scripts updater, which can ignore `--version`", server_updates)
-        self.assertIn("the helper is absent, or you cannot confirm its owner", server_updates)
-        self.assertIn("[signed server-installer flow](INSTALL.md#2-bare-metal--systemd)", server_updates)
-        self.assertIn("`PULSE_VERSION` to the exact target tag", server_updates)
-        self.assertIn("This also applies to rollback", server_updates)
-        self.assertIn("Verify the installed version with `GET /api/version`", server_updates)
+        self.assertNotRegex(server_updates, r"```(?:bash|sh|shell)\b")
+        self.assertIn("INSTALL.md#manual-update", server_updates)
+        self.assertIn("helper's ownership", server_updates)
+        self.assertIn("Do not execute an absent or unknown helper", server_updates)
+        self.assertIn("default installation paths", server_updates)
+        self.assertIn("AUTO_UPDATE.md#a-helper-selects-a-helm-chart-release", server_updates)
+        self.assertIn("do not replace a private Pro runtime", server_updates)
+        self.assertIn("running version, edition and service health", server_updates)
 
     def test_manual_update_help_preserves_helper_ownership_and_software_identity(self) -> None:
         automatic_updates = read("docs/AUTO_UPDATE.md")
@@ -1774,7 +1771,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         upgrade_guide = read("docs/UPGRADE_v6.md")
         current_version = read("VERSION").strip()
         self.assertIn("the historical Pulse update signer was not recovered", normalize_ws(upgrade_guide))
-        self.assertIn("manual reinstall or other explicit trust migration", normalize_ws(upgrade_guide))
+        self.assertIn("explicit verified trust migration", normalize_ws(upgrade_guide))
+        self.assertIn("not an instruction to reinstall or bypass signature verification", normalize_ws(upgrade_guide))
+        self.assertIn("historical choice is not a safe downgrade procedure", normalize_ws(upgrade_guide))
         self.assertIn("### License and Entitlements", upgrade_guide)
         self.assertNotIn("### License, Trial, and Entitlements", upgrade_guide)
         self.assertIn("does not expose a general in-app trial, trial-return callback, or hosted AI quickstart", normalize_ws(upgrade_guide))

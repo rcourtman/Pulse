@@ -8164,3 +8164,40 @@ nonzero exit. `TestProviderMSPStartupCommandSeparatesDiagnostics` checks three
 consumer shapes with controlled successful stderr; it is not Docker acceptance.
 Hosted mounted-secret/readiness/persistence/refusal/cleanup checks remain required.
 Frontend fixture reformatting retains all assertions and changes no runtime UI.
+
+
+### Current v6 migration guidance: preserved-state upgrade and recovery
+
+The existing `docs/UPGRADE_v6.md` and byte-identical shipped guide are migration
+entry points, not independent generic update or downgrade recipes. Historical
+release and rollback packets remain historical; they grant no compatibility
+claim for an older binary against current migrated data. This active guidance
+supersedes the early-cutover shortcut wording above, not retained release facts.
+
+Preparation distinguishes a configuration export from a consistent full-state
+backup, with matching keys and deployment settings. Existing service/data paths,
+credentials, agent identity and runtime edition survive. The guide routes CLI,
+Docker and Helm users to existing deployment-owned procedures; it does not
+execute an unknown helper, recreate unrelated services, discard configured
+values/volumes or replace private Pro with public Community. Old signing-root
+continuity warnings retain verified trust migration without prescribing a
+reinstall or weakening signatures.
+
+Post-upgrade observations distinguish running version, edition, ordinary
+collector/notification recovery and agent convergence from download/signature
+success. They do not induce notifications or active diagnostic traffic. An
+uncertain attempt retains original stop evidence and backups, uses timer-only
+containment when appropriate, and restores matching data/keys only through the
+stopped-service recovery path. Historical v5 testing requires an isolated,
+disconnected recovery copy; a generic binary downgrade is not data rollback.
+Relay is not offered for new purchases; existing subscribers preserve their
+current-price Pro entitlements and private runtime while subscribed.
+
+Verification: `scripts/tests/test_upgrade_v6_docs.py` checks the complete
+preparation/routes/recovery/compatibility chain and actual local link targets;
+`release_promotion_policy_test.py` preserves the trust warning and current
+procedure routes without forcing the retired shortcuts. Consuming Docs/router
+browser proof at desktop and phone must inspect the rendered safety boundaries,
+keyboard/touch linked recovery navigation and direct/reload fragments. These
+are help qualification, not installed upgrade, native recovery, paid deployment
+or release acceptance.
