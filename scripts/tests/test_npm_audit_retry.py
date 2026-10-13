@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import tempfile
 import textwrap
+import time
 import unittest
 from unittest.mock import patch
 
@@ -16,6 +18,127 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "npm-audit-retry.sh"
+
+
+@unittest.skipUnless(os.name == "posix", "audit process groups require Unix")
+class NpmAuditProcessCleanupTest(unittest.TestCase):
+    def live(self, pid: int) -> bool:
+        result = subprocess.run(
+            ["ps", "-o", "stat=", "-p", str(pid)],
+            capture_output=True, text=True, check=False,
+        )
+        state = result.stdout.strip()
+        return bool(state) and not state.startswith("Z")
+
+    def run_with_child(self, mode: str, *, finding: bool = False):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pidfile = root / "child.pid"
+            npm = root / "npm"
+            counts = dict.fromkeys(("info", "low", "moderate", "high", "critical", "total"), 0)
+            if finding:
+                counts.update(high=1, total=1)
+            report = json.dumps({"metadata": {"vulnerabilities": counts}})
+            actions = {
+                "success": "exit 0",
+                "failure": "exit 42",
+                "timeout": "wait",
+                "timeout-exits-zero": "trap 'exit 0' TERM; wait",
+                "interrupted": "wait",
+            }
+            npm.write_text(textwrap.dedent(f"""\
+                #!/bin/sh
+                (trap '' TERM; exec sleep 60) &
+                printf '%s\\n' "$!" > "$CHILD_PID_FILE"
+                printf '%s\\n' '{report}'
+                {actions[mode]}
+                """), encoding="utf-8")
+            npm.chmod(0o755)
+            env = os.environ.copy()
+            env.update(
+                CHILD_PID_FILE=str(pidfile), NPM_AUDIT_CMD=str(npm),
+                NPM_AUDIT_ATTEMPTS="1", NPM_AUDIT_ATTEMPT_TIMEOUT="1",
+                NPM_AUDIT_MAX_SECONDS="3", NPM_AUDIT_RETRY_DELAY="0",
+                NPM_AUDIT_REQUIRE_RESULT="true",
+            )
+            unrelated = subprocess.Popen(["sleep", "60"], start_new_session=True)
+            wrapper = subprocess.Popen(
+                ["bash", str(SCRIPT), "all"], cwd=ROOT, env=env,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                start_new_session=True,
+            )
+            child = None
+            started = time.monotonic()
+            try:
+                if mode == "interrupted":
+                    deadline = started + 4
+                    while not pidfile.exists() and time.monotonic() < deadline:
+                        time.sleep(0.01)
+                    self.assertTrue(pidfile.exists(), "audit never started")
+                    # Cancel the caller's actual group. The audit's separate
+                    # group must be cleaned by its owner, not this signal.
+                    os.killpg(wrapper.pid, signal.SIGTERM)
+                stdout, stderr = wrapper.communicate(timeout=8)
+                child = int(pidfile.read_text(encoding="utf-8").strip())
+                deadline = time.monotonic() + 1
+                while self.live(child) and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertFalse(self.live(child), f"audit child {child} survived {mode}")
+                self.assertIsNone(unrelated.poll(), "audit cleanup killed an unrelated process")
+                self.assertLess(time.monotonic() - started, 6, stdout + stderr)
+                return wrapper.returncode, stdout, stderr
+            finally:
+                # These exact fixture children/groups are owned by this test,
+                # including on the unfixed parent or an assertion failure.
+                if child is None and pidfile.exists():
+                    child = int(pidfile.read_text(encoding="utf-8").strip())
+                if child is not None:
+                    try:
+                        os.kill(child, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                for process in (wrapper, unrelated):
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait(timeout=3)
+                if wrapper.stdout is not None:
+                    wrapper.stdout.close()
+                if wrapper.stderr is not None:
+                    wrapper.stderr.close()
+
+    def test_completed_and_failed_audits_clean_children_without_changing_verdict(self):
+        for mode, expected in (("success", 0), ("failure", 1)):
+            with self.subTest(mode=mode):
+                status, stdout, stderr = self.run_with_child(mode)
+                self.assertEqual(status, expected, stdout + stderr)
+                self.assertEqual("no vulnerabilities" in stdout, mode == "success")
+                if mode == "failure":
+                    self.assertIn("status 42", stdout)
+
+    def test_timeout_cleans_term_resistant_descendants_and_keeps_strict_verdict(self):
+        status, stdout, stderr = self.run_with_child("timeout")
+        self.assertEqual(status, 1, stdout + stderr)
+        self.assertIn("command was stopped", stdout)
+        self.assertNotIn("no vulnerabilities", stdout)
+
+    def test_zero_exit_from_timeout_handler_is_not_completed_audit(self):
+        status, stdout, stderr = self.run_with_child("timeout-exits-zero")
+        self.assertEqual(status, 1, stdout + stderr)
+        self.assertIn("status 143", stdout)
+        self.assertNotIn("no vulnerabilities", stdout)
+
+    def test_timeout_keeps_captured_positive_findings_without_a_second_query(self):
+        status, stdout, stderr = self.run_with_child("timeout", finding=True)
+        self.assertEqual(status, 1, stdout + stderr)
+        self.assertIn("vulnerabilities present", stdout)
+        self.assertNotIn("could not reach the advisory endpoint", stdout)
+        self.assertNotIn("retrying", stdout)
+
+    def test_interrupted_caller_cleans_the_separate_audit_group(self):
+        status, stdout, stderr = self.run_with_child("interrupted")
+        self.assertEqual(status, -signal.SIGTERM, stdout + stderr)
 
 
 class NpmAuditRetryTest(unittest.TestCase):
