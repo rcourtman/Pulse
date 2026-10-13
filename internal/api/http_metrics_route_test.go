@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -128,6 +129,63 @@ func TestNormalizeRoute_BoundedAllocations(t *testing.T) {
 			t.Errorf("root label for %q allocated %v times per call, want 0", path, allocs)
 		}
 	}
+}
+
+// The retired BenchmarkNormalizeRoute rows flipped by a CPU cycle with code
+// layout, but their allocation columns never moved: one allocation per call,
+// sized to the label. That is the part a timing gate cannot judge reliably, so
+// it is pinned here per path. A label built from a buffer sized to the raw
+// path, or assembled through intermediates, fails even when it stays fast.
+func TestNormalizeRoute_LabelAllocationProfile(t *testing.T) {
+	if !measureAllocsInIsolation(t) {
+		return
+	}
+	for _, c := range []struct{ path, label string }{
+		{"/api/resources", "/api/resources"},
+		{"/api/users/12345", "/api/users/:id"},
+		{"/api/nodes/550e8400-e29b-41d4-a716-446655440000", "/api/nodes/:uuid"},
+		{"/api/nodes/550e8400-e29b-41d4-a716-446655440000/status", "/api/nodes/:uuid/status"},
+		{"/api/v1/orgs/123/resources/456/metrics", "/api/v1/orgs/:id/resources"},
+		{"/api/metrics-store/history?resourceType=vm&resourceId=pve1:node1:100&metric=cpu&range=1h", "/api/metrics-store/history"},
+		{"/api/metrics-store/history", "/api/metrics-store/history"},
+	} {
+		if got := normalizeRoute(c.path); got != c.label {
+			t.Fatalf("normalizeRoute(%q) = %q, want %q", c.path, got, c.label)
+		}
+		// A fresh copy of the label is the cost floor: one allocation in
+		// whatever size class the runtime gives that many bytes.
+		wantAllocs, wantBytes := allocationsPerCall(func() { normalizeRouteSink = strings.Clone(c.label) })
+		allocs, bytes := allocationsPerCall(func() { normalizeRouteSink = normalizeRoute(c.path) })
+		if wantAllocs != 1 {
+			t.Fatalf("control: cloning %q allocated %d times per call, want 1", c.label, wantAllocs)
+		}
+		if allocs != wantAllocs || bytes != wantBytes {
+			t.Errorf("normalizeRoute(%q) allocated %d times and %d bytes per call, want %d and %d (the label alone)",
+				c.path, allocs, bytes, wantAllocs, wantBytes)
+		}
+	}
+}
+
+// allocationsPerCall is testing.AllocsPerRun with the byte count kept. Callers
+// run in an isolated child, since MemStats are process-wide. A single runtime
+// allocation inside one window would add its whole size to the bytes, so each
+// figure is the lowest of a few windows: f's own cost recurs in every window.
+func allocationsPerCall(f func()) (allocs, bytes uint64) {
+	const runs, windows = 100, 3
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
+	f()
+	allocs, bytes = ^uint64(0), ^uint64(0)
+	for range windows {
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		for range runs {
+			f()
+		}
+		runtime.ReadMemStats(&after)
+		allocs = min(allocs, (after.Mallocs-before.Mallocs)/runs)
+		bytes = min(bytes, (after.TotalAlloc-before.TotalAlloc)/runs)
+	}
+	return allocs, bytes
 }
 
 func TestNormalizeRoute_ConcurrentAndRetainedLabels(t *testing.T) {
