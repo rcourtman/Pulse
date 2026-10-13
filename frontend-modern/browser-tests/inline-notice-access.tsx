@@ -28,6 +28,7 @@ const resource: Resource = {
   id: 'fixture:pve1:101', type: 'vm', name: 'safety-guest', displayName: 'safety-guest',
   platformId: 'fixture', platformType: 'proxmox-pve', platformScopes: ['proxmox-pve'],
   sourceType: 'api', sources: ['proxmox'], status: 'online', lastSeen: 1791885600000,
+  metricsTarget: { resourceType: 'vm', resourceId: 'fixture:pve1:101' },
   cpu: { current: 10 }, memory: { current: 25, total: 4 * 1024 ** 3, used: 1024 ** 3 },
   disk: { current: 50, used: 5 * 1024 ** 3, total: 10 * 1024 ** 3 },
   proxmox: {
