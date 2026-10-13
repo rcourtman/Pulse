@@ -35,7 +35,9 @@ describe('existing phone recovery and retirement help', () => {
     expect(text).toContain('not the web UI');
     expect(text).toContain('ntfy, Gotify or Pushover');
     expect(text).toContain('own VPN or tunnel');
-    expect(prose(section('RELAY', 'requirements', 2))).toContain('An existing licence with the relay entitlement');
+    expect(prose(section('RELAY', 'requirements', 2))).toContain(
+      'An existing licence with the relay entitlement',
+    );
     expect(prose(section('RELAY', 'requirements', 2))).not.toContain('Relay-or-higher');
   });
 
@@ -66,14 +68,19 @@ describe('existing phone recovery and retirement help', () => {
         const same = /^#(.+)$/.exec(href);
         const cross = /^\/docs\/([^#]+)#(.+)$/.exec(href);
         expect(same || cross, href).not.toBeNull();
-        expect(render(cross ? cross[1] : 'RELAY').querySelector(
-          `[id="${cross ? cross[2] : same![1]}"]`,
-        ), href).not.toBeNull();
-        expect(link.hasAttribute('data-doc-link'), href).toBe(true);
+        expect(
+          render(cross ? cross[1] : 'RELAY').querySelector(`[id="${cross ? cross[2] : same![1]}"]`),
+          href,
+        ).not.toBeNull();
+        // Cross-document links use the router; same-page fragments use native anchors.
+        expect(link.hasAttribute('data-doc-link'), href).toBe(Boolean(cross));
       }
     }
-    for (const fragment of ['relay-showing-disconnected', 'pulse-mobile-cant-connect',
-      'open-pulse-handoff-not-loading']) {
+    for (const fragment of [
+      'relay-showing-disconnected',
+      'pulse-mobile-cant-connect',
+      'open-pulse-handoff-not-loading',
+    ]) {
       expect(render('RELAY').querySelector(`[id="${fragment}"]`), fragment).not.toBeNull();
     }
   });
