@@ -19,6 +19,19 @@ import {
 } from '../infrastructureOperationsModel';
 
 describe('infrastructure operations model', () => {
+  it('keeps the complete optional signing settings wrappable without changing their values', () => {
+    const note = infrastructureInstallerSectionSource
+      .split('Config signing (optional)')[1]
+      .split('</div>')[0];
+    for (const value of [
+      'PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true',
+      'PULSE_AGENT_CONFIG_SIGNING_KEY',
+      'PULSE_AGENT_CONFIG_PUBLIC_KEYS',
+    ]) {
+      expect(note).toContain(`<code class="wrap-anywhere">${value}</code>`);
+    }
+  });
+
   it('offers the existing private-file alternative on Linux/NAS and FreeBSD only when supplied', () => {
     const cards = buildCommandsByPlatform(
       'prompt-command',

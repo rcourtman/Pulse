@@ -23,6 +23,16 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Independently known PBS remains available in Backups (13 October 2026)
+
+The resource-owned PBS table is outside backup-inventory loading/error gates.
+Its canonical identity, datastore health/capacity and details remain usable
+when either or both inventory endpoints fail. Error/loading counts are not zero
+backup evidence. The inventory-only surface retains incomplete notices and
+ordinary retries. `ProxmoxBackupsTable.test.tsx` checks stable server-table
+ownership through loading, single/both failures and valid response recovery.
+This consumes existing resources; it adds no producer or native recovery claim.
+
 ### Shared interpretation of selected guest memory
 
 `GuestMemoryEvidenceForResource` and the VM/container `MemoryEvidence` accessors
