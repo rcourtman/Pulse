@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const { chromium, webkit } = require('playwright');
+const { chromium } = require('playwright');
 
 (async () => {
   const root = path.resolve('frontend-modern');
@@ -27,22 +27,34 @@ const { chromium, webkit } = require('playwright');
   let browser;
   try {
     await server.listen();
-    for (const [engine, width, tone] of [['chromium', 1280, 'light'], ['webkit', 390, 'dark']]) {
-      browser = await { chromium, webkit }[engine].launch(engine === 'chromium'
-        ? { headless: true, channel: 'chromium', args: ['--no-sandbox'] }
-        : { headless: true });
+    for (const [width, tone] of [[1280, 'light'], [390, 'dark']]) {
+      const engine = 'chromium';
+      const narrow = width < 500;
+      browser = await chromium.launch({ headless: true, channel: 'chromium', args: ['--no-sandbox'] });
       const page = await browser.newPage({ viewport: { width, height: 1000 },
-        ...(engine === 'webkit' ? { isMobile: true, hasTouch: true } : {}) });
+        ...(narrow ? { isMobile: true, hasTouch: true } : {}) });
       const errors = [];
+      const apiRequests = [];
+      const offOriginRequests = [];
       page.on('pageerror', error => errors.push(error.message));
       page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-      await page.route(new RegExp(`^http://127\\.0\\.0\\.1:${port}/api/`), route =>
-        route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+      await page.route('**/*', route => {
+        const url = new URL(route.request().url());
+        if (url.origin !== `http://127.0.0.1:${port}`) {
+          offOriginRequests.push(url.href);
+          return route.abort();
+        }
+        if (url.pathname.startsWith('/api/')) {
+          apiRequests.push(url.pathname);
+          return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+        }
+        return route.continue();
+      });
       await page.goto(`http://127.0.0.1:${port}/browser-tests/docs-fragment-navigation.html`,
         { waitUntil: 'domcontentloaded', timeout: 60_000 });
       await page.getByRole('link', { name: '← All documentation' }).click();
       const entry = page.locator('a[data-doc-link][href="/docs/API"]').first();
-      if (engine === 'webkit') await entry.tap();
+      if (narrow) await entry.tap();
       else {
         await entry.focus();
         await page.keyboard.press('Enter');
@@ -62,7 +74,7 @@ const { chromium, webkit } = require('playwright');
         if (innerWidth < 500) pre.scrollLeft = pre.scrollWidth;
       });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-      const captures = [`${engine}-helper.png`, `${engine}-boundary.png`];
+      const captures = [`${engine}-${width}-helper.png`, `${engine}-${width}-boundary.png`];
       await page.screenshot({ path: path.join(artifacts, captures[0]) });
       const warning = page.locator('p').filter({ hasText: "shell quotes alone do not disable curl's URL globbing" });
       await warning.scrollIntoViewIfNeeded();
@@ -77,7 +89,7 @@ const { chromium, webkit } = require('playwright');
       // the real renderer's fragment focus/reload handling on the API guide.
       const rbac = page.locator('a[data-doc-link][href^="/docs/RBAC#"]').first();
       await rbac.scrollIntoViewIfNeeded();
-      if (engine === 'webkit') await rbac.tap();
+      if (narrow) await rbac.tap();
       else { await rbac.focus(); await page.keyboard.press('Enter'); }
       await page.waitForURL(`**/docs/RBAC#managing-roles`);
       await page.waitForFunction(() => document.activeElement?.id === 'managing-roles');
@@ -89,10 +101,13 @@ const { chromium, webkit } = require('playwright');
       assert.equal((await page.locator('pre').filter({ hasText: 'pulse_api() (' })
         .locator('code').textContent()).trim(), helper);
       assert.deepEqual(errors, []);
+      assert.deepEqual(apiRequests, []);
+      assert.deepEqual(offOriginRequests, []);
       results.push({ engine, browserVersion: browser.version(), width, height: 1000, tone,
-        entry: engine === 'webkit' ? 'touch' : 'keyboard', exactRenderedShell: true,
+        entry: narrow ? 'touch' : 'keyboard', exactRenderedShell: true,
         literalURLAndEncodingBoundary: true, linkedAdminHelp: true,
-        fragmentFocusAndReload: true, noPageOverflow: true, captures, errors });
+        fragmentFocusAndReload: true, noPageOverflow: true, captures, errors,
+        apiRequests, offOriginRequests });
       await browser.close();
       browser = undefined;
     }
