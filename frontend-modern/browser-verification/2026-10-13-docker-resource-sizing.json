@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "4491595251412077c141a93da07dcbb4356d59d4",
+  "verified_at": "2026-10-13T13:57:00.876602Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/DOCKER.md",
+    "frontend-modern/public/docs/DOCKER.md",
+    "scripts/tests/test_docker_resource_sizing_docs.py",
+    "frontend-modern/browser-tests/build-doc-command-help.mjs",
+    "frontend-modern/browser-tests/docker-resource-sizing.cjs"
+  ],
+  "content_sha256": {
+    "docs/DOCKER.md": "c51b434d62b2a30d7f81421ac10aed1036d6dab1593c17f5bf4958924c493c77",
+    "frontend-modern/public/docs/DOCKER.md": "c51b434d62b2a30d7f81421ac10aed1036d6dab1593c17f5bf4958924c493c77",
+    "scripts/tests/test_docker_resource_sizing_docs.py": "fdcab923026abf65f378b525e2b8769ac6f87f47803d93adcc8eb3dddddca69f",
+    "frontend-modern/browser-tests/build-doc-command-help.mjs": "b4cbf642426174f47f552a7a71f68e523bce19f037bbe7fa490cce53e90e70da",
+    "frontend-modern/browser-tests/docker-resource-sizing.cjs": "b83fd388015a4115247d1d19ac9268ae55dd0c16a156fc7398244bbbedef87e1",
+    "frontend-modern/src/pages/Docs.tsx": "2ddb5a1daef50d23a99a7d1cb510c73cd7a85600f07ea9f69ad72f741f3b5229",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "572a3b4bc5bc1114adef5aa64bb0ea833c0dbe5865bbd57d3dc767fd1965aa55",
+    "frontend-modern/src/components/shared/PageHeader.tsx": "428d4c02380ba13a38d1ee7404c56b538562df904aecb66f11786ef0dbb8d259",
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c",
+    "frontend-modern/package.json": "e00d2edb9f70b43c7e43ef3d79195fc2148b58772c00a3e130fe721f0eec76ee",
+    "frontend-modern/package-lock.json": "230d8a9ef15f68577ba07691753a52b4baad05b36b9d6058993955d3fe480ecb"
+  },
+  "routes": [
+    "/docs/DOCKER#healthcheck-and-resource-sizing",
+    "/docs/TROUBLESHOOTING#excessive-cpu-writes-or-database-growth",
+    "/docs/TROUBLESHOOTING#memory-use-keeps-growing"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Actual Docs fetch, markdown renderer, PageHeader and router through the existing minimal shell. Docker help preserves the healthcheck and removes both arbitrary limits; existing resource policy and measurement boundaries remain.",
+    "All four captures opened with native view_image: readable desktop light and phone dark paragraphs, visible heading focus, legible healthcheck fence, and underlined diagnostic links. The long healthcheck line uses the existing horizontally scrollable code fence on the phone; no whole-document horizontal overflow. This is not an accessibility/contrast audit."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and phone taps follow both bounded statistics and memory interpretation links, verify their visible destinations and history back without reloading the shell. No Docker/service/diagnostic command runs.",
+    "All 2808 source inputs and seven artifacts match; actual served document bytes match. No API/WS write or page error. Browser/context/server closure is script-recorded, not an independent executor descendant-cleanup receipt."
+  ],
+  "browser": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "proof_scope": "Existing help only, not changed Pulse memory requirements, a safe universal sizing limit, installed Docker enforcement, reporter resolution, full frontend qualification or release availability."
+}
