@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "9adc1579282d48cfd60d2808f46c51bd5fe203d6",
+  "verified_at": "2026-10-12T23:15:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx",
+    "frontend-modern/src/utils/memoryObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "cf79e50b7c7286abf444644a5f5a38e191d5bfe6d72cbf63fc78a97db879bf3c",
+    "frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx": "b066231d8c835bd72c5de46046b06f105e1a59cd59ebc9f891b834a15ca87533",
+    "frontend-modern/src/utils/memoryObservation.ts": "69eb7fd90bca00dd2ffdfc542f08a41508d1353d43f0fdb03ac654e1b4cfcc15"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1900,
+      "height": 1100
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack built from main (backend 7676, sidecar Vite 5194), guest memory warning set to 75%",
+    "Bars, desktop: stopped VM and container (postgres-replica-01, dev-portal-01) show a dash in MEM and DISK with no caption; MEM title \"Unavailable while the guest is powered off.\"",
+    "Bars, desktop: running VM without guest agent (checkout-web-01) shows a dash in DISK with no caption; title carries the Proxmox reason",
+    "Bars, desktop: cache-inclusive VMs below warning (orders-api-01 52%, postgres-primary-01 64%) show no caption; caveat is the cell title and sr-only text",
+    "Bars, desktop: cache-inclusive VM at warning (redis-cache-01 77%) shows \"May include cache\"; guest-agent VM at 83% (checkout-web-02) shows none",
+    "Trends, desktop: sparkline hover title carries the memory/disk reason for stopped and agentless rows; current rows keep \"<name> memory history\"; accessible names unchanged",
+    "Rows stay 32px on desktop (33px only on the one caption row) and 44px on phone; no horizontal page overflow",
+    "Phone bars and trends: redis-cache-01 shows compact \"Cache?\" unclipped; stopped row shows dashes",
+    "Before/after headless captures of the same rows against main GuestRow/memoryObservation for comparison"
+  ],
+  "interactions": [
+    "Switched View between Bars and Trends",
+    "Reloaded at 1900x1100 and at the 375x812 mobile preset",
+    "Lowered the private instance guest memory threshold to 75% via PUT /api/alerts/config and reloaded",
+    "Read cell, caption and sparkline title attributes and row heights from the DOM"
+  ]
+}

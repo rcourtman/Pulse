@@ -219,7 +219,8 @@ assert.equal(
       assert.equal(await memory.locator('svg[role="img"] path').getAttribute('d'), plot);
       await capture('unavailable-sparkline');
       await page.getByLabel('Metric display').selectOption('bars');
-      await memory.getByText('N/A', { exact: true }).first().waitFor();
+      // Bars mode shows the same dash as an unavailable disk, not an empty bar.
+      await memory.getByText('-', { exact: true }).first().waitFor();
       assert.equal(
         await memory.locator('[data-stacked-memory-segment]').count(),
         0,

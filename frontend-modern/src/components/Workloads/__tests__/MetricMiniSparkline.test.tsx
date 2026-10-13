@@ -98,6 +98,25 @@ describe('MetricMiniSparkline', () => {
     },
   );
 
+  it('shows a separate hover reason without changing the accessible name', () => {
+    render(() => (
+      <MetricMiniSparkline
+        title="Memory history"
+        tooltip="Unavailable while the guest is powered off."
+        valueLabel="N/A"
+        valueLabelContext="unavailable"
+        series={[]}
+      />
+    ));
+    expect(screen.getByTestId('metric-mini-sparkline')).toHaveAttribute(
+      'title',
+      'Unavailable while the guest is powered off.',
+    );
+    expect(
+      screen.getByRole('img', { name: 'Memory history, unavailable N/A' }),
+    ).toBeInTheDocument();
+  });
+
   it('keeps the label visible when history has no renderable line', () => {
     render(() => (
       <MetricMiniSparkline
