@@ -1,10 +1,11 @@
 // Final Overview history/caption/update-access bytes through real consuming components.
 // This fixture never operates on a guest, credential, service or backup.
-import { createSignal, Show } from 'solid-js';
+import { createSignal, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
 import { DarkModeContext } from '../src/contexts/appRuntime';
 import { useWorkloads } from '../src/hooks/useWorkloads';
+import { nodeFromResource } from '../src/utils/resourceStateAdapters';
 import { GuestRow } from '../src/components/Workloads/GuestRow';
 import { GuestDrawer } from '../src/components/Workloads/GuestDrawer';
 import { NodeDrawer } from '../src/components/Workloads/NodeDrawer';
@@ -161,8 +162,11 @@ function NodeFixture() {
       available: true,
       cpuPackage: 55,
       cores: [{ core: 0, temp: 50 }],
+      hasCPU: true,
       hasGPU: true,
-      gpu: 95,
+      gpu: [{ device: 'fixture-gpu', edge: 95 }],
+      nvme: [{ device: 'fixture-nvme', temp: 91 }],
+      lastUpdate: '2026-10-13T12:00:00Z',
     },
     memory: { total: capacity, used: capacity / 4, free: capacity * 0.75, usage: 25 },
     disk: { total: capacity, used: capacity / 2, free: capacity / 2, usage: 50 },
@@ -188,6 +192,14 @@ function NodeFixture() {
     pendingUpdatesStatus: 'stale',
     pendingUpdatesReason: 'permission_denied',
     pendingUpdatesCheckedAt: new Date(Date.now() - 60000).toISOString(),
+  });
+  onMount(async () => {
+    const resource = await (await fetch('/temperature-producer.json')).json();
+    const projected = nodeFromResource(resource);
+    if (!projected || projected.cpuTemperature !== 55)
+      throw new Error('Producer-to-node CPU projection mismatch');
+    setNode((previous) => ({ ...previous, cpuTemperature: projected.cpuTemperature }));
+    (window as any).__temperatureProducer = { resource, projected };
   });
   (window as any).__integration = {
     update: (delta: Partial<Node>) => setNode((previous) => ({ ...previous, ...delta })),

@@ -343,6 +343,10 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 
       historyMode = 'empty';
       await page.goto(origin + '/node', { waitUntil: 'networkidle' });
+      await page.waitForFunction(() => window.__temperatureProducer);
+      record.temperatureProducer = await page.evaluate(() => window.__temperatureProducer);
+      assert.equal(record.temperatureProducer.resource.temperature, 55);
+      assert.equal(record.temperatureProducer.projected.cpuTemperature, 55);
       const node = page.getByTestId('node-drawer-overview'),
         nodeDetails = page.getByTestId('node-technical-details');
       await node.waitFor();

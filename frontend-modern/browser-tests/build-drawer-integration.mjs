@@ -96,6 +96,11 @@ try {
   fs.mkdirSync(path.join(outDir, 'docs'), { recursive: true });
   for (const doc of ['VM_DISK_MONITORING.md', 'TROUBLESHOOTING.md'])
     fs.copyFileSync(path.join(root, 'public/docs', doc), path.join(outDir, 'docs', doc));
+  const producer = path.join(process.env.PULSE_PROOF_INPUTS ?? '', 'temperature.json');
+  if (!fs.existsSync(producer))
+    throw new Error('Exact containing temperature producer input missing');
+  fs.copyFileSync(producer, path.join(outDir, 'temperature-producer.json'));
+  binding.temperatureProducer = hash(fs.readFileSync(producer));
   const artifacts = (directory) => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const file = path.join(directory, entry.name);
