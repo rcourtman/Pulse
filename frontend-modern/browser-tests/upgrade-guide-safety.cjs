@@ -9,7 +9,7 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
 (async () => {
   const root = path.resolve('frontend-modern');
-  const output = path.resolve('tmp/upgrade-guide-browser-observed');
+  const output = path.resolve('tmp/upgrade-guide-browser-final');
   fs.mkdirSync(output, { recursive: true });
   const source = fs.readFileSync(path.join(root, 'public/docs/UPGRADE_v6.md'));
   assert.equal(hash(source), hash(fs.readFileSync(path.resolve('docs/UPGRADE_v6.md'))));
@@ -118,7 +118,21 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
       assert.deepEqual(record.externalRequests, []);
       assert.ok(record.apiRequests.every(request => request.method === 'GET' && request.path === '/api/security/status'));
       assert.ok(record.servedGuide.length >= 1);
-      assert.ok(record.servedGuide.every(observation => observation.status === 200 && observation.sha256 === result.document_sha256));
+      // Native page Fetch preserves raw transfer bytes. Retain the distinct
+      // Playwright response.body observations; that API's earlier Unicode
+      // byte identity failed and is not silently treated as a source pass.
+      const fetched = await page.evaluate(async () => {
+        const response = await fetch('/docs/UPGRADE_v6.md', { cache: 'no-store' });
+        return { status: response.status, contentType: response.headers.get('content-type'),
+          bytes: Array.from(new Uint8Array(await response.arrayBuffer())) };
+      });
+      const fetchedBytes = Buffer.from(fetched.bytes);
+      record.nativeFetch = { status: fetched.status, contentType: fetched.contentType,
+        bytes: fetchedBytes.length, sha256: hash(fetchedBytes) };
+      fs.writeFileSync(path.join(output, `native-served-${width}.md`), fetchedBytes);
+      assert.equal(record.nativeFetch.status, 200);
+      assert.equal(record.nativeFetch.sha256, result.document_sha256);
+      record.checks.push('Native browser Fetch raw byte identity matches both committed guide copies');
       await browser.close(); browser = undefined;
     }
     result.result = 'passed'; result.verifiedAt = new Date().toISOString();
