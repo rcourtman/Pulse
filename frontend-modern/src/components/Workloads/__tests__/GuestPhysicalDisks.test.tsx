@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertsAPI } from '@/api/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -15,6 +15,14 @@ const queryState = vi.hoisted(() => ({
   error: undefined as unknown,
   query: '',
   enabled: false,
+}));
+
+// The expanded disk detail now shows its history charts in view; the chart
+// measures itself with ResizeObserver, which jsdom lacks. Its rendering is
+// covered by the HistoryChart and DiskDetail suites.
+vi.mock('@/components/shared/HistoryChart', () => ({
+  HistoryChartHoverGroup: (props: { children: JSX.Element }) => <div>{props.children}</div>,
+  HistoryChart: (props: { label: string }) => <div data-testid="history-chart">{props.label}</div>,
 }));
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
