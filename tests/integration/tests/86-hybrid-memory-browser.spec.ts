@@ -190,7 +190,8 @@ test("hybrid guest memory follows canonical snapshots in the browser", async ({
       vm("cluster-b", 80),
     ];
     send();
-    await expect(memoryCell).toContainText("N/A");
+    // The bar shows a dash; an open history lens still reads N/A.
+    await expect(memoryCell).toContainText(/^-|N\/A/);
     await expect(memoryCell).not.toContainText("100%");
     await expect(memoryDetails).toHaveCount(0);
     await expect(drawer.getByText("Free", { exact: true })).toHaveCount(0);

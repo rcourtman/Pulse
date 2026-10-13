@@ -75,7 +75,7 @@ const settle = (page) => page.evaluate(async () => {
       await apply({ reason: '', lock: '', status: 'stopped', data: true, usage: 90 });
       for (const mode of ['bars', 'sparklines']) {
         await page.evaluate((value) => window.__guestDiskProvenance.mode(value), mode); await settle(page);
-        assert.match(await cell.innerText(), /Unavailable|N\/A/);
+        assert.equal(await cell.locator('[data-workload-disk-read-status] [aria-hidden="true"]').count(), 0);
         assert.equal(await cell.getAttribute('title'), 'Guest filesystem stats unavailable while the VM is stopped.');
         assert.equal(await cell.getByRole('progressbar').count(), 0);
         for (const label of await cell.getByRole('img').evaluateAll((items) => items.map((item) => item.getAttribute('aria-label')))) assert.doesNotMatch(label, /current 90%/);
@@ -83,7 +83,7 @@ const settle = (page) => page.evaluate(async () => {
       }
       record.checks.push('Both row modes withdraw stopped-VM current usage; the independent running control is unchanged.');
       const disclosure = row.locator('[data-row-action]');
-      if (width < 768) await click(cell.locator('[data-workload-disk-read-status]'));
+      if (width < 768) await click(cell);
       else { await disclosure.focus(); await page.keyboard.press('Enter'); }
       const drawer = page.getByRole('region', { name: 'Guest details' });
       await drawer.waitFor({ state: 'visible' });

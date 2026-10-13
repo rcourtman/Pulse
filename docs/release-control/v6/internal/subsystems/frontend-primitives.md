@@ -227,7 +227,10 @@ Retained and freshness-unknown values keep a visible cue in bars, sparklines,
 the hover History lens and host-capacity mode; compact layouts shorten only the
 visible label, not the accessible original source/time explanation. Sparkline
 accessible values never call retained, unknown or unavailable memory current.
-Unavailable numeric carriers remain N/A while recorded History stays intact.
+An unavailable reading shows the cell's dash in bars mode (N/A only as a
+sparkline value) while recorded History stays intact; it has no visible label,
+because no number is left to qualify, and its reason stays in the cell title,
+the chart's native hover title and assistive text.
 An independent qualified memory reading is not paused by a disk deferral.
 Neither Last seen, backup completion nor running power state renews memory.
 Unannotated unrelated platforms and actual zero readings retain their meaning.
@@ -237,11 +240,18 @@ the backend marks `MayIncludeCache`) keeps its numbers, colour and thresholds;
 the shared presentation adds `mayIncludeCache` and a `cacheNote` saying a high
 percentage alone does not show memory pressure and which fix can supply the
 guest's own figure. A VM row shows `May include cache` (`Cache?` in compact
-layouts); a container, whose Proxmox reading is always the cgroup value, keeps
-the caveat in the bar tooltip and drawer instead of a label on every row. A
-retained or freshness-unknown reading keeps its own freshness label with the
-caveat in its explanation, an unavailable reading is never qualified, and the
-drawer states the note as visible text in `About this reading`.
+layouts) only while the guest's own memory meets its warning or critical
+threshold, the figure that colours the bar in host-share mode too, which is
+when a cache-inclusive figure reads as pressure; below that the caveat is the
+cell title, the chart's native hover title and assistive text, not a label on every
+agentless VM. A container, whose Proxmox reading is always the cgroup value,
+keeps the caveat in the bar tooltip and drawer instead of a label on every
+row. A retained or freshness-unknown reading keeps its own freshness label
+with the caveat in its explanation, an unavailable reading is never qualified,
+and the drawer states the note as visible text in `About this reading`. An
+unavailable explanation names only what is known: a powered-off guest reads
+`Unavailable while the guest is powered off.`, and no message says
+`Unknown source`.
 Agent setup advice first states that setup, restarts and live guest-agent probes
 must be deferred during backups or a guest incident. This precaution stays with
 VM/container fallback guidance regardless of freshness or a reported backup lock;
@@ -544,10 +554,14 @@ previous data and fresh resumption with production components and CSS on desktop
 Chromium and touch WebKit. Synthetic observations do not establish the native
 command-ID cause, guest thaw, fresh History collection or containing release.
 
-The shipped row also keeps a visible filesystem provenance cue in every disk
+The shipped row also keeps a filesystem provenance cue in every disk
 presentation: resting bars, selected sparklines, the pointer/focus history lens
 and the pre-sample empty state. `prev-` is labelled **Last known** (**Prior** in
-compact rows); an unavailable read is **Unavailable** (**N/A** in compact rows).
+compact rows). An unavailable read shows the cell's dash with no visible label
+(a stopped VM or missing guest agent is a setup state, not news), except a
+broken read the user can fix: **No permission** or **Agent error** (**Denied**
+or **Error** in compact rows), in amber. Every reason stays in the cell title
+and the sparkline's native hover title.
 The full fixed-reason explanation is ordinary assistive text as well as the
 existing cell title and drawer content, not a live region repeated across a
 fleet. Retained sparkline values are announced as **last known**, never current;
