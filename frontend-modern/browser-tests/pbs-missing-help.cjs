@@ -110,7 +110,7 @@ const result = { source: binding.source_sha, binding_sha256: hash(bindingBytes),
         assert.ok(section.includes(phrase), `${state.name}: ${phrase}`);
       const safety = page.locator('article p').filter({ hasText: 'Do not delete and re-add the connection, replace tokens, install an agent' });
       await capture('preserve-state', safety);
-      await activate(page.locator(`article #${fragment} ~ table a[href="#pbs-is-connected-but-history-stays-empty"]`).first());
+      await activate(page.getByRole('link', { name: 'PBS History checks', exact: true }));
       await page.waitForURL('**#pbs-is-connected-but-history-stays-empty');
       await page.waitForFunction(() => document.activeElement?.id === 'pbs-is-connected-but-history-stays-empty');
       const consumed = await page.evaluate(() => window.__helpDocuments);
