@@ -88,7 +88,11 @@ describe('InlineNotice', () => {
       const onAction = vi.fn();
       render(() => (
         <>
-          <InlineNotice tone={tone} actionHref="/docs/VM_DISK_MONITORING" actionLabel="Read guidance">
+          <InlineNotice
+            tone={tone}
+            actionHref="/docs/VM_DISK_MONITORING"
+            actionLabel="Read guidance"
+          >
             Reading is deferred.
           </InlineNotice>
           <InlineNotice tone={tone} layout="banner" actionLabel="Retry" actionOnClick={onAction}>
@@ -104,7 +108,10 @@ describe('InlineNotice', () => {
         // drawers and the RBAC recovery consumers in the browser fixture.
         expect(action).toHaveClass('min-h-11', 'min-w-11', 'sm:min-h-0', 'sm:min-w-0');
         expect(action).toHaveClass('underline', 'focus-visible:outline-2');
-        expect(action).toHaveClass('focus-visible:outline-offset-2', 'focus-visible:outline-current');
+        expect(action).toHaveClass(
+          'focus-visible:outline-offset-2',
+          'focus-visible:outline-current',
+        );
       }
       expect(link).toHaveAttribute('href', '/docs/VM_DISK_MONITORING');
       expect(button).toHaveAttribute('type', 'button');
