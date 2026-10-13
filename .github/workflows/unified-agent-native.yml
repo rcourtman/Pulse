@@ -148,21 +148,6 @@ jobs:
         if: matrix.unix
         run: go test -count=1 -timeout 3m -run '^TestIntegrationContainer' ./scripts/installtests
 
-      - name: Set up Node.js for native runtime test assets
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: 'frontend-modern/package-lock.json'
-
-      - name: Install frontend test dependencies
-        working-directory: frontend-modern
-        run: npm ci
-
-      - name: Build real frontend assets for API-linked native tests
-        working-directory: frontend-modern
-        run: npm run build
-
       - name: Supply GNU timeout for macOS guidance checks
         if: runner.os == 'macOS'
         shell: bash
@@ -182,35 +167,6 @@ jobs:
         run: |
           set -euo pipefail
           timeout --version | grep -q 'GNU coreutils'
-
-      - name: Test native agent runtime
-        run: >-
-          go test
-          ./cmd/pulse-agent
-          ./internal/agenttls
-          ./internal/agentupdate
-          ./internal/dockeragent
-          ./internal/hostagent
-          ./internal/kubernetesagent
-          ./internal/remoteconfig
-
-      # The privileged helper is Linux-only. Keep its protocol, executable
-      # identity and shared filesystem fences in both native Linux jobs, even
-      # when a change leaves the unprivileged agent's source untouched. These
-      # tests run as the ordinary runner user; no helper service is installed.
-      - name: Test native Linux helper boundaries
-        if: runner.os == 'Linux'
-        run: >-
-          go test -race -count=1 -timeout 5m
-          ./cmd/pulse-agent-helper
-          ./internal/agenthelper
-          ./internal/filesystemprobe
-          ./internal/updatesignature
-          ./pkg/agents/host
-
-      - name: Build native Linux helper
-        if: runner.os == 'Linux'
-        run: go build -o pulse-agent-helper-native ./cmd/pulse-agent-helper
 
       # Server/LXC fixtures execute Linux-only scripts, not a macOS installer.
       # Keep their Bash/GNU metadata, archive and rename semantics local to that step;
@@ -246,6 +202,64 @@ jobs:
           ln -s "$gnu_awk" "$fixture_bin/awk"
           printf 'PULSE_INSTALLER_FIXTURE_BIN=%s\n' "$fixture_bin" >> "$GITHUB_ENV"
 
+      # Observe the existing generated NAS watchdog/collector control before
+      # Node acquisition and the large installer inventory. The runner's two
+      # phases partition the same discovered checks; no check runs twice or is
+      # dropped, and the production process/cleanup deadlines stay unchanged.
+      - name: Test NAS removal contracts before frontend preparation
+        if: matrix.unix
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${PULSE_INSTALLER_FIXTURE_BIN:-}" ]]; then
+            export PATH="$PULSE_INSTALLER_FIXTURE_BIN:$PATH"
+          fi
+          python3 scripts/installtests/run_unix_contracts.py --phase preflight
+
+      - name: Set up Node.js for native runtime test assets
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
+
+      - name: Install frontend test dependencies
+        working-directory: frontend-modern
+        run: npm ci
+
+      - name: Build real frontend assets for API-linked native tests
+        working-directory: frontend-modern
+        run: npm run build
+
+      - name: Test native agent runtime
+        run: >-
+          go test
+          ./cmd/pulse-agent
+          ./internal/agenttls
+          ./internal/agentupdate
+          ./internal/dockeragent
+          ./internal/hostagent
+          ./internal/kubernetesagent
+          ./internal/remoteconfig
+
+      # The privileged helper is Linux-only. Keep its protocol, executable
+      # identity and shared filesystem fences in both native Linux jobs, even
+      # when a change leaves the unprivileged agent's source untouched. These
+      # tests run as the ordinary runner user; no helper service is installed.
+      - name: Test native Linux helper boundaries
+        if: runner.os == 'Linux'
+        run: >-
+          go test -race -count=1 -timeout 5m
+          ./cmd/pulse-agent-helper
+          ./internal/agenthelper
+          ./internal/filesystemprobe
+          ./internal/updatesignature
+          ./pkg/agents/host
+
+      - name: Build native Linux helper
+        if: runner.os == 'Linux'
+        run: go build -o pulse-agent-helper-native ./cmd/pulse-agent-helper
+
       - name: Test native Unix installer contracts
         if: matrix.unix
         shell: bash
@@ -254,7 +268,7 @@ jobs:
           if [[ -n "${PULSE_INSTALLER_FIXTURE_BIN:-}" ]]; then
             export PATH="$PULSE_INSTALLER_FIXTURE_BIN:$PATH"
           fi
-          python3 scripts/installtests/run_unix_contracts.py
+          python3 scripts/installtests/run_unix_contracts.py --phase remaining
 
       - name: Test native Windows installer contracts
         if: ${{ !matrix.unix }}

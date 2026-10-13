@@ -17,6 +17,8 @@ import (
 
 type nativeGuidanceStep struct {
 	Name, If, Shell, Run string
+	ContinueOnError      bool   `yaml:"continue-on-error"`
+	WorkingDirectory     string `yaml:"working-directory"`
 }
 
 func nativeGuidanceToolSteps(content []byte) (nativeGuidanceStep, nativeGuidanceStep, error) {
