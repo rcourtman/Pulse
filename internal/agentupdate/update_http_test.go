@@ -69,6 +69,18 @@ func runNASUpdateExecutable(t *testing.T, path, wantVersion string) {
 	}
 }
 
+func writeNASUpdateExecutable(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.WriteFile(path, data, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// The controls run under a restrictive umask. Set the old executable's
+	// exact starting mode rather than assuming WriteFile overrides that mask.
+	if err := os.Chmod(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestNASAuthenticatedUpdateKeepsExecutableCopies(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("QNAP/Unraid executable-layout controls require Linux")
@@ -94,9 +106,7 @@ func TestNASAuthenticatedUpdateKeepsExecutableCopies(t *testing.T) {
 				execPath = persistPath
 			}
 			for _, path := range []string{execPath, persistPath} {
-				if err := os.WriteFile(path, oldBinary, 0755); err != nil {
-					t.Fatal(err)
-				}
+				writeNASUpdateExecutable(t, path, oldBinary)
 			}
 			if layout == "qnap-directory-alias" {
 				alias := filepath.Join(dir, "state-alias")

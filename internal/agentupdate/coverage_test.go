@@ -1600,13 +1600,11 @@ func TestPersistentBinaryCopyFailuresRetainExecutable(t *testing.T) {
 			dir := t.TempDir()
 			execPath := filepath.Join(dir, "runtime")
 			persistPath := filepath.Join(dir, "pulse-agent")
-			if err := os.WriteFile(execPath, newBinary, 0755); err != nil {
-				t.Fatal(err)
-			}
+			writeNASUpdateExecutable(t, execPath, newBinary)
 			if phase == "same-file" {
 				persistPath = execPath
-			} else if err := os.WriteFile(persistPath, oldBinary, 0755); err != nil {
-				t.Fatal(err)
+			} else {
+				writeNASUpdateExecutable(t, persistPath, oldBinary)
 			}
 			if phase == "hardlink" {
 				if err := os.Link(persistPath, persistPath+".old-link"); err != nil {
