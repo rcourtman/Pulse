@@ -2352,7 +2352,9 @@ type LinuxMemoryAvailability struct {
 // ParseLinuxMemoryAvailability parses /proc/meminfo. New kernels provide
 // MemAvailable directly. Older kernels use the conservative cache-aware
 // estimate Free + Buffers + Cached + SReclaimable - Shmem. A partial payload
-// containing only MemTotal/MemFree is deliberately rejected.
+// containing only MemTotal/MemFree is deliberately rejected. Impossible
+// physical counters or a derived estimate above MemTotal are not measurements;
+// clamping them would manufacture a trusted zero-usage sample.
 func ParseLinuxMemoryAvailability(content string, truncated bool) (LinuxMemoryAvailability, error) {
 	var result LinuxMemoryAvailability
 	seen := make(map[string]struct{})
@@ -2395,6 +2397,14 @@ func ParseLinuxMemoryAvailability(content string, truncated bool) (LinuxMemoryAv
 		*target = kB * 1024
 	}
 
+	if result.Total > 0 {
+		for _, name := range []string{"MemFree", "Buffers", "Cached", "SReclaimable", "Shmem"} {
+			if *fieldsByName[name] > result.Total {
+				return LinuxMemoryAvailability{}, fmt.Errorf("%s exceeds MemTotal", name)
+			}
+		}
+	}
+
 	if _, present := seen["MemAvailable"]; present {
 		if _, ok := seen["MemTotal"]; !ok || result.Total == 0 {
 			return LinuxMemoryAvailability{}, fmt.Errorf("MemAvailable has no valid MemTotal")
@@ -2425,8 +2435,7 @@ func ParseLinuxMemoryAvailability(content string, truncated bool) (LinuxMemoryAv
 	available := result.Free
 	for _, value := range []uint64{result.Buffers, result.Cached, result.SReclaimable} {
 		if math.MaxUint64-available < value {
-			available = math.MaxUint64
-			break
+			return LinuxMemoryAvailability{}, fmt.Errorf("cache-aware /proc/meminfo estimate overflows uint64")
 		}
 		available += value
 	}
@@ -2436,7 +2445,7 @@ func ParseLinuxMemoryAvailability(content string, truncated bool) (LinuxMemoryAv
 		available -= result.Shmem
 	}
 	if available > result.Total {
-		available = result.Total
+		return LinuxMemoryAvailability{}, fmt.Errorf("derived MemAvailable exceeds MemTotal")
 	}
 	result.EffectiveAvailable = available
 	result.Source = "meminfo-derived"

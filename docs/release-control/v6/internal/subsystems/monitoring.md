@@ -205,6 +205,50 @@ full-pressure/zero-available, legacy, resize and age controls remain distinct.
 These are secret-free source fixtures, not native balloon or freeze recovery,
 reporter #2762 cause/resolution, or release acceptance.
 
+### Contradictory guest meminfo cannot manufacture healthy pressure
+
+The QGA `/proc/meminfo` parser rejects physical counters above their sample's
+MemTotal, integer-overflowing cache estimates and derived availability above
+that total. It does not clamp contradictory evidence into a trusted zero-used
+sample. Shmem is subtracted before checking the derived bound; valid older-kernel
+estimates, exact-total/zero-used readings and explicit zero MemAvailable retain
+their semantics. Swap capacity is not physical RAM, and explicit MemAvailable
+still takes precedence over the optional cache estimate.
+
+A completed but contradictory file-read remains an ordinary failed observation,
+not a QGA transport pause. Existing negative-cache timing and independent
+provider/linked-agent selection remain unchanged. A cold guest can retain an
+independent provider tuple; an existing successful guest reading may instead
+remain bounded last-known evidence with its original observation time. Neither
+provider usage nor held guest data becomes current cache-aware guest pressure,
+and neither can clear an incident established by an earlier qualified sample. Normal valid polling can restore guest authority and
+clear it. The original backup-lock, single-attempt, uncertainty, observation-age
+and History rules remain required; no command or recovery route is added.
+
+Retained snapshots carry their explicitly annotated original source through
+subsequent failed and negative-cache polls. The `previous-snapshot` wrapper
+cannot discard a qualified origin after one poll and thereby clear a held
+incident using an independent provider fallback. This continuity remains
+last-known, uses the unchanged two-minute original-observation window and
+capacity fence, and adds no History points or guest-pressure authority. A
+wrapper with unknown/low-trust provenance, a missing/future/expired original,
+or a capacity change remains ineligible; independent current qualified memory
+still wins. `TestGuestMemoryRetainedOriginSurvivesRepeatedLowTrustPolls` covers
+those controls and 125 synthetic poll transitions across the original deadline.
+
+`pkg/proxmox/meminfo_integrity_test.go` covers contradictory physical components,
+overflow and the supported zero/shared-memory/modern-available boundaries.
+`TestGuestMeminfoIntegrityPollingContract` exercises both ordinary collectors
+with actual single/cluster HTTP clients for every physical-counter and
+estimate-refusal branch, canonical views, negative caching, backup-lock
+admission and the production alert decision. Rejected, negative-cached and
+locked polls must leave both percentage and byte History point sets exactly
+unchanged, including original times. Valid recovery and genuine zero must add
+only their own points. Each synthetic poll has a bounded caller context without
+changing production timeouts. These are
+synthetic source controls, not #2762 attribution, native freeze/restart recovery,
+resolution of #2439/#2619/#2822 or released availability.
+
 ### Existing memory origins cannot be renewed by AI consumers
 
 AI query/context/fact consumers now retain the selected guest observation and

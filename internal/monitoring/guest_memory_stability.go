@@ -107,6 +107,17 @@ func stabilizeGuestLowTrustMemory(
 	return currentUsed, currentSource, nil
 }
 
+// A retained snapshot is a wrapper around an original observation, not a
+// downgrade of that observation's origin. The caller still checks its original
+// age and capacity; neither this wrapper nor RetrievedAt can renew the sample.
+func guestMemorySnapshotReliability(prev *GuestMemorySnapshot) int {
+	source := CanonicalMemorySource(prev.MemorySource)
+	if source == "previous-snapshot" && (prev.Memory.Observation.State == "current" || prev.Memory.Observation.State == "last-known") {
+		source = CanonicalMemorySource(prev.Memory.Observation.Source)
+	}
+	return guestMemorySourceReliability(source)
+}
+
 func shouldCarryForwardPreviousGuestMemory(prev *GuestMemorySnapshot, currentStatus, currentSource string, currentTotal, currentUsed uint64, now time.Time) bool {
 	if prev == nil || currentStatus != "running" || prev.Status != "running" {
 		return false
@@ -118,7 +129,7 @@ func shouldCarryForwardPreviousGuestMemory(prev *GuestMemorySnapshot, currentSta
 		return false
 	}
 
-	prevReliability := guestMemorySourceReliability(prev.MemorySource)
+	prevReliability := guestMemorySnapshotReliability(prev)
 	currentReliability := guestMemorySourceReliability(currentSource)
 	if prevReliability < guestMemoryReliabilityTrusted || currentReliability > guestMemoryReliabilityFallback {
 		return false

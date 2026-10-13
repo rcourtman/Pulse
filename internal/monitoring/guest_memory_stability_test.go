@@ -68,15 +68,17 @@ func TestStabilizeGuestLowTrustMemoryUsesHealthyGuestAgentEvidence(t *testing.T)
 	const gib = uint64(1024 * 1024 * 1024)
 
 	now := time.Now()
+	// Stay beyond the two-minute original-source window so this control
+	// genuinely exercises the distinct healthy-guest retention path.
 	prev := &GuestMemorySnapshot{
 		Status:       "running",
-		RetrievedAt:  now.Add(-2 * time.Minute),
+		RetrievedAt:  now.Add(-3 * time.Minute),
 		MemorySource: "previous-snapshot",
 		Memory: models.Memory{
 			Total:       8 * int64(gib),
 			Used:        3 * int64(gib),
 			Usage:       safePercentage(float64(3*gib), float64(8*gib)),
-			Observation: models.MemoryObservation{State: "last-known", Source: "guest-agent-meminfo", ObservedAt: now.Add(-2 * time.Minute)},
+			Observation: models.MemoryObservation{State: "last-known", Source: "guest-agent-meminfo", ObservedAt: now.Add(-3 * time.Minute)},
 		},
 	}
 
@@ -230,5 +232,65 @@ func TestPollVMsWithNodesPreservesHealthyGuestMemoryFromPreviousSnapshot(t *test
 	}
 	if len(snap.Notes) != 1 || snap.Notes[0] != "preserved-previous-memory-for-healthy-guest-low-trust-full-usage" {
 		t.Fatalf("snapshot.Notes = %#v, want healthy guest carry-forward note", snap.Notes)
+	}
+}
+
+// The first malformed refresh must not consume the prior observation's source
+// authority. Negative-cache and later failed polls carry the same bounded
+// last-known tuple, never a new pressure or History observation.
+func TestGuestMemoryRetainedOriginSurvivesRepeatedLowTrustPolls(t *testing.T) {
+	original := time.Date(2026, time.October, 13, 5, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name, source, state, origin string
+		age                         time.Duration
+		total                       uint64
+		currentSource               string
+		want                        bool
+	}{
+		{"direct", "guest-agent-meminfo", "current", "guest-agent-meminfo", time.Second, 100, "status-mem", true},
+		{"retained", "previous-snapshot", "last-known", "guest-agent-meminfo", time.Second, 100, "status-mem", true},
+		{"retained-derived", "previous-snapshot", "last-known", "guest-agent-meminfo-derived", time.Minute, 100, "unavailable", true},
+		{"inclusive-original-age", "previous-snapshot", "last-known", "guest-agent-meminfo", guestMemoryCarryForwardMaxAge, 100, "status-mem", true},
+		{"expired-original", "previous-snapshot", "last-known", "guest-agent-meminfo", guestMemoryCarryForwardMaxAge + time.Nanosecond, 100, "status-mem", false},
+		{"future-original", "previous-snapshot", "last-known", "guest-agent-meminfo", -time.Second, 100, "status-mem", false},
+		{"legacy-wrapper", "previous-snapshot", "", "", time.Second, 100, "status-mem", false},
+		{"unavailable-wrapper", "previous-snapshot", "unavailable", "guest-agent-meminfo", time.Second, 100, "status-mem", false},
+		{"unknown-wrapper-state", "previous-snapshot", "future-state", "guest-agent-meminfo", time.Second, 100, "status-mem", false},
+		{"unknown-original-source", "previous-snapshot", "last-known", "future-source", time.Second, 100, "status-mem", false},
+		{"wrapper-without-origin", "previous-snapshot", "last-known", "previous-snapshot", time.Second, 100, "status-mem", false},
+		{"provider-wrapper-is-not-guest-pressure", "previous-snapshot", "last-known", "status-mem", time.Second, 100, "status-mem", false},
+		{"provider-label-cannot-borrow-annotation", "status-mem", "last-known", "guest-agent-meminfo", time.Second, 100, "status-mem", false},
+		{"resized", "previous-snapshot", "last-known", "guest-agent-meminfo", time.Second, 101, "status-mem", false},
+		{"independent-current-memory-wins", "previous-snapshot", "last-known", "guest-agent-meminfo", time.Second, 100, "available-field", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := original.Add(tc.age)
+			prev := &GuestMemorySnapshot{Status: "running", MemorySource: tc.source, RetrievedAt: now,
+				Memory: models.Memory{Total: 100, Used: 100, Usage: 100, Observation: models.MemoryObservation{State: tc.state, Source: tc.origin, ObservedAt: original}}}
+			if tc.state == "" {
+				prev.Memory.Observation = models.MemoryObservation{}
+			}
+			if got := shouldCarryForwardPreviousGuestMemory(prev, "running", tc.currentSource, tc.total, 50, now); got != tc.want {
+				t.Errorf("bounded original-source retention=%t, want %t", got, tc.want)
+			}
+		})
+	}
+	prev := &GuestMemorySnapshot{Status: "running", MemorySource: "guest-agent-meminfo", RetrievedAt: original,
+		Memory: models.Memory{Total: 100, Used: 100, Usage: 100, Observation: models.MemoryObservation{State: "current", Source: "guest-agent-meminfo", ObservedAt: original}}}
+	for second := 1; second <= 125; second++ {
+		now := original.Add(time.Duration(second) * time.Second)
+		used, source, _ := stabilizeGuestLowTrustMemory(prev, "running", "status-mem", 100, 50, now, true)
+		if second <= int(guestMemoryCarryForwardMaxAge/time.Second) {
+			if used != 100 || source != "previous-snapshot" {
+				t.Fatalf("poll %d lost bounded original guest reading: %d/%s", second, used, source)
+			}
+			prev.MemorySource, prev.Memory.Observation.State = source, "last-known"
+			prev.RetrievedAt = now
+		} else if used != 50 || source != "status-mem" {
+			t.Fatalf("poll %d renewed expired original reading: %d/%s", second, used, source)
+		}
+		if !prev.Memory.Observation.ObservedAt.Equal(original) {
+			t.Fatal("retained poll renewed the original observation time")
+		}
 	}
 }
