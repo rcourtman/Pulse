@@ -255,7 +255,7 @@ describe('current workload memory selection', () => {
     expect(iso).not.toHaveBeenCalled();
   });
 
-  it.each(['guest-agent-meminfo', 'agent', 'status-mem'])(
+  it.each(['guest-agent-meminfo', 'status-mem'])(
     'selects current %s memory independently of a QEMU disk deferral',
     (source) => {
       const input = current({
@@ -267,6 +267,12 @@ describe('current workload memory selection', () => {
       expect(getCurrentWorkloadMemoryUsage(input)).toBe(25);
     },
   );
+
+  it('selects a reporting agent independently of a QEMU disk deferral', () => {
+    const input = current({ diskStatusReason: 'prev-vm-locked', lock: 'backup' });
+    input.memory.observation!.source = 'agent';
+    expect(getCurrentWorkloadMemoryUsage(input)).toBe(25);
+  });
 
   it('cannot use current metadata to revive unavailable telemetry', () => {
     const input = current();

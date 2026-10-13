@@ -20,6 +20,29 @@
 
 ## Purpose
 
+### History honours explicit selected-source staleness (13 October 2026)
+
+The shared memory presentation reads the server's explicit `agent.stale`
+invalidation only when the selected observation is from `agent`. A dated
+current carrier then becomes visibly last known, with its original source,
+time and measured value, including zero. It does not supply current sorting,
+metric-filter pressure or guest/canonical History fallbacks. The visible source
+label explains that the supplying Pulse Agent stopped reporting. Missing or
+invalid provenance remains unknown; unavailable telemetry stays unavailable.
+
+QGA and Proxmox observations remain independent of a stale linked Pulse Agent
+and of filesystem deferrals. No client TTL, source timestamp renewal, metadata
+rewrite, API schema, History point or guest operation is added. The source
+can restore current measured zero when it reports again. This is presentation
+safety, not native restart/thaw recovery or release availability.
+
+`staleAgentMemory.test.ts` connects qualification to both History models,
+sorting and metric search, while `GuestRow.test.tsx` mounts same-ID source
+updates in bars and sparklines. The static production-component browser
+fixture `guest-memory-agent-stale.cjs` exercises agent-facet-only canonical
+deltas through the actual Workloads projection, both drawers and trusted
+keyboard/touch controls at desktop and phone widths.
+
 ### Patrol setup panel uses existing form primitives
 
 `PatrolSetupPanel.tsx` builds the provider choice from `SelectionCardGroup`

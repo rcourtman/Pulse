@@ -171,6 +171,7 @@ const memoryReading = (resource: Resource) =>
     resource.memory ? finiteMetric(getMemoryPercent(resource)) : undefined,
     resource.memory?.observation,
     isProxmoxGuest(resource),
+    { agentStale: resource.agent?.stale === true },
   );
 
 const guestDiskReading = (resource: Resource) => {
