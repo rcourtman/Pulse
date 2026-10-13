@@ -11,10 +11,11 @@ const output = root + '/tmp/drawer-composition';
 const hash = (b) => crypto.createHash('sha256').update(b).digest('hex');
 async function box(locator) {
   return locator.evaluate((element) => {
+    const focused = element === document.activeElement, focusVisible = element.matches(':focus-visible');
     const rect = element.getBoundingClientRect(), css = getComputedStyle(element);
     return { width: rect.width, height: rect.height, left: rect.left, right: rect.right,
       client: element.clientWidth, scroll: element.scrollWidth, text: element.textContent,
-      focused: element === document.activeElement, focusVisible: element.matches(':focus-visible'),
+      focused, focusVisible,
       whiteSpace: css.whiteSpace, overflowWrap: css.overflowWrap, colour: css.color,
       outline: css.outlineStyle, outlineWidth: css.outlineWidth, outlineOffset: css.outlineOffset };
   });
@@ -97,6 +98,7 @@ async function box(locator) {
       const fact = page.getByTestId('guest-drawer-facts').getByText(os, { exact: true }); await fact.waitFor();
       record.os = await box(fact); assert.equal(record.os.text, os); assert(record.os.scroll <= record.os.client); assert.equal(record.os.whiteSpace, 'normal');
       assert(record.os.right <= width && record.os.left >= 0); await noOverflow();
+      await overview.getByTestId('drawer-trend-card-memory').locator('[data-testid="drawer-trend-threshold"]').waitFor();
       const reading = overview.getByRole('link', { name: 'Filesystem reading guidance' });
       await reading.scrollIntoViewIfNeeded(); await reading.focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
       await page.evaluate(async () => { await document.fonts.ready; await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))); });
