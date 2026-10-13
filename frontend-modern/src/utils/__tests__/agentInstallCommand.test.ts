@@ -431,8 +431,7 @@ else:
     output += b"\\nPTY fixture deadline expired\\n"
 code = child.wait()
 final_tty = termios.tcgetattr(tty_watch)
-mode_mask = termios.ECHO | termios.ICANON
-if (initial_tty[3] & mode_mask) != (final_tty[3] & mode_mask):
+if initial_tty != final_tty:
     output += b"\\nBootstrap did not restore terminal echo/canonical mode\\n"
     code = 1
 if echo_at_prompt:
