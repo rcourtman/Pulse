@@ -3,7 +3,7 @@
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
-import { DarkModeContext } from '../src/contexts/appRuntime';
+import { DarkModeContext, WebSocketContext, type WebSocketStore } from '../src/contexts/appRuntime';
 import { useWorkloads } from '../src/hooks/useWorkloads';
 import { mergeCanonicalResourceDeltaSnapshot } from '../src/utils/resourceStateAdapters';
 import { GuestRow } from '../src/components/Workloads/GuestRow';
@@ -51,6 +51,7 @@ const initial: Resource = {
 // Only the transport is synthetic; the canonical merger, mapper and mounted
 // presentation use production code. No websocket connection is attempted.
 window.__pulseWsStore = {
+  activeAlerts: {},
   state: { resources: [], activeAlerts: [], recentlyResolved: [] },
   connected: () => false,
   initialDataReceived: () => true,
@@ -197,7 +198,9 @@ render(
           <DarkModeContext.Provider
             value={() => document.documentElement.classList.contains('dark')}
           >
-            <Fixture />
+            <WebSocketContext.Provider value={window.__pulseWsStore as unknown as WebSocketStore}>
+              <Fixture />
+            </WebSocketContext.Provider>
           </DarkModeContext.Provider>
         )}
       />
