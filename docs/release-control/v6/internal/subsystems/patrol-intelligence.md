@@ -2578,7 +2578,11 @@ both: maintenance window suppression takes priority and emits
 `maintenance_end_at` metadata; the `IntentionallyOffline` branch is
 the indefinite fallback that emits `operator_state_cause:
 intentionally_offline` with no end-at field because the suppression
-has no scheduled end. Both branches set `DismissedReason =
+has no scheduled end. That branch, like canonical `expected_offline`,
+silences only availability findings (the shared down condition class);
+capacity, performance, backup, security, and disk-health findings on the
+resource stay visible, matching the alert runtime. Only `muted`, retired
+lifecycle, and active maintenance silence every finding. Both branches set `DismissedReason =
 expected_behavior` and write a `UserNote` naming the cause so the
 operator can audit why future findings stayed quiet without
 expanding each row. Default deployments without a provider behave
