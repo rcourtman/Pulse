@@ -39,6 +39,11 @@ type Client struct {
 	auth       auth
 	config     ClientConfig
 
+	// Polling and datastore reads share this client. Publish a whole session
+	// tuple and share its renewal, not the subsequent requests or cancellation.
+	authMu       sync.Mutex
+	authInFlight *authRefresh
+
 	// GetNodeName caching. The node hostname is stable for the lifetime of a
 	// connection. PBS exposes /nodes as a superuser-only compatibility endpoint,
 	// so GetNodeName rejects API-token and non-superuser sessions before I/O.
@@ -52,6 +57,17 @@ type nodeNameAttempt struct {
 	joined int
 	name   string
 	err    error
+}
+
+type authRefresh struct {
+	done chan struct{}
+	err  error
+}
+
+func (c *Client) authSnapshot() auth {
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	return c.auth
 }
 
 // ErrNodeNameUnavailableForAuth means the current PBS authentication mode
@@ -197,16 +213,47 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 
 // authenticate performs password-based authentication
 func (c *Client) authenticate(ctx context.Context) error {
-	username := c.auth.user + "@" + c.auth.realm
-	password := c.config.Password
+	return c.refreshAuthentication(ctx, true)
+}
 
-	if err := c.authenticateJSON(ctx, username, password); err == nil {
-		return nil
-	} else if shouldFallbackToForm(err) {
-		return c.authenticateForm(ctx, username, password)
-	} else {
+// Ordinary expiry is checked under the same lock as session publication, so a
+// reader that observed an old ticket cannot start a second renewal. Explicit
+// authentication keeps its existing forced-refresh semantics. A joining caller
+// can stop waiting without cancelling the owner or replaying a failed attempt.
+func (c *Client) refreshAuthentication(ctx context.Context, force bool) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
+	c.authMu.Lock()
+	if !force && (c.config.Password == "" || c.auth.tokenName != "" || !time.Now().After(c.auth.expiresAt)) {
+		c.authMu.Unlock()
+		return nil
+	}
+	if pending := c.authInFlight; pending != nil {
+		c.authMu.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-pending.done:
+			return pending.err
+		}
+	}
+	pending := &authRefresh{done: make(chan struct{})}
+	c.authInFlight = pending
+	username := c.auth.user + "@" + c.auth.realm
+	c.authMu.Unlock()
+	password := c.config.Password
+
+	err := c.authenticateJSON(ctx, username, password)
+	if shouldFallbackToForm(err) {
+		err = c.authenticateForm(ctx, username, password)
+	}
+	c.authMu.Lock()
+	pending.err = err
+	c.authInFlight = nil
+	close(pending.done)
+	c.authMu.Unlock()
+	return err
 }
 
 func (c *Client) authenticateJSON(ctx context.Context, username, password string) error {
@@ -287,9 +334,11 @@ func (c *Client) handleAuthResponse(resp *http.Response) error {
 		return err
 	}
 
+	c.authMu.Lock()
 	c.auth.ticket = result.Data.Ticket
 	c.auth.csrfToken = result.Data.CSRFPreventionToken
 	c.auth.expiresAt = time.Now().Add(2 * time.Hour) // PBS tickets expire after 2 hours
+	c.authMu.Unlock()
 
 	return nil
 }
@@ -360,11 +409,15 @@ func isPBSNotFoundError(err error) bool {
 // request performs an API request
 func (c *Client) request(ctx context.Context, method, path string, data url.Values) (*http.Response, error) {
 	// Re-authenticate if needed
-	if c.config.Password != "" && c.auth.tokenName == "" && time.Now().After(c.auth.expiresAt) {
-		if err := c.authenticate(ctx); err != nil {
-			return nil, fmt.Errorf("re-authentication failed: %w", err)
+	if err := c.refreshAuthentication(ctx, false); err != nil {
+		// An ended caller or cancelled renewal is not a credential refusal.
+		// Preserve its context error class, including token reads with no login.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
 		}
+		return nil, fmt.Errorf("re-authentication failed: %w", err)
 	}
+	auth := c.authSnapshot()
 
 	var body io.Reader
 	if data != nil {
@@ -386,29 +439,29 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 	}
 
 	// Set authentication
-	if c.auth.tokenName != "" && c.auth.tokenValue != "" {
+	if auth.tokenName != "" && auth.tokenValue != "" {
 		// API token authentication
 		// Note: tokenName already contains just the token part (e.g., "pulse-token")
 		// after parsing in NewClient, so we reconstruct the full format
 		authHeader := fmt.Sprintf("PBSAPIToken=%s@%s!%s:%s",
-			c.auth.user, c.auth.realm, c.auth.tokenName, c.auth.tokenValue)
+			auth.user, auth.realm, auth.tokenName, auth.tokenValue)
 		req.Header.Set("Authorization", authHeader)
 		// NEVER log the actual token value - only log that we're using token auth
 		// Log the auth header format (without the secret)
 		maskedHeader := fmt.Sprintf("PBSAPIToken=%s@%s!%s:***",
-			c.auth.user, c.auth.realm, c.auth.tokenName)
+			auth.user, auth.realm, auth.tokenName)
 		log.Debug().
-			Str("user", c.auth.user).
-			Str("realm", c.auth.realm).
-			Str("tokenName", c.auth.tokenName).
+			Str("user", auth.user).
+			Str("realm", auth.realm).
+			Str("tokenName", auth.tokenName).
 			Str("authHeaderFormat", maskedHeader).
 			Str("url", req.URL.String()).
 			Msg("Setting PBS API token authentication")
-	} else if c.auth.ticket != "" {
+	} else if auth.ticket != "" {
 		// Ticket authentication
-		req.Header.Set("Cookie", "PBSAuthCookie="+c.auth.ticket)
-		if method != "GET" && c.auth.csrfToken != "" {
-			req.Header.Set("CSRFPreventionToken", c.auth.csrfToken)
+		req.Header.Set("Cookie", "PBSAuthCookie="+auth.ticket)
+		if method != "GET" && auth.csrfToken != "" {
+			req.Header.Set("CSRFPreventionToken", auth.csrfToken)
 		}
 	}
 
