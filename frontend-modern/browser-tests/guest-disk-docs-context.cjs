@@ -188,6 +188,11 @@ const linkPresentation = (link) =>
       await guidance.scrollIntoViewIfNeeded();
       await page.keyboard.press('Tab');
       await guidance.focus();
+      record.retained_link_focus_before_frame = await linkPresentation(guidance);
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      });
       record.retained_link_focus = await linkPresentation(guidance);
       assert.equal(record.retained_link_focus.focused, true);
       assert.equal(record.retained_link_focus.focus_visible, true);
