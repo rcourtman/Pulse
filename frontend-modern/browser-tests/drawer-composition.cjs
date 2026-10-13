@@ -114,11 +114,13 @@ async function box(locator) {
       assert.equal(digest, binding.artifacts['docs/VM_DISK_MONITORING.md']);
       await openGuest();
       await page.evaluate(() => window.__composition.mode('retained'));
-      await overview.getByText(/Using last known/).waitFor(); await overview.getByText('/data', { exact: true }).waitFor();
+      await overview.getByTestId('guest-drawer-filesystems').getByText(/Using last known/).waitFor();
+      await overview.getByTestId('drawer-trend-card-disk').getByText(/Using last known/).waitFor(); await overview.getByText('/data', { exact: true }).waitFor();
       assert.equal(await details.getAttribute('open'), null); await noOverflow(); await capture('guest-retained');
       record.states.push('Unknown reading and full OS outside closed Details; retained /data and last-known notice preserved');
       await page.evaluate(() => window.__composition.mode('fresh'));
-      await overview.getByText(/Using last known/).waitFor({ state: 'hidden' });
+      await overview.getByTestId('guest-drawer-filesystems').getByText(/Using last known/).waitFor({ state: 'hidden' });
+      await overview.getByTestId('drawer-trend-card-disk').getByText(/Using last known/).waitFor({ state: 'hidden' });
       assert.equal(await overview.getByRole('link', { name: 'Filesystem reading guidance' }).count(), 0);
       const memoryCard = overview.getByTestId('drawer-trend-card-memory'); assert.match(await memoryCard.getAttribute('class'), /amber/);
       await memoryCard.locator('[data-testid="drawer-trend-threshold"]').waitFor({ state: 'attached' });
