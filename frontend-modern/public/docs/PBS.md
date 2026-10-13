@@ -203,6 +203,37 @@ If you have multiple PBS servers, add each one separately in Settings. Pulse wil
 
 ## Troubleshooting
 
+### PBS is Active but missing from monitoring
+
+**Active** in **Settings → Infrastructure** describes the configured
+connection's polling health. It does not establish that Pulse has a matching
+PBS resource, every datastore or fresh readings. A direct PBS API connection
+does not require a Pulse Agent; adding one does not prove that the API path
+recovered.
+
+Use the existing views to distinguish what is missing:
+
+| Observation | Where to look next |
+| --- | --- |
+| The PBS server itself is missing | Open **Proxmox → Backups** and look for its **Backup server** row. Note any existing search or view filter. The PBS VM/LXC in **Overview** is a different resource. If Proxmox navigation is absent too, retain that fact. |
+| The server row exists, but datastores or backups are missing | Compare the affected view with the connection's existing collection scope. PVE passthrough backups do not establish that direct PBS inventory is available. Do not widen permissions or change scope just to diagnose the gap. |
+| Current readings exist, but a chart is empty | Use the [PBS History checks](#pbs-is-connected-but-history-stays-empty) for that server and time range. An empty chart is not the same as a missing server. |
+
+When reporting a missing server, keep the Pulse server version separate from
+the PBS version and whether a Pulse Agent is installed. Say which existing
+views lack it, whether Infrastructure says Active, and whether it was visible
+before. A last known working version is useful only if already known; unknown
+is valid. Use consistent aliases for private server names. Existing error text
+or screenshots are enough to start; do not run Diagnostics, enable Debug or
+collect a full response just to fill the report.
+
+Do not delete and re-add the connection, replace tokens, install an agent,
+restart PBS or Pulse, clear History or run a backup to make the server appear.
+These actions can lose evidence or change the affected path. Keep certificate
+verification and existing access restrictions intact. If the original incident
+also involved an unresponsive guest or uncertain freeze/thaw, follow
+[Backup safety](VM_DISK_MONITORING.md#backup-safety) before any live checks.
+
 ### "Connection Failed" Error
 
 Check from the Pulse host or container's network, if possible. A request from
