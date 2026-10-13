@@ -425,7 +425,20 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                 root = Path(directory).resolve()
                 for name in ('state', 'bin', 'tools', 'flash', 'logs'): (root / name).mkdir(mode=0o700)
                 runtime = root / 'bin/pulse-agent'; stored = root / 'state/stored-agent'
-                stored.write_bytes(Path('/bin/sleep').read_bytes()); stored.chmod(0o700)
+                # Supply a native Go executable like the actual collector,
+                # not a renamed platform-owned /bin/sleep with implicit
+                # executable/process semantics. The generated production
+                # wrapper still copies it to the exact runtime path, and real
+                # kernel rows still drive the unchanged ownership/stop checks.
+                build = subprocess.run(
+                    ['go', 'build', '-trimpath', '-o', str(stored),
+                     './scripts/installtests/nasfixturecollector'],
+                    cwd=ROOT, capture_output=True, text=True, timeout=30,
+                )
+                self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
+                self.assertTrue(stored.is_file())
+                self.assertFalse(stored.is_symlink())
+                stored.chmod(0o700)
                 watchdog = root / 'state/start-pulse-agent.sh'
                 (root / 'tools/pkill').write_text('#!/bin/sh\nexit 0\n'); (root / 'tools/pkill').chmod(0o700)
                 (root / 'tools/flash').write_text('#!/bin/sh\nexit 0\n'); (root / 'tools/flash').chmod(0o700)
@@ -467,6 +480,7 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                 control = root / 'control.sh'
                 control.write_text('set -euo pipefail\n' + setup + '\n' + functions + '\ncommand() { [[ "$*" != "-v systemctl" ]] || return 1; builtin command "$@"; }\nquiesce_nas_agent_for_removal ' + platform + '\n')
                 output = root / 'watchdog.log'
+                collector_log = root / 'logs' / ('pulse-agent-watchdog.log' if platform == 'QNAP' else 'watchdog.log')
                 with output.open('wb') as stream:
                     process = subprocess.Popen([str(watchdog)] if platform == 'QNAP' else ['bash', str(watchdog)], env=env,
                                                stdout=stream, stderr=stream, start_new_session=True)
@@ -474,7 +488,9 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                         deadline = time.monotonic() + 8
                         while time.monotonic() < deadline:
                             listing = subprocess.run([str(fixture_ps), '-ax', '-o', 'comm=', '-o', 'args='], capture_output=True, text=True, check=True).stdout
-                            if generated_collector_is_running(listing, runtime): break
+                            if (generated_collector_is_running(listing, runtime)
+                                    and collector_log.is_file()
+                                    and 'private NAS fixture collector ready\n' in collector_log.read_text()): break
                             self.assertIsNone(process.poll(), output.read_text()); time.sleep(.05)
                         else:
                             # Retain only owned fixture rows/logs, never other
