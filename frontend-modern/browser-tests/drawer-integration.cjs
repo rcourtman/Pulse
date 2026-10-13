@@ -385,11 +385,18 @@ async function box(locator) {
       const rect = await plot.boundingBox();
       if (width < 768) await plot.tap({ position: { x: rect.width * 0.6, y: rect.height / 2 } });
       else await plot.hover({ position: { x: rect.width * 0.6, y: rect.height / 2 } });
-      await page.locator('[data-history-hover-marker="cpu"]').first().waitFor();
+      // Decorative zero-length stroke groups have no geometric bounding box.
+      // Verify attachment/path geometry, then review the rendered pixels.
+      await page
+        .locator('[data-history-hover-marker="cpu"]')
+        .first()
+        .waitFor({ state: 'attached' });
       assert.equal(
         await page
           .locator('[data-history-hover-marker="cpu"]')
           .first()
+          .locator('path')
+          .last()
           .getAttribute('vector-effect'),
         'non-scaling-stroke',
       );
