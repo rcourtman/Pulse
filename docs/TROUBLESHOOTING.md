@@ -39,6 +39,10 @@ establish safe recovery.
 - **TrueNAS readings are stale or absent:** use
   [TrueNAS data checks](TRUENAS.md#stale-truenas-data), keeping the platform API
   and Pulse Agent paths separate.
+- **PBS is Active but missing from monitoring:** distinguish the
+  [server, backup inventory and History](PBS.md#pbs-is-active-but-missing-from-monitoring).
+  An Active API connection does not establish a visible PBS resource; installing
+  an agent does not prove API recovery.
 - **Pulse itself uses more memory, CPU or disk writes:** use
   [memory baseline and growth checks](TROUBLESHOOTING.md#memory-use-keeps-growing)
   or [CPU and write-rate checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).
