@@ -1009,6 +1009,30 @@ last-known values remain and current CPU advances. These checks establish reply
 consistency, not native payload-to-command provenance, thaw, cross-process
 coordination or restart safety. The native recovery precaution below remains.
 
+The same pre-release check validates the types of present canonical reply
+fields: `result` is an object, array or null, `content` a string or null, and
+`truncated` a boolean or null. Primitive results and wrongly typed file fields
+cannot become empty filesystem/network inventories or release admission before
+a file decoder reports its error. They retain `agent-completion-unverified` and
+the original one-minute fence; blocked follow-ups do not renew that deadline.
+Absent/null fields, compatible object/array rows, unknown metadata and completed
+but unusable memory content keep their existing semantics. A measurement
+rejection alone does not pause ordinary OS discovery.
+
+`TestGuestAgentTypedSuccessDefersEveryRead` checks sixteen impossible field
+shapes through all six real HTTP readers, including no postflight/follow-up
+request and unaffected live counters.
+`TestGuestAgentTypedSuccessSharesUnrenewedFenceAndResumes` checks fresh clients,
+cluster aliases, VM/source isolation, unchanged expiry and valid resumption.
+`TestGuestAgentTypedSuccessPreservesFieldAndMeasurementSemantics` keeps empty,
+null, partial-row, escaped-text and truncated-measurement compatibility.
+`TestGuestAgentTypedReplyMonitoringContract` connects all three field kinds to
+the real poll builder, broadcast resource and History, with untouched
+healthy-read cache and observation origins: original memory/disk remain
+last-known with their QGA provenance, metadata is not renewed, CPU advances,
+and guest metrics are not renewed. This is synthetic source/consuming-surface proof, not attribution of
+the original freeze or native thaw/restart recovery.
+
 The completed-error boundary uses the actual HTTP status retained by the request
 layer, not an `API error` phrase in provider or proxy text. The supported
 explicit request/access/command refusals (HTTP 400, 401, 403, 404, 405, 422 and
