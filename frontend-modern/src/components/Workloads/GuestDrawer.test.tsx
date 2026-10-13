@@ -636,6 +636,36 @@ describe('GuestDrawer', () => {
       expect(screen.queryByText('Open related infrastructure')).toBeNull();
     });
 
+    it('adds one min-max band per series whose buckets spread, and none for flat ones', async () => {
+      const points = makeHistoryPoints(10);
+      chartsApiMocks.getMetricsHistory.mockResolvedValue({
+        resourceType: 'vm',
+        resourceId: 'inst1:node1:100',
+        range: '24h',
+        start: 1,
+        end: 3,
+        source: 'store',
+        metrics: {
+          cpu: [points[0], { ...points[1], max: 95 }, points[2]],
+          memory: makeHistoryPoints(20),
+          disk: makeHistoryPoints(30),
+        },
+      });
+      render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      await waitFor(() =>
+        expect(
+          screen
+            .getAllByTestId('guest-history-group-chart')[0]
+            .querySelector('path[data-history-band="cpu"]'),
+        ).not.toBeNull(),
+      );
+      const charts = screen.getAllByTestId('guest-history-group-chart');
+      expect(charts[0].querySelectorAll('path[data-history-band]')).toHaveLength(1);
+      expect(charts[0].querySelectorAll('path[data-history-series]')).toHaveLength(3);
+      expect(charts[1].querySelectorAll('path[data-history-band]')).toHaveLength(0);
+    });
+
     it('shows current readings without fabricating history points', async () => {
       chartsApiMocks.getMetricsHistory.mockResolvedValue({
         resourceType: 'vm',

@@ -27,6 +27,7 @@ import { formatCompactSpeed } from '@/utils/format';
 
 import {
   GUEST_DRAWER_HISTORY_GROUPS,
+  buildGuestDrawerHistoryBandPath,
   buildGuestDrawerHistoryPath,
   getGuestDrawerHistoryRangeBounds,
   getGuestDrawerHistoryScale,
@@ -309,7 +310,13 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     if (timestamp === undefined) return 'No stored history observations.';
     const values = series().map((item) => {
       const point = item.points.find((point) => point.timestamp === timestamp);
-      return `${item.label} ${point ? formatHistoryChartTooltipValue(point.value, item.unit) : 'no observation'}`;
+      if (!point) return `${item.label} no observation`;
+      const value = formatHistoryChartTooltipValue(point.value, item.unit);
+      const low = formatHistoryChartTooltipValue(point.min ?? point.value, item.unit);
+      const high = formatHistoryChartTooltipValue(point.max ?? point.value, item.unit);
+      return low === high
+        ? `${item.label} ${value}`
+        : `${item.label} ${value} average, ${low} to ${high}`;
     });
     return `${new Date(timestamp).toLocaleString()}. ${values.join('. ')}.`;
   };
@@ -425,8 +432,19 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         : props.currentMetrics?.[item.metric];
       const isFallback =
         timestamp === null && typeof fallbackValue === 'number' && Number.isFinite(fallbackValue);
+      // While a time is inspected, name the bucket's peak when it rises a
+      // visible distance (a tenth of the plot) above the average the line
+      // shows. The default readout stays one number per series.
+      const peakVisible =
+        point !== undefined &&
+        activeTimestamp() !== null &&
+        (point.max ?? point.value) - point.value >= 0.1 * (scale().maxValue - scale().minValue);
       return {
         ...item,
+        peakLabel:
+          point && peakVisible
+            ? `peak ${formatHistoryChartTooltipValue(point.max ?? point.value, item.unit)}`
+            : null,
         deferred,
         descriptionId: `${inspectionId}-deferred-${index}`,
         isCurrent: isFallback && !deferred,
@@ -517,6 +535,9 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                 <span class={alertToneClass(props.alerts?.[item.metric]?.severity)}>
                   {item.valueLabel}
                 </span>
+                <Show when={item.peakLabel}>
+                  {(label) => <span data-history-peak={item.metric}>{label()}</span>}
+                </Show>
                 <Show when={item.isCurrent}>
                   <span>current</span>
                 </Show>
@@ -605,6 +626,34 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           <Show when={bounds()}>
             {(rangeBounds) => (
               <>
+                <For each={drawableSeries()}>
+                  {(item) => (
+                    <Show
+                      when={buildGuestDrawerHistoryBandPath(
+                        item.points,
+                        scale(),
+                        rangeBounds().startTime,
+                        rangeBounds().endTime,
+                        GUEST_DRAWER_HISTORY_CHART_WIDTH,
+                        GUEST_DRAWER_HISTORY_CHART_HEIGHT,
+                      )}
+                    >
+                      {(band) => (
+                        <path
+                          data-history-band={item.metric}
+                          d={band()}
+                          fill={item.color}
+                          fill-opacity="0.2"
+                          stroke={item.color}
+                          stroke-opacity="0.45"
+                          stroke-width="1"
+                          stroke-linejoin="round"
+                          vector-effect="non-scaling-stroke"
+                        />
+                      )}
+                    </Show>
+                  )}
+                </For>
                 <For each={drawableSeries()}>
                   {(item) => (
                     <path

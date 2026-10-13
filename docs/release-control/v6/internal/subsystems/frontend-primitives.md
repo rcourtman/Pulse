@@ -5465,7 +5465,12 @@ reading, qualified "current" or "last known". An active alert on a charted
 metric tones that reading and, when it carries a numeric trigger, draws it as
 a dashed line in its severity colour; `getDrawerChartAlerts` maps alert types
 to chart metrics and converts I/O triggers from the alert engine's MiB/s to
-the charts' bytes per second. Any
+the charts' bytes per second. Each line is a bucket average, so a tinted band
+behind it spans every bucket's own lowest and highest reading
+(`buildGuestDrawerHistoryBandPath`): a short spike stays visible after
+downsampling. While a time is inspected the readout names that bucket's peak
+when it rises at least a tenth of the plot above the average, and the
+accessible value states each reading's average and range. Any
 warning- or danger-toned detail row
 is lifted into a "Worth checking" section in front, whichever section owns it,
 so demotion never hides a reason a reading cannot be trusted. Guest

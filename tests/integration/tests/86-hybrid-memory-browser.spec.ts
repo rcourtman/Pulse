@@ -227,7 +227,10 @@ test("hybrid guest memory follows canonical snapshots in the browser", async ({
       const box = await memoryDetails.boundingBox();
       return box ? box.y + box.height : Infinity;
     }).toBeLessThan(viewport.height - 64);
-    await expect(memoryDetails).toBeInViewport({ ratio: 1 });
+    // Fully readable, allowing the fraction of a pixel the rounded table
+    // border can clip when earlier drawer content lands on a sub-pixel offset
+    // (0.9956 was seen at 390px once the charts moved onto Overview).
+    await expect(memoryDetails).toBeInViewport({ ratio: 0.98 });
     await expect(memoryDetails).toContainText("100 MB");
     await expect(
       memoryDetails.locator("tr").filter({

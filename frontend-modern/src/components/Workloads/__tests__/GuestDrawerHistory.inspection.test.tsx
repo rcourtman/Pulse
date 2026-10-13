@@ -5,7 +5,10 @@ import { ChartsAPI, type AllMetricsHistoryResponse, type HistoryTimeRange } from
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { GuestDrawerHistory } from '../GuestDrawerHistory';
 import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
-import type { GuestDrawerHistoryTarget } from '../guestDrawerModel';
+import {
+  buildGuestDrawerHistoryBandPath,
+  type GuestDrawerHistoryTarget,
+} from '../guestDrawerModel';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
@@ -270,5 +273,120 @@ describe('GuestDrawerHistory stored-observation inspection', () => {
     await screen.findByText(/14 days history requires/);
     expect(screen.queryByRole('slider')).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+// Min-max band: each stored point is a bucket average carrying its extremes.
+const bandStart = Date.UTC(2026, 9, 12, 12);
+const bandTarget = { resourceType: 'vm' as const, resourceId: 'fixture:pve:101' };
+const bandPoint = (minute: number, value: number, min = value, max = value) => ({
+  timestamp: bandStart + minute * 60_000,
+  value,
+  min,
+  max,
+});
+const bandResponse = (
+  metrics: AllMetricsHistoryResponse['metrics'],
+): AllMetricsHistoryResponse => ({
+  ...bandTarget,
+  range: '1h',
+  start: bandStart,
+  end: bandStart + 3 * 60_000,
+  source: 'store',
+  metrics,
+});
+const bandUtilization = () =>
+  screen
+    .getAllByTestId('guest-history-group-chart')
+    .find((el) => el.dataset.historyGroup === 'utilization')!;
+
+// A 99% CPU burst inside a bucket that averages 20%.
+const bandSpiky = {
+  cpu: [bandPoint(0, 10), bandPoint(1, 20, 10, 99), bandPoint(2, 12)],
+  memory: [bandPoint(0, 40), bandPoint(1, 40, 39.5, 41.5), bandPoint(2, 40)],
+};
+
+describe('drawer History min-max band', () => {
+  it("draws a band up to a bucket's peak so a short spike is not averaged away", async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(bandResponse(bandSpiky));
+    render(() => <GuestDrawerHistory target={bandTarget} range="1h" />);
+    await screen.findByRole('slider', { name: 'Inspect Utilization history' });
+    const band = bandUtilization().querySelector('path[data-history-band="cpu"]');
+    expect(band).not.toBeNull();
+    // 99% on the 0-100 scale sits at y = 8 + (1 - 0.99) * 66 = 8.66 of the viewBox.
+    expect(band?.getAttribute('d')).toContain(',8.66');
+    expect(band?.getAttribute('d')).toMatch(/ Z$/);
+    // The average line itself still passes through 20%, not the peak.
+    const line = bandUtilization().querySelector('path[data-history-series="cpu"]');
+    expect(line?.getAttribute('d')).not.toContain(',8.66');
+  });
+
+  it('draws no band for buckets whose readings never spread', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(
+      bandResponse({
+        ...bandSpiky,
+        memory: [bandPoint(0, 40), bandPoint(1, 40), bandPoint(2, 40)],
+      }),
+    );
+    render(() => <GuestDrawerHistory target={bandTarget} range="1h" />);
+    await screen.findByRole('slider', { name: 'Inspect Utilization history' });
+    expect(bandUtilization().querySelector('path[data-history-band="memory"]')).toBeNull();
+    expect(bandUtilization().querySelectorAll('path[data-history-band]')).toHaveLength(1);
+  });
+
+  it('names the peak only while a time is inspected, and to assistive technology', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(bandResponse(bandSpiky));
+    render(() => <GuestDrawerHistory target={bandTarget} range="1h" />);
+    const slider = await screen.findByRole('slider', { name: 'Inspect Utilization history' });
+    // The default readout is the latest stored time: one number per series.
+    expect(bandUtilization().querySelector('[data-history-peak]')).toBeNull();
+
+    fireEvent.focus(slider);
+    fireEvent.input(slider, { target: { value: '1' } });
+    expect(bandUtilization().querySelector('[data-history-peak="cpu"]')).toHaveTextContent(
+      'peak 99.0%',
+    );
+    // Memory's bucket spread is too small to see, so it is not called a peak.
+    expect(bandUtilization().querySelector('[data-history-peak="memory"]')).toBeNull();
+    expect(slider).toHaveAttribute(
+      'aria-valuetext',
+      expect.stringContaining(
+        'CPU 20.0% average, 10.0% to 99.0%. Memory 40.0% average, 39.5% to 41.5%.',
+      ),
+    );
+
+    fireEvent.blur(slider);
+    expect(bandUtilization().querySelector('[data-history-peak]')).toBeNull();
+    expect(
+      within(bandUtilization()).getByRole('img', { name: 'Utilization history' }),
+    ).toBeTruthy();
+  });
+});
+
+describe('buildGuestDrawerHistoryBandPath', () => {
+  const scale = { minValue: 0, maxValue: 100 };
+
+  it('needs two points and some spread', () => {
+    expect(
+      buildGuestDrawerHistoryBandPath([bandPoint(0, 5, 1, 9)], scale, bandStart, bandStart + 1),
+    ).toBe('');
+    expect(
+      buildGuestDrawerHistoryBandPath(
+        [bandPoint(0, 5), bandPoint(1, 6)],
+        scale,
+        bandStart,
+        bandStart + 60_000,
+      ),
+    ).toBe('');
+  });
+
+  it('runs forward along the highs and back along the lows', () => {
+    const path = buildGuestDrawerHistoryBandPath(
+      [bandPoint(0, 50, 0, 100), bandPoint(1, 50, 0, 100)],
+      scale,
+      bandStart,
+      bandStart + 60_000,
+    );
+    expect(path).toBe('M34.00,8.00 L352.00,8.00 L352.00,74.00 L34.00,74.00 Z');
   });
 });
