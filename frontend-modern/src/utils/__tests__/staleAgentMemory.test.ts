@@ -42,6 +42,9 @@ const guest = (source = 'agent', state = 'current', usage = 95): WorkloadGuest =
 const resource = (input: WorkloadGuest): Resource => ({
   id: input.id,
   name: input.name,
+  displayName: input.name,
+  platformId: 'fixture',
+  sourceType: 'hybrid',
   type: 'vm',
   status: 'online',
   platformType: 'proxmox-pve',
