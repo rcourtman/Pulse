@@ -141,7 +141,7 @@ describe('both filesystem panels preserve unavailable versus measured zero', () 
     'does not show an empty healthy disk for %s',
     (_name, values) => {
       renderPanels(disk(values));
-      for (const id of ['disk-list-panel', 'guest-technical-details']) {
+      for (const id of ['disk-list-panel', 'guest-drawer-filesystems']) {
         const panel = screen.getByTestId(id);
         expect(panel.textContent).toContain('—');
         expect(panel.textContent).not.toMatch(/0%|NaN|Infinity/);
@@ -152,7 +152,7 @@ describe('both filesystem panels preserve unavailable versus measured zero', () 
 
   it('withdraws a prior measurement and restores zero only after explicit same-filesystem evidence', () => {
     const update = renderPanels(disk());
-    const details = screen.getByTestId('guest-technical-details');
+    const details = screen.getByTestId('guest-drawer-filesystems');
     expect(within(details).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
     update(disk({ used: undefined }));
     expect(within(details).queryByRole('progressbar')).not.toBeInTheDocument();

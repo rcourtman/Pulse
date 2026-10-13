@@ -2897,12 +2897,14 @@ and supplement known utilization with the threshold-colored progress metadata
 derived by `diskListModel.ts`. `GuestDrawerOverview.tsx` passes that metadata
 to the shared detail-row primitive; it does not parse display strings, create
 local bar geometry, or render a bar for the negative unknown-usage sentinel.
-Within that compact technical layout, `GuestDrawerOverview.tsx` declares the
-`Filesystems` section before the `Tags` section, so the shared
-`DetailSectionTable` span algorithm gives the longer mount-point list the wider
-panel and keeps the short tag list in the narrower slot. Future section-order
-changes in that overview must preserve the filesystem-first ordering rather
-than letting the shorter tag list take the wide column.
+`GuestDrawerOverview.tsx` renders the `Filesystems` section on its own, in
+front of the collapsed Details, so the mount-point list never shares a card
+row with shorter sections; tags render as chips in the Overview facts strip
+rather than as a `Tags` detail section. The Overview's 24h trend cards
+(`DrawerTrendCards.tsx`, lazy-loaded out of the WorkloadsSurface chunk) and
+the History tab read one query from `guestDrawerHistoryQuery.ts` with one cache
+key, and each mounts only while its tab is visible: the node drawer's History
+no longer stays mounted and polling while hidden.
 Panel width alone does not make mount paths readable. Filesystem disk rows must
 opt into the shared `layout: 'stacked'` presentation so their full mount path
 wraps above usage and progress at desktop and phone widths. Shared-prefix paths

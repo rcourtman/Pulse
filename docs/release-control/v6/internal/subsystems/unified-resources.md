@@ -136,6 +136,18 @@ the shared live-status copy to `TemperatureGauge`. Other node alerts never
 recolour the cell. The Mail Gateway drawer formats its attention rows through
 `getAlertAttentionCopy`.
 
+### Proxmox node drawer trend cards follow the node's own alerts
+
+`ProxmoxNodesTable` passes `NodeDrawer` two lists. `alerts` keeps the
+node-name match, so Needs attention also lists the node's guests. `ownAlerts`
+is the same `hostOverrideIdCandidates` identity match without the name, and
+only it colours the drawer's CPU, memory, temperature and disk trend cards and
+draws their triggers. Node alerts are keyed on the cluster-qualified id (for
+example `homelab-delly2`), which the drawer's own node record does not carry,
+so the drawer must not rebuild this match itself. `NodeDrawer.test.tsx` covers
+a guest alert that leaves the card plain and a table-supplied node alert that
+colours it.
+
 ### Canonical Discovery honours VM guest-read deferrals
 
 The canonical resource drawer uses the same fixed PVE VM lock, backup and

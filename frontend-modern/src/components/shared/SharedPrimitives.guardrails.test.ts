@@ -8761,7 +8761,10 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/TechnicalDetailsDisclosure.tsx',
     );
     expect(disclosureSource).toContain('onToggle');
-    expect(disclosureSource).toContain('<Show when={expanded()}>');
+    // Lazily mounted by default; keepMounted is an explicit opt-in for a
+    // disclosure that holds a surface's complete record (drawer Details).
+    expect(disclosureSource).toContain('<Show when={props.keepMounted || expanded()}>');
+    expect(disclosureSource).toContain('keepMounted?: boolean;');
     expect(disclosureSource).toContain('sections?: DetailSection[]');
     expect(disclosureSource).toContain('<DetailSectionTable');
     expect(disclosureSource).toContain('export const TechnicalDetailsSection');
