@@ -11,7 +11,7 @@ const renderedGuides = new Map<string, HTMLElement>();
 
 function renderGuide(name: string): HTMLElement {
   // Several destinations share a long guide. Render each immutable document
-  // once, rather than making sixteen navigation checks parse it repeatedly.
+  // once, rather than making seventeen navigation checks parse it repeatedly.
   // entry() clones its section, so the cached article is never modified.
   const cached = renderedGuides.get(name);
   if (cached) return cached;
@@ -44,7 +44,7 @@ describe('troubleshooting workflow entry', () => {
     const section = entry();
     const link = section.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/docs/VM_DISK_MONITORING#backup-safety');
-    expect(section.querySelectorAll('li')).toHaveLength(9);
+    expect(section.querySelectorAll('li')).toHaveLength(10);
     expect(section.querySelector('pre')).toBeNull();
     const beforeList = [...section.children]
       .slice(
@@ -75,17 +75,22 @@ describe('troubleshooting workflow entry', () => {
       'Preserve the current state and rollback evidence',
     );
     expect(prose(rows[2] as HTMLElement)).toContain('Installer success is not an accepted report');
-    expect(prose(rows[3] as HTMLElement)).toContain(
+    expect(prose(rows[3] as HTMLElement)).toContain('A stopped new command does not diagnose the existing agent');
+    expect(prose(rows[3] as HTMLElement)).toContain('do not repeat removal or installation');
+    expect(rows[3].querySelector('a')?.getAttribute('href')).toBe(
+      '/docs/UNIFIED_AGENT#copied-agent-command-fails-before-installation',
+    );
+    expect(prose(rows[4] as HTMLElement)).toContain(
       'a working Pulse Agent view does not prove API recovery',
     );
-    expect(prose(rows[6] as HTMLElement)).toContain(
+    expect(prose(rows[7] as HTMLElement)).toContain(
       'Guest usage and database size are different measurements',
     );
   });
 
   it('routes every entry to an existing shipped heading in the production viewer', () => {
     const links = [...entry().querySelectorAll('a[href]')];
-    expect(links).toHaveLength(16);
+    expect(links).toHaveLength(17);
     for (const link of links) {
       const href = link.getAttribute('href')!;
       const match = /^\/docs\/([^#]+)#(.+)$/.exec(href);

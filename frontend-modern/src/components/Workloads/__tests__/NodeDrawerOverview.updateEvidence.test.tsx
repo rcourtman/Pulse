@@ -85,7 +85,12 @@ describe('NodeDrawerOverview update evidence', () => {
 
     const status = screen.getByText('Unavailable · Update check access denied');
     expect(screen.getByTestId('node-technical-details')).not.toHaveAttribute('open');
-    expect(status.closest('details')).toBeNull();
+    const details = screen.getByTestId('node-technical-details') as HTMLDetailsElement;
+    expect(status.closest('details')).toBe(details);
+    expect(status).not.toBeVisible();
+    details.open = true;
+    expect(status).toBeVisible();
+    details.open = false;
     expect(status).toHaveClass('whitespace-normal');
     expect(status).not.toHaveClass('truncate');
     expect(screen.getByText(/Other monitoring can still work/)).toBeInTheDocument();
@@ -128,7 +133,13 @@ describe('NodeDrawerOverview update evidence', () => {
     expect(screen.getByText(/7 pending.*stale.*checked 2 mins ago/)).toBeInTheDocument();
     setNode({ ...node(), pendingUpdatesStatus: 'unavailable' });
     expect(screen.getByRole('dialog', { name: 'Proxmox update-check access' })).toBe(help);
-    expect(screen.getByText('Unavailable · Update check access denied')).toBeVisible();
+    expect(screen.getByTestId('node-technical-details')).toBe(details);
+    expect(screen.queryByTestId('node-drawer-exceptions')).toBeNull();
+    const status = screen.getByText('Unavailable · Update check access denied');
+    expect(status).not.toBeVisible();
+    details.open = true;
+    expect(status).toBeVisible();
+    expect(screen.getByRole('dialog', { name: 'Proxmox update-check access' })).toBe(help);
   });
 
   it('keeps a denied update check in Details, not under Worth checking', () => {
