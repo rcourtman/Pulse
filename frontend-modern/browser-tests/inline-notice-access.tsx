@@ -3,7 +3,7 @@
 import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
-import { DarkModeContext } from '../src/contexts/appRuntime';
+import { DarkModeContext, WebSocketContext, type WebSocketStore } from '../src/contexts/appRuntime';
 import { useWorkloads } from '../src/hooks/useWorkloads';
 import { GuestRow } from '../src/components/Workloads/GuestRow';
 import { GuestDrawer } from '../src/components/Workloads/GuestDrawer';
@@ -14,6 +14,15 @@ import { InlineNotice, type InlineNoticeTone } from '../src/components/shared/In
 import Docs from '../src/pages/Docs';
 import type { Resource } from '../src/types/resource';
 import '../src/index.css';
+
+// ResourceDetailDrawerOverviewTab reads the real context, not a mocked drawer.
+// This transport is inert and cannot open a connection or send a command.
+const socket = {
+  activeAlerts: {}, state: { resources: [], activeAlerts: [], recentlyResolved: [] },
+  connected: () => false, initialDataReceived: () => true, resourceSnapshotReceived: () => false,
+  resourceChange: () => ({ version: 0, changedIds: null, changedKeys: null }),
+  changedResourceMetaSince: () => null, changedResourceIdsSince: () => null, shutdown: () => {},
+} as unknown as WebSocketStore;
 
 const resource: Resource = {
   id: 'fixture:pve1:101', type: 'vm', name: 'safety-guest', displayName: 'safety-guest',
@@ -74,9 +83,9 @@ function RecoveryFixture() {
 }
 
 render(() => <DarkModeContext.Provider value={() => document.documentElement.classList.contains('dark')}>
-  <Router>
+  <WebSocketContext.Provider value={socket}><Router>
     <Route path="/docs/*docPath" component={Docs} />
     <Route path="/recovery-fixture" component={RecoveryFixture} />
     <Route path="*" component={GuestFixture} />
-  </Router>
+  </Router></WebSocketContext.Provider>
 </DarkModeContext.Provider>, document.getElementById('root')!);

@@ -72,8 +72,15 @@ async function run(variant) {
   try {
     assert.match(result.source, /^[a-f0-9]{40}$/);
     assert.equal(result.playwright, JSON.parse(fs.readFileSync(root + '/tests/integration/package-lock.json')).packages['node_modules/@playwright/test'].version);
-    for (const [file, digest] of Object.entries(binding.sources))
-      assert.equal(hash(fs.readFileSync(frontend + '/' + file)), digest, file);
+    for (const [file, digest] of Object.entries(binding.sources)) {
+      // The parent variant is compiled in the proof VM from an explicit,
+      // hash-bound original primitive input. Do not replace assigned source
+      // or pretend the final primitive supplied those parent pixels.
+      const input = variant === 'parent' && file === 'src/components/shared/InlineNotice.tsx'
+        ? root + '/tmp/inline-notice-access/parent-runtime.tsx'
+        : frontend + '/' + file;
+      assert.equal(hash(fs.readFileSync(input)), digest, file);
+    }
     const docHash = hash(fs.readFileSync(root + '/docs/VM_DISK_MONITORING.md'));
     assert.equal(binding.artifacts['docs/VM_DISK_MONITORING.md'], docHash);
     result.doc_sha256 = docHash;

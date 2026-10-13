@@ -43,7 +43,7 @@ const INLINE_NOTICE_ICON_CLASS =
 const INLINE_NOTICE_CONTENT_CLASS = 'min-w-0 flex-1 space-y-1';
 
 const INLINE_NOTICE_ACTION_BASE_CLASS =
-  'inline-flex items-center gap-1 text-xs font-semibold underline-offset-2 hover:underline';
+  'inline-flex min-h-11 min-w-11 max-w-full items-center gap-1 rounded-sm text-left text-xs font-semibold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current sm:min-h-0 sm:min-w-0';
 
 export const INLINE_NOTICE_ACTION_TONE_CLASSES: Record<InlineNoticeTone, string> = {
   danger: 'text-red-800 dark:text-red-100',
