@@ -1,4 +1,4 @@
-// Final combined History/UTC/update-access bytes through real consuming components.
+// Final Overview history/caption/update-access bytes through real consuming components.
 // This fixture never operates on a guest, credential, service or backup.
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -30,6 +30,22 @@ const alert = (id: string, resourceId: string, type = 'memory'): Alert =>
   }) as Alert;
 function GuestFixture() {
   const [mode, setMode] = createSignal('unknown');
+  const [memoryMode, setMemoryMode] = createSignal('cache-low');
+  const [display, setDisplay] = createSignal<'bars' | 'sparklines'>('bars');
+  const observedAt = '2026-10-13T12:00:00Z';
+  const memory = () => {
+    const unavailable = ['unknown', 'powered-off'].includes(memoryMode());
+    const current = memoryMode() === 'current-zero' ? 0 : memoryMode() === 'cache-low' ? 25 : 92;
+    return {
+      current, total: capacity, used: (capacity * current) / 100,
+      ...(unavailable ? { usageUnavailable: true } : {}),
+      observation: {
+        state: unavailable ? 'unavailable' as const : 'current' as const,
+        source: memoryMode() === 'powered-off' ? 'powered-off' : memoryMode().startsWith('cache') ? 'status-mem' : 'agent',
+        observedAt,
+      },
+    };
+  };
   const [open, setOpen] = createSignal(false);
   const [backup, setBackup] = createSignal('2026-10-13T12:30:00Z');
   const snapshot = (): Resource[] => [
@@ -47,7 +63,8 @@ function GuestFixture() {
       lastSeen: Date.now(),
       metricsTarget: { resourceType: 'vm', resourceId: 'fixture:pve1:101' },
       cpu: { current: 10 },
-      memory: { current: 92, total: capacity, used: capacity * 0.92 },
+      memory: memory(),
+      agent: { stale: memoryMode() === 'stale', lastReportAt: observedAt },
       ...(mode() !== 'unknown'
         ? { disk: { current: 50, used: capacity / 2, total: capacity } }
         : {}),
@@ -66,7 +83,9 @@ function GuestFixture() {
             ? 'agent-not-running'
             : mode() === 'retained'
               ? 'prev-vm-locked'
-              : '',
+              : mode() === 'denied'
+                ? 'permission-denied'
+                : '',
         lock: mode() === 'retained' ? 'backup' : '',
         disks:
           mode() === 'unknown'
@@ -87,6 +106,8 @@ function GuestFixture() {
   const guest = () => state.workloads()[0];
   (window as any).__integration = {
     mode: setMode,
+    memory: setMemoryMode,
+    display: setDisplay,
     backup: setBackup,
     evidence: () => ({ mode: mode(), projected: guest(), os }),
   };
@@ -99,7 +120,9 @@ function GuestFixture() {
           <tbody>
             <GuestRow
               guest={guest()}
-              visibleColumnIds={['name', 'disk']}
+              visibleColumnIds={['name', 'memory', 'disk']}
+              metricDisplayMode={display()}
+              metricHoverMode="value"
               isExpanded={open()}
               workloadTableLayoutMode={window.innerWidth < 768 ? 'phone' : 'wide'}
               onClick={() => setOpen(!open())}
@@ -126,6 +149,8 @@ function NodeFixture() {
     status: 'online',
     type: 'node',
     cpu: 0.1,
+    cpuTemperature: 55,
+    temperature: { available: true, cpuPackage: 55, cores: { 'Hottest secondary': 91 }, hasGPU: true, gpu: 95 },
     memory: { total: capacity, used: capacity / 4, free: capacity * 0.75, usage: 25 },
     disk: { total: capacity, used: capacity / 2, free: capacity / 2, usage: 50 },
     uptime: 3600,
