@@ -5,10 +5,6 @@ import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
-import {
-  GuestDrawerHistory,
-  GuestDrawerHistoryRangeSelect,
-} from '@/components/Workloads/GuestDrawerHistory';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
 import { ResourceOperatorStateSection } from '@/components/Infrastructure/ResourceOperatorStateSection';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
@@ -29,7 +25,7 @@ interface DockerHostDrawerProps {
   onClose?: () => void;
 }
 
-type DockerHostDrawerTab = 'overview' | 'history' | 'manage';
+type DockerHostDrawerTab = 'overview' | 'manage';
 
 export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<DockerHostDrawerTab>('overview');
@@ -81,20 +77,22 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
         onChange={(value) => setActiveTab(value as DockerHostDrawerTab)}
         tabs={[
           { value: 'overview', label: 'Overview' },
-          { value: 'history', label: 'History' },
           { value: 'manage', label: 'Manage' },
         ]}
-        trailing={
-          <Show when={activeTab() === 'history'}>
-            <GuestDrawerHistoryRangeSelect range={historyRange()} onRangeChange={setHistoryRange} />
-          </Show>
-        }
       />
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
           overflow-anchor: none prevents browser scroll anchoring from jumping when display toggles. */}
       <div class={`[overflow-anchor:none] ${activeTab() === 'overview' ? '' : 'hidden'}`}>
-        <DockerHostDrawerOverview host={props.host} />
+        <DockerHostDrawerOverview
+          host={props.host}
+          historyTarget={historyTarget()}
+          historyRange={historyRange()}
+          onHistoryRangeChange={setHistoryRange}
+          historyGroups={DOCKER_HOST_DRAWER_HISTORY_GROUPS}
+          currentMetrics={currentMetrics()}
+          historyEnabled={activeTab() === 'overview'}
+        />
       </div>
 
       <div class={`[overflow-anchor:none] ${activeTab() === 'manage' ? '' : 'hidden'}`}>
@@ -117,15 +115,6 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
             />
           </div>
         </Show>
-      </div>
-
-      <div class={`[overflow-anchor:none] ${activeTab() === 'history' ? '' : 'hidden'}`}>
-        <GuestDrawerHistory
-          currentMetrics={currentMetrics()}
-          groups={DOCKER_HOST_DRAWER_HISTORY_GROUPS}
-          range={historyRange()}
-          target={historyTarget()}
-        />
       </div>
     </section>
   );

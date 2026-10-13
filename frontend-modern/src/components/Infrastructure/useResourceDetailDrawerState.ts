@@ -8,8 +8,7 @@ import { useResourceDetailDrawerHistoryState } from './useResourceDetailDrawerHi
 import { useResourceDetailDrawerDerivedState } from './useResourceDetailDrawerDerivedState';
 import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
 
-type DrawerTab =
-  'overview' | 'history' | 'manage' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
+type DrawerTab = 'overview' | 'manage' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
 export interface UseResourceDetailDrawerStateOptions {
   resource: Resource;

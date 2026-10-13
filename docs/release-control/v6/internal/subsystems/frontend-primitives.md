@@ -1243,7 +1243,7 @@ display identity. The presence of discovery routing does not enable Agent-only
 disk-throughput charts. Explicit Agent linkage owns that capability distinction.
 `nodeDrawerModel.branchcov0713.test.ts` pins target precedence and unsupported
 target fallback, while `NodeDrawer.test.tsx` verifies the chart request and
-API-only chart groups through the rendered History tab.
+API-only chart groups through the rendered Overview charts.
 
 Platform inventory presentation has one structural owner across provider pages,
 drawers, and inline detail rows. `PlatformTableShell` owns framed page tables;
@@ -5457,7 +5457,10 @@ The Proxmox guest and node drawers (`GuestDrawerOverview.tsx`,
 a named bet): a grid of equal-weight inventory cards buried the drawer's job.
 Their Overview leads with active alerts (or one "No active alerts" line), then
 the resource's history charts (`GuestDrawerHistory`, lazy-loaded) opening on
-24 hours with the range picker beside them. These drawers have no History tab:
+24 hours with the range picker beside them. These drawers have no History tab
+(nor, since the same change was carried to them, do the Docker host drawer and
+the shared resource-detail drawer for agents, containers and other platform
+rows):
 by maintainer decision on 2026-10-13 the tab was removed because it repeated
 Overview's charts at another range in another style. The charts poll only
 while Overview shows, and before any history is stored they show the live

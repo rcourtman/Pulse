@@ -162,7 +162,7 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('ResourceDetailDrawer change history section', () => {
-  it('keeps retained guest memory and paused filesystems out of current History fallbacks', async () => {
+  it('keeps retained guest memory and paused filesystems out of current chart fallbacks', async () => {
     resetCreateNonSuspendingQueryCacheForTest();
     const source = baseResource({
       id: 'provenance-vm',
@@ -194,7 +194,6 @@ describe('ResourceDetailDrawer change history section', () => {
       <ResourceDetailDrawer resource={resource()} presentation="table-row" />
     ));
     try {
-      fireEvent.click(screen.getByRole('tab', { name: 'History' }));
       await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
       const chart = view.container.querySelector('[data-history-group="utilization"]')!;
       expect(chart.querySelector('[data-history-current="memory"]')).toBeNull();
@@ -249,7 +248,7 @@ describe('ResourceDetailDrawer change history section', () => {
     }
   });
 
-  it('reactively withdraws stopped VM disk carriers without discarding History or independent readings', async () => {
+  it('reactively withdraws stopped VM disk carriers without discarding the Overview charts or independent readings', async () => {
     resetCreateNonSuspendingQueryCacheForTest();
     const source = baseResource({
       id: 'native-power-vm',
@@ -278,7 +277,6 @@ describe('ResourceDetailDrawer change history section', () => {
       <ResourceDetailDrawer resource={resource()} presentation="table-row" />
     ));
     try {
-      fireEvent.click(screen.getByRole('tab', { name: 'History' }));
       await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
       const chart = view.container.querySelector('[data-history-group="utilization"]')!;
       expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
@@ -308,7 +306,10 @@ describe('ResourceDetailDrawer change history section', () => {
       expect(view.container.querySelector('[data-history-group="utilization"]')).toBe(chart);
       expect(chart.querySelector('path[data-history-series]')).toBeNull();
       expect(read).toHaveBeenCalledTimes(1);
-      expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
     } finally {
       view.unmount();
       read.mockRestore();
@@ -317,7 +318,7 @@ describe('ResourceDetailDrawer change history section', () => {
   });
 
   it.each(['vm', 'system-container'] as const)(
-    'keeps the mounted %s History on the selected filesystem producer',
+    'keeps the mounted %s Overview charts on the selected filesystem producer',
     async (type) => {
       resetCreateNonSuspendingQueryCacheForTest();
       const disks = [{ mountpoint: '/', total: 100, used: 62, free: 38 }];
@@ -350,7 +351,6 @@ describe('ResourceDetailDrawer change history section', () => {
         <ResourceDetailDrawer resource={resource()} presentation="table-row" />
       ));
       try {
-        fireEvent.click(screen.getByRole('tab', { name: 'History' }));
         await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
         const chart = view.container.querySelector('[data-history-group="utilization"]')!;
         expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(

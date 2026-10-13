@@ -2900,8 +2900,11 @@ and pass `enabled={false}` while Manage shows, so one query from
 `guestDrawerHistoryQuery.ts` polls only while the charts are visible. These
 drawers have no History tab, so there is no second read of the same resource
 at another range (the deleted `DrawerTrendCards.tsx` and the History tab each
-held one). Docker host and resource-detail drawers keep their History tab on
-the same 24h default.
+held one). The Docker host drawer and the shared resource-detail drawer
+(agents, containers, PBS, TrueNAS, Kubernetes and other platform rows) follow
+the same rule: `DockerHostDrawerOverview.tsx` and
+`ResourceDetailDrawerOverviewTab.tsx` render `GuestDrawerHistory` on Overview
+on the same 24h default and pass `enabled={false}` while another tab shows.
 Panel width alone does not make mount paths readable. Filesystem disk rows must
 opt into the shared `layout: 'stacked'` presentation so their full mount path
 wraps above usage and progress at desktop and phone widths. Shared-prefix paths
@@ -3745,7 +3748,7 @@ internal/mock/platform_fixtures_test.go pin the generation behavior.
 The workload adapter copies resource.parentId into parentResourceId. vSphere
 workload groups use that server parent identity while cluster, connection and
 host display labels are enriched. A metadata update therefore keeps the row
-and its drawer mounted, including its selected History tab. The workload
+and its drawer mounted, including its selected tab. The workload
 instance fallback uses an explicit cluster and never the workload's own name.
 Legacy rows without a canonical parent retain the existing scoped fallback.
 

@@ -78,7 +78,7 @@ afterEach(() => {
 });
 
 describe('ResourceDetailDrawer machine metrics history', () => {
-  it('adds a metrics history tab for Pulse Agent machines', async () => {
+  it('charts metrics history on Overview for Pulse Agent machines, with no History tab', async () => {
     render(() => (
       <ResourceDetailDrawer
         resource={resource({
@@ -90,8 +90,7 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-
+    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument();
     const history = screen.getByTestId('machine-history');
     expect(history).toHaveAttribute('data-resource-type', 'agent');
     expect(history).toHaveAttribute('data-resource-id', 'agent-mac-mini');
@@ -113,6 +112,7 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     ));
 
     expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('machine-history')).not.toBeInTheDocument();
   });
 
   it('renders storage history with the capacity catalog instead of workload metrics', async () => {
@@ -126,8 +126,6 @@ describe('ResourceDetailDrawer machine metrics history', () => {
         })}
       />
     ));
-
-    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
 
     const history = screen.getByTestId('machine-history');
     expect(history).toHaveAttribute('data-resource-type', 'storage');
@@ -148,8 +146,6 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-
     const history = screen.getByTestId('machine-history');
     expect(history).toHaveAttribute('data-resource-type', 'disk');
     expect(history).toHaveAttribute('data-groups', 'disk-activity,disk-io,disk-thermal');
@@ -167,8 +163,6 @@ describe('ResourceDetailDrawer machine metrics history', () => {
         })}
       />
     ));
-
-    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
 
     const history = screen.getByTestId('machine-history');
     expect(history).toHaveAttribute('data-resource-type', 'docker-host');
@@ -270,7 +264,7 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     expect(within(hostSection).queryByText('Hardware')).toBeNull();
   });
 
-  it('keeps the selected History tab across a snapshot refresh that briefly drops the metrics target', async () => {
+  it('withdraws and restores the Overview charts when a snapshot briefly drops the metrics target', async () => {
     const initial = resource({
       id: 'pbs-1',
       type: 'pbs',
@@ -279,18 +273,16 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     });
     const [pbs, setPbs] = createStore<Resource>(initial);
     render(() => <ResourceDetailDrawer resource={pbs} />);
-
-    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
     expect(screen.getByTestId('machine-history')).toHaveAttribute(
       'data-resource-id',
       'agent-pbs-1',
     );
 
-    // A snapshot refresh arrives without the merged metrics target. The drawer
-    // must not silently discard the user's History selection: it should show
-    // the in-tab notice and recover when the target returns on the next poll.
+    // A snapshot refresh arrives without the merged metrics target. Overview
+    // stays selected without charts, and they return when the target does.
     setPbs(reconcile({ ...initial, metricsTarget: undefined }, { merge: false }));
-    expect(screen.getByText('Metrics history is unavailable.')).toBeInTheDocument();
+    expect(screen.queryByTestId('machine-history')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
 
     setPbs(
       reconcile(

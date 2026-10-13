@@ -9,10 +9,6 @@ import { ProxmoxMailGatewayDrawer } from '@/features/proxmox/ProxmoxMailGatewayD
 import { K8sDeploymentsDrawer } from '@/components/Kubernetes/K8sDeploymentsDrawer';
 import { K8sNamespacesDrawer } from '@/components/Kubernetes/K8sNamespacesDrawer';
 import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
-import {
-  GuestDrawerHistory,
-  GuestDrawerHistoryRangeSelect,
-} from '@/components/Workloads/GuestDrawerHistory';
 import { ResourceDetailDrawerDebugTab } from './ResourceDetailDrawerDebugTab';
 import {
   ResourceAccessDisclosure,
@@ -191,34 +187,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           drawer={drawer}
           presentation={presentation()}
         />
-      </div>
-
-      {/* Agent Machine Metrics History Tab */}
-      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'history' ? '' : 'hidden'}`}>
-        <Show when={drawer.activeTab() === 'history'}>
-          <Show
-            when={drawer.metricsHistoryTarget()}
-            fallback={<TabAvailabilityNotice message="Metrics history is unavailable." />}
-          >
-            {(target) => (
-              <div class="space-y-3" data-testid="resource-metrics-history-tab">
-                <div class="flex items-center justify-end">
-                  <GuestDrawerHistoryRangeSelect
-                    range={drawer.metricsHistoryRange()}
-                    onRangeChange={drawer.setMetricsHistoryRange}
-                  />
-                </div>
-                <GuestDrawerHistory
-                  target={target()}
-                  range={drawer.metricsHistoryRange()}
-                  currentMetrics={drawer.metricsHistoryCurrentMetrics()}
-                  deferredMetrics={drawer.metricsHistoryDeferredMetrics()}
-                  groups={drawer.metricsHistoryGroups()}
-                />
-              </div>
-            )}
-          </Show>
-        </Show>
       </div>
 
       <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'manage' ? '' : 'hidden'}`}>
