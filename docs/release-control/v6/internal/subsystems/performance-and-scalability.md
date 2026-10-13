@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Guest filesystem guidance remains reachable by touch and keyboard (13 October 2026)
+
+The existing Filesystems footer link in the guest drawer has a 44px minimum
+height below the shared `sm` breakpoint, while desktop keeps its compact text
+height. Its underlined label and focus outline use the semantic foreground in
+both themes. The target is the unchanged shipped missing-reading explanation;
+no new route, setup action, guest operation, polling or recovery claim is added.
+Read-reason updates keep the destination available until a current reading
+removes the explanation. Existing section reconciliation is unchanged.
+
+`GuestDrawer.test.tsx` covers the connected drawer's responsive/focus classes,
+destination, same-guest reason replacement and current-reading
+withdrawal. `browser-tests/guest-disk-docs-context.cjs` measures actual target
+bounds, foreground/focus contrast, keyboard/touch navigation and the consuming
+Docs renderer at desktop/phone widths in both themes. Browser acceptance and
+pixels must be recorded separately; these fixtures prove no native thaw or
+recovery.
+
 ### Workloads reading explanations work without hover
 
 The existing Memory/Disk freshness and cache cues are native disclosure buttons.

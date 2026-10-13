@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "b94922582c9f6d45f3746e82a6f7d6fd424d7df9",
+  "verified_at": "2026-10-13T08:52:57.312Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "f5e4c15f2091e6c18c5a65418b0941120c237ac930bf50790bc02f6af3f1489f"
+  },
+  "routes": [
+    "/browser-tests/guest-reading-help.html (production GuestRow and GuestDrawer)",
+    "/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis",
+    "/docs/VM_DISK_MONITORING#current-retained-and-unavailable-disk-readings (production Docs renderer)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Unavailable and retained/VM-locked observations retain the same shipped filesystem-guidance destination and safety advice, without implying setup failure or thaw. The native anchor stays underlined, has a measured 44px phone height and keeps 16px desktop density in both themes.",
+    "Keyboard focus uses a solid 2px semantic-foreground outline with 2px offset. Settled text/focus contrast is 17.85:1 in light mode and 13.35:1 in dark mode. Captures include the full phone focus target; all eight final capture files were opened with native view_image and actual pixels inspected.",
+    "Consuming shipped Markdown remains byte-identical to the canonical guide; Docs explains unknown versus zero, retained versus current usage, source distinctions, intentional access scope and the independent backup-safety precaution. No new feature, route, setup action, guest request, collection or recovery claim is introduced."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and phone touch open the production guest drawer and activate the filesystem-guidance anchor after a same-guest reason update. The consuming Docs context link reaches the actual reading-context heading.",
+    "Only loopback static assets and synthetic GET API replies are used. No mutation, external request, page error or live guest operation occurs. Both browsers and the static server close. This is presentation/accessibility proof, not native restart/thaw, installed or released acceptance."
+  ]
+}
