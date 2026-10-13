@@ -5474,7 +5474,11 @@ behind it spans every bucket's own lowest and highest reading
 (`buildGuestDrawerHistoryBandPath`): a short spike stays visible after
 downsampling. While a time is inspected the readout names that bucket's peak
 when it rises at least a tenth of the plot above the average, and the
-accessible value states each reading's average and range. Any
+accessible value states each reading's average and range. Every history range
+picker (these drawers, storage disk and pool details) names its options through
+`formatHistoryRangeOptionLabel` in `historyChartModel.ts` ("1 hour", "24 hours",
+"7 days"), so one range is never shown as "24h", "24 hours" and "Last 24 hours"
+in three places. Any
 warning- or danger-toned detail row
 is lifted into a "Worth checking" section in front, whichever section owns it,
 so demotion never hides a reason a reading cannot be trusted. Guest

@@ -8,6 +8,7 @@ import type { HistoryTimeRange } from '@/api/charts';
 import { formatPowerOnHours } from '@/utils/format';
 import { getMetricSeverity, type MetricDisplayThresholds } from '@/utils/metricThresholds';
 import type { StatusIndicatorVariant } from '@/utils/status';
+import { formatHistoryRangeOptionLabel } from '@/components/shared/historyChartModel';
 
 export function getDiskAttributeValueTextClass(ok: boolean): string {
   return ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
@@ -67,16 +68,9 @@ export type DiskDetailHistoryChartConfig = {
   color: string;
 };
 
-export const DISK_DETAIL_HISTORY_RANGE_OPTIONS: readonly DiskDetailChartOption[] = [
-  { value: '1h', label: 'Last 1 hour' },
-  { value: '6h', label: 'Last 6 hours' },
-  { value: '12h', label: 'Last 12 hours' },
-  { value: '24h', label: 'Last 24 hours' },
-  { value: '7d', label: 'Last 7 days' },
-  { value: '14d', label: 'Last 14 days' },
-  { value: '30d', label: 'Last 30 days' },
-  { value: '90d', label: 'Last 90 days' },
-] as const;
+export const DISK_DETAIL_HISTORY_RANGE_OPTIONS: readonly DiskDetailChartOption[] = (
+  ['1h', '6h', '12h', '24h', '7d', '14d', '30d', '90d'] as const
+).map((value) => ({ value, label: formatHistoryRangeOptionLabel(value) }));
 
 export const DISK_DETAIL_LIVE_CHARTS: readonly DiskDetailLiveChartConfig[] = [
   { label: 'Read', unit: 'B/s', metric: 'disk', series: 'read' },

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "f0108e4930d44c9658c07ae62ca27e2bcd97f84f",
+  "verified_at": "2026-10-13T22:55:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/shared/historyChartModel.ts",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "3e0f85039b2be039ec8468b372c8adddef47f5ab1208d50859918e7f19af734f",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "371473b262149f0fde298859a6d01d52c51f833f0e7755cbad8ea86db6970be6",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "65f193c01c2e5b5f8a6f4869de701dfe8a44c9abb15f4a4d45476e878cd16c6d",
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts": "8b7ee924acbb6e4a341c3ea02c5c03b0cf19383ad33b5d864e4462409bd30830"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/storage",
+    "/proxmox/storage?tab=disks"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "final built bytes of this tree (origin/main plus PRs 2918/2920 and this change) embedded in a darwin binary, mock mode, read in the in-app browser (DOM option text) at the pane width and confirmed by screenshot of the disk History heading",
+    "guest drawer range picker options read: 1 hour, 6 hours, 12 hours, 24 hours, 7 days, 14 days, 30 days, 90 days",
+    "pool Capacity Trend picker options read: 24 hours, 7 days (the instance plan keeps 7 days, so longer pool ranges are withheld as before)",
+    "physical disk History picker options read: 1 hour, 6 hours, 12 hours, 24 hours, 7 days, selected 24 hours",
+    "the 390px width was covered by the earlier storage pass on the same layout; option text does not change with width"
+  ],
+  "interactions": [
+    "expanded the first guest row, a service pool row and the first physical disk row and read each picker's option list"
+  ]
+}

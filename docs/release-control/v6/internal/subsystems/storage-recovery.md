@@ -2878,7 +2878,9 @@ canonical pre-handler authorization proof covering both transfer routes.
     picker, then configuration, topology and devices; a disk detail shows its
     health verdict and SMART facts, then its History charts with the range
     picker beside their heading, then live I/O. With only one view left, these
-    details render no `Subtabs` strip. The range picker keeps the shared
+    details render no `Subtabs` strip. Both pickers label their options with
+    the shared `formatHistoryRangeOptionLabel` ("24 hours", "7 days"), the
+    same names the resource drawers use. The range picker keeps the shared
     filter-select presentation; storage must not restore the retired
     storage-local range-selector classes and inline SVG select decoration.
     Storage-page pool growth readouts belong to that same contract: the table

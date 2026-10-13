@@ -19,6 +19,7 @@ import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import {
   HISTORY_CHART_RANGES,
   formatHistoryChartTooltipValue,
+  formatHistoryRangeOptionLabel,
   formatHistoryChartTimeLabel,
 } from '@/components/shared/historyChartModel';
 import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
@@ -88,29 +89,6 @@ const GUEST_DRAWER_HISTORY_PLOT_RIGHT = 8;
 const GUEST_DRAWER_HISTORY_PLOT_TOP = 8;
 const GUEST_DRAWER_HISTORY_PLOT_BOTTOM = 18;
 
-const formatRangeLabel = (range: HistoryTimeRange): string => {
-  switch (range) {
-    case '1h':
-      return '1 hour';
-    case '6h':
-      return '6 hours';
-    case '12h':
-      return '12 hours';
-    case '24h':
-      return '24 hours';
-    case '7d':
-      return '7 days';
-    case '14d':
-      return '14 days';
-    case '30d':
-      return '30 days';
-    case '90d':
-      return '90 days';
-    default:
-      return range;
-  }
-};
-
 // A guest and a node drawer can be open together, so each picker owns its id.
 export const GuestDrawerHistoryRangeSelect: Component<GuestDrawerHistoryRangeSelectProps> = (
   props,
@@ -130,7 +108,7 @@ export const GuestDrawerHistoryRangeSelect: Component<GuestDrawerHistoryRangeSel
       onChange={(event) => props.onRangeChange(event.currentTarget.value as HistoryTimeRange)}
     >
       <For each={HISTORY_CHART_RANGES}>
-        {(option) => <option value={option}>{formatRangeLabel(option)}</option>}
+        {(option) => <option value={option}>{formatHistoryRangeOptionLabel(option)}</option>}
       </For>
     </FormSelect>
   );
@@ -918,8 +896,8 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
           when={!locked()}
           fallback={
             <div class="rounded-xs border border-border bg-surface p-5 text-sm text-muted">
-              {formatRangeLabel(props.range)} history requires a higher license plan. This
-              instance's plan retains {maxHistoryDays()} days.
+              {formatHistoryRangeOptionLabel(props.range)} history requires a higher license plan.
+              This instance's plan retains {maxHistoryDays()} days.
             </div>
           }
         >

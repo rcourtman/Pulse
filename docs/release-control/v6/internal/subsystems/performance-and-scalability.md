@@ -4018,7 +4018,9 @@ Numeric gridline labels are computed from the scale the panel already holds;
 the compact "Worth checking" list reuses rows already derived, and an alert's
 dashed trigger line reuses the alert the drawer already holds. The min-max band
 reads the `min`/`max` each stored bucket already carries: one extra path per
-series with any spread (none for flat data). None adds a read or timer.
+series with any spread (none for flat data). Range picker option labels come
+from one lookup table (`formatHistoryRangeOptionLabel`). None adds a read or
+timer.
 
 The default stored-history legend resolves one latest timestamp from that
 same bounded, normalized panel index, then looks up each configured series at
