@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### Known PBS health survives unreadable backup inventories (13 October 2026)
+
+Backups keeps the separately supplied PBS server/datastore projection mounted
+while PVE and PBS inventories load, fail or recover. Inventory notices and
+source-local retries remain explicit; both failures still suppress the inventory
+summary rather than claim zero restore points or no backups. PBS counts are
+Loading/Unavailable until its own valid response arrives; resource health,
+capacity, identity and detail access remain independent. No backup execution,
+agent requirement, credential/access change or reporter recovery is implied.
+`ProxmoxBackupsTable.test.tsx` covers both pending reads, each source failure,
+both failures and ordinary recovery without replacing the known server table.
+
 ### Portable installation input does not change recovery authority
 
 The backend setup/Proxmox/container copied-command reader can use BusyBox `stty`

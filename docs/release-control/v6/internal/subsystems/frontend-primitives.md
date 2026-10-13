@@ -20,6 +20,19 @@
 
 ## Purpose
 
+### Independent PBS resource and inventory rendering (13 October 2026)
+
+The existing PBS health/datastore/detail table remains mounted outside backup
+inventory loading/error gates. Explicit per-source notices and retries are
+independent too; both inventory failures retain their error state and never
+publish zero restore-point success. Known resource identity and readable
+capacity remain usable, while PBS backup counts stay Loading/Unavailable until
+a valid inventory arrives. `ProxmoxBackupsTable.test.tsx` verifies pending,
+single/both failure and ordinary recovery with a stable server-table owner.
+Desktop/narrow production-app proof must retain actual API resource identity,
+keyboard/touch detail access and truthful incomplete counts. No monitoring,
+backup execution, agent, credential or access authority is added.
+
 ### Alert-first drawer composition retains usable evidence guidance (13 October 2026)
 
 The guest's full OS caption moves to the visible, wrapping facts strip; it is

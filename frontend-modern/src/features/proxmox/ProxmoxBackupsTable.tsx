@@ -665,324 +665,327 @@ export const ProxmoxBackupsTable: Component<{
     );
 
   return (
-    <Show
-      when={!allInventoriesFailed()}
-      fallback={
-        <PlatformErrorState
-          title="Could not load Proxmox backup inventory"
-          description="PVE and PBS backup inventories are unavailable. Counts are incomplete. Refresh to retry both sources."
-          onRefresh={retryAllInventories}
+    <div class="space-y-3">
+      <For each={inventorySources}>
+        {({ label, query }) => (
+          <Show when={!query.resolvedOnce() || query.error()}>
+            <div
+              role="status"
+              class={`${BACKUP_READ_NOTICE_CLASS} flex flex-wrap items-center justify-between gap-2`}
+            >
+              <span>
+                {label} backup inventory is {query.error() ? 'unavailable' : 'loading'}. Counts are
+                incomplete. {getAPIReadAccessErrorMessage(query.error())}
+                <Show when={query.error() instanceof BackupInventoryFormatError}>
+                  {' '}
+                  The response format is invalid. Missing restore points do not mean no backups
+                  exist.
+                </Show>
+              </span>
+              <Show when={query.error()}>
+                <button
+                  type="button"
+                  class="min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+                  aria-label={`Retry ${label} inventory`}
+                  disabled={query.loading()}
+                  onClick={() => void query.refetch()}
+                >
+                  {query.loading() ? 'Retrying…' : `Retry ${label} inventory`}
+                </button>
+              </Show>
+            </div>
+          </Show>
+        )}
+      </For>
+      {/* Server health comes from /api/resources, not either backup inventory.
+          Keep this owner mounted through loading, failure and ordinary retries. */}
+      <Show when={(props.servers?.length ?? 0) > 0}>
+        <ProxmoxBackupServersTable
+          servers={props.servers ?? []}
+          backups={pbsArtifacts()}
+          backupInventoryState={
+            pbsBackups.error() ? 'unavailable' : pbsBackups.resolvedOnce() ? 'available' : 'loading'
+          }
         />
-      }
-    >
+      </Show>
       <Show
-        when={
-          hasReadableInventory() || inventorySources.some(({ query }) => Boolean(query.error()))
-        }
+        when={!allInventoriesFailed()}
         fallback={
-          <PlatformTableLoadingState
-            title="Loading Proxmox backup inventory"
-            description="Reading PBS snapshots, PVE backup files, guest snapshots, and recent backup tasks."
+          <PlatformErrorState
+            title="Could not load Proxmox backup inventory"
+            description="PVE and PBS backup inventories are unavailable. Counts are incomplete. Refresh to retry both sources."
+            onRefresh={retryAllInventories}
           />
         }
       >
-        <div class="space-y-3">
-          <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
-          <For each={inventorySources}>
-            {({ label, query }) => (
-              <Show when={!query.resolvedOnce() || query.error()}>
-                <div
-                  role="status"
-                  class={`${BACKUP_READ_NOTICE_CLASS} flex flex-wrap items-center justify-between gap-2`}
-                >
-                  <span>
-                    {label} backup inventory is {query.error() ? 'unavailable' : 'loading'}. Counts
-                    are incomplete. {getAPIReadAccessErrorMessage(query.error())}
-                    <Show when={query.error() instanceof BackupInventoryFormatError}>
-                      {' '}
-                      The response format is invalid. Missing restore points do not mean no backups
-                      exist.
-                    </Show>
-                  </span>
-                  <Show when={query.error()}>
-                    <button
-                      type="button"
-                      class="min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
-                      aria-label={`Retry ${label} inventory`}
-                      disabled={query.loading()}
-                      onClick={() => void query.refetch()}
-                    >
-                      {query.loading() ? 'Retrying…' : `Retry ${label} inventory`}
-                    </button>
+        <Show
+          when={
+            hasReadableInventory() || inventorySources.some(({ query }) => Boolean(query.error()))
+          }
+          fallback={
+            <PlatformTableLoadingState
+              title="Loading Proxmox backup inventory"
+              description="Reading PBS snapshots, PVE backup files, guest snapshots, and recent backup tasks."
+            />
+          }
+        >
+          <div class="space-y-3">
+            <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
+            <Show when={protectionPostures.response.error}>
+              <div role="status" class={BACKUP_READ_NOTICE_CLASS}>
+                Protection posture is unavailable. Pulse is showing restore evidence without
+                guessing whether workloads are protected.
+              </div>
+            </Show>
+
+            {/* The health strip renders identically in both route-backed views. */}
+            <ProxmoxBackupsCoverageStrip
+              title="Backup health"
+              footnote={getBackupPostureRuleText(protectionPostures.policy()) ?? undefined}
+              tail={
+                <span>
+                  {liveTotalCount()} targets ·{' '}
+                  {recoveryModel().coverageSummary.recoverableArtifacts} restore points
+                  {inventoryIncomplete() ? ' read' : ''}
+                  <Show when={recoveryModel().coverageSummary.withPBS > 0}>
+                    {' · '}
+                    {recoveryModel().coverageSummary.withPBS} with{' '}
+                    {getProxmoxBackupSourcePresentation('pbs').filterLabel}
+                  </Show>
+                  <Show when={orphanedTotalCount() > 0}>
+                    {' · '}
+                    {orphanedTotalCount()} unmatched
+                  </Show>
+                </span>
+              }
+              segments={[
+                {
+                  key: 'protected',
+                  value: liveHealthSummary().protected,
+                  ...postureSegmentFilter('protected'),
+                  label: 'protected',
+                  toneClass: 'bg-emerald-500',
+                },
+                {
+                  key: 'attention',
+                  value: liveHealthSummary().attention,
+                  ...postureSegmentFilter('attention'),
+                  label: 'attention',
+                  toneClass: 'bg-amber-500',
+                  muted: liveHealthSummary().attention === 0,
+                },
+                {
+                  key: 'unprotected',
+                  value: liveHealthSummary().unprotected,
+                  ...postureSegmentFilter('unprotected'),
+                  label: 'unprotected',
+                  toneClass: 'bg-red-500',
+                  muted: liveHealthSummary().unprotected === 0,
+                },
+                {
+                  key: 'unknown',
+                  value: liveHealthSummary().unknown,
+                  ...postureSegmentFilter('unknown'),
+                  label: 'unknown',
+                  toneClass: 'bg-slate-400',
+                  muted: liveHealthSummary().unknown === 0,
+                },
+                {
+                  key: 'checking',
+                  value: liveHealthSummary().checking,
+                  label: 'checking',
+                  toneClass: 'bg-blue-400',
+                  muted: liveHealthSummary().checking === 0,
+                },
+                {
+                  key: 'not-evaluated',
+                  value: liveHealthSummary().notEvaluated,
+                  label: 'not evaluated',
+                  toneClass: 'bg-slate-300 dark:bg-slate-600',
+                  muted: liveHealthSummary().notEvaluated === 0,
+                },
+              ]}
+            />
+
+            <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
+              <Show
+                when={recoveryModel().recoverableArtifacts.some(
+                  (artifact) => artifact.createdMs === undefined,
+                )}
+              >
+                <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
+                  Backup entries with unavailable or future dates remain listed. Their ages are
+                  unknown. They are excluded from the activity chart and day filters.
+                </p>
+              </Show>
+              <Show
+                when={hasRecoverableActivityInRange()}
+                fallback={
+                  <div class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+                    <span>No dated backup activity in the selected {chartRange()}-day window.</span>
+                    <div class="flex items-center gap-2">
+                      <button
+                        type="button"
+                        class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                        onClick={() => setChartRange(90)}
+                      >
+                        Show 90 days
+                      </button>
+                      <span aria-hidden="true">·</span>
+                      <button
+                        type="button"
+                        class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                        onClick={() => setChartRange(365)}
+                      >
+                        Show 1 year
+                      </button>
+                    </div>
+                  </div>
+                }
+              >
+                <BackupActivityChart
+                  title={
+                    recoverableMetricMode() === 'volume'
+                      ? 'Backup volume per day'
+                      : 'Backups per day'
+                  }
+                  noun="backup"
+                  segmentKinds={RECOVERABLE_SEGMENT_KINDS}
+                  range={chartRange}
+                  onRangeChange={setChartRange}
+                  timeline={recoverableTimeline}
+                  selectedDateKey={selectedDateKey}
+                  onToggleDay={toggleDay}
+                  metricToggle={{ mode: recoverableMetricMode, onChange: setRecoverableMetricMode }}
+                />
+              </Show>
+            </Show>
+
+            <FilterBar
+              role="group"
+              ariaLabel="Backups filters"
+              isMobile={isMobile}
+              search={{
+                value: search,
+                setValue: setSearch,
+                placeholder: 'Search backups by workload, node, source, or status',
+              }}
+              filters={buildBackupsFilters()}
+              showClearAll={hasActiveBackupsFilters}
+              onClearAll={resetBackupsFilters}
+              searchTrailing={
+                <Show when={view() === 'date' && selectedDateKey() !== null}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDateKey(null)}
+                    class="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                    aria-label="Clear date filter"
+                  >
+                    <span class="uppercase tracking-wide text-[9px] text-blue-600 dark:text-blue-300">
+                      Date
+                    </span>
+                    <span class="font-mono tabular-nums">
+                      {getRecoveryFilterDateLabel(selectedDateKey()!)}
+                    </span>
+                    <span aria-hidden="true">×</span>
+                  </button>
+                </Show>
+              }
+              trailingControls={
+                <PlatformResourceCounter
+                  visible={view() === 'date' ? visibleRecoverableCount() : visibleLiveCount()}
+                  total={view() === 'date' ? totalRecoverableCount() : liveTotalCount()}
+                  rowNoun={
+                    view() === 'date'
+                      ? inventoryIncomplete()
+                        ? 'backups read'
+                        : 'backups'
+                      : 'targets'
+                  }
+                />
+              }
+            />
+
+            <Show when={view() === 'date'}>
+              <ProxmoxRecoverableTable
+                artifacts={filteredRecoverableArtifacts()}
+                hasAnyArtifacts={recoveryModel().recoverableArtifacts.length > 0}
+                emptyIcon={props.emptyIcon}
+                emptyTitle={
+                  inventoryIncomplete() ? 'Backup inventory is incomplete' : 'No backups yet'
+                }
+                emptyDescription={
+                  inventoryIncomplete()
+                    ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
+                    : 'PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run.'
+                }
+                sortKey={recoverableSortKey}
+                sortDirection={recoverableSortDirection}
+                onSort={handleRecoverableSort}
+                sizeMaxBytes={recoverableSizeMaxBytes()}
+                groupByDay
+              />
+            </Show>
+
+            <Show when={view() === 'coverage'}>
+              <ProxmoxCoverageTable
+                rows={liveCoverageRows()}
+                hasAnyRows={liveTotalCount() > 0}
+                emptyIcon={props.emptyIcon}
+                emptyTitle="No backup target coverage"
+                emptyDescription="VM, container, and host restore posture will appear here once backup data exists."
+                sortKey={coverageSortKey}
+                sortDirection={coverageSortDirection}
+                onSort={handleCoverageSort}
+                expandedKeys={expandedCoverageRows()}
+                onToggleExpand={toggleCoverageExpansion}
+                showTaskColumn={coverageHasTask()}
+              />
+
+              <Show when={orphanedTotalCount() > 0}>
+                <div class="rounded-lg border border-border-subtle">
+                  <button
+                    type="button"
+                    onClick={() => setShowOrphaned((v) => !v)}
+                    class="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left"
+                    aria-expanded={showOrphaned()}
+                  >
+                    <span class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                      <ChevronRightIcon
+                        class={`h-3.5 w-3.5 transition-transform ${showOrphaned() ? 'rotate-90' : ''}`}
+                        aria-hidden="true"
+                      />
+                      {orphanedTotalCount()} unmatched{' '}
+                      {orphanedTotalCount() === 1 ? 'backup' : 'backups'}
+                    </span>
+                    <span class="w-full text-[11px] text-muted sm:w-auto">
+                      No unambiguous inventory match
+                    </span>
+                  </button>
+                  <Show when={showOrphaned()}>
+                    <div class="border-t border-border-subtle p-2">
+                      <ProxmoxCoverageTable
+                        rows={orphanedCoverageRows()}
+                        hasAnyRows={orphanedTotalCount() > 0}
+                        emptyIcon={props.emptyIcon}
+                        emptyTitle="No unmatched backups"
+                        emptyDescription="Backups without an unambiguous live guest match will appear here."
+                        sortKey={coverageSortKey}
+                        sortDirection={coverageSortDirection}
+                        onSort={handleCoverageSort}
+                        expandedKeys={expandedCoverageRows()}
+                        onToggleExpand={toggleCoverageExpansion}
+                        showTaskColumn={coverageHasTask()}
+                      />
+                    </div>
                   </Show>
                 </div>
               </Show>
-            )}
-          </For>
-          <Show when={protectionPostures.response.error}>
-            <div role="status" class={BACKUP_READ_NOTICE_CLASS}>
-              Protection posture is unavailable. Pulse is showing restore evidence without guessing
-              whether workloads are protected.
-            </div>
-          </Show>
-          <Show when={(props.servers?.length ?? 0) > 0}>
-            <ProxmoxBackupServersTable
-              servers={props.servers ?? []}
-              backups={pbsArtifacts()}
-              backupInventoryState={
-                pbsBackups.error()
-                  ? 'unavailable'
-                  : pbsBackups.resolvedOnce()
-                    ? 'available'
-                    : 'loading'
-              }
-            />
-          </Show>
-
-          {/* The health strip renders identically in both route-backed views. */}
-          <ProxmoxBackupsCoverageStrip
-            title="Backup health"
-            footnote={getBackupPostureRuleText(protectionPostures.policy()) ?? undefined}
-            tail={
-              <span>
-                {liveTotalCount()} targets · {recoveryModel().coverageSummary.recoverableArtifacts}{' '}
-                restore points{inventoryIncomplete() ? ' read' : ''}
-                <Show when={recoveryModel().coverageSummary.withPBS > 0}>
-                  {' · '}
-                  {recoveryModel().coverageSummary.withPBS} with{' '}
-                  {getProxmoxBackupSourcePresentation('pbs').filterLabel}
-                </Show>
-                <Show when={orphanedTotalCount() > 0}>
-                  {' · '}
-                  {orphanedTotalCount()} unmatched
-                </Show>
-              </span>
-            }
-            segments={[
-              {
-                key: 'protected',
-                value: liveHealthSummary().protected,
-                ...postureSegmentFilter('protected'),
-                label: 'protected',
-                toneClass: 'bg-emerald-500',
-              },
-              {
-                key: 'attention',
-                value: liveHealthSummary().attention,
-                ...postureSegmentFilter('attention'),
-                label: 'attention',
-                toneClass: 'bg-amber-500',
-                muted: liveHealthSummary().attention === 0,
-              },
-              {
-                key: 'unprotected',
-                value: liveHealthSummary().unprotected,
-                ...postureSegmentFilter('unprotected'),
-                label: 'unprotected',
-                toneClass: 'bg-red-500',
-                muted: liveHealthSummary().unprotected === 0,
-              },
-              {
-                key: 'unknown',
-                value: liveHealthSummary().unknown,
-                ...postureSegmentFilter('unknown'),
-                label: 'unknown',
-                toneClass: 'bg-slate-400',
-                muted: liveHealthSummary().unknown === 0,
-              },
-              {
-                key: 'checking',
-                value: liveHealthSummary().checking,
-                label: 'checking',
-                toneClass: 'bg-blue-400',
-                muted: liveHealthSummary().checking === 0,
-              },
-              {
-                key: 'not-evaluated',
-                value: liveHealthSummary().notEvaluated,
-                label: 'not evaluated',
-                toneClass: 'bg-slate-300 dark:bg-slate-600',
-                muted: liveHealthSummary().notEvaluated === 0,
-              },
-            ]}
-          />
-
-          <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
-            <Show
-              when={recoveryModel().recoverableArtifacts.some(
-                (artifact) => artifact.createdMs === undefined,
-              )}
-            >
-              <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
-                Backup entries with unavailable or future dates remain listed. Their ages are
-                unknown. They are excluded from the activity chart and day filters.
-              </p>
             </Show>
-            <Show
-              when={hasRecoverableActivityInRange()}
-              fallback={
-                <div class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
-                  <span>No dated backup activity in the selected {chartRange()}-day window.</span>
-                  <div class="flex items-center gap-2">
-                    <button
-                      type="button"
-                      class="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                      onClick={() => setChartRange(90)}
-                    >
-                      Show 90 days
-                    </button>
-                    <span aria-hidden="true">·</span>
-                    <button
-                      type="button"
-                      class="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                      onClick={() => setChartRange(365)}
-                    >
-                      Show 1 year
-                    </button>
-                  </div>
-                </div>
-              }
-            >
-              <BackupActivityChart
-                title={
-                  recoverableMetricMode() === 'volume' ? 'Backup volume per day' : 'Backups per day'
-                }
-                noun="backup"
-                segmentKinds={RECOVERABLE_SEGMENT_KINDS}
-                range={chartRange}
-                onRangeChange={setChartRange}
-                timeline={recoverableTimeline}
-                selectedDateKey={selectedDateKey}
-                onToggleDay={toggleDay}
-                metricToggle={{ mode: recoverableMetricMode, onChange: setRecoverableMetricMode }}
-              />
-            </Show>
-          </Show>
-
-          <FilterBar
-            role="group"
-            ariaLabel="Backups filters"
-            isMobile={isMobile}
-            search={{
-              value: search,
-              setValue: setSearch,
-              placeholder: 'Search backups by workload, node, source, or status',
-            }}
-            filters={buildBackupsFilters()}
-            showClearAll={hasActiveBackupsFilters}
-            onClearAll={resetBackupsFilters}
-            searchTrailing={
-              <Show when={view() === 'date' && selectedDateKey() !== null}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedDateKey(null)}
-                  class="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
-                  aria-label="Clear date filter"
-                >
-                  <span class="uppercase tracking-wide text-[9px] text-blue-600 dark:text-blue-300">
-                    Date
-                  </span>
-                  <span class="font-mono tabular-nums">
-                    {getRecoveryFilterDateLabel(selectedDateKey()!)}
-                  </span>
-                  <span aria-hidden="true">×</span>
-                </button>
-              </Show>
-            }
-            trailingControls={
-              <PlatformResourceCounter
-                visible={view() === 'date' ? visibleRecoverableCount() : visibleLiveCount()}
-                total={view() === 'date' ? totalRecoverableCount() : liveTotalCount()}
-                rowNoun={
-                  view() === 'date'
-                    ? inventoryIncomplete()
-                      ? 'backups read'
-                      : 'backups'
-                    : 'targets'
-                }
-              />
-            }
-          />
-
-          <Show when={view() === 'date'}>
-            <ProxmoxRecoverableTable
-              artifacts={filteredRecoverableArtifacts()}
-              hasAnyArtifacts={recoveryModel().recoverableArtifacts.length > 0}
-              emptyIcon={props.emptyIcon}
-              emptyTitle={
-                inventoryIncomplete() ? 'Backup inventory is incomplete' : 'No backups yet'
-              }
-              emptyDescription={
-                inventoryIncomplete()
-                  ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
-                  : 'PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run.'
-              }
-              sortKey={recoverableSortKey}
-              sortDirection={recoverableSortDirection}
-              onSort={handleRecoverableSort}
-              sizeMaxBytes={recoverableSizeMaxBytes()}
-              groupByDay
-            />
-          </Show>
-
-          <Show when={view() === 'coverage'}>
-            <ProxmoxCoverageTable
-              rows={liveCoverageRows()}
-              hasAnyRows={liveTotalCount() > 0}
-              emptyIcon={props.emptyIcon}
-              emptyTitle="No backup target coverage"
-              emptyDescription="VM, container, and host restore posture will appear here once backup data exists."
-              sortKey={coverageSortKey}
-              sortDirection={coverageSortDirection}
-              onSort={handleCoverageSort}
-              expandedKeys={expandedCoverageRows()}
-              onToggleExpand={toggleCoverageExpansion}
-              showTaskColumn={coverageHasTask()}
-            />
-
-            <Show when={orphanedTotalCount() > 0}>
-              <div class="rounded-lg border border-border-subtle">
-                <button
-                  type="button"
-                  onClick={() => setShowOrphaned((v) => !v)}
-                  class="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left"
-                  aria-expanded={showOrphaned()}
-                >
-                  <span class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-                    <ChevronRightIcon
-                      class={`h-3.5 w-3.5 transition-transform ${showOrphaned() ? 'rotate-90' : ''}`}
-                      aria-hidden="true"
-                    />
-                    {orphanedTotalCount()} unmatched{' '}
-                    {orphanedTotalCount() === 1 ? 'backup' : 'backups'}
-                  </span>
-                  <span class="w-full text-[11px] text-muted sm:w-auto">
-                    No unambiguous inventory match
-                  </span>
-                </button>
-                <Show when={showOrphaned()}>
-                  <div class="border-t border-border-subtle p-2">
-                    <ProxmoxCoverageTable
-                      rows={orphanedCoverageRows()}
-                      hasAnyRows={orphanedTotalCount() > 0}
-                      emptyIcon={props.emptyIcon}
-                      emptyTitle="No unmatched backups"
-                      emptyDescription="Backups without an unambiguous live guest match will appear here."
-                      sortKey={coverageSortKey}
-                      sortDirection={coverageSortDirection}
-                      onSort={handleCoverageSort}
-                      expandedKeys={expandedCoverageRows()}
-                      onToggleExpand={toggleCoverageExpansion}
-                      showTaskColumn={coverageHasTask()}
-                    />
-                  </div>
-                </Show>
-              </div>
-            </Show>
-          </Show>
-        </div>
+          </div>
+        </Show>
       </Show>
-    </Show>
+    </div>
   );
 };
 

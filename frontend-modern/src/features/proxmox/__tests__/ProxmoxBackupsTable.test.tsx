@@ -923,7 +923,7 @@ describe('independent Proxmox backup inventory reads', () => {
     mountBackupReadState();
     await screen.findByText(/PBS backup inventory is loading/);
     expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
-    expect(screen.getByText('Backup inventory is incomplete')).toBeInTheDocument();
+    await screen.findByText('Backup inventory is incomplete');
     expect(serverTable()).toHaveTextContent('Loading');
     pending.resolve(jsonResponse(emptyPBS));
     await screen.findByText('No backups yet');
@@ -940,7 +940,7 @@ describe('independent Proxmox backup inventory reads', () => {
     );
     mountBackupReadState();
     await screen.findByText(/PVE backup inventory is loading/);
-    expect(recoverableRows()).toHaveLength(1);
+    await waitFor(() => expect(recoverableRows()).toHaveLength(1));
     expect(screen.getByText(/1 restore points read/)).toBeInTheDocument();
     pending.resolve(jsonResponse(readPvePayload));
     await waitFor(() => expect(recoverableRows()).toHaveLength(2));
@@ -996,6 +996,77 @@ describe('independent Proxmox backup inventory reads', () => {
     },
   );
 
+  it('keeps known PBS health and unknown counts usable while both inventories are loading', async () => {
+    const pve = deferred<Response>();
+    const pbs = deferred<Response>();
+    apiFetchMock.mockImplementation((url) => (url.endsWith('/pbs') ? pbs.promise : pve.promise));
+    mountBackupReadState();
+    expect(serverTable()).toHaveTextContent('pbs-main');
+    expect(serverTable()).toHaveTextContent('Loading');
+    expect(serverTable()).toHaveTextContent('40.0%');
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+    await screen.findByText(/PVE backup inventory is loading/);
+    expect(screen.getByText(/PBS backup inventory is loading/)).toBeInTheDocument();
+    const originalServerTable = serverTable();
+    pve.resolve(jsonResponse(emptyPVE));
+    pbs.resolve(jsonResponse(emptyPBS));
+    await screen.findByText('No backups yet');
+    expect(serverTable()).toBe(originalServerTable);
+    expect(
+      within(serverTable() as HTMLElement).getByText('0', { exact: true }),
+    ).toBeInTheDocument();
+  });
+
+  it.each(['pve', 'pbs', 'both'] as const)(
+    'keeps separately known PBS identity and health mounted through %s inventory failure and recovery',
+    async (failed) => {
+      apiFetchMock.mockImplementation((url) =>
+        Promise.resolve(
+          failed === 'both' || url.endsWith(`/${failed}`)
+            ? new Response('{}', { status: 503 })
+            : jsonResponse(url.endsWith('/pbs') ? emptyPBS : emptyPVE),
+        ),
+      );
+      mountBackupReadState();
+      const originalServerTable = serverTable();
+      await screen.findByText(
+        new RegExp(`${failed === 'pve' ? 'PVE' : 'PBS'} backup inventory is unavailable`),
+      );
+      expect(serverTable()).toBe(originalServerTable);
+      expect(serverTable()).toHaveTextContent('pbs-main');
+      expect(serverTable()).toHaveTextContent('40.0%');
+      if (failed === 'pve') {
+        await within(serverTable() as HTMLElement).findByText('0', { exact: true });
+      } else {
+        expect(serverTable()).toHaveTextContent('Unavailable');
+      }
+      expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+      if (failed === 'both') {
+        expect(screen.getByText('Could not load Proxmox backup inventory')).toBeInTheDocument();
+        expect(screen.getByText(/PVE backup inventory is unavailable/)).toBeInTheDocument();
+        expect(screen.queryByText(/0 restore points/)).not.toBeInTheDocument();
+      }
+      apiFetchMock.mockImplementation((url) =>
+        Promise.resolve(jsonResponse(url.endsWith('/pbs') ? pbsPayload : readPvePayload)),
+      );
+      if (failed === 'both') fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+      else
+        fireEvent.click(
+          screen.getByRole('button', { name: `Retry ${failed.toUpperCase()} inventory` }),
+        );
+      await waitFor(() =>
+        expect(screen.queryByText(/inventory is unavailable/)).not.toBeInTheDocument(),
+      );
+      expect(serverTable()).toBe(originalServerTable);
+      expect(serverTable()).not.toHaveTextContent('Unavailable');
+      expect(
+        within(serverTable() as HTMLElement).getByText(failed === 'pve' ? '0' : '1', {
+          exact: true,
+        }),
+      ).toBeInTheDocument();
+    },
+  );
+
   it('retries both failed inventories and allows the first recovered source to render', async () => {
     apiFetchMock.mockResolvedValue(new Response('{}', { status: 500 }));
     mountBackupReadState();
@@ -1007,7 +1078,7 @@ describe('independent Proxmox backup inventory reads', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await screen.findByText(/PVE backup inventory is unavailable/);
-    expect(recoverableRows()).toHaveLength(1);
+    await waitFor(() => expect(recoverableRows()).toHaveLength(1));
     pending.resolve(jsonResponse(readPvePayload));
     await waitFor(() => expect(recoverableRows()).toHaveLength(2));
     expect(sourceCalls('pve')).toHaveLength(2);

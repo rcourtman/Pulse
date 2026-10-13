@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### Optional configuration-signing guidance fits narrow installers (13 October 2026)
+
+The three existing signing environment names wrap within their advice card.
+Their complete text, values, optional semantics, trust defaults and copied
+installation/removal commands are unchanged. The source regression in
+`InfrastructureOperationsModel.test.tsx` preserves those exact names and the
+wrapping class; desktop/phone light/dark browser proof must inspect the actual
+installer and preserve separate-token/private-file copy behaviour. This is
+readability, not an installed agent or QNAP recovery result.
+
 ### Backend bootstrap preserves silent input on BusyBox hosts
 
 Setup, Proxmox and container bootstrap commands prefer standalone `stty`,
