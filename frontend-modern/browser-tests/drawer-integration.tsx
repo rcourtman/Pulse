@@ -160,7 +160,7 @@ function NodeFixture() {
     temperature: {
       available: true,
       cpuPackage: 55,
-      cores: { 'Hottest secondary': 91 },
+      cores: [{ core: 0, temp: 50 }],
       hasGPU: true,
       gpu: 95,
     },

@@ -37,12 +37,12 @@ class GuestDiskReadingDocsTest(unittest.TestCase):
             with self.subTest(label=label):
                 self.assertIn(label, text)
                 self.assertIn(f"'{label}'", row)
-        for empty_state in ("N/A", "Unavailable", "a dash"):
+        for empty_state in ("Usage unavailable", "a dash"):
             self.assertIn(empty_state, text)
         assert_disk_reason_wiring(self, row, presentation)
-        for distinction in ("select the disk reading indicator", "same guest's details",
+        for distinction in ("select a visible disk reading indicator", "same guest's details",
                             "phone or with a keyboard", "rather than relying on a hover tooltip",
-                            "presence or absence of a caption does not establish freshness",
+                            "A missing caption does not establish freshness",
                             "same guest's explanation before treating it as an agent setup problem"):
             self.assertIn(distinction, text)
         self.assertIn("Filesystems → Status", text)

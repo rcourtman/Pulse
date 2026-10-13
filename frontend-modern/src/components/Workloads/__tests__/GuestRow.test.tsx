@@ -3409,6 +3409,9 @@ describe('GuestRow accessible reading explanations', () => {
     renderGuestRow({
       guest: makeGuest({
         memory: makeMemory({
+          total: 1000,
+          used: 920,
+          usage: 92,
           observation: {
             state: 'current',
             source: 'status-mem',
