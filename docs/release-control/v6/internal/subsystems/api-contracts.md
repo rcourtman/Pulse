@@ -20,6 +20,19 @@
 
 ## Purpose
 
+### Copied backend bootstrap commands have one portable private reader
+
+Existing setup artifact aliases and Proxmox/container command fields retain
+separate credential response fields. Their command text now selects standalone
+`stty` or, only when absent, BusyBox `stty`, with distinct fail-closed terminal,
+tool and mode diagnostics. One isolated root/sudo prefix emits the privileged
+reader once, preserving complete fetch/preflight and 0700/0600 path handoff.
+No route, payload key, issuance scope, TLS policy or install authority changes.
+`TestContract_PortablePrivateBootstrapPayloads` checks the serialized producer
+boundary; full configapi PTY/tool/privacy/caller tests exercise the commands.
+Browser acceptance must use the actual producer fields through their existing
+setup/agent consumers, not a frontend-file guard skip or fabricated commands.
+
 ### Patrol setup panel reuses existing AI endpoints
 
 The Patrol page setup panel adds no endpoint or payload field. It calls

@@ -15,6 +15,21 @@
 
 ## Purpose
 
+### Backend bootstrap preserves silent input on BusyBox hosts
+
+Setup, Proxmox and container bootstrap commands prefer standalone `stty`,
+otherwise the BusyBox `stty` applet. They distinguish absent terminals, missing
+or unsupported tools and failed snapshot/echo/restoration before installation.
+The privileged Bash child keeps the selected tool and complete saved terminal
+state through EXIT/HUP/INT/TERM cleanup. Overflow is drained while silent;
+empty, interrupted or oversized input never reaches the installer. The isolated
+POSIX root/sudo prefix emits that child once, without moving credentials into
+shell source, argv, environment or history. Existing complete-download,
+preflight, private-file, scope, profile, identity and TLS boundaries remain.
+`portable_bootstrap_test.go` exercises all three producers with real PTYs and
+BusyBox, full terminal restoration and closed privilege/download fixtures;
+it is not native appliance installation or recovery evidence.
+
 ### Unraid/QNAP removal retires exact boot entries and confirms watchdog quiescence
 
 The Unix uninstall caller selects these platforms from their vendor/installed

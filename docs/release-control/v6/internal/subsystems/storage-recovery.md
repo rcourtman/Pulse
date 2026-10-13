@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### Portable installation input does not change recovery authority
+
+The backend setup/Proxmox/container copied-command reader can use BusyBox `stty`
+when standalone `stty` is absent. Tool or terminal-mode failures stop before
+installation; full same-tool restoration and silent overflow draining retain
+the private credential boundary. The shorter root/sudo dispatch adds no root
+profile, state/identity replacement, backup operation or incident-replay right.
+Reported QNAP installed boot/watchdog/removal/reinstall recovery remains a
+separate native outcome; source PTYs and publishing an incoming updater do
+not establish it. `portable_bootstrap_test.go` and the serialized API contract
+cover these producer boundaries without touching stored monitoring data.
+
 ### Patrol maintenance coverage adds no recovery execution
 
 Patrol's operator-state projection now projects the active recurring

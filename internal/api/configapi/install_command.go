@@ -84,17 +84,23 @@ func privateBootstrapCommand(scriptURL, curlFlags, preflight, run string, needsT
 			`token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX);`,
 			`token_file="$token_dir/token";`,
 			`unset pulse_token pulse_discard tty_state;`,
-			`cleanup() { unset pulse_token pulse_discard; if [ -n "${tty_state:-}" ]; then stty "$tty_state" </dev/tty 2>/dev/null || :; fi; rm -f -- "$token_file"; rmdir -- "$token_dir"; };`,
+			`tty_control=();`,
+			`cleanup() { unset pulse_token pulse_discard; if [ -n "${tty_state:-}" ]; then "${tty_control[@]}" "$tty_state" </dev/tty 2>/dev/null || :; fi; rm -f -- "$token_file"; rmdir -- "$token_dir"; };`,
 			`trap cleanup EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM;`,
 			// A normal canonical tty silently truncates long lines (4095 bytes on
 			// Linux). Bounded character input preserves valid input and detects
 			// overflow; keep echo off while draining the rest of an invalid line
 			// so it cannot become a second command in the caller's shell history.
-			`if ! tty_state=$(stty -g </dev/tty); then echo "A terminal is required to enter the token. No installation was attempted." >&2; exit 1; fi;`,
-			`stty -echo </dev/tty;`,
+			// NAS hosts may expose stty only as a BusyBox applet. Preserve the
+			// selected tool for full restoration; an unsafe mode never falls
+			// back to echoed input or another privilege/credential channel.
+			`if ! { : </dev/tty; } 2>/dev/null; then echo "A terminal is required to enter the token. Use a private token-file command instead. No installation was attempted." >&2; exit 1; fi;`,
+			`if command -v stty >/dev/null 2>&1; then tty_control=(stty); elif command -v busybox >/dev/null 2>&1; then tty_control=(busybox stty); else echo "Silent token input requires stty or BusyBox stty. Use a private token-file command instead. No installation was attempted." >&2; exit 1; fi;`,
+			`if ! tty_state=$("${tty_control[@]}" -g </dev/tty 2>/dev/null) || [ -z "$tty_state" ]; then echo "Cannot read terminal settings with stty or BusyBox stty. Use a private token-file command instead. No installation was attempted." >&2; exit 1; fi;`,
+			`if ! "${tty_control[@]}" -echo </dev/tty 2>/dev/null; then echo "Cannot disable terminal echo. No token was requested and no installation was attempted." >&2; exit 1; fi;`,
 			`if ! IFS= read -r -s -p `+posixShellQuote(prompt+" (paste at this prompt, not in the command): ")+` -n 4097 pulse_token </dev/tty; then echo "Token input was interrupted. No installation was attempted." >&2; exit 1; fi;`,
 			`if [ "${#pulse_token}" -gt 4096 ]; then while IFS= read -r -s -n 4097 pulse_discard </dev/tty && [ "${#pulse_discard}" -eq 4097 ]; do :; done; unset pulse_discard; fi;`,
-			`stty "$tty_state" </dev/tty; unset tty_state;`,
+			`if ! "${tty_control[@]}" "$tty_state" </dev/tty 2>/dev/null; then echo "Cannot restore terminal settings. No installation was attempted." >&2; exit 1; fi; unset tty_state;`,
 			`printf '\n' >/dev/tty;`,
 			`if [ -z "$pulse_token" ] || [ "${#pulse_token}" -gt 4096 ]; then echo "A non-empty token of at most 4096 characters is required." >&2; exit 1; fi;`,
 			`printf %s "$pulse_token" > "$token_file"; unset pulse_token;`,
@@ -111,7 +117,10 @@ func privateBootstrapCommand(scriptURL, curlFlags, preflight, run string, needsT
 		`trap cleanup EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM;`,
 		"curl " + curlFlags + " " + posixShellQuote(strings.TrimSpace(scriptURL)) + ` -o "$install_script";`,
 		preflight,
-		`if [ "$(id -u)" -eq 0 ]; then ` + child + " else sudo " + child + " fi;",
+		// Expand the root/sudo prefix once, inside this isolated POSIX subshell.
+		// Duplicating the quoted reader can exceed a pasted line's tty budget.
+		`if [ "$(id -u)" -eq 0 ]; then set --; else set -- sudo; fi;`,
+		`"$@" ` + child,
 		")",
 	}, " ")
 }

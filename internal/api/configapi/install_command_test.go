@@ -17,6 +17,11 @@ import errno, fcntl, json, os, pty, select, signal, subprocess, sys, termios, ti
 p = json.load(sys.stdin)
 master, slave = pty.openpty()
 tty_watch = os.dup(slave)
+if p.get("alternate_tty"):
+    alternate = termios.tcgetattr(tty_watch)
+    alternate[0] &= ~termios.IXON
+    alternate[3] &= ~termios.ECHOK
+    termios.tcsetattr(tty_watch, termios.TCSANOW, alternate)
 initial_tty = termios.tcgetattr(tty_watch)
 def session():
     os.setsid()
@@ -76,7 +81,15 @@ while time.monotonic() < deadline:
         # the real bootstrap disables it before printing the input prompt.
         silent = not (termios.tcgetattr(tty_watch)[3] & termios.ECHO)
         if output.endswith(b"(paste at this prompt, not in the command): ") and command_ready and silent and not sent:
-            os.write(master, (p["input"] + "\n").encode())
+            if p.get("signal_on_prompt"):
+                # Keep the controlling terminal/session alive. The selected
+                # tool records the privileged reader that owns EXIT cleanup;
+                # signalling the entire session kills that observation owner.
+                with open(os.path.join(env["FAKE_ROOT"], "reader-pid")) as f:
+                    reader = int(f.read())
+                os.kill(reader, getattr(signal, "SIG" + p["signal_on_prompt"]))
+            else:
+                os.write(master, (p["input"] + "\n").encode())
             sent = True
     if child.poll() is not None and not ready: break
 else:
@@ -84,9 +97,8 @@ else:
     output += b"\nPTY fixture deadline expired\n"
 code = child.wait()
 final_tty = termios.tcgetattr(tty_watch)
-mode_mask = termios.ECHO | termios.ICANON
-if (initial_tty[3] & mode_mask) != (final_tty[3] & mode_mask):
-    output += b"\nBootstrap did not restore terminal echo/canonical mode\n"
+if initial_tty != final_tty:
+    output += b"\nBootstrap did not restore complete terminal settings\n"
     code = 1
 os.close(tty_watch)
 os.close(master)
@@ -190,7 +202,7 @@ func TestPrivateBootstrapKeepsSecretsOutOfCommands(t *testing.T) {
 			if strings.Contains(command, secret) || strings.ContainsAny(command, "\r\n") || strings.Contains(command, "PULSE_SETUP_TOKEN=") || strings.Contains(command, "--token '") || strings.Contains(command, "| bash") {
 				t.Fatal("copied command exposes a credential or executes a partial fetch")
 			}
-			if !strings.Contains(command, "read -r -s -p") || !strings.Contains(command, "sudo bash -c") || !strings.Contains(command, " -o \"$install_script\"") {
+			if !strings.Contains(command, "read -r -s -p") || !strings.Contains(command, `"$@" bash -c`) || !strings.Contains(command, " -o \"$install_script\"") {
 				t.Fatal("missing private prompt, sudo or complete download")
 			}
 		})
