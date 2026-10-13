@@ -52,11 +52,12 @@ class RenderReleaseBodyTest(unittest.TestCase):
     def test_beta_two_notes_and_changelog_use_the_same_stable_based_range(self) -> None:
         notes = (_REPO_ROOT / "docs/releases/RELEASE_NOTES_v6.6.0-beta.2.md").read_text()
         changelog = (_REPO_ROOT / "docs/releases/V6_CHANGELOG_v6.6.0-beta.2.md").read_text()
-        self.assertIn(
-            "https://github.com/rcourtman/Pulse/blob/v6.6.0-beta.2/"
-            "docs/releases/V6_CHANGELOG_v6.6.0-beta.2.md#changes-since-v650", notes,
-        )
-        self.assertIn("covers changes since `v6.5.0`, not just the previous beta", notes)
+        # The immutable tagged changelog still has a contradictory beta.1
+        # introduction. Use the renderer's stable-based comparison instead of
+        # suggesting that a later source edit changed that published document.
+        self.assertNotIn("/blob/v6.6.0-beta.2/docs/releases/V6_CHANGELOG", notes)
+        self.assertIn("not just the previous beta", notes)
+        self.assertIn("source comparison below", notes)
         self.assertIn("since stable `v6.5.0`, not just", changelog)
         self.assertIn("## Changes since v6.5.0\n", changelog)
         self.assertNotIn("This changelog describes the changes since `v6.6.0-beta.1`.", changelog)
@@ -67,16 +68,28 @@ class RenderReleaseBodyTest(unittest.TestCase):
         args = type("Args", (), {
             "version": "6.6.0-beta.2", "rollback_target": "v6.5.0",
             "rollback_command": "sudo /bin/update --version v6.5.0",
+            "candidate_tag": "v6.6.0-beta.2",
         })()
         body = "\n\n".join((
             render_release_body.sanitize_release_notes(notes, args.version).rstrip("\n"),
             render_release_body.build_installation_section(args.version),
             render_release_body.build_rollback_section(args),
+            render_release_body.build_source_comparison(args),
         )) + "\n"
         self.assertEqual(render_release_body.validate_release_body_shape(body, args.version), body)
         self.assertIn("not Authenticode-signed", body)
         self.assertIn("Unknown Publisher warning", body)
-        self.assertIn("does not require a companion mobile release", body)
+        self.assertIn(
+            "Pulse Mobile is being retired on 31 March 2027. It keeps working until then. "
+            "For alerts on your phone afterwards, add an ntfy, Gotify, or Pushover "
+            "destination, and open Pulse in your phone's browser. Relay is no longer sold, "
+            "and existing Relay subscribers now have Pro features at their current price.",
+            body,
+        )
+        self.assertIn(
+            "https://github.com/rcourtman/Pulse/compare/v6.5.0...v6.6.0-beta.2", body,
+        )
+        self.assertIn("GitHub shows at most 250 commits", body)
         self.assertIn("rollback target is stable `v6.5.0`", body)
         self.assertIn("PULSE_VERSION=v6.6.0-beta.2", body)
         self.assertIn("PULSE_VERSION=v6.5.0", body)
