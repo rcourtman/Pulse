@@ -78,9 +78,12 @@ const settle = (page) =>
         if (!url.pathname.startsWith('/api/')) return route.continue();
         record.requests.push({ path: url.pathname, method: request.method() });
         assert.equal(request.method(), 'GET', 'no mutations');
-        assert(!/diagnostics|\/run|guest-agent|qemu/.test(url.pathname), 'no guest operations');
+        assert(
+          !/\/(?:diagnostics|run|run-command|guest-agent|qemu)(?:\/|$)/.test(url.pathname),
+          `no guest operations: ${url.pathname}`,
+        );
         let body = { success: true, data: [], alerts: [], anomalies: [], config: null };
-        if (url.pathname.includes('/charts/'))
+        if (url.pathname === '/api/metrics-store/history')
           body = {
             resourceType: 'vm',
             resourceId: url.searchParams.get('resourceId') || 'fixture:pve1:101',
