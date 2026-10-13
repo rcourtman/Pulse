@@ -24,6 +24,10 @@ establish safe recovery.
   [agent authentication and reporting evidence](UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403)
   before replacing a token or reinstalling. Installer success is not an accepted
   report.
+- **Copied agent install or removal command failed:** distinguish its
+  [preparation, private prompt and lifecycle action](UNIFIED_AGENT.md#copied-agent-command-fails-before-installation).
+  A stopped new command does not diagnose the existing agent. Keep state and
+  credentials; do not repeat removal or installation to obtain an error.
 - **Guest readings are missing or disagree:** distinguish
   [current, retained and unavailable disks](VM_DISK_MONITORING.md#current-retained-and-unavailable-disk-readings)
   from [guest memory pressure](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful).
