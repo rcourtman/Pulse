@@ -289,6 +289,18 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
       record.states.push(
         'Quiet captions, keyboard/touch disclosures, stale-Agent/prior disk qualifications, current measured zero and sparkline withdrawal',
       );
+      await activate(details.locator('summary'));
+      const completed = details.locator('time[datetime="2026-10-13T12:30:00.000Z"]');
+      await completed.waitFor();
+      assert.equal(await completed.textContent(), '2026-10-13 12:30:00 UTC');
+      await page.evaluate(() => window.__integration.backup('2026-10-13T13:30:00+01:00'));
+      assert.equal(await completed.textContent(), '2026-10-13 12:30:00 UTC');
+      await noOverflow();
+      await capture('guest-details', details);
+      await activate(details.locator('summary'));
+      record.states.push(
+        'Last completed backup original instant survives offset input as visible UTC, independently of backup/read activity',
+      );
       historyMode = 'stored';
       await activate(overview.getByRole('button', { name: 'Refresh history', exact: true }));
       await chart.locator('[data-history-band="memory"]').waitFor({ state: 'attached' });
@@ -343,10 +355,6 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 
       historyMode = 'empty';
       await page.goto(origin + '/node', { waitUntil: 'networkidle' });
-      await page.waitForFunction(() => window.__temperatureProducer);
-      record.temperatureProducer = await page.evaluate(() => window.__temperatureProducer);
-      assert.equal(record.temperatureProducer.resource.temperature, 55);
-      assert.equal(record.temperatureProducer.projected.cpuTemperature, 55);
       await page.waitForFunction(() => window.__temperatureProducer);
       record.temperatureProducer = await page.evaluate(() => window.__temperatureProducer);
       assert.equal(record.temperatureProducer.resource.temperature, 55);
