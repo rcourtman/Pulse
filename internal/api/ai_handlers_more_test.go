@@ -1234,3 +1234,148 @@ func TestPatrolFindingOperatorStateResolvesContinuityBackedHost(t *testing.T) {
 		t.Fatalf("finding projection cloned the unified listing %d times; it must resolve through the monitor's read state", seed.clones)
 	}
 }
+
+// patrolMaintenanceTree publishes a node with one guest under it and returns
+// the router, the operator-state store, and the two canonical IDs.
+func patrolMaintenanceTree(t *testing.T) (*Router, unifiedresources.ResourceStore, string, string) {
+	t.Helper()
+	handlers := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	t.Cleanup(func() { _ = handlers.CloseStores() })
+	store, err := handlers.getStore("default")
+	if err != nil {
+		t.Fatalf("resource store: %v", err)
+	}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+	const nodeRef, guestRef = "node:pve-a", "vm:pve-a:101"
+	adapter.PopulateSupplementalRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{
+		{SourceID: nodeRef, Resource: unifiedresources.Resource{ID: nodeRef, Type: unifiedresources.ResourceTypeAgent, Name: "pve-a"}},
+		{SourceID: guestRef, ParentSourceID: nodeRef, Resource: unifiedresources.Resource{ID: guestRef, Type: unifiedresources.ResourceTypeVM, Name: "database"}},
+	})
+	nodeID, nodeOK := adapter.ResolveCanonicalResourceID(nodeRef)
+	guestID, guestOK := adapter.ResolveCanonicalResourceID(guestRef)
+	if !nodeOK || !guestOK {
+		t.Fatalf("published tree does not resolve node (%v) or guest (%v)", nodeOK, guestOK)
+	}
+	if ancestors := adapter.ResolveCanonicalResourceAncestors(guestID); len(ancestors) == 0 || ancestors[0] != nodeID {
+		t.Fatalf("guest ancestors = %v, want the node %s first", ancestors, nodeID)
+	}
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(adapter)
+	return &Router{monitor: monitor, resourceHandlers: handlers}, store, nodeID, guestID
+}
+
+// 2026-10-13 is a Tuesday.
+var patrolMaintenanceNow = time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
+
+func tuesdayLunchRecurrence() *unifiedresources.RecurringMaintenanceWindow {
+	return &unifiedresources.RecurringMaintenanceWindow{
+		Timezone:    "UTC",
+		Weekdays:    []string{"tuesday"},
+		StartMinute: 11 * 60,
+		EndMinute:   13 * 60,
+	}
+}
+
+func setOperatorState(t *testing.T, store unifiedresources.ResourceStore, state unifiedresources.ResourceOperatorState) {
+	t.Helper()
+	if err := store.SetResourceOperatorState(state); err != nil {
+		t.Fatalf("set operator state on %s: %v", state.CanonicalID, err)
+	}
+}
+
+// A recurring window carries no one-shot start or end. Patrol must project
+// the occurrence that is active, not dereference the absent one-shot dates.
+func TestPatrolOperatorStateProjectsActiveRecurringMaintenance(t *testing.T) {
+	router, store, nodeID, _ := patrolMaintenanceTree(t)
+	setOperatorState(t, store, unifiedresources.ResourceOperatorState{
+		CanonicalID:           nodeID,
+		MaintenanceRecurrence: tuesdayLunchRecurrence(),
+		MaintenanceReason:     "weekly patching",
+	})
+	provider := router.patrolResourceOperatorStateProvider("default")
+
+	projection, ok := provider.OperatorStateProjection(nodeID, patrolMaintenanceNow)
+	window := projection.MaintenanceWindow
+	if !ok || window == nil {
+		t.Fatalf("recurring occurrence active at %s projected %+v (ok=%v), want a maintenance window", patrolMaintenanceNow, projection, ok)
+	}
+	wantStart := time.Date(2026, 10, 13, 11, 0, 0, 0, time.UTC)
+	wantEnd := time.Date(2026, 10, 13, 13, 0, 0, 0, time.UTC)
+	if !window.StartAt.Equal(wantStart) || !window.EndAt.Equal(wantEnd) || window.Reason != "weekly patching" || window.Inherited {
+		t.Fatalf("projected window %+v, want the %s-%s occurrence on the resource itself", window, wantStart, wantEnd)
+	}
+
+	// Control: outside the occurrence the same row projects no window.
+	projection, ok = provider.OperatorStateProjection(nodeID, wantEnd.Add(time.Minute))
+	if !ok || projection.MaintenanceWindow != nil {
+		t.Fatalf("after the occurrence projected %+v (ok=%v), want the row without a window", projection, ok)
+	}
+
+	// Control: a one-shot window still projects its own dates.
+	start, end := patrolMaintenanceNow.Add(-time.Minute), patrolMaintenanceNow.Add(time.Hour)
+	setOperatorState(t, store, unifiedresources.ResourceOperatorState{
+		CanonicalID:        nodeID,
+		MaintenanceStartAt: &start,
+		MaintenanceEndAt:   &end,
+	})
+	projection, _ = provider.OperatorStateProjection(nodeID, patrolMaintenanceNow)
+	if window := projection.MaintenanceWindow; window == nil || !window.StartAt.Equal(start) || !window.EndAt.Equal(end) {
+		t.Fatalf("one-shot window projected %+v, want %s-%s", projection.MaintenanceWindow, start, end)
+	}
+}
+
+// A window scoped to resource_and_descendants silences Patrol findings on the
+// guests under it, as it silences their alerts. Only maintenance crosses: the
+// node's remediation lock and monitoring mode stay the node's own.
+func TestPatrolOperatorStateInheritsDescendantScopedMaintenance(t *testing.T) {
+	router, store, nodeID, guestID := patrolMaintenanceTree(t)
+	setOperatorState(t, store, unifiedresources.ResourceOperatorState{
+		CanonicalID:           nodeID,
+		MaintenanceRecurrence: tuesdayLunchRecurrence(),
+		MaintenanceScope:      unifiedresources.MaintenanceScopeResourceAndDescendants,
+		MaintenanceReason:     "hypervisor patching",
+		MonitoringMode:        unifiedresources.MonitoringModeMuted,
+		NeverAutoRemediate:    true,
+	})
+	provider := router.patrolResourceOperatorStateProvider("default")
+
+	projection, ok := provider.OperatorStateProjection(guestID, patrolMaintenanceNow)
+	window := projection.MaintenanceWindow
+	if !ok || window == nil || !window.Inherited || window.SourceID != nodeID || window.Reason != "hypervisor patching" {
+		t.Fatalf("guest under a descendant-scoped node window projected %+v (ok=%v), want the node's window inherited", projection, ok)
+	}
+	if projection.NeverAutoRemediate || projection.MonitoringMode != "" {
+		t.Fatalf("guest inherited non-maintenance state %+v; only maintenance may cross", projection)
+	}
+
+	// A guest window ending later than the node's keeps the guest covered
+	// until the later end; an earlier one yields to the node's.
+	guestStart, guestEnd := patrolMaintenanceNow.Add(-time.Minute), patrolMaintenanceNow.Add(3*time.Hour)
+	setOperatorState(t, store, unifiedresources.ResourceOperatorState{CanonicalID: guestID, MaintenanceStartAt: &guestStart, MaintenanceEndAt: &guestEnd, MaintenanceReason: "guest upgrade"})
+	projection, _ = provider.OperatorStateProjection(guestID, patrolMaintenanceNow)
+	if window := projection.MaintenanceWindow; window == nil || window.Inherited || !window.EndAt.Equal(guestEnd) {
+		t.Fatalf("guest's own later window projected %+v, want its own window to %s", projection.MaintenanceWindow, guestEnd)
+	}
+	shortEnd := patrolMaintenanceNow.Add(10 * time.Minute)
+	setOperatorState(t, store, unifiedresources.ResourceOperatorState{CanonicalID: guestID, MaintenanceStartAt: &guestStart, MaintenanceEndAt: &shortEnd})
+	projection, _ = provider.OperatorStateProjection(guestID, patrolMaintenanceNow)
+	if window := projection.MaintenanceWindow; window == nil || !window.Inherited || window.SourceID != nodeID {
+		t.Fatalf("guest's own earlier window projected %+v, want the node's later window", projection.MaintenanceWindow)
+	}
+
+	// Control: a resource-only node window does not reach the guest.
+	if err := store.ClearResourceOperatorState(guestID); err != nil {
+		t.Fatalf("clear guest operator state: %v", err)
+	}
+	setOperatorState(t, store, unifiedresources.ResourceOperatorState{
+		CanonicalID:           nodeID,
+		MaintenanceRecurrence: tuesdayLunchRecurrence(),
+		MaintenanceScope:      unifiedresources.MaintenanceScopeResource,
+	})
+	if projection, ok := provider.OperatorStateProjection(guestID, patrolMaintenanceNow); ok || projection.MaintenanceWindow != nil {
+		t.Fatalf("resource-only node window reached the guest: %+v (ok=%v)", projection, ok)
+	}
+	if projection, _ := provider.OperatorStateProjection(nodeID, patrolMaintenanceNow); projection.MaintenanceWindow == nil {
+		t.Fatal("resource-only node window no longer covers the node itself, so the guest control proves nothing")
+	}
+}

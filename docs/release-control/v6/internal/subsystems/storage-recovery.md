@@ -21,6 +21,13 @@
 
 ## Purpose
 
+### Patrol maintenance coverage adds no recovery execution
+
+Patrol's operator-state projection now projects the active recurring
+occurrence instead of the nil one-shot fields and inherits descendant-scoped
+ancestor maintenance. It reads existing operator-state rows only; it adds no
+recovery endpoint, execution route or recovery-point access.
+
 A legacy client echoing the projected `controlled` mode into an unrelated AI
 settings PUT must retain a stored `autonomous` preference and its existing
 legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`

@@ -23492,8 +23492,11 @@ func TestContract_FindingsResourceOperatorStateProviderIsWired(t *testing.T) {
 	if !strings.Contains(src, "ResourceOperatorStateProviderFunc(") {
 		t.Error("router.go must use the ai.ResourceOperatorStateProviderFunc adapter so the closure satisfies the provider interface")
 	}
-	if !strings.Contains(src, "IsInMaintenanceAt(now)") {
-		t.Error("router.go must gate the projection on state.IsInMaintenanceAt so a stale window does not return as active")
+	if !strings.Contains(src, "unifiedresources.ActiveMaintenanceCoverageAt(now, canonicalID, own, ancestorIDs,") {
+		t.Error("router.go must project maintenance through unifiedresources.ActiveMaintenanceCoverageAt, the active-occurrence and descendant-scope rule alert intent shares, so a stale window does not return as active")
+	}
+	if strings.Contains(src, "*state.MaintenanceStartAt") || strings.Contains(src, "*state.MaintenanceEndAt") {
+		t.Error("router.go must not dereference the one-shot maintenance fields; a recurring window leaves them nil")
 	}
 	if !strings.Contains(src, "GetResourceOperatorState(canonicalID)") {
 		t.Error("router.go must read state from the unified store's canonical accessor")

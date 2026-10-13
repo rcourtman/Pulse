@@ -133,7 +133,9 @@ function makeGuestWithDiscoveryTarget(overrides: Partial<WorkloadGuest> = {}): W
   });
 }
 
-const technicalDetails = () => within(screen.getByTestId('guest-technical-details'));
+// Filesystems and lifted warning rows render outside Details; the render
+// helper opens Details, so read the whole Overview.
+const technicalDetails = () => within(screen.getByTestId('guest-drawer-overview'));
 
 const makeHistoryPoints = (base: number) => [
   { timestamp: 1, value: base, min: base, max: base },
@@ -1159,36 +1161,45 @@ describe('GuestDrawer', () => {
   // ── Tags card ──
 
   describe('Tags card', () => {
+    const tagChips = () =>
+      Array.from(
+        screen.getByTestId('guest-drawer-facts').querySelectorAll('span.rounded-full'),
+      ).map((chip) => chip.textContent);
+
     it('renders tags from an array', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ tags: ['production', 'web'] })} onClose={vi.fn()} />
       ));
-      expect(screen.getByText('Tags')).toBeInTheDocument();
-      expect(technicalDetails().getByText('production, web')).toBeInTheDocument();
+      expect(tagChips()).toEqual(['production', 'web']);
     });
 
     it('renders tags from a comma-separated string', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ tags: 'db,critical' as any })} onClose={vi.fn()} />
       ));
-      expect(technicalDetails().getByText('db, critical')).toBeInTheDocument();
+      expect(tagChips()).toEqual(['db', 'critical']);
     });
 
     it('trims whitespace from tags', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ tags: ' spaced , padded ' as any })} onClose={vi.fn()} />
       ));
-      expect(technicalDetails().getByText('spaced, padded')).toBeInTheDocument();
+      expect(tagChips()).toEqual(['spaced', 'padded']);
     });
 
-    it('hides Tags card when tags is null', () => {
+    it('renders no tag chips when tags is null', () => {
       render(() => <GuestDrawer guest={makeGuest({ tags: null })} onClose={vi.fn()} />);
       expect(screen.queryByText('Tags')).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('guest-drawer-facts')?.querySelectorAll('span.rounded-full') ?? [],
+      ).toHaveLength(0);
     });
 
-    it('hides Tags card when tags is empty array', () => {
+    it('renders no tag chips when tags is empty array', () => {
       render(() => <GuestDrawer guest={makeGuest({ tags: [] })} onClose={vi.fn()} />);
-      expect(screen.queryByText('Tags')).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('guest-drawer-facts')?.querySelectorAll('span.rounded-full') ?? [],
+      ).toHaveLength(0);
     });
   });
 

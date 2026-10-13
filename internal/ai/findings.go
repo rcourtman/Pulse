@@ -847,10 +847,15 @@ type FindingsStore struct {
 // this through ResourceOperatorStateProvider; the package layout puts
 // the canonical type in `internal/unifiedresources` to avoid an import
 // cycle, so this is the projected shape the findings runtime needs.
+// StartAt/EndAt bound the active occurrence (one-shot or recurring).
+// Inherited marks a window stored on an ancestor whose scope covers its
+// descendants; SourceID names the resource the window is stored on.
 type ResourceOperatorStateMaintenanceWindow struct {
-	StartAt time.Time
-	EndAt   time.Time
-	Reason  string
+	StartAt   time.Time
+	EndAt     time.Time
+	Reason    string
+	SourceID  string
+	Inherited bool
 }
 
 // ResourceOperatorStateProjection is the per-resource view the
@@ -2149,16 +2154,25 @@ func (s *FindingsStore) Add(f *Finding) bool {
 				window := projection.MaintenanceWindow
 				f.DismissedReason = "expected_behavior"
 				f.AcknowledgedAt = &now
-				noteParts := []string{fmt.Sprintf("Resource is in operator-set maintenance window until %s.", window.EndAt.Format(time.RFC3339))}
+				note := fmt.Sprintf("Resource is in operator-set maintenance window until %s.", window.EndAt.Format(time.RFC3339))
+				if window.Inherited {
+					note = fmt.Sprintf("Resource is covered by an operator-set maintenance window on a parent resource until %s.", window.EndAt.Format(time.RFC3339))
+				}
+				noteParts := []string{note}
 				if reason := strings.TrimSpace(window.Reason); reason != "" {
 					noteParts = append(noteParts, "Reason: "+reason)
 				}
 				f.UserNote = strings.Join(noteParts, " ")
-				s.appendLifecycleLocked(f, "dismissed", "Auto-acknowledged: resource in maintenance window", f.LoopState, string(FindingLoopStateDismissed), map[string]string{
+				metadata := map[string]string{
 					"reason":               "expected_behavior",
 					"operator_state_cause": "maintenance_window",
 					"maintenance_end_at":   window.EndAt.Format(time.RFC3339),
-				})
+				}
+				if window.Inherited {
+					metadata["maintenance_inherited"] = "true"
+					metadata["maintenance_source_id"] = window.SourceID
+				}
+				s.appendLifecycleLocked(f, "dismissed", "Auto-acknowledged: resource in maintenance window", f.LoopState, string(FindingLoopStateDismissed), metadata)
 				s.syncLoopStateLocked(f)
 			case projection.monitoringSuppressionCauseFor(f) != "":
 				cause := projection.monitoringSuppressionCauseFor(f)
