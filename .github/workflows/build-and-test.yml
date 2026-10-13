@@ -129,7 +129,7 @@ jobs:
           # Consume the full list: grep -q can close the pipe on an early
           # match, making printf fail with SIGPIPE under pipefail. A large
           # dependency change must not enter the inherited-advisory mode.
-          if printf '%s\n' "$changed" | grep -E '^frontend-modern/package(-lock)?\.json$|^scripts/npm-audit-retry\.sh$' >/dev/null; then
+          if printf '%s\n' "$changed" | grep -E '^frontend-modern/package(-lock)?\.json$|^scripts/(npm-audit-retry\.sh|npm_audit_process\.py)$' >/dev/null; then
             frontend_deps=true
           else
             frontend_deps=false

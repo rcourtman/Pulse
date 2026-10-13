@@ -57,7 +57,7 @@ CHANGED_GO=$(printf '%s\n' "$CHANGED" | grep -E '\.go$' || true)
 # Unchanged graphs are left to CI's existing inherited-finding warning policy.
 # Consume the whole list rather than using grep -q: under pipefail an early
 # match in a large diff must not turn the producer's SIGPIPE into a false skip.
-if printf '%s\n' "$CHANGED" | grep -E '^frontend-modern/package(-lock)?\.json$|^scripts/npm-audit-retry\.sh$' >/dev/null; then
+if printf '%s\n' "$CHANGED" | grep -E '^frontend-modern/package(-lock)?\.json$|^scripts/(npm-audit-retry\.sh|npm_audit_process\.py)$' >/dev/null; then
   step "Frontend dependency audit (changed graph or audit runner)"
   if ! (cd frontend-modern && NPM_AUDIT_REQUIRE_RESULT=true bash "$ROOT_DIR/scripts/npm-audit-retry.sh" all); then
     echo "Frontend dependency audit failed; remaining source checks have not run." >&2
