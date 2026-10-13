@@ -313,12 +313,13 @@ custom monitoring role if the required read privileges are absent.
 
 ### Current, retained and unavailable disk readings
 
-In **Workloads**, select the disk reading indicator for its explanation, or
+In **Workloads**, select a visible disk reading indicator for its explanation, or
 open the same guest's details and look under **Filesystems → Status**. Use the
 details on a phone or with a keyboard rather than relying on a hover tooltip.
 Retained readings use **Prior** in compact rows and **Last known** in wider rows.
-An unavailable reading may show a dash or an unavailable label: the presence or
-absence of a caption does not establish freshness or explain the cause. Read
+Unavailable readings show a dash; fixable errors also show **No permission** or
+**Agent error** (**Denied** or **Error** in compact rows). A missing caption does
+not establish freshness or explain the cause. Read
 the same guest's explanation before treating it as an agent setup problem.
 Where an observation time is shown, keep it with the reading; an unavailable
 time leaves freshness unknown.
@@ -327,7 +328,7 @@ time leaves freshness unknown.
 | --- | --- |
 | Current filesystem usage | Usage for the reported guest and filesystem, from its collection source. It does not establish that every filesystem is covered or that a backup can be restored. |
 | **Prior**, **Last known**, or **Using last known disk stats** | Retained evidence, not current free space. A visible number or History sample does not make it fresh. |
-| **N/A**, **Unavailable**, a dash, or a paused/deferred read | Usage is unknown, not zero and not proof that the disk is full. A cooldown ending does not establish a successful new read. |
+| A dash, **Usage unavailable**, **No permission**, **Agent error**, or a paused/deferred read | Usage is unknown, not zero and not proof that the disk is full. A cooldown ending does not establish a successful new read. |
 
 **A numeric disk search or disk sort is not a monitoring-coverage check.** To
 review missing readings, clear numeric disk conditions and restrictive table

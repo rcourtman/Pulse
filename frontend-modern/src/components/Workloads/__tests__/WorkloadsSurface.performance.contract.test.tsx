@@ -1654,7 +1654,9 @@ describe('Workloads performance contract', () => {
     it('keeps guest drawer runtime and derivations in canonical drawer owners', () => {
       expect(guestDrawerSource).toContain('useGuestDrawerState');
       expect(guestDrawerSource).toContain('GuestDrawerOverview');
-      expect(guestDrawerSource).toContain('GuestDrawerHistoryRangeSelect');
+      // The charts live on Overview; there is no History tab to carry a picker.
+      expect(guestDrawerSource).not.toContain('GuestDrawerHistoryRangeSelect');
+      expect(guestDrawerSource).not.toContain("label: 'History'");
       expect(guestDrawerSource).toContain('ObjectDrawerHeader');
       expect(guestDrawerSource).not.toContain('Open related infrastructure');
       expect(guestDrawerHistorySource).toContain('data-testid="guest-history-hover-time"');
@@ -1668,7 +1670,8 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerHistorySource).toContain('relative min-h-24 flex-1');
       expect(guestDrawerHistorySource).not.toContain('relative h-24');
       expect(nodeDrawerSource).toContain('NodeDrawerOverview');
-      expect(nodeDrawerSource).toContain('GuestDrawerHistoryRangeSelect');
+      expect(nodeDrawerSource).not.toContain('GuestDrawerHistoryRangeSelect');
+      expect(nodeDrawerSource).not.toContain("label: 'History'");
       expect(nodeDrawerSource).toContain('getNodeDrawerHistoryGroups');
       expect(nodeDrawerOverviewSource).toContain('Hardware');
       expect(nodeDrawerOverviewSource).toContain('Telemetry');
@@ -1713,10 +1716,14 @@ describe('Workloads performance contract', () => {
       expect(filesystemsSectionIndex).toBeGreaterThan(-1);
       expect(guestDrawerOverviewSource).not.toContain("label: 'Tags'");
       expect(guestDrawerOverviewSource).toContain('dataTestId="guest-drawer-filesystems"');
-      // The 24h trend cards load with an open drawer, outside the table chunk.
-      expect(guestDrawerOverviewSource).toContain("import('./DrawerTrendCards')");
+      // The Overview charts load with an open drawer, outside the table chunk.
+      expect(guestDrawerOverviewSource).toContain("import('./GuestDrawerHistory')");
       expect(guestDrawerOverviewSource).not.toMatch(
-        /^import (?!type )[^;]*from '\.\/DrawerTrendCards';/m,
+        /^import (?!type )[^;]*from '\.\/GuestDrawerHistory';/m,
+      );
+      expect(nodeDrawerOverviewSource).toContain("import('./GuestDrawerHistory')");
+      expect(nodeDrawerOverviewSource).not.toMatch(
+        /^import (?!type )[^;]*from '\.\/GuestDrawerHistory';/m,
       );
       // Filesystem rows delegate full-path presentation to the shared renderer.
       const filesystemSectionSource = guestDrawerOverviewSource.slice(

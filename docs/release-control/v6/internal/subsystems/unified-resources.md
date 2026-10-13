@@ -138,6 +138,20 @@ select the canonical owner without interpreting alert strings independently.
 references and absent current owners. Scoped Patrol tests cover linked owners
 and conflicting unqualified source IDs.
 
+### Resource CPU temperature uses the one primary rule
+
+`proxmox.temperature`, `agent.temperature` and a Kubernetes node's
+linked-host temperature come from `models.PrimaryCPUTemperatureCelsius` and
+`models.HostSensorPrimaryCPUTemperatureCelsius`, the rule node and agent
+history record under (see the monitoring contract). The adapter-local
+`maxNodeTemp`/`maxCPUTemp` copies are gone. `nodeFromResource` carries the
+resource's top-level temperature (the agent's reading first, then the
+node's: the same source as the drawer's history target) as
+`Node.cpuTemperature`; the node drawer shows that value and never rebuilds a
+headline from `temperatureDetails`. Proof: `adapters_test.go`
+(`TestResourceTemperatureUsesPrimaryCPURuleForNodeAndAgent`) and
+`resourceStateAdapters.test.ts`.
+
 ### Proxmox node temperature cell follows its own open alert — issue #2068
 
 `ProxmoxNodesTable` finds the node's own temperature alert through
@@ -146,17 +160,17 @@ the shared live-status copy to `TemperatureGauge`. Other node alerts never
 recolour the cell. The Mail Gateway drawer formats its attention rows through
 `getAlertAttentionCopy`.
 
-### Proxmox node drawer trend cards follow the node's own alerts
+### Proxmox node drawer charts follow the node's own alerts
 
 `ProxmoxNodesTable` passes `NodeDrawer` two lists. `alerts` keeps the
 node-name match, so Needs attention also lists the node's guests. `ownAlerts`
 is the same `hostOverrideIdCandidates` identity match without the name, and
-only it colours the drawer's CPU, memory, temperature and disk trend cards and
-draws their triggers. Node alerts are keyed on the cluster-qualified id (for
+only it draws dashed alert triggers on the drawer's Overview charts and tones
+their readings. Node alerts are keyed on the cluster-qualified id (for
 example `homelab-delly2`), which the drawer's own node record does not carry,
 so the drawer must not rebuild this match itself. `NodeDrawer.test.tsx` covers
-a guest alert that leaves the card plain and a table-supplied node alert that
-colours it.
+a guest alert that draws no line and a table-supplied node alert that draws
+one.
 
 ### Canonical Discovery honours VM guest-read deferrals
 

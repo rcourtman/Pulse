@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "base_sha": "634ce84dced83459580a461eeafc565dc7ff1259",
+  "verified_at": "2026-10-12T16:32:02Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/shared/HelpIcon.tsx",
+    "frontend-modern/src/components/shared/helpIconModel.ts",
+    "frontend-modern/src/components/shared/useHelpIconState.ts",
+    "frontend-modern/src/content/help/updates.ts",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "26c84752b849f2cbb9f56e963eab7a65800a14f1031d7389200e899b6477856a",
+    "frontend-modern/src/components/shared/HelpIcon.tsx": "154ff34a5b770a4c5abe954af42ca43b4fd343b593d0ecf36c2aaf21ec1e372f",
+    "frontend-modern/src/components/shared/helpIconModel.ts": "a28b0aa96d48d05ceba5d062d823ec444f15c0e6de17665d1da9bbbf3b0a54ca",
+    "frontend-modern/src/components/shared/useHelpIconState.ts": "c1a05f886cd5f7ec9a1b5f7c4ac98825b3b8f10321be9cc0027053f4c832b8c8",
+    "frontend-modern/src/content/help/updates.ts": "bfe8fc379c4074f0932b3dd9906ef643767bb94544295b0b2c7fc68f86be6f16",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts": "52af16617dbe18ed2608d285975b9565ba22e0e48017723a580a126cc5c90f9a"
+  },
+  "routes": [
+    "/node-update-proof.html (production NodeDrawer and shared inline detail row fixture for Proxmox node Overview)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 640
+    },
+    {
+      "width": 844,
+      "height": 390
+    }
+  ],
+  "states": [
+    "Permission denied with no successful check",
+    "Permission denied with retained positive and zero counts and checked time",
+    "Current checked zero and positive counts",
+    "Source unavailable, failed check, offline not checked and absent evidence",
+    "Help closed/open with full description and documentation link",
+    "Scrollable help at short landscape height",
+    "Help retained through metric replacement and relative-time advance",
+    "Checked recovery withdraws denied guidance",
+    "History/Overview return, keyboard collapse/remount and reload closed"
+  ],
+  "interactions": [
+    "Pointer hover/focus and Enter open the labelled help control",
+    "Touch opens and closes the help at 390x844",
+    "Close and Escape restore trigger focus",
+    "Outside click closes help without collapsing expanded details",
+    "Documentation link remains reachable by scrolling the help body",
+    "Open dialog stays contained through viewport resize and page scrolling",
+    "Node metric replacement and one-minute clock advance retain the same open dialog",
+    "Recovery removes guidance and open help",
+    "History/Overview selection, keyboard collapse while help is open, remount and reload"
+  ],
+  "command": "Playwright Chromium controlled through the persistent JavaScript runtime against the isolated pulse-dev Vite build at port 8087",
+  "notes": [
+    "Production NodeDrawer, shared InlineDetailTableRow and shared Table rendered with synthetic node data and synthetic read-only API responses. No installed collection or customer permission claim.",
+    "Inspected actual pixels and text-range bounds for complete status, retained counts and checked time. No horizontal overflow at 320/390/900/1440 widths.",
+    "Inspected help placement, stacking, full copy, Close focus, scrolling and Learn more at 1440x900, 900x900, 390x844, 320x640 and 844x390.",
+    "Worker source snapshot based on 634ce84dced83459580a461eeafc565dc7ff1259 with exact staged runtime bytes. Package-lock matched installed dependency graph.",
+    "Interaction matrix, screenshots and raw browser results retained locally under /Volumes/Development/.caches/support-triage-20261012/."
+  ]
+}

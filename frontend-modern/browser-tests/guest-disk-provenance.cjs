@@ -176,12 +176,22 @@ const settle = (page) =>
       };
       const check = async (retained, message) => {
         assert.equal(await notice.count(), 1);
-        assert.equal(
-          await notice.locator('[aria-hidden="true"]').innerText(),
-          retained ? (compact ? 'Prior' : 'Last known') : compact ? 'N/A' : 'Unavailable',
-        );
-        assert.equal(await notice.locator('.sr-only').textContent(), message);
-        const geometry = await notice.locator('[aria-hidden="true"]').evaluate((el) => {
+        // A deferral with no retained reading shows the cell's dash; its reason
+        // is assistive text and the cell title, not a visible caption.
+        if (retained) {
+          assert.equal(
+            await notice.locator('[aria-hidden="true"]').innerText(),
+            compact ? 'Prior' : 'Last known',
+          );
+          assert.equal(await notice.locator('.sr-only').textContent(), message);
+        } else {
+          assert.equal(await notice.locator('[aria-hidden="true"]').count(), 0);
+          assert.equal(await notice.textContent(), message);
+        }
+        const measured = retained
+          ? notice.locator('[aria-hidden="true"]')
+          : notice.locator('xpath=ancestor::td');
+        const geometry = await measured.evaluate((el) => {
           const rect = el.getBoundingClientRect();
           const cellRect = el.closest('td').getBoundingClientRect();
           return {

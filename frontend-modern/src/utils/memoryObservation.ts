@@ -188,8 +188,25 @@ export const getMemoryObservationPresentation = (
       : 'Unknown source';
   const time = observed ? `Observed: ${observed}.` : 'Observation time unknown.';
   const cacheNote = mayIncludeCache ? getCacheNote(options.guestKind) : undefined;
+  if (state === 'unavailable') {
+    // No number is shown, so say why when the producer knows (the guest is
+    // off) and otherwise name only what is known, never "Unknown source".
+    const poweredOff = observation?.source === 'powered-off';
+    const knownSource = source !== 'Unknown source';
+    return {
+      state,
+      summary: poweredOff
+        ? 'Unavailable · guest powered off'
+        : `Unavailable${knownSource ? ` · ${source}` : ''}${observed ? ` · ${observed}` : ''}`,
+      // Consumers prefix their own metric name ("Memory reading: ...").
+      message: poweredOff
+        ? 'Unavailable while the guest is powered off.'
+        : `Unavailable.${knownSource ? ` Source: ${source}.` : ''}${observed ? ` ${time}` : ''}`,
+      mayIncludeCache,
+    };
+  }
   const sourceStatus =
-    state !== 'unavailable' && options.agentStale && observation?.source === 'agent'
+    options.agentStale && observation?.source === 'agent'
       ? ' The Pulse Agent that supplied this reading stopped reporting.'
       : '';
   return {

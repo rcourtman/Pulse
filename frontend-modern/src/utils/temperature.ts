@@ -1,4 +1,3 @@
-import type { Temperature } from '@/types/api';
 import { createSignal, createRoot } from 'solid-js';
 import {
   getDefaultDisplayMetricThresholds,
@@ -67,35 +66,6 @@ export const formatTemperature = (
  */
 export const getTemperatureSymbol = (): string => {
   return temperatureStore.unit() === 'fahrenheit' ? '°F' : '°C';
-};
-
-const isValidTemperature = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value);
-
-export const getCpuTemperature = (temperature?: Temperature | null): number | null => {
-  if (!temperature?.available) return null;
-
-  const candidates: number[] = [];
-
-  if (isValidTemperature(temperature.cpuPackage)) {
-    candidates.push(temperature.cpuPackage);
-  }
-  if (isValidTemperature(temperature.cpuMax)) {
-    candidates.push(temperature.cpuMax);
-  }
-  if (Array.isArray(temperature.cores)) {
-    temperature.cores.forEach((core) => {
-      if (isValidTemperature(core.temp)) {
-        candidates.push(core.temp);
-      }
-    });
-  }
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  return Math.max(...candidates);
 };
 
 const TEMPERATURE_TEXT_CLASSES = {

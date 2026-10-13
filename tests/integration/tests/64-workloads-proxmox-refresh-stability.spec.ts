@@ -179,7 +179,7 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     }
   });
 
-  test("keeps an expanded Proxmox VM on the History tab across a canonical refresh", async ({
+  test("keeps an expanded Proxmox VM on the Manage tab across a canonical refresh", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -218,19 +218,20 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     await expect(detailRow).toBeVisible();
 
     // The drawer tab strip exposes proper tab roles.
-    // History is always present and is the tab users reported being reset by
-    // live refreshes. Discovery is optional and must not be a hidden fixture
-    // prerequisite for this polling regression proof.
-    const historyButton = detailRow.getByRole("tab", {
-      name: "History",
+    // Manage is always present and, as the non-default tab, is the one a live
+    // refresh would visibly reset (users reported this on the old History
+    // tab, whose charts now sit on Overview). Discovery is optional and must
+    // not be a hidden fixture prerequisite for this polling regression proof.
+    const manageButton = detailRow.getByRole("tab", {
+      name: "Manage",
       exact: true,
     });
-    await expect(historyButton).toBeVisible();
-    await historyButton.click();
+    await expect(manageButton).toBeVisible();
+    await manageButton.click();
 
     await expect
       .poll(() => readGuestDrawerActiveTab(detailRow))
-      .toBe("history");
+      .toBe("manage");
 
     const beforeRefreshScrollTop = await readPrimaryViewportScrollTop(page);
 
@@ -262,7 +263,7 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     await expect(detailRow).toBeVisible();
     await expect
       .poll(() => readGuestDrawerActiveTab(detailRow), { timeout: 15_000 })
-      .toBe("history");
+      .toBe("manage");
 
     const afterRefreshScrollTop = await readPrimaryViewportScrollTop(page);
     expect(afterRefreshScrollTop).toBeGreaterThanOrEqual(

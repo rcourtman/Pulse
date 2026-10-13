@@ -3257,6 +3257,14 @@ presentation copy only: no API token name, scope preset, privacy disclosure,
 telemetry statement or security term changes, and no request, storage or
 authorization path moves.
 
+### Live temperature fallback uses the shared primary rule
+
+`router.go`'s live metrics fallback now picks node and agent CPU temperature
+through `models.PrimaryCPUTemperatureCelsius` and its sensor-map form instead
+of local copies. It serves the same rows to the same authorized callers; the
+route, authentication, scope checks, tenant resolution and response shape are
+unchanged.
+
 ### Retained disk temperatures are not served as live history
 
 `/api/metrics-store/history` now omits a disk's `smart_temp` live point, and

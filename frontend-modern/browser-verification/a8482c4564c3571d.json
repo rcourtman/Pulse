@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "base_sha": "72d25e4925136d4825cfde7bffbcda0dfa3cab45",
+  "verified_at": "2026-10-13T21:16:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/DrawerTrendCards.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/drawerOverviewModel.ts",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/DrawerTrendCards.tsx": "deleted",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "432877652921fa2bbb88ea93cba0ee3595f8bc86e44432df97c81ac216e55f7c",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "680cdaf8d6de2b6f2b5e2041c42727a3bbe7b87877da2ebcdeded1788e8fd711",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "06b7ea42bfbebf968fd71c431151d92176a8d78a9efce2d89d5ced118328a71a",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "f7e8b8681a4ef8e746a59712cda37d8a944b9ad77c2082f8e8aebd7f3b619fb1",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "ce84229c3dae971af99db270dd4e6a066d2c14cbf30abf82d31eb307af433529",
+    "frontend-modern/src/components/Workloads/drawerOverviewModel.ts": "925431410bff547760decdd86b1b6c44dba39bff22e044178d9812019441b132",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "caf6936ece406d824aa6261d9d5715dc12f4bfcfeee07ee0638cce095717011a",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "ee91b7576c75303d5a920e6ac792a9c57ac021e86c218b28e10142f9c8abbec3"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1000,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "final built bytes of this tree (origin/main 72d25e4925 plus this change) embedded in a darwin binary, mock mode with 7 days of seeded metrics, headless Chromium on pulse-dev through a reverse tunnel, full-resolution element screenshots read by eye at each viewport",
+    "guest drawer (artifact-cache-310): tabs read Overview, Manage with no History tab; Overview shows No active alerts, Worth checking (21d-old backup), then Utilization, Network I/O and Disk I/O charts at 24 hours with continuous lines, numeric gridline labels and the range picker plus Refresh history above them, then a facts strip reading \"2 vCPU\", \"401 MB of 853 MB RAM (may include cache)\", \"2.87 GB of 10.0 GB disk\" and tag chips, then the closed Details",
+    "node drawer (Analytics A): tabs read Overview, Manage; Utilization, Network I/O, Disk I/O and Thermals charts at 24 hours, Thermals reading CPU 44°C, facts strip with \"36.9 GB of 88.0 GB RAM\" and \"637 GB of 1.29 TB root disk\"",
+    "1440px: guest charts in three columns, node charts in four (the Utilization legend wraps to two lines at that width); 1000px: charts in two columns (node 2x2); 390px phone: charts stack in one column under the toolbar, no horizontal overflow",
+    "no Proxmox guest or node in the mock estate carried an active cpu/memory/disk/temperature alert, so the dashed alert line and toned reading were not seen in the browser; they are covered by NodeDrawer.test.tsx and drawerOverviewModel.test.ts only"
+  ],
+  "interactions": [
+    "expanded the first guest row and the first node row by their expand buttons",
+    "moved the mouse over the middle of the guest Utilization plot: the dashed crosshair and round markers appeared and the header read \"Stored · 09:03 AM\" with that time's CPU, Memory and Disk values; moving away restored \"Latest stored\"",
+    "changed the guest range picker from 24 hours to 7 days: the three charts redrew over Oct 6 to Oct 13 with continuous lines",
+    "read the tab list of both drawers at each viewport (Overview, Manage)"
+  ]
+}

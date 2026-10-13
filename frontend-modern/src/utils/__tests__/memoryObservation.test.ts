@@ -210,6 +210,43 @@ describe('cache-inclusive Proxmox memory sources', () => {
     expect(presentation?.cacheNote).toBeUndefined();
   });
 
+  it('says a powered-off guest has no memory reading, without an unknown source', () => {
+    const presentation = getWorkloadMemoryObservationPresentation(
+      guest({
+        status: 'stopped',
+        memory: {
+          total: 100,
+          used: 0,
+          free: 0,
+          usage: 0,
+          observation: { state: 'unavailable', source: 'powered-off' },
+        },
+      }),
+    )!;
+    expect(presentation.state).toBe('unavailable');
+    expect(presentation.message).toBe('Unavailable while the guest is powered off.');
+    expect(presentation.summary).toBe('Unavailable · guest powered off');
+  });
+
+  it.each([
+    [{ state: 'unavailable', source: 'unavailable' }, 'Unavailable.', 'Unavailable'],
+    [
+      { state: 'unavailable', source: 'agent', observedAt },
+      'Unavailable. Source: Pulse Agent. Observed: 2026-09-30 11:00:00 UTC.',
+      'Unavailable · Pulse Agent · 2026-09-30 11:00:00 UTC',
+    ],
+  ])(
+    'names only what is known about an unavailable reading (%j)',
+    (observation, message, summary) => {
+      const presentation = getWorkloadMemoryObservationPresentation(
+        guest({ memory: { ...guest().memory, observation } }),
+      )!;
+      expect(presentation.message).toBe(message);
+      expect(presentation.summary).toBe(summary);
+      expect(presentation.message).not.toContain('Unknown source');
+    },
+  );
+
   it('leaves the selected number unchanged', () => {
     expect(getCurrentWorkloadMemoryUsage(reading('status-mem'))).toBe(25);
     expect(getCurrentWorkloadMemoryUsage(reading('cluster-resources'))).toBe(25);

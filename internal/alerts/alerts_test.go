@@ -22958,3 +22958,37 @@ func TestPMGQuarantineGrowthHalfOffKeepsAbsoluteCheck(t *testing.T) {
 		t.Fatal("spam quarantine above its absolute warning raised no alert while a growth level was half off")
 	}
 }
+
+// The node temperature alert judges the primary CPU reading, the value the
+// node's table, drawer headline and history show: a core above the package wins.
+func TestCheckNodeTemperatureJudgesPrimaryCPUReading(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	node := models.Node{
+		ID:       "node/pve-hot-core",
+		Name:     "pve-hot-core",
+		Instance: "pve-hot-core",
+		Status:   "online",
+		CPU:      0.20,
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 40},
+		Temperature: &models.Temperature{
+			Available:  true,
+			HasCPU:     true,
+			CPUPackage: 60,
+			Cores:      []models.CoreTemp{{Core: 0, Temp: 58}, {Core: 1, Temp: 92}},
+		},
+	}
+	m.CheckNode(node)
+
+	m.mu.RLock()
+	alert := testRequireActiveAlert(t, m, canonicalMetricStateID(node.ID, "temperature"))
+	m.mu.RUnlock()
+	if alert == nil {
+		t.Fatal("expected node temperature alert from the hot core")
+	}
+	if want := *models.PrimaryCPUTemperatureCelsius(node.Temperature); alert.Value != want || want != 92 {
+		t.Fatalf("alert value = %v, want the primary reading 92 (rule gave %v)", alert.Value, want)
+	}
+}

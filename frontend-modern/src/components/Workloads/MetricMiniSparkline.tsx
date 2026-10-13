@@ -27,6 +27,8 @@ interface MetricMiniSparklineProps {
   valueLabelMode?: MetricMiniSparklineValueLabelMode;
   valueLabelContext?: MetricMiniSparklineValueLabelContext;
   title?: string;
+  /** Hover text when it should say more than the accessible title, such as a reading's reason. */
+  tooltip?: string;
   unit?: string;
   emptyLabel?: string;
   formatValue?: (value: number) => string;
@@ -149,7 +151,7 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
   return (
     <div
       class={`grid h-4 w-full min-w-0 ${rootColumns()} items-center gap-1 overflow-hidden`}
-      title={props.title}
+      title={props.tooltip ?? props.title}
       data-testid="metric-mini-sparkline"
       data-value-label-mode={valueLabelMode()}
       data-rendered-series-count={paths().length}

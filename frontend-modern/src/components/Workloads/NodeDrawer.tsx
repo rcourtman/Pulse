@@ -12,8 +12,7 @@ import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { getSimpleStatusIndicator } from '@/utils/status';
 
-import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
-import { TRENDED_DRAWER_HISTORY_DEFAULT_RANGE } from './guestDrawerModel';
+import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from './guestDrawerModel';
 import { NodeDrawerOverview } from './NodeDrawerOverview';
 import {
   getNodeDrawerCurrentMetrics,
@@ -34,12 +33,12 @@ interface NodeDrawerProps {
   onClose?: () => void;
 }
 
-type NodeDrawerTab = 'overview' | 'history' | 'manage';
+type NodeDrawerTab = 'overview' | 'manage';
 
 export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<NodeDrawerTab>('overview');
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
-    TRENDED_DRAWER_HISTORY_DEFAULT_RANGE,
+    GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   );
   const alertsActivation = useAlertsActivation();
 
@@ -49,7 +48,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   const historyGroups = createMemo(() => getNodeDrawerHistoryGroups(props.node));
   const currentMetrics = createMemo(() => getNodeDrawerCurrentMetrics(props.node));
   // The drawer lists alerts for the node's guests too; only the node's own
-  // alerts describe the metrics on its trend cards.
+  // alerts describe the metrics on its charts.
   const ownAlerts = createMemo(() => {
     if (props.ownAlerts) return props.ownAlerts;
     const ids = new Set(nodeOverrideIdCandidates(props.node));
@@ -101,14 +100,8 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
         onChange={(value) => setActiveTab(value as NodeDrawerTab)}
         tabs={[
           { value: 'overview', label: 'Overview' },
-          { value: 'history', label: 'History' },
           { value: 'manage', label: 'Manage' },
         ]}
-        trailing={
-          <Show when={activeTab() === 'history'}>
-            <GuestDrawerHistoryRangeSelect range={historyRange()} onRangeChange={setHistoryRange} />
-          </Show>
-        }
       />
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
@@ -120,23 +113,14 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           temperatureThresholds={temperatureThresholds()}
           alerts={props.alerts}
           historyTarget={historyTarget()}
-          trendsEnabled={activeTab() === 'overview'}
+          historyRange={historyRange()}
+          onHistoryRangeChange={setHistoryRange}
+          historyGroups={historyGroups()}
+          currentMetrics={currentMetrics()}
+          historyEnabled={activeTab() === 'overview'}
           metricAlerts={ownAlerts()}
         />
       </div>
-
-      {/* Mounted on demand, like the guest drawer's History: a hidden History
-          would poll the same resource the Overview trends already read. */}
-      <Show when={activeTab() === 'history'}>
-        <div class="[overflow-anchor:none]">
-          <GuestDrawerHistory
-            currentMetrics={currentMetrics()}
-            groups={historyGroups()}
-            range={historyRange()}
-            target={historyTarget()}
-          />
-        </div>
-      </Show>
 
       <div class={`[overflow-anchor:none] ${activeTab() === 'manage' ? '' : 'hidden'}`}>
         <Show when={activeTab() === 'manage'}>
