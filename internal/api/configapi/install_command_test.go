@@ -82,7 +82,12 @@ while time.monotonic() < deadline:
         silent = not (termios.tcgetattr(tty_watch)[3] & termios.ECHO)
         if output.endswith(b"(paste at this prompt, not in the command): ") and command_ready and silent and not sent:
             if p.get("signal_on_prompt"):
-                os.killpg(child.pid, getattr(signal, "SIG" + p["signal_on_prompt"]))
+                # Keep the controlling terminal/session alive. The selected
+                # tool records the privileged reader that owns EXIT cleanup;
+                # signalling the entire session kills that observation owner.
+                with open(os.path.join(env["FAKE_ROOT"], "reader-pid")) as f:
+                    reader = int(f.read())
+                os.kill(reader, getattr(signal, "SIG" + p["signal_on_prompt"]))
             else:
                 os.write(master, (p["input"] + "\n").encode())
             sent = True

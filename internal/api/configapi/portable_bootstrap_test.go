@@ -86,6 +86,7 @@ exec `+posixShellQuote(stty)+` "$@"
 		}
 		writeExecutable(t, filepath.Join(bin, "busybox"), `#!/bin/sh
 printf '%s\n' "$*" >> "$FAKE_ROOT/tty-calls"
+if [ "$1" = stty ] && [ "$2" = -echo ]; then printf '%s\n' "$PPID" > "$FAKE_ROOT/reader-pid"; fi
 exec "$FAKE_ROOT/native/busybox" "$@"
 `)
 	} else if mode == "unsupported-busybox" || mode == "prefer-standalone" {
@@ -218,7 +219,7 @@ func TestPrivateBootstrapRealBusyBoxInput(t *testing.T) {
 				calls, err := os.ReadFile(filepath.Join(root, "tty-calls"))
 				lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
 				if err != nil || len(lines) != 3 || lines[0] != "stty -g" || lines[1] != "stty -echo" || !strings.HasPrefix(lines[2], "stty ") {
-					t.Fatal("snapshot, silent mode and full restoration did not use the selected real BusyBox applet")
+					t.Fatalf("snapshot, silent mode and full restoration did not use the selected real BusyBox applet: %q\n%s", lines, out)
 				}
 				assertPortableBootstrapPrivate(t, root, tc.input, out)
 			})
