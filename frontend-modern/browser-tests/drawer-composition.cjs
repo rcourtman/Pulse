@@ -123,9 +123,9 @@ async function box(locator) {
       const memoryCard = overview.getByTestId('drawer-trend-card-memory'); assert.match(await memoryCard.getAttribute('class'), /amber/);
       await memoryCard.locator('[data-testid="drawer-trend-threshold"]').waitFor({ state: 'attached' });
       await overview.getByTestId('drawer-trend-card-memory').locator('svg').waitFor();
-      await activate(page.getByRole('button', { name: 'History', exact: true }));
+      await activate(page.getByRole('tab', { name: 'History', exact: true }));
       await page.getByTestId('guest-history-group-chart').first().waitFor();
-      await activate(page.getByRole('button', { name: 'Overview', exact: true }));
+      await activate(page.getByRole('tab', { name: 'Overview', exact: true }));
       record.states.push('Fresh read withdraws deferral; metric alert trend threshold and on-demand History retained');
 
       await page.goto(origin + '/node', { waitUntil: 'networkidle' });
