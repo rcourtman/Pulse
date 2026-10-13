@@ -953,9 +953,14 @@ func mockChartPointTarget(duration time.Duration) int {
 	}
 }
 
+// downsampleMetricSeriesForMockChart thins a mock series onto the shared mock
+// chart grid (see sampleMetricSeriesOnMockChartGrid). It does not use LTTB:
+// LTTB keeps the points whose values stand out, so each metric of a resource
+// kept its own timestamps, and drawer history panels, which break a line
+// where another series in the panel has a reading this one lacks, drew mock
+// charts as scattered dots.
 func downsampleMetricSeriesForMockChart(points []MetricPoint, duration time.Duration) []MetricPoint {
-	target := mockChartPointTarget(duration)
-	return lttb(cloneMetricSeries(points), target)
+	return sampleMetricSeriesOnMockChartGrid(points, mockChartGridInterval(duration))
 }
 
 func downsampleMetricMapForMockChart(metrics map[string][]MetricPoint, duration time.Duration) map[string][]MetricPoint {
