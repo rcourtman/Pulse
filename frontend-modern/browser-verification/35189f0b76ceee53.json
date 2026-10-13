@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "b837a8a98d113aa2f06008afc329912eee19b7f4",
+  "verified_at": "2026-10-13T21:56:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "63d543738ffb71ca86a8f9786d75c6479ae7ed0673a4f96b81620a549be63a82",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "9e46fe5e7adc08b9199248516583745af18c3a08d225367645d0e8b47b86c64a"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "final built bytes of this tree (origin/main b837a8a98d plus this change) embedded in a darwin binary, mock mode, headless Chromium on pulse-dev through a reverse tunnel, full-resolution element screenshots read by eye",
+    "mock history first: its stored buckets barely spread (10 of 102 points, by under 0.1 percentage points), so bands there are a hairline halo and no peak is named",
+    "then /api/metrics-store/history intercepted with 96 synthetic 24h buckets: CPU averaging 14-22% with two buckets peaking at 97%, network in peaking at 40 MB/s once, disk read peaking at 30 MB/s twice, memory and disk flat. Each spike shows as a tinted, outlined spire from its average line up to its peak on the Utilization, Network I/O and Disk I/O charts, while flat series draw no band",
+    "1440px: three charts side by side, spires visible at every spike; 390px: charts stacked, the same spires visible, no horizontal overflow"
+  ],
+  "interactions": [
+    "expanded the first guest row; hovered the Utilization plot over the CPU spike bucket at 1440 and 390px: the header read \"Stored · <time>\" and the legend read \"CPU 22.0% peak 97.0%\" with Memory and Disk showing a single value each",
+    "moved the pointer away: the legend returned to \"Latest stored\" with one value per series and no peak label"
+  ]
+}

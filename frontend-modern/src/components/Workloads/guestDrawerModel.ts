@@ -361,6 +361,49 @@ export const buildGuestDrawerHistoryPath = (
     .join(' ');
 };
 
+// Each stored point is a bucket average carrying its own lowest and highest
+// reading. The band spans those extremes behind the average line, so a short
+// spike stays visible after downsampling instead of averaging away. A segment
+// whose buckets never spread draws nothing.
+export const buildGuestDrawerHistoryBandPath = (
+  points: readonly AggregatedMetricPoint[],
+  scale: GuestDrawerHistoryScale,
+  startTime: number,
+  endTime: number,
+  width = 360,
+  height = 92,
+): string => {
+  if (points.length < 2) return '';
+  const spreads = points.some((point) => (point.max ?? point.value) > (point.min ?? point.value));
+  if (!spreads) return '';
+
+  const left = 34;
+  const right = 8;
+  const top = 8;
+  const bottom = 18;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  const timeSpan = Math.max(1, endTime - startTime);
+  const valueSpan = Math.max(1, scale.maxValue - scale.minValue);
+  const coordinate = (timestamp: number, value: number) => {
+    const x = left + ((timestamp - startTime) / timeSpan) * plotWidth;
+    const bounded = Math.min(Math.max(value, scale.minValue), scale.maxValue);
+    const y = top + (1 - (bounded - scale.minValue) / valueSpan) * plotHeight;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  };
+
+  const upper = points.map(
+    (point, index) =>
+      `${index === 0 ? 'M' : 'L'}${coordinate(point.timestamp, Math.max(point.max ?? point.value, point.value))}`,
+  );
+  const lower = [...points]
+    .reverse()
+    .map(
+      (point) => `L${coordinate(point.timestamp, Math.min(point.min ?? point.value, point.value))}`,
+    );
+  return `${[...upper, ...lower].join(' ')} Z`;
+};
+
 export const getGuestDrawerHistoryValueLabel = (
   points: readonly AggregatedMetricPoint[],
   unit: string,
