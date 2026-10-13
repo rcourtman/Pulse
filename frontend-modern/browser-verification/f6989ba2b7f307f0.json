@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "0a44d276db4bdb53c7187f6074ee4b005c1d4872",
+  "verified_at": "2026-10-13T14:21:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "751bdc1f976171edfad5f340d60c08e6163a30cbfa8f16d5ee55ed81ced6858a"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "private preview: origin/main plus this GuestDrawerHistory.tsx (and the separate 7-day default change), frontend embedded, run locally in mock mode with a seeded metrics store whose per-metric timestamps are misaligned, so single-observation dots appear across every panel",
+    "guest artifact-cache-310 History at 24 hours: single-observation dots and hover markers render round in a zoomed screenshot of the 906px-wide plot; the plot contains no <circle>",
+    "readout at a stored time where Memory and Disk have no reading shows 'Memory no reading' and 'Disk no reading'; the 'A dash means' line is absent",
+    "390px phone: no element extends past the viewport, page scrollWidth equals the viewport"
+  ],
+  "interactions": [
+    "swept the pointer across the Utilization plot in 21 steps at 1024px: chart height stayed 202px throughout (previously the dash note appeared and vanished, moving the chart)",
+    "repeated the sweep in 16 steps at 390px: chart height stayed 327px",
+    "switched the History range to 24 hours with the range control"
+  ]
+}

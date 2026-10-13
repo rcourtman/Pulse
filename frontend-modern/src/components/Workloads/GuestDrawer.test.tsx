@@ -222,7 +222,7 @@ describe('GuestDrawer', () => {
     expect(screen.getAllByTestId('guest-history-group-chart')[0]).toBe(chart);
     expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent('0.0%current');
     expect(chart.querySelector('[data-history-deferred="memory"]')).toBeNull();
-    expect(chart.querySelector('path')).toBeNull();
+    expect(chart.querySelector('path[data-history-series]')).toBeNull();
     expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1);
   });
 
@@ -245,7 +245,7 @@ describe('GuestDrawer', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'History' }));
     await screen.findByRole('slider', { name: 'Inspect Utilization history' });
     const chart = screen.getAllByTestId('guest-history-group-chart')[0];
-    expect(chart.querySelectorAll('path')).toHaveLength(1);
+    expect(chart.querySelectorAll('path[data-history-series]')).toHaveLength(1);
     expect(chart.querySelectorAll('[data-history-observation="memory"]')).toHaveLength(2);
     expect(chart.querySelector('[data-history-gaps]')).toHaveTextContent(
       'Missing observations: Memory.',
@@ -276,7 +276,7 @@ describe('GuestDrawer', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
     await waitFor(() => expect(chart.querySelector('[data-history-gaps]')).toBeNull());
-    expect(chart.querySelectorAll('path')).toHaveLength(2);
+    expect(chart.querySelectorAll('path[data-history-series]')).toHaveLength(2);
     expect(chart.querySelector('[data-history-observation="memory"]')).toBeNull();
     expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(2);
   });
@@ -382,7 +382,7 @@ describe('GuestDrawer', () => {
     expect(history.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
       'Not a current measurement.',
     );
-    expect(history.querySelector('path')).toBeNull();
+    expect(history.querySelector('path[data-history-series]')).toBeNull();
     // Same target/range snapshots retain the chart and original History read.
     expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1);
     for (const [request] of chartsApiMocks.getMetricsHistory.mock.calls) {
@@ -651,7 +651,7 @@ describe('GuestDrawer', () => {
       const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
       expect(utilizationChart).toHaveTextContent('CPU25.0%current');
       expect(utilizationChart).toHaveTextContent('No stored history in this range');
-      expect(utilizationChart.querySelector('path')).toBeNull();
+      expect(utilizationChart.querySelector('path[data-history-series]')).toBeNull();
     });
 
     it('renders unavailable current disk usage as a dash', async () => {

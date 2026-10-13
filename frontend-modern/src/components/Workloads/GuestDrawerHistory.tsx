@@ -175,6 +175,48 @@ const findClosestGuestDrawerHistoryTimestamp = (
   return closest;
 };
 
+interface HistoryPointMarkerProps {
+  x: number;
+  y: number;
+  diameter: number;
+  color: string;
+  'data-history-observation'?: string;
+  'data-history-hover-marker'?: string;
+}
+
+// The plot stretches its viewBox to the panel (preserveAspectRatio="none"), so
+// a <circle> renders as an oval. A zero-length, round-capped stroke with a
+// non-scaling stroke is drawn in screen pixels and stays round at any width.
+// The surface-coloured ring underneath keeps the dot legible over a line.
+const HistoryPointMarker: Component<HistoryPointMarkerProps> = (props) => {
+  const d = () => `M${props.x} ${props.y}h0`;
+  return (
+    <g
+      aria-hidden="true"
+      data-history-observation={props['data-history-observation']}
+      data-history-hover-marker={props['data-history-hover-marker']}
+      data-x={props.x}
+      data-y={props.y}
+    >
+      <path
+        d={d()}
+        stroke="currentColor"
+        class="text-surface"
+        stroke-width={props.diameter + 2}
+        stroke-linecap="round"
+        vector-effect="non-scaling-stroke"
+      />
+      <path
+        d={d()}
+        stroke={props.color}
+        stroke-width={props.diameter}
+        stroke-linecap="round"
+        vector-effect="non-scaling-stroke"
+      />
+    </g>
+  );
+};
+
 const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps> = (props) => {
   const [hoverTimestamp, setHoverTimestamp] = createSignal<number | null>(null);
   const [selectedTimestamp, setSelectedTimestamp] = createSignal<number | null>(null);
@@ -325,8 +367,11 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         isUnknown: isFallback && deferred?.valueLabel === 'freshness unknown',
         valueLabel: point
           ? getGuestDrawerHistoryValueLabel([point], item.unit)
-          : timestamp !== null
-            ? '-'
+          : // A stored time where this series has no reading says so in place,
+            // rather than through a note that appears and disappears (and moves
+            // the chart) as the inspected time changes.
+            timestamp !== null
+            ? 'no reading'
             : typeof fallbackValue === 'number' && Number.isFinite(fallbackValue)
               ? formatHistoryChartTooltipValue(fallbackValue, item.unit)
               : '-',
@@ -418,14 +463,6 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         </div>
       </div>
 
-      <Show
-        when={
-          readoutTimestamp() !== null && displaySeries().some((item) => item.valueLabel === '-')
-        }
-      >
-        <p class="mb-2 text-xs text-muted">A dash means no stored observation at this time.</p>
-      </Show>
-
       <For each={displaySeries().filter((item) => item.deferred)}>
         {(item) => (
           <p
@@ -482,6 +519,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                 <For each={drawableSeries()}>
                   {(item) => (
                     <path
+                      data-history-series={item.metric}
                       d={buildGuestDrawerHistoryPath(
                         item.points,
                         scale(),
@@ -501,21 +539,16 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                 </For>
                 <For each={singlePointSeries()}>
                   {(item) => (
-                    <circle
-                      aria-hidden="true"
+                    <HistoryPointMarker
                       data-history-observation={item.metric}
-                      cx={getGuestDrawerHistoryX(
+                      x={getGuestDrawerHistoryX(
                         item.points[0].timestamp,
                         rangeBounds().startTime,
                         rangeBounds().endTime,
                       )}
-                      cy={getGuestDrawerHistoryY(item.points[0].value, scale())}
-                      r="3.5"
-                      fill={item.color}
-                      stroke="currentColor"
-                      stroke-width="1"
-                      class="text-surface"
-                      vector-effect="non-scaling-stroke"
+                      y={getGuestDrawerHistoryY(item.points[0].value, scale())}
+                      diameter={7}
+                      color={item.color}
                     />
                   )}
                 </For>
@@ -536,15 +569,12 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             />
             <For each={hoveredSeries()}>
               {(item) => (
-                <circle
-                  cx={item.x}
-                  cy={item.y}
-                  fill={item.color}
-                  r="3"
-                  stroke="currentColor"
-                  stroke-width="1"
-                  class="text-surface"
-                  vector-effect="non-scaling-stroke"
+                <HistoryPointMarker
+                  data-history-hover-marker={item.metric}
+                  x={item.x}
+                  y={item.y}
+                  diameter={6}
+                  color={item.color}
                 />
               )}
             </For>
