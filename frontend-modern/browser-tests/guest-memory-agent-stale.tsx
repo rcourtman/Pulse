@@ -45,7 +45,7 @@ const initial: Resource = {
     diskStatusReason: 'prev-vm-locked',
     lock: 'backup',
   },
-  agent: { stale: false, version: 'fixture-version', lastReportAt: observedAt },
+  agent: { stale: false, agentVersion: 'fixture-version', lastReportAt: observedAt },
 };
 
 // Only the transport is synthetic; the canonical merger, mapper and mounted
@@ -72,7 +72,9 @@ function Fixture() {
   const update = (patch: Partial<Resource>, keys: (keyof Resource)[]) =>
     setSnapshot((previous) =>
       mergeCanonicalResourceDeltaSnapshot(
-        [{ id: initial.id, ...patch } as Resource],
+        // The native delta wrapper receives a complete resource with changed
+        // keys, not an identity-only patch that would withdraw provider facets.
+        [{ ...previous[0], ...patch }],
         previous,
         new Set([initial.id]),
         new Map([[initial.id, keys]]),

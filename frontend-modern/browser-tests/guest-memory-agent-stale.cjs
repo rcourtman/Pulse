@@ -127,6 +127,10 @@ const settle = (page) =>
         .first()
         .waitFor();
       const evidence = await page.evaluate(() => window.__staleAgentMemory.evidence());
+      assert.equal(evidence.canonical.platformType, 'proxmox-pve');
+      assert.equal(evidence.canonical.proxmox.lock, 'backup');
+      assert.equal(evidence.projected.diskStatusReason, 'prev-vm-locked');
+      assert.equal(evidence.projected.guestAgentStatus, 'deferred');
       assert.equal(evidence.projected.agentStale, true);
       assert.equal(
         evidence.projected.memory.observation.state,
