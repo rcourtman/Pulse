@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "base_sha": "cbec132640cde4b5c2f1ffcf2cbfb88d75a88792",
+  "verified_at": "2026-10-13T19:29:12Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/content/help/updates.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/content/help/updates.ts": "f7e3a822d1826aa0eb137dc3e5fb1559005d7685bdca2671b84b14722b681806"
+  },
+  "routes": [
+    "/node-update-proof.html",
+    "/docs/TROUBLESHOOTING#proxmox-pending-update-access"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 640
+    },
+    {
+      "width": 844,
+      "height": 390
+    }
+  ],
+  "states": [
+    "Denied update access with help closed/open",
+    "Retained positive and zero counts with full checked-time text",
+    "Current checked recovery withdraws denied help",
+    "Short landscape scrollable help",
+    "Actual shipped troubleshooting document and focused pending-update heading"
+  ],
+  "interactions": [
+    "Hover/focus and Enter open the shared help control",
+    "Learn more opens the actual in-app troubleshooting viewer in a new tab",
+    "Pointer and keyboard documentation activation",
+    "Viewport-specific document reload verifies focused section anchor and readable pixels at 1440/900/390/320/844 widths",
+    "Close and Escape restore trigger focus",
+    "Outside click dismisses help without collapsing details",
+    "Landscape help scroll reaches Learn more",
+    "Metric polling retains the same open help dialog",
+    "Current checked evidence removes denied guidance",
+    "Touch opens help and its documentation link at 390x844, then closes help"
+  ],
+  "command": "Playwright Chromium against the task-owned pulse-dev Vite server on port 8087 after the corrected production build",
+  "notes": [
+    "Production NodeDrawer fixture uses synthetic node data. The documentation destination uses the actual public application Docs route, shipped markdown, fragment scrolling and focus. Local API responses are synthetic.",
+    "Inspected pixels, status text-range bounds, dialog containment and the destination heading. No horizontal overflow at the listed widths. New documentation tabs were explicitly sized to each viewport before reloading the anchored route.",
+    "Corrected worker source hash f7e3a822d1826aa0eb137dc3e5fb1559005d7685bdca2671b84b14722b681806 matches staged updates.ts. Other guidance source remains at parent cbec132640cde4b5c2f1ffcf2cbfb88d75a88792.",
+    "Raw browser results and screenshots are retained under /Volumes/Development/.caches/support-triage-20261013/. Owned browser and private source server stopped after verification."
+  ]
+}

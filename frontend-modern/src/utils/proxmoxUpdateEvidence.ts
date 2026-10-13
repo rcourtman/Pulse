@@ -1,4 +1,5 @@
 import type { Node } from '@/types/api';
+import type { HelpContentId } from '@/content/help';
 import { formatRelativeTime } from '@/utils/format';
 
 export interface ProxmoxUpdateEvidencePresentation {
@@ -6,6 +7,7 @@ export interface ProxmoxUpdateEvidencePresentation {
   title: string;
   tone: 'success' | 'warning' | 'default';
   current: boolean;
+  helpContentId?: HelpContentId;
 }
 
 type UpdateEvidenceNode = Pick<
@@ -40,6 +42,10 @@ export const getProxmoxUpdateEvidencePresentation = (
     ? formatCheckedAt(node.pendingUpdatesCheckedAt)
     : '';
   const reason = reasonLabel(node.pendingUpdatesReason);
+  const accessHelp =
+    node.pendingUpdatesReason === 'permission_denied'
+      ? { helpContentId: 'updates.proxmox.access' }
+      : {};
   const status =
     node.pendingUpdatesStatus ||
     (node.pendingUpdatesCheckedAt || (typeof node.pendingUpdates === 'number' && count > 0)
@@ -72,6 +78,7 @@ export const getProxmoxUpdateEvidencePresentation = (
           .join(' · '),
         tone: 'warning',
         current: false,
+        ...accessHelp,
       };
     }
     case 'unavailable':
@@ -84,6 +91,7 @@ export const getProxmoxUpdateEvidencePresentation = (
         // it reads neutral. A source outage or failed check stays a warning.
         tone: node.pendingUpdatesReason === 'permission_denied' ? 'default' : 'warning',
         current: false,
+        ...accessHelp,
       };
     case 'not_checked':
       return {

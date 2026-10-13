@@ -111,4 +111,41 @@ describe('HelpIcon', () => {
     expect(first.id).not.toBe(second.id);
     expect(first.getAttribute('aria-labelledby')).not.toBe(second.getAttribute('aria-labelledby'));
   });
+
+  it('contains the full dialog box through animation, resize and scrolling', async () => {
+    let flushFrame: FrameRequestCallback | undefined;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      flushFrame = callback;
+      return 1;
+    });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    vi.stubGlobal('innerWidth', 240);
+    vi.stubGlobal('innerHeight', 220);
+    render(() => <HelpIcon inline={{ title: 'Responsive help', description: 'Description' }} />);
+
+    const trigger = screen.getByRole('button', { name: 'Help: Responsive help' });
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(new DOMRect(200, 150, 20, 20));
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole('dialog', { name: 'Responsive help' });
+    Object.defineProperties(dialog, {
+      offsetWidth: { value: 200 },
+      offsetHeight: { value: 150 },
+    });
+    vi.spyOn(dialog, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 180, 135));
+    flushFrame?.(0);
+    expect(dialog.style.left).toBe('32px');
+    expect(dialog.style.top).toBe('62px');
+
+    vi.stubGlobal('innerWidth', 500);
+    vi.stubGlobal('innerHeight', 600);
+    fireEvent(window, new Event('resize'));
+    expect(dialog.style.left).toBe('110px');
+    expect(dialog.style.top).toBe('178px');
+
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 350, 20, 20));
+    fireEvent(window, new Event('scroll'));
+    expect(dialog.style.left).toBe('10px');
+    expect(dialog.style.top).toBe('192px');
+    expect(screen.getByRole('button', { name: 'Close help' })).toHaveFocus();
+  });
 });
