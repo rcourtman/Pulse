@@ -415,6 +415,68 @@ test("pasted HTML keeps genuine topic values without turning copied headings int
   assert.equal(triage.internals.extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0");
 });
 
+test("inline and quoted HTML literals cannot hide subsequent form declarations", () => {
+  const { extractPulseVersion, classifyV6FeedbackType, classifyAdditionalActionableTopics } = triage.internals;
+  for (const evidence of [
+    "The error includes `<!-- unfinished`.",
+    "The error includes ``a ` tick and <!-- unfinished``.",
+    "The error includes `<!-- first` and ``<!-- second``.",
+    "> ```html\n> <!-- unfinished\n> ### Pulse version\n> 6.4.1\n> ```",
+    "   > The response includes <!-- unfinished",
+    "The literal is \\<!-- unfinished.",
+  ]) {
+    for (const newline of ["\n", "\r\n"]) {
+      const body = ["### Existing evidence", evidence, "", "### Pulse version", "6.5.0",
+        "### Feedback type", "Documentation issue", "### Additional actionable topics",
+        "Storage History remains empty."].join("\n").replaceAll("\n", newline);
+      assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0", body);
+      assert.equal(classifyV6FeedbackType(body), "documentation", body);
+      assert.equal(classifyAdditionalActionableTopics(body), true, body);
+    }
+  }
+});
+
+test("actual hidden comments stay hidden beside inline and quoted evidence", () => {
+  const { extractPulseVersion, classifyV6FeedbackType, classifyAdditionalActionableTopics } = triage.internals;
+  for (const evidence of [
+    "A literal `<!-- unfinished` followed by <!--",
+    "A mismatched `<!-- opener`` remains an actual comment",
+    "An escaped \\` backtick does not protect <!-- unfinished`",
+    "An even escape \\\\<!-- still opens a comment",
+    "<!-- a hidden ` backtick is not an opener --> <!-- second hidden`",
+  ]) {
+    const body = [evidence, "> quoted text", "```", "### Pulse version", "6.4.1",
+      "### Feedback type", "Bug / regression", "### Additional actionable topics", "Hidden topic",
+      "-->", "### Pulse version", "unknown", "### Feedback type", "Documentation issue",
+      "### Additional actionable topics", "None"].join("\n");
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), null, body);
+    assert.equal(classifyV6FeedbackType(body), "documentation", body);
+    assert.equal(classifyAdditionalActionableTopics(body), false, body);
+    const unfinished = body.replace("-->\n### Pulse version\nunknown", "\n### Pulse version\nunknown");
+    assert.equal(extractPulseVersion("Bug", unfinished), null, unfinished);
+    assert.equal(classifyV6FeedbackType(unfinished), null, unfinished);
+    assert.equal(classifyAdditionalActionableTopics(unfinished), null, unfinished);
+  }
+});
+
+test("syncLabels preserves visible fields after inline HTML without new contact", async () => {
+  for (const evidence of ["Error: `<!-- unfinished`", "> <!-- unfinished response"]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2808, title: "Upgrade from v6.4.5",
+      body: ["### Existing evidence", evidence, "", "### Pulse version", "6.5.0",
+        "### Feedback type", "Bug / regression", "### Additional actionable topics", "Missing History"].join("\n"),
+      labels: ["needs-human", "needs-retest-on-latest", "operator-reviewed", "needs-version-info"]
+        .map(name => ({ name })) };
+    await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+    assert.deepEqual(calls.addLabels.flatMap(call => call.labels), ["affects-6.5.0", "bug", "needs-decomposition"]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["needs-version-info"]);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2808]);
+  }
+});
+
 test("syncLabels consumes real fields after pasted HTML without contact or state changes", async () => {
   const { github, calls } = createGithub();
   const issue = { number: 2801, title: "Upgrade from v6.4.5",
