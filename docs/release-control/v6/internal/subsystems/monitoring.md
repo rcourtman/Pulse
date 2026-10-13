@@ -6293,7 +6293,10 @@ canonical parent chain for maintenance only. An ancestor contributes an active
 occurrence only when its scope is `resource_and_descendants`; monitoring mode,
 lifecycle state, and every other operator field remain exact-resource policy.
 When active windows overlap, the adapter projects the occurrence with the
-latest end together with its source id and inherited marker.
+latest end together with its source id and inherited marker. That resolution
+is `unifiedresources.ActiveMaintenanceCoverageAt`, the rule Patrol's
+operator-state projection shares, so a host window scoped to descendants
+silences its guests' alerts and Patrol findings alike.
 
 Backup-aware offline intent consumes a PVE task only when VMID, instance, and
 node match and the task is active. `pollBackupTasks` stamps server observation

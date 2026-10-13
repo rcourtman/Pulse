@@ -2178,6 +2178,12 @@ type canonicalResourceIDResolver interface {
 	ResolveCanonicalResourceID(ref string) (string, bool)
 }
 
+// canonicalResourceAncestorResolver is the live canonical parent chain the
+// same read state exposes, nearest parent first.
+type canonicalResourceAncestorResolver interface {
+	ResolveCanonicalResourceAncestors(ref string) []string
+}
+
 // patrolResourceOperatorStateProvider projects durable operator state onto the
 // resource a Patrol finding names. Findings carry whatever resource ID their
 // producer used: unified-derived findings hold the canonical hash, Patrol
@@ -2193,6 +2199,11 @@ type canonicalResourceIDResolver interface {
 // and reused for up to two seconds while nothing it depends on changes), so
 // findings do not each clone the unified listing. Only a reference it cannot
 // resolve is read as given.
+//
+// Maintenance is the active occurrence (one-shot or recurring) covering the
+// resource, resolved by the rule alert intent uses: the resource's own window
+// or an ancestor's window scoped to its descendants, latest end winning. Every
+// other field is the resource's own state; nothing else is inherited.
 func (r *Router) patrolResourceOperatorStateProvider(orgID string) ai.ResourceOperatorStateProvider {
 	return ai.ResourceOperatorStateProviderFunc(
 		func(resourceRef string, now time.Time) (ai.ResourceOperatorStateProjection, bool) {
@@ -2201,33 +2212,49 @@ func (r *Router) patrolResourceOperatorStateProvider(orgID string) ai.ResourceOp
 				return ai.ResourceOperatorStateProjection{}, false
 			}
 			canonicalID := resourceRef
-			if resolver, ok := r.resolveMonitorForOrg(orgID).GetUnifiedStructureReadState().(canonicalResourceIDResolver); ok {
+			readState := r.resolveMonitorForOrg(orgID).GetUnifiedStructureReadState()
+			if resolver, ok := readState.(canonicalResourceIDResolver); ok {
 				if resolvedID, resolved := resolver.ResolveCanonicalResourceID(resourceRef); resolved {
 					canonicalID = resolvedID
 				}
 			}
 			state, found, fetchErr := orgStore.GetResourceOperatorState(canonicalID)
-			if fetchErr != nil || !found {
+			if fetchErr != nil {
 				return ai.ResourceOperatorStateProjection{}, false
 			}
-			projection := ai.ResourceOperatorStateProjection{
-				IntentionallyOffline: state.IntentionallyOffline,
-				MonitoringMode:       string(state.MonitoringMode),
-				LifecycleState:       string(state.LifecycleState),
-				NeverAutoRemediate:   state.NeverAutoRemediate,
-				Criticality:          string(state.Criticality),
-			}
-			if state.LifecycleState == unifiedresources.LifecycleStateRetired {
-				projection.NeverAutoRemediate = true
-			}
-			if state.IsInMaintenanceAt(now) {
-				projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{
-					StartAt: *state.MaintenanceStartAt,
-					EndAt:   *state.MaintenanceEndAt,
-					Reason:  state.MaintenanceReason,
+			var own *unifiedresources.ResourceOperatorState
+			var projection ai.ResourceOperatorStateProjection
+			if found {
+				own = &state
+				projection = ai.ResourceOperatorStateProjection{
+					IntentionallyOffline: state.IntentionallyOffline,
+					MonitoringMode:       string(state.MonitoringMode),
+					LifecycleState:       string(state.LifecycleState),
+					NeverAutoRemediate:   state.NeverAutoRemediate,
+					Criticality:          string(state.Criticality),
+				}
+				if state.LifecycleState == unifiedresources.LifecycleStateRetired {
+					projection.NeverAutoRemediate = true
 				}
 			}
-			return projection, true
+			var ancestorIDs []string
+			if ancestors, ok := readState.(canonicalResourceAncestorResolver); ok {
+				ancestorIDs = ancestors.ResolveCanonicalResourceAncestors(canonicalID)
+			}
+			coverage, covered := unifiedresources.ActiveMaintenanceCoverageAt(now, canonicalID, own, ancestorIDs, func(ancestorID string) (unifiedresources.ResourceOperatorState, bool) {
+				ancestorState, ancestorFound, ancestorErr := orgStore.GetResourceOperatorState(ancestorID)
+				return ancestorState, ancestorErr == nil && ancestorFound
+			})
+			if covered {
+				projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{
+					StartAt:   coverage.Occurrence.StartAt,
+					EndAt:     coverage.Occurrence.EndAt,
+					Reason:    coverage.Reason,
+					SourceID:  coverage.SourceID,
+					Inherited: coverage.Inherited,
+				}
+			}
+			return projection, found || covered
 		},
 	)
 }

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "5996dc1a25c5b982ee2d10dd858df2e303ba97c5",
+  "verified_at": "2026-10-13T11:54:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "f2161a1fcf17f2efd8502c8cf4b991b26a7569fa5b4851a80605754efcd53cdd"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "production vite build of these exact bytes (sha256 matches) served by vite preview on pulse-dev, proxied to the :7699 perf rig's mock estate (50 PVE nodes)",
+    "PVE node Analytics A inline drawer, Manage tab, maintenance scheduler open with Applies to set to This resource and descendants: help reads 'With descendants, everything under this resource is covered too, including resources added later: alerts are silenced and new Patrol findings dismissed.'",
+    "old alerts-only descendant help absent (0 matches) at both widths",
+    "phone 390px: help wraps to four lines under the select inside the drawer, no horizontal page overflow (scrollWidth - clientWidth = 0); desktop 1440px: single line, no overflow"
+  ],
+  "interactions": [
+    "signed in with the rig's dev login",
+    "expanded the Analytics A node row via its chevron, opened the Manage tab",
+    "clicked Schedule window, selected This resource and descendants in Applies to, read the help text and measured overflow at both viewports"
+  ]
+}

@@ -15,6 +15,14 @@
 
 ## Purpose
 
+### Patrol maintenance coverage adds no agent authority
+
+The Patrol operator-state projection in `internal/api/router.go` now reads the
+active maintenance occurrence (one-shot or recurring) and inherits ancestor
+windows scoped `resource_and_descendants`, as alert intent does. It only
+auto-dismisses new findings; it adds no agent route, command or execution
+authority, and remediation locks stay exact-resource state.
+
 ### Pro Patrol default adds no agent authority
 
 The Patrol autonomy handler change only reports whether the Pro Ask first

@@ -844,7 +844,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             onChange={(event) =>
               setScheduleScope(event.currentTarget.value as 'resource' | 'resource_and_descendants')
             }
-            help="With descendants, alerts on everything under this resource are silenced too, including resources added later."
+            help="With descendants, everything under this resource is covered too, including resources added later: alerts are silenced and new Patrol findings dismissed."
             helpClass="text-[11px] leading-tight"
           >
             <option value="resource">This resource only</option>

@@ -5851,9 +5851,19 @@ attributes the suppression on the lifecycle timeline
 (`operator_state_cause: maintenance_window`, with
 `maintenance_end_at` metadata), and persists the finding for audit
 history. The active boundary may come from a one-shot or recurring schedule;
-both are evaluated by the canonical operator-state model. Descendant-scope
-inheritance is alert-intent behavior and does not weaken exact-resource
-action-remediation locks or invent inherited action authority.
+both are evaluated by the canonical operator-state model, and the projection
+carries the active occurrence's own start and end
+(`ActiveMaintenanceOccurrenceAt`), never the one-shot fields, which a recurring
+schedule leaves nil. Patrol inherits maintenance exactly as alert intent does:
+`unifiedresources.ActiveMaintenanceCoverageAt` resolves the resource's own
+window and every ancestor window scoped `resource_and_descendants` on the live
+canonical parent chain, and the latest-ending active window wins. A window
+stored on an ancestor reaches the projection with `Inherited` and its
+`SourceID`; the dismissal note says the window is on a parent resource and the
+lifecycle event carries `maintenance_inherited` and `maintenance_source_id`.
+Only maintenance is inherited. Monitoring mode, lifecycle, criticality and
+action-remediation locks stay exact-resource state, so descendant scope never
+weakens a lock or invents inherited action authority.
 
 Operator state outranks per-action approval on the Pulse Actions path:
 `validateExecutionPolicy` in `internal/actionlifecycle/service.go` reads the

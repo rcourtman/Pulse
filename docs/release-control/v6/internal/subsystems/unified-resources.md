@@ -3469,7 +3469,11 @@ silently move operator intent. Weekdays normalize to unique Monday-through-
 Sunday order. `maintenanceScope` defaults to `resource`; the only inherited
 value is `resource_and_descendants`, resolved against the canonical registry
 parent chain with cycle protection. Concrete occurrence start/end boundaries
-are derived by the same model for Alerts and post-window verification. SQLite
+are derived by the same model for Alerts, Patrol and post-window verification;
+consumers read the active occurrence, never the one-shot fields, which a
+recurring schedule leaves nil. `ActiveMaintenanceCoverageAt` is the one
+inheritance rule: own window plus ancestor windows scoped
+`resource_and_descendants`, latest active end wins, maintenance only. SQLite
 persists recurrence JSON and scope in additive columns while legacy one-shot
 rows retain their existing meaning. Scheduling, updating, changing scope, or
 clearing either form remains an atomic operator-state plus resource-timeline
@@ -3539,8 +3543,9 @@ plain words, never in implementation terms (no "persisted resource policy",
 maintenance-window help says it silences alerts and dismisses new Patrol
 findings, because an active window suppresses alert activation and
 auto-dismisses new findings while keeping them in history. The descendant-scope
-help claims only alerts for descendants, because Patrol reads the exact
-resource's own state. The `Never auto-remediate` label stays as named, because
+help says descendants' alerts are silenced and their new Patrol findings
+dismissed, because Alerts and Patrol resolve maintenance through the one
+`ActiveMaintenanceCoverageAt` rule over the live canonical parent chain. The `Never auto-remediate` label stays as named, because
 help pages and the Assistant's refusal message refer to it; its help and lock
 confirmation say it blocks every automated fix, including approved ones, and
 that blocked runs are logged as failed actions (an Assistant planning refusal

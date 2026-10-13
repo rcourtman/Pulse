@@ -6452,9 +6452,19 @@ at startup: `internal/api/router.go` calls
 `patrol.GetFindings().SetResourceOperatorStateProvider(...)` with a
 `ResourceOperatorStateProviderFunc` closure that reads the unified
 store and returns a `ResourceOperatorStateProjection` carrying every
-operator-set signal in one call (maintenance window via
-`state.IsInMaintenanceAt`, the `IntentionallyOffline` flag, and the
-`Criticality` hint). The same router setup also calls
+operator-set signal in one call (the maintenance window, the
+`IntentionallyOffline` flag, and the `Criticality` hint). The maintenance
+window is the active occurrence `unifiedresources.ActiveMaintenanceCoverageAt`
+resolves: the resource's own one-shot or recurring window, or an ancestor
+window scoped `resource_and_descendants` on the read state's
+`ResolveCanonicalResourceAncestors` chain, latest end winning, with
+`Inherited`/`SourceID` naming an ancestor's window. Its bounds come from the
+occurrence, never the one-shot fields a recurring schedule leaves nil
+(`TestPatrolOperatorStateProjectsActiveRecurringMaintenance` and
+`TestPatrolOperatorStateInheritsDescendantScopedMaintenance` in
+`internal/api/ai_handlers_more_test.go`). A resource with no row of its own
+still projects `ok=true` while an inherited window covers it; every other
+projected field is the resource's own state. The same router setup also calls
 `SetResourceStoreProvider(r.resourceHandlers.getStore)` on the AI settings
 handler so `/api/ai/patrol/findings` can refresh `resource_criticality` at
 read time after an operator changes priority, without waiting for the next
