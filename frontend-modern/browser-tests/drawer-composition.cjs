@@ -98,7 +98,8 @@ async function box(locator) {
       const fact = page.getByTestId('guest-drawer-facts').getByText(os, { exact: true }); await fact.waitFor();
       record.os = await box(fact); assert.equal(record.os.text, os); assert(record.os.scroll <= record.os.client); assert.equal(record.os.whiteSpace, 'normal');
       assert(record.os.right <= width && record.os.left >= 0); await noOverflow();
-      await overview.getByTestId('drawer-trend-card-memory').locator('[data-testid="drawer-trend-threshold"]').waitFor();
+      await overview.getByTestId('drawer-trend-card-memory').locator('[data-testid="drawer-trend-threshold"]').waitFor({ state: 'attached' });
+      await overview.getByTestId('drawer-trend-card-memory').locator('svg').waitFor();
       const reading = overview.getByRole('link', { name: 'Filesystem reading guidance' });
       await reading.scrollIntoViewIfNeeded(); await reading.focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
       await page.evaluate(async () => { await document.fonts.ready; await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))); });
@@ -118,7 +119,8 @@ async function box(locator) {
       await overview.getByText(/Using last known/).waitFor({ state: 'hidden' });
       assert.equal(await overview.getByRole('link', { name: 'Filesystem reading guidance' }).count(), 0);
       const memoryCard = overview.getByTestId('drawer-trend-card-memory'); assert.match(await memoryCard.getAttribute('class'), /amber/);
-      await memoryCard.locator('[data-testid="drawer-trend-threshold"]').waitFor();
+      await memoryCard.locator('[data-testid="drawer-trend-threshold"]').waitFor({ state: 'attached' });
+      await overview.getByTestId('drawer-trend-card-memory').locator('svg').waitFor();
       await activate(page.getByRole('button', { name: 'History', exact: true }));
       await page.getByTestId('guest-history-group-chart').first().waitFor();
       await activate(page.getByRole('button', { name: 'Overview', exact: true }));
