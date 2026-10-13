@@ -33,12 +33,12 @@ try {
           if (file.startsWith(root + '/') && !file.includes('/node_modules/') && fs.existsSync(file) && fs.statSync(file).isFile())
             binding.sources[path.relative(root, file)] = hash(fs.readFileSync(file));
         }
-        for (const file of ['src/components/shared/InlineNotice.tsx', 'src/components/Workloads/GuestDrawer.tsx', 'src/components/Infrastructure/ResourceDetailDrawer.tsx', 'src/components/Settings/RolesPanel.tsx', 'src/components/Settings/UserAssignmentsPanel.tsx', 'src/pages/Docs.tsx'])
+        for (const file of ['src/components/shared/InlineNotice.tsx', 'src/components/Workloads/GuestDrawer.tsx', 'src/components/Infrastructure/ResourceDetailDrawer.tsx', 'src/components/Settings/RolesPanel.tsx', 'src/components/Settings/UserAssignmentsPanel.tsx', 'src/pages/Docs.tsx', 'src/components/Workloads/NodeDrawer.tsx'])
           if (!binding.sources[file]) throw new Error(`Required consumer not compiled: ${file}`);
       },
     }, tailwindcss(), solid()],
     resolve: { alias: { '@': path.join(root, 'src') }, conditions: ['import', 'browser', 'default'] },
-    build: { target: 'esnext', outDir, emptyOutDir: true, rollupOptions: { input: path.join(root, 'browser-tests/inline-notice-access.html') } },
+    build: { target: 'esnext', outDir, emptyOutDir: true, rollupOptions: { input: [path.join(root, 'browser-tests/inline-notice-access.html'), path.join(root, 'browser-tests/drawer-composition.html')] } },
   });
   const bind = (directory) => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -51,7 +51,8 @@ try {
   for (const file of ['index.html', 'package.json', 'package-lock.json', 'tsconfig.json', 'public/docs/VM_DISK_MONITORING.md'])
     binding.sources[file] = hash(fs.readFileSync(path.join(root, file)));
   fs.mkdirSync(path.join(outDir, 'docs'), { recursive: true });
-  fs.copyFileSync(path.join(root, 'public/docs/VM_DISK_MONITORING.md'), path.join(outDir, 'docs/VM_DISK_MONITORING.md'));
+  for (const doc of ['VM_DISK_MONITORING.md', 'TROUBLESHOOTING.md'])
+    fs.copyFileSync(path.join(root, 'public/docs', doc), path.join(outDir, 'docs', doc));
   const artifacts = (directory) => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const file = path.join(directory, entry.name);
