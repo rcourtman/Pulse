@@ -11,62 +11,17 @@ import (
 // middleware (middleware.go:57–62). These functions must stay fast to
 // avoid adding per-request overhead.
 
-// BenchmarkNormalizeRoute measures route normalization with representative
-// API paths of varying complexity.
-//
-// Neither the "/" fast path nor normalizeSegment is timed on its own. They
-// take 2-40ns, and paired CI runs measured each at one of two values a CPU
-// cycle or two apart, per call or per byte of the UUID scan.
-// Changes that never touched this code flipped them both ways by 13-50%.
-// Every path below runs its segments through normalizeSegment, so a real
-// slowdown in segment classification still shows here, most in with_uuid.
-// TestNormalizeRoute_RootFastPathDoesNotAllocate and
-// TestNormalizeSegment_DoesNotAllocate pin the allocation guarantees.
-func BenchmarkNormalizeRoute(b *testing.B) {
-	paths := []struct {
-		name string
-		path string
-	}{
-		{"simple_api", "/api/resources"},
-		{"with_numeric_id", "/api/users/12345"},
-		{"with_uuid", "/api/nodes/550e8400-e29b-41d4-a716-446655440000"},
-		{"deep_path_truncated", "/api/v1/orgs/123/resources/456/metrics"},
-		{"with_query_params", "/api/metrics-store/history?resourceType=vm&resourceId=pve1:node1:100&metric=cpu&range=1h"},
-		{"metrics_history", "/api/metrics-store/history"},
-	}
-
-	for _, p := range paths {
-		b.Run(p.name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				_ = normalizeRoute(p.path)
-			}
-		})
-	}
-}
-
-// BenchmarkNormalizeRoute_Parallel measures normalizeRoute under concurrent
-// access matching the production middleware pattern (many goroutines calling
-// normalizeRoute simultaneously for different requests). Uses r.URL.Path
-// inputs (no query parameters) matching the real middleware call site.
-func BenchmarkNormalizeRoute_Parallel(b *testing.B) {
-	paths := []string{
-		"/api/resources",
-		"/api/users/12345",
-		"/api/metrics-store/history",
-		"/api/nodes/550e8400-e29b-41d4-a716-446655440000/status",
-		"/api/alerts/config",
-	}
-
-	b.ReportAllocs()
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			_ = normalizeRoute(paths[i%len(paths)])
-			i++
-		}
-	})
-}
+// normalizeRoute is not timed on its own. Since the bounded scanner it takes
+// 30-180ns a path on CI runners, and on pull requests that never touched
+// route code the BenchmarkNormalizeRoute rows and their parallel variant
+// failed 17 of 72 paired comparisons, 6 of those without with_uuid. Go aligns
+// functions to 32 bytes, so a change earlier in the binary moves the
+// scanner's loops by a cycle per iteration, as it did for the "/" fast path
+// and normalizeSegment. Every path shares those loops, so a mixed-path row
+// moves almost as far. TestNormalizeRoute_LabelAllocationProfile pins the
+// allocation columns, which never moved. BenchmarkFullMiddlewarePath still
+// times the normaliser inside the request path, and
+// BenchmarkNormalizeRoute_DiscardedSuffix the cost of a long discarded suffix.
 
 // BenchmarkRecordAPIRequest measures the full Prometheus recording pipeline
 // for a single HTTP request (histogram observe + counter inc + error counter
