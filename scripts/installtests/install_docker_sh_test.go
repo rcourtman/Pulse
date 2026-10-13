@@ -301,8 +301,8 @@ func previousPrereleaseVersion(version string) (string, bool) {
 	return "", false
 }
 
-// The release train cuts several betas before its candidate. The second beta's changelog
-// is written as the changes since the first, so the checks that read it must expect that.
+// This predecessor is the metadata tool's default comparison base. A cumulative
+// changelog can explicitly compare with the previous stable instead.
 func TestPreviousPrereleaseVersionFollowsItsOwnStage(t *testing.T) {
 	for _, tc := range []struct {
 		version, want string
