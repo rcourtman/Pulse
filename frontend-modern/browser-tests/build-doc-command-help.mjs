@@ -37,7 +37,9 @@ try {
       },
     }, tailwind(), solid()],
     resolve: { alias: { '@': path.join(root, 'src') } },
-    build: { outDir: output, emptyOutDir: true,
+    // This fixture targets the installed current browser, not a legacy-engine
+    // qualification. Match the other consuming preview's non-lowering target.
+    build: { target: 'esnext', outDir: output, emptyOutDir: true,
       rollupOptions: { input: path.join(root, 'browser-tests/doc-command-help.html') } },
   });
   const bind = directory => {
