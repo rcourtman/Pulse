@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "0dd07f5052f4589b9a55ccea011a1cabed7b8d8f",
+  "verified_at": "2026-10-13T17:28:00.763Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "25d274583af1713fc537f9dabbfc5bcdb66deb3181b1c8f6e7f442c88f2ad46d",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "c26b2daf44ada360534d656a2d05d3530fc1afcc029d4c6aad8f88f030603553",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "bffc9f138c28f7af10ad518412f24e31ac07f95b6130c5d5b314b7cf7eec855c",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts": "8fd0dc4746f382a8755b7a49b2d2384d1f6cbf2c885acfe630aff30e6ce3f574"
+  },
+  "routes": [
+    "/guest (actual Workloads projection/row/GuestDrawer, synthetic observations)",
+    "/node (actual NodeDrawer, synthetic observations)",
+    "/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis",
+    "/docs/TROUBLESHOOTING#proxmox-pending-update-access"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Chromium141 and WebKit26, Playwright1.56.1 matches integration lock; both themes. Fresh source-n70s0s9c static preview verifies all2487 source/10 served-artifact hashes. All24 final captures opened with native view_image.",
+    "Guest full OS facts,44px phone filesystem guidance and captured focus outlines remain outside closed Details. Unknown/retained/fresh disk states remain distinct, with independent-thaw/covered-write safety advice and a preserved UTC completion instant separate from running activity.",
+    "Overview uses24h queries while History starts at7d; actual % and magnitude-labelled I/O axes, stored timestamps and round painted markers are consumed with consistent synthetic extrema. No Avg label substitutes for the scale.",
+    "Node denied permission status remains neutral in Details, not Worth checking, while stable access help remains outside closed Details. Failed source checks remain compact warnings. CPU/agent identity wrap fully; unknown/true-empty/measured filesystems remain distinct, and offline node trends withhold live values."
+  ],
+  "interactions": [
+    "Actual row keyboard disclosure/phone tap; Tab/Enter/touch filesystem guidance into the shipped Docs renderer; retained/fresh snapshot changes and Details open/close.",
+    "Actual History/Overview tabs: desktop pointer inspection and phone native range control with Home selection. Default7d and independent24h trend requests are checked through consuming surfaces.",
+    "Update help keyboard/touch activation and identical dialog/trigger across CPU/evidence-clock/verdict changes; Learn more opens actual shipped Docs, Escape restores focus; unavailable/source-failed/checked-success controls withdraw the correct status/help."
+  ],
+  "limits": "Credential-free synthetic observation/API fixtures only. No native guest thaw/restart, QNAP install/update/removal/credential replacement, real permission change, protected publication or release acceptance."
+}
