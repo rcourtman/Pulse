@@ -18,6 +18,26 @@
 
 ## Purpose
 
+### Rejected infrastructure URLs stay out of diagnostics
+
+PVE/PBS constructors validate a host before logging it. URL syntax errors omit
+`url.Parse`'s copy of the supplied input; ordinary validation reasons remain.
+Cluster logs, health snapshots, recovery summaries and aggregate errors use
+display-only labels:
+a valid base URL or `[invalid endpoint]`. Health snapshots preserve each entry
+even when rejected endpoints share that label, and are built only for enabled
+log events. These labels never supply routing,
+alias membership, saved configuration or TLS-pin identity. HTTP/HTTPS defaults,
+base paths, authentication, CA/pin/opt-out choices and guest fences are unchanged.
+
+`TestClientRejectedHostDiagnosticsContainNoCredentials` and
+`TestClusterRejectedEndpointDiagnosticsContainNoCredentials` exercise actual
+constructors, single/multiple endpoint routing and recovery with synthetic
+userinfo/query/fragment and malformed URLs. Accepted-host and
+`TestInfrastructureURLValidationPolicyUnchanged` controls preserve ordinary
+routing and diagnostics. This bounds client diagnostics, not arbitrary provider
+error text, previously saved logs, native trust recovery or an installed service.
+
 ### Startup provisioning cannot replace retained access
 
 `pkg/server/server.go` admits environment-selected startup import only into an

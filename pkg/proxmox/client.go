@@ -319,15 +319,6 @@ type auth struct {
 func NewClient(cfg ClientConfig) (*Client, error) {
 	var user, realm string
 
-	// Log what auth method we're using
-	log.Debug().
-		Str("host", cfg.Host).
-		Bool("hasToken", cfg.TokenName != "").
-		Bool("hasPassword", cfg.Password != "").
-		Str("tokenName", cfg.TokenName).
-		Str("user", cfg.User).
-		Msg("Creating Proxmox client")
-
 	// For token authentication, we don't need user@realm format
 	if cfg.TokenName != "" && cfg.TokenValue != "" {
 		// Extract user and realm from token name (format: user@realm!tokenname)
@@ -364,13 +355,25 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	if baseHost == "" {
 		return nil, fmt.Errorf("host is required")
 	}
-	if !strings.HasPrefix(baseHost, "http://") && !strings.HasPrefix(baseHost, "https://") {
+	defaultedScheme := !strings.HasPrefix(baseHost, "http://") && !strings.HasPrefix(baseHost, "https://")
+	if defaultedScheme {
 		baseHost = "https://" + baseHost
-		log.Debug().Str("host", baseHost).Msg("No protocol specified in Proxmox host, defaulting to HTTPS")
 	}
-	baseHostURL, err := securityutil.NormalizeHTTPBaseURL(baseHost, "")
+	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(baseHost, "")
 	if err != nil {
 		return nil, fmt.Errorf("invalid Proxmox host: %w", err)
+	}
+	// Do not log raw configuration before URL validation.
+	log.Debug().
+		Str("host", baseHostURL.String()).
+		Bool("hasToken", cfg.TokenName != "").
+		Bool("hasPassword", cfg.Password != "").
+		Str("tokenName", cfg.TokenName).
+		Str("user", cfg.User).
+		Msg("Creating Proxmox client")
+
+	if defaultedScheme {
+		log.Debug().Str("host", baseHostURL.String()).Msg("No protocol specified in Proxmox host, defaulting to HTTPS")
 	}
 	if baseHostURL.Scheme == "http" {
 		log.Warn().Str("host", baseHostURL.String()).Msg("Using HTTP for Proxmox connection - consider enabling HTTPS")
