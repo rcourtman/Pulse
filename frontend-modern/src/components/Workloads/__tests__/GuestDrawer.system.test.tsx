@@ -29,7 +29,13 @@ const guest = (overrides: Partial<WorkloadGuest> = {}): WorkloadGuest => ({
   ...overrides,
 });
 
-const systemRow = () => screen.getByText('System', { selector: 'td' }).closest('tr')!;
+// Upstream keeps the full record in a collapsed, mounted Details section.
+// Exercise its native open state before judging the retained System row.
+const systemRow = () => {
+  const details = screen.getByTestId('guest-technical-details') as HTMLDetailsElement;
+  details.open = true;
+  return within(details).getByText('System', { selector: 'td' }).closest('tr')!;
+};
 
 afterEach(cleanup);
 

@@ -938,7 +938,9 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(technicalDetails().getByText('Ubuntu • 22.04')).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('guest-drawer-facts')).getByText('Ubuntu • 22.04'),
+      ).toBeInTheDocument();
     });
 
     it('shows OS name only when version is missing', () => {
@@ -948,7 +950,9 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(technicalDetails().getByText('Debian')).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('guest-drawer-facts')).getByText('Debian'),
+      ).toBeInTheDocument();
     });
 
     it('shows OS version only when name is missing', () => {
@@ -958,7 +962,9 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(technicalDetails().getByText('11.0')).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('guest-drawer-facts')).getByText('11.0'),
+      ).toBeInTheDocument();
     });
 
     it('shows IP addresses', () => {
