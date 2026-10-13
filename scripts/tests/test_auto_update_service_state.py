@@ -102,12 +102,18 @@ mktemp() {
     command mktemp "${args[@]}"
 }
 curl() {
+    printf '%s\000' "$#" "$@" >> "$FIXTURE/curl-calls"
     local out="" url=""
     while (( $# )); do
         case "$1" in -o) out="$2"; shift ;; https://*) url="$1" ;; esac
         shift
     done
     printf '%s\n' "$url" >> "$FIXTURE/downloads"
+    if [[ "$DOWNLOAD_FAULT" == installer:* && "$url" != *.sshsig ]] ||
+       [[ "$DOWNLOAD_FAULT" == signature:* && "$url" == *.sshsig ]]; then
+        printf 'partial unverified input\n' > "$out"
+        return "${DOWNLOAD_FAULT#*:}"
+    fi
     if [[ "$url" == *.sshsig ]]; then printf 'fixture signature\n' > "$out"
     else command cp "$FIXTURE/installer" "$out"; fi
 }
@@ -175,7 +181,7 @@ def read_logger_calls(path):
 class UpdaterFixture(unittest.TestCase):
     def run_fixture(self, *, mode="normal", state="active", load="loaded", success=False, flow="update",
                     installer_exit=None, collector_exit=0, installer_output=None, collector_failures=None,
-                    real_log=False, runtime_exit=0, installer_state=None):
+                    real_log=False, runtime_exit=0, installer_state=None, download_fault=""):
         with tempfile.TemporaryDirectory(prefix="pulse-updater-state-") as directory:
             f = Path(directory)
             for name in ("tools", "tmp", "install/bin", "config"):
@@ -215,6 +221,7 @@ class UpdaterFixture(unittest.TestCase):
                        INSTALLER_EXIT=str(installer_exit) if installer_exit is not None else ("0" if success else "23"),
                        COLLECTOR_EXIT=str(collector_exit),
                        REAL_LOG="true" if real_log else "false", RUNTIME_EXIT=str(runtime_exit),
+                       DOWNLOAD_FAULT=download_fault,
                        PATH=str(f / "tools") + os.pathsep + os.environ["PATH"])
             for line, status in (collector_failures or {}).items():
                 env[f"COLLECTOR_EXIT_{line}"] = str(status)
@@ -231,6 +238,8 @@ class UpdaterFixture(unittest.TestCase):
                                if (f / "runtime-probes").exists() else [],
                                collected=int((f / "collector-count").read_text()) if (f / "collector-count").exists() else 0,
                                logger_calls=read_logger_calls(f / "logger-calls"),
+                               curl_calls=read_logger_calls(f / "curl-calls"),
+                               temporary_files=[p.name for p in (f / "tmp").iterdir()],
                                started=(f / "start-ran").exists(), state=(f / "state").read_text().strip(),
                                binary=(f / "install/bin/pulse").read_bytes(), version=(f / "install/VERSION").read_text(),
                                backups=[(b / "pulse-bin").read_bytes() for b in backups],
@@ -242,6 +251,45 @@ class UpdaterFixture(unittest.TestCase):
                 # All read/mutation calls target the exact explicit service.
                 self.assertIn("pulse-custom@department", args)
             return observation
+
+
+class UpdateDownloads(UpdaterFixture):
+    def assert_download_policy(self, calls):
+        self.assertTrue(calls)
+        for args in calls:
+            self.assertEqual(args[:10], ["--disable", "-fsSL", "--connect-timeout", "5",
+                                         "--max-time", "60", "--proto", "=https",
+                                         "--proto-redir", "=https"])
+            self.assertEqual(len(args), 13)
+            self.assertTrue(args[10].startswith("https://github.com/rcourtman/Pulse/releases/download/v6.6.0/"))
+            self.assertEqual(args[11], "-o")
+
+    def test_both_complete_downloads_keep_the_exact_signed_installer_handoff(self):
+        result = self.run_fixture(success=True, installer_state="active")
+        self.assertEqual(result["exit"], 0, result)
+        self.assertTrue(result["installer_finished"])
+        self.assert_download_policy(result["curl_calls"])
+        self.assertEqual([args[10].rsplit("/", 1)[1] for args in result["curl_calls"]],
+                         ["install.sh", "install.sh.sshsig"])
+        self.assertEqual(result["temporary_files"], [])
+
+    def test_partial_failed_downloads_never_execute_or_mutate_the_install(self):
+        for asset in ("installer", "signature"):
+            for status in (7, 22, 28):  # Connection, HTTP refusal, timeout.
+                for state in ("active", "inactive"):
+                    with self.subTest(asset=asset, status=status, state=state):
+                        result = self.run_fixture(state=state, download_fault=f"{asset}:{status}")
+                        self.assertEqual(result["exit"], 1, result)
+                        self.assertFalse(result["installed"])
+                        self.assertFalse(result["stopped"])
+                        self.assertFalse(result["started"])
+                        self.assertEqual(result["state"], state)
+                        self.assertEqual(result["binary"], b"#!/bin/sh\necho 'Pulse v6.5.0'\n")
+                        self.assertEqual(result["version"], "v6.5.0\n")
+                        self.assertEqual(result["temporary_files"], [])
+                        self.assertEqual(len(result["curl_calls"]), 1 if asset == "installer" else 2)
+                        self.assert_download_policy(result["curl_calls"])
+                        self.assertIn("Failed to download installer", result["output"])
 
 
 class UpdateLogSinks(UpdaterFixture):

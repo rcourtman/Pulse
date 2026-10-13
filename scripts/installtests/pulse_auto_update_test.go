@@ -136,6 +136,25 @@ func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {
 	}
 }
 
+func TestAutoUpdateDownloadFailures(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateDownloads")
+	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("complete updater download-failure controls: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_both_complete_downloads_keep_the_exact_signed_installer_handoff",
+		"test_partial_failed_downloads_never_execute_or_mutate_the_install",
+	} {
+		if !strings.Contains(string(out), fmt.Sprintf("%s (", name)) {
+			t.Fatalf("missing updater download control %s:\n%s", name, out)
+		}
+	}
+}
+
 // Service-state admission is independent of the signed/metadata transaction
 // matrix below; no native service or published input is used by this fixture.
 func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {

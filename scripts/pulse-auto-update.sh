@@ -391,6 +391,15 @@ resolve_install_script_url() {
     printf 'https://github.com/%s/releases/download/%s/install.sh\n' "$GITHUB_REPO" "$target_version"
 }
 
+# Small signed installer assets must not consume the systemd transaction's
+# entire ten-minute budget before installation/recovery can even start. Ignore
+# ambient curl configuration and refuse a redirect that downgrades HTTPS.
+# Signature verification remains mandatory after both complete transfers.
+download_update_asset() {
+    curl --disable -fsSL --connect-timeout 5 --max-time 60 \
+        --proto '=https' --proto-redir '=https' "$1" -o "$2"
+}
+
 # Read a complete, bounded manager observation. An is-active failure conflates
 # an inactive unit with an unavailable manager; neither missing text nor a
 # plausible partial result grants an update, restart or rollback.
@@ -643,11 +652,11 @@ perform_update() {
         return 1
     fi
 
-    if ! curl -fsSL "$install_script_url" -o "$installer_tmp"; then
+    if ! download_update_asset "$install_script_url" "$installer_tmp"; then
         log error "Failed to download installer from $install_script_url"
         return 1
     fi
-    if ! curl -fsSL "$install_signature_url" -o "$signature_tmp"; then
+    if ! download_update_asset "$install_signature_url" "$signature_tmp"; then
         log error "Failed to download installer signature from $install_signature_url"
         return 1
     fi

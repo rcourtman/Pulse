@@ -7522,6 +7522,14 @@ symlinks/non-regular snapshot sources, allocation/copy/comparison failures and
 failed download/signature verification stop before installer mutation. An
 unneeded pre-mutation snapshot and verification files are removed on return.
 
+Both versioned installer and signature transfers ignore ambient curl settings,
+allow only HTTPS (including redirects), and have a five-second connection and
+sixty-second whole-transfer limit. Partial data after connection, HTTP or timeout
+failure cannot reach signature verification or installer execution; there is no
+download retry or alternate source. These per-transfer bounds leave time inside
+the unchanged ten-minute systemd transaction for installation and recovery.
+They do not extend a stop/restart deadline or relax the pinned SSH verifier.
+
 Installer failure, mismatched version and failure to restore a previously active
 service share one rollback path. It stops the service, stages and compares all
 saved files before any replacement, and renames each into its recorded original
@@ -7555,6 +7563,15 @@ prior-active-only restoration, configuration/identity preservation and trap
 cleanup. Exact-parent negative controls must reject ignored snapshot failures
 and loss of the backup after a failed restore. Synthetic proof is not a deployed
 update, native systemd migration or reporter confirmation.
+
+`TestAutoUpdateAssetTransport` uses real curl and disposable trusted HTTPS
+servers to check complete/redirected bytes, certificate refusal, HTTPS-to-HTTP
+refusal and an actual stalled-transfer deadline. `TestAutoUpdateDownloadFailures`
+runs the complete conditional updater with partial connection/HTTP/timeout
+failures for either asset and both prior-active states, requiring unchanged
+binary/version/configuration/identity, no installer/manager mutation, exact
+requests, and removal of all temporary files. These controls do not establish
+published-installer or installed-host recovery.
 
 ### Governed dependency floors for the go-minor-patch group
 
