@@ -23,6 +23,7 @@ import {
 } from '@/components/shared/historyChartModel';
 import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
+import { formatCompactSpeed } from '@/utils/format';
 
 import {
   GUEST_DRAWER_HISTORY_GROUPS,
@@ -116,20 +117,19 @@ export const GuestDrawerHistoryRangeSelect: Component<GuestDrawerHistoryRangeSel
   </FormSelect>
 );
 
-const getAxisLabel = (unit: string, pct: number): string => {
-  if (unit === '%') {
-    if (pct === 0) return '100%';
-    if (pct === 0.5) return '50%';
-    return '0%';
-  }
-  if (unit === 'C') {
-    if (pct === 0) return 'Max';
-    if (pct === 0.5) return 'Mid';
-    return 'Min';
-  }
-  if (pct === 0) return 'Max';
-  if (pct === 0.5) return 'Avg';
-  return '0';
+// Gridline labels state the scale's actual value at each line, so a reader
+// can tell a KB/s peak from a MB/s one. ("Avg" used to mark the midpoint of
+// the scale, which is not the measured average.)
+const getAxisLabel = (
+  unit: string,
+  pct: number,
+  scale: { minValue: number; maxValue: number },
+): string => {
+  const value = scale.maxValue - pct * (scale.maxValue - scale.minValue);
+  if (unit === '%') return `${Math.round(value)}%`;
+  if (unit === 'C') return `${Math.round(value)}°C`;
+  if (unit === 'B/s') return value <= 0 ? '0' : `${formatCompactSpeed(value)}/s`;
+  return `${Math.round(value)}`;
 };
 
 const clampNumber = (value: number, min: number, max: number): number =>
@@ -310,7 +310,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       .filter((item) => item.segments.length > 1)
       .map((item) => item.label);
     return labels.length > 0
-      ? `Missing observations: ${labels.join(', ')}. Lines stop where a series has no reading at another stored time in this panel. This does not identify the cause or duration of a monitoring outage.`
+      ? `Missing observations: ${labels.join(', ')}. Lines break where a reading is missing.`
       : null;
   });
   const drawableSeries = createMemo(() =>
@@ -479,11 +479,13 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         <For each={[0, 0.5, 1]}>
           {(tick) => (
             <span
-              class={`pointer-events-none absolute left-0 w-8 text-right text-[10px] text-muted ${
-                tick === 0 ? 'top-1' : tick === 0.5 ? 'top-1/2 -translate-y-1/2' : 'bottom-3'
+              // Centred on the SVG gridlines at y = 8, 41 and 74 of the 92-unit
+              // viewBox (8.7%, 44.6%, 80.4%), so each label sits on its line.
+              class={`pointer-events-none absolute left-0 w-8 -translate-y-1/2 text-right text-[10px] tabular-nums text-muted ${
+                tick === 0 ? 'top-[8.7%]' : tick === 0.5 ? 'top-[44.6%]' : 'top-[80.4%]'
               }`}
             >
-              {getAxisLabel(props.group.unit, tick)}
+              {getAxisLabel(props.group.unit, tick, scale())}
             </span>
           )}
         </For>

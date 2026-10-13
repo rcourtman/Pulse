@@ -8,6 +8,7 @@ import {
 } from '@/components/shared/TechnicalDetailsDisclosure';
 import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import { DrawerExceptionList } from './DrawerExceptionList';
 import {
   compactDetailRows,
   compactDetailSections,
@@ -565,6 +566,8 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
         </p>
       </Show>
 
+      <DrawerExceptionList testId="node-drawer-exceptions" rows={exceptionRows()} />
+
       <Show when={props.historyTarget}>
         <Suspense fallback={<div class="h-28" aria-hidden="true" />}>
           <DrawerTrendCards
@@ -573,13 +576,6 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
             cards={trendCards()}
           />
         </Suspense>
-      </Show>
-
-      <Show when={exceptionRows().length > 0}>
-        <TechnicalDetailsSection
-          dataTestId="node-drawer-exceptions"
-          sections={[{ label: 'Worth checking', rows: exceptionRows() }]}
-        />
       </Show>
 
       <Show when={sensorSections().length > 0}>

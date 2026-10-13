@@ -1171,6 +1171,13 @@ the plot. Series lines carry `data-history-series`, which is how tests tell a
 line from a dot. A series without a reading at the inspected time reads
 `no reading` in the readout itself; there is no separate explanatory line that
 would appear and vanish, and move the chart, as the inspected time changes.
+Gridline labels state the plotted scale's value at each line: percent for
+utilization, °C for thermals, and a compact rate such as `5.0M/s` for network
+and disk I/O, each centred on its SVG gridline. The I/O midpoint used to read
+"Avg", which was the scale midpoint, not a measured average (demand ledger
+"Numeric axis labels on history I/O charts", issue #1720). A panel with missing
+readings says so in one line: `Missing observations: <series>. Lines break
+where a reading is missing.`
 Shared history-chart gridlines must carry numeric labels derived from the
 plotted scale rather than semantic `Avg` / `Max` placeholders. Byte and
 byte-rate axes include their human-readable unit at each gridline, and the
@@ -5437,7 +5444,15 @@ one-line facts strip carries OS, address, a healthy last completed backup and
 tags. The complete inventory sits in a closed "Details"
 `TechnicalDetailsDisclosure` with `keepMounted`, so its rows stay in the
 document for find-in-page and tests while hidden. Other drawers keep the rule
-above until that bet is graded. `DetailSectionTable` keeps the single bordered table at narrow widths
+above until that bet is graded. "Worth checking" renders through
+`DrawerExceptionList.tsx` directly under the alerts line, above the trend
+cards: one compact label/value line per lifted row with the shared
+`detailValueToneClass` tone, not a card per section. Each trend card marks its
+headline value "now" and states its range as "24h low–high", so the live
+number is not read as the last point of the stored line. A guest memory reading
+from a cache-inclusive source says "may include cache" on the Memory card
+itself; the full note (why, and what to do) is the Details row "About this
+reading" and appears once. `DetailSectionTable` keeps the single bordered table at narrow widths
 where density matters, then presents those same canonical rows as bounded
 section cards on desktop. Desktop cards share the available row width, stretch
 to the same row height, and use stable three- or four-column tracks. An
