@@ -130,9 +130,30 @@ func guestAgentSuccessResponse(body []byte) bool {
 	if !ok {
 		return false
 	}
-	for name := range data {
+	for name, value := range data {
 		for _, canonical := range []string{"result", "content", "truncated"} {
 			if name != canonical && strings.EqualFold(name, canonical) {
+				return false
+			}
+		}
+		// A well-formed envelope can still contain an impossible guest reply.
+		// The filesystem/network compatibility decoders otherwise turn scalar
+		// results into empty inventories, and the file decoder reports a type
+		// error only after admission has already been released. Neither proves
+		// that the command finished. Keep this check before release, while
+		// preserving absent/null fields and the existing row/content semantics.
+		value = bytes.TrimSpace(value)
+		switch name {
+		case "result":
+			if !bytes.Equal(value, []byte("null")) && value[0] != '{' && value[0] != '[' {
+				return false
+			}
+		case "content":
+			if !bytes.Equal(value, []byte("null")) && value[0] != '"' {
+				return false
+			}
+		case "truncated":
+			if !bytes.Equal(value, []byte("null")) && !bytes.Equal(value, []byte("true")) && !bytes.Equal(value, []byte("false")) {
 				return false
 			}
 		}

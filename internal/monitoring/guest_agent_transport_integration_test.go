@@ -45,6 +45,15 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T, kinds ..
 						case "trailing success":
 							fmt.Fprint(w, `{"data":{"result":[]}} {}`)
 							return
+						case "typed result":
+							fmt.Fprint(w, `{"data":{"result":"wrong command id"}}`)
+							return
+						case "typed content":
+							fmt.Fprint(w, `{"data":{"result":[],"content":false}}`)
+							return
+						case "typed truncated":
+							fmt.Fprint(w, `{"data":{"result":[],"truncated":"false"}}`)
+							return
 						}
 						if status := map[string]int{
 							"server error":           http.StatusInternalServerError,
@@ -95,6 +104,9 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T, kinds ..
 				t.Fatal(err)
 			}
 			m := &Monitor{config: &config.Config{}, rateTracker: NewRateTracker(), metricsHistory: NewMetricsHistory(32, time.Hour), guestMetadataLimiter: make(map[string]time.Time)}
+			if strings.HasPrefix(kind, "typed ") {
+				m.state = models.NewState()
+			}
 			res := proxmox.ClusterResource{Type: "qemu", Node: "node", Name: "guest", VMID: 105, Status: "running", MaxMem: 8 * mib, Mem: 8 * mib, MaxDisk: 1000 * mib, CPU: 0.1}
 			identity := "transport:node:105"
 			var previous *models.VM
@@ -106,6 +118,25 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T, kinds ..
 				m.recordGuestSnapshot("transport", "qemu", "node", 105, GuestMemorySnapshot{Name: vm.Name, Status: vm.Status, RetrievedAt: at, MemorySource: source, Memory: vm.Memory, Raw: raw, Notes: notes})
 				m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
 				previous = &vm
+				if strings.HasPrefix(kind, "typed ") {
+					// The safe fixture's actual builder/broadcast output is also
+					// available for consuming browser proof. Do not hand-author a
+					// fresh/last-known carrier or replace its observation time.
+					m.state.UpdateVMs([]models.VM{vm})
+					front := m.buildBroadcastFrontendStateFromSnapshot(m.state.GetSnapshot(), m.mockModeFence.begin())
+					if len(front.Resources) != 1 {
+						t.Fatal("typed-reply producer lost the canonical guest")
+					}
+					wire, err := json.Marshal(map[string]any{
+						"kind": kind, "phase": phase.Load(), "guestCommands": calls.Load(),
+						"vm": vm, "resources": front.Resources,
+						"history": m.metricsHistory.GetAllGuestMetrics(identity, time.Hour),
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+					t.Logf("TYPED_REPLY_PRODUCER %s", wire)
+				}
 				return vm, source
 			}
 			initial, source := build()
@@ -114,11 +145,18 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T, kinds ..
 			}
 			memKey, metadataKey := guestMemoryCacheKey("transport", "node", 105), guestMetadataCacheKey("transport", "node", 105)
 			memory := m.vmAgentMemCache[memKey]
-			memory.fetchedAt = time.Now().Add(-2 * vmAgentMemCacheTTL)
-			m.vmAgentMemCache[memKey] = memory
 			metadata := m.guestMetadataCache[metadataKey]
-			metadata.fetchedAt = time.Now().Add(-2 * guestMetadataCacheTTL)
-			m.guestMetadataCache[metadataKey] = metadata
+			if !strings.HasPrefix(kind, "typed ") {
+				memory.fetchedAt = time.Now().Add(-2 * vmAgentMemCacheTTL)
+				m.vmAgentMemCache[memKey] = memory
+				metadata.fetchedAt = time.Now().Add(-2 * guestMetadataCacheTTL)
+				m.guestMetadataCache[metadataKey] = metadata
+			}
+			// Typed-reply controls retain the real healthy read's original cache
+			// and observation times. fetchedAt also owns measurement provenance;
+			// manually aging it would invalidate an unchanged-origin assertion.
+			// The filesystem is always read before these optional cached fields,
+			// while the six-reader wire controls exercise fresh uncached clients.
 			m.guestMetadataLimiter = make(map[string]time.Time)
 			phase.Store(1)
 			res.CPU = 0.2
@@ -137,6 +175,9 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T, kinds ..
 				}
 				if deferred.ID != initial.ID || deferred.GuestAgentStatus != "deferred" || deferred.DiskStatusReason != wantReason || deferred.Memory.Used != initial.Memory.Used || source != "previous-snapshot" || deferred.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(deferred.NetworkInterfaces, initial.NetworkInterfaces) {
 					t.Fatalf("uncertain command lost truthful continuity: source=%s vm=%+v", source, deferred)
+				}
+				if strings.HasPrefix(kind, "typed ") && (deferred.Memory.Observation.State != "last-known" || !deferred.Memory.Observation.ObservedAt.Equal(initial.Memory.Observation.ObservedAt)) {
+					t.Fatal("typed reply renewed or promoted the original memory observation")
 				}
 				if !reflect.DeepEqual(m.vmAgentMemCache[memKey], memory) || !reflect.DeepEqual(m.guestMetadataCache[metadataKey], metadata) {
 					t.Fatal("uncertain command renewed or replaced cached evidence")

@@ -3378,6 +3378,12 @@ func TestGuestAgentSuccessEnvelopeMonitoringContract(t *testing.T) {
 	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "malformed success", "ambiguous success", "trailing success")
 }
 
+func TestGuestAgentTypedReplyMonitoringContract(t *testing.T) {
+	// Valid JSON with impossible result/file field types is still unreadable
+	// command evidence, not an empty current inventory or a completion fence.
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "typed result", "typed content", "typed truncated")
+}
+
 func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
 	for path, want := range map[string]int{"monitor_backups.go": 2, "monitor_alerts.go": 1} {
 		raw, err := os.ReadFile(path)
