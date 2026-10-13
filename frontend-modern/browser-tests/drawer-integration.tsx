@@ -37,11 +37,18 @@ function GuestFixture() {
     const unavailable = ['unknown', 'powered-off'].includes(memoryMode());
     const current = memoryMode() === 'current-zero' ? 0 : memoryMode() === 'cache-low' ? 25 : 92;
     return {
-      current, total: capacity, used: (capacity * current) / 100,
+      current,
+      total: capacity,
+      used: (capacity * current) / 100,
       ...(unavailable ? { usageUnavailable: true } : {}),
       observation: {
-        state: unavailable ? 'unavailable' as const : 'current' as const,
-        source: memoryMode() === 'powered-off' ? 'powered-off' : memoryMode().startsWith('cache') ? 'status-mem' : 'agent',
+        state: unavailable ? ('unavailable' as const) : ('current' as const),
+        source:
+          memoryMode() === 'powered-off'
+            ? 'powered-off'
+            : memoryMode().startsWith('cache')
+              ? 'status-mem'
+              : 'agent',
         observedAt,
       },
     };
@@ -150,7 +157,13 @@ function NodeFixture() {
     type: 'node',
     cpu: 0.1,
     cpuTemperature: 55,
-    temperature: { available: true, cpuPackage: 55, cores: { 'Hottest secondary': 91 }, hasGPU: true, gpu: 95 },
+    temperature: {
+      available: true,
+      cpuPackage: 55,
+      cores: { 'Hottest secondary': 91 },
+      hasGPU: true,
+      gpu: 95,
+    },
     memory: { total: capacity, used: capacity / 4, free: capacity * 0.75, usage: 25 },
     disk: { total: capacity, used: capacity / 2, free: capacity / 2, usage: 50 },
     uptime: 3600,
