@@ -81,4 +81,37 @@ describe('NodeDrawerOverview update evidence', () => {
 
     expect(screen.getByText('Unavailable · Update check access denied')).toBeInTheDocument();
   });
+
+  it('keeps a denied update check in Details, not under Worth checking', () => {
+    render(() => (
+      <NodeDrawerOverview
+        node={makeNode({
+          pendingUpdatesStatus: 'unavailable',
+          pendingUpdatesReason: 'permission_denied',
+        })}
+      />
+    ));
+    expect(screen.queryByTestId('node-drawer-exceptions')).toBeNull();
+    // Details shows the whole reason, wrapped, not cut off behind an ellipsis.
+    expect(screen.getByText('Unavailable · Update check access denied')).toHaveClass(
+      'whitespace-normal',
+    );
+    expect(screen.getByTestId('node-technical-details').textContent).toContain(
+      'Unavailable · Update check access denied',
+    );
+  });
+
+  it('lists an update check that failed under Worth checking', () => {
+    render(() => (
+      <NodeDrawerOverview
+        node={makeNode({
+          pendingUpdatesStatus: 'unavailable',
+          pendingUpdatesReason: 'source_unavailable',
+        })}
+      />
+    ));
+    expect(screen.getByTestId('node-drawer-exceptions').textContent).toContain(
+      'Unavailable · Proxmox source unavailable',
+    );
+  });
 });
