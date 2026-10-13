@@ -4045,6 +4045,22 @@ through `aria-controls` only while that region is rendered. This is
 presentation only: acknowledgement, snooze, investigation and policy
 handlers are unchanged.
 
+### A guest alert's name opens that guest
+
+On the overview, a VM or container alert whose platform page is Proxmox or
+vSphere links its resource name to that page with `?resource=` set to the
+alert's own resource id. The shared workloads table resolves that id
+(including a Proxmox source id such as `<cluster>-<node>-<vmid>`) through
+the resource registry, opens the guest's drawer and reveals it, so a
+notification reaches the affected guest in one tap instead of the top of a
+page with every guest on it. Other alerts (hosts, storage, Docker
+containers, Kubernetes, TrueNAS, Pulse system alerts) keep their platform
+page link, because their pages do not read `?resource=`. So do a guest's
+per-filesystem alerts (`<guest>-disk-<key>`, marked by `mountpoint` or
+`diskIndex` metadata) and orphaned backup alerts (`backup-subject:...`),
+whose ids name no resource the registry can open. The platform used
+for the monitoring policy menu is still read from the page path alone.
+
 ### Thresholds lead with each group's default limits
 
 The Thresholds page answers "what will alert me, and at what limits" before

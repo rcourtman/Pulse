@@ -8685,6 +8685,15 @@ listener of its own. Snooze never moves, so its dialog state survives a
 breakpoint crossing. The More button keeps its existing catalog labels and
 sets `aria-controls` only while its region is rendered.
 
+### Alert cards deep-link guests through the workloads route search
+
+`AlertOverviewAlertCard` builds a guest alert's link with
+`buildWorkloadsRouteSearch({ resource })` and passes the alert's resource id
+unchanged. It adds no identity mapping of its own: the workloads selection
+state resolves non-row ids through the resource registry, and the summary
+focus bridge reveals the selected row, so the alert link and every other
+`?resource=` link share one resolution and reveal path.
+
 ### Alert groups use the shared localization boundary
 
 Alert group disclosure and group acknowledgement copy routes through

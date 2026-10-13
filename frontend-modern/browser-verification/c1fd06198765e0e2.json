@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "25978a7d49221f6f0ee0d8a15d84f666506857a3",
+  "verified_at": "2026-10-13T01:20:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "177ebc8f769597fbe865c5ce4f51be30939510d6037420cb4c636eeac824a2e9"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/proxmox/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "embedded production build of origin/main 421a784783 plus this change (card content identical on 25978a7d49), private mock stack (PULSE_MOCK_MODE, 8 nodes, 66 Proxmox guests, vSphere mock), compared with an unchanged origin/main build",
+    "Alerts overview: the three guest alerts (dev-portal-01 LXC, postgres-replica-01 and -18 VMs) link to /proxmox/overview?resource=<alert resource id>; the other 16 alerts (storage, ZFS, disks, Docker, TrueNAS, vSphere hosts and datastores, agent) keep their platform page link",
+    "375px: the guest row opens with its drawer and is revealed in view (row at y=173 to 303), Needs attention lists the same powered-off alert",
+    "1280px: the guest drawer opens and the focus bridge scrolls to the row (scrollTo top 1361); the test browser pane was hidden so smooth scroll did not animate, and with smooth forced to instant the row landed at y=269 with its drawer in view",
+    "/vmware/overview?resource=<vSphere source id> and ?resource=<unified id> both open client-portal-01",
+    "no console errors"
+  ],
+  "interactions": [
+    "375px: real tap on dev-portal-01 and on postgres-replica-18 alert names navigates to the Proxmox page with that guest open and in view",
+    "1280px: click on dev-portal-01 alert name opens that guest; browser Back returns to /alerts/overview"
+  ]
+}
