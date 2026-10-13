@@ -1320,8 +1320,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 			"This cumulative changelog describes the changes included in `v"+version+"` since stable `v"+previous+"`",
 			"## Changes since v"+previous,
 		)
-	}
-	if version == "6.4.0-rc.10" {
+	} else if version == "6.4.0-rc.10" {
 		assertFileContainsAllNormalized(t, changelogPath,
 			"The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly.")
 	} else {
