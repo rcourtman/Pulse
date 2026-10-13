@@ -3,29 +3,29 @@ import { expect, test, type WebSocketRoute } from "@playwright/test";
 // Collapsed table borders can extend outside an overflow container even when
 // every reading is fully visible. Measure the text, not the decorative tbody.
 function textIsUnclipped(element: HTMLElement, bottomClearance: number) {
-  const clip = {
-    left: 0,
-    top: 0,
-    right: window.innerWidth,
-    bottom: window.innerHeight - bottomClearance,
-  };
-  for (let parent: HTMLElement | null = element; parent; parent = parent.parentElement) {
-    const style = getComputedStyle(parent);
-    if (style.visibility !== "visible" || Number(style.opacity) === 0) return false;
-    const rect = parent.getBoundingClientRect();
-    if (/^(auto|scroll|hidden|clip)$/.test(style.overflowX)) {
-      clip.left = Math.max(clip.left, rect.left + parent.clientLeft);
-      clip.right = Math.min(clip.right, rect.left + parent.clientLeft + parent.clientWidth);
-    }
-    if (/^(auto|scroll|hidden|clip)$/.test(style.overflowY)) {
-      clip.top = Math.max(clip.top, rect.top + parent.clientTop);
-      clip.bottom = Math.min(clip.bottom, rect.top + parent.clientTop + parent.clientHeight);
-    }
-  }
   const text = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   let found = false;
   for (let node = text.nextNode(); node; node = text.nextNode()) {
     if (!node.textContent?.trim()) continue;
+      const clip = {
+        left: 0,
+        top: 0,
+        right: window.innerWidth,
+        bottom: window.innerHeight - bottomClearance,
+      };
+      for (let parent: HTMLElement | null = node.parentElement; parent; parent = parent.parentElement) {
+        const style = getComputedStyle(parent);
+        if (style.visibility !== "visible" || Number(style.opacity) === 0) return false;
+        const rect = parent.getBoundingClientRect();
+        if (/^(auto|scroll|hidden|clip)$/.test(style.overflowX)) {
+          clip.left = Math.max(clip.left, rect.left + parent.clientLeft);
+          clip.right = Math.min(clip.right, rect.left + parent.clientLeft + parent.clientWidth);
+        }
+        if (/^(auto|scroll|hidden|clip)$/.test(style.overflowY)) {
+          clip.top = Math.max(clip.top, rect.top + parent.clientTop);
+          clip.bottom = Math.min(clip.bottom, rect.top + parent.clientTop + parent.clientHeight);
+        }
+      }
     const range = document.createRange();
     range.selectNodeContents(node);
     const lines = [...range.getClientRects()].filter((rect) => rect.width > 0 && rect.height > 0);
@@ -322,6 +322,10 @@ test("memory text geometry rejects clipping without rejecting collapsed borders"
       await page.locator("#clip").evaluate((element, value) => element.setAttribute("style", value), style);
       expect(await heading.evaluate(textIsUnclipped, 64), style).toBe(false);
     }
+    await page.setContent('<td></td><p><span style="display:inline-block; width:10px; overflow:hidden">100 MB</span></p>');
+    expect(await page.locator("p").evaluate(textIsUnclipped, 64)).toBe(false);
+    await page.locator("span").evaluate((element) => element.setAttribute("style", "visibility:hidden"));
+    expect(await page.locator("p").evaluate(textIsUnclipped, 64)).toBe(false);
     await page.setContent("<p></p>");
     expect(await page.locator("p").evaluate(textIsUnclipped, 64)).toBe(false);
   }
