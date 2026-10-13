@@ -80,8 +80,8 @@ export const createGuestDrawerHistorySource = (
   );
 
 // The drawer's Overview trends and its History tab read one resource's
-// metrics-store history through this query. The shared cache key lets the
-// History tab open on the Overview's 24h read instead of starting another.
+// metrics-store history through this query. The shared cache key lets a 24h
+// History view reuse the Overview's read instead of starting another.
 export const createGuestDrawerHistoryQuery = (
   source: Accessor<GuestDrawerHistoryQueryKey | null>,
 ) =>
