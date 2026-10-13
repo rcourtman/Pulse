@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "ccd4f1b491d120f655bd414fce94a3d107f0a079",
+  "verified_at": "2026-10-13T17:57:04.323Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "25d274583af1713fc537f9dabbfc5bcdb66deb3181b1c8f6e7f442c88f2ad46d",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "c26b2daf44ada360534d656a2d05d3530fc1afcc029d4c6aad8f88f030603553",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "bffc9f138c28f7af10ad518412f24e31ac07f95b6130c5d5b314b7cf7eec855c",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts": "8fd0dc4746f382a8755b7a49b2d2384d1f6cbf2c885acfe630aff30e6ce3f574"
+  },
+  "routes": [
+    "/guest (offline actual Workloads adapter/row/GuestDrawer/History)",
+    "/node (offline actual NodeDrawer/HelpIcon/Details)",
+    "/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis",
+    "/docs/TROUBLESHOOTING#proxmox-pending-update-access"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Unknown and retained filesystem evidence, long OS caption outside closed Details, backup precaution and alert thresholds; fresh readings withdraw the deferral.",
+    "Current-source History and Overview tab navigation with matching 24h/7d API fixture identity.",
+    "Neutral unavailable permission check stays inside Details without an exception warning; its independent accessible guidance remains outside. Stale evidence, relative age, CPU changes and a true successful check preserve or withdraw the existing help appropriately.",
+    "Chromium 141.0.7390.37 desktop and WebKit26.0 touch phone, Playwright1.56.1, both themes. All twenty final captures opened natively; compiled 2813 source inputs and 13 served assets match the current source."
+  ],
+  "interactions": [
+    "Native keyboard/touch row and tab navigation; filesystem guidance into shipped Docs with native fetched-byte hashes.",
+    "HelpIcon activation, same dialog and trigger across age/verdict changes, Learn more new tab into shipped Docs, Escape focus return, Details open/close and fully wrapped status.",
+    "No external or mutating API requests, no page errors, browser/server closed in both completed two-case driver results."
+  ],
+  "adverse_attempt": "Initial browser attempt completed both desktop cases but stopped at phone History because its fixed 24h reply did not match the new 7d request. Corrected the fixture range/window only and completed separate desktop and phone cases; production source, timeouts and assertions were not weakened.",
+  "limits": "Synthetic source-bound local previews, not native guest, Proxmox permission, installed or release acceptance. Browser/server closure is recorded by the drivers; no independent descendant-cleanup receipt was returned."
+}
