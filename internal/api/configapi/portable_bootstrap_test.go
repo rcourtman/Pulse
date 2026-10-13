@@ -37,7 +37,7 @@ func portableBootstrapFixture(t *testing.T, mode string) (string, []string) {
 	t.Helper()
 	root, env := bootstrapFixture(t, recordingInstaller)
 	bin := filepath.Join(root, "bin")
-	for _, name := range []string{"bash", "cp", "rm", "rmdir", "cat", "stat", "dirname", "touch"} {
+	for _, name := range []string{"sh", "bash", "cp", "rm", "rmdir", "cat", "stat", "dirname", "touch"} {
 		path, err := exec.LookPath(name)
 		if err != nil {
 			t.Fatal(err)
@@ -165,7 +165,7 @@ func TestPrivateBootstrapPortableToolFailures(t *testing.T) {
 					out, err = runBootstrap(t, command, "", env, false)
 				}
 				if err == nil || !strings.Contains(string(out), tc.message) {
-					t.Fatalf("expected distinct fail-closed %s diagnostic; exit=%v, matched=%t", tc.name, err, strings.Contains(string(out), tc.message))
+					t.Fatalf("expected distinct fail-closed %s diagnostic; exit=%v, matched=%t\n%s", tc.name, err, strings.Contains(string(out), tc.message), out)
 				}
 				if _, err := os.Stat(filepath.Join(root, "captured-token")); !os.IsNotExist(err) {
 					t.Fatal("installation preceded safe terminal restoration")
@@ -205,7 +205,7 @@ func TestPrivateBootstrapRealBusyBoxInput(t *testing.T) {
 				command := caller.build("issued-separately")
 				out, err := runPortableBootstrap(t, command, tc.input, env, "", tc.signalName)
 				if (err != nil) != tc.failure {
-					t.Fatalf("BusyBox bootstrap result=%v, expected failure=%t", err, tc.failure)
+					t.Fatalf("BusyBox bootstrap result=%v, expected failure=%t\n%s", err, tc.failure, out)
 				}
 				captured, captureErr := os.ReadFile(filepath.Join(root, "captured-token"))
 				if tc.failure {
