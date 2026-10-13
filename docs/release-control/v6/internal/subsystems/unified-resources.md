@@ -3521,6 +3521,18 @@ below its explanatory copy so the button cannot squeeze policy text into a
 narrow side column; desktop retains the compact side-by-side layout.
 The UI must never infer eligibility from capability names, severity, or the
 human approval floor.
+Each control's help says what it does to Alerts, Patrol and automatic fixes in
+plain words, never in implementation terms (no "persisted resource policy",
+"action broker", "dispatch" or "canonical inventory hierarchy"). The
+maintenance-window help says it silences alerts and dismisses new Patrol
+findings, because an active window suppresses alert activation and
+auto-dismisses new findings while keeping them in history. The descendant-scope
+help claims only alerts for descendants, because Patrol reads the exact
+resource's own state. The `Never auto-remediate` label stays as named, because
+help pages and the Assistant's refusal message refer to it; its help and lock
+confirmation say it blocks every automated fix, including approved ones, and
+that blocked runs are logged as failed actions (an Assistant planning refusal
+creates no action record).
 
 The `/api/resources/{id}/operator-state` API surface (GET / PUT /
 DELETE) in `internal/api/resources_operator_state.go` is the

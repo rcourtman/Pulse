@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "68662e8eec6e64226efb76d1b6e412af0fea1177",
+  "verified_at": "2026-10-13T09:55:04Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "56d07878fd33d3bc7e0f09f9dea2ba1b43f1a5c8c7b1958433e2529f8f1167f5"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "sidecar Vite dev server serving these final bytes against the shared dev backend with the real homelab estate; frigate (LXC) guest drawer, Manage tab",
+    "Operator overrides reads: subtitle 'How Pulse alerts on, prioritizes and acts on this resource.'; maintenance 'Silence alerts and dismiss new Patrol findings during planned work, such as upgrades or reboots.'; scheduler Applies-to help 'With descendants, alerts on everything under this resource are silenced too, including resources added later.'; Monitoring and Lifecycle consequences unchanged; Never auto-remediate 'Block every automated fix on this resource, including approved ones. Blocked runs are logged as failed actions.'; 119 words with the scheduler closed (about 172 before)",
+    "390px phone: no element extends past the viewport, page scrollWidth equals the viewport"
+  ],
+  "interactions": [
+    "expanded frigate and opened the Manage tab",
+    "clicked Schedule window to read the Applies-to help, then Cancel; no Save overrides button appeared",
+    "turned on the Never auto-remediate toggle in an earlier pass on the same confirmation copy: it read 'Pulse will block every automated fix on this resource, including ones already approved in Patrol or the Assistant, until this is turned off.'; Cancel left the toggle off and nothing to save"
+  ]
+}
