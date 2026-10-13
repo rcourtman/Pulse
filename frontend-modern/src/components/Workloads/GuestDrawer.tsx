@@ -142,6 +142,10 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
           parentMemoryTotal={props.parentMemoryTotal}
           memoryDisplayBasis={props.memoryDisplayBasis}
           alerts={props.alerts}
+          historyTarget={hasHistorySupport() ? historyTarget() : null}
+          trendsEnabled={activeTab() === 'overview'}
+          currentMetrics={historyCurrentMetrics()}
+          deferredMetrics={historyDeferredMetrics()}
         />
       </div>
 

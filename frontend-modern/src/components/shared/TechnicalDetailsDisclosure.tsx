@@ -9,6 +9,12 @@ interface TechnicalDetailsDisclosureProps {
   dataTestId: string;
   class?: string;
   contentClass?: string;
+  /**
+   * Keep the content in the document while the disclosure is closed. A closed
+   * native <details> still hides it, and browser find-in-page can open it.
+   * Use where the collapsed content is the surface's complete record.
+   */
+  keepMounted?: boolean;
 }
 
 interface TechnicalDetailsSectionProps {
@@ -51,11 +57,17 @@ export const TechnicalDetailsDisclosure: Component<TechnicalDetailsDisclosurePro
       class={props.class ?? 'rounded-sm border border-border bg-surface px-2 py-1.5'}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
-      <summary class="cursor-pointer list-none text-[11px] font-medium text-base-content">
+      <summary class="flex min-h-11 cursor-pointer list-none flex-wrap items-center text-[11px] font-medium text-base-content sm:min-h-0">
+        <span
+          aria-hidden="true"
+          class={`mr-1 inline-block text-muted transition-transform ${expanded() ? 'rotate-90' : ''}`}
+        >
+          ›
+        </span>
         {props.title ?? 'Technical details'}
         <span class="ml-2 font-normal text-muted">{props.subtitle}</span>
       </summary>
-      <Show when={expanded()}>
+      <Show when={props.keepMounted || expanded()}>
         <div class={props.contentClass ?? 'mt-2 border-t border-border pt-2'}>
           <TechnicalDetailsContent sections={props.sections} children={props.children} />
         </div>

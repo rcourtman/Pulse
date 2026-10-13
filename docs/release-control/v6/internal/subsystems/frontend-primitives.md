@@ -5440,7 +5440,29 @@ compact `DetailSectionTable` rows as Overview; those facts must not switch to a
 provider-local card mosaic or require another tap. Only genuinely large or
 interactive provider-support content belongs behind
 `TechnicalDetailsDisclosure`, which owns its collapsed, lazily mounted
-boundary. `DetailSectionTable` keeps the single bordered table at narrow widths
+boundary.
+The Proxmox guest and node drawers (`GuestDrawerOverview.tsx`,
+`NodeDrawerOverview.tsx`) are the exception, by maintainer decision on
+2026-10-13 (demand ledger "Drawer Overview leads with attention and trends",
+a named bet): a grid of equal-weight inventory cards buried the drawer's job.
+Their Overview leads with active alerts (or one "No active alerts" line), then
+24h trend cards for the metrics the row shows, which add the time dimension
+the row lacks rather than restating it. Any warning- or danger-toned detail row
+is lifted into a "Worth checking" section in front, whichever section owns it,
+so demotion never hides a reason a reading cannot be trusted. Guest
+filesystems, physical disks, RAID, node GPU and NVMe sensor readings (which
+carry no heat tone of their own), and any availability check that is not both
+healthy and fresh stay visible; "availability checks passing" is said only of
+fresh healthy evidence. Trend cards withhold the live value of an offline or
+stale node, and a guest's withdrawn memory reading shows no bytes either.
+A node card is coloured only by the node's own alerts, which
+`ProxmoxNodesTable.tsx` passes as `ownAlerts` by identity match; the drawer's
+`alerts` list also carries its guests' alerts through the node-name match. A
+one-line facts strip carries OS, address, a healthy last completed backup and
+tags. The complete inventory sits in a closed "Details"
+`TechnicalDetailsDisclosure` with `keepMounted`, so its rows stay in the
+document for find-in-page and tests while hidden. Other drawers keep the rule
+above until that bet is graded. `DetailSectionTable` keeps the single bordered table at narrow widths
 where density matters, then presents those same canonical rows as bounded
 section cards on desktop. Desktop cards share the available row width, stretch
 to the same row height, and use stable three- or four-column tracks. An
