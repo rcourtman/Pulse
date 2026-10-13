@@ -99,6 +99,7 @@ async function box(locator) {
       assert(record.os.right <= width && record.os.left >= 0); await noOverflow();
       const reading = overview.getByRole('link', { name: 'Filesystem reading guidance' });
       await reading.scrollIntoViewIfNeeded(); await reading.focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
+      await page.evaluate(async () => { await document.fonts.ready; await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))); });
       record.reading = await box(reading); assert.equal(record.reading.focusVisible, true); assert.equal(record.reading.outline, 'solid'); assert.equal(record.reading.outlineWidth, '2px');
       assert.equal(record.reading.height, width < 768 ? 44 : 16); await capture('guest-unknown');
       await activate(reading); await page.waitForURL('**/docs/VM_DISK_MONITORING#*');
