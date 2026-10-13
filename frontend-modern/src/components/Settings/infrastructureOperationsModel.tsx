@@ -373,7 +373,7 @@ export const buildCommandsByPlatform = (
             shell (for example <code>su -</code>). If a token is required, run this command first,
             then paste the separately revealed token at its silent prompt. Auto-detects your init
             system and works on Debian, Ubuntu, Proxmox, Fedora, Alpine, Unraid, Synology, and more.{' '}
-            The prompt needs <code>stty</code> or BusyBox <code>stty</code>; otherwise use the
+            The prompt needs <code>stty</code> or BusyBox <code>stty</code>. Otherwise use the
             private-file command below.
           </span>
         ),
