@@ -134,6 +134,18 @@ leaves over IPv4/IPv6 and unchanged bare-host defaults, without HTTP. Existing
 cluster trust and provisioning controls remain required. This is source proof,
 not installed connection recovery or completion of #2140.
 
+`FetchFingerprintContext` additionally binds TCP dialing and the TLS handshake
+to the caller's context under the same five-second ceiling. A cancelled or
+expired caller receives no fingerprint, and a stalled capture closes its own
+socket. The existing `FetchFingerprint` helper retains its background-context
+interface and ordinary leaf/authority semantics. Proxmox first-use recovery
+uses the context-bound helper and checks cancellation under the trust mutex
+before committing a runtime pin; established pins and first-use eligibility
+are unchanged. `TestFetchFingerprintCancellationContract` covers pre-cancelled
+no-dial, stalled-handshake cancellation/deadline with peer-observed EOF, and
+ordinary owned-leaf capture through both interfaces without HTTP. These are
+local source/connection-lifecycle proofs, not installed trust recovery.
+
 ### TLS pin failures remain local typed trust evidence
 
 `tlsutil.FingerprintVerifier` preserves its existing certificate digest checks,

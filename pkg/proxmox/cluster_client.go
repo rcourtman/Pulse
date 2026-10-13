@@ -297,7 +297,7 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 		return nil, lastErr, false
 	}
 
-	newFingerprint, err := tlsutil.FetchFingerprint(endpoint)
+	newFingerprint, err := tlsutil.FetchFingerprintContext(ctx, endpoint)
 	if err != nil {
 		log.Warn().
 			Str("cluster", cc.name).
@@ -311,6 +311,12 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 	}
 
 	cc.mu.Lock()
+	// Cancellation may have arrived while waiting for the trust mutex too.
+	// Ending that caller cannot establish a new runtime pin.
+	if ctx.Err() != nil {
+		cc.mu.Unlock()
+		return nil, lastErr, false
+	}
 	captured := false
 	// A concurrent first-use capture may have established trust while the TLS
 	// probe was in flight. Use that winner's pin, not our later certificate.

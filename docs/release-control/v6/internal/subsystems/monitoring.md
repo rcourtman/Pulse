@@ -292,12 +292,24 @@ probe was in flight, and cancelled work cannot initiate or commit new trust.
 Runtime captures belong to the client, not the caller's saved fingerprint map.
 This does not add a certificate-management surface or persist new runtime trust.
 
+The credential-free first-use TLS probe shares the polling caller's context:
+cancellation or deadline ends a stalled handshake and releases its socket without
+waiting for the peer. The existing five-second capture ceiling remains; it never
+extends the caller's budget. Cancellation is checked again under the trust mutex
+before a runtime pin is committed. A later ordinary caller may still establish
+the declared member's first-use pin and make the existing pin-verified API read.
+
 `TestClusterClientFingerprintTrustContract` checks changed and restored real TLS
 leaves through startup/recovery, token containment, known/equivalent pins,
 provider-text/undeclared/cancelled exclusions, concurrent first-use capture and
 ordinary first-use authenticated acceptance. The existing #1664 new-member
 control remains. These are secret-free loopback source proofs, not live cluster
 or installed acceptance, exploitation evidence or native guest recovery.
+
+`TestClusterClientFirstUseCaptureCancellation` holds an actual first-use TLS
+handshake behind a local barrier. Cancellation and deadline must return before
+that barrier is released, without a new pin or authenticated request; a fresh
+caller subsequently establishes the owned leaf and makes one pinned API read.
 
 ### Known Windows guests do not receive Linux-only memory reads
 

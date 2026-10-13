@@ -61,6 +61,16 @@ func UnverifiedPeerCertificateCaptureTLSConfig() *tls.Config {
 // port. A bare hostname or IP retains the legacy Proxmox default port, 8006.
 // Capture is always a TLS handshake, not an HTTP request or a grant of trust.
 func FetchFingerprint(host string) (string, error) {
+	return FetchFingerprintContext(context.Background(), host)
+}
+
+// FetchFingerprintContext captures the same credential-free TLS leaf while
+// respecting the caller's cancellation and deadline. The existing five-second
+// capture limit remains an upper bound, not an extension of the caller's budget.
+func FetchFingerprintContext(ctx context.Context, host string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	targetHost, err := fingerprintTarget(host)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse host URL: %w", err)
@@ -68,11 +78,14 @@ func FetchFingerprint(host string) (string, error) {
 
 	// Create a TLS connection that explicitly accepts parseable peer certificates
 	// for fingerprint capture without relying on blanket skip-verify alone.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
-	conn, err := tls.DialWithDialer(dialer, "tcp", targetHost, UnverifiedPeerCertificateCaptureTLSConfig())
+	dialer := &tls.Dialer{
+		NetDialer: &net.Dialer{Timeout: 5 * time.Second},
+		Config:    UnverifiedPeerCertificateCaptureTLSConfig(),
+	}
+	conn, err := dialer.DialContext(ctx, "tcp", targetHost)
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to %s: %w", targetHost, err)
 	}
@@ -86,7 +99,8 @@ func FetchFingerprint(host string) (string, error) {
 	}
 
 	// Get the peer certificates
-	certs := conn.ConnectionState().PeerCertificates
+	// tls.Dialer.DialContext always returns a *tls.Conn on success.
+	certs := conn.(*tls.Conn).ConnectionState().PeerCertificates
 	if len(certs) == 0 {
 		return "", fmt.Errorf("no certificates presented by %s", targetHost)
 	}
