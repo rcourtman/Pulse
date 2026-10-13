@@ -1163,6 +1163,14 @@ invalid data, refresh and replacement. `browser-tests/history-window.cjs` also
 checks sparse/empty/current states through the production PBS drawer and direct
 shared renderer. This is presentation proof, not provider collection or #1723
 installed acceptance.
+Because the plot stretches its viewBox to the panel
+(`preserveAspectRatio="none"`), single-observation dots and hover markers are
+zero-length, round-capped strokes with `vector-effect="non-scaling-stroke"`,
+drawn in screen pixels so they stay round at any width; never a `<circle>` in
+the plot. Series lines carry `data-history-series`, which is how tests tell a
+line from a dot. A series without a reading at the inspected time reads
+`no reading` in the readout itself; there is no separate explanatory line that
+would appear and vanish, and move the chart, as the inspected time changes.
 Shared history-chart gridlines must carry numeric labels derived from the
 plotted scale rather than semantic `Avg` / `Max` placeholders. Byte and
 byte-rate axes include their human-readable unit at each gridline, and the

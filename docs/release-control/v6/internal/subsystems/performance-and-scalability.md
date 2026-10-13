@@ -3999,6 +3999,10 @@ only explicit matching refreshes; the full `GuestDrawer.test.tsx` pins the
 unchanged cap and no live-recovery read. `guestHistorySegments.test.ts` pins
 complete point preservation at the existing request bound. Neither claims a
 timing benchmark, fleet CPU attribution or native incident relief.
+Round dot markers (zero-length round-capped strokes) and the in-place
+`no reading` readout change presentation only: they add no read, timer or DOM
+node per observation beyond the marker's two paths, and the readout no longer
+inserts or removes a line as the inspected time changes.
 
 The default stored-history legend resolves one latest timestamp from that
 same bounded, normalized panel index, then looks up each configured series at
