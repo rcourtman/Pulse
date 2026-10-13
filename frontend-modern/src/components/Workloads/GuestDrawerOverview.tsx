@@ -25,7 +25,9 @@ import {
 } from '@/utils/workloadGuestPresentation';
 
 import { buildWorkloadsDiskPresentation } from './diskListModel';
+import type { HistoryTimeRange } from '@/api/charts';
 import {
+  GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   GUEST_DRAWER_HISTORY_GROUPS,
   getGuestDrawerAlertAttention,
   getGuestDrawerMemoryRows,
@@ -38,11 +40,10 @@ import {
 } from './guestDrawerModel';
 import {
   collectDrawerExceptionRows,
-  getDrawerMetricAlert,
+  getDrawerChartAlerts,
   isDrawerAvailabilityHealthy,
   withoutDrawerExceptionRows,
 } from './drawerOverviewModel';
-import type { DrawerTrendCardConfig } from './DrawerTrendCards';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import { WORKLOAD_ACTION_AGENT_LABEL } from './workloadAgentReadiness';
 import { getWorkloadAlertResourceIdCandidates } from './workloadTopology';
@@ -59,14 +60,17 @@ const GuestPhysicalDisks = lazy(() =>
   })),
 );
 
-// The 24h trend cards read metrics history only once a drawer is open; keep
-// their chart code out of the WorkloadsSurface table chunk the same way.
-const DrawerTrendCards = lazy(() => import('./DrawerTrendCards'));
+// The charts read metrics history only once a drawer is open; keep their code
+// out of the WorkloadsSurface table chunk the same way.
+const GuestDrawerHistory = lazy(() =>
+  import('./GuestDrawerHistory').then(({ GuestDrawerHistory }) => ({
+    default: GuestDrawerHistory,
+  })),
+);
 
-const historySeriesColor = (metric: string): string =>
-  GUEST_DRAWER_HISTORY_GROUPS.flatMap((group) => group.series).find(
-    (series) => series.metric === metric,
-  )?.color ?? 'currentColor';
+const GUEST_DRAWER_CHARTED_METRICS = GUEST_DRAWER_HISTORY_GROUPS.flatMap((group) =>
+  group.series.map((series) => series.metric),
+);
 
 interface GuestDrawerOverviewProps {
   guest: GuestDrawerProps['guest'];
@@ -91,8 +95,10 @@ interface GuestDrawerOverviewProps {
   memoryDisplayBasis?: GuestDrawerProps['memoryDisplayBasis'];
   alerts?: Alert[];
   historyTarget?: GuestDrawerHistoryTarget | null;
-  /** True while Overview is the visible tab; hidden trends do not poll. */
-  trendsEnabled?: boolean;
+  historyRange?: HistoryTimeRange;
+  onHistoryRangeChange?: (range: HistoryTimeRange) => void;
+  /** True while Overview is the visible tab; hidden charts do not poll. */
+  historyEnabled?: boolean;
   currentMetrics?: Record<string, number | undefined>;
   deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
 }
@@ -380,58 +386,38 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
     hasAvailability() &&
     availabilityChecks().every((check) => isDrawerAvailabilityHealthy(check, now()));
 
-  const memoryDetail = () => {
+  // The amounts the charts' percentages are of. A withdrawn memory reading
+  // shows no bytes either, the same decision as its percentage.
+  const memoryFact = () => {
     const memory = props.guest.memory;
-    // Bytes follow the same decision as the percentage: a withdrawn reading
-    // shows neither, a last-known one shows both.
     const hasReading =
       typeof props.currentMetrics?.memory === 'number' ||
       typeof props.deferredMetrics?.memory?.lastKnownValue === 'number';
     if (!memory || !hasReading || memory.usageUnavailable || !((memory.total ?? 0) > 0)) {
-      return undefined;
+      return '';
     }
-    const bytes = `${formatBytes(memory.used ?? 0)} of ${formatBytes(memory.total ?? 0)}`;
-    // The short qualifier sits on the number it qualifies; the full note (why,
+    // The short qualifier sits on the size it qualifies; the full note (why,
     // and what to do) is the Details row "About this reading".
-    return memoryReading()?.mayIncludeCache ? `${bytes} · may include cache` : bytes;
+    const size = `${formatBytes(memory.used ?? 0)} of ${formatBytes(memory.total ?? 0)} RAM`;
+    return memoryReading()?.mayIncludeCache ? `${size} (may include cache)` : size;
   };
-  const diskDetail = () => {
+  const diskFact = () => {
     const disk = props.guest.disk;
     if (!disk || !((disk.total ?? 0) > 0) || typeof props.currentMetrics?.disk !== 'number') {
-      return undefined;
+      return '';
     }
-    return `${formatBytes(disk.used ?? 0)} of ${formatBytes(disk.total ?? 0)}`;
+    return `${formatBytes(disk.used ?? 0)} of ${formatBytes(disk.total ?? 0)} disk`;
   };
-  const trendCards = (): DrawerTrendCardConfig[] => {
-    const card = (metric: string, label: string, detail?: string): DrawerTrendCardConfig => {
-      const alert = getDrawerMetricAlert(props.alerts, metric);
-      return {
-        metric,
-        label,
-        unit: '%',
-        color: historySeriesColor(metric),
-        current: props.currentMetrics?.[metric],
-        deferred: props.deferredMetrics?.[metric],
-        detail,
-        alertSeverity: alert?.severity,
-        alertThreshold: alert?.threshold,
-      };
-    };
-    // With no disk reading at all, the Filesystems section below already says
-    // why; an empty Disk card would only repeat it.
-    const diskReading =
-      typeof props.currentMetrics?.disk === 'number' ||
-      typeof props.deferredMetrics?.disk?.lastKnownValue === 'number';
-    return [
-      card('cpu', 'CPU', props.guest.cpus ? `${props.guest.cpus} vCPU` : undefined),
-      card('memory', 'Memory', memoryDetail()),
-      ...(diskReading ? [card('disk', 'Disk', diskDetail())] : []),
-    ];
-  };
+  const chartAlerts = createMemo(() =>
+    getDrawerChartAlerts(props.alerts, GUEST_DRAWER_CHARTED_METRICS),
+  );
 
   const facts = () =>
     [
       props.hasOsInfo ? props.guestOsSummary : '',
+      props.guest.cpus ? `${props.guest.cpus} vCPU` : '',
+      memoryFact(),
+      diskFact(),
       props.ipAddresses[0] ?? '',
       // A late or missing backup is listed under Worth checking instead.
       protectionPresentation().tone === 'success'
@@ -472,11 +458,15 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       <DrawerExceptionList testId="guest-drawer-exceptions" rows={exceptionRows()} />
 
       <Show when={props.historyTarget}>
-        <Suspense fallback={<div class="h-28" aria-hidden="true" />}>
-          <DrawerTrendCards
+        <Suspense fallback={<div class="h-48" aria-hidden="true" />}>
+          <GuestDrawerHistory
             target={props.historyTarget ?? null}
-            enabled={props.trendsEnabled ?? true}
-            cards={trendCards()}
+            range={props.historyRange ?? GUEST_DRAWER_HISTORY_DEFAULT_RANGE}
+            onRangeChange={props.onHistoryRangeChange}
+            enabled={props.historyEnabled ?? true}
+            currentMetrics={props.currentMetrics}
+            deferredMetrics={props.deferredMetrics}
+            alerts={chartAlerts()}
           />
         </Suspense>
       </Show>

@@ -44,7 +44,7 @@ export interface GuestDrawerProps {
   alerts?: Alert[];
 }
 
-export type GuestDrawerTab = 'overview' | 'history' | 'manage';
+export type GuestDrawerTab = 'overview' | 'manage';
 
 export interface GuestDrawerViewState {
   activeTab: Accessor<GuestDrawerTab>;
@@ -194,14 +194,6 @@ export const getGuestDrawerCurrentMetrics = (guest: Guest): Record<string, numbe
 };
 
 export const GUEST_DRAWER_HISTORY_DEFAULT_RANGE: HistoryTimeRange = '24h';
-
-// The Overview's trend cards cover the last 24 hours.
-export const DRAWER_TREND_RANGE: HistoryTimeRange = '24h';
-
-// Drawers whose Overview already shows those 24h trend cards open History on
-// the week, so the tab adds context instead of repeating them. The free plan
-// keeps 7 days, so this range is never locked.
-export const TRENDED_DRAWER_HISTORY_DEFAULT_RANGE: HistoryTimeRange = '7d';
 
 export const GUEST_DRAWER_HISTORY_GROUPS: GuestDrawerHistoryGroupConfig[] = [
   {

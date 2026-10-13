@@ -8,6 +8,7 @@ import {
   TechnicalDetailsSection,
 } from '@/components/shared/TechnicalDetailsDisclosure';
 import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
+import type { HistoryTimeRange } from '@/api/charts';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import { DrawerExceptionList } from './DrawerExceptionList';
 import {
@@ -28,24 +29,24 @@ import { getProxmoxUpdateEvidencePresentation } from '@/utils/proxmoxUpdateEvide
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
 import { buildDrawerDiskListItems } from './DrawerDiskListCard';
-import type { DrawerTrendCardConfig } from './DrawerTrendCards';
 import {
   collectDrawerExceptionRows,
-  getDrawerMetricAlert,
+  getDrawerChartAlerts,
   withoutDrawerExceptionRows,
 } from './drawerOverviewModel';
-import type {
-  GuestDrawerHistoryDeferredMetric,
-  GuestDrawerHistoryTarget,
+import {
+  GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
+  type GuestDrawerHistoryDeferredMetric,
+  type GuestDrawerHistoryGroupConfig,
+  type GuestDrawerHistoryTarget,
 } from './guestDrawerModel';
 
 // Loaded once a node drawer opens, so the Proxmox table chunk does not carry it.
-const DrawerTrendCards = lazy(() => import('./DrawerTrendCards'));
-
-const hostSeriesColor = (metric: string): string =>
-  HOST_METRICS_HISTORY_GROUPS.flatMap((group) => group.series).find(
-    (series) => series.metric === metric,
-  )?.color ?? 'currentColor';
+const GuestDrawerHistory = lazy(() =>
+  import('./GuestDrawerHistory').then(({ GuestDrawerHistory }) => ({
+    default: GuestDrawerHistory,
+  })),
+);
 
 const finitePercent = (value: number | null | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0
@@ -58,9 +59,14 @@ interface NodeDrawerOverviewProps {
   temperatureThresholds?: MetricDisplayThresholds | null;
   alerts?: Alert[];
   historyTarget?: GuestDrawerHistoryTarget | null;
-  /** True while Overview is the visible tab; hidden trends do not poll. */
-  trendsEnabled?: boolean;
-  /** The node's own alerts, without its guests', for the trend cards. */
+  historyRange?: HistoryTimeRange;
+  onHistoryRangeChange?: (range: HistoryTimeRange) => void;
+  historyGroups?: GuestDrawerHistoryGroupConfig[];
+  /** Live readings the charts fall back to before any history is stored. */
+  currentMetrics?: Record<string, number | undefined>;
+  /** True while Overview is the visible tab; hidden charts do not poll. */
+  historyEnabled?: boolean;
+  /** The node's own alerts, without its guests', for the charts' alert lines. */
   metricAlerts?: Alert[];
 }
 
@@ -454,8 +460,8 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     collectDrawerExceptionRows([...overviewSections(), ...technicalSections()]),
   );
 
-  // The table withholds readings from an offline or stale node; the trend
-  // cards do the same instead of presenting the last numbers as live.
+  // The table withholds readings from an offline or stale node; the charts do
+  // the same instead of presenting the last numbers as live.
   const liveReadingsWithheld = (): string | null => {
     const health = (props.node.connectionHealth || '').trim().toLowerCase();
     if (props.node.status === 'offline') return 'Node is offline. Showing its history only.';
@@ -470,85 +476,63 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     return null;
   };
 
-  const trendCards = (): DrawerTrendCardConfig[] => {
-    const card = (
-      metric: string,
-      label: string,
-      unit: DrawerTrendCardConfig['unit'],
-      current: number | undefined,
-      detail?: string,
-      deferred?: GuestDrawerHistoryDeferredMetric,
-    ): DrawerTrendCardConfig => {
-      const alert = getDrawerMetricAlert(props.metricAlerts, metric);
-      const withheld = liveReadingsWithheld();
-      return {
-        metric,
-        label,
-        unit,
-        color: hostSeriesColor(metric),
-        current: withheld ? undefined : current,
-        deferred: withheld ? { message: withheld } : deferred,
-        detail: withheld ? undefined : detail,
-        alertSeverity: alert?.severity,
-        alertThreshold: alert?.threshold,
-      };
-    };
+  // The adapter fills missing usage with zero; a known total is the evidence
+  // that a percentage was measured at all.
+  const memoryValue = () => {
     const memory = props.node.memory;
-    const disk = props.node.disk;
-    // The adapter fills missing usage with zero; a known total is the
-    // evidence that a percentage was measured at all.
-    const memoryValue =
-      memory?.usageUnavailable || !((memory?.total ?? 0) > 0)
-        ? undefined
-        : finitePercent(memory?.usage);
-    // A retained or undated reading is shown as last known, the same rule the
-    // guest cards follow, rather than as a live value.
-    const memoryReading = getMemoryObservationPresentation(memoryValue, memory?.observation);
-    const memoryDeferred: GuestDrawerHistoryDeferredMetric | undefined =
-      memoryReading && memoryReading.state !== 'current'
-        ? {
-            lastKnownValue: memoryReading.state === 'unavailable' ? undefined : memoryValue,
-            ...(memoryReading.state === 'unknown'
-              ? { valueLabel: 'freshness unknown' as const }
-              : {}),
-            message: memoryReading.message,
-          }
-        : undefined;
-    const memoryCurrent = memoryDeferred ? undefined : memoryValue;
-    const diskMeasured = (disk?.total ?? 0) > 0;
-    // The backend's primary reading, recorded under the same rule as the line.
-    const temperature = props.node.cpuTemperature;
-    return [
-      card(
-        'cpu',
-        'CPU',
-        '%',
-        finitePercent(props.node.cpu),
-        loadAverageLabel() !== '-' ? `load ${props.node.loadAverage?.[0]?.toFixed(2)}` : undefined,
+    return memory?.usageUnavailable || !((memory?.total ?? 0) > 0)
+      ? undefined
+      : finitePercent(memory?.usage);
+  };
+  const diskMeasured = () => (props.node.disk?.total ?? 0) > 0;
+  // A retained or undated memory reading is shown as last known, the same rule
+  // the guest drawer follows, rather than as a live value.
+  const deferredMetrics = createMemo(
+    (): Record<string, GuestDrawerHistoryDeferredMetric | undefined> | undefined => {
+      if (liveReadingsWithheld()) return undefined;
+      const memoryReading = getMemoryObservationPresentation(
+        memoryValue(),
+        props.node.memory?.observation,
+      );
+      if (!memoryReading || memoryReading.state === 'current') return undefined;
+      return {
+        memory: {
+          lastKnownValue: memoryReading.state === 'unavailable' ? undefined : memoryValue(),
+          ...(memoryReading.state === 'unknown'
+            ? { valueLabel: 'freshness unknown' as const }
+            : {}),
+          message: memoryReading.message,
+        },
+      };
+    },
+  );
+  // Live readings the charts show before any history is stored. A withheld
+  // node offers none, and deferred memory is qualified above instead.
+  const liveMetrics = createMemo((): Record<string, number | undefined> | undefined => {
+    if (liveReadingsWithheld()) return undefined;
+    return {
+      ...props.currentMetrics,
+      cpu: finitePercent(props.node.cpu),
+      memory: deferredMetrics()?.memory ? undefined : memoryValue(),
+      disk: diskMeasured() ? finitePercent(props.node.disk?.usage) : undefined,
+    };
+  });
+  const chartAlerts = createMemo(() =>
+    getDrawerChartAlerts(
+      props.metricAlerts,
+      (props.historyGroups ?? HOST_METRICS_HISTORY_GROUPS).flatMap((group) =>
+        group.series.map((series) => series.metric),
       ),
-      card(
-        'memory',
-        'Memory',
-        '%',
-        memoryCurrent,
-        (memoryCurrent ?? memoryDeferred?.lastKnownValue) !== undefined
-          ? `${formatBytes(memory.used ?? 0)} of ${formatBytes(memory.total)}`
-          : undefined,
-        memoryDeferred,
-      ),
-      ...(typeof temperature === 'number'
-        ? [card('temperature', 'CPU temperature', 'C', temperature)]
-        : []),
-      card(
-        'disk',
-        'Root disk',
-        '%',
-        diskMeasured ? finitePercent(disk?.usage) : undefined,
-        diskMeasured
-          ? `${formatBytes(disk?.used ?? 0)} of ${formatBytes(disk?.total ?? 0)}`
-          : undefined,
-      ),
-    ];
+    ),
+  );
+
+  // The sizes the charts' percentages are of. A withheld node states only its
+  // capacity, not a used amount that would read as live.
+  const sizeFact = (total: number | undefined, used: number | undefined, label: string) => {
+    if (!((total ?? 0) > 0)) return '';
+    return !liveReadingsWithheld() && typeof used === 'number' && used >= 0
+      ? `${formatBytes(used)} of ${formatBytes(total ?? 0)} ${label}`
+      : `${formatBytes(total ?? 0)} ${label}`;
   };
 
   const facts = () => {
@@ -561,7 +545,12 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     return [
       versionLabel() ? `Proxmox VE ${versionLabel()}` : '',
       [model, hasPositiveNumber(cores) ? `${cores} logical CPUs` : ''].filter(Boolean).join(' · '),
-      (props.node.memory?.total ?? 0) > 0 ? `${formatBytes(props.node.memory.total)} RAM` : '',
+      sizeFact(
+        props.node.memory?.total,
+        memoryValue() !== undefined ? props.node.memory?.used : undefined,
+        'RAM',
+      ),
+      diskMeasured() ? sizeFact(props.node.disk?.total, props.node.disk?.used, 'root disk') : '',
       firstAddress ?? '',
       clusterLabel() && clusterLabel() !== 'Standalone' ? `Cluster ${clusterLabel()}` : '',
     ].filter((fact) => fact.trim().length > 0);
@@ -592,11 +581,23 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
       <DrawerExceptionList testId="node-drawer-exceptions" rows={exceptionRows()} />
 
       <Show when={props.historyTarget}>
-        <Suspense fallback={<div class="h-28" aria-hidden="true" />}>
-          <DrawerTrendCards
+        <Show when={liveReadingsWithheld()}>
+          {(message) => (
+            <p data-testid="node-drawer-readings-withheld" class="text-xs text-muted">
+              {message()}
+            </p>
+          )}
+        </Show>
+        <Suspense fallback={<div class="h-48" aria-hidden="true" />}>
+          <GuestDrawerHistory
             target={props.historyTarget ?? null}
-            enabled={props.trendsEnabled ?? true}
-            cards={trendCards()}
+            range={props.historyRange ?? GUEST_DRAWER_HISTORY_DEFAULT_RANGE}
+            onRangeChange={props.onHistoryRangeChange}
+            enabled={props.historyEnabled ?? true}
+            groups={props.historyGroups}
+            currentMetrics={liveMetrics()}
+            deferredMetrics={deferredMetrics()}
+            alerts={chartAlerts()}
           />
         </Suspense>
       </Show>

@@ -3,6 +3,7 @@ import type { DetailSection } from '@/components/shared/detailSectionModel';
 import type { Alert } from '@/types/api';
 import {
   collectDrawerExceptionRows,
+  getDrawerChartAlerts,
   getDrawerMetricAlert,
   isDrawerAvailabilityHealthy,
   withoutDrawerExceptionRows,
@@ -36,6 +37,45 @@ describe('getDrawerMetricAlert', () => {
       severity: 'warning',
       threshold: undefined,
     });
+  });
+});
+
+describe('getDrawerChartAlerts', () => {
+  it('converts I/O triggers from the alert engine MiB/s to the charts B/s', () => {
+    expect(
+      getDrawerChartAlerts(
+        [
+          alert({ type: 'diskRead', threshold: 100 }),
+          alert({ type: 'networkIn', level: 'critical', threshold: 2 }),
+        ],
+        ['diskread', 'netin'],
+      ),
+    ).toEqual({
+      diskread: { severity: 'warning', value: 100 * 1024 * 1024 },
+      netin: { severity: 'critical', value: 2 * 1024 * 1024 },
+    });
+  });
+
+  it('keeps percentage and temperature triggers in their own unit', () => {
+    expect(
+      getDrawerChartAlerts(
+        [alert({ type: 'cpu', threshold: 90 }), alert({ type: 'temperature', threshold: 80 })],
+        ['cpu', 'temperature'],
+      ),
+    ).toEqual({
+      cpu: { severity: 'warning', value: 90 },
+      temperature: { severity: 'warning', value: 80 },
+    });
+  });
+
+  it('keeps the severity of an alert with no numeric trigger, without a line value', () => {
+    expect(getDrawerChartAlerts([alert({ threshold: Number.NaN })], ['memory'])).toEqual({
+      memory: { severity: 'warning' },
+    });
+  });
+
+  it('ignores alerts on metrics the drawer does not chart', () => {
+    expect(getDrawerChartAlerts([alert({ type: 'diskWrite' })], ['cpu', 'memory'])).toEqual({});
   });
 });
 

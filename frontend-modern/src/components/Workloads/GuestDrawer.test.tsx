@@ -76,6 +76,9 @@ vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
 
 // After mocks, import the component under test
 import { GuestDrawer } from './GuestDrawer';
+// Overview loads its charts lazily; warm the module so a cold transform does
+// not outlast the tests' waits.
+import './GuestDrawerHistory';
 
 const render = (...args: Parameters<typeof solidRender>): ReturnType<typeof solidRender> => {
   const result = solidRender(...args);
@@ -201,7 +204,7 @@ describe('GuestDrawer', () => {
       }),
     );
     render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1));
     const chart = screen.getAllByTestId('guest-history-group-chart')[0];
     expect(chart.querySelector('[data-history-last-known="memory"]')).toHaveTextContent(
@@ -242,7 +245,7 @@ describe('GuestDrawer', () => {
       makeGuest({ lock: 'backup', diskStatusReason: 'prev-vm-locked' }),
     );
     render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await screen.findByRole('slider', { name: 'Inspect Utilization history' });
     const chart = screen.getAllByTestId('guest-history-group-chart')[0];
     expect(chart.querySelectorAll('path[data-history-series]')).toHaveLength(1);
@@ -267,7 +270,7 @@ describe('GuestDrawer', () => {
     expect(chartsApiMocks.getMetricsHistory.mock.calls[0][0]).toMatchObject({
       resourceType: 'vm',
       resourceId: 'inst1:node1:100',
-      range: '7d',
+      range: '24h',
       maxPoints: 240,
     });
     chartsApiMocks.getMetricsHistory.mockResolvedValue({
@@ -301,7 +304,7 @@ describe('GuestDrawer', () => {
     expect(
       within(precaution()).getByRole('link', { name: 'Backup safety guidance' }),
     ).toHaveAttribute('href', '/docs/VM_DISK_MONITORING');
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     expect(precaution()).toBeVisible();
     setGuest({
       ...guest(),
@@ -351,7 +354,7 @@ describe('GuestDrawer', () => {
       }),
     );
     render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await waitFor(() =>
       expect(screen.getAllByText('No stored history in this range')).toHaveLength(3),
     );
@@ -389,7 +392,7 @@ describe('GuestDrawer', () => {
       expect(request).toMatchObject({
         resourceType: 'vm',
         resourceId: 'inst1:node1:100',
-        range: '7d',
+        range: '24h',
       });
     }
   });
@@ -415,7 +418,7 @@ describe('GuestDrawer', () => {
       }),
     );
     render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await waitFor(() =>
       expect(screen.getAllByText('No stored history in this range')).toHaveLength(3),
     );
@@ -590,10 +593,11 @@ describe('GuestDrawer', () => {
   // ── Tabs ──
 
   describe('tab switching', () => {
-    it('renders Overview and History tabs', () => {
+    it('renders Overview and Manage tabs, with the charts on Overview instead of a History tab', () => {
       render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
       expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Manage' })).toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'History' })).toBeNull();
       expect(screen.queryByRole('tab', { name: 'Discovery' })).toBeNull();
     });
 
@@ -606,18 +610,17 @@ describe('GuestDrawer', () => {
       expect(panels[1]).toHaveClass('hidden');
     });
 
-    it('renders persistent metric charts on the History tab', async () => {
+    it('renders the metric charts on the Overview tab', async () => {
       render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
-      expect(screen.queryByTestId('guest-history-group-chart')).toBeNull();
 
-      await fireEvent.click(screen.getByText('History'));
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
 
       await waitFor(() => {
         expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledWith(
           expect.objectContaining({
             resourceType: 'vm',
             resourceId: 'inst1:node1:100',
-            range: '7d',
+            range: '24h',
           }),
         );
       });
@@ -645,12 +648,15 @@ describe('GuestDrawer', () => {
       });
       render(() => <GuestDrawer guest={makeGuest({ cpu: 0.25 })} onClose={vi.fn()} />);
 
-      await fireEvent.click(screen.getByText('History'));
-      await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled());
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      await waitFor(() =>
+        expect(screen.getAllByTestId('guest-history-group-chart')[0]).toHaveTextContent(
+          'No stored history in this range',
+        ),
+      );
 
       const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
       expect(utilizationChart).toHaveTextContent('CPU25.0%current');
-      expect(utilizationChart).toHaveTextContent('No stored history in this range');
       expect(utilizationChart.querySelector('path[data-history-series]')).toBeNull();
     });
 
@@ -673,7 +679,7 @@ describe('GuestDrawer', () => {
         />
       ));
 
-      await fireEvent.click(screen.getByText('History'));
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
       await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled());
 
       const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
@@ -684,11 +690,11 @@ describe('GuestDrawer', () => {
     it('updates grouped metric header values on History chart hover', async () => {
       render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
 
-      await fireEvent.click(screen.getByText('History'));
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
 
-      await waitFor(() => {
-        expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled();
-      });
+      await waitFor(() =>
+        expect(screen.getAllByTestId('guest-history-group-chart')[0]).toHaveTextContent('40.0%'),
+      );
       const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
       const plot = within(utilizationChart).getByTestId('guest-history-plot');
       plot.getBoundingClientRect = () =>
@@ -735,7 +741,7 @@ describe('GuestDrawer', () => {
       const { container } = render(() => (
         <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
       ));
-      await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+      await fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
       await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
       const panels = container.querySelectorAll('[class*="overflow-anchor"]');
       expect(panels[0]).not.toHaveClass('hidden');
@@ -1121,6 +1127,40 @@ describe('GuestDrawer', () => {
       solidRender(() => <GuestDrawer guest={makeGuest({ lastBackup: 0 })} onClose={vi.fn()} />);
       expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
       expect(technicalDetails().queryByText('Backup activity')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── Facts strip ──
+
+  describe('Facts strip', () => {
+    it('states the amounts the chart percentages are of', () => {
+      const GiB = 1024 ** 3;
+      solidRender(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            cpus: 4,
+            memory: { total: 4 * GiB, used: GiB, free: 3 * GiB, usage: 25 },
+            disk: { total: 100 * GiB, used: 25 * GiB, free: 75 * GiB, usage: 25 },
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      const facts = screen.getByTestId('guest-drawer-facts');
+      expect(facts).toHaveTextContent('4 vCPU');
+      expect(facts).toHaveTextContent(/1\.00 GB of 4\.00 GB RAM/);
+      expect(facts).toHaveTextContent(/25\.0 GB of 100 GB disk/);
+    });
+
+    it('shows no memory amount when the memory reading is withdrawn', () => {
+      solidRender(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            memory: { total: 100, used: 0, free: 100, usage: 0, usageUnavailable: true },
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      expect(screen.getByTestId('guest-drawer-facts')).not.toHaveTextContent('RAM');
     });
   });
 

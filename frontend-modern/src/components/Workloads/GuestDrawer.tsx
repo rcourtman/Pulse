@@ -3,7 +3,7 @@ import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import { getDrawerHeaderActionButtonClass } from '@/components/shared/buttonModel';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
-import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
+import { Subtabs } from '@/components/shared/Subtabs';
 import { WebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import {
@@ -17,7 +17,6 @@ import { getCanonicalWorkloadId } from '@/utils/workloads';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { getShippedDocUrl } from '@/utils/docsLinks';
 import { useGuestDrawerState } from './useGuestDrawerState';
-import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
 import { GuestDrawerOverview } from './GuestDrawerOverview';
 import { GuestDrawerManage } from './GuestDrawerManage';
 
@@ -105,16 +104,8 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
         onChange={(value) => switchTab(value as Parameters<typeof switchTab>[0])}
         tabs={[
           { value: 'overview', label: 'Overview' },
-          ...(hasHistorySupport()
-            ? [{ value: 'history', label: 'History' } satisfies SubtabOption]
-            : []),
           { value: 'manage', label: 'Manage' },
         ]}
-        trailing={
-          <Show when={hasHistorySupport() && activeTab() === 'history'}>
-            <GuestDrawerHistoryRangeSelect range={historyRange()} onRangeChange={setHistoryRange} />
-          </Show>
-        }
       />
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
@@ -143,22 +134,13 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
           memoryDisplayBasis={props.memoryDisplayBasis}
           alerts={props.alerts}
           historyTarget={hasHistorySupport() ? historyTarget() : null}
-          trendsEnabled={activeTab() === 'overview'}
+          historyRange={historyRange()}
+          onHistoryRangeChange={setHistoryRange}
+          historyEnabled={activeTab() === 'overview'}
           currentMetrics={historyCurrentMetrics()}
           deferredMetrics={historyDeferredMetrics()}
         />
       </div>
-
-      {hasHistorySupport() && activeTab() === 'history' && (
-        <div class="[overflow-anchor:none]">
-          <GuestDrawerHistory
-            target={historyTarget()}
-            range={historyRange()}
-            currentMetrics={historyCurrentMetrics()}
-            deferredMetrics={historyDeferredMetrics()}
-          />
-        </div>
-      )}
 
       <div class={`[overflow-anchor:none] ${activeTab() === 'manage' ? '' : 'hidden'}`}>
         <Show when={activeTab() === 'manage'}>

@@ -12,8 +12,8 @@ export interface DrawerMetricAlert {
   threshold?: number;
 }
 
-// An active alert on a trend card's metric colours that card and draws the
-// alert's own trigger. The most severe active alert wins.
+// An active alert on a charted metric tones that metric's reading and draws
+// the alert's own trigger. The most severe active alert wins.
 export const getDrawerMetricAlert = (
   alerts: readonly Alert[] | undefined,
   metric: string,
@@ -29,6 +29,45 @@ export const getDrawerMetricAlert = (
         typeof alert.threshold === 'number' && Number.isFinite(alert.threshold)
           ? alert.threshold
           : undefined,
+    };
+  }
+  return result;
+};
+
+// Alert types the Overview charts draw, keyed by chart metric. The alert engine
+// judges I/O rates in MiB/s while the charts plot bytes per second, so those
+// triggers are converted before they meet a chart scale.
+const DRAWER_CHART_ALERT_TYPES: ReadonlyArray<{ type: string; metric: string; scale: number }> = [
+  { type: 'cpu', metric: 'cpu', scale: 1 },
+  { type: 'memory', metric: 'memory', scale: 1 },
+  { type: 'disk', metric: 'disk', scale: 1 },
+  { type: 'temperature', metric: 'temperature', scale: 1 },
+  { type: 'diskread', metric: 'diskread', scale: 1024 * 1024 },
+  { type: 'diskwrite', metric: 'diskwrite', scale: 1024 * 1024 },
+  { type: 'networkin', metric: 'netin', scale: 1024 * 1024 },
+  { type: 'networkout', metric: 'netout', scale: 1024 * 1024 },
+];
+
+export interface DrawerChartAlert {
+  severity: DrawerMetricAlert['severity'];
+  /** The trigger in the chart's own unit; absent when the alert carries none. */
+  value?: number;
+}
+
+// Active alerts on the Overview charts' metrics, keyed by chart metric. Every
+// alert tones its reading; only one with a numeric trigger draws a line.
+export const getDrawerChartAlerts = (
+  alerts: readonly Alert[] | undefined,
+  metrics: readonly string[],
+): Record<string, DrawerChartAlert> => {
+  const result: Record<string, DrawerChartAlert> = {};
+  for (const { type, metric, scale } of DRAWER_CHART_ALERT_TYPES) {
+    if (!metrics.includes(metric)) continue;
+    const alert = getDrawerMetricAlert(alerts, type);
+    if (!alert) continue;
+    result[metric] = {
+      severity: alert.severity,
+      ...(typeof alert.threshold === 'number' ? { value: alert.threshold * scale } : {}),
     };
   }
   return result;
