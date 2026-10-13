@@ -62,30 +62,33 @@ describe('troubleshooting workflow entry', () => {
 
   it('keeps server updates, workload updates and reporting acceptance distinct', () => {
     const section = entry();
-    const rows = section.querySelectorAll('li');
-    expect(prose(rows[1] as HTMLElement)).toContain(
-      'An update of a monitored container is a different job',
-    );
-    const updateLinks = [...rows[1].querySelectorAll('a')].map((link) => link.getAttribute('href'));
+    const row = (label: string) => {
+      const rows = [...section.querySelectorAll('li')].filter((element) =>
+        prose(element.querySelector('strong') as HTMLElement).startsWith(label),
+      );
+      expect(rows, label).toHaveLength(1);
+      return rows[0] as HTMLElement;
+    };
+    const update = row('Update failed or its result is uncertain');
+    const install = row('Agent host is missing or reporting is rejected');
+    const command = row('Copied agent install or removal command failed');
+    const reporting = row('Guest readings are missing or disagree');
+    const memory = row('Pulse itself uses more memory, CPU or disk writes');
+    expect(prose(update)).toContain('An update of a monitored container is a different job');
+    const updateLinks = [...update.querySelectorAll('a')].map((link) => link.getAttribute('href'));
     expect(updateLinks).toEqual([
       '/docs/AUTO_UPDATE#update-failed',
       '/docs/DOCKER#check-a-failed-or-pending-workload-update',
     ]);
-    expect(prose(rows[1] as HTMLElement)).toContain(
-      'Preserve the current state and rollback evidence',
-    );
-    expect(prose(rows[2] as HTMLElement)).toContain('Installer success is not an accepted report');
-    expect(prose(rows[3] as HTMLElement)).toContain('A stopped new command does not diagnose the existing agent');
-    expect(prose(rows[3] as HTMLElement)).toContain('do not repeat removal or installation');
-    expect(rows[3].querySelector('a')?.getAttribute('href')).toBe(
+    expect(prose(update)).toContain('Preserve the current state and rollback evidence');
+    expect(prose(install)).toContain('Installer success is not an accepted report');
+    expect(prose(command)).toContain('A stopped new command does not diagnose the existing agent');
+    expect(prose(command)).toContain('do not repeat removal or installation');
+    expect(command.querySelector('a')?.getAttribute('href')).toBe(
       '/docs/UNIFIED_AGENT#copied-agent-command-fails-before-installation',
     );
-    expect(prose(rows[4] as HTMLElement)).toContain(
-      'a working Pulse Agent view does not prove API recovery',
-    );
-    expect(prose(rows[7] as HTMLElement)).toContain(
-      'Guest usage and database size are different measurements',
-    );
+    expect(prose(reporting)).toContain('a working Pulse Agent view does not prove API recovery');
+    expect(prose(memory)).toContain('Guest usage and database size are different measurements');
   });
 
   it('routes every entry to an existing shipped heading in the production viewer', () => {
