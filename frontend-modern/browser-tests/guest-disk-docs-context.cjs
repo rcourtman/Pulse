@@ -201,6 +201,16 @@ const linkPresentation = (link) =>
       assert.equal(record.retained_link_focus.outline_offset, '2px');
       assert.ok(record.retained_link_focus.outline_contrast >= 3, 'focus outline contrast');
       assert.ok(record.retained_link_focus.text_contrast >= 4.5, 'retained-reading link contrast');
+      await guidance.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+      record.capture_bounds = await guidance.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return { top: bounds.top, bottom: bounds.bottom, viewport_height: window.innerHeight };
+      });
+      assert.ok(record.capture_bounds.top >= 4, 'focus outline clipped above viewport');
+      assert.ok(
+        record.capture_bounds.bottom <= record.capture_bounds.viewport_height - 4,
+        'focus outline clipped below viewport',
+      );
       const focusFile = name + '-guidance-focus.png';
       await page.screenshot({ path: output + '/' + focusFile });
       result.captures.push({
