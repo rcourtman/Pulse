@@ -68,15 +68,17 @@ func TestStabilizeGuestLowTrustMemoryUsesHealthyGuestAgentEvidence(t *testing.T)
 	const gib = uint64(1024 * 1024 * 1024)
 
 	now := time.Now()
+	// Stay beyond the two-minute original-source window so this control
+	// genuinely exercises the distinct healthy-guest retention path.
 	prev := &GuestMemorySnapshot{
 		Status:       "running",
-		RetrievedAt:  now.Add(-2 * time.Minute),
+		RetrievedAt:  now.Add(-3 * time.Minute),
 		MemorySource: "previous-snapshot",
 		Memory: models.Memory{
 			Total:       8 * int64(gib),
 			Used:        3 * int64(gib),
 			Usage:       safePercentage(float64(3*gib), float64(8*gib)),
-			Observation: models.MemoryObservation{State: "last-known", Source: "guest-agent-meminfo", ObservedAt: now.Add(-2 * time.Minute)},
+			Observation: models.MemoryObservation{State: "last-known", Source: "guest-agent-meminfo", ObservedAt: now.Add(-3 * time.Minute)},
 		},
 	}
 
