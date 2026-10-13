@@ -1003,3 +1003,88 @@ func TestGuestFilesystemFailureGuidanceUsesObservedEvidence(t *testing.T) {
 		})
 	}
 }
+
+// TestPerNodeLXCMemoryObservationMatchesClusterPath pins the producer parity
+// for the fallback used when cluster/resources is unavailable: the per-node
+// collector annotates memory through the same builder, so its containers do
+// not read as freshness unknown while the same guest polled via the cluster
+// listing reads current.
+func TestPerNodeLXCMemoryObservationMatchesClusterPath(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	const gib = uint64(1024 * 1024 * 1024)
+	listedAt := time.Now().Add(-5 * time.Second).UTC()
+
+	tests := []struct {
+		name   string
+		status string
+		want   models.MemoryObservation
+	}{
+		{
+			name:   "running reads current from the listing time",
+			status: "running",
+			want:   models.MemoryObservation{State: "current", Source: "cluster-resources", ObservedAt: listedAt},
+		},
+		{
+			name:   "stopped reads unavailable from powered-off",
+			status: "stopped",
+			want:   models.MemoryObservation{State: "unavailable", Source: "powered-off"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &vmMemoryTrustStubClient{
+				stubPVEClient: &stubPVEClient{},
+				containers: []proxmox.Container{{
+					VMID: 311, Name: "ct-311", Node: "node1", Status: tt.status,
+					MaxMem: 8 * gib, Mem: 3 * gib, CPUs: 2, ObservedAt: listedAt,
+				}},
+			}
+
+			clusterMon := newTestPVEMonitor("test")
+			defer clusterMon.alertManager.Stop()
+			defer clusterMon.notificationMgr.Stop()
+			clusterContainer, _, _, _, ok := clusterMon.buildContainerFromClusterResource(
+				context.Background(),
+				"test",
+				proxmox.ClusterResource{
+					Type: "lxc", Node: "node1", Name: "ct-311", Status: tt.status, VMID: 311,
+					MaxMem: 8 * gib, Mem: 3 * gib, MaxCPU: 2, ObservedAt: listedAt,
+				},
+				client,
+				map[int]bool{},
+				nil,
+			)
+			if !ok {
+				t.Fatal("expected cluster-path container to be built")
+			}
+
+			nodeMon := newTestPVEMonitor("test")
+			defer nodeMon.alertManager.Stop()
+			defer nodeMon.notificationMgr.Stop()
+			nodeMon.pollContainersWithNodes(
+				context.Background(),
+				"test",
+				"",
+				false,
+				client,
+				[]proxmox.Node{{Node: "node1", Status: "online"}},
+				map[string]string{"node1": "online"},
+			)
+			containers := nodeMon.state.GetSnapshot().Containers
+			if len(containers) != 1 {
+				t.Fatalf("expected 1 per-node container, got %d", len(containers))
+			}
+
+			for path, got := range map[string]models.MemoryObservation{
+				"cluster":  clusterContainer.Memory.Observation,
+				"per-node": containers[0].Memory.Observation,
+			} {
+				if got.State != tt.want.State || got.Source != tt.want.Source || !got.ObservedAt.Equal(tt.want.ObservedAt) {
+					t.Fatalf("%s memory observation = %+v, want %+v", path, got, tt.want)
+				}
+			}
+		})
+	}
+}

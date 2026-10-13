@@ -625,6 +625,17 @@ retained one keeps its own state, source and time
 `TestFixtureRefreshMovesCurrentGuestMemoryObservationTime`). This is fixture
 realism, not a change to live source selection.
 
+The per-node LXC collector that runs when `cluster/resources` is unavailable
+(`monitor_polling_containers.go`) annotates through the same
+`guestMemoryObservation` builder as the cluster path, passing the selected
+source, the listing's `ObservedAt`, the previous snapshot and the linked agent.
+A running container therefore reads `current` from `cluster-resources` (or
+`agent`) at the listing time and a stopped one `unavailable` from
+`powered-off`, rather than an unannotated value the UI qualifies as freshness
+unknown for every container on that node
+(`TestPerNodeLXCMemoryObservationMatchesClusterPath`). The fallback's numeric
+selection, stabilisation and alerting are unchanged.
+
 Low-trust memory stabilisation uses the original memory observation time for
 its existing two-minute reconnect and ten-minute healthy-guest windows, not
 the diagnostic poll's `RetrievedAt`. Repeated carried-forward polls cannot

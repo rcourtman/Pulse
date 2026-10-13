@@ -577,8 +577,26 @@ describe('Pulse system-alert overview scope', () => {
       ).toBe('/vmware/overview?resource=vm-vsphere-42');
     });
 
+    it('opens the guest a filesystem alert carries', () => {
+      // The alert's own `<guest>-disk-<key>` id names no row; the backend
+      // stamps the guest it belongs to.
+      expect(
+        linkFor({
+          resourceId: 'mock-cluster-1-pve1-105-disk-root',
+          resourceName: 'postgres-replica-01',
+          metadata: {
+            resourceType: 'vm',
+            mountpoint: '/',
+            diskIndex: 0,
+            guestResourceId: 'mock-cluster-1-pve1-105',
+          },
+        }),
+      ).toBe('/proxmox/overview?resource=mock-cluster-1-pve1-105');
+    });
+
     it('keeps the platform page for a guest filesystem or an orphaned backup', () => {
-      // Per-filesystem alerts name `<guest>-disk-<key>`, which no row answers to.
+      // Per-filesystem alerts raised before the backend stamped the owning
+      // guest name only `<guest>-disk-<key>`, which no row answers to.
       expect(
         linkFor({
           resourceId: 'mock-cluster-1-pve1-105-disk-root',
