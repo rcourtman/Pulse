@@ -1301,11 +1301,6 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	if _, _, ok := strings.Cut(version, "-"); !ok {
 		t.Fatalf("current prerelease %q has no stable target", version)
 	}
-	comparisonVersion, ok := previousPrereleaseVersion(version)
-	if !ok {
-		comparisonVersion = previous
-	}
-
 	releaseNotesPath := repoFile("docs", "releases", "RELEASE_NOTES_v"+version+".md")
 	changelogPath := repoFile("docs", "releases", "V6_CHANGELOG_v"+version+".md")
 
@@ -1319,22 +1314,30 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"The rollback target is stable `v"+previous+"`",
 	)
 	assertFileDoesNotContain(t, releaseNotesPath, "## Fixes")
-	comparisonSummary := "This changelog describes the changes since `v" + comparisonVersion + "`"
 	if version == "6.6.0-beta.2" {
-		// This packet's recorded list is cumulative from stable, not beta.1.
-		// Keep its introduction bound to that actual list and rollback base.
-		comparisonSummary = "This cumulative changelog describes the changes included in `v" + version + "` since stable `v" + previous + "`"
-		assertFileContainsAllNormalized(t, changelogPath, "## Changes since v"+previous)
+		// Preserve this already-reviewed packet's exact recorded cumulative list.
+		assertFileContainsAllNormalized(t, changelogPath,
+			"This cumulative changelog describes the changes included in `v"+version+"` since stable `v"+previous+"`",
+			"## Changes since v"+previous,
+		)
 	}
 	if version == "6.4.0-rc.10" {
-		comparisonSummary = "The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly."
+		assertFileContainsAllNormalized(t, changelogPath,
+			"The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly.")
+	} else {
+		content, err := os.ReadFile(changelogPath)
+		if err != nil {
+			t.Fatalf("read %s: %v", changelogPath, err)
+		}
+		if !prereleaseChangelogHasSupportedBase(string(content), version, previous) {
+			t.Fatalf("%s must describe changes since the previous numbered prerelease or stable v%s", changelogPath, previous)
+		}
 	}
 	assertFileContainsAllNormalized(t, changelogPath,
 		"Version: `v"+version+"`",
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
 		"Promotion path: ",
-		comparisonSummary,
 		"Windows signing decision: prereleases publish checksum- and detached-signature-verified Windows agents without Authenticode",
 		"Mobile decision: ",
 		"no companion mobile build or store rollout is required",
@@ -4955,6 +4958,44 @@ func TestCommittedReleaseVisualSidecarsCarrySelectionEvidence(t *testing.T) {
 		if plan.SchemaVersion != 1 || strings.TrimSpace(plan.Decision) == "" || len(plan.Captures) == 0 {
 			t.Fatalf("%s must carry schema version, visual selection evidence, and a captures decision", path)
 		}
+	}
+}
+
+// Metadata defaults to the previous numbered prerelease. The release train can
+// explicitly select the previous stable for a cumulative changelog instead.
+func prereleaseChangelogHasSupportedBase(content, version, previousStable string) bool {
+	matches := regexp.MustCompile("This changelog describes the changes since `v([^`]+)`").FindAllStringSubmatch(normalizedInstallTestWhitespace(content), -1)
+	if len(matches) != 1 {
+		return false
+	}
+	base := matches[0][1]
+	if base == previousStable {
+		return true
+	}
+	previous, ok := previousPrereleaseVersion(version)
+	return ok && base == previous
+}
+
+func TestPrereleaseChangelogSupportsIncrementalAndCumulativeBases(t *testing.T) {
+	for _, tc := range []struct {
+		name, version, content string
+		want                   bool
+	}{
+		{"incremental beta", "6.6.0-beta.3", "This changelog describes the changes since `v6.6.0-beta.2`", true},
+		{"cumulative beta", "6.6.0-beta.3", "This changelog describes the changes since\n`v6.5.0`", true},
+		{"incremental candidate", "6.6.0-rc.2", "This changelog describes the changes since `v6.6.0-rc.1`", true},
+		{"first beta", "6.6.0-beta.1", "This changelog describes the changes since `v6.5.0`", true},
+		{"unrelated stable", "6.6.0-beta.3", "This changelog describes the changes since `v6.4.0`", false},
+		{"older beta", "6.6.0-beta.3", "This changelog describes the changes since `v6.6.0-beta.1`", false},
+		{"other stage", "6.6.0-rc.2", "This changelog describes the changes since `v6.6.0-beta.1`", false},
+		{"missing comparison", "6.6.0-beta.3", "## Changes", false},
+		{"conflicting comparisons", "6.6.0-beta.3", "This changelog describes the changes since `v6.5.0`\nThis changelog describes the changes since `v6.6.0-beta.2`", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := prereleaseChangelogHasSupportedBase(tc.content, tc.version, "6.5.0"); got != tc.want {
+				t.Fatalf("supported base = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
