@@ -3136,7 +3136,10 @@ service-history reads plus denial/recovery without fabricated samples.
    If a store-backed read-state has not yet been refreshed for the PVE instance
    whose current monitor state already contains guests, backup/snapshot polling
    refreshes the canonical resource store from the current state and continues
-   through the read-state interface. It must not fall back to direct legacy
+   through the read-state interface. Explicit selections use the optional
+   `ReferenceReadState` capability on the current `MonitorAdapter` generation,
+   preserving registry identity across rename or node movement instead of
+   binding a same-name guest from another provider. It must not fall back to direct legacy
    guest slices as the primary source of truth. Clustered PVE snapshot polling
    must therefore see guests collected earlier in the same cycle before calling
    the Proxmox guest snapshot APIs.

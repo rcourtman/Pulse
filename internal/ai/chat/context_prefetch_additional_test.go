@@ -16,6 +16,59 @@ func newTestReadState(snapshot models.StateSnapshot) unifiedresources.ReadState 
 	return rr
 }
 
+func TestContextPrefetcherCanonicalGuestMentionsKeepIndependentInstancesDistinct(t *testing.T) {
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{
+		{ID: "cluster-a:node1:101", Name: "duplicate", Instance: "cluster-a", Node: "node1", VMID: 101, Type: "qemu"},
+		{ID: "cluster-b:node1:101", Name: "duplicate", Instance: "cluster-b", Node: "node1", VMID: 101, Type: "qemu"},
+	}})
+	prefetcher := NewContextPrefetcher(rr)
+	for _, instance := range []string{"cluster-a", "cluster-b"} {
+		id := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, instance, 101)
+		if _, found := rr.Get(id); !found {
+			t.Fatalf("fixture did not publish canonical guest %s", id)
+		}
+		mentions := prefetcher.resolveStructuredMentions([]StructuredMention{{
+			ID: id, Name: "duplicate", Type: "vm", Node: "node1",
+		}})
+		if len(mentions) != 1 || mentions[0].UnifiedResourceID != id {
+			t.Errorf("explicit canonical guest selection crossed instance boundaries: selected=%s mentions=%+v", id, mentions)
+		}
+	}
+}
+
+func TestContextPrefetcherCanonicalGuestMentionUsesCurrentCoordinates(t *testing.T) {
+	rr := unifiedresources.NewRegistry(nil)
+	id := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "cluster-a", 101)
+	rr.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{{
+		ID: "cluster-a:old-node:101", Name: "old-name", Instance: "cluster-a", Node: "old-node", VMID: 101, Type: "qemu",
+	}}})
+	rr.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{{
+		ID: "cluster-a:new-node:101", Name: "current-name", Instance: "cluster-a", Node: "new-node", VMID: 101, Type: "qemu",
+	}}})
+	prefetcher := NewContextPrefetcher(rr)
+	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{{
+		ID: id, Name: "old-name", Type: "vm", Node: "old-node",
+	}})
+	if len(mentions) != 1 || mentions[0].UnifiedResourceID != id ||
+		mentions[0].ResourceID != "101" || mentions[0].TargetID != "new-node" ||
+		mentions[0].Name != "current-name" {
+		t.Fatalf("canonical mention trusted stale client labels or coordinates: %+v", mentions)
+	}
+}
+
+func TestContextPrefetcherUnknownCanonicalGuestCannotAttachByDisplayName(t *testing.T) {
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{VMs: []models.VM{{
+		ID: "cluster-a:node1:101", Name: "duplicate", Instance: "cluster-a", Node: "node1", VMID: 101, Type: "qemu",
+	}}}))
+	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{{
+		ID: "vm-0000000000000000", Name: "duplicate", Type: "vm", Node: "node1",
+	}})
+	if len(mentions) != 0 {
+		t.Fatalf("unknown explicit resource ID selected a different same-name guest: %+v", mentions)
+	}
+}
+
 func TestContextPrefetcher_NoReadState(t *testing.T) {
 	prefetcher := NewContextPrefetcher(nil)
 	if ctx := prefetcher.Prefetch(context.Background(), "check @missing", nil); ctx != nil {
@@ -76,6 +129,7 @@ func TestContextPrefetcher_PlainTextResourceNamesDoNotPrefetch(t *testing.T) {
 
 func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	state := models.StateSnapshot{
+		Containers: []models.Container{{ID: "lab:node1:201", Name: "beta", Instance: "lab", Node: "node1", VMID: 201, Type: "lxc"}},
 		DockerHosts: []models.DockerHost{{
 			ID:       "dock1",
 			Hostname: "dock1",
@@ -139,8 +193,8 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	}
 
 	unknown := prefetcher.resolveStructuredMentions([]StructuredMention{{ID: "weird:1", Name: "mystery", Type: "weird"}})
-	if len(unknown) != 1 || unknown[0].ResourceType != "weird" {
-		t.Fatalf("expected unknown type to be preserved")
+	if len(unknown) != 0 {
+		t.Fatalf("unknown resource reference must not fabricate monitoring context")
 	}
 
 	legacyHost := prefetcher.resolveStructuredMentions([]StructuredMention{{ID: "host:host1", Name: "host1", Type: "host"}})
@@ -324,7 +378,7 @@ func TestContextPrefetcher_ResolveStructuredMentions_VMwareCanonicalIDs(t *testi
 	if mentions[0].SupportsControl {
 		t.Fatalf("expected VMware host mention to stay read-only, got %+v", mentions[0])
 	}
-	if mentions[0].UnifiedResourceID != "agent:vc-1:host:host-101" {
+	if mentions[0].UnifiedResourceID != rr.Hosts()[0].ID() {
 		t.Fatalf("expected VMware host unified resource id, got %+v", mentions[0])
 	}
 	if mentions[1].ResourceType != "vm" || mentions[1].ResourceID != "vm-201" || mentions[1].TargetID != "esxi-01.lab.local" {
@@ -434,10 +488,10 @@ func TestContextPrefetcher_FormatContextSummary_VMwareGuestStaysReadOnly(t *test
 	if strings.Contains(summary, "target_host:") {
 		t.Fatalf("expected VMware guest summary to avoid target_host routing, got %q", summary)
 	}
-	if !strings.Contains(summary, "resource_id: \"app-01\"") {
+	if !strings.Contains(summary, "resource_id: \"vmware-vm-1\"") {
 		t.Fatalf("expected VMware guest summary to expose canonical resource_id routing, got %q", summary)
 	}
-	if !strings.Contains(summary, "Status, alerts, recent activity, and metrics are available through resource_id=\"app-01\"") {
+	if !strings.Contains(summary, "Status, alerts, recent activity, and metrics are available through resource_id=\"vmware-vm-1\"") {
 		t.Fatalf("expected VMware summary to expose resource_id read context, got %q", summary)
 	}
 }
@@ -500,10 +554,10 @@ func TestContextPrefetcher_FormatContextSummary_TrueNASAppUsesNativeResourceRead
 	if strings.Contains(summary, "target_host:") {
 		t.Fatalf("expected native TrueNAS app summary to avoid target_host routing, got %q", summary)
 	}
-	if !strings.Contains(summary, "resource_id: \"Nextcloud\"") {
+	if !strings.Contains(summary, "resource_id: \"app-container:truenas-main:nextcloud\"") {
 		t.Fatalf("expected native TrueNAS app summary to expose resource_id routing, got %q", summary)
 	}
-	if !strings.Contains(summary, "Shared reads address this resource by resource_id=\"Nextcloud\"") {
+	if !strings.Contains(summary, "Shared reads address this resource by resource_id=\"app-container:truenas-main:nextcloud\"") {
 		t.Fatalf("expected native TrueNAS app summary to expose native resource context, got %q", summary)
 	}
 }

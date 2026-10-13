@@ -328,20 +328,27 @@ const hasLegacyProxmoxShape = (
   resource: Resource,
   platformData: JsonRecord,
   sources?: string[],
-): boolean =>
-  resource.platformType === 'proxmox-pve' ||
-  sourceListHas(sources, 'proxmox-pve') ||
-  [
-    'instance',
-    'node',
-    'clusterName',
-    'vmid',
-    'cpus',
-    'template',
-    'swapUsed',
-    'swapTotal',
-    'balloon',
-  ].some((key) => platformData[key] !== undefined);
+): boolean => {
+  // Flat instance/node fields also describe storage from other providers.
+  // Current source ownership takes precedence over the legacy field shape.
+  if (sources && sources.length > 0) {
+    return sourceListHas(sources, 'proxmox-pve');
+  }
+  return (
+    resource.platformType === 'proxmox-pve' ||
+    [
+      'instance',
+      'node',
+      'clusterName',
+      'vmid',
+      'cpus',
+      'template',
+      'swapUsed',
+      'swapTotal',
+      'balloon',
+    ].some((key) => platformData[key] !== undefined)
+  );
+};
 
 const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformData'] => {
   const platformData = asRecord(resource.platformData);

@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "base_sha": "421a784783ebf29709a9d5e1b6fb5c1f0d3a179a",
+  "verified_at": "2026-10-13T00:50:58.421Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/Chat/MentionAutocomplete.tsx",
+    "frontend-modern/src/components/AI/Chat/index.tsx",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/Chat/index.tsx": "95bf41da8b96cf528ea9aab1b6aef98443d749158dd016a02d04f85bfac203ca",
+    "frontend-modern/src/components/AI/Chat/MentionAutocomplete.tsx": "f6836b4da038aacee20846f3e1d0db29406bbf48b2baee88fee4513b3aa31b6b",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "f46778a596def79e0593197f8b001c21ae98ba4f74253fa8329585412d95e1a0"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 900,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "configured and unconfigured Assistant",
+    "open resource picker with same-name resources in different provider scopes",
+    "hover and keyboard selection",
+    "selected and removed chips",
+    "current provider name and node refresh",
+    "submitted, pending and completed response",
+    "restored prompt after reload and server error",
+    "empty resource search",
+    "nested model menu and resource picker dismissal",
+    "governed suggestions and selected resources"
+  ],
+  "interactions": [
+    "open and close Assistant",
+    "search by name and provider scope",
+    "hover options",
+    "ArrowUp, ArrowDown, Enter and Tab selection",
+    "remove and reselect resource with draft text preserved",
+    "Escape and outside-click dismissal with focus return",
+    "select VM, system container, application container, agent and storage using registry IDs",
+    "submit distinct clone IDs",
+    "rename and move selected resource without rebinding",
+    "reload persisted prompt history",
+    "restore draft after HTTP 503",
+    "model menu cross-control dismissal",
+    "withhold private name, provider and node according to current resource policy"
+  ],
+  "binary_sha256": "b64ec7c36c3255f561c9bc8fbbbf4b4e22c0eca151af71049fcff08f86f3e00b",
+  "checks": 108,
+  "pixel_inspection": "Open pickers, hover, selected chips, renamed/moved selections, pending/completed response, restored storage draft, model menu, governed picker/selection and unconfigured composer inspected from current build screenshots.",
+  "fixture_boundary": "Local synthetic registry inventory and controlled provider/session/SSE transport. No native infrastructure action or external inference claimed."
+}

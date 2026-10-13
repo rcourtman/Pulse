@@ -7631,8 +7631,11 @@ structured mention payloads for canonical `agent`, `vm`, `storage`, and
 so VMware-backed reads stay on `/api/ai/*` and `/api/resources*` instead of
 introducing VMware-only mention payloads or provider-local inventory reads
 under `/api/vmware/*`. Runtime-specific container/app mentions remain shared
-unified-resource mentions as well; VMware network inventory does not create a
-provider-local mention family.
+unified-resource mentions as well. The existing {id,name,type,node} payload
+shape is retained, with registry ID as selection authority and labels/type/node
+as hints. Unknown IDs cannot recover through a client name. Legacy structured
+mention and session ID formats resolve only to a unique current owner.
+VMware network inventory does not create a provider-local mention family.
 That same `/api/ai/chat` payload boundary owns request-local execution mode,
 and the server sets it. `ChatRequest` in `internal/api/ai_handler.go` has no
 `autonomous_mode` field, so a stale client's `autonomous_mode` is dropped at

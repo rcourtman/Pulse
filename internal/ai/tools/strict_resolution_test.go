@@ -326,6 +326,10 @@ func (m *mockResolvedContext) AddResolvedResource(reg ResourceRegistration) {
 		resourceID = strings.TrimSpace(reg.Name)
 	}
 
+	if reg.ResourceID != "" {
+		resourceID = reg.ResourceID
+	}
+
 	resource := &mockResource{
 		resourceID:     resourceID,
 		resourceType:   reg.Kind,

@@ -435,3 +435,19 @@ describe('MentionAutocomplete', () => {
     });
   });
 });
+
+describe('provider-scoped mentions', () => {
+  it('shows and searches site names without collapsing equal labels', () => {
+    const resources = [
+      makeResource({ id: 'vm-site-a', label: 'duplicate', scope: 'Site A' }),
+      makeResource({ id: 'vm-site-b', label: 'duplicate', scope: 'Site B' }),
+    ];
+    const selected = vi.fn();
+    renderAutocomplete({ resources, query: 'site b', onSelect: selected });
+    expect(screen.queryByRole('option', { name: /in Site A/ })).not.toBeInTheDocument();
+    const option = screen.getByRole('option', { name: /in Site B/ });
+    expect(option).toHaveTextContent('Site B');
+    fireEvent.click(option);
+    expect(selected).toHaveBeenCalledWith(resources[1]);
+  });
+});

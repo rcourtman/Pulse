@@ -26,7 +26,7 @@ func buildReadRoutingHint(kind, adapter, targetHost, displayName, resourceID str
 	canonicalKind := tools.CanonicalToolResourceType(kind)
 	adapter = strings.ToLower(strings.TrimSpace(adapter))
 	targetHost = strings.TrimSpace(targetHost)
-	resourceRef := firstNonEmptyTrimmed(displayName, resourceID)
+	resourceRef := firstNonEmptyTrimmed(resourceID, displayName)
 
 	switch {
 	case canonicalKind == "app-container" && adapter == "truenas":
@@ -43,12 +43,13 @@ func buildReadRoutingHint(kind, adapter, targetHost, displayName, resourceID str
 }
 
 func readRoutingHintForMention(mention ResourceMention) readRoutingHint {
-	resourceRef := firstNonEmptyTrimmed(mention.Name, mention.UnifiedResourceID, mention.ResourceID)
-	return buildReadRoutingHint(mention.ResourceType, mention.Adapter, mention.TargetHost, resourceRef, mention.ResourceID)
+	resourceRef := firstNonEmptyTrimmed(mention.UnifiedResourceID, mention.ResourceID, mention.Name)
+	target := firstNonEmptyTrimmed(mention.UnifiedResourceID, mention.TargetHost)
+	return buildReadRoutingHint(mention.ResourceType, mention.Adapter, target, mention.Name, resourceRef)
 }
 
 func readRoutingHintForResolvedResource(kind, adapter, targetHost, displayName, resourceID string) readRoutingHint {
-	return buildReadRoutingHint(kind, adapter, targetHost, displayName, resourceID)
+	return buildReadRoutingHint(kind, adapter, firstNonEmptyTrimmed(resourceID, targetHost), displayName, resourceID)
 }
 
 func (h readRoutingHint) targetFact() string {

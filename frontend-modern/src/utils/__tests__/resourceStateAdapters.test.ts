@@ -1326,6 +1326,46 @@ describe('resourceStateAdapters nodeFromResource', () => {
     ]);
   });
 
+  it.each(['vmware', 'truenas', 'agent'])(
+    'keeps flat storage coordinates within their %s source',
+    (source) => {
+      const platformType = source === 'vmware' ? 'vmware-vsphere' : source;
+      const incoming = {
+        ...createNodeResource({ instance: 'storage-canonical', node: '', cpus: 4 }),
+        id: 'storage-canonical',
+        type: 'storage',
+        platformType,
+        sources: [source],
+        vmware:
+          source === 'vmware' ? { connectionId: 'vc-1', connectionName: 'Lab vCenter' } : undefined,
+      } as Resource;
+      const [resource] = mergeCanonicalResourceSnapshot([incoming], []);
+      expect(resource.proxmox).toBeUndefined();
+      expect((resource.platformData as Record<string, unknown>).proxmox).toBeUndefined();
+      expect(resource.platformType).toBe(platformType);
+      expect(resource.vmware).toEqual(incoming.vmware);
+      const [refreshed] = mergeCanonicalResourceDeltaSnapshot(
+        [incoming],
+        [resource],
+        new Set([incoming.id]),
+      );
+      expect(refreshed.proxmox).toBeUndefined();
+      expect(refreshed.vmware).toEqual(incoming.vmware);
+    },
+  );
+
+  it('keeps explicit Proxmox ownership on an agent-reported disk', () => {
+    const incoming = {
+      ...createNodeResource({ instance: 'legacy-storage-coordinate' }),
+      type: 'physical_disk',
+      platformType: 'agent',
+      sources: ['agent'],
+      proxmox: { instance: 'owned-pve', nodeName: 'owned-node' },
+    } as Resource;
+    const [resource] = mergeCanonicalResourceSnapshot([incoming], []);
+    expect(resource.proxmox).toEqual(incoming.proxmox);
+  });
+
   it('uses authoritative top-level sources for realtime storage platform canonicalization', () => {
     const [resource] = mergeCanonicalResourceSnapshot(
       [

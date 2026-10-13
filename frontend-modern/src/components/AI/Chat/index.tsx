@@ -133,12 +133,8 @@ import {
 } from '@/utils/aiProviderPresentation';
 import { getCachedUnifiedResources } from '@/hooks/useUnifiedResources';
 import type { ModelInfo as RuntimeModelInfo } from '@/types/ai';
-import type { Resource } from '@/types/resource';
-import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
-import {
-  getActionableAgentIdFromResource,
-  isAgentFacetInfrastructureResource,
-} from '@/utils/agentResources';
+import { requiresGovernedResourceDisplay, type Resource } from '@/types/resource';
+import { isAgentFacetInfrastructureResource } from '@/utils/agentResources';
 import { normalizeChatMentionKeyPart } from '@/utils/chatIdentifiers';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -374,6 +370,7 @@ const normalizePromptHistoryEntry = (value: unknown): PromptHistoryEntry | null 
             id,
             label,
             type,
+            scope: typeof mentionRecord.scope === 'string' ? mentionRecord.scope : undefined,
             node: typeof mentionRecord.node === 'string' ? mentionRecord.node : undefined,
             status: typeof mentionRecord.status === 'string' ? mentionRecord.status : undefined,
           };
@@ -814,6 +811,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     textareaRef.style.height = `${Math.min(textareaRef.scrollHeight, 160)}px`;
   };
 
+  const selectedMention = (mention: MentionResource) =>
+    mentionResources().find((candidate) => candidate.id === mention.id) || mention;
+
   const cloneMentions = (mentions: MentionResource[]) =>
     mentions.map((mention) => ({ ...mention }));
 
@@ -888,7 +888,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
         mention.id === other.id &&
         mention.label === other.label &&
         mention.type === other.type &&
-        mention.node === other.node
+        mention.node === other.node &&
+        mention.scope === other.scope
       );
     });
   };
@@ -3011,23 +3012,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
     const asString = (value: unknown): string | undefined =>
       typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-    const getAgentActionId = (resource: Resource): string => {
-      return getActionableAgentIdFromResource(resource) || resource.id;
-    };
-    const getDockerActionId = (resource: Resource): string => {
-      const platformData = readPlatformData(resource);
-      const platformDocker = asRecord(platformData?.docker);
-      const discoveryTarget = resource.discoveryTarget;
-      return (
-        (isAppContainerDiscoveryResourceType(discoveryTarget?.resourceType)
-          ? discoveryTarget?.resourceId
-          : undefined) ||
-        asString(platformDocker?.hostSourceId) ||
-        asString(platformData?.hostSourceId) ||
-        discoveryTarget?.agentId ||
-        resource.id
-      );
-    };
+
     const getAppContainerMentionHost = (resource: Resource): string => {
       const platformData = readPlatformData(resource);
       const platformDocker = asRecord(platformData?.docker);
@@ -3040,79 +3025,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
         ''
       );
     };
-    const getAppContainerMentionId = (resource: Resource): string => {
-      if (resource.id.startsWith('app-container:')) {
-        return resource.id;
-      }
-
-      const host = getAppContainerMentionHost(resource);
-      const platformData = readPlatformData(resource);
-      const platformDocker = asRecord(platformData?.docker);
-      const containerID =
-        asString(platformDocker?.containerId) ||
-        asString(platformDocker?.name) ||
-        asString(resource.canonicalIdentity?.primaryId) ||
-        asString(resource.name) ||
-        asString(resource.id);
-
-      if (host && containerID) {
-        return `app-container:${host}:${containerID}`;
-      }
-
-      return resource.id;
-    };
-
-    const parseLegacyVmid = (
-      platformData: Record<string, unknown> | undefined,
-    ): number | undefined => {
-      const vmidRaw = platformData?.vmid;
-      if (typeof vmidRaw === 'number' && Number.isFinite(vmidRaw) && vmidRaw > 0) return vmidRaw;
-      if (typeof vmidRaw === 'string') {
-        const parsed = parseInt(vmidRaw, 10);
-        if (Number.isFinite(parsed) && parsed > 0) return parsed;
-      }
-      return undefined;
-    };
 
     const getVMMentionNode = (resource: Resource): string => {
       const platformData = readPlatformData(resource);
       return (
+        asString(resource.proxmox?.nodeName) ||
+        asString(resource.proxmox?.node) ||
         asString(platformData?.node) ||
         asString(resource.vmware?.runtimeHostName) ||
         asString(resource.vmware?.runtimeHostId) ||
         resource.parentName ||
         ''
       );
-    };
-
-    const getVMMentionId = (resource: Resource): string => {
-      if (resource.id.startsWith('vm:')) {
-        return resource.id;
-      }
-
-      const platformData = readPlatformData(resource);
-      const node = getVMMentionNode(resource);
-      const vmid = parseLegacyVmid(platformData);
-      if (node && vmid !== undefined) {
-        return `vm:${node}:${vmid}`;
-      }
-
-      return resource.id;
-    };
-
-    const getSystemContainerMentionId = (resource: Resource): string => {
-      if (resource.id.startsWith('system-container:')) {
-        return resource.id;
-      }
-
-      const platformData = readPlatformData(resource);
-      const node = asString(platformData?.node) || resource.parentName || '';
-      const vmid = parseLegacyVmid(platformData);
-      if (node && vmid !== undefined) {
-        return `system-container:${node}:${vmid}`;
-      }
-
-      return resource.id;
     };
 
     const getStorageMentionNode = (resource: Resource): string => {
@@ -3135,41 +3059,52 @@ export const AIChat: Component<AIChatProps> = (props) => {
     );
     const mentionCandidates: MentionResource[] = [];
 
+    const mentionScope = (resource: Resource): string | undefined => {
+      if (requiresGovernedResourceDisplay(resource.policy)) return undefined;
+      return asString(resource.proxmox?.instance) || asString(resource.vmware?.connectionName);
+    };
+
     // Add VMs
     for (const vm of vms) {
       const node = getVMMentionNode(vm);
       mentionCandidates.push({
-        id: getVMMentionId(vm),
+        id: vm.id,
+        scope: mentionScope(vm),
         label: getPreferredResourceDisplayName(vm),
         type: 'vm',
         status: vm.status === 'running' ? 'running' : 'stopped',
-        node,
+        node: requiresGovernedResourceDisplay(vm.policy) ? undefined : node,
       });
     }
 
     // Add LXC/system containers (includes OCI containers).
     for (const container of containers) {
       const platformData = readPlatformData(container);
-      const node = asString(platformData?.node) || container.parentName || '';
+      const node =
+        asString(container.proxmox?.nodeName) ||
+        asString(container.proxmox?.node) ||
+        asString(platformData?.node) ||
+        container.parentName ||
+        '';
       mentionCandidates.push({
-        id: getSystemContainerMentionId(container),
+        id: container.id,
+        scope: mentionScope(container),
         label: getPreferredResourceDisplayName(container),
         type: 'system-container',
         status: container.status === 'running' ? 'running' : 'stopped',
-        node,
+        node: requiresGovernedResourceDisplay(container.policy) ? undefined : node,
       });
     }
 
     // Add container runtimes
     for (const runtime of dockerHosts) {
-      const dockerActionId = getDockerActionId(runtime);
       const label = getPreferredResourceDisplayName(runtime);
       const runtimeStatus =
         runtime.status === 'online' || runtime.status === 'running'
           ? 'online'
           : runtime.status || 'online';
       mentionCandidates.push({
-        id: `agent:${dockerActionId}`,
+        id: runtime.id,
         label,
         type: 'agent',
         status: runtimeStatus,
@@ -3181,28 +3116,34 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // the same mention contract as Docker-backed workloads.
     for (const container of appContainers) {
       mentionCandidates.push({
-        id: getAppContainerMentionId(container),
+        id: container.id,
         label: getPreferredResourceDisplayName(container),
         type: 'app-container',
         status: container.status === 'running' ? 'running' : 'exited',
-        node: getAppContainerMentionHost(container),
+        node: requiresGovernedResourceDisplay(container.policy)
+          ? undefined
+          : getAppContainerMentionHost(container),
       });
     }
 
     for (const storage of storageResources) {
       mentionCandidates.push({
         id: storage.id,
+        scope: mentionScope(storage),
         label: getPreferredResourceDisplayName(storage),
         type: 'storage',
         status: storage.status,
-        node: getStorageMentionNode(storage),
+        node: requiresGovernedResourceDisplay(storage.policy)
+          ? undefined
+          : getStorageMentionNode(storage),
       });
     }
 
     // Add nodes
     for (const node of nodes) {
       mentionCandidates.push({
-        id: `node:${node.platformId || ''}:${node.name}`,
+        id: node.id,
+        scope: mentionScope(node),
         label: getPreferredResourceDisplayName(node),
         type: 'agent',
         status: node.status,
@@ -3211,14 +3152,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     // Add standalone agents
     for (const agentResource of agentResources) {
-      const agentActionId = getAgentActionId(agentResource);
       const label = getPreferredResourceDisplayName(agentResource);
       const agentStatus =
         agentResource.status === 'online' || agentResource.status === 'running'
           ? 'online'
           : agentResource.status;
       mentionCandidates.push({
-        id: `agent:${agentActionId}`,
+        id: agentResource.id,
+        scope: mentionScope(agentResource),
         label,
         type: 'agent',
         status: agentStatus,
@@ -5232,6 +5173,57 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       </button>
                     );
                   }}
+                </For>
+              </div>
+            </Show>
+            <Show when={accumulatedMentions().length > 0}>
+              <div
+                class="mb-2 flex min-w-0 flex-wrap items-center gap-1.5"
+                aria-label="Selected resources"
+              >
+                <For each={accumulatedMentions()}>
+                  {(mention) => (
+                    <div class="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-surface-alt pl-2 pr-0.5 text-xs text-base-content">
+                      <span class="min-w-0 break-words py-1">
+                        {selectedMention(mention).label}
+                        <Show when={selectedMention(mention).scope}>
+                          {' · '}
+                          {selectedMention(mention).scope}
+                        </Show>
+                        <Show
+                          when={
+                            selectedMention(mention).node &&
+                            selectedMention(mention).node !== selectedMention(mention).scope
+                          }
+                        >
+                          {' · '}
+                          {selectedMention(mention).node}
+                        </Show>
+                      </span>
+                      <ActionIconButton
+                        onClick={() => {
+                          setAccumulatedMentions((previous) =>
+                            previous.filter((resource) => resource.id !== mention.id),
+                          );
+                          focusComposer();
+                        }}
+                        tone="muted"
+                        size="2xs"
+                        label={[
+                          'Remove resource',
+                          selectedMention(mention).label,
+                          selectedMention(mention).scope,
+                          selectedMention(mention).node !== selectedMention(mention).scope
+                            ? selectedMention(mention).node
+                            : undefined,
+                        ]
+                          .filter(Boolean)
+                          .join(': ')}
+                      >
+                        <XIcon class="h-3 w-3" aria-hidden="true" />
+                      </ActionIconButton>
+                    </div>
+                  )}
                 </For>
               </div>
             </Show>
