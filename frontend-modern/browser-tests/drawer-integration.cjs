@@ -383,8 +383,14 @@ async function box(locator) {
       const plot = historyCpu.getByTestId('guest-history-plot');
       await plot.scrollIntoViewIfNeeded();
       const rect = await plot.boundingBox();
-      if (width < 768) await plot.tap({ position: { x: rect.width * 0.6, y: rect.height / 2 } });
-      else await plot.hover({ position: { x: rect.width * 0.6, y: rect.height / 2 } });
+      if (width < 768) {
+        // Touch reveals the real native inspection control; it does not hover.
+        await plot.tap({ position: { x: rect.width * 0.6, y: rect.height / 2 } });
+        const inspect = historyCpu.getByRole('slider', { name: 'Inspect Utilization history' });
+        await inspect.tap();
+        await inspect.press('Home');
+        record.phoneInspection = await inspect.getAttribute('aria-valuetext');
+      } else await plot.hover({ position: { x: rect.width * 0.6, y: rect.height / 2 } });
       // Decorative zero-length stroke groups have no geometric bounding box.
       // Verify attachment/path geometry, then review the rendered pixels.
       await page
