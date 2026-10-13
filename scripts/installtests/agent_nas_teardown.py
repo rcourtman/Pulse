@@ -44,6 +44,20 @@ def definitions(source, names=FUNCTIONS):
     return "\n".join(result)
 
 
+def generated_collector_is_running(listing, runtime):
+    """Match the owned executable with either Unix comm representation.
+
+    Darwin reports an executable path where Linux reports its basename. Keep
+    the argument path exact so another same-named process is not our collector.
+    """
+    for line in listing.splitlines():
+        fields = line.split(maxsplit=1)
+        if (len(fields) == 2 and Path(fields[0]).name == "pulse-agent"
+                and fields[1].startswith(str(runtime) + " ")):
+            return True
+    return False
+
+
 MODEL = r'''#!/usr/bin/python3
 import json, os, pathlib, sys
 root = pathlib.Path(os.environ['FIXTURE'])
@@ -392,7 +406,9 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
         import time
         for platform in ('Unraid', 'QNAP'):
             with self.subTest(platform=platform), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory)
+                # Darwin's temporary-directory alias must not become a
+                # different executable identity in its process observation.
+                root = Path(directory).resolve()
                 for name in ('state', 'bin', 'tools', 'flash', 'logs'): (root / name).mkdir(mode=0o700)
                 runtime = root / 'bin/pulse-agent'; stored = root / 'state/stored-agent'
                 stored.write_bytes(Path('/bin/sleep').read_bytes()); stored.chmod(0o700)
@@ -438,7 +454,7 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                         deadline = time.monotonic() + 8
                         while time.monotonic() < deadline:
                             listing = subprocess.run(['ps', '-ax', '-o', 'comm=', '-o', 'args='], capture_output=True, text=True, check=True).stdout
-                            if any(line.strip().startswith('pulse-agent ') and str(runtime) in line for line in listing.splitlines()): break
+                            if generated_collector_is_running(listing, runtime): break
                             self.assertIsNone(process.poll(), output.read_text()); time.sleep(.05)
                         else: self.fail('private generated collector did not start')
                         result = subprocess.run(['bash', str(control)], env=env, capture_output=True, text=True, timeout=12)
@@ -450,6 +466,23 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                         try: os.killpg(process.pid, signal.SIGKILL)
                         except ProcessLookupError: pass
                         process.wait(timeout=3)
+
+    def test_generated_collector_observation_keeps_exact_identity_on_both_unix_formats(self):
+        runtime = Path('/synthetic/owned/bin/pulse-agent')
+        for comm in ('pulse-agent', str(runtime)):
+            with self.subTest(comm=comm):
+                self.assertTrue(generated_collector_is_running(f'{comm} {runtime} 30\n', runtime))
+        for listing in (
+            f'other {runtime} 30\n',
+            'pulse-agent /synthetic/foreign/bin/pulse-agent 30\n',
+            f'pulse-agent {runtime}-prod 30\n',
+            f'pulse-agent /bin/sh echo {runtime} 30\n',
+            f'pulse-agent {runtime}\n',
+            'pulse-agent\n',
+            '',
+        ):
+            with self.subTest(listing=listing):
+                self.assertFalse(generated_collector_is_running(listing, runtime))
 
     def test_caller_has_no_blanket_nas_or_legacy_tree_deletion(self):
         caller = self.source.split('# --- Uninstall Logic ---\n', 1)[1].split('# --- Validation ---\n', 1)[0]
