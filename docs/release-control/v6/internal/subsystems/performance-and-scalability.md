@@ -569,6 +569,8 @@ in-place click and chevron activation over a selection.
 
 ## Canonical Files
 
+- `frontend-modern/src/utils/filesystemByteUsage.ts`: shared finite byte/capacity admission for filesystem utilization.
+
 1. `pkg/metrics/store.go`
 2. `pkg/metrics/store_query_plan_test.go`
 3. `pkg/metrics/store_slo_test.go`
@@ -4159,3 +4161,20 @@ offset/numeric/Date inputs and unusable timestamp safety. Browser proof checks
 that disclosures and passive ticks add no API requests while production
 table/drawer times agree in opposing non-UTC contexts. This is not whole-fleet
 CPU/RSS relief or native guest/backup recovery.
+
+### Filesystem summaries admit only usable byte readings
+
+The shared stacked-disk model uses the same finite byte/capacity admission as
+the host drawer rows. Unknown sentinels, invalid used bytes and unmeasured
+capacity stay in tooltip identity/capacity evidence, without entering byte
+sums, utilization segments or severity. Mixed summaries count only accepted
+filesystem byte rows; all-unknown lists render N/A unless an independent
+accepted aggregate is available. True zero and source-owned last-known states
+remain distinct. The existing aggregate-only percentage fallback is unchanged.
+
+`stackedDiskBarModel.branchcov0712b.test.ts` covers mixed partial byte lists,
+invalid values, all-unknown admission and explicit independent aggregate
+controls. `browser-tests/host-disk-usage.cjs` exercises the actual resource
+HTTP/table/summary/drawer flow at desktop and touch widths. Disclosure adds no
+measurement or storage operation. This is truthful presentation, not native
+collector recovery or an installed performance result.

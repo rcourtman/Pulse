@@ -8284,3 +8284,34 @@ classification use the existing shared clock for freshness and ages. No clock
 tick initiates a probe, grants health, changes thresholds or widens token scope.
 The vSphere VM table has one h2 title, including kiosk and filtered-empty state;
 its count follows filtered rows only when the page-owned toolbar state is ready.
+
+### Host filesystem consumers retain uncertainty
+
+The existing Proxmox node and Docker host drawers preserve a negative
+filesystem usage sentinel through normalization into **Usage unavailable**,
+not 0% or healthy empty storage. Missing/invalid capacity and negative or
+non-finite used bytes also withhold utilization; a finite positive capacity
+can still be shown independently. Canonical DiskInfo omits genuine zero bytes,
+so those omissions retain their existing zero semantics when positive capacity
+is present and there is no unknown sentinel. Valid measured byte ratios,
+mount filtering and resource identity remain unchanged.
+
+Both drawers consume the same host disk presentation text and neutral unknown
+state. A same-ID accepted resource refresh replaces the old reading, in both
+directions, without adding a read, scan or disk operation to disclosure.
+`HostDrawer.filesystem-readings.test.tsx` checks both production consumers;
+`DrawerDiskListCard.readings.test.tsx` checks normalized unknown/invalid and
+zero controls. The source-bound `browser-tests/host-disk-usage.cjs` fixture
+connects synthetic Resources HTTP, the real resource hook, platform tables and
+keyboard/touch drawer controls. This is presentation admission, not installed
+collector, guest safety, restart or release acceptance.
+
+The shared `filesystemByteUsage.ts` admission also applies to filesystem inputs
+of `stackedDiskBarModel.ts`: unusable byte rows remain neutral in tooltips and
+do not contribute used bytes, capacity, bars, combined percentages or highest
+usage. All-unmeasured filesystem lists with no independent accepted aggregate
+render N/A, not a fabricated zero. Independently supplied aggregate metrics and
+retained/unavailable source classifications preserve their existing semantics.
+The connected stacked-model controls retain explicit aggregate fallback tests;
+the browser fixture checks mixed and all-unknown lists in the actual summaries
+as well as both drawers, including live replacement at narrow widths.

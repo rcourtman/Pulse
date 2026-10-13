@@ -515,10 +515,11 @@ describe('StackedDiskBar', () => {
   // ── Zero capacity edge case ─────────────────────────────────────────────
 
   describe('zero capacity', () => {
-    it('handles zero total capacity gracefully', () => {
+    it('shows unavailable rather than empty utilization for zero total capacity', () => {
       const disk = makeDisk({ used: 0, total: 0, free: 0 });
       render(() => <StackedDiskBar disks={[disk]} />);
-      expect(screen.getByText('0%')).toBeInTheDocument();
+      expect(screen.getByText('N/A')).toBeInTheDocument();
+      expect(screen.queryByText('0%')).not.toBeInTheDocument();
     });
 
     it('handles zero total in stacked mode without NaN segments', () => {
