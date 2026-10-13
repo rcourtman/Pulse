@@ -13,7 +13,7 @@ async function box(locator) {
   return locator.evaluate((element) => {
     const focused = element === document.activeElement, focusVisible = element.matches(':focus-visible');
     const rect = element.getBoundingClientRect(), css = getComputedStyle(element);
-    return { width: rect.width, height: rect.height, left: rect.left, right: rect.right,
+    return { class: element.className, width: rect.width, height: rect.height, left: rect.left, right: rect.right,
       client: element.clientWidth, scroll: element.scrollWidth, text: element.textContent,
       focused, focusVisible,
       whiteSpace: css.whiteSpace, overflowWrap: css.overflowWrap, colour: css.color,
@@ -103,8 +103,10 @@ async function box(locator) {
       const reading = overview.getByRole('link', { name: 'Filesystem reading guidance' });
       await reading.scrollIntoViewIfNeeded(); await reading.focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
       await page.evaluate(async () => { await document.fonts.ready; await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))); });
+      record.readingBeforeCapture = await box(reading);
+      await capture('guest-unknown');
       record.reading = await box(reading); assert.equal(record.reading.focusVisible, true); assert.equal(record.reading.outline, 'solid'); assert.equal(record.reading.outlineWidth, '2px');
-      assert.equal(record.reading.height, width < 768 ? 44 : 16); await capture('guest-unknown');
+      assert.equal(record.reading.height, width < 768 ? 44 : 16);
       await activate(reading); await page.waitForURL('**/docs/VM_DISK_MONITORING#*');
       await page.getByRole('heading', { name: 'A missing reading is not an installation diagnosis' }).waitFor();
       record.filesystemDoc = page.url();
