@@ -105,11 +105,8 @@ parser. These controls do not establish issue #2762's installed input or cause,
 a cleared finding, or a containing release. Monitoring collection, guest-agent
 admission, configured alert thresholds, history storage and access are unchanged.
 
-A legacy client echoing the projected `controlled` mode into an unrelated AI
-settings PUT must retain a stored `autonomous` preference and its existing
-legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
-uses actual encrypted GET/PUT persistence with and without the entitlement,
-then checks explicit read-only opt-out and later opt-in remain possible.
+Legacy Assistant mode echo and stored-preference compatibility follow the
+[API settings contract](api-contracts.md#assistant-control_level-is-an-interactive-projection).
 
 ### Assistant protection is the per-resource lock, not a settings list
 
@@ -2204,7 +2201,7 @@ tool-result payloads must project through
 `OrchestratorToolResultInfo.ProviderToolResult` so the public investigation
 handoff contract inherits the same `agentcapabilities` input-map,
 thought-signature, and provider-result normalization as Assistant and MCP —
-`TestOrchestratorAndChatAdaptersMapTheSameMessageFields` enforces it.
+`TestOrchestratorAndChatAdaptersMapTheirMessageContracts` enforces it.
 
 Assistant frontend presentation changes under
 `frontend-modern/src/components/AI/Chat/` must keep live tool activity aligned
@@ -5851,9 +5848,19 @@ attributes the suppression on the lifecycle timeline
 (`operator_state_cause: maintenance_window`, with
 `maintenance_end_at` metadata), and persists the finding for audit
 history. The active boundary may come from a one-shot or recurring schedule;
-both are evaluated by the canonical operator-state model. Descendant-scope
-inheritance is alert-intent behavior and does not weaken exact-resource
-action-remediation locks or invent inherited action authority.
+both are evaluated by the canonical operator-state model, and the projection
+carries the active occurrence's own start and end
+(`ActiveMaintenanceOccurrenceAt`), never the one-shot fields, which a recurring
+schedule leaves nil. Patrol inherits maintenance exactly as alert intent does:
+`unifiedresources.ActiveMaintenanceCoverageAt` resolves the resource's own
+window and every ancestor window scoped `resource_and_descendants` on the live
+canonical parent chain, and the latest-ending active window wins. A window
+stored on an ancestor reaches the projection with `Inherited` and its
+`SourceID`; the dismissal note says the window is on a parent resource and the
+lifecycle event carries `maintenance_inherited` and `maintenance_source_id`.
+Only maintenance is inherited. Monitoring mode, lifecycle, criticality and
+action-remediation locks stay exact-resource state, so descendant scope never
+weakens a lock or invents inherited action authority.
 
 Operator state outranks per-action approval on the Pulse Actions path:
 `validateExecutionPolicy` in `internal/actionlifecycle/service.go` reads the
@@ -8640,11 +8647,9 @@ recompute digest counts from run history, findings, or cost events, and must
 not call the endpoint through any other client. Proof:
 `frontend-modern/src/api/__tests__/patrol.test.ts`.
 
-The explicit issue explanation journey is qualified separately from provider
-reasoning and real remediation in
-`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
-proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
-response does not establish a useful customer outcome or model qualification.
+Issue explanation follows the [customer-journey qualification boundary](../../../../qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md#real-outcome-qualification-still-required),
+which separates scripted interaction proof from provider reasoning, remediation
+and repeatable customer outcomes.
 
 ### Subscription routing content boundary
 

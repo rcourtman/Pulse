@@ -145,3 +145,50 @@ func TestSQLiteOperatorStateNullPolicyColumnNormalizesOnRead(t *testing.T) {
 		t.Fatalf("wire payload must contain an empty capabilityNames list, got: %s", encoded)
 	}
 }
+
+func TestActiveMaintenanceCoverageAtInheritsOnlyDescendantScopedAncestors(t *testing.T) {
+	now := time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
+	window := func(endIn time.Duration, scope MaintenanceScope, reason string) ResourceOperatorState {
+		start, end := now.Add(-time.Hour), now.Add(endIn)
+		return ResourceOperatorState{MaintenanceStartAt: &start, MaintenanceEndAt: &end, MaintenanceScope: scope, MaintenanceReason: reason}
+	}
+	states := map[string]ResourceOperatorState{
+		"node":    window(2*time.Hour, MaintenanceScopeResourceAndDescendants, "node patching"),
+		"cluster": window(4*time.Hour, MaintenanceScopeResource, "cluster only"),
+	}
+	read := func(id string) (ResourceOperatorState, bool) {
+		state, ok := states[id]
+		return state, ok
+	}
+
+	// No own state: the descendant-scoped node window covers the guest; the
+	// resource-only cluster window, though it ends later, does not.
+	coverage, ok := ActiveMaintenanceCoverageAt(now, "guest", nil, []string{"node", "cluster"}, read)
+	if !ok || !coverage.Inherited || coverage.SourceID != "node" || coverage.Reason != "node patching" || !coverage.Occurrence.EndAt.Equal(now.Add(2*time.Hour)) {
+		t.Fatalf("coverage = %+v (ok=%v), want the node's inherited window", coverage, ok)
+	}
+
+	// An own window ending earlier yields to the later inherited one; ending
+	// later, it wins.
+	short := window(time.Hour, MaintenanceScopeResource, "guest short")
+	if coverage, _ := ActiveMaintenanceCoverageAt(now, "guest", &short, []string{"node"}, read); coverage.SourceID != "node" {
+		t.Fatalf("earlier own window won over a later inherited one: %+v", coverage)
+	}
+	long := window(3*time.Hour, MaintenanceScopeResource, "guest long")
+	if coverage, _ := ActiveMaintenanceCoverageAt(now, "guest", &long, []string{"node"}, read); coverage.Inherited || coverage.SourceID != "guest" || coverage.Reason != "guest long" {
+		t.Fatalf("later own window lost to the inherited one: %+v", coverage)
+	}
+
+	// Controls: no ancestors or no reader means own state only.
+	if _, ok := ActiveMaintenanceCoverageAt(now, "guest", nil, nil, read); ok {
+		t.Fatal("covered with no own window and no ancestors")
+	}
+	if _, ok := ActiveMaintenanceCoverageAt(now, "guest", nil, []string{"node"}, nil); ok {
+		t.Fatal("covered with no ancestor reader")
+	}
+	expired := window(-time.Minute, MaintenanceScopeResourceAndDescendants, "")
+	states["node"] = expired
+	if _, ok := ActiveMaintenanceCoverageAt(now, "guest", nil, []string{"node"}, read); ok {
+		t.Fatal("an ancestor window that already ended still covers the guest")
+	}
+}

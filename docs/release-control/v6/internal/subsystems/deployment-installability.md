@@ -67,123 +67,24 @@ publication remain separate obligations; this source proof does not resolve
 
 ### TrueNAS SCALE removal retires every owned middleware boot task before recovery erasure
 
-TrueNAS SCALE has an independent activation owner: its Init/Shutdown bootstrap
-can recreate and enable the systemd unit after a normal disable. A recovered
-state directory or an unrelated `/etc/version` alone is not appliance identity.
-The uninstall caller selects SCALE only from a bootstrap footprint or vendor
-marker. The existing protected/explicit state-removal authority must select the
-same state directory and exact bootstrap path; linked, writable or non-regular
-bootstrap files refuse before task/service mutation.
-
-One complete, bounded middleware inventory must identify every exact generated
-SCRIPT/POSTINIT task, including duplicates. Unknown ownership, indirect command
-activation or another-install bootstrap refuses without deleting unrelated
-tasks. The JSON reader rejects duplicate keys/IDs, invalid types, failed/empty/
-diagnostic/incomplete reads, over 512 tasks or over 1 MiB; it returns only owned
-numeric IDs and enablement, never task commands, names or credentials. A
-missing/empty SCRIPT path or COMMAND target is unknown activation, not an
-unrelated task or evidence that the owned task is absent. All owned
-tasks are disabled with checked calls and independent exact-set readback before
-systemd stop. A partial stop/disable stays stopped/disabled: do not re-enable or
-automatically restart after a refusal.
-
-The complete systemd target set and independent kernel collector/bootstrap
-process inventory and a final exact disabled-task readback must be quiescent
-before same-instance server removal, including task changes during systemd stop.
-After remote confirmation, the exact disabled task set is re-read before the first
-task deletion. Every owned deletion is checked; final whole-unit/process
-quiescence and complete task absence precede credential, stored binary,
-bootstrap and state erasure. A changed set, refusal, ignored deletion, new task
-or reactivation retains local recovery, even if earlier task/server operations
-succeeded. No favourable replacement observation, task recreation or credential
-churn is performed. Unrelated tasks survive unchanged.
-
-`TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure` requires all
-sixteen `agent_truenas_teardown.py` actual-function/full-caller controls,
-including multiple tasks, partial/refused/unknown operations, post-remote
-changes, ignored/recreated deletion, process privacy and a real timeout child.
-These run against closed middleware/systemd/process models and private ordinary-
-user files, not a native appliance. Existing systemd/OpenRC/DSM/rc.d/SysV gates,
-transport trust and identity remain. TrueNAS CORE retains its linked rc.d/
-appliance refusal; Unraid/QNAP boot ownership, Windows and signed installed
-Linux/PowerShell/native/TLS/cleanup acceptance remain separate. This does not
-expand the original removal job into macOS or introduce another dispatcher.
+The [agent lifecycle removal contract](agent-lifecycle.md#truenas-scale-removal-retires-every-owned-middleware-boot-task-before-recovery-erasure)
+owns this manager's activation, quiescence, recovery-retention and erasure
+requirements, including the registered source controls and native-qualification
+boundary. The deployment entrypoint must preserve that contract.
 
 ### DSM Upstart removal retains recovery until automatic activation and the job are absent
 
-DSM 6 Upstart jobs (including leftovers on DSM 7) are not classified as SysV.
-Before remote removal, the installer validates protected regular Pulse job and
-manual-override files, observes one complete combined status and independent
-process inventory, installs a non-clobbering `manual` override, reloads and
-checks the effective configuration has no start condition, then confirms stopped
-status and process absence. A missing manager, transitional/unknown state,
-diagnostic, duplicate, empty or failed observation refuses without another
-sample. A successful stop/override may remain after failure; do not restart or
-restore automatic activation. Foreign override/configuration and any previous
-`.removal.*` recovery copy refuse without deletion.
-
-After remote confirmation, a fresh gate precedes retiring the job. Its original
-configuration inode is staged outside Upstart's `.conf` namespace until checked
-reload, exact unknown-job status and independent process absence establish
-retirement. On unconfirmed retirement it is restored only if the original path
-is still absent, leaving the manual override and all local recovery state;
-atomic non-replacement links refuse concurrently created files or directories,
-including during restore; the staged recovery copy is retained on conflict.
-Override write, permission and link operations each have explicit checked
-failure handling. Their non-credential temporary is also registered with the
-existing installer EXIT cleanup, executed by the production-function controls.
-Credential-bearing staged job recovery is never registered for EXIT deletion. Only confirmed retirement removes the staged config and manual
-before credential/state erasure. No credentials, arguments or config contents
-are returned by these observations. Existing same-instance URL, exact record,
-TLS, systemd/OpenRC/rc.d/SysV and state-directory ownership remain unchanged.
-
-The registered `scripts/installtests/install_sh_test.go` requires all fifteen
-`agent_upstart_teardown.py` production-function/caller controls, including exact
-file restoration, effective activation, late refusal, stopped/absent/repeated
-removal and real timeout-child termination. These are confined ordinary-user
-files and closed manager/process/transport models, not native DSM/Upstart,
-current-compiler or installed Linux/PowerShell acceptance. Unraid/QNAP/TrueNAS
-boot/watchdog ownership, Windows and the original native/TLS/cleanup journey
-remain separate; this does not broaden #1099 into macOS acceptance.
+The [agent lifecycle removal contract](agent-lifecycle.md#dsm-upstart-removal-retains-recovery-until-automatic-activation-and-the-job-are-absent)
+owns this manager's activation, quiescence, recovery-retention and erasure
+requirements, including the registered source controls and native-qualification
+boundary. The deployment entrypoint must preserve that contract.
 
 ### FreeBSD rc.d and SysV removal retains recovery on unknown or live state
 
-Before server deregistration or local erasure, Unix uninstall selects its
-FreeBSD rc.d or SysV manager and requires observed quiescence. Bounded combined
-reads reject failed, incomplete, empty, duplicate or diagnostic-bearing state.
-The kernel process inventory checks both collector and daemon supervisor, while
-PID files must be regular numeric records of at most 32 bytes that cannot
-identify another process.
-Process arguments are never returned from the reader. Rendered rc.d/SysV stops
-retain PID files after refused signals or when termination remains unconfirmed.
-
-FreeBSD requires effective `pulse_agent_enable=NO` readback plus matching stopped
-status and supervisor/child absence. SysV removes every owned activation link
-across both rc*.d layouts, including custom runlevels and priorities, with checked
-manager commands or exact owned-link removal. Foreign, malformed or inaccessible
-paths refuse, rather than deleting another service. Both paths recheck after
-remote confirmation and before script, PID or credential erasure. Remote refusal
-keeps the stopped installation's recovery material; no automatic restart occurs.
-Disabling may succeed before a later stop/status/process read fails; do not
-restore activation links or automatically restart. Earlier installed init scripts
-can still erase their own runtime PID files after failed signals. The independent
-gate then retains service/credential recovery and refuses remote removal; it
-does not recreate PIDs or rewrite those installed scripts. Renderer changes apply
-to newly generated scripts, not historical installed-script acceptance.
-Missing/repeated removal still requires known disabled activation and process
-absence. Existing systemd/OpenRC gates and credential/transport ownership remain.
-
-TrueNAS bootstrap re-enables rc.conf and recreates the service link independently.
-A linked rc.d service or existing appliance bootstrap therefore refuses *before*
-remote removal or erasure until its owning activation task can be reconciled;
-this step does not claim appliance task, launchd, Windows or native acceptance.
-Missing timeout/sysrc or unrecognised manager output also remains a safe refusal.
-`TestInstallSHLegacyTeardownRequiresObservedQuiescence` requires all eighteen
-production-function/caller/rendered-stop methods in `agent_legacy_teardown.py`,
-using closed ordinary-user models and private deletion/signal targets, plus a
-real timeout-child termination control. Source models are not installed signed
-agent, real TLS, native manager, published availability or whole #1099 resolution.
-
+The [agent lifecycle removal contract](agent-lifecycle.md#freebsd-rcd-and-sysv-removal-retains-recovery-on-unknown-or-live-state)
+owns this manager's activation, quiescence, recovery-retention and erasure
+requirements, including the registered source controls and native-qualification
+boundary. The deployment entrypoint must preserve that contract.
 
 ### OpenRC removal retains recovery on an unconfirmed manager result
 
@@ -257,38 +158,10 @@ and installed/removal acceptance remain separate from these confined controls.
 
 ### Unix removal retains credentials when connection recovery is incomplete
 
-After existing installed-state recovery, the unified Unix installer checks for
-collector credentials before considering whether a Pulse URL was recovered.
-Any inline credential or selected/runtime/legacy/helper token-file entry,
-including an empty or unreadable file, broken symlink or FIFO, requires
-an authenticated exact-record removal confirmation before local teardown.
-A missing URL fails with a credential-safe same-instance recovery message;
-it cannot turn credential-bearing removal into the local-only path. No
-transport request, process stop, service stop or state deletion follows that
-refusal. Server refusal, unknown confirmation and identity mismatch retain
-state as before; confirmation does not widen trusted path-removal authority.
-Credential-free removal remains local-only, with or without a saved URL.
-
-`TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing` runs the
-production argument parser, token-file ingress, admission, credential-presence,
-record-confirmation and initial state-directory cleanup through
-`agent_uninstall_state.py`. Its forty-eight confined cases use private files
-and service/transport doubles, not a privileged installer or native service
-manager. The legacy shell reader's root ownership is projected onto the private
-fixture owner; root refusal runs as the ordinary proof user. These checks do not
-establish Windows, actual TLS, saved-state discovery, a published fix or
-whole-issue installed removal acceptance.
-
-Reading `--token-file` is read-only, including in non-interactive mode and
-before permission checks. Supplying a credential does not grant ownership of
-its file: a missing URL, root refusal, refused or unknown server result, or
-identity mismatch cannot erase it. Confirmed removal retains a caller-owned
-file outside the authorised runtime state directory; tokens inside that state
-are removed only by its existing post-confirmation path-authorised cleanup.
-Installer-created temporary credentials still belong to the installer cleanup
-trap. Generated setup commands already remove their own private bootstrap
-files; this does not remove that caller-owned cleanup or widen token/TLS trust.
-
+The [agent lifecycle credential-removal contract](agent-lifecycle.md#unix-removal-retains-credentials-when-connection-recovery-is-incomplete)
+owns credential detection, same-instance confirmation, caller-owned token files
+and recovery retention. The deployment entrypoint must preserve those rules and
+the distinction between confined source controls and installed acceptance.
 
 ### Docker server update plans preserve the saved deployment
 

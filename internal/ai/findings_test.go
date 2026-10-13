@@ -1757,6 +1757,9 @@ func TestFindingsStore_Add_AutoAcknowledgesDuringMaintenanceWindow(t *testing.T)
 	if !strings.Contains(got.UserNote, "Q3 storage upgrade") {
 		t.Errorf("UserNote should include the operator's reason; got %q", got.UserNote)
 	}
+	if strings.Contains(got.UserNote, "parent resource") {
+		t.Errorf("UserNote on the resource's own window must not credit a parent; got %q", got.UserNote)
+	}
 	// Lifecycle must record the auto-dismiss with the canonical
 	// operator_state_cause metadata so the timeline can attribute the
 	// suppression to its source.
@@ -1769,6 +1772,44 @@ func TestFindingsStore_Add_AutoAcknowledgesDuringMaintenanceWindow(t *testing.T)
 	}
 	if !foundMaintenanceEvent {
 		t.Error("expected a 'dismissed' lifecycle event with operator_state_cause=maintenance_window")
+	}
+}
+
+// A window inherited from an ancestor's descendant-scoped maintenance
+// dismisses the finding too, and the note and timeline say the window is the
+// parent's, so the operator does not look for one on the guest.
+func TestFindingsStore_Add_AutoAcknowledgesDuringInheritedMaintenanceWindow(t *testing.T) {
+	store := NewFindingsStore()
+	now := time.Now()
+	store.SetResourceOperatorStateProvider(ResourceOperatorStateProviderFunc(func(canonicalID string, queriedAt time.Time) (ResourceOperatorStateProjection, bool) {
+		return ResourceOperatorStateProjection{
+			MaintenanceWindow: &ResourceOperatorStateMaintenanceWindow{
+				StartAt:   now.Add(-time.Hour),
+				EndAt:     now.Add(time.Hour),
+				Reason:    "hypervisor patching",
+				SourceID:  "agent:node-a",
+				Inherited: true,
+			},
+		}, true
+	}))
+
+	store.Add(&Finding{ID: "f-inherited", ResourceID: "vm:101", Severity: FindingSeverityWarning, Title: "CPU saturated"})
+
+	got := store.Get("f-inherited")
+	if got == nil || got.DismissedReason != "expected_behavior" {
+		t.Fatalf("finding under an inherited window = %+v, want it dismissed as expected_behavior", got)
+	}
+	if !strings.Contains(got.UserNote, "on a parent resource") || !strings.Contains(got.UserNote, "hypervisor patching") {
+		t.Fatalf("UserNote %q should name the parent's window and its reason", got.UserNote)
+	}
+	attributed := false
+	for _, ev := range got.Lifecycle {
+		if ev.Type == "dismissed" && ev.Metadata["maintenance_inherited"] == "true" && ev.Metadata["maintenance_source_id"] == "agent:node-a" {
+			attributed = true
+		}
+	}
+	if !attributed {
+		t.Fatal("expected the dismissed lifecycle event to name the ancestor the window is stored on")
 	}
 }
 

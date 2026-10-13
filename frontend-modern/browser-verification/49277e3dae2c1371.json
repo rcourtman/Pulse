@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "base_sha": "e9083fdf8020200e39e71f7cd2e1448af5450ec8",
+  "verified_at": "2026-10-13T09:33:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/DrawerTrendCards.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/drawerOverviewModel.ts",
+    "frontend-modern/src/components/Workloads/guestDrawerHistoryQuery.ts",
+    "frontend-modern/src/components/shared/TechnicalDetailsDisclosure.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/DrawerTrendCards.tsx": "414c2989dd404301d7e0b0fd06fd15472f40217ba6bf1d26083d6f91e74f9d28",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "2892e4cf2f6e1811559a0093ea9bab0cf84600c878a3a2d16d7666d480003717",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "6c2ff6fcc5111ba706386ac6431a466e67b36b25f96503d3447ffa56c077d0eb",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "983b9c2c1da71c05f7d537f716747b8870487c2a3ec3a8be1b0fb5208f3b8f08",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "a7c7c3e5f862c506e090451d2b971594b7f456d58b2998e3fe3065221ec25aba",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "591766e5d15e1c9dd592901069b01423d16d28420778fd2190edddb1ad2cc272",
+    "frontend-modern/src/components/Workloads/drawerOverviewModel.ts": "c15dab901c0230698cecbadf5d589cb5562da275c931dcdc7699a35eb21b8cfb",
+    "frontend-modern/src/components/Workloads/guestDrawerHistoryQuery.ts": "e028e1dd36a24bd7ad2b605f3a32157869d32f60f44f11ee4504619cdad2d0d7",
+    "frontend-modern/src/components/shared/TechnicalDetailsDisclosure.tsx": "dab4ef9a255fbe1ccacf6a15a2b762ab1146c53f666a8afc24cda856a98d58cc",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "45255f415466fae949a3b67c55da37650c5903ca6ae42a79786a85c136d429ee"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "sidecar Vite dev server serving these final bytes, proxied to the shared dev backend with the real homelab estate (delly, delly2, minipc; 36 guests); websocket not proxied, so data arrived over REST",
+    "VM msp-eval-lab with an active 85% memory warning: Needs attention first, CPU and Memory trend cards (no Disk card: no disk reading, the Filesystems section carries the guest-agent reason once), Memory card amber with the alert trigger drawn, Last completed backup in the facts strip, Details closed",
+    "LXC frigate with no alerts and a fresh passing HTTP check: 'No active alerts \u00b7 availability checks passing', CPU/Memory/Disk trend cards, Filesystems section with / and /media/frigate, facts strip with OS, IP, backup and tag chips (IP tag not repeated); Details opened shows Summary, System, Memory, Network and the availability card",
+    "PVE node delly: guest's memory alert listed under Needs attention but the node's Memory card stays plain (own alerts only), CPU temperature range 42-92\u00b0C from bucket extremes, Worth checking lists the denied update check, Sensors shows NVMe readings outside Details, facts strip, Details closed with the full inventory inside",
+    "390px phone: cards stack full width (356px), no element extends past the viewport, page scrollWidth equals the viewport, Details summary is 44px tall",
+    "after the final node fixes (table-supplied own alerts, last-known memory, measured disk), reloaded at 1280px: delly2 with its own critical memory alert shows a red Memory card with the trigger drawn and the alert under Needs attention; delly with only a guest's warning keeps a plain Memory card; all three nodes show CPU/Memory/(temperature)/Root disk cards with live values and 24h ranges"
+  ],
+  "interactions": [
+    "expanded and collapsed msp-eval-lab, frigate and the delly node rows",
+    "opened Details on frigate and delly by clicking the summary; content was already mounted and became visible",
+    "on delly switched to History: zero History charts before the click, three after (History mounts on demand while Overview trend cards own the 24h read)",
+    "reloaded at 1024, 1280 and 390px widths and re-checked overflow",
+    "negative controls on a pulse-dev copy: reverted the own-alert filter, threshold scaling, bucket extremes, offline withholding, hidden-tab polling and fresh-availability rule in turn; each made exactly its targeted test fail, then restored",
+    "queried /api/alerts/active to confirm delly2's memory alert is keyed on homelab-delly2, then expanded delly, delly2 and minipc in turn"
+  ]
+}

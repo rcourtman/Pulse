@@ -21,11 +21,15 @@
 
 ## Purpose
 
-A legacy client echoing the projected `controlled` mode into an unrelated AI
-settings PUT must retain a stored `autonomous` preference and its existing
-legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
-uses actual encrypted GET/PUT persistence with and without the entitlement,
-then checks explicit read-only opt-out and later opt-in remain possible.
+### Patrol maintenance coverage adds no recovery execution
+
+Patrol's operator-state projection now projects the active recurring
+occurrence instead of the nil one-shot fields and inherits descendant-scoped
+ancestor maintenance. It reads existing operator-state rows only; it adds no
+recovery endpoint, execution route or recovery-point access.
+
+Legacy Assistant mode echo and stored-preference compatibility follow the
+[API settings contract](api-contracts.md#assistant-control_level-is-an-interactive-projection).
 
 ### Pro Patrol default adds no recovery execution
 
@@ -6080,17 +6084,8 @@ than drifting into "has ever used"
 
 ### Per-tenant resource stores are released on offboarding and shutdown
 
-`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
-process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
-called from `Router.CleanupTenant` alongside the other per-tenant teardown;
-`CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
-Without this an offboarded tenant kept its file descriptors and its
-`unified_resources.db-wal`/`-shm` files alive and its directory could not be
-fully removed. Closed stores are evicted from the cache so a later request opens
-a fresh handle rather than using a closed one
-(`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
-are idempotent and nil-safe
-(`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+Tenant offboarding and process shutdown use the [API store-lifecycle contract](api-contracts.md#per-tenant-resource-stores-are-released-on-offboarding-and-shutdown),
+including its source controls and qualification limits.
 
 ### Report-ack version echo persists nothing
 
@@ -6515,18 +6510,9 @@ results. A running guest alone cannot prove a reboot.
 
 ### Quick security setup preserves unrelated settings
 
-Authenticated force setup in `internal/api/security_setup_fix.go` retains the
-existing authentication and settings-write authorization checks. Rotating local
-credentials does not reset non-auth system preferences.
-`ConfigPersistence.InitializeSystemSettings` in `internal/config/persistence.go`
-creates defaults only when system settings are absent, under the same instance
-mutex as ordinary saves; existing bytes (including unknown fields and malformed
-data requiring recovery) are not rewritten. A read error prevents initialization,
-while authentication setup retains its existing nonfatal settings-error behavior.
-This does not change token scopes, agent admission, or existing agent cleanup.
-Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
-`TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
-`TestInitializeSystemSettingsReadError`.
+Quick security setup follows the [API settings-preservation contract](api-contracts.md#quick-security-setup-preserves-unrelated-settings),
+including byte-preserving first-run initialization and read-error handling.
+It grants no additional agent or recovery authority.
 
 ### Storage pool rows do not retain their whole group
 

@@ -153,6 +153,67 @@ func TestInstallOperatorIntentResolverInheritsScopedMaintenanceFromParent(t *tes
 	}
 }
 
+// A recurring parent window carries no one-shot dates. Scoped to descendants,
+// its active occurrence silences the child's alerts until the occurrence ends,
+// resolved by the coverage rule Patrol's projection shares.
+func TestInstallOperatorIntentResolverInheritsRecurringScopedMaintenance(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	registry := unifiedresources.NewRegistry(store)
+	parentID := "node:pve-a"
+	registry.IngestResources([]unifiedresources.Resource{
+		{ID: parentID, Type: unifiedresources.ResourceTypeAgent, Name: "pve-a"},
+		{ID: "vm:101", Type: unifiedresources.ResourceTypeVM, Name: "database", ParentID: &parentID},
+	})
+	// A two-hour occurrence every day, centred on the current minute.
+	now := time.Now().UTC().Truncate(time.Minute)
+	minute := now.Hour()*60 + now.Minute()
+	recurrence := &unifiedresources.RecurringMaintenanceWindow{
+		Timezone:    "UTC",
+		Weekdays:    []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		StartMinute: (minute + 1440 - 60) % 1440,
+		EndMinute:   (minute + 60) % 1440,
+	}
+	setParent := func(scope unifiedresources.MaintenanceScope) {
+		t.Helper()
+		if err := store.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+			CanonicalID:           parentID,
+			MaintenanceRecurrence: recurrence,
+			MaintenanceScope:      scope,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setParent(unifiedresources.MaintenanceScopeResourceAndDescendants)
+
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	monitor := &Monitor{alertManager: manager}
+	monitor.installOperatorIntentResolver(unifiedresources.NewMonitorAdapter(registry))
+	preview := func() alerts.AlertIntentPolicyPreview {
+		t.Helper()
+		got, err := manager.PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest{
+			ResourceID: "vm:101", ResourceType: "vm", Signal: string(alerts.AlertIntentSignalOffline), ConditionActive: true,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	got := preview()
+	if got.Reason != "operator_maintenance" || got.Status != "expected_transient" {
+		t.Fatalf("inherited recurring maintenance preview = %+v", got)
+	}
+	if wantEnd := now.Add(time.Hour); got.EligibleAt == nil || !got.EligibleAt.Equal(wantEnd) {
+		t.Fatalf("eligibleAt = %v, want the occurrence end %v", got.EligibleAt, wantEnd)
+	}
+
+	// Control: the same recurrence scoped to the parent alone leaves the child.
+	setParent(unifiedresources.MaintenanceScopeResource)
+	if got := preview(); got.Status != "would_activate" {
+		t.Fatalf("resource-only recurring parent window leaked to child: %+v", got)
+	}
+}
+
 func TestPlatformMonitorResourceIdentityConstructors(t *testing.T) {
 	if got := PBSMonitorResourceID("backup-main"); got != "pbs-backup-main" {
 		t.Fatalf("PBS monitor resource ID = %q", got)

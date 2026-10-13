@@ -67,12 +67,6 @@ returns it, `PUT /api/settings/ai/update` ignores it from older clients, and a
 stored value is dropped the next time the settings are written. Scope and
 approval authority do not change.
 
-A legacy client echoing the projected `controlled` mode into an unrelated AI
-settings PUT must retain a stored `autonomous` preference and its existing
-legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
-uses actual encrypted GET/PUT persistence with and without the entitlement,
-then checks explicit read-only opt-out and later opt-in remain possible.
-
 ### Assistant control_level is an interactive projection
 
 AI settings GET/PUT responses expose `read_only` or `controlled`: an entitled
@@ -82,6 +76,12 @@ remain; an entitled old client can retain the stored preference, an unentitled
 request is refused. Unrelated saves do not rewrite it. Shared external-agent
 vocabulary, Patrol settings and authenticated authority remain unchanged. `TestContract_AssistantSettingsAdvertisePlanningNotExecution`
 and the actual persistence/handler tests pin responses and compatibility.
+
+A legacy client echoing the projected `controlled` mode into an unrelated AI
+settings PUT must retain a stored `autonomous` preference and its existing
+legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
+uses actual encrypted GET/PUT persistence with and without the entitlement,
+then checks explicit read-only opt-out and later opt-in remain possible.
 
 ### Optional held-alert breach date consumer
 
@@ -283,22 +283,6 @@ exercises the real client with production drawer, shared chart-state and row
 warming consumers. The connected browser fixture verifies actual History
 components/CSS on desktop Chromium and phone WebKit, not native identity,
 appliance history, workload safety or released availability.
-
-### Discovery detail reads preserve final access status
-
-`getDiscovery` retains final HTTP401/403 in a typed client error before any
-response-body read. The fixed message exposes no denied body. This applies to
-the typed resource detail, agent collection and resolved agent detail paths.
-A body or transport message claiming an access status is not that status, and
-ordinary transient failures retain their existing error behaviour. Successful
-absent-record semantics (detail HTTP404 or an empty agent list) are unchanged.
-Retained query consumers can therefore withdraw a denied service/endpoint
-rather than treating it as a transient read or a successful empty discovery.
-No endpoint, server permission, wire schema or mutation policy changes.
-`src/api/__tests__/discovery.test.ts` exercises all three paths with actual
-Response status/body objects, denied-body non-read and a misleading 503 body.
-The production guest browser fixture verifies the connected final HTTP403
-withdrawal, pending retry, transient retention and successful HTTP404 recovery.
 
 ### TrueNAS saved probes do not rewrite runtime evidence — issue #2382
 
@@ -6452,9 +6436,19 @@ at startup: `internal/api/router.go` calls
 `patrol.GetFindings().SetResourceOperatorStateProvider(...)` with a
 `ResourceOperatorStateProviderFunc` closure that reads the unified
 store and returns a `ResourceOperatorStateProjection` carrying every
-operator-set signal in one call (maintenance window via
-`state.IsInMaintenanceAt`, the `IntentionallyOffline` flag, and the
-`Criticality` hint). The same router setup also calls
+operator-set signal in one call (the maintenance window, the
+`IntentionallyOffline` flag, and the `Criticality` hint). The maintenance
+window is the active occurrence `unifiedresources.ActiveMaintenanceCoverageAt`
+resolves: the resource's own one-shot or recurring window, or an ancestor
+window scoped `resource_and_descendants` on the read state's
+`ResolveCanonicalResourceAncestors` chain, latest end winning, with
+`Inherited`/`SourceID` naming an ancestor's window. Its bounds come from the
+occurrence, never the one-shot fields a recurring schedule leaves nil
+(`TestPatrolOperatorStateProjectsActiveRecurringMaintenance` and
+`TestPatrolOperatorStateInheritsDescendantScopedMaintenance` in
+`internal/api/ai_handlers_more_test.go`). A resource with no row of its own
+still projects `ok=true` while an inherited window covers it; every other
+projected field is the resource's own state. The same router setup also calls
 `SetResourceStoreProvider(r.resourceHandlers.getStore)` on the AI settings
 handler so `/api/ai/patrol/findings` can refresh `resource_criticality` at
 read time after an operator changes priority, without waiting for the next
@@ -11397,9 +11391,9 @@ fields.
 
 ### Per-tenant resource stores are released on offboarding and shutdown
 
-`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
-process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
-called from `Router.CleanupTenant` alongside the other per-tenant teardown;
+The API `resourceapi.QueryService` owns and caches SQLite handles per org.
+`ResourceHandlers.getStore` delegates to that owner. `CloseTenantStore` releases
+and evicts one org's handle and is called from `Router.CleanupTenant` alongside the other per-tenant teardown;
 `CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
 Without this an offboarded tenant kept its file descriptors and its
 `unified_resources.db-wal`/`-shm` files alive and its directory could not be
@@ -11960,11 +11954,9 @@ disk. The advanced-reporting entitlement gates both kinds. Proofs:
 `internal/api/report_schedules_test.go`, `internal/api/patrol_digest_email_test.go`,
 `internal/api/ai_handlers_more_test.go`.
 
-The explicit issue explanation journey is qualified separately from provider
-reasoning and real remediation in
-`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
-proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
-response does not establish a useful customer outcome or model qualification.
+Issue explanation follows the [customer-journey qualification boundary](../../../../qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md#real-outcome-qualification-still-required),
+which separates scripted interaction proof from provider reasoning, remediation
+and repeatable customer outcomes.
 
 ### Report email shares the canonical SMTP retry verdict
 
@@ -12013,10 +12005,6 @@ GET decoding and PUT encoding. Unknown inputs retain the all fallback. This
 repairs a dropped supported value without introducing a new wire enum or changing
 backend routing. The notification adapter save/reload matrix verifies each
 supported severity in frontend-modern/src/api/__tests__/notifications.test.ts.
-
-Formatting-only follow-up retains this warning-level contract. The production-component
-browser matrix was rerun after formatting at desktop and narrow widths, including
-all/critical/warning save/reload, cancel, and warning webhook creation.
 
 ### Quick security setup preserves unrelated settings
 

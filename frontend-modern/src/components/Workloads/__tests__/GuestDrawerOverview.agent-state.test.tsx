@@ -1,7 +1,18 @@
-import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, render as solidRender, screen, within } from '@solidjs/testing-library';
 import { createSignal, type ComponentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GuestDrawerOverview } from '../GuestDrawerOverview';
+
+// Coverage and read rows live in the Overview's Details, closed by default.
+// Opening it is a tap, not a hover, so these explanations stay reachable.
+const render = (...args: Parameters<typeof solidRender>): ReturnType<typeof solidRender> => {
+  const result = solidRender(...args);
+  const details = result.container.querySelector<HTMLDetailsElement>(
+    '[data-testid="guest-technical-details"]',
+  );
+  if (details) details.open = true;
+  return result;
+};
 import type { WorkloadGuest } from '@/types/workloads';
 import type { VM } from '@/types/api';
 import {
@@ -58,7 +69,13 @@ function overviewProps(value: WorkloadGuest): ComponentProps<typeof GuestDrawerO
   };
 }
 
-const readRow = () => screen.getByText('Guest-agent reads').closest('tr')!;
+const readRow = () => {
+  const row = screen.getByText('Guest-agent reads').closest('tr')!;
+  // Details is closed by default; opening it is a tap, not a hover.
+  const details = row.closest('details');
+  if (details) details.open = true;
+  return row;
+};
 
 afterEach(cleanup);
 

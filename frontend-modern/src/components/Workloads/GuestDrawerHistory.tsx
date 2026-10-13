@@ -10,14 +10,7 @@ import {
   type Component,
 } from 'solid-js';
 
-import {
-  ChartsAPI,
-  type AggregatedMetricPoint,
-  type AllMetricsHistoryResponse,
-  type HistoryTimeRange,
-  type ResourceType,
-  type SingleMetricHistoryResponse,
-} from '@/api/charts';
+import { type AggregatedMetricPoint, type HistoryTimeRange } from '@/api/charts';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { filterSelectClass } from '@/components/shared/FilterToolbar';
 import { Button } from '@/components/shared/Button';
@@ -28,12 +21,10 @@ import {
   formatHistoryChartTooltipValue,
   formatHistoryChartTimeLabel,
 } from '@/components/shared/historyChartModel';
-import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 
 import {
-  GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   GUEST_DRAWER_HISTORY_GROUPS,
   buildGuestDrawerHistoryPath,
   getGuestDrawerHistoryRangeBounds,
@@ -46,6 +37,10 @@ import {
   type GuestDrawerHistoryTarget,
   type GuestDrawerHistoryTimeBounds,
 } from './guestDrawerModel';
+import {
+  createGuestDrawerHistoryQuery,
+  createGuestDrawerHistorySource,
+} from './guestDrawerHistoryQuery';
 
 interface GuestDrawerHistoryProps {
   currentMetrics?: Record<string, number | null | undefined>;
@@ -57,12 +52,6 @@ interface GuestDrawerHistoryProps {
 
 interface GuestDrawerHistoryRangeSelectProps {
   onRangeChange: (range: HistoryTimeRange) => void;
-  range: HistoryTimeRange;
-}
-
-interface GuestDrawerHistoryQueryKey {
-  resourceType: ResourceType;
-  resourceId: string;
   range: HistoryTimeRange;
 }
 
@@ -78,24 +67,12 @@ interface GuestDrawerHistoryGroupChartProps {
   touchInspection: boolean;
 }
 
-const GUEST_DRAWER_HISTORY_MAX_POINTS = 240;
-const GUEST_DRAWER_HISTORY_POLL_MS = 30_000;
 const GUEST_DRAWER_HISTORY_CHART_WIDTH = 360;
 const GUEST_DRAWER_HISTORY_CHART_HEIGHT = 92;
 const GUEST_DRAWER_HISTORY_PLOT_LEFT = 34;
 const GUEST_DRAWER_HISTORY_PLOT_RIGHT = 8;
 const GUEST_DRAWER_HISTORY_PLOT_TOP = 8;
 const GUEST_DRAWER_HISTORY_PLOT_BOTTOM = 18;
-
-const EMPTY_HISTORY_RESPONSE: AllMetricsHistoryResponse = {
-  resourceType: '',
-  resourceId: '',
-  range: GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
-  start: 0,
-  end: 0,
-  metrics: {},
-  source: 'store',
-};
 
 const formatRangeLabel = (range: HistoryTimeRange): string => {
   switch (range) {
@@ -138,21 +115,6 @@ export const GuestDrawerHistoryRangeSelect: Component<GuestDrawerHistoryRangeSel
     </For>
   </FormSelect>
 );
-
-const normalizeHistoryResponse = (
-  result: SingleMetricHistoryResponse | AllMetricsHistoryResponse,
-): AllMetricsHistoryResponse => {
-  if ('metrics' in result) return result;
-  return {
-    resourceType: result.resourceType,
-    resourceId: result.resourceId,
-    range: result.range,
-    start: result.start,
-    end: result.end,
-    metrics: { [result.metric]: result.points ?? [] },
-    source: result.source,
-  };
-};
 
 const getAxisLabel = (unit: string, pct: number): string => {
   if (unit === '%') {
@@ -702,53 +664,12 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   });
 
   const locked = createMemo(() => isRangeLocked(props.range));
-  // Snapshot replacement often creates a new target object with unchanged
-  // coordinates. Only a real target/range/access change owns a new read.
-  const historySource = createMemo<GuestDrawerHistoryQueryKey | null>(
-    () => {
-      const target = props.target;
-      if (!target || locked()) return null;
-      return {
-        resourceType: target.resourceType,
-        resourceId: target.resourceId,
-        range: props.range,
-      };
-    },
-    null,
-    {
-      equals: (previous, next) =>
-        previous === next ||
-        Boolean(
-          previous &&
-          next &&
-          previous.resourceType === next.resourceType &&
-          previous.resourceId === next.resourceId &&
-          previous.range === next.range,
-        ),
-    },
+  const historySource = createGuestDrawerHistorySource(
+    () => props.target,
+    () => props.range,
+    () => !locked(),
   );
-  const historyQuery = createNonSuspendingQuery<
-    AllMetricsHistoryResponse,
-    GuestDrawerHistoryQueryKey
-  >({
-    source: historySource,
-    fetcher: async (key, signal) =>
-      normalizeHistoryResponse(
-        await ChartsAPI.getMetricsHistory({
-          resourceType: key.resourceType,
-          resourceId: key.resourceId,
-          range: key.range,
-          maxPoints: GUEST_DRAWER_HISTORY_MAX_POINTS,
-          signal,
-        }),
-      ),
-    initialValue: EMPTY_HISTORY_RESPONSE,
-    cacheKey: (key) => `guest-drawer-history:${key.resourceType}:${key.resourceId}:${key.range}`,
-    // Former-host or former-range observations are not evidence for this
-    // target. Matching cached reads and same-source polling remain retained.
-    retainPreviousValueOnSourceChange: false,
-    pollMs: GUEST_DRAWER_HISTORY_POLL_MS,
-  });
+  const historyQuery = createGuestDrawerHistoryQuery(historySource);
 
   const metrics = createMemo(() => historyQuery.value().metrics ?? {});
   const groups = createMemo(() => props.groups ?? GUEST_DRAWER_HISTORY_GROUPS);

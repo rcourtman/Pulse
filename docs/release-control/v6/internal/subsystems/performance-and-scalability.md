@@ -409,22 +409,8 @@ metric tracks at narrow width; this is readability, not a throughput claim.
 
 ### Bounded confidence/priority work in broadcast grouping — issue #2199
 
-The general identity matcher retains every confidence, reason, ordering and
-review flag. Top-level grouping requests only its existing high-confidence
-floor (0.90), so hostname-only and IP-only peer sets are not built when no
-eligible composite signal exists. High-confidence results are identical to
-filtering the full general matcher; machine ID, UUID and hostname+MAC still
-keep their existing precedence. Host/IP fallback still requires exactly one
-strictly better-priority owner. Equal/worse-priority peers are discarded before
-allocating/sorting fallback candidates, and a best-priority group has no possible
-attachment target. No identity, ambiguity, count, group ID or explanation rule
-changes, and no cached output hides live transitions.
-
-Independent pre-repair matching/grouping oracles, candidate-floor differential
-cases/fuzzing, a discarded-peer allocation bound, mixed grouping records and the
-complete existing identity/topology suites protect these constraints. The
-residual synthetic broadcast profile identified discarded matching/grouping as
-the dominant cost; it is not a profile of the reporter's installed agent fleet.
+Broadcast performance work preserves the [unified grouping semantics and allocation bounds](unified-resources.md#bounded-confidencepriority-work-in-broadcast-grouping--issue-2199),
+including its source controls and qualification limits.
 
 ### Connected-dashboard snapshot ownership — issue #2199
 
@@ -2942,12 +2928,14 @@ and supplement known utilization with the threshold-colored progress metadata
 derived by `diskListModel.ts`. `GuestDrawerOverview.tsx` passes that metadata
 to the shared detail-row primitive; it does not parse display strings, create
 local bar geometry, or render a bar for the negative unknown-usage sentinel.
-Within that compact technical layout, `GuestDrawerOverview.tsx` declares the
-`Filesystems` section before the `Tags` section, so the shared
-`DetailSectionTable` span algorithm gives the longer mount-point list the wider
-panel and keeps the short tag list in the narrower slot. Future section-order
-changes in that overview must preserve the filesystem-first ordering rather
-than letting the shorter tag list take the wide column.
+`GuestDrawerOverview.tsx` renders the `Filesystems` section on its own, in
+front of the collapsed Details, so the mount-point list never shares a card
+row with shorter sections; tags render as chips in the Overview facts strip
+rather than as a `Tags` detail section. The Overview's 24h trend cards
+(`DrawerTrendCards.tsx`, lazy-loaded out of the WorkloadsSurface chunk) and
+the History tab read one query from `guestDrawerHistoryQuery.ts` with one cache
+key, and each mounts only while its tab is visible: the node drawer's History
+no longer stays mounted and polling while hidden.
 Panel width alone does not make mount paths readable. Filesystem disk rows must
 opt into the shared `layout: 'stacked'` presentation so their full mount path
 wraps above usage and progress at desktop and phone widths. Shared-prefix paths
@@ -3644,17 +3632,9 @@ nothing at all when workload rows are present.
 
 ### Per-tenant resource stores are released on offboarding and shutdown
 
-`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
-process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
-called from `Router.CleanupTenant` alongside the other per-tenant teardown;
-`CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
-Without this an offboarded tenant kept its file descriptors and its
-`unified_resources.db-wal`/`-shm` files alive and its directory could not be
-fully removed. Closed stores are evicted from the cache so a later request opens
-a fresh handle rather than using a closed one
-(`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
-are idempotent and nil-safe
-(`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+Tenant offboarding and process shutdown use the [API store-lifecycle contract](api-contracts.md#per-tenant-resource-stores-are-released-on-offboarding-and-shutdown),
+including its source controls and qualification limits.
+
 ### Report-ack version echo adds no steady-state work
 
 The `serverVersion` field on unified-agent report acks is a constant string

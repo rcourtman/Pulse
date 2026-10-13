@@ -1,12 +1,16 @@
+import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
-import { Show, Suspense, lazy } from 'solid-js';
+import { For, Show, Suspense, createMemo, lazy } from 'solid-js';
 
 import {
   compactDetailRows,
   compactDetailSections,
   makeDetailRow,
 } from '@/components/shared/DetailSectionTable';
-import { TechnicalDetailsSection } from '@/components/shared/TechnicalDetailsDisclosure';
+import {
+  TechnicalDetailsDisclosure,
+  TechnicalDetailsSection,
+} from '@/components/shared/TechnicalDetailsDisclosure';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import type { Alert } from '@/types/api';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
@@ -21,13 +25,23 @@ import {
 
 import { buildWorkloadsDiskPresentation } from './diskListModel';
 import {
+  GUEST_DRAWER_HISTORY_GROUPS,
   getGuestDrawerAlertAttention,
   getGuestDrawerMemoryRows,
   getGuestDrawerMemoryReading,
   getGuestDrawerGuestReadPresentation,
   isGuestDrawerVM,
   type GuestDrawerBackupPresentation,
+  type GuestDrawerHistoryDeferredMetric,
+  type GuestDrawerHistoryTarget,
 } from './guestDrawerModel';
+import {
+  collectDrawerExceptionRows,
+  getDrawerMetricAlert,
+  isDrawerAvailabilityHealthy,
+  withoutDrawerExceptionRows,
+} from './drawerOverviewModel';
+import type { DrawerTrendCardConfig } from './DrawerTrendCards';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import { WORKLOAD_ACTION_AGENT_LABEL } from './workloadAgentReadiness';
 import { getWorkloadAlertResourceIdCandidates } from './workloadTopology';
@@ -43,6 +57,15 @@ const GuestPhysicalDisks = lazy(() =>
     default: GuestPhysicalDisks,
   })),
 );
+
+// The 24h trend cards read metrics history only once a drawer is open; keep
+// their chart code out of the WorkloadsSurface table chunk the same way.
+const DrawerTrendCards = lazy(() => import('./DrawerTrendCards'));
+
+const historySeriesColor = (metric: string): string =>
+  GUEST_DRAWER_HISTORY_GROUPS.flatMap((group) => group.series).find(
+    (series) => series.metric === metric,
+  )?.color ?? 'currentColor';
 
 interface GuestDrawerOverviewProps {
   guest: GuestDrawerProps['guest'];
@@ -66,6 +89,11 @@ interface GuestDrawerOverviewProps {
   parentMemoryTotal?: GuestDrawerProps['parentMemoryTotal'];
   memoryDisplayBasis?: GuestDrawerProps['memoryDisplayBasis'];
   alerts?: Alert[];
+  historyTarget?: GuestDrawerHistoryTarget | null;
+  /** True while Overview is the visible tab; hidden trends do not poll. */
+  trendsEnabled?: boolean;
+  currentMetrics?: Record<string, number | undefined>;
+  deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
 }
 
 export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
@@ -114,7 +142,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   const overviewSections = () =>
     compactDetailSections([
       {
-        label: 'Operator context',
+        label: 'Summary',
         rows: compactDetailRows([
           makeDetailRow('System', props.hasOsInfo ? props.guestOsSummary : null, {
             // The full OS name/version must be readable without a hover title.
@@ -138,7 +166,6 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             layout: 'stacked',
             wrap: true,
           }),
-          makeDetailRow('Primary IP', props.ipAddresses[0]),
           // Starting or ending an operation is not evidence of a completed
           // backup. Keep its activity separate from the last completed age.
           makeDetailRow('Last completed backup', protectionPresentation().label, {
@@ -292,14 +319,6 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             ]),
           }
         : null,
-      props.normalizedTags.length > 0
-        ? {
-            label: 'Tags',
-            rows: compactDetailRows([
-              makeDetailRow('Values', props.normalizedTags.join(', '), { wrap: true }),
-            ]),
-          }
-        : null,
       props.hasNetworkInterfaces
         ? {
             label: 'Network',
@@ -341,8 +360,89 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
     ]);
   };
 
+  const sectionsByLabel = () => {
+    const technical = technicalSections();
+    const filesystems = technical.filter((section) => section.label === 'Filesystems');
+    const rest = technical.filter((section) => section.label !== 'Filesystems');
+    return {
+      filesystems,
+      details: withoutDrawerExceptionRows([...overviewSections(), ...rest]),
+    };
+  };
+  const exceptionRows = createMemo(() =>
+    collectDrawerExceptionRows([...overviewSections(), ...technicalSections()]),
+  );
+
+  const availabilityChecks = () => [
+    ...(props.guest.availability ? [props.guest.availability] : []),
+    ...(props.guest.availabilityChecks ?? []),
+  ];
+  const hasAvailability = () => availabilityChecks().length > 0;
+  const availabilityHealthy = () =>
+    hasAvailability() &&
+    availabilityChecks().every((check) => isDrawerAvailabilityHealthy(check, now()));
+
+  const memoryDetail = () => {
+    const memory = props.guest.memory;
+    // Bytes follow the same decision as the percentage: a withdrawn reading
+    // shows neither, a last-known one shows both.
+    const hasReading =
+      typeof props.currentMetrics?.memory === 'number' ||
+      typeof props.deferredMetrics?.memory?.lastKnownValue === 'number';
+    if (!memory || !hasReading || memory.usageUnavailable || !((memory.total ?? 0) > 0)) {
+      return undefined;
+    }
+    return `${formatBytes(memory.used ?? 0)} of ${formatBytes(memory.total ?? 0)}`;
+  };
+  const diskDetail = () => {
+    const disk = props.guest.disk;
+    if (!disk || !((disk.total ?? 0) > 0) || typeof props.currentMetrics?.disk !== 'number') {
+      return undefined;
+    }
+    return `${formatBytes(disk.used ?? 0)} of ${formatBytes(disk.total ?? 0)}`;
+  };
+  const trendCards = (): DrawerTrendCardConfig[] => {
+    const card = (metric: string, label: string, detail?: string): DrawerTrendCardConfig => {
+      const alert = getDrawerMetricAlert(props.alerts, metric);
+      return {
+        metric,
+        label,
+        unit: '%',
+        color: historySeriesColor(metric),
+        current: props.currentMetrics?.[metric],
+        deferred: props.deferredMetrics?.[metric],
+        detail,
+        alertSeverity: alert?.severity,
+        alertThreshold: alert?.threshold,
+      };
+    };
+    // With no disk reading at all, the Filesystems section below already says
+    // why; an empty Disk card would only repeat it.
+    const diskReading =
+      typeof props.currentMetrics?.disk === 'number' ||
+      typeof props.deferredMetrics?.disk?.lastKnownValue === 'number';
+    return [
+      card('cpu', 'CPU', props.guest.cpus ? `${props.guest.cpus} vCPU` : undefined),
+      card('memory', 'Memory', memoryDetail()),
+      ...(diskReading ? [card('disk', 'Disk', diskDetail())] : []),
+    ];
+  };
+
+  const facts = () =>
+    [
+      props.hasOsInfo ? props.guestOsSummary : '',
+      props.ipAddresses[0] ?? '',
+      // A late or missing backup is listed under Worth checking instead.
+      protectionPresentation().tone === 'success'
+        ? `Last completed backup ${protectionPresentation().label}`
+        : '',
+    ].filter((fact) => fact.trim().length > 0);
+
+  // A tag that repeats a fact already on the strip (often the IP) adds nothing.
+  const tagChips = () => props.normalizedTags.filter((tag) => !facts().includes(tag));
+
   return (
-    <div class="space-y-3">
+    <div class="space-y-3" data-testid="guest-drawer-overview">
       <DrawerAttentionSection
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
@@ -359,10 +459,47 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           acknowledged: alert.acknowledged,
         }))}
       />
-      <TechnicalDetailsSection
-        dataTestId="guest-technical-details"
-        sections={[...overviewSections(), ...technicalSections()]}
-      />
+      <Show when={(props.alerts ?? []).length === 0}>
+        <p data-testid="drawer-no-attention" class="text-xs text-muted">
+          <span class="font-medium text-base-content">{ALERTS_EMPTY_STATE}</span>
+          <Show when={availabilityHealthy()}>
+            <span> · availability checks passing</span>
+          </Show>
+        </p>
+      </Show>
+
+      <Show when={props.historyTarget}>
+        <Suspense fallback={<div class="h-28" aria-hidden="true" />}>
+          <DrawerTrendCards
+            target={props.historyTarget ?? null}
+            enabled={props.trendsEnabled ?? true}
+            cards={trendCards()}
+          />
+        </Suspense>
+      </Show>
+      {/* Visible text, not a tooltip: the caveat and what to do about it
+          must reach touch and keyboard users too. */}
+      <Show when={memoryReading()?.cacheNote}>
+        {(note) => (
+          <p data-testid="drawer-memory-reading-note" class="text-xs leading-snug text-muted">
+            {note()}
+          </p>
+        )}
+      </Show>
+
+      <Show when={exceptionRows().length > 0}>
+        <TechnicalDetailsSection
+          dataTestId="guest-drawer-exceptions"
+          sections={[{ label: 'Worth checking', rows: exceptionRows() }]}
+        />
+      </Show>
+
+      <Show when={sectionsByLabel().filesystems.length > 0}>
+        <TechnicalDetailsSection
+          dataTestId="guest-drawer-filesystems"
+          sections={sectionsByLabel().filesystems}
+        />
+      </Show>
       <Show
         when={
           props.guest.agentKind === 'pulse' ||
@@ -389,18 +526,54 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         />
       </Show>
 
-      <div class="space-y-3">
-        <Show when={props.guest.availability || props.guest.availabilityChecks?.length}>
-          <div class="mt-3 max-w-sm">
-            <div class="space-y-3">
-              <AvailabilityProbeStatusCards
-                availability={props.guest.availability}
-                checks={props.guest.availabilityChecks}
-              />
-            </div>
+      {/* A failing or unknown check is something to act on, so it stays in
+          front. A passing one is summarised above and kept under Details. */}
+      <Show when={hasAvailability() && !availabilityHealthy()}>
+        <div class="max-w-sm space-y-3">
+          <AvailabilityProbeStatusCards
+            availability={props.guest.availability}
+            checks={props.guest.availabilityChecks}
+          />
+        </div>
+      </Show>
+
+      <Show when={facts().length > 0 || tagChips().length > 0}>
+        <div
+          data-testid="guest-drawer-facts"
+          class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
+        >
+          <For each={facts()}>{(fact) => <span class="wrap-break-word">{fact}</span>}</For>
+          <For each={tagChips()}>
+            {(tag) => (
+              <span class="max-w-full rounded-full border border-border px-2 py-0.5 text-[11px] break-all">
+                {tag}
+              </span>
+            )}
+          </For>
+        </div>
+      </Show>
+
+      <TechnicalDetailsDisclosure
+        dataTestId="guest-technical-details"
+        title="Details"
+        keepMounted
+        subtitle="system, coverage, memory, network and availability checks"
+        class="border-t border-border pt-2"
+        contentClass="mt-2 space-y-3"
+      >
+        <TechnicalDetailsSection
+          dataTestId="guest-technical-details-sections"
+          sections={sectionsByLabel().details}
+        />
+        <Show when={availabilityHealthy()}>
+          <div class="max-w-sm space-y-3">
+            <AvailabilityProbeStatusCards
+              availability={props.guest.availability}
+              checks={props.guest.availabilityChecks}
+            />
           </div>
         </Show>
-      </div>
+      </TechnicalDetailsDisclosure>
     </div>
   );
 }

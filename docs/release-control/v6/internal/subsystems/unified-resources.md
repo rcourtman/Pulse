@@ -136,6 +136,18 @@ the shared live-status copy to `TemperatureGauge`. Other node alerts never
 recolour the cell. The Mail Gateway drawer formats its attention rows through
 `getAlertAttentionCopy`.
 
+### Proxmox node drawer trend cards follow the node's own alerts
+
+`ProxmoxNodesTable` passes `NodeDrawer` two lists. `alerts` keeps the
+node-name match, so Needs attention also lists the node's guests. `ownAlerts`
+is the same `hostOverrideIdCandidates` identity match without the name, and
+only it colours the drawer's CPU, memory, temperature and disk trend cards and
+draws their triggers. Node alerts are keyed on the cluster-qualified id (for
+example `homelab-delly2`), which the drawer's own node record does not carry,
+so the drawer must not rebuild this match itself. `NodeDrawer.test.tsx` covers
+a guest alert that leaves the card plain and a table-supplied node alert that
+colours it.
+
 ### Canonical Discovery honours VM guest-read deferrals
 
 The canonical resource drawer uses the same fixed PVE VM lock, backup and
@@ -2977,7 +2989,7 @@ application resource-provider or WebSocket lifecycle.
     become a per-row store pattern.
     Regression coverage:
     `TestSQLiteStoreActionAuditOriginRoundTrip`,
-    `TestSQLiteActionAuditOriginOperationalRecordReader`, and the matching
+    `TestActionAuditOriginReaderReturnsLatestTransition`, and the matching
     memory/batch reader tests in `internal/unifiedresources/store_test.go`.
     Incident next-step fallback follows the same canonical resource boundary:
     storage guidance is reserved for storage, physical-disk, network-share,
@@ -3457,7 +3469,11 @@ silently move operator intent. Weekdays normalize to unique Monday-through-
 Sunday order. `maintenanceScope` defaults to `resource`; the only inherited
 value is `resource_and_descendants`, resolved against the canonical registry
 parent chain with cycle protection. Concrete occurrence start/end boundaries
-are derived by the same model for Alerts and post-window verification. SQLite
+are derived by the same model for Alerts, Patrol and post-window verification;
+consumers read the active occurrence, never the one-shot fields, which a
+recurring schedule leaves nil. `ActiveMaintenanceCoverageAt` is the one
+inheritance rule: own window plus ancestor windows scoped
+`resource_and_descendants`, latest active end wins, maintenance only. SQLite
 persists recurrence JSON and scope in additive columns while legacy one-shot
 rows retain their existing meaning. Scheduling, updating, changing scope, or
 clearing either form remains an atomic operator-state plus resource-timeline
@@ -3527,8 +3543,9 @@ plain words, never in implementation terms (no "persisted resource policy",
 maintenance-window help says it silences alerts and dismisses new Patrol
 findings, because an active window suppresses alert activation and
 auto-dismisses new findings while keeping them in history. The descendant-scope
-help claims only alerts for descendants, because Patrol reads the exact
-resource's own state. The `Never auto-remediate` label stays as named, because
+help says descendants' alerts are silenced and their new Patrol findings
+dismissed, because Alerts and Patrol resolve maintenance through the one
+`ActiveMaintenanceCoverageAt` rule over the live canonical parent chain. The `Never auto-remediate` label stays as named, because
 help pages and the Assistant's refusal message refer to it; its help and lock
 confirmation say it blocks every automated fix, including approved ones, and
 that blocked runs are logged as failed actions (an Assistant planning refusal

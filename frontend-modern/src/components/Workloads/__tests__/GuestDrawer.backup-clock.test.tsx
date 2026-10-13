@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkloadGuest } from '@/types/workloads';
 import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
@@ -55,19 +56,45 @@ const guest = (type: 'qemu' | 'lxc', lastBackup: number): WorkloadGuest => ({
   lock: '',
   lastSeen: new Date(start).toISOString(),
 });
-const details = () => within(screen.getByTestId('guest-technical-details'));
+// Details is closed by default and a late backup is lifted into Worth
+// checking, so read the whole Overview with Details open.
+const details = () => {
+  const disclosure = screen.getByTestId('guest-technical-details') as HTMLDetailsElement;
+  if (!disclosure.open) {
+    disclosure.open = true;
+    // jsdom queues the native toggle event as a zero-delay task.
+    vi.advanceTimersByTime(0);
+  }
+  return within(screen.getByTestId('guest-drawer-overview'));
+};
 const backupRow = () => details().getByText('Last completed backup').closest('tr')!;
 const completion = () => backupRow().querySelector('time');
+// Overview's 24h trend cards read history by design. Backup age is judged by
+// the local clock, so no other history read (a History tab range) happens.
+const expectOnlyTrendReads = () =>
+  expect(calls.history.mock.calls.every(([params]) => params?.range === '24h')).toBe(true);
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(start);
   policy.freshHours = 24;
   policy.staleHours = 72;
-  calls.history.mockClear();
+  calls.history.mockReset();
+  calls.history.mockResolvedValue({
+    resourceType: 'vm',
+    resourceId: 'lab:pve-a:101',
+    range: '24h',
+    start: 0,
+    end: 0,
+    metrics: {},
+    source: 'store',
+  });
 });
 afterEach(() => {
   cleanup();
+  // The Overview's 24h trend read leaves the shared query cache's expiry
+  // timer behind; it is module state, not a timer this drawer owns.
+  resetCreateNonSuspendingQueryCacheForTest();
   expect(vi.getTimerCount()).toBe(0);
   vi.useRealTimers();
 });
@@ -101,7 +128,7 @@ describe('mounted completed-backup evidence', () => {
       expect(within(backupRow()).getByText('1d ago').closest('td')).toHaveClass('text-amber-700');
       expect(completion()).toHaveAttribute('datetime', new Date(timestamp).toISOString());
       expect(screen.getByTestId('guest-technical-details')).toBe(drawer);
-      expect(calls.history).not.toHaveBeenCalled();
+      expectOnlyTrendReads();
     },
   );
 
@@ -114,7 +141,7 @@ describe('mounted completed-backup evidence', () => {
       expect(details().getByText('59 mins ago').closest('td')).toHaveClass('text-emerald-700');
       vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
       expect(details().getByText('1 hour ago').closest('td')).toHaveClass('text-amber-700');
-      expect(calls.history).not.toHaveBeenCalled();
+      expectOnlyTrendReads();
     },
   );
 
@@ -148,7 +175,7 @@ describe('mounted completed-backup evidence', () => {
     expect(completion()).toHaveAttribute('datetime', '2026-10-12T12:00:30.000Z');
     vi.advanceTimersByTime(60_000);
     expect(details().getByText('1 min ago')).toBeVisible();
-    expect(calls.history).not.toHaveBeenCalled();
+    expectOnlyTrendReads();
   });
 
   it('rejudges future and backwards-clock times without manufacturing completion', () => {
@@ -174,7 +201,7 @@ describe('mounted completed-backup evidence', () => {
     ).toHaveClass('text-amber-700');
     expect(completion()).toBeNull();
     expect(details().queryByText('No completed backup found')).not.toBeInTheDocument();
-    expect(calls.history).not.toHaveBeenCalled();
+    expectOnlyTrendReads();
   });
 
   it.each([0, NaN, Infinity])(
@@ -185,7 +212,7 @@ describe('mounted completed-backup evidence', () => {
       vi.advanceTimersByTime(60_000);
       expect(backupRow()).toHaveTextContent(initial!);
       expect(completion()).toBeNull();
-      expect(calls.history).not.toHaveBeenCalled();
+      expectOnlyTrendReads();
     },
   );
 });

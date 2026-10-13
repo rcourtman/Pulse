@@ -1706,19 +1706,22 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerOverviewSource).not.toMatch(
         /^import (?!type )[^;]*from '\.\/GuestPhysicalDisks';/m,
       );
-      // The shared DetailSectionTable gives the earlier of the last two sections
-      // the wider span, so the longer filesystem list must be declared before the
-      // short tag list for mount points to get the readable panel width.
+      // Filesystems render as their own section in front of the collapsed
+      // Details, so mount points never share a card row with short sections.
+      // Tags render as facts-strip chips, not as a detail section.
       const filesystemsSectionIndex = guestDrawerOverviewSource.indexOf("label: 'Filesystems'");
-      const tagsSectionIndex = guestDrawerOverviewSource.indexOf("label: 'Tags'");
       expect(filesystemsSectionIndex).toBeGreaterThan(-1);
-      expect(tagsSectionIndex).toBeGreaterThan(-1);
-      expect(filesystemsSectionIndex).toBeLessThan(tagsSectionIndex);
-      // Ordering cannot prevent the compact label column from clipping paths.
+      expect(guestDrawerOverviewSource).not.toContain("label: 'Tags'");
+      expect(guestDrawerOverviewSource).toContain('dataTestId="guest-drawer-filesystems"');
+      // The 24h trend cards load with an open drawer, outside the table chunk.
+      expect(guestDrawerOverviewSource).toContain("import('./DrawerTrendCards')");
+      expect(guestDrawerOverviewSource).not.toMatch(
+        /^import (?!type )[^;]*from '\.\/DrawerTrendCards';/m,
+      );
       // Filesystem rows delegate full-path presentation to the shared renderer.
       const filesystemSectionSource = guestDrawerOverviewSource.slice(
         filesystemsSectionIndex,
-        tagsSectionIndex,
+        guestDrawerOverviewSource.indexOf('label:', filesystemsSectionIndex + 1),
       );
       expect(filesystemSectionSource).toContain("layout: 'stacked'");
       expect(filesystemSectionSource).toContain('wrap: true');

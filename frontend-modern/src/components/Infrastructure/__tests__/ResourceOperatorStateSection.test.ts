@@ -67,8 +67,12 @@ describe('ResourceOperatorStateSection', () => {
     // The lock's consequence stays beside it, including approved fixes.
     expect(visibleSource).toContain('Block every automated fix on this resource, including');
     expect(visibleSource).toContain('Expected offline hides availability noise only.');
-    // Descendant scope reaches alerts only; Patrol reads the exact resource.
-    expect(visibleSource).toContain('With descendants, alerts on everything under this resource');
+    // Descendant scope covers alerts and new Patrol findings under the
+    // resource, the same maintenance coverage both runtimes resolve.
+    expect(visibleSource).toContain('alerts are silenced and new Patrol findings dismissed.');
+    expect(visibleSource).not.toContain(
+      'With descendants, alerts on everything under this resource',
+    );
   });
 
   it('presents resource action policy as an optional limit on global Patrol autonomy', () => {

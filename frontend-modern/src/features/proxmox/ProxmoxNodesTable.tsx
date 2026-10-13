@@ -823,6 +823,13 @@ export const ProxmoxNodesTable: Component<{
                               alertsEnabled(),
                               node.name,
                             )}
+                            // Without the node-name match: the node's own alerts,
+                            // not its guests', drive its trend cards.
+                            ownAlerts={getAlertsForResource(
+                              alertResourceIds(),
+                              activeAlerts,
+                              alertsEnabled(),
+                            )}
                             disks={normalizeDiskArray(node.agent?.disks)}
                             temperatureThresholds={temperatureThresholds()}
                           />
