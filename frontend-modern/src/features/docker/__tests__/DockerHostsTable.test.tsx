@@ -375,7 +375,8 @@ describe('DockerHostsTable', () => {
     expect(window.location.pathname).toBe('/docker/overview');
     expect(window.location.search).toBe('');
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('type', 'button');
-    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('type', 'button');
+    expect(screen.getByRole('tab', { name: 'Manage' })).toHaveAttribute('type', 'button');
+    expect(screen.queryByRole('tab', { name: 'History' })).toBeNull();
   });
 
   it('opens a saved Docker host web interface without toggling the row', () => {

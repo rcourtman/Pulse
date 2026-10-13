@@ -89,8 +89,7 @@ import {
 } from './resourceDetailDrawerKubernetesModel';
 import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 
-type DrawerTab =
-  'overview' | 'history' | 'manage' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
+type DrawerTab = 'overview' | 'manage' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
 interface UseResourceDetailDrawerDerivedStateOptions {
   resource: Resource;
@@ -376,8 +375,9 @@ export const useResourceDetailDrawerDerivedState = (
 
   const tabs = createMemo(() => {
     const base = [
+      // A resource with stored history charts it on Overview; there is no
+      // separate History tab repeating those charts at another range.
       { id: 'overview' as DrawerTab, label: 'Overview' },
-      ...(hasMetricsHistory() ? [{ id: 'history' as DrawerTab, label: 'History' }] : []),
       { id: 'manage' as DrawerTab, label: 'Manage' },
       ...(resource().type === 'pmg' ? [{ id: 'mail' as DrawerTab, label: 'Mail' }] : []),
       ...(resource().type === 'k8s-cluster'

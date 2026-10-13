@@ -1,12 +1,11 @@
 // Offline real-browser proof for the #1723 drawer tab-retention repair.
 //
-// Opens the production Proxmox Backups server drawer, selects History, then
-// drives a snapshot that transiently removes the merged host metrics target
-// (the field that gates the History tab). The drawer must keep the user's
-// History selection and show the in-tab availability notice instead of
-// silently falling back to Overview; restoring the target must bring the chart
-// back on the same selection. Synthetic API responses prove UI behaviour, not
-// backend persistence or installed release behaviour.
+// Opens the production Proxmox Backups server drawer, whose history charts sit
+// on Overview, selects Manage, then drives a snapshot that transiently removes
+// the merged host metrics target (the field that gates those charts). The
+// drawer must keep the user's Manage selection without remounting; restoring
+// the target must bring the charts back on Overview. Synthetic API responses
+// prove UI behaviour, not backend persistence or installed release behaviour.
 // Run: pulse-worker-browser scripts/check-drawer-tab-retention.cjs
 const path = require('node:path');
 const assert = require('node:assert/strict');
@@ -111,9 +110,6 @@ const launchOptions = {
         await serverRow.getByRole('button').focus();
         await page.keyboard.press('Enter');
         await page
-          .getByRole('tab', { name: 'History', exact: true })
-          .click();
-        await page
           .locator('[data-testid="guest-history-plot"] path')
           .first()
           .waitFor({ timeout: 20000 });
@@ -127,31 +123,33 @@ const launchOptions = {
           .locator('[data-testid="guest-history-plot"] path')
           .count();
         assert.ok(pathsBefore > 0, 'history plot did not render before the drop');
+        await page.getByRole('tab', { name: 'Manage', exact: true }).click();
 
         // Snapshot arrives without the merged host metrics target.
         await page.getByRole('button', { name: 'Drop metrics target' }).click();
-        await page
-          .getByText('Metrics history is unavailable.', { exact: true })
-          .waitFor({ timeout: 20000 });
+        await detail
+          .locator('[data-testid="resource-metrics-history"]')
+          .waitFor({ state: 'detached', timeout: 20000 });
+        assert.equal(
+          await page
+            .getByRole('tab', { name: 'Manage', exact: true })
+            .getAttribute('aria-selected'),
+          'true',
+          'tab selection was discarded across the transient target loss',
+        );
         assert.equal(
           await detail.getAttribute('data-proof-identity'),
           'retained',
           'drawer remounted on the transient target loss',
         );
 
-        // Next snapshot restores it; the same History selection must recover.
+        // Next snapshot restores it; Overview shows the same charts again.
         await page.getByRole('button', { name: 'Restore metrics target' }).click();
+        await page.getByRole('tab', { name: 'Overview', exact: true }).click();
         await page
           .locator('[data-testid="guest-history-plot"] path')
           .first()
           .waitFor({ timeout: 20000 });
-        assert.equal(
-          await page
-            .getByRole('tab', { name: 'History', exact: true })
-            .getAttribute('aria-selected'),
-          'true',
-          'history selection was discarded across the transient target loss',
-        );
         assert.equal(
           await detail
             .locator('[data-testid="guest-history-plot"] path')

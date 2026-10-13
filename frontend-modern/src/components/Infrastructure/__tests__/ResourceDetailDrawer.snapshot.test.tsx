@@ -21,13 +21,23 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
     target: { resourceType: string; resourceId: string };
     currentMetrics?: Record<string, number | undefined>;
     range: string;
+    onRangeChange?: (range: string) => void;
   }) => (
     <div
       data-testid="snapshot-history"
       data-target={props.target.resourceId}
       data-cpu={props.currentMetrics?.cpu}
       data-range={props.range}
-    />
+    >
+      <select
+        aria-label="History range"
+        value={props.range}
+        onChange={(event) => props.onRangeChange?.(event.currentTarget.value)}
+      >
+        <option value="24h">24 hours</option>
+        <option value="7d">7 days</option>
+      </select>
+    </div>
   ),
   GuestDrawerHistoryRangeSelect: (props: {
     range: string;
@@ -126,7 +136,6 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
   it('updates derived identity, current metrics and the History target without remounting a same-ID drawer', () => {
     const [resource, setResource] = createSignal(snapshot());
     render(() => <ResourceDetailDrawer resource={resource()} presentation="table-row" />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'History range' }), {
       target: { value: '7d' },
     });
@@ -145,16 +154,16 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
     expect(history).toHaveAttribute('data-range', '7d');
   });
 
-  it('withdraws a lost metrics target on an immutable snapshot and recovers the selected tab when it returns', () => {
+  it('withdraws Overview charts for a lost metrics target on an immutable snapshot and restores them when it returns', () => {
     const [resource, setResource] = createSignal(snapshot());
     render(() => <ResourceDetailDrawer resource={resource()} presentation="table-row" />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    expect(screen.getByTestId('snapshot-history')).toHaveAttribute('data-target', 'history-a');
     setResource(snapshot({ metricsTarget: undefined }));
     expect(screen.queryByTestId('snapshot-history')).not.toBeInTheDocument();
-    expect(screen.getByText('Metrics history is unavailable.')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument();
     setResource(snapshot());
     expect(screen.getByTestId('snapshot-history')).toHaveAttribute('data-target', 'history-a');
-    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('updates availability evidence in Overview instead of retaining the initial snapshot', () => {
@@ -188,7 +197,7 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
     requests.facets.mockReturnValueOnce(new Promise((resolve) => (completeOld = resolve)));
     const [resource, setResource] = createSignal(snapshot());
     const { container } = render(() => <ResourceDetailDrawer resource={resource()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
     setResource(
       snapshot({
         id: 'pbs-b',
@@ -199,7 +208,7 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
     );
     expect(screen.getByRole('heading', { name: 'PBS B' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByTestId('snapshot-history')).not.toBeInTheDocument();
+    expect(screen.getByTestId('snapshot-history')).toHaveAttribute('data-target', 'history-b');
     await waitFor(() => expect(requests.facets).toHaveBeenCalledWith('pbs-b', { limit: 25 }));
     completeOld({
       capabilities: [],
@@ -211,14 +220,11 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
     await Promise.resolve();
     expect(container).not.toHaveTextContent('Former resource change');
     expect(container).not.toHaveTextContent('PBS A');
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-    expect(screen.getByTestId('snapshot-history')).toHaveAttribute('data-target', 'history-b');
   });
 
   it('keeps the reconciled-store client and same-ID tab continuity working', () => {
     const [resource, setResource] = createStore(snapshot());
     render(() => <ResourceDetailDrawer resource={resource} presentation="table-row" />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
     const history = screen.getByTestId('snapshot-history');
     setResource(reconcile(snapshot({ cpu: { current: 35 } })));
     expect(screen.getByTestId('snapshot-history')).toBe(history);

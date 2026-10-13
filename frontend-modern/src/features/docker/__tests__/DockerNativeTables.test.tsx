@@ -708,18 +708,19 @@ describe('Docker native tables', () => {
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand details for nginx' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-    const historyRange = screen.getByRole('combobox', { name: 'History range' });
+    const historyRange = await screen.findByRole('combobox', { name: 'History range' });
     fireEvent.change(historyRange, { target: { value: '1h' } });
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
 
-    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Manage' })).toHaveAttribute('aria-selected', 'true');
     expect(historyRange).toHaveValue('1h');
 
     setResources(makeContainers(1));
 
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true'),
+      expect(screen.getByRole('tab', { name: 'Manage' })).toHaveAttribute('aria-selected', 'true'),
     );
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     expect(screen.getByRole('combobox', { name: 'History range' })).toHaveValue('1h');
     expect(screen.getByRole('button', { name: 'Collapse details for nginx' })).toBeInTheDocument();
   });

@@ -704,7 +704,7 @@ API-only Proxmox hosts remain `agent` resources but their metrics target is
 linked Agent source retains priority and its `agent` store ID. Consumers must
 use that target rather than reconstructing storage coordinates from display
 identity or discovery routing. The node view carries the canonical target into
-its History tab. Discovery can route by a host name without an installed Agent,
+its Overview charts. Discovery can route by a host name without an installed Agent,
 so it does not establish a `linkedAgentId` or Agent-only disk-throughput coverage.
 The explicit Agent facet/link owns that evidence.
 
@@ -7696,14 +7696,19 @@ live snapshot is being replaced. `useResourceDetailDrawerState` falls back to
 Overview only when the drawer starts showing a different resource; it must not
 reset merely because the current tab is momentarily absent from the derived tab
 list. A merged host's metrics target can be omitted for one snapshot during a
-refresh, and treating that as a permanent loss of the History tab made the
-Proxmox -> Backups drawer silently jump back to Overview. Each tab body already
-renders its own availability notice while its tab is unavailable, so the
-selection can be retained and recovered without manufacturing a target. The
+refresh, and treating that as a permanent loss of the then History tab made
+the Proxmox -> Backups drawer silently jump back to Overview. History charts
+now sit on Overview and simply withdraw while the target is absent; the other
+tab bodies render their own availability notice while their tab is
+unavailable, so the selection can be retained and recovered without
+manufacturing a target. The
 `ResourceDetailDrawer.history.test.tsx` guard pins the single-resource reset
 boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
-drawer at desktop and narrow widths: selecting History, dropping the merged
-metrics target, and restoring it must keep the selection and recover the chart.
+drawer at desktop and narrow widths: selecting Manage, dropping the merged
+metrics target, and restoring it must keep the selection and bring the Overview
+charts back. Its fixture page currently fails before the drawer renders
+(no WebSocket provider), so that proof does not run until the fixture is
+repaired.
 
 ### Canonical reference resolution uses a derived alias index
 
