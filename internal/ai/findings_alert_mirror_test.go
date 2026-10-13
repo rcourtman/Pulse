@@ -59,6 +59,8 @@ func TestFindingConditionClass_CoversAlertOwnedConditions(t *testing.T) {
 		{"snapshot age", &Finding{Category: FindingCategoryBackup, Title: `Snapshot "base" is 349 days old`}, mirrorConditionSnapshotAge},
 		{"backup age", &Finding{Category: FindingCategoryBackup, Title: `No recent backup for VM 104`}, mirrorConditionBackupAge},
 		{"pdm offline", &Finding{ID: PDMAlertFindingPrefix + ":dc/node/pve1", Category: FindingCategoryReliability, Title: `PDM: node "pve1" is offline`}, mirrorConditionDown},
+		{"smart offline uncorrectable is disk health", &Finding{Category: FindingCategoryReliability, Title: `Disk sda reports 8 offline uncorrectable sectors`}, ""},
+		{"smart-failure key is disk health", &Finding{Key: "smart-failure", Category: FindingCategoryReliability, Title: `Disk sdb is failing and may go offline`}, ""},
 		{"mail gateway degraded is Patrol-owned", &Finding{Category: FindingCategoryReliability, Title: `Mail gateway "mail-gateway-us" is degraded`}, ""},
 		{"security finding never mirrors", &Finding{Category: FindingCategorySecurity, Title: `Container runs as root and is offline`}, ""},
 	}
