@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "19f1052321b2603d22415a6410b4bbfbc05a60ce",
+  "verified_at": "2026-10-13T14:57:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/DrawerExceptionList.tsx",
+    "frontend-modern/src/components/Workloads/DrawerTrendCards.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx",
+    "frontend-modern/src/components/shared/TechnicalDetailsDisclosure.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/DrawerExceptionList.tsx": "7caf0baaef1d2b7ea2f32edc9d23cd96bac3c34ec27c816f06ece9b000f5e65f",
+    "frontend-modern/src/components/Workloads/DrawerTrendCards.tsx": "002761ba428458925ce66f369bf83bc30a562f50fc8c89f2c60be2f02322ecc9",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "500b8ab7e11bc114bc362766cb76fdb66451e45a3b0bea085f3b4e24c49353c8",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "217f1222302741efcdf957517c2dd311dae67d0f7c3982e88491f93f3a30e652",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "4defc2af9d598817adfc2b1232caaa429749a214f6a4924731d96ceb29c54118",
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "8f1502d6cc0a543d79b4266db84fba0426487cb9af688092499d81c01af593fa",
+    "frontend-modern/src/components/shared/TechnicalDetailsDisclosure.tsx": "7c843b8d7c20e6e3bae0ecc0df4c4dbbe8331466a231d5dad3941759d2b5701a"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "private preview: origin/main plus this change and the stacked update-check change, frontend embedded, mock mode with a seeded metrics store; headless Chromium on pulse-dev through a reverse tunnel; full-resolution screenshots of every drawer tab reviewed by eye at 1440 and 390px",
+    "guest artifact-cache-310 Overview: 'No active alerts', then a one-line Worth checking 'Last completed backup 21d ago 2026-09-22 ...' in the amber list, then CPU/Memory/Disk cards with 'now' beside each value and '24h low\u2013high' ranges; Memory card reads '2.56 GB of 5.04 GB \u00b7 may include cache'; no caveat paragraph; the full note appears once in Details",
+    "guest History 24h and 7d: gridline labels 100%/50%/0%, 15M/s / 7.4M/s / 0, 2.2M/s / 1.1M/s / 0, each centred on its gridline; missing-readings note is one line",
+    "node Analytics A Overview and History 7d: numeric I/O axes (32M/s, 55M/s) and thermals 60\u00b0C/51\u00b0C/41\u00b0C on their gridlines; continuous lines",
+    "390px phone: Worth checking wraps within its box, cards stack full width, axis labels readable, no horizontal overflow"
+  ],
+  "interactions": [
+    "expanded a guest and a node, opened Details, switched History to 24 hours and to 7 days, opened Manage, in both viewports"
+  ]
+}

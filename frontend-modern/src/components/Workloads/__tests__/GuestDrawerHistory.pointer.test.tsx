@@ -84,7 +84,7 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
     expect(
       within(utilization()).getByRole('img', { name: 'Utilization history' }),
     ).toHaveAccessibleDescription(
-      `${new Date(time).toLocaleString()}. CPU 11.0%. Memory no observation. Disk no observation. Missing observations: CPU, Memory. Lines stop where a series has no reading at another stored time in this panel. This does not identify the cause or duration of a monitoring outage.`,
+      `${new Date(time).toLocaleString()}. CPU 11.0%. Memory no observation. Disk no observation. Missing observations: CPU, Memory. Lines break where a reading is missing.`,
     );
     fireEvent.pointerLeave(plot);
     expect(utilization()).toHaveTextContent('CPU43.0%');

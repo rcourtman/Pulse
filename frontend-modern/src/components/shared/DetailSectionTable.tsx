@@ -17,7 +17,7 @@ export {
   type DetailValueTone,
 } from './detailSectionModel';
 
-const detailValueToneClass = (tone: DetailValueTone | undefined): string => {
+export const detailValueToneClass = (tone: DetailValueTone | undefined): string => {
   if (tone === 'accent') return 'text-cyan-700 dark:text-cyan-300';
   if (tone === 'success') return 'text-emerald-700 dark:text-emerald-300';
   if (tone === 'warning') return 'text-amber-700 dark:text-amber-300';

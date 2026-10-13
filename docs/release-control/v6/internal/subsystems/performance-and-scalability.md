@@ -4048,6 +4048,9 @@ Round dot markers (zero-length round-capped strokes) and the in-place
 `no reading` readout change presentation only: they add no read, timer or DOM
 node per observation beyond the marker's two paths, and the readout no longer
 inserts or removes a line as the inspected time changes.
+Numeric gridline labels are computed from the scale the panel already holds;
+the compact "Worth checking" list and the trend cards' "now" and "24h low–high"
+labels reuse rows and ranges already derived. None adds a read or timer.
 
 The default stored-history legend resolves one latest timestamp from that
 same bounded, normalized panel index, then looks up each configured series at

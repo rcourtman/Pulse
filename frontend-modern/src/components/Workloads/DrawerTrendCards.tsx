@@ -171,7 +171,9 @@ const DrawerTrendCards: Component<DrawerTrendCardsProps> = (props) => {
               return '—';
             });
             const valueQualifier = () => {
-              if (typeof card.current === 'number') return '';
+              // Name the big number's time, so it is not read as the last point
+              // of the 24h line (stored history can trail the live reading).
+              if (typeof card.current === 'number') return 'now';
               if (card.deferred?.valueLabel) return card.deferred.valueLabel;
               if (card.deferred && typeof card.deferred.lastKnownValue === 'number') {
                 return 'last known';
@@ -184,7 +186,7 @@ const DrawerTrendCards: Component<DrawerTrendCardsProps> = (props) => {
               if (points().length === 1) return '24h: one reading so far';
               const low = formatValue(r.low, card.unit);
               const high = formatValue(r.high, card.unit);
-              return low === high ? `24h: steady at ${low}` : `24h: ${low}–${high}`;
+              return low === high ? `24h: steady at ${low}` : `24h low–high: ${low}–${high}`;
             };
             const ariaLabel = () => {
               const r = range();

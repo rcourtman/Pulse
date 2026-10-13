@@ -57,7 +57,7 @@ export const TechnicalDetailsDisclosure: Component<TechnicalDetailsDisclosurePro
       class={props.class ?? 'rounded-sm border border-border bg-surface px-2 py-1.5'}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
-      <summary class="flex min-h-11 cursor-pointer list-none flex-wrap items-center text-[11px] font-medium text-base-content sm:min-h-0">
+      <summary class="flex min-h-11 cursor-pointer list-none flex-wrap items-center text-xs font-medium text-base-content sm:min-h-0">
         <span
           aria-hidden="true"
           class={`mr-1 inline-block text-muted transition-transform ${expanded() ? 'rotate-90' : ''}`}

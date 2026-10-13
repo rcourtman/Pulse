@@ -255,7 +255,9 @@ describe('GuestDrawerHistory source isolation', () => {
         />
       ));
       await waitFor(() =>
-        expect(screen.getByTestId('drawer-trend-card-cpu')).toHaveTextContent('24h: 87.0%–88.0%'),
+        expect(screen.getByTestId('drawer-trend-card-cpu')).toHaveTextContent(
+          '24h low–high: 87.0%–88.0%',
+        ),
       );
       overview.unmount();
 
