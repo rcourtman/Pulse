@@ -233,11 +233,6 @@ cannot supply a field or feedback type, and the next form field's contents are
 not secondary topics. These labels surface review work; they do not establish
 that a defect is reproduced or a request will be built.
 
-Quoted logs and literal HTML markers inside a complete same-line backtick span
-or after a Markdown escape cannot hide subsequent unquoted form fields. Actual
-hidden comments still cannot declare metadata, even when they contain backticks,
-quotes or apparent code fences; an unfinished hidden comment remains hidden.
-
 Headings and inline fields inside backtick or tilde code blocks and indented
 logs are evidence, not form declarations or field boundaries. A real field can
 still contain a fenced version or topic; do not discard that evidence. Version
