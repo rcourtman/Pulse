@@ -80,8 +80,25 @@ function stripHTMLComments(value) {
           fence = { character: marker[1][0], length: marker[1].length };
           return text;
         }
-        if (/^(?: {4}|\t)/.test(text)) return text;
+        // A quoted log is not a top-level form declaration. Its literal
+        // comment opener must not hide the unquoted fields which follow it.
+        if (/^(?: {4}|\t| {0,3}>)/.test(text)) return text;
       }
+      // Match complete, same-line code spans by exact backtick-run length.
+      // Looking up the next run avoids rescanning a long pasted line for each
+      // unmatched delimiter. Backticks inside a hidden comment cannot open a
+      // span: the scanner below skips the comment before considering them.
+      const codeEnds = new Map();
+      const nextRun = new Map();
+      const runs = [...text.matchAll(/`+/g)];
+      for (let i = runs.length - 1; i >= 0; i -= 1) {
+        const run = runs[i];
+        if (nextRun.has(run[0].length)) {
+          codeEnds.set(run.index, nextRun.get(run[0].length));
+        }
+        nextRun.set(run[0].length, run.index + run[0].length);
+      }
+      const token = /<!--|`+/g;
       let visible = "";
       let offset = 0;
       while (offset < text.length) {
@@ -91,11 +108,24 @@ function stripHTMLComments(value) {
           offset = end + 3;
           inComment = false;
         } else {
-          const start = text.indexOf("<!--", offset);
-          if (start === -1) return visible + text.slice(offset);
+          token.lastIndex = offset;
+          const next = token.exec(text);
+          if (!next) return visible + text.slice(offset);
+          const start = next.index;
           visible += text.slice(offset, start);
-          offset = start + 4;
-          inComment = true;
+          let escapes = 0;
+          for (let i = start - 1; i >= 0 && text[i] === "\\"; i -= 1) escapes += 1;
+          const codeEnd = next[0][0] === "`" && escapes % 2 === 0 && codeEnds.get(start);
+          if (codeEnd) {
+            visible += text.slice(start, codeEnd);
+            offset = codeEnd;
+          } else if (next[0] === "<!--" && escapes % 2 === 0) {
+            offset = start + 4;
+            inComment = true;
+          } else {
+            visible += next[0];
+            offset = start + next[0].length;
+          }
         }
       }
       return visible;
