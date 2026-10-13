@@ -448,6 +448,7 @@ export function GuestRow(props: GuestRowProps) {
                       lastBackup={props.guest.lastBackup}
                       isTemplate={props.guest.template}
                       backupRunning={props.guest.backupInProgress}
+                      guestReadEvidence={props.guest}
                     />
                   </Show>
                   <Show when={nestedWorkloadCueLabel()}>
@@ -885,6 +886,7 @@ export function GuestRow(props: GuestRowProps) {
                     guestName={props.guest.name}
                     lastBackup={props.guest.lastBackup}
                     backupRunning={props.guest.backupInProgress}
+                    guestReadEvidence={props.guest}
                   />
                 </Show>
                 <Show when={props.guest.template}>

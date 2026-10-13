@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@solidjs/testing-library';
+import { render, screen, fireEvent, cleanup, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk } from '@/types/api';
 import { guestDiskDeferrals } from '../__fixtures__/guestDiskDeferrals';
+import { GUEST_DRAWER_BACKUP_PRECAUTION } from '../guestDrawerModel';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
@@ -3242,4 +3243,168 @@ describe('GuestRow accessible reading explanations', () => {
     expect(screen.queryByRole('button', { name: /^(Memory|Disk) reading for/ })).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+});
+
+describe('backup disclosures keep completion separate from guest safety', () => {
+  const backup = Date.now() - 3600_000;
+
+  function openBackup(backupColumn: boolean) {
+    fireEvent.click(
+      screen.getByRole('button', { name: backupColumn ? /^Backup status:/ : /^Last backup:/ }),
+    );
+    return screen.getByRole('dialog');
+  }
+
+  it.each([true, false])(
+    'keeps the same open evidence truthful through lock, uncertain completion and recovery, column=%s',
+    (backupColumn) => {
+      const onClick = vi.fn();
+      const [guest, setGuest] = createSignal(
+        makeGuest({ lastBackup: backup, guestAgentStatus: 'available', agentVersion: '9.2' }),
+      );
+      render(() => (
+        <table>
+          <tbody>
+            <GuestRow
+              guest={guest()}
+              visibleColumnIds={backupColumn ? ['name', 'backup'] : ['name']}
+              onClick={onClick}
+            />
+          </tbody>
+        </table>
+      ));
+      const dialog = openBackup(backupColumn);
+      expect(dialog).toHaveTextContent('Last completed backup');
+      expect(dialog).toHaveTextContent('Guest-agent reads: Reported available');
+      expect(dialog).toHaveTextContent('does not independently confirm thaw or filesystem writes');
+      expect(within(dialog).queryByRole('link')).toBeNull();
+
+      setGuest({
+        ...guest(),
+        lock: 'backup',
+        backupInProgress: true,
+        diskStatusReason: 'prev-vm-locked',
+      });
+      expect(screen.getByRole('dialog')).toBe(dialog);
+      expect(dialog).toHaveTextContent('Backup running now');
+      expect(dialog).toHaveTextContent('Guest-agent reads: Deferred');
+      expect(dialog).toHaveTextContent(
+        'Guest reads paused while Proxmox reports a VM operation lock',
+      );
+      expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+      expect(dialog).not.toHaveTextContent('Reported available');
+      expect(within(dialog).getByRole('link', { name: 'Backup safety guidance' })).toHaveAttribute(
+        'href',
+        '/docs/VM_DISK_MONITORING',
+      );
+
+      // An unlocked VM and fresh backup are not evidence that an uncertain
+      // guest request completed. A reporting Pulse Agent cannot clear it.
+      setGuest({
+        ...guest(),
+        lock: '',
+        backupInProgress: false,
+        diskStatusReason: 'prev-agent-timeout',
+        agentKind: 'pulse',
+        agentVersion: '6.5.0',
+        agentStale: false,
+      });
+      expect(dialog).toHaveTextContent('Guest request timed out. Completion is uncertain.');
+      expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+      expect(dialog).toHaveTextContent('Last completed backup');
+      expect(dialog).not.toHaveTextContent('VM operation lock');
+
+      setGuest({ ...guest(), diskStatusReason: '', guestAgentStatus: 'available' });
+      expect(dialog).toHaveTextContent('Guest-agent reads: Reported available');
+      expect(dialog).not.toHaveTextContent('timed out');
+      expect(dialog).not.toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+      expect(within(dialog).queryByRole('link')).toBeNull();
+      expect(onClick).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(guestDiskDeferrals)(
+    'carries the existing allowlisted %s precaution into backup evidence',
+    (reason, detail) => {
+      renderGuestRow({
+        guest: makeGuest({
+          lastBackup: backup,
+          guestAgentStatus: 'deferred',
+          diskStatusReason: reason,
+        }),
+        visibleColumnIds: ['name', 'backup'],
+      });
+      const dialog = openBackup(true);
+      expect(dialog).toHaveTextContent(detail);
+      expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+    },
+  );
+
+  it.each([
+    'available',
+    'expected-unreachable',
+    'not-running',
+    'disabled',
+    'unrecognised-private-value',
+    '',
+  ])(
+    'shows the recognised interpretation of %s, never raw unknown state or a health verdict',
+    (state) => {
+      renderGuestRow({
+        guest: makeGuest({ lastBackup: backup, guestAgentStatus: state, agentVersion: '9.2' }),
+        visibleColumnIds: ['name', 'backup'],
+      });
+      const dialog = openBackup(true);
+      expect(dialog).toHaveTextContent('Guest-agent reads:');
+      expect(dialog).not.toHaveTextContent('unrecognised-private-value');
+      expect(dialog).not.toHaveTextContent('Guest agent connected');
+      expect(dialog).not.toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+    },
+  );
+
+  it.each(['lxc', 'vm'] as const)(
+    'does not fabricate QEMU read state for a %s non-QEMU control',
+    (type) => {
+      renderGuestRow({
+        guest: makeGuest({
+          lastBackup: backup,
+          type,
+          platformType: type === 'vm' ? 'vmware-vsphere' : 'proxmox-pve',
+          platformScopes: type === 'vm' ? ['vmware-vsphere'] : ['proxmox-pve'],
+          lock: 'backup',
+          agentKind: 'pulse',
+          agentVersion: '6.5.0',
+        }),
+        visibleColumnIds: ['name', 'backup'],
+      });
+      if (type === 'vm') {
+        expect(screen.queryByRole('button', { name: /^Backup status:/ })).toBeNull();
+        return;
+      }
+      const dialog = openBackup(true);
+      expect(dialog).toHaveTextContent('Last completed backup');
+      expect(dialog).not.toHaveTextContent('Guest-agent reads:');
+      expect(dialog).not.toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+    },
+  );
+
+  it.each([0, NaN, Date.now() + 86400_000])(
+    'keeps a precaution independent of missing or uncertain backup evidence %s',
+    (lastBackup) => {
+      renderGuestRow({
+        guest: makeGuest({
+          lastBackup,
+          guestAgentStatus: 'deferred',
+          diskStatusReason: 'lock-unverified',
+        }),
+        visibleColumnIds: ['name', 'backup'],
+      });
+      const trigger = screen.getByRole('button', { name: /^Backup status:/ });
+      fireEvent.click(trigger);
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).not.toHaveTextContent('Last completed backup');
+      expect(dialog).toHaveTextContent('Pulse cannot verify that the VM is unlocked');
+      expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+    },
+  );
 });
