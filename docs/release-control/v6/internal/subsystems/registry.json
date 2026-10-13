@@ -5911,7 +5911,8 @@
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/nodeDrawerModel.branchcov0713.test.ts",
-              "frontend-modern/src/features/docker/__tests__/dockerHostDrawerModel.test.ts"
+              "frontend-modern/src/features/docker/__tests__/dockerHostDrawerModel.test.ts",
+              "frontend-modern/src/utils/__tests__/staleAgentMemory.test.ts"
             ]
           },
           {

@@ -1219,6 +1219,49 @@ describe('GuestRow', () => {
     const observation = (state: string, date = observedAt, source = 'guest-agent-meminfo') =>
       makeMemory({ observation: { state, source, observedAt: date } });
     const noticeSelector = '[data-workload-memory-read-status]';
+    it.each(['bars', 'sparklines'] as const)(
+      'invalidates only a stale agent-owned carrier in the mounted %s row',
+      (mode) => {
+        const [guest, setGuest] = createSignal(
+          makeGuest({ memory: observation('current', observedAt, 'agent') }),
+        );
+        const view = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                visibleColumnIds={['name', 'memory']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        expect(view.container.querySelector(noticeSelector)).toBeNull();
+        setGuest({ ...guest(), agentStale: true, lastSeen: '2026-10-01T12:00:00Z' });
+        const notice = view.container.querySelector(noticeSelector)!;
+        expect(notice).toHaveTextContent('Last known');
+        expect(notice).toHaveTextContent('stopped reporting');
+        expect(notice).toHaveTextContent('2026-09-30 11:00:00 UTC');
+        expect(notice).not.toHaveTextContent('2026-10-01');
+        if (mode === 'bars')
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+            'data-reading-state',
+            'last-known',
+          );
+        else
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, last known 50%' }),
+          ).toBeInTheDocument();
+        setGuest({ ...guest(), memory: observation('current') });
+        expect(view.container.querySelector(noticeSelector)).toBeNull();
+        setGuest({
+          ...guest(),
+          agentStale: false,
+          memory: observation('current', observedAt, 'agent'),
+        });
+        expect(view.container.querySelector(noticeSelector)).toBeNull();
+      },
+    );
     const history = {
       getGuestMetricSeries: vi.fn(() => [
         {
