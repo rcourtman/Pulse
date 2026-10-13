@@ -27,7 +27,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	input := models.ResourceConvertInput{ID: resource.ID, Type: string(resource.Type), Name: resource.Name, Status: string(resource.Status), Temperature: resource.Temperature, Proxmox: proxmox, LastSeen: resource.LastSeen}
+	input := models.ResourceConvertInput{ID: resource.ID, Type: string(resource.Type), Name: resource.Name, Status: string(resource.Status), Temperature: resource.Temperature, Proxmox: proxmox, LastSeenUnix: resource.LastSeen.UnixMilli()}
 	frontend := models.ConvertResourceToFrontend(input)
 	b, err := json.Marshal(frontend)
 	if err != nil {
