@@ -1309,9 +1309,19 @@ not a guide to the current menu.
 ### Relay / Mobile
 
 #### Relay showing "Disconnected"
-- Confirm a valid Relay, Pro, grandfathered Pro+, or Cloud license is active (**Settings → Plans & Billing**).
-- Check Pulse server can reach the relay server (outbound WebSocket to `relay.pulserelay.pro`).
-- Review logs: `journalctl -u pulse | grep relay` or `docker logs pulse | grep relay`.
+
+Pulse Mobile and Relay retire on **31 March 2027**; existing paired phones keep
+working until then. **Relay is no longer sold.** Existing Relay subscribers keep
+Pro features at their current price for as long as their subscription continues,
+including after the app retires. Do not buy or switch plans to diagnose a
+connection failure.
+
+For an existing paired phone, use the [Relay connection checks](RELAY.md#relay-showing-disconnected).
+Keep the pairing and current configuration; a relay connection is not proof
+that the phone has connected. Relay connects the app, **not the web UI**.
+For phone alerts after retirement, configure [ntfy, Gotify or Pushover](WEBHOOKS.md#-quick-setup)
+under **Alerts → Notifications** and open Pulse in your phone's browser, using
+your own VPN or tunnel when away from home.
 
 ---
 
