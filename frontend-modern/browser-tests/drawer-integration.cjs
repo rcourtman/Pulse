@@ -309,14 +309,24 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
       await inspector.focus();
       await page.keyboard.press('End');
       await chart.locator('[data-history-peak="memory"]').waitFor();
-      assert.match(await chart.locator('[data-history-peak="memory"]').textContent(), /90%/);
+      assert.match(
+        await chart.locator('[data-history-peak="memory"]').textContent(),
+        /^peak 90\.0%$/,
+      );
       assert.match(
         await chart.getByTestId('guest-history-hover-time').getAttribute('aria-label'),
         /Stored observation/,
       );
       await noOverflow();
       await capture('stored-bands', chart);
-      await overview.getByLabel('History range', { exact: true }).selectOption('7d');
+      await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.url().includes('/api/metrics-store/history') &&
+            response.url().includes('range=7d'),
+        ),
+        overview.getByLabel('History range', { exact: true }).selectOption('7d'),
+      ]);
       assert(
         record.requests.some(
           (r) => r.path === '/api/metrics-store/history' && r.search.includes('range=7d'),

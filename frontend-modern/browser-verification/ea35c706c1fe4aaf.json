@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "831d9c75fd2f8f929667a45670fafebb0e1560b9",
+  "verified_at": "2026-10-13T23:44:21Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/utils/memoryObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "a87f2cedc6276f2208a7a9f0dd97adac23b61a5858f0cb14d93aba7f839bb88c",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "e3041dc7e0bdefc4559b816f5fcbefd7c5bcfdd53742172c7a6fd5157ebcfe0d",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "7473e0b405eeb6bc1aa6b33278621b440b05254b0ea1aaae1ed5c9d062c4c670",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "c9903b52c8d1dd391c8990b9b253ebeccdff065d4a97dbcd5ef1f205b2bda03c",
+    "frontend-modern/src/utils/memoryObservation.ts": "5dc98c643eab0852c52e326a86c41cef2f5784032233e72d5ef7afebeba26a73"
+  },
+  "routes": [
+    "/guest (production component fixture)",
+    "/node (production component fixture)",
+    "/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Both themes; Chromium141 and WebKit26, Playwright1.56.1 parity with integration lock",
+    "Quiet low-pressure cache/missing-disk captions; high-cache keyboard/touch disclosure with source/time; stale-Agent and retained disk qualifiers; current measured-zero withdrawal",
+    "Overview-only stored History with min/max bands, dated average and peak90.0%; hidden Manage no polling; range selection",
+    "UTC backup completion and offset-equivalent instant; full OS facts and safe shipped missing-reading help",
+    "Actual source-hldvapda in-memory node registry/models frontend conversion JSON through nodeFromResource to primary CPU55, separate GPU95/NVMe91, no missing-primary substitution",
+    "Always-visible update access help remains the same open DOM node across CPU/status/age updates; unknown per-disk usage remains distinct from zero and measured use",
+    "36 original capture files opened natively in current lane outcome PIXEL-REVIEW.json. Earlier first aggregate retains its literal peak-format assertion failure; first five completed desktop/light scenes reused on identical source instead of replayed. No native or installed acceptance."
+  ],
+  "interactions": [
+    "Desktop native keyboard Enter/Escape; phone native touch; read-only reading dialogs",
+    "Expand existing row and Details; inspect chart with keyboard slider End; select7d and refresh existing read-only History; Manage/Overview switching",
+    "Open safe existing shipped Docs guidance; open update help and retain it through synthetic source updates; inspect existing Learn more target",
+    "No external/native guest, diagnostics, restart, credential, service or monitoring operation"
+  ]
+}
