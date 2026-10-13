@@ -81,7 +81,9 @@ describe('GuestPhysicalDisks', () => {
     const row = within(card).getByTestId('guest-physical-disk') as HTMLDetailsElement;
     row.open = true;
     fireEvent(row, new Event('toggle'));
-    expect(await within(card).findByText('Reallocated Sectors')).toBeInTheDocument();
+    // The SMART card and the disk's Reallocated Sectors history chart both
+    // name the attribute once the detail is open.
+    expect((await within(card).findAllByText('Reallocated Sectors')).length).toBeGreaterThan(0);
     expect(within(card).getByText('Pending Sectors')).toBeInTheDocument();
     expect(within(card).getByText('CRC Errors')).toBeInTheDocument();
     expect(within(card).getAllByTestId('guest-physical-disk')).toHaveLength(1);

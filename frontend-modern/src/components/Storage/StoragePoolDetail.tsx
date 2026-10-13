@@ -1,9 +1,8 @@
-import { Component, For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo } from 'solid-js';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { filterSelectClass } from '@/components/shared/FilterToolbar';
 import { HistoryChart } from '@/components/shared/HistoryChart';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { Subtabs } from '@/components/shared/Subtabs';
 import type { HistoryTimeRange } from '@/api/charts';
 import { maxHistoryDays } from '@/stores/license';
 import {
@@ -53,10 +52,7 @@ interface StoragePoolDetailProps {
   controlsId?: string;
 }
 
-type StoragePoolDetailTab = 'overview' | 'history';
-
 export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
-  const [activeTab, setActiveTab] = createSignal<StoragePoolDetailTab>('overview');
   const { getDiskTemperatureThresholds } = useAlertsActivation();
   const {
     chartRange,
@@ -90,36 +86,40 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
     <tr class={STORAGE_DETAIL_ROW_CLASS} data-inline-detail-for={props.summarySeriesId}>
       <td id={props.controlsId} colSpan={99} class={STORAGE_DETAIL_CELL_CLASS}>
         <div class="space-y-3">
-          <Subtabs
-            class="mb-1"
-            ariaLabel="Storage pool detail sections"
-            value={activeTab()}
-            onChange={(value) => setActiveTab(value as StoragePoolDetailTab)}
-            tabs={[
-              { value: 'overview', label: 'Overview' },
-              { value: 'history', label: 'History' },
-            ]}
-            trailing={
-              <Show when={activeTab() === 'history'}>
-                <FormSelect
-                  label="Capacity history range"
-                  labelClass="sr-only"
-                  fieldBaseClass="contents"
-                  value={chartRange()}
-                  onChange={(event) => setChartRange(event.currentTarget.value as HistoryTimeRange)}
-                  selectBaseClass={`${filterSelectClass} h-7 min-h-11 py-0 text-[11px] sm:min-h-0`}
-                >
-                  <For each={rangeOptions()}>
-                    {(option) => <option value={option.value}>{option.label}</option>}
-                  </For>
-                </FormSelect>
-              </Show>
-            }
-          />
+          {/* The capacity trend leads: "is this pool filling up?" is answered
+              before topology and devices. There is no separate History tab
+              repeating it. */}
+          <div class={STORAGE_DETAIL_CARD_CLASS} data-testid="storage-pool-capacity-trend">
+            <div class={STORAGE_DETAIL_HEADER_ROW_CLASS}>
+              <h4 class={STORAGE_DETAIL_SECTION_TITLE_CLASS}>Capacity Trend</h4>
+              <FormSelect
+                label="Capacity history range"
+                labelClass="sr-only"
+                fieldBaseClass="contents"
+                value={chartRange()}
+                onChange={(event) => setChartRange(event.currentTarget.value as HistoryTimeRange)}
+                selectBaseClass={`${filterSelectClass} h-7 min-h-11 py-0 text-[11px] sm:min-h-0`}
+              >
+                <For each={rangeOptions()}>
+                  {(option) => <option value={option.value}>{option.label}</option>}
+                </For>
+              </FormSelect>
+            </div>
+            <HistoryChart
+              resourceType={chartTarget().resourceType}
+              resourceId={chartTarget().resourceId || props.record.id}
+              metric="usage"
+              label="Usage"
+              unit="%"
+              height={140}
+              range={chartRange()}
+              hideSelector
+              compact
+              hideLock
+            />
+          </div>
 
-          <div
-            class={`[overflow-anchor:none] ${activeTab() === 'overview' ? STORAGE_DETAIL_ROOT_GRID_CLASS : 'hidden'}`}
-          >
+          <div class={STORAGE_DETAIL_ROOT_GRID_CLASS}>
             <Show when={topologyRows().length > 0}>
               <div class={STORAGE_DETAIL_CARD_CLASS}>
                 <h4 class={STORAGE_DETAIL_SECTION_TITLE_SPACED_CLASS}>Topology</h4>
@@ -306,28 +306,6 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                     )}
                   </For>
                 </div>
-              </div>
-            </Show>
-          </div>
-
-          <div class={`[overflow-anchor:none] ${activeTab() === 'history' ? '' : 'hidden'}`}>
-            <Show when={activeTab() === 'history'}>
-              <div class={STORAGE_DETAIL_CARD_CLASS}>
-                <div class={STORAGE_DETAIL_HEADER_ROW_CLASS}>
-                  <h4 class={STORAGE_DETAIL_SECTION_TITLE_CLASS}>Capacity Trend</h4>
-                </div>
-                <HistoryChart
-                  resourceType={chartTarget().resourceType}
-                  resourceId={chartTarget().resourceId || props.record.id}
-                  metric="usage"
-                  label="Usage"
-                  unit="%"
-                  height={140}
-                  range={chartRange()}
-                  hideSelector
-                  compact
-                  hideLock
-                />
               </div>
             </Show>
           </div>

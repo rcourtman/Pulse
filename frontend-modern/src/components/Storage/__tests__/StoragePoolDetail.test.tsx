@@ -100,9 +100,6 @@ describe('StoragePoolDetail', () => {
       </table>
     ));
 
-    expect(screen.queryByTestId('history-chart')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-
     expect(screen.getByTestId('history-chart')).toHaveTextContent('storage:pool:tank:usage');
     expect(historyChartSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -130,8 +127,6 @@ describe('StoragePoolDetail', () => {
         </tbody>
       </table>
     ));
-
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
 
     const rangeSelector = screen.getByRole('combobox', {
       name: 'Capacity history range',
@@ -166,8 +161,6 @@ describe('StoragePoolDetail', () => {
         </tbody>
       </table>
     ));
-
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
 
     expect(screen.getByTestId('history-chart')).toHaveTextContent('storage:pve1:local-zfs:usage');
     expect(historyChartSpy).toHaveBeenCalledWith(
@@ -281,7 +274,7 @@ describe('StoragePoolDetail', () => {
     expect(screen.getByText('16 errors')).toBeInTheDocument();
   });
 
-  it('uses the canonical overview and history detail navigation', () => {
+  it('shows the capacity trend and the pool details in one view, trend first', () => {
     render(() => (
       <table>
         <tbody>
@@ -290,16 +283,14 @@ describe('StoragePoolDetail', () => {
       </table>
     ));
 
-    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'false');
-    expect(screen.getByText('Configuration')).toBeVisible();
-    expect(screen.queryByText('Capacity Trend')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-
-    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Capacity Trend')).toBeVisible();
-    expect(screen.getByText('Configuration').closest('.hidden')).not.toBeNull();
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    const trend = screen.getByTestId('storage-pool-capacity-trend');
+    const configuration = screen.getByText('Configuration');
+    expect(trend).toBeVisible();
+    expect(configuration).toBeVisible();
+    expect(
+      trend.compareDocumentPosition(configuration) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('renders linked host-agent ZFS datasets inside the expanded pool detail', () => {

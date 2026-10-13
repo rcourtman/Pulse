@@ -82,7 +82,8 @@ const response = (
 });
 const description = (canvas: HTMLElement) =>
   document.getElementById(canvas.getAttribute('aria-describedby')!)!;
-const openHistory = () => fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+// History charts sit in the disk detail's single view; nothing to open.
+const openHistory = () => undefined;
 
 beforeEach(() => {
   request.mockReset().mockImplementation(async (params) => response(params));
@@ -172,9 +173,13 @@ describe('Disk History independently of current collection', () => {
     expect(description(thermal)).toHaveTextContent('42°C');
     expect(screen.getByRole('img', { name: 'Reallocated Sectors chart' })).toBeInTheDocument();
     expect(request).toHaveBeenCalledTimes(reads);
-    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    // The SMART cards share the view with the charts: the current reading is
+    // withdrawn there while the stored observation stays on the chart.
     expect(screen.getByText(/Temperature is temporarily unavailable/)).toBeVisible();
-    expect(screen.queryByText('42°C')).not.toBeInTheDocument();
+    // 42°C survives only as the chart's stored reading, never as a current card.
+    for (const reading of screen.getAllByText('42°C')) {
+      expect(reading.closest('[data-testid="disk-detail-history"]')).not.toBeNull();
+    }
   });
 
   it('ignores an old target completion and uses only the explicit new disk target', async () => {
@@ -254,7 +259,7 @@ describe('Disk History independently of current collection', () => {
         nodes={[]}
       />
     ));
-    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Historical disk charts are unavailable/)).toBeInTheDocument();
     expect(request).not.toHaveBeenCalled();
   });
 });
