@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "075efed2b06f9b850db6c8e657570d8946bc081b",
+  "verified_at": "2026-10-13T18:43:31Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/PBS.md",
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/public/docs/PBS.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md"
+  ],
+  "content_sha256": {
+    "docs/PBS.md": "9195d17de570f1ba5d2dfdf71007e1af1427160b8f3df68676fcac76c2d0830a",
+    "docs/TROUBLESHOOTING.md": "f8872aa45703fd9f5bfc4e4d4f1ad43d82cf2ad618a0193ded66c1d0f8c4d881",
+    "frontend-modern/public/docs/PBS.md": "9195d17de570f1ba5d2dfdf71007e1af1427160b8f3df68676fcac76c2d0830a",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "f8872aa45703fd9f5bfc4e4d4f1ad43d82cf2ad618a0193ded66c1d0f8c4d881"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING#choose-the-affected-workflow",
+    "/docs/PBS#pbs-is-active-but-missing-from-monitoring",
+    "/docs/PBS#pbs-is-connected-but-history-stays-empty"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Actual production Docs router, Markdown renderer and CSS consume the exact shipped PBS and Troubleshooting bytes. Active connection health is distinct from a missing PBS server, partial datastores/backups and empty History; direct API use needs no Pulse agent.",
+    "Existing state, credentials, TLS verification, access restrictions and backup-safety guidance remain intact. Unknown context is valid; no diagnostics, Debug export, agent install, restart, re-add or backup is prescribed to fill a missing-server report.",
+    "Desktop light Chromium 141.0.7390.37 and phone dark WebKit 26.0, Playwright 1.56.1. All six original entry, missing-server and preserve-state screenshots opened natively; labels, links, table and paragraphs fit without horizontal page overflow."
+  ],
+  "interactions": [
+    "Desktop keyboard focus and Enter, phone touch navigation from Troubleshooting to the exact PBS fragment; focused heading after routing.",
+    "PBS History link reaches its existing fragment with focus; actual fetched Markdown byte hashes match the final source.",
+    "No page errors, mutating requests or backend API calls. Browser and local server closed after both cases."
+  ],
+  "source_proof": "source-vveyiz15, exact containing preview with 2824 source inputs/8 artifacts; merged four-test guide and formatting checks pass. Original source-oxih5yuo retains 64 direct guide/renderer cases, type/all lint and production build; no unchanged-suite replay.",
+  "prior_adverse": "Original source-x7rfavm5: 146 pass/five failures. Original browser busy before execution. First containing source-oc36g20f: three pass/one row-position failure, now corrected by unique workflow labels without dropping current safety assertions.",
+  "limits": "Offline source-bound consuming preview with fixture shell, not a native PBS server, cause or recovery of #2905, production deployment or release acceptance. Browser/server closure is recorded; no independent browser-descendant cleanup receipt supplied."
+}
