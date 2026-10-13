@@ -45,13 +45,13 @@ describe('DrawerTrendCards', () => {
       .mockResolvedValue(response({ memory: [point(0, 84), point(12, 84.6), point(23, 85.6)] }));
     render(() => <DrawerTrendCards target={target} enabled cards={[memoryCard()]} />);
 
-    await waitFor(() => expect(card()).toHaveTextContent('24h: 84.0%–85.6%'));
+    await waitFor(() => expect(card()).toHaveTextContent('24h low–high: 84.0%–85.6%'));
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch.mock.calls[0][0]).toMatchObject({ ...target, range: '24h' });
     expect(within(card()).getByText('85.4%')).toBeInTheDocument();
     expect(card()).toHaveTextContent('3.42 GB of 4.00 GB');
     expect(within(card()).getByRole('img')).toHaveAccessibleName(
-      'Memory 85.4%, 84.0% to 85.6% over 24 hours',
+      'Memory now 85.4%, 84.0% to 85.6% over 24 hours',
     );
     // A current reading is not drawn as a trend point; three stored points.
     expect(card().querySelector('path')?.getAttribute('d')?.match(/[ML]/g)).toHaveLength(3);
@@ -137,7 +137,7 @@ describe('DrawerTrendCards', () => {
         cards={[memoryCard(), memoryCard({ metric: 'cpu', label: 'CPU', current: 4 })]}
       />
     ));
-    await waitFor(() => expect(card()).toHaveTextContent('24h: 48.0%–99.0%'));
+    await waitFor(() => expect(card()).toHaveTextContent('24h low–high: 48.0%–99.0%'));
     expect(card('cpu')).toHaveTextContent('24h: one reading so far');
   });
 
@@ -180,14 +180,14 @@ describe('DrawerTrendCards', () => {
       .mockRejectedValue(new Error('boom'));
     const [enabled, setEnabled] = createSignal(true);
     render(() => <DrawerTrendCards target={target} enabled={enabled()} cards={[memoryCard()]} />);
-    await waitFor(() => expect(card()).toHaveTextContent('24h: 84.0%–85.0%'));
+    await waitFor(() => expect(card()).toHaveTextContent('24h low–high: 84.0%–85.0%'));
     setEnabled(false);
     setEnabled(true);
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
     await waitFor(() =>
       expect(card()).toHaveTextContent('Refresh failed. Showing the last loaded trend.'),
     );
-    expect(card()).toHaveTextContent('24h: 84.0%–85.0%');
+    expect(card()).toHaveTextContent('24h low–high: 84.0%–85.0%');
   });
 
   it('stops polling while hidden and reads again when shown', async () => {

@@ -9,6 +9,7 @@ import {
 } from '@/components/shared/TechnicalDetailsDisclosure';
 import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import { DrawerExceptionList } from './DrawerExceptionList';
 import {
   compactDetailRows,
   compactDetailSections,
@@ -211,9 +212,12 @@ const getDetailTone = (valueClass: string | undefined): DetailValueTone => {
 const toDetailRows = (rows: NodeOverviewRow[]): DetailRow[] =>
   compactDetailRows(
     rows.map((row) =>
+      // Details is where a reader goes for the full value; wrap rather than
+      // cut it off behind an ellipsis and a hover-only title.
       makeDetailRow(row.label, row.value, {
         title: row.title,
         tone: getDetailTone(row.valueClass),
+        wrap: true,
       }),
     ),
   );
@@ -418,6 +422,7 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
           makeDetailRow(
             'Pulse coverage',
             linkedAgentId() ? `Agent ${stripAgentPrefix(linkedAgentId())}` : 'PVE API only',
+            { wrap: true },
           ),
           updates
             ? makeDetailRow('Updates', updates.value, {
@@ -575,6 +580,8 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
         </p>
       </Show>
 
+      <DrawerExceptionList testId="node-drawer-exceptions" rows={exceptionRows()} />
+
       <Show when={props.historyTarget}>
         <Suspense fallback={<div class="h-28" aria-hidden="true" />}>
           <DrawerTrendCards
@@ -583,13 +590,6 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
             cards={trendCards()}
           />
         </Suspense>
-      </Show>
-
-      <Show when={exceptionRows().length > 0}>
-        <TechnicalDetailsSection
-          dataTestId="node-drawer-exceptions"
-          sections={[{ label: 'Worth checking', rows: exceptionRows() }]}
-        />
       </Show>
 
       {updateAccessGuidance}

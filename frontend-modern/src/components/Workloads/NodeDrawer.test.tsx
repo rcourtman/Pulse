@@ -396,6 +396,29 @@ describe('NodeDrawer', () => {
 });
 
 describe('NodeDrawer Overview trends', () => {
+  it('lists Worth checking as one line under the alerts line, above the trend cards', async () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          pendingUpdatesStatus: 'unavailable',
+          pendingUpdatesReason: 'source_unavailable',
+        })}
+      />
+    ));
+    const cpu = await screen.findByTestId('drawer-trend-card-cpu');
+    const worth = screen.getByTestId('node-drawer-exceptions');
+    expect(
+      worth.compareDocumentPosition(cpu) & window.Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const row = within(worth).getByText('Updates').closest('tr')!;
+    expect(row).toHaveTextContent('Unavailable · Proxmox source unavailable');
+    expect(
+      within(row)
+        .getByText(/Proxmox source unavailable/)
+        .closest('td'),
+    ).toHaveClass('text-amber-700');
+  });
+
   const guestAlert = makeAlert({
     id: 'guest-memory',
     resourceId: 'qemu-281',
