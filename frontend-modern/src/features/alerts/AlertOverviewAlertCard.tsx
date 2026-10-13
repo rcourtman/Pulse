@@ -240,14 +240,16 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
   // platform page.
   const resourceLink = (): string => {
     const page = platformLink();
-    const resourceId = props.alert.resourceId?.trim();
-    const resourceType = props.alert.metadata?.resourceType;
+    const metadata = props.alert.metadata;
+    const resourceType = metadata?.resourceType;
     // A per-filesystem alert names `<guest>-disk-<key>` and an orphaned backup
     // names `backup-subject:...`; neither is a resource the registry can open.
-    const namesSubResource =
-      props.alert.metadata?.mountpoint !== undefined ||
-      props.alert.metadata?.diskIndex !== undefined ||
-      Boolean(resourceId?.startsWith('backup-subject:'));
+    // A filesystem alert that carries its guest's id opens that guest.
+    const isFilesystem = metadata?.mountpoint !== undefined || metadata?.diskIndex !== undefined;
+    const owningGuestId =
+      typeof metadata?.guestResourceId === 'string' ? metadata.guestResourceId.trim() : '';
+    const resourceId = isFilesystem ? owningGuestId : props.alert.resourceId?.trim();
+    const namesSubResource = Boolean(resourceId?.startsWith('backup-subject:'));
     if (
       !resourceId ||
       namesSubResource ||

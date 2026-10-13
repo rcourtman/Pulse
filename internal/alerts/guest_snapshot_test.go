@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -182,5 +183,40 @@ func TestGuestIORateMetricsDistinguishValidZeroFromUnknown(t *testing.T) {
 	diskRead, diskWrite, networkIn, networkOut = guestIORateMetrics(unknown)
 	if diskRead != nil || diskWrite != nil || networkIn != nil || networkOut != nil {
 		t.Fatalf("unknown rates became alert candidates: %+v %+v %+v %+v", diskRead, diskWrite, networkIn, networkOut)
+	}
+}
+
+// A filesystem alert's resource ID ("<guest>-disk-<key>") names nothing the
+// resource registry can open, so it carries the guest it belongs to under
+// guestResourceId: the ID the guest's own alerts are raised under. Both the
+// canonical-spec path (VMs, containers) and the legacy checkMetric path (a
+// guest of unknown kind) stamp it.
+func TestGuestFilesystemAlertsNameOwningGuest(t *testing.T) {
+	vm := guestObservationVM()
+	legacy := guestSnapshotFromVM(vm)
+	legacy.Kind = guestKindUnknown
+	for name, guest := range map[string]any{"canonical": vm, "legacy": legacy} {
+		t.Run(name, func(t *testing.T) {
+			// Only the canonical guest raises a guest-level (memory) alert
+			// beside its filesystems; it ties the stamp to that alert's ID.
+			wantGuestLevel := name == "canonical"
+			m := guestObservationManager(t)
+			m.CheckGuest(guest, "site")
+			var filesystems int
+			var guestLevel bool
+			for _, alert := range m.GetActiveAlerts() {
+				if !strings.HasPrefix(alert.ResourceID, vm.ID+"-disk-") {
+					guestLevel = guestLevel || alert.ResourceID == vm.ID
+					continue
+				}
+				filesystems++
+				if got := alert.Metadata["guestResourceId"]; got != vm.ID {
+					t.Fatalf("filesystem alert %s guestResourceId = %v, want %q", alert.ResourceID, got, vm.ID)
+				}
+			}
+			if filesystems != 2 || guestLevel != wantGuestLevel {
+				t.Fatalf("expected two filesystem alerts (guest-level alert under %q: %v): %+v", vm.ID, wantGuestLevel, m.GetActiveAlerts())
+			}
+		})
 	}
 }
