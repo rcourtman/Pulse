@@ -9551,6 +9551,12 @@ Sudo validation occurs before download; download and unprivileged preflight
 still precede privileged installation. Token-optional and saved-state update
 paths need no terminal or replacement credential.
 
+Root/sudo dispatch emits the quoted private reader only once via an isolated
+POSIX positional-argument prefix. Normal quoted URL/profile/identity variants
+remain below the common 4096-byte terminal line boundary. Actual interactive
+PTY controls wait for the caller prompt before pasting and before exiting, so
+startup truncation or a queued exit is not mistaken for a reader failure.
+
 The frontend reader selects standalone `stty`, or `busybox stty` when standalone
 `stty` is absent, and uses the same selected utility to restore terminal modes.
 Missing terminal, missing/unsupported utility, unreadable settings, echo-disable

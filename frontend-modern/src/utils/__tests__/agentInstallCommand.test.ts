@@ -31,7 +31,8 @@ describe('agentInstallCommand', () => {
 
     expect(command).toContain("--url 'http://pulse.example:7655'");
     expect(command).toContain('token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)');
-    expect(command).toContain('sudo bash -c');
+    expect(command).toContain('set -- sudo');
+    expect(command).toContain('\"$@\" bash -c');
     expect(command).not.toContain('token-123');
     expect(command).toContain('--token-file "$token_file"');
     expect(command).toContain('--insecure');
@@ -60,7 +61,7 @@ describe('agentInstallCommand', () => {
     });
 
     const preflightIndex = command.indexOf('--preflight-only');
-    const sudoIndex = command.indexOf('sudo bash -c');
+    const sudoIndex = command.indexOf('\"$@\" bash -c');
 
     expect(command).toContain('bootstrap_dir=$(mktemp -d /tmp/pulse-bootstrap.XXXXXX)');
     expect(command).toContain('trap cleanup EXIT');
@@ -336,6 +337,21 @@ const variants = [
 ];
 
 describe('single-line Unix install commands', () => {
+  it.each(variants)('keeps one private body below the usual terminal line limit: %j', (options) => {
+    const command = buildUnixAgentInstallCommand({
+      ...options,
+      token: 'present',
+      extraArgs: [
+        '--update',
+        '--enable-docker',
+        "--agent-id 'agent-42'",
+        "--hostname 'node.example'",
+      ],
+    });
+    expect(Buffer.byteLength(command, 'utf8')).toBeLessThan(4096);
+    expect(command.match(/bash -c /g)).toHaveLength(1);
+    expect(command).toContain('set -- sudo');
+  });
   it.each(variants)('survives text-input normalization: %j', (options) => {
     const command = buildUnixAgentInstallCommand(options);
     const input = document.createElement('input');
@@ -391,7 +407,8 @@ if history:
     env.update(HISTFILE=history, HISTSIZE="100", HISTFILESIZE="100", HISTCONTROL="", PS1="PULSE_TEST$ ")
 program = ["bash", "--noprofile", "--norc", "-i"] if history else ["sh", "-c", p["command"]]
 child = subprocess.Popen(program, stdin=slave, stdout=slave, stderr=slave, preexec_fn=session, env=env)
-if history: os.write(master, (p["command"] + "\\n").encode())
+command_sent = not bool(history)
+exit_sent = False
 os.close(slave)
 output = b""
 sent = False
@@ -406,6 +423,17 @@ while time.monotonic() < deadline:
             raise
         if not chunk: break
         output += chunk
+        # A human pastes after the caller's prompt. Injecting a longer command
+        # while the PTY is still in its startup canonical mode can truncate it
+        # before Bash has even entered readline.
+        if history and not command_sent and output.endswith(b"PULSE_TEST$ "):
+            os.write(master, (p["command"] + "\\n").encode())
+            command_sent = True
+            continue
+        # Do not queue exit while the private reader/installer owns the tty.
+        if history and sent and not exit_sent and output.endswith(b"PULSE_TEST$ "):
+            os.write(master, b"exit\\n")
+            exit_sent = True
         # The interactive shell's echo of the command line quotes the prompt
         # text too, so a chunk can end there long before the bootstrap runs.
         # Only the bootstrap's own stty -echo (recorded by the stty fixture)
@@ -424,7 +452,6 @@ while time.monotonic() < deadline:
             else:
                 os.write(master, (p["input"] + "\\n").encode())
             sent = True
-            if history: os.write(master, b"exit\\n")
     if child.poll() is not None and not ready: break
 else:
     os.killpg(child.pid, signal.SIGKILL)
@@ -958,7 +985,7 @@ describe('terminal-control portability', { timeout: 25_000 }, () => {
         const result = runPrivateUnix(command(), 'private-input', fixture.env('0', failure));
         expect(result.status, result.stdout + result.stderr).not.toBe(0);
         expect(result.stdout).toContain(error);
-        expect(result.stdout).toContain('No installation was attempted');
+        expect(result.stdout).toMatch(/no installation was attempted/i);
         expect(result.stdout).not.toMatch(
           /A terminal is required|command not found|deadline expired|did not restore|private-input/,
         );

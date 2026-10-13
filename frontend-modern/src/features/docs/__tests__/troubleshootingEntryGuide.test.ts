@@ -44,7 +44,7 @@ describe('troubleshooting workflow entry', () => {
     const section = entry();
     const link = section.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/docs/VM_DISK_MONITORING#backup-safety');
-    expect(section.querySelectorAll('li')).toHaveLength(9);
+    expect(section.querySelectorAll('li')).toHaveLength(10);
     expect(section.querySelector('pre')).toBeNull();
     const beforeList = [...section.children]
       .slice(
@@ -62,30 +62,32 @@ describe('troubleshooting workflow entry', () => {
 
   it('keeps server updates, workload updates and reporting acceptance distinct', () => {
     const section = entry();
-    const rows = section.querySelectorAll('li');
-    expect(prose(rows[1] as HTMLElement)).toContain(
-      'An update of a monitored container is a different job',
-    );
-    const updateLinks = [...rows[1].querySelectorAll('a')].map((link) => link.getAttribute('href'));
+    const row = (label: string) => {
+      const rows = [...section.querySelectorAll('li')].filter((element) =>
+        prose(element.querySelector('strong') as HTMLElement).startsWith(label),
+      );
+      expect(rows, label).toHaveLength(1);
+      return rows[0] as HTMLElement;
+    };
+    const update = row('Update failed or its result is uncertain');
+    const install = row('Agent host is missing or reporting is rejected');
+    const reporting = row('Guest readings are missing or disagree');
+    const memory = row('Pulse itself uses more memory, CPU or disk writes');
+    expect(prose(update)).toContain('An update of a monitored container is a different job');
+    const updateLinks = [...update.querySelectorAll('a')].map((link) => link.getAttribute('href'));
     expect(updateLinks).toEqual([
       '/docs/AUTO_UPDATE#update-failed',
       '/docs/DOCKER#check-a-failed-or-pending-workload-update',
     ]);
-    expect(prose(rows[1] as HTMLElement)).toContain(
-      'Preserve the current state and rollback evidence',
-    );
-    expect(prose(rows[2] as HTMLElement)).toContain('Installer success is not an accepted report');
-    expect(prose(rows[3] as HTMLElement)).toContain(
-      'a working Pulse Agent view does not prove API recovery',
-    );
-    expect(prose(rows[6] as HTMLElement)).toContain(
-      'Guest usage and database size are different measurements',
-    );
+    expect(prose(update)).toContain('Preserve the current state and rollback evidence');
+    expect(prose(install)).toContain('Installer success is not an accepted report');
+    expect(prose(reporting)).toContain('a working Pulse Agent view does not prove API recovery');
+    expect(prose(memory)).toContain('Guest usage and database size are different measurements');
   });
 
   it('routes every entry to an existing shipped heading in the production viewer', () => {
     const links = [...entry().querySelectorAll('a[href]')];
-    expect(links).toHaveLength(16);
+    expect(links).toHaveLength(17);
     for (const link of links) {
       const href = link.getAttribute('href')!;
       const match = /^\/docs\/([^#]+)#(.+)$/.exec(href);

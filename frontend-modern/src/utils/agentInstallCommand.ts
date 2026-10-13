@@ -239,7 +239,11 @@ export const buildUnixAgentInstallCommand = ({
     `curl ${curlFlags}${caCertArg} ${shellQuoteArg(`${normalizedBaseUrl}/install.sh`)} -o "$install_script";`,
     // Detachment must not require a downloadable new agent binary.
     ...(!uninstall ? [`bash "$install_script" ${preflightArgs}${caCertArg}${insecureArg};`] : []),
-    `if [ "$(id -u)" -eq 0 ]; then ${child} else sudo ${child} fi;`,
+    // Expand the root/sudo prefix once. Repeating the entire quoted reader
+    // makes a normal pasted command exceed some terminals' canonical line
+    // limit. Positional arguments live only inside this isolated subshell.
+    'if [ "$(id -u)" -eq 0 ]; then set --; else set -- sudo; fi;',
+    `"$@" ${child}`,
     ')',
   ].join(' ');
 };

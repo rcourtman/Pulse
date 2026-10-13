@@ -211,6 +211,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
       await activate(fileCopy);
       const linuxCard = page
         .getByRole('heading', { name: 'Install on Linux', exact: true })
+        .locator('..')
         .locator('..');
       assert.match(await linuxCard.innerText(), /BusyBox/);
       assert.match(await linuxCard.innerText(), /root-owned/);

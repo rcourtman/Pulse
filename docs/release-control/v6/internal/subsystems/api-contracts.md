@@ -12048,6 +12048,12 @@ and ancestor trust. The Linux/NAS and FreeBSD cards explain this existing privat
 and does not put credentials in GUI command fields. It does not claim a GUI can
 create private files or establish native appliance installation.
 
+Root/sudo dispatch emits the quoted private reader only once via an isolated
+POSIX positional-argument prefix. Normal quoted URL/profile/identity variants
+remain below the common 4096-byte terminal line boundary. Actual interactive
+PTY controls wait for the caller prompt before pasting and before exiting, so
+startup truncation or a queued exit is not mistaken for a reader failure.
+
 The frontend terminal reader can select `busybox stty` only when standalone
 `stty` is absent. It distinguishes missing TTY, absent/unsupported tool and
 mode-save/echo-disable/restoration failures, refuses unsafe entry/installation,
