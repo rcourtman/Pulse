@@ -724,7 +724,8 @@ Disk detail composes shared HistoryChart owners from stable disk-family catalog
 entries, independently of the latest optional temperature/SMART fields. Matching
 snapshots must not recreate chart DOM, reset inspection or restart reads. Stored
 series retain their own sample provenance; current collection unavailability is
-still reported in Overview, and empty history is not a manufactured zero. The
+still reported beside the SMART facts in the detail's single view (there is no
+History tab), and empty history is not a manufactured zero. The
 shared target/range owner continues to cancel old selections and reject late
 responses. `DiskDetail.history-collection.test.tsx` and the production
 `browser-tests/disk-history-collection.cjs` fixture verify these boundaries with

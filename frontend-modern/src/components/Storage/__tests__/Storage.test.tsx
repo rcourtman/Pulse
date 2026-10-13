@@ -1110,7 +1110,6 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand tank' }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'History' }));
 
     await waitFor(() => {
       expect(metricsHistorySpy).toHaveBeenCalledWith(
