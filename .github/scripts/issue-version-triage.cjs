@@ -10,6 +10,15 @@ function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function atxHeading(text) {
+  // Edited issue forms still use Markdown: up to three leading spaces and
+  // one to six hashes, separated from the text by whitespace. A closing hash
+  // run is optional, but only closes a heading when preceded by whitespace.
+  const match = text.match(/^ {0,3}#{1,6}(?:[ \t]+(.*)|$)/);
+  if (!match) return null;
+  return (match[1] || "").replace(/(?:^|[ \t]+)#+[ \t]*$/, "").trim();
+}
+
 function declarationLines(body) {
   let fence = null;
   return stripHTMLComments(body).split(/\r?\n/).map((text) => {
@@ -28,8 +37,8 @@ function declarationLines(body) {
     }
     // Pasted examples and logs are evidence, not issue-form structure. Keep
     // their text as a value under a real field, but never scan it for fields.
-    return { text, delimiter, declaration: !inCode && !delimiter &&
-      !/^(?: {4}|\t)/.test(text) };
+    const declaration = !inCode && !delimiter && !/^(?: {4}|\t)/.test(text);
+    return { text, delimiter, declaration, heading: declaration ? atxHeading(text) : null };
   });
 }
 
@@ -41,13 +50,14 @@ function firstFieldValue(lines) {
 function extractSectionValue(body, heading, followingHeadings = []) {
   if (!body) return null;
   const lines = declarationLines(body);
-  const pattern = new RegExp(`^#+[ \\t]*${escapeRegExp(heading)}[ \\t]*$`, "i");
-  const start = lines.findIndex((line) => line.declaration && pattern.test(line.text));
+  const pattern = new RegExp(`^${escapeRegExp(heading)}$`, "i");
+  const start = lines.findIndex((line) => line.heading !== null && pattern.test(line.heading));
   if (start === -1) return null;
-  const boundary = new RegExp(`^#+[ \\t]*(?:${followingHeadings.length
-    ? followingHeadings.map(escapeRegExp).join("|") : "[^\\n]+"})[ \\t]*$`, "i");
+  const boundary = followingHeadings.length
+    ? new RegExp(`^(?:${followingHeadings.map(escapeRegExp).join("|")})$`, "i") : null;
   let end = start + 1;
-  while (end < lines.length && !(lines[end].declaration && boundary.test(lines[end].text))) {
+  while (end < lines.length && !(lines[end].heading !== null &&
+      (!boundary || boundary.test(lines[end].heading)))) {
     end += 1;
   }
   // An empty declared field differs from a legacy report with no field.
@@ -178,7 +188,7 @@ function extractPulseVersion(title, body) {
   if (body) {
     const lines = declarationLines(body);
     const versionHeading = lines.findIndex((line) =>
-      line.declaration && /^#{1,6}[ \t]+Pulse[ \t]+version[ \t]*$/i.test(line.text)
+      line.heading !== null && /^Pulse[ \t]+version$/i.test(line.heading)
     );
     if (versionHeading !== -1) {
       // The explicit running-version field is authoritative, even when it is
@@ -188,8 +198,8 @@ function extractPulseVersion(title, body) {
     }
     for (let i = 0; i < lines.length; i += 1) {
       if (!lines[i].declaration) continue;
-      const line = lines[i].text.replace(/\*\*|__/g, "")
-        .replace(/^[ \t]*(?:#{1,6}[ \t]+|[-*][ \t]+)/, "").trim();
+      const line = (lines[i].heading ?? lines[i].text).replace(/\*\*|__/g, "")
+        .replace(/^[ \t]*[-*][ \t]+/, "").trim();
       const field = line.match(
         /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
       );
