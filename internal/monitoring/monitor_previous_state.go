@@ -82,13 +82,13 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 	}
 
 	for _, host := range readState.Hosts() {
-		if host == nil {
+		// Only an online, guest-linked host can contribute to this input.
+		// Check the view before projecting it: projection clones the complete
+		// disk inventory, twice, even for unrelated hosts we would discard.
+		if host == nil || host.Status() != unifiedresources.StatusOnline || (host.LinkedVMID() == "" && host.LinkedContainerID() == "") {
 			continue
 		}
 		modelHost := previousHostFromView(host)
-		if modelHost.Status != "online" {
-			continue
-		}
 		if modelHost.LinkedVMID != "" {
 			ctx.hostAgentsByVMID[modelHost.LinkedVMID] = modelHost
 		}

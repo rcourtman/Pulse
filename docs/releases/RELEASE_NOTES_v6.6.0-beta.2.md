@@ -2,7 +2,7 @@
 
 This beta follows `v6.6.0-beta.1` on the way to stable `v6.6.0`. Stable `v6.5.0` remains the rollback target.
 
-This beta carries 322 changes merged since stable `v6.5.0`.
+This beta carries 328 changes merged since stable `v6.5.0`.
 
 ## What's improved
 

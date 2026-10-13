@@ -206,6 +206,15 @@ echo "  Regex bytes:  $MAX_REGEX_BYTES max"
 
 echo "Compiling the race-enabled internal/api test binary once..."
 go test -c -race -o "$API_BINARY" ./internal/api
+
+# TestHostAgentCredentialFileHandoff compiles pulse-agent itself, with a fixed three-minute
+# limit. Every API shard runs with a small pinned GOMAXPROCS that the test's child compiler
+# inherits, so a cold build of roughly 250 CPU-seconds is serialized past that limit: run
+# alone with GOMAXPROCS=1 and a cold cache it fails at 180s with "signal: killed", while a
+# cache warmed beforehand makes it a 16s test. The race-enabled test binary does not warm
+# this plain build, so compile the agent once here, before any shard starts and unpinned.
+echo "Warming the pulse-agent build cache for tests that compile the agent..."
+go build -o /dev/null ./cmd/pulse-agent
 (
   cd internal/api
   "$API_BINARY" -test.list '^Test'

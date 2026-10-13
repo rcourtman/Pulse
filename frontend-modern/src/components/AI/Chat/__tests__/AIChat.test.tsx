@@ -415,6 +415,7 @@ vi.mock('../MentionAutocomplete', () => ({
       data-resource-count={String(props.resources.length)}
       data-resource-ids={props.resources.map((resource) => resource.id).join('|')}
       data-resource-labels={props.resources.map((resource) => resource.label).join('|')}
+      data-resource-nodes={props.resources.map((resource) => resource.node || '').join('|')}
     >
       <button
         type="button"
@@ -4983,6 +4984,113 @@ describe('AIChat', () => {
   // ── @ mention detection ──────────────────────────────────────────────
 
   describe('mention autocomplete', () => {
+    it('uses canonical provider labels without displaying a legacy instance placeholder', async () => {
+      const storage = {
+        id: 'storage-opaque',
+        type: 'storage' as const,
+        name: 'Archive',
+        displayName: 'Archive',
+        status: 'online',
+        platformType: 'vmware-vsphere',
+        sourceType: 'api',
+        vmware: {
+          connectionName: 'Lab vCenter',
+          entityType: 'datastore',
+          managedObjectId: 'datastore-1',
+        },
+        platformData: { instance: 'storage-opaque' },
+      };
+      mockByType.mockImplementation((type: string) => (type === 'storage' ? [storage] : []));
+      mockResources.mockReturnValue([storage]);
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      Object.defineProperty(textarea, 'selectionStart', { value: 1, writable: true });
+      fireEvent.input(textarea, { target: { value: '@' } });
+      fireEvent.click(screen.getByTestId('mention-select-storage-opaque'));
+      const selected = screen.getByLabelText('Selected resources');
+      expect(selected).toHaveTextContent('Lab vCenter');
+      expect(selected).not.toHaveTextContent('storage-opaque');
+      expect(selected.textContent?.match(/Lab vCenter/g)).toHaveLength(1);
+    });
+
+    it('withholds governed guest nodes and site names from suggestions and selected chips', async () => {
+      const guest = {
+        id: 'vm-governed',
+        type: 'vm' as const,
+        name: 'secret-guest',
+        status: 'running',
+        label: 'withheld guest',
+        aiSafeSummary: 'withheld guest',
+        policy: {
+          sensitivity: 'restricted' as const,
+          routing: { scope: 'local-only' as const, redact: ['hostname'] as const },
+        },
+        proxmox: { vmid: 101, nodeName: 'secret-node', instance: 'secret-site' },
+      };
+      mockByType.mockImplementation((type: string) => (type === 'vm' ? [guest] : []));
+      mockResources.mockReturnValue([guest]);
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      Object.defineProperty(textarea, 'selectionStart', { value: 1, writable: true });
+      fireEvent.input(textarea, { target: { value: '@' } });
+      const suggestions = screen.getByTestId('mention-autocomplete');
+      expect(suggestions).toHaveAttribute('data-resource-nodes', '');
+      fireEvent.click(screen.getByTestId('mention-select-vm-governed'));
+      const selected = screen.getByLabelText('Selected resources');
+      expect(selected).not.toHaveTextContent('secret-node');
+      expect(selected).not.toHaveTextContent('secret-site');
+      expect(selected).not.toHaveTextContent('secret-guest');
+    });
+
+    it('keeps same-label selections distinct and removable by canonical ID', async () => {
+      const clones = ['Site A', 'Site B'].map((instance, index) => ({
+        id: 'vm-owner-' + index,
+        type: 'vm' as const,
+        name: 'duplicate',
+        displayName: 'duplicate',
+        status: 'running',
+        platformType: 'proxmox',
+        sourceType: 'proxmox',
+        proxmox: { vmid: 101, nodeName: 'node1', instance },
+      }));
+      mockByType.mockImplementation((type: string) => (type === 'vm' ? clones : []));
+      mockResources.mockReturnValue(clones);
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      const pick = (id: string) => {
+        Object.defineProperty(textarea, 'selectionStart', {
+          value: 1,
+          writable: true,
+          configurable: true,
+        });
+        fireEvent.input(textarea, { target: { value: '@' } });
+        fireEvent.click(screen.getByTestId('mention-select-' + id));
+      };
+      pick('vm-owner-0');
+      pick('vm-owner-1');
+      const selected = screen.getByLabelText('Selected resources');
+      expect(selected).toHaveTextContent('Site A');
+      expect(selected).toHaveTextContent('Site B');
+      fireEvent.click(
+        within(selected).getByRole('button', { name: 'Remove resource: duplicate: Site A: node1' }),
+      );
+      expect(selected).not.toHaveTextContent('Site A');
+      expect(textarea.value).toContain('@duplicate');
+      await waitForProviderCheckSettled();
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        '@duplicate',
+        [expect.objectContaining({ id: 'vm-owner-1', name: 'duplicate', type: 'vm' })],
+        undefined,
+      );
+    });
+
     it('activates mention autocomplete on @ input', () => {
       renderChat();
       const textarea = screen.getByPlaceholderText(
@@ -5212,10 +5320,10 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(
           screen.getByTestId('mention-autocomplete').getAttribute('data-resource-ids'),
-        ).toContain('agent:vc-1:host:host-101');
+        ).toContain('vmware-host-1');
       });
 
-      fireEvent.click(screen.getByTestId('mention-select-agent:vc-1:host:host-101'));
+      fireEvent.click(screen.getByTestId('mention-select-vmware-host-1'));
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       await waitFor(() => {
@@ -5223,7 +5331,7 @@ describe('AIChat', () => {
           '@ESXi 01',
           [
             expect.objectContaining({
-              id: 'agent:vc-1:host:host-101',
+              id: 'vmware-host-1',
               name: 'ESXi 01',
               type: 'agent',
             }),
@@ -5339,7 +5447,7 @@ describe('AIChat', () => {
         '@redacted by policy',
         [
           expect.objectContaining({
-            id: 'node::secret-node-1',
+            id: 'agent-1',
             name: 'redacted by policy',
             type: 'agent',
           }),

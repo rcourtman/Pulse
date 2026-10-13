@@ -89,6 +89,15 @@ describe('usePatrolIntelligenceState', () => {
     );
   });
 
+  it('shows the Pro default only when the server says it applies', () => {
+    // A missing or non-boolean flag from an older server must not show the
+    // notice, so the state owner accepts only an explicit true.
+    expect(patrolIntelligenceStateSource).toContain(
+      'setDefaultModeApplied(settings.default_mode_applied === true);',
+    );
+    expect(patrolIntelligenceStateSource).toContain('defaultModeApplied,');
+  });
+
   it('keeps browser/network start failures distinct from backend rejections', () => {
     expect(patrolStartFailureMessage(new TypeError('Failed to fetch'))).toBe(
       'Could not reach Pulse to start Patrol: Failed to fetch',

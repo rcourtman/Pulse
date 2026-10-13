@@ -16,44 +16,26 @@
 
 ## Purpose
 
+### TrueNAS SCALE removal retires every owned middleware boot task before recovery erasure
+
+The [agent lifecycle removal contract](agent-lifecycle.md#truenas-scale-removal-retires-every-owned-middleware-boot-task-before-recovery-erasure)
+owns this manager's activation, quiescence, recovery-retention and erasure
+requirements, including the registered source controls and native-qualification
+boundary. The deployment entrypoint must preserve that contract.
+
+### DSM Upstart removal retains recovery until automatic activation and the job are absent
+
+The [agent lifecycle removal contract](agent-lifecycle.md#dsm-upstart-removal-retains-recovery-until-automatic-activation-and-the-job-are-absent)
+owns this manager's activation, quiescence, recovery-retention and erasure
+requirements, including the registered source controls and native-qualification
+boundary. The deployment entrypoint must preserve that contract.
+
 ### FreeBSD rc.d and SysV removal retains recovery on unknown or live state
 
-Before server deregistration or local erasure, Unix uninstall selects its
-FreeBSD rc.d or SysV manager and requires observed quiescence. Bounded combined
-reads reject failed, incomplete, empty, duplicate or diagnostic-bearing state.
-The kernel process inventory checks both collector and daemon supervisor, while
-PID files must be regular numeric records of at most 32 bytes that cannot
-identify another process.
-Process arguments are never returned from the reader. Rendered rc.d/SysV stops
-retain PID files after refused signals or when termination remains unconfirmed.
-
-FreeBSD requires effective `pulse_agent_enable=NO` readback plus matching stopped
-status and supervisor/child absence. SysV removes every owned activation link
-across both rc*.d layouts, including custom runlevels and priorities, with checked
-manager commands or exact owned-link removal. Foreign, malformed or inaccessible
-paths refuse, rather than deleting another service. Both paths recheck after
-remote confirmation and before script, PID or credential erasure. Remote refusal
-keeps the stopped installation's recovery material; no automatic restart occurs.
-Disabling may succeed before a later stop/status/process read fails; do not
-restore activation links or automatically restart. Earlier installed init scripts
-can still erase their own runtime PID files after failed signals. The independent
-gate then retains service/credential recovery and refuses remote removal; it
-does not recreate PIDs or rewrite those installed scripts. Renderer changes apply
-to newly generated scripts, not historical installed-script acceptance.
-Missing/repeated removal still requires known disabled activation and process
-absence. Existing systemd/OpenRC gates and credential/transport ownership remain.
-
-TrueNAS bootstrap re-enables rc.conf and recreates the service link independently.
-A linked rc.d service or existing appliance bootstrap therefore refuses *before*
-remote removal or erasure until its owning activation task can be reconciled;
-this step does not claim appliance task, launchd, Windows or native acceptance.
-Missing timeout/sysrc or unrecognised manager output also remains a safe refusal.
-`TestInstallSHLegacyTeardownRequiresObservedQuiescence` requires all eighteen
-production-function/caller/rendered-stop methods in `agent_legacy_teardown.py`,
-using closed ordinary-user models and private deletion/signal targets, plus a
-real timeout-child termination control. Source models are not installed signed
-agent, real TLS, native manager, published availability or whole #1099 resolution.
-
+The [agent lifecycle removal contract](agent-lifecycle.md#freebsd-rcd-and-sysv-removal-retains-recovery-on-unknown-or-live-state)
+owns this manager's activation, quiescence, recovery-retention and erasure
+requirements, including the registered source controls and native-qualification
+boundary. The deployment entrypoint must preserve that contract.
 
 ### OpenRC removal retains recovery on an unconfirmed manager result
 
@@ -127,38 +109,10 @@ and installed/removal acceptance remain separate from these confined controls.
 
 ### Unix removal retains credentials when connection recovery is incomplete
 
-After existing installed-state recovery, the unified Unix installer checks for
-collector credentials before considering whether a Pulse URL was recovered.
-Any inline credential or selected/runtime/legacy/helper token-file entry,
-including an empty or unreadable file, broken symlink or FIFO, requires
-an authenticated exact-record removal confirmation before local teardown.
-A missing URL fails with a credential-safe same-instance recovery message;
-it cannot turn credential-bearing removal into the local-only path. No
-transport request, process stop, service stop or state deletion follows that
-refusal. Server refusal, unknown confirmation and identity mismatch retain
-state as before; confirmation does not widen trusted path-removal authority.
-Credential-free removal remains local-only, with or without a saved URL.
-
-`TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing` runs the
-production argument parser, token-file ingress, admission, credential-presence,
-record-confirmation and initial state-directory cleanup through
-`agent_uninstall_state.py`. Its forty-eight confined cases use private files
-and service/transport doubles, not a privileged installer or native service
-manager. The legacy shell reader's root ownership is projected onto the private
-fixture owner; root refusal runs as the ordinary proof user. These checks do not
-establish Windows, actual TLS, saved-state discovery, a published fix or
-whole-issue installed removal acceptance.
-
-Reading `--token-file` is read-only, including in non-interactive mode and
-before permission checks. Supplying a credential does not grant ownership of
-its file: a missing URL, root refusal, refused or unknown server result, or
-identity mismatch cannot erase it. Confirmed removal retains a caller-owned
-file outside the authorised runtime state directory; tokens inside that state
-are removed only by its existing post-confirmation path-authorised cleanup.
-Installer-created temporary credentials still belong to the installer cleanup
-trap. Generated setup commands already remove their own private bootstrap
-files; this does not remove that caller-owned cleanup or widen token/TLS trust.
-
+The [agent lifecycle credential-removal contract](agent-lifecycle.md#unix-removal-retains-credentials-when-connection-recovery-is-incomplete)
+owns credential detection, same-instance confirmation, caller-owned token files
+and recovery retention. The deployment entrypoint must preserve those rules and
+the distinction between confined source controls and installed acceptance.
 
 ### Docker server update plans preserve the saved deployment
 
@@ -5058,6 +5012,41 @@ beta's release), so each is retried up to four times with doubling backoff from
 half-printed failed attempt cannot corrupt the verified digests. A moved tag or an
 invalid attestation fails identically on every attempt and is delayed by the
 backoff, never masked.
+The release backend test runner warms the `pulse-agent` build cache once, after
+compiling the race-enabled API test binary and before any shard starts, with
+the full CPU count. `TestHostAgentCredentialFileHandoff` compiles the agent
+itself under a fixed three-minute limit, and each API shard runs with a small
+pinned `GOMAXPROCS` that the test's child compiler inherits. A cold agent build
+is about 250 CPU-seconds, so under the pin it fails at 180 seconds with
+`signal: killed` (reproduced; the first beta's release failed on it twice),
+while a warmed cache makes the same pinned run a 16-second test. The race
+build of the test binary does not warm that plain build.
+
+The release renderer appends a `## Source comparison` section after Roll back: a link to
+GitHub's comparison of the release tag with the stable rollback target it was given
+(`/compare/<rollback target>...<tag>`, from the candidate tag and rollback target the
+workflow already passes; the base is whatever lower stable target was supplied, not
+necessarily the immediately previous release). The link names bare refs, so a branch that shares
+a tag's name would win on GitHub; no such branch exists today. A `tags/` prefix, which
+GitHub's documentation describes for choosing the tag, returned HTTP 404 on the web
+comparison URL for tags that exist (checked on 2026-10-13 against v6.5.0 and
+v6.6.0-beta.2, with a nonexistent tag as a control), so the bare form is used. It is a pointer and not a
+complete list, because GitHub shows at most 250 commits in a comparison, so a larger release
+is only partly visible through it and the section says so. It is advisory. The comparison
+helper skips a missing or malformed tag or base, including a trailing newline, non-ASCII
+digits or numbers too large to convert, and raises nothing. The renderer's existing argument
+and body checks still apply to the whole render, so a rollback target that smuggles in a
+heading still fails the existing duplicate-Install check. A body that validated
+before still validates without the section, and an expected-body comparison still rejects a
+changed or deleted section when its expected body contains one. This does not establish that
+every historical published body meets today's other requirements. The post-update changelog
+dialog reads only recognised category headings, so a separate heading placed after Roll back
+is ignored by it; a `<details>` block placed inside a recognised category would be retained,
+and the sanitizer drops its collapse behaviour. Making the section required, and adding a
+generated row-level inventory that does prove completeness, needs a declarative contract
+record in the preparation snapshot: a marker in the body alone could be deleted to restore
+legacy acceptance, and a frozen in-flight release keeps its own renderer.
+
 As of 2026-10-11, the governed release floor is Go `1.26.9`. It supersedes
 `1.26.8`, whose standard library is reachable through twelve vulnerable Pulse
 call paths reported by `govulncheck` after the 2026-10-08 advisories, including

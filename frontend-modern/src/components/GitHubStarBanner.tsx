@@ -14,7 +14,7 @@ import StarIcon from 'lucide-solid/icons/star';
 import XIcon from 'lucide-solid/icons/x';
 
 const GITHUB_REPO_URL = 'https://github.com/rcourtman/Pulse';
-const ACTIVE_DAYS_BEFORE_PROMPT = 14;
+const ACTIVE_DAYS_BEFORE_PROMPT = 2;
 
 function getTodayDateString(): string {
   return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -49,15 +49,13 @@ export function GitHubStarBanner() {
   const [showPrompt, setShowPrompt] = createSignal(false);
   let blockedByDialogThisSession = false;
 
-  // Count distinct days with connected infrastructure, then offer one quiet
-  // prompt only when the rest of the app shell has yielded the session.
+  // The first connected day establishes use. On the first return day, offer
+  // one quiet prompt only when the rest of the app shell has yielded the session.
   createEffect(() => {
     if (dismissed()) {
       setShowPrompt(false);
       return;
     }
-
-    if (promptShown()) return;
 
     if (dialogStackHasBlockingDialog()) {
       blockedByDialogThisSession = true;
@@ -66,6 +64,7 @@ export function GitHubStarBanner() {
     }
 
     if (blockedByDialogThisSession) return;
+    if (promptShown()) return;
 
     if (!initialDataReceived()) {
       setShowPrompt(false);
@@ -108,7 +107,7 @@ export function GitHubStarBanner() {
   return (
     <Show when={showPrompt()}>
       <section
-        class="fixed left-4 right-20 bottom-(--pulse-mobile-nav-height) z-30 max-w-sm overflow-hidden rounded-lg border border-border bg-surface text-base-content shadow-lg md:right-auto md:bottom-4"
+        class="fixed left-4 right-20 bottom-(--pulse-mobile-nav-height) mb-4 z-30 max-w-sm overflow-hidden rounded-lg border border-border bg-surface text-base-content shadow-lg md:right-auto"
         aria-labelledby="github-star-title"
         aria-live="polite"
       >

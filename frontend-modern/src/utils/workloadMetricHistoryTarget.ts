@@ -1,6 +1,10 @@
 import type { ResourceType } from '@/api/charts';
 import type { WorkloadGuest } from '@/types/workloads';
-import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
+import {
+  buildProxmoxGuestNativeId,
+  getCanonicalWorkloadId,
+  resolveWorkloadType,
+} from '@/utils/workloads';
 
 export interface WorkloadMetricHistoryTarget {
   resourceType: ResourceType;
@@ -16,10 +20,17 @@ export const getWorkloadMetricHistoryTarget = (
     return { resourceType: explicitResourceType, resourceId: explicitResourceId };
   }
 
-  const resourceId = getCanonicalWorkloadId(guest).trim();
+  const workloadType = resolveWorkloadType(guest);
+  // Legacy guest inputs have native coordinates but no backend metrics target.
+  // The History API reads native metric keys, independently of row identity.
+  const nativeGuestId =
+    workloadType === 'vm' || workloadType === 'system-container'
+      ? buildProxmoxGuestNativeId(guest)
+      : null;
+  const resourceId = (nativeGuestId || getCanonicalWorkloadId(guest)).trim();
   if (!resourceId) return null;
 
-  switch (resolveWorkloadType(guest)) {
+  switch (workloadType) {
     case 'vm':
       return { resourceType: 'vm', resourceId };
     case 'system-container':

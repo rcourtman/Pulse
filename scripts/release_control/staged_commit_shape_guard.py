@@ -104,10 +104,6 @@ def advanced_lane_ids(previous_status: dict | None, staged_status: dict) -> list
         previous_lane = previous_lanes.get(lane_id)
         if previous_lane is None:
             continue
-        previous_score = float(previous_lane.get("current_score", 0))
-        staged_score = float(staged_lane.get("current_score", 0))
-        previous_target = float(previous_lane.get("target_score", 0))
-        staged_target = float(staged_lane.get("target_score", 0))
         previous_status_rank = LANE_STATUS_RANK.get(str(previous_lane.get("status", "")), -1)
         staged_status_rank = LANE_STATUS_RANK.get(str(staged_lane.get("status", "")), -1)
         previous_completion_rank = LANE_COMPLETION_RANK.get(
@@ -119,9 +115,7 @@ def advanced_lane_ids(previous_status: dict | None, staged_status: dict) -> list
             -1,
         )
         if (
-            staged_score > previous_score
-            or staged_target < previous_target
-            or staged_status_rank > previous_status_rank
+            staged_status_rank > previous_status_rank
             or staged_completion_rank > previous_completion_rank
         ):
             advanced.append(lane_id)

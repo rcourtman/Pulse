@@ -240,7 +240,7 @@ describe('ResourceDetailDrawer change history section', () => {
         '50.0%current',
       );
       expect(chart.querySelector('[data-history-deferred]')).toBeNull();
-      expect(chart.querySelector('path')).toBeNull();
+      expect(chart.querySelector('path[data-history-series]')).toBeNull();
       expect(read).toHaveBeenCalledTimes(1);
     } finally {
       view.unmount();
@@ -306,7 +306,7 @@ describe('ResourceDetailDrawer change history section', () => {
       expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent('0.0%current');
       expect(chart.querySelector('[data-history-deferred="disk"]')).toBeNull();
       expect(view.container.querySelector('[data-history-group="utilization"]')).toBe(chart);
-      expect(chart.querySelector('path')).toBeNull();
+      expect(chart.querySelector('path[data-history-series]')).toBeNull();
       expect(read).toHaveBeenCalledTimes(1);
       expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
     } finally {
@@ -404,7 +404,7 @@ describe('ResourceDetailDrawer change history section', () => {
           '10.0%current',
         );
         expect(view.container.querySelector('[data-history-group="utilization"]')).toBe(chart);
-        expect(chart.querySelector('path')).toBeNull();
+        expect(chart.querySelector('path[data-history-series]')).toBeNull();
         expect(read).toHaveBeenCalledTimes(1);
       } finally {
         view.unmount();

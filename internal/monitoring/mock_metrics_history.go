@@ -627,17 +627,22 @@ func seedMockMetricsHistory(ctx context.Context, mh *MetricsHistory, ms *metrics
 		return timestamps
 	}
 
-	seedStoreSeries := func(resourceType, resourceID string, metricNames ...string) {
+	// seedStoreSampledSeries stores one metric drawn from another resource's
+	// sampler series (a linked node's CPU temperature follows its agent's).
+	seedStoreSampledSeries := func(resourceType, resourceID, metricType, sampleClass, sampleID string) {
 		if ms == nil || strings.TrimSpace(resourceID) == "" {
 			return
 		}
-		for _, metricType := range metricNames {
-			for _, plan := range mockStoreSeedPlans {
-				coverageKey := metrics.NormalizedSeriesKey(resourceType, resourceID, metricType)
-				for _, ts := range seedStoreGapTimestamps(plan, coverageKey) {
-					queueStorePoint(resourceType, resourceID, metricType, sampler.SampleMetric(resourceType, resourceID, metricType, ts), ts, plan.tier)
-				}
+		for _, plan := range mockStoreSeedPlans {
+			coverageKey := metrics.NormalizedSeriesKey(resourceType, resourceID, metricType)
+			for _, ts := range seedStoreGapTimestamps(plan, coverageKey) {
+				queueStorePoint(resourceType, resourceID, metricType, sampler.SampleMetric(sampleClass, sampleID, metricType, ts), ts, plan.tier)
 			}
+		}
+	}
+	seedStoreSeries := func(resourceType, resourceID string, metricNames ...string) {
+		for _, metricType := range metricNames {
+			seedStoreSampledSeries(resourceType, resourceID, metricType, resourceType, resourceID)
 		}
 	}
 
@@ -713,7 +718,10 @@ func seedMockMetricsHistory(ctx context.Context, mh *MetricsHistory, ms *metrics
 		diskSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "disk", seedTimestamps)
 		netInSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "netin", seedTimestamps)
 		netOutSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "netout", seedTimestamps)
-		temperatureSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "temperature", seedTimestamps)
+		// The node's CPU temperature follows the series the mock drives it
+		// from, so the seeded line ends at the node's current reading.
+		temperatureClass, temperatureID := mock.CPUTemperatureSeries(node)
+		temperatureSeries := canonicalMetricSeriesWithSampler(sampler, temperatureClass, temperatureID, "temperature", seedTimestamps)
 
 		mh.addNodeMetricSeries(node.ID, "cpu", cpuSeries, seedTimestamps)
 		mh.addNodeMetricSeries(node.ID, "memory", memSeries, seedTimestamps)
@@ -721,7 +729,8 @@ func seedMockMetricsHistory(ctx context.Context, mh *MetricsHistory, ms *metrics
 		mh.addNodeMetricSeries(node.ID, "netin", netInSeries, seedTimestamps)
 		mh.addNodeMetricSeries(node.ID, "netout", netOutSeries, seedTimestamps)
 		mh.addNodeMetricSeries(node.ID, "temperature", temperatureSeries, seedTimestamps)
-		seedStoreSeries("node", node.ID, "cpu", "memory", "disk", "netin", "netout", "temperature")
+		seedStoreSeries("node", node.ID, "cpu", "memory", "disk", "netin", "netout")
+		seedStoreSampledSeries("node", node.ID, "temperature", temperatureClass, temperatureID)
 	}
 
 	recordGuest := func(
@@ -1534,7 +1543,7 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		mh.AddNodeMetric(node.ID, "disk", disk, ts)
 		mh.AddNodeMetric(node.ID, "netin", netIn, ts)
 		mh.AddNodeMetric(node.ID, "netout", netOut, ts)
-		if temperature := nodePrimaryTemperatureCelsius(node.Temperature); temperature != nil {
+		if temperature := models.PrimaryCPUTemperatureCelsius(node.Temperature); temperature != nil {
 			mh.AddNodeMetric(node.ID, "temperature", *temperature, ts)
 		}
 
@@ -1544,7 +1553,7 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 			ms.Write("node", node.ID, "disk", disk, ts)
 			ms.Write("node", node.ID, "netin", netIn, ts)
 			ms.Write("node", node.ID, "netout", netOut, ts)
-			if temperature := nodePrimaryTemperatureCelsius(node.Temperature); temperature != nil {
+			if temperature := models.PrimaryCPUTemperatureCelsius(node.Temperature); temperature != nil {
 				ms.Write("node", node.ID, "temperature", *temperature, ts)
 			}
 		}
@@ -1761,7 +1770,7 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		diskwrite := sampler.SampleMetric("agent", host.ID, "diskwrite", ts)
 		netin := sampler.SampleMetric("agent", host.ID, "netin", ts)
 		netout := sampler.SampleMetric("agent", host.ID, "netout", ts)
-		temperature := hostPrimaryTemperatureCelsius(host.Sensors)
+		temperature := models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors)
 		mh.AddGuestMetric(hostKey, "cpu", cpu, ts)
 		mh.AddGuestMetric(hostKey, "memory", memory, ts)
 		mh.AddGuestMetric(hostKey, "disk", disk, ts)

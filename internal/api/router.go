@@ -2178,6 +2178,12 @@ type canonicalResourceIDResolver interface {
 	ResolveCanonicalResourceID(ref string) (string, bool)
 }
 
+// canonicalResourceAncestorResolver is the live canonical parent chain the
+// same read state exposes, nearest parent first.
+type canonicalResourceAncestorResolver interface {
+	ResolveCanonicalResourceAncestors(ref string) []string
+}
+
 // patrolResourceOperatorStateProvider projects durable operator state onto the
 // resource a Patrol finding names. Findings carry whatever resource ID their
 // producer used: unified-derived findings hold the canonical hash, Patrol
@@ -2193,6 +2199,11 @@ type canonicalResourceIDResolver interface {
 // and reused for up to two seconds while nothing it depends on changes), so
 // findings do not each clone the unified listing. Only a reference it cannot
 // resolve is read as given.
+//
+// Maintenance is the active occurrence (one-shot or recurring) covering the
+// resource, resolved by the rule alert intent uses: the resource's own window
+// or an ancestor's window scoped to its descendants, latest end winning. Every
+// other field is the resource's own state; nothing else is inherited.
 func (r *Router) patrolResourceOperatorStateProvider(orgID string) ai.ResourceOperatorStateProvider {
 	return ai.ResourceOperatorStateProviderFunc(
 		func(resourceRef string, now time.Time) (ai.ResourceOperatorStateProjection, bool) {
@@ -2201,33 +2212,49 @@ func (r *Router) patrolResourceOperatorStateProvider(orgID string) ai.ResourceOp
 				return ai.ResourceOperatorStateProjection{}, false
 			}
 			canonicalID := resourceRef
-			if resolver, ok := r.resolveMonitorForOrg(orgID).GetUnifiedStructureReadState().(canonicalResourceIDResolver); ok {
+			readState := r.resolveMonitorForOrg(orgID).GetUnifiedStructureReadState()
+			if resolver, ok := readState.(canonicalResourceIDResolver); ok {
 				if resolvedID, resolved := resolver.ResolveCanonicalResourceID(resourceRef); resolved {
 					canonicalID = resolvedID
 				}
 			}
 			state, found, fetchErr := orgStore.GetResourceOperatorState(canonicalID)
-			if fetchErr != nil || !found {
+			if fetchErr != nil {
 				return ai.ResourceOperatorStateProjection{}, false
 			}
-			projection := ai.ResourceOperatorStateProjection{
-				IntentionallyOffline: state.IntentionallyOffline,
-				MonitoringMode:       string(state.MonitoringMode),
-				LifecycleState:       string(state.LifecycleState),
-				NeverAutoRemediate:   state.NeverAutoRemediate,
-				Criticality:          string(state.Criticality),
-			}
-			if state.LifecycleState == unifiedresources.LifecycleStateRetired {
-				projection.NeverAutoRemediate = true
-			}
-			if state.IsInMaintenanceAt(now) {
-				projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{
-					StartAt: *state.MaintenanceStartAt,
-					EndAt:   *state.MaintenanceEndAt,
-					Reason:  state.MaintenanceReason,
+			var own *unifiedresources.ResourceOperatorState
+			var projection ai.ResourceOperatorStateProjection
+			if found {
+				own = &state
+				projection = ai.ResourceOperatorStateProjection{
+					IntentionallyOffline: state.IntentionallyOffline,
+					MonitoringMode:       string(state.MonitoringMode),
+					LifecycleState:       string(state.LifecycleState),
+					NeverAutoRemediate:   state.NeverAutoRemediate,
+					Criticality:          string(state.Criticality),
+				}
+				if state.LifecycleState == unifiedresources.LifecycleStateRetired {
+					projection.NeverAutoRemediate = true
 				}
 			}
-			return projection, true
+			var ancestorIDs []string
+			if ancestors, ok := readState.(canonicalResourceAncestorResolver); ok {
+				ancestorIDs = ancestors.ResolveCanonicalResourceAncestors(canonicalID)
+			}
+			coverage, covered := unifiedresources.ActiveMaintenanceCoverageAt(now, canonicalID, own, ancestorIDs, func(ancestorID string) (unifiedresources.ResourceOperatorState, bool) {
+				ancestorState, ancestorFound, ancestorErr := orgStore.GetResourceOperatorState(ancestorID)
+				return ancestorState, ancestorErr == nil && ancestorFound
+			})
+			if covered {
+				projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{
+					StartAt:   coverage.Occurrence.StartAt,
+					EndAt:     coverage.Occurrence.EndAt,
+					Reason:    coverage.Reason,
+					SourceID:  coverage.SourceID,
+					Inherited: coverage.Inherited,
+				}
+			}
+			return projection, found || covered
 		},
 	)
 }
@@ -6686,7 +6713,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: chartapi.ProxmoxModelCPURatioPercent(node.CPU)}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: node.Memory.Usage}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: node.Disk.Usage}
-			if temperature := primaryNodeTemperatureCelsius(node.Temperature); temperature != nil {
+			if temperature := models.PrimaryCPUTemperatureCelsius(node.Temperature); temperature != nil {
 				points["temperature"] = monitoring.MetricPoint{Timestamp: now, Value: *temperature}
 			}
 		case "storage":
@@ -6750,7 +6777,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					diskPercent = host.Disks[0].Usage
 				}
 				points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
-				if temperature := primaryHostSensorTemperatureCelsius(host.Sensors); temperature != nil {
+				if temperature := models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors); temperature != nil {
 					points["temperature"] = monitoring.MetricPoint{Timestamp: now, Value: *temperature}
 				}
 				// Note: We intentionally don't include netin/netout here because the host model
@@ -6766,7 +6793,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: chartapi.ProxmoxModelCPURatioPercent(node.CPU)}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: node.Memory.Usage}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: node.Disk.Usage}
-			if temperature := primaryNodeTemperatureCelsius(node.Temperature); temperature != nil {
+			if temperature := models.PrimaryCPUTemperatureCelsius(node.Temperature); temperature != nil {
 				points["temperature"] = monitoring.MetricPoint{Timestamp: now, Value: *temperature}
 			}
 		case "app-container":
@@ -7503,61 +7530,6 @@ func readingSightingsLapsed(sourceStatus func(unifiedresources.DataSource) (unif
 		recorded = true
 	}
 	return recorded
-}
-
-func primaryHostSensorTemperatureCelsius(sensors models.HostSensorSummary) *float64 {
-	if len(sensors.TemperatureCelsius) == 0 {
-		return nil
-	}
-	if value, ok := sensors.TemperatureCelsius["cpu_package"]; ok && value > 0 {
-		return &value
-	}
-
-	var best float64
-	found := false
-	for key, value := range sensors.TemperatureCelsius {
-		if value <= 0 || !strings.HasPrefix(strings.ToLower(key), "cpu") {
-			continue
-		}
-		if !found || value > best {
-			best = value
-			found = true
-		}
-	}
-	if !found {
-		return nil
-	}
-	return &best
-}
-
-func primaryNodeTemperatureCelsius(temperature *models.Temperature) *float64 {
-	if temperature == nil || !temperature.Available {
-		return nil
-	}
-	if temperature.CPUMax > 0 {
-		value := temperature.CPUMax
-		return &value
-	}
-	if temperature.CPUPackage > 0 {
-		value := temperature.CPUPackage
-		return &value
-	}
-
-	var best float64
-	found := false
-	for _, core := range temperature.Cores {
-		if core.Temp <= 0 {
-			continue
-		}
-		if !found || core.Temp > best {
-			best = core.Temp
-			found = true
-		}
-	}
-	if !found {
-		return nil
-	}
-	return &best
 }
 
 func normalizeMetricsHistoryResourceType(input string) (responseType string, runtimeType string, storeTypes []string, err error) {

@@ -164,8 +164,9 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					agentHost,
 					hasAgent,
 				)
+				previousMemory := m.previousGuestSnapshot(instanceName, "lxc", n.Node, int(container.VMID))
 				memUsed, memorySource, _ = stabilizeGuestLowTrustMemory(
-					m.previousGuestSnapshot(instanceName, "lxc", n.Node, int(container.VMID)),
+					previousMemory,
 					container.Status,
 					memorySource,
 					memTotal,
@@ -193,6 +194,13 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 						Usage: memUsagePercent,
 					}
 				}
+				// The cluster path's provenance builder owns state, source and
+				// observation time here too, so a node polled through this
+				// fallback does not read as freshness unknown.
+				memory.Observation = m.guestMemoryObservation(instanceName, "lxc", n.Node, int(container.VMID), memory, guestMemoryObservationContext{
+					source: memorySource, providerObservedAt: counterObservedAt,
+					previous: previousMemory, linkedAgent: agentHost,
+				}, time.Now())
 
 				diskTotalBytes := clampToInt64(container.MaxDisk)
 				diskUsedBytes := clampToInt64(container.Disk)
@@ -297,12 +305,7 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					}
 				}
 
-				// Trigger guest metadata migration if old format exists
 				stagePVEGuestEffect(ctx, func() {
-					if m.guestMetadataStore != nil {
-						m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, n.Node, int(container.VMID))
-					}
-
 					m.recordGuestSnapshot(instanceName, modelContainer.Type, n.Node, int(container.VMID), GuestMemorySnapshot{
 						Name:           modelContainer.Name,
 						Status:         modelContainer.Status,

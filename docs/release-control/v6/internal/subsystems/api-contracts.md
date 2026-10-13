@@ -20,6 +20,33 @@
 
 ## Purpose
 
+### Patrol setup panel reuses existing AI endpoints
+
+The Patrol page setup panel adds no endpoint or payload field. It calls
+`PUT /api/settings/ai/update` (provider key or Ollama URL with `enabled`,
+then `patrol_model`, `model` only when empty, and `patrol_interval_minutes`
+only when the cost model slows the untouched default), `POST
+/api/ai/test/{provider}`, `GET /api/ai/models`, `GET
+/api/ai/patrol/model-guidance`, `GET /api/ai/patrol/cost-preview` and `POST
+/api/ai/patrol/readiness`, with the same meanings Provider & Models and
+Patrol settings rely on.
+The panel loads on demand, so none of these requests is made until Patrol is
+blocked and the operator starts setup.
+The `provider_connection` readiness cause is read as it is: it changes only
+where the Patrol page sends the operator, not any payload.
+
+### Patrol autonomy reports the Pro default
+
+`GET /api/ai/patrol/autonomy` adds `default_mode_applied`. It is true only when
+the install never saved a Patrol mode and holds a positive investigation
+licence; then `requested_autonomy_level` and `effective_autonomy_level` both
+read `approval`. Any save, including the monitor-only save, writes the level and
+the flag reads false from then on. Older clients ignore the field, and no other
+autonomy payload field changes meaning, and `getPatrolAutonomySettings` returns
+the flag unchanged. Proofs: `internal/api/patrol_autopilot_test.go`
+(`TestPatrolAutonomyReportsTheProDefault`) and
+`frontend-modern/src/api/__tests__/patrol.test.ts`.
+
 ### AI guest memory projections preserve uncertainty
 
 Existing AI get/list/topology responses carry selected guest memory evidence:
@@ -40,12 +67,6 @@ returns it, `PUT /api/settings/ai/update` ignores it from older clients, and a
 stored value is dropped the next time the settings are written. Scope and
 approval authority do not change.
 
-A legacy client echoing the projected `controlled` mode into an unrelated AI
-settings PUT must retain a stored `autonomous` preference and its existing
-legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
-uses actual encrypted GET/PUT persistence with and without the entitlement,
-then checks explicit read-only opt-out and later opt-in remain possible.
-
 ### Assistant control_level is an interactive projection
 
 AI settings GET/PUT responses expose `read_only` or `controlled`: an entitled
@@ -55,6 +76,12 @@ remain; an entitled old client can retain the stored preference, an unentitled
 request is refused. Unrelated saves do not rewrite it. Shared external-agent
 vocabulary, Patrol settings and authenticated authority remain unchanged. `TestContract_AssistantSettingsAdvertisePlanningNotExecution`
 and the actual persistence/handler tests pin responses and compatibility.
+
+A legacy client echoing the projected `controlled` mode into an unrelated AI
+settings PUT must retain a stored `autonomous` preference and its existing
+legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
+uses actual encrypted GET/PUT persistence with and without the entitlement,
+then checks explicit read-only opt-out and later opt-in remain possible.
 
 ### Optional held-alert breach date consumer
 
@@ -256,22 +283,6 @@ exercises the real client with production drawer, shared chart-state and row
 warming consumers. The connected browser fixture verifies actual History
 components/CSS on desktop Chromium and phone WebKit, not native identity,
 appliance history, workload safety or released availability.
-
-### Discovery detail reads preserve final access status
-
-`getDiscovery` retains final HTTP401/403 in a typed client error before any
-response-body read. The fixed message exposes no denied body. This applies to
-the typed resource detail, agent collection and resolved agent detail paths.
-A body or transport message claiming an access status is not that status, and
-ordinary transient failures retain their existing error behaviour. Successful
-absent-record semantics (detail HTTP404 or an empty agent list) are unchanged.
-Retained query consumers can therefore withdraw a denied service/endpoint
-rather than treating it as a transient read or a successful empty discovery.
-No endpoint, server permission, wire schema or mutation policy changes.
-`src/api/__tests__/discovery.test.ts` exercises all three paths with actual
-Response status/body objects, denied-body non-read and a misleading 503 body.
-The production guest browser fixture verifies the connected final HTTP403
-withdrawal, pending retry, transient retention and successful HTTP404 recovery.
 
 ### TrueNAS saved probes do not rewrite runtime evidence — issue #2382
 
@@ -3212,6 +3223,11 @@ a new API state machine, queue contract, or verification-accounting field.
    verification adapters, but they must remain read-only views of the canonical
    action audit and lifecycle trail rather than a second audit store.
 6. Route dedicated unified-resource timeline and facet-bundle reads through `frontend-modern/src/api/resources.ts`, `internal/api/resourceapi/resources.go`, and `internal/api/contract_test.go` together so the backend facet contract and the frontend client stay aligned on one timeline-first surface, while capability and relationship detail stays backend-owned for AI correlation and change detection.
+   Resource reference reads use `ResourceAPI.getResource()` and the existing
+   `GET /api/resources/{id}` resolver. The registry owns current IDs, declared
+   succession and unique legacy/source aliases. Frontend selection cancels a
+   superseded lookup and applies only its returned resource ID. A refused or
+   ambiguous reference cannot be translated by guessing instance, node or VMID.
    Compact aggregate consumers must read `GET /api/resources/stats` through
    `ResourceAPI.getStats()` rather than paging `/api/resources` and discarding
    every row. The stats client preserves the backend-owned total, type, status,
@@ -4961,24 +4977,9 @@ auto-register mutation boundary.
 
 ### AI Discovery removed (2026-10-11)
 
-AI Discovery, the model-backed service-identification layer, is gone. The
-`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
-the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
-mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
-identified-service cards, readiness badges, provenance markers, suggested
-web-interface URLs, the Workloads AI Context column, the chat "Discovery is
-off" hint and the AI Service Context settings page were all removed. No
-telemetry counter ever measured its use (the `discovery_enabled` telemetry
-field folded it together with network subnet discovery), the maintainer judged it a flop, and
-it carried a separate scheduler, store and model route for context that
-`pulse_query`, `pulse_read` and the unified-resource context sections already
-supply.
-Network subnet discovery (`internal/discovery`, `/api/discover`, the
-Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
-are separate features and stay. Stored `discovery_enabled`,
-`discovery_interval_hours` and `discovery_model` AI settings are ignored on
-load. The old `/settings/pulse-intelligence/discovery` route redirects to
-Assistant settings.
+The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)
+owns the removed service-identification API and ignored legacy AI settings.
+Network subnet discovery keeps its separate `/api/discover` contract.
 
 ### Masked webhook updates preserve edits without disclosing saved fields
 
@@ -5762,9 +5763,15 @@ agent/node chart metric for Proxmox node drawers. Agent-backed nodes request
 `resourceType=agent` with the linked agent identity; API-only nodes request
 `resourceType=node` with the canonical Proxmox node identity so node history is
 not routed through an agent compatibility alias. `resourceType=agent` may serve
-the current host-agent CPU package temperature as a live fallback when persisted
+the current host-agent primary CPU temperature as a live fallback when persisted
 history is still cold, while `resourceType=node` may serve the Proxmox node
 temperature fallback from the same `/api/metrics-store/history` response shape.
+Both live fallbacks use `models.PrimaryCPUTemperatureCelsius` (the hottest
+usable package, CPU-maximum or core reading) and its sensor-map form, the rule
+the stored series and the unified resource temperature use; `router.go` keeps
+no local copy. The frontend `Node.cpuTemperature` field carries that resource
+value to the node drawer, which must not recompute a headline from the
+temperature details.
 The transport remains the existing metrics-history payload; it must not add a
 Proxmox-only chart endpoint or drawer-local temperature response contract.
 Host sensor summaries also carry optional `thermalState` for platforms such as
@@ -6435,9 +6442,19 @@ at startup: `internal/api/router.go` calls
 `patrol.GetFindings().SetResourceOperatorStateProvider(...)` with a
 `ResourceOperatorStateProviderFunc` closure that reads the unified
 store and returns a `ResourceOperatorStateProjection` carrying every
-operator-set signal in one call (maintenance window via
-`state.IsInMaintenanceAt`, the `IntentionallyOffline` flag, and the
-`Criticality` hint). The same router setup also calls
+operator-set signal in one call (the maintenance window, the
+`IntentionallyOffline` flag, and the `Criticality` hint). The maintenance
+window is the active occurrence `unifiedresources.ActiveMaintenanceCoverageAt`
+resolves: the resource's own one-shot or recurring window, or an ancestor
+window scoped `resource_and_descendants` on the read state's
+`ResolveCanonicalResourceAncestors` chain, latest end winning, with
+`Inherited`/`SourceID` naming an ancestor's window. Its bounds come from the
+occurrence, never the one-shot fields a recurring schedule leaves nil
+(`TestPatrolOperatorStateProjectsActiveRecurringMaintenance` and
+`TestPatrolOperatorStateInheritsDescendantScopedMaintenance` in
+`internal/api/ai_handlers_more_test.go`). A resource with no row of its own
+still projects `ok=true` while an inherited window covers it; every other
+projected field is the resource's own state. The same router setup also calls
 `SetResourceStoreProvider(r.resourceHandlers.getStore)` on the AI settings
 handler so `/api/ai/patrol/findings` can refresh `resource_criticality` at
 read time after an operator changes priority, without waiting for the next
@@ -7614,8 +7631,11 @@ structured mention payloads for canonical `agent`, `vm`, `storage`, and
 so VMware-backed reads stay on `/api/ai/*` and `/api/resources*` instead of
 introducing VMware-only mention payloads or provider-local inventory reads
 under `/api/vmware/*`. Runtime-specific container/app mentions remain shared
-unified-resource mentions as well; VMware network inventory does not create a
-provider-local mention family.
+unified-resource mentions as well. The existing {id,name,type,node} payload
+shape is retained, with registry ID as selection authority and labels/type/node
+as hints. Unknown IDs cannot recover through a client name. Legacy structured
+mention and session ID formats resolve only to a unique current owner.
+VMware network inventory does not create a provider-local mention family.
 That same `/api/ai/chat` payload boundary owns request-local execution mode,
 and the server sets it. `ChatRequest` in `internal/api/ai_handler.go` has no
 `autonomous_mode` field, so a stale client's `autonomous_mode` is dropped at
@@ -11377,9 +11397,9 @@ fields.
 
 ### Per-tenant resource stores are released on offboarding and shutdown
 
-`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
-process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
-called from `Router.CleanupTenant` alongside the other per-tenant teardown;
+The API `resourceapi.QueryService` owns and caches SQLite handles per org.
+`ResourceHandlers.getStore` delegates to that owner. `CloseTenantStore` releases
+and evicts one org's handle and is called from `Router.CleanupTenant` alongside the other per-tenant teardown;
 `CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
 Without this an offboarded tenant kept its file descriptors and its
 `unified_resources.db-wal`/`-shm` files alive and its directory could not be
@@ -11940,11 +11960,9 @@ disk. The advanced-reporting entitlement gates both kinds. Proofs:
 `internal/api/report_schedules_test.go`, `internal/api/patrol_digest_email_test.go`,
 `internal/api/ai_handlers_more_test.go`.
 
-The explicit issue explanation journey is qualified separately from provider
-reasoning and real remediation in
-`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
-proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
-response does not establish a useful customer outcome or model qualification.
+Issue explanation follows the [customer-journey qualification boundary](../../../../qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md#real-outcome-qualification-still-required),
+which separates scripted interaction proof from provider reasoning, remediation
+and repeatable customer outcomes.
 
 ### Report email shares the canonical SMTP retry verdict
 
@@ -11993,10 +12011,6 @@ GET decoding and PUT encoding. Unknown inputs retain the all fallback. This
 repairs a dropped supported value without introducing a new wire enum or changing
 backend routing. The notification adapter save/reload matrix verifies each
 supported severity in frontend-modern/src/api/__tests__/notifications.test.ts.
-
-Formatting-only follow-up retains this warning-level contract. The production-component
-browser matrix was rerun after formatting at desktop and narrow widths, including
-all/critical/warning save/reload, cancel, and warning webhook creation.
 
 ### Quick security setup preserves unrelated settings
 

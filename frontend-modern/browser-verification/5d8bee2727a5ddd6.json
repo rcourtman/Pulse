@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "159db4ba3cb17533e18ff96d0a1202746948c0bc",
+  "verified_at": "2026-10-12T22:10:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+    "frontend-modern/src/features/patrol/PatrolSetupPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "ef823bc4eb881408bf70e77d97f94996d07c4f98b99cff19ab7133b7a15a0df5",
+    "frontend-modern/src/features/patrol/PatrolSetupPanel.tsx": "2125b7ce81958de98ebd46a8e7db19fdaf28d6c85cd0f724238c5b42b3b5fc55"
+  },
+  "routes": [
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Fresh Pro install, no provider: the lazily loaded setup panel renders inside the setup card with Anthropic preselected and 'About $7.62 a month ... every 12 hours' from the live cost preview",
+    "Refused Gemini test key saved, then reload (readiness cause provider_auth, provider gemini): panel renders with Gemini preselected from the readiness provider, label 'Google Gemini API key', subtitle 'Your AI provider refused Patrol's connection. Reconnect it so Patrol can run.', cost 'About $5.11 a month ... every 6 hours'",
+    "Phone width: no horizontal overflow, Connect and check 44px"
+  ],
+  "interactions": [
+    "Gemini card, invalid test key, Connect and check: 'Google Gemini did not accept the connection: ... Check the API key and connect again.'",
+    "Reload re-mounts the lazy panel from the readiness provider"
+  ],
+  "browser": {
+    "client": "Claude desktop browser pane",
+    "engine": "Chromium"
+  },
+  "scope": "Dev server on the PR branch plus this change, proxied to a private non-mock pulse-enterprise stack on :7681 with a dev Pro licence. Bundle split checked separately with a production build on pulse-dev: AIIntelligence 70.38 kB gzip (main 69.89 kB, max 70.86 kB)."
+}

@@ -373,6 +373,10 @@ func (s *State) GetLastUpdate() time.Time {
 // ResourceLocation describes where a resource lives in the infrastructure hierarchy.
 // This is the authoritative source of truth for routing commands to resources.
 type ResourceLocation struct {
+	// Ambiguous refuses a known label shared by different resource identities.
+	Ambiguous bool
+	// NodeResourceID keeps command routing scoped to the owned parent node.
+	NodeResourceID string
 	// What was found
 	Found        bool   // True if the resource was found
 	Name         string // The resource name

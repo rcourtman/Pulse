@@ -44,6 +44,37 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('setNote');
   });
 
+  it('explains each control by its effect, not by implementation terms', () => {
+    // Users read the help to learn what a control will do; implementation
+    // vocabulary hid that answer. Code comments may keep the internal terms.
+    const visibleSource = sectionSource
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    for (const jargon of [
+      'persisted resource policy',
+      'action broker',
+      'dispatch',
+      'canonical inventory hierarchy',
+      'Backend-governed',
+    ]) {
+      expect(visibleSource).not.toContain(jargon);
+    }
+    // An active maintenance window silences alerts and dismisses new findings
+    // (kept in history), so the help names both.
+    expect(visibleSource).toContain(
+      'Silence alerts and dismiss new Patrol findings during planned work',
+    );
+    // The lock's consequence stays beside it, including approved fixes.
+    expect(visibleSource).toContain('Block every automated fix on this resource, including');
+    expect(visibleSource).toContain('Expected offline hides availability noise only.');
+    // Descendant scope covers alerts and new Patrol findings under the
+    // resource, the same maintenance coverage both runtimes resolve.
+    expect(visibleSource).toContain('alerts are silenced and new Patrol findings dismissed.');
+    expect(visibleSource).not.toContain(
+      'With descendants, alerts on everything under this resource',
+    );
+  });
+
   it('presents resource action policy as an optional limit on global Patrol autonomy', () => {
     expect(sectionSource).toContain('Automatic action limits');
     expect(sectionSource).toContain('follows your Patrol mode by default');

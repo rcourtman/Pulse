@@ -272,7 +272,7 @@ class DevPrepushBrowserTest(DevPrepushFixture):
 
     def setUp(self):
         super().setUp()
-        for name in ("browser_verification_guard.py", "format_staged_frontend.py"):
+        for name in ("browser_verification_guard.py", "format_staged_frontend.py", "repo_file_io.py"):
             self.write(
                 "scripts/release_control/" + name,
                 (ROOT / "scripts/release_control" / name).read_text(),

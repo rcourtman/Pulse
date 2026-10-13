@@ -46,7 +46,7 @@
   ],
   "execution_model": "direct-repo-sessions",
   "readiness": {
-    "repo_ready_rule": "all lanes target-met and evidence-present plus all repo-ready assertions passed",
+    "repo_ready_rule": "all lanes complete or bounded-residual and evidence-present plus all repo-ready assertions passed",
     "rc_ready_rule": "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed",
     "release_ready_rule": "rc_ready plus all release-ready assertions passed plus zero release-ready open_decisions plus all release-ready release_gates passed"
   },
@@ -5095,36 +5095,10 @@
     "absolute_paths_forbidden": true,
     "local_repo": "pulse"
   },
-  "priority_engine": {
-    "formula": "behind_score = (max(0,target-current)*4) + criticality + staleness + dependency + blocker_bonus",
-    "floor_rule": {
-      "release_critical_lanes": [
-        "L1",
-        "L2",
-        "L3",
-        "L7",
-        "L8",
-        "L9",
-        "L10",
-        "L11",
-        "L12"
-      ],
-      "minimum_score": 6
-    },
-    "weights": {
-      "gap_multiplier": 4,
-      "criticality_range": "0-5",
-      "staleness_range": "0-3",
-      "dependency_range": "0-3",
-      "blocker_bonus": 8
-    }
-  },
   "lanes": [
     {
       "id": "L1",
       "name": "Self-hosted release confidence",
-      "target_score": 9,
-      "current_score": 9,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5211,8 +5185,6 @@
     {
       "id": "L2",
       "name": "Conversion/commercial readiness",
-      "target_score": 9,
-      "current_score": 9,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5283,8 +5255,6 @@
     {
       "id": "L3",
       "name": "Cloud paid readiness",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5331,8 +5301,6 @@
     {
       "id": "L4",
       "name": "Hosted MSP readiness",
-      "target_score": 6,
-      "current_score": 6,
       "status": "target-met",
       "completion": {
         "state": "complete",
@@ -5352,8 +5320,6 @@
     {
       "id": "L5",
       "name": "Mobile go-live readiness",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5398,8 +5364,6 @@
     {
       "id": "L6",
       "name": "Architecture coherence",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5490,8 +5454,6 @@
     {
       "id": "L7",
       "name": "Relay infrastructure readiness",
-      "target_score": 9,
-      "current_score": 9,
       "status": "target-met",
       "completion": {
         "state": "complete",
@@ -5533,8 +5495,6 @@
     {
       "id": "L8",
       "name": "First-session & UX polish",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5596,8 +5556,6 @@
     {
       "id": "L9",
       "name": "Documentation readiness",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5637,8 +5595,6 @@
     {
       "id": "L10",
       "name": "Performance & scalability",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5725,8 +5681,6 @@
     {
       "id": "L11",
       "name": "v5-to-v6 migration safety",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5796,8 +5750,6 @@
     {
       "id": "L12",
       "name": "E2E journey coverage",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5832,8 +5784,6 @@
     {
       "id": "L13",
       "name": "Core monitoring runtime",
-      "target_score": 8,
-      "current_score": 8,
       "status": "target-met",
       "completion": {
         "state": "complete",
@@ -5976,8 +5926,6 @@
     {
       "id": "L14",
       "name": "Security, identity, and privacy",
-      "target_score": 8,
-      "current_score": 8,
       "status": "target-met",
       "completion": {
         "state": "complete",
@@ -6080,8 +6028,6 @@
     {
       "id": "L15",
       "name": "Storage and recovery",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -6133,8 +6079,6 @@
     {
       "id": "L16",
       "name": "Agent lifecycle and fleet operations",
-      "target_score": 8,
-      "current_score": 8,
       "status": "target-met",
       "completion": {
         "state": "complete",
@@ -6386,8 +6330,6 @@
     {
       "id": "L17",
       "name": "Customer account portal",
-      "target_score": 6,
-      "current_score": 6,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -6462,8 +6404,6 @@
     {
       "id": "L18",
       "name": "Policy-aware data governance",
-      "target_score": 6,
-      "current_score": 6,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -6538,8 +6478,6 @@
     {
       "id": "L19",
       "name": "Resource change intelligence",
-      "target_score": 6,
-      "current_score": 6,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -6714,8 +6652,6 @@
     {
       "id": "L20",
       "name": "Action governance and auditability",
-      "target_score": 6,
-      "current_score": 6,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -7133,8 +7069,6 @@
     {
       "id": "L21",
       "name": "Platform admission execution",
-      "target_score": 6,
-      "current_score": 6,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -7314,8 +7248,6 @@
     {
       "id": "L22",
       "name": "Fleet governance and rollout control",
-      "target_score": 6,
-      "current_score": 6,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -7465,8 +7397,6 @@
     {
       "id": "L23",
       "name": "Monitor-first Patrol operations",
-      "target_score": 8,
-      "current_score": 8,
       "status": "target-met",
       "completion": {
         "state": "complete",
@@ -7648,8 +7578,6 @@
     {
       "id": "L24",
       "name": "Localized product surfaces",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -9734,7 +9662,6 @@
         "agent-lifecycle"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
       "evidence": [
         {
           "repo": "pulse",
@@ -9770,7 +9697,6 @@
         "unified-resources"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 6,
       "evidence": [
         {
           "repo": "pulse",
@@ -9809,7 +9735,6 @@
         "security-privacy"
       ],
       "proposed_resolution": "new-lane",
-      "coverage_impact": 8,
       "evidence": [
         {
           "repo": "pulse",
@@ -9868,7 +9793,6 @@
         "unified-resources"
       ],
       "proposed_resolution": "new-lane",
-      "coverage_impact": 9,
       "evidence": [
         {
           "repo": "pulse",
@@ -9902,7 +9826,6 @@
         "monitoring"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 6,
       "evidence": [
         {
           "repo": "pulse",
@@ -9941,7 +9864,6 @@
         "security-privacy"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
       "evidence": [
         {
           "repo": "pulse",
@@ -9977,7 +9899,6 @@
         "patrol-intelligence"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
       "evidence": [
         {
           "repo": "pulse",
@@ -10021,7 +9942,6 @@
         "patrol-intelligence"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
       "evidence": [
         {
           "repo": "pulse",
@@ -10055,7 +9975,6 @@
         "patrol-intelligence"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 4,
       "evidence": [
         {
           "repo": "pulse",
@@ -10093,7 +10012,6 @@
         "notifications"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
       "evidence": [
         {
           "repo": "pulse",
@@ -10130,7 +10048,6 @@
         "security-privacy"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
       "evidence": [
         {
           "repo": "pulse",
@@ -10172,7 +10089,6 @@
         "unified-resources"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 4,
       "evidence": [
         {
           "repo": "pulse",

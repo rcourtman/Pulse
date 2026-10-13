@@ -26,8 +26,12 @@ vi.mock('@/stores/license', () => ({
 
 import { NodeDrawer } from './NodeDrawer';
 
+// Details is closed by default; a warning row is lifted out of it into
+// Worth checking, so read the whole Overview with Details open.
 const openTechnicalDetails = () => {
-  return within(screen.getByTestId('node-technical-details'));
+  const details = screen.getByTestId('node-technical-details') as HTMLDetailsElement;
+  details.open = true;
+  return within(screen.getByTestId('node-drawer-overview'));
 };
 
 const makeHistoryPoints = (base: number) => [
@@ -65,6 +69,7 @@ function makeNode(overrides: Partial<Node> = {}): Node {
       hasCPU: true,
       lastUpdate: new Date().toISOString(),
     },
+    cpuTemperature: 65,
     temperatureMonitoringEnabled: true,
     lastSeen: new Date().toISOString(),
     connectionHealth: 'online',
@@ -211,11 +216,12 @@ describe('NodeDrawer', () => {
       />
     ));
 
-    const technical = openTechnicalDetails();
-    expect(technical.getByText('GPU')).toBeInTheDocument();
-    expect(technical.getByText('GPU 0')).toBeInTheDocument();
+    // GPU readings stay visible in Sensors rather than inside closed Details.
+    const sensors = within(screen.getByTestId('node-drawer-sensors'));
+    expect(sensors.getByText('Sensors')).toBeInTheDocument();
+    expect(sensors.getByText('GPU 0')).toBeInTheDocument();
     expect(
-      technical.getByText('NVIDIA RTX A6000 · 63°C · 42% · 8.00 GB / 48.0 GB'),
+      sensors.getByText('NVIDIA RTX A6000 · 63°C · 42% · 8.00 GB / 48.0 GB'),
     ).toBeInTheDocument();
   });
 
@@ -319,7 +325,7 @@ describe('NodeDrawer', () => {
         expect.objectContaining({
           resourceType: 'node',
           resourceId: 'cluster-pve-native',
-          range: '24h',
+          range: '7d',
         }),
       ),
     );
@@ -346,7 +352,7 @@ describe('NodeDrawer', () => {
         expect.objectContaining({
           resourceType: 'node',
           resourceId: 'homelab-pve-node-1',
-          range: '24h',
+          range: '7d',
         }),
       );
     });
@@ -375,7 +381,7 @@ describe('NodeDrawer', () => {
         expect.objectContaining({
           resourceType: 'agent',
           resourceId: 'pve-node-1',
-          range: '24h',
+          range: '7d',
         }),
       );
     });
@@ -387,5 +393,166 @@ describe('NodeDrawer', () => {
       'disk-io',
       'thermals',
     ]);
+  });
+});
+
+describe('NodeDrawer Overview trends', () => {
+  it('lists Worth checking as one line under the alerts line, above the trend cards', async () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          pendingUpdatesStatus: 'unavailable',
+          pendingUpdatesReason: 'source_unavailable',
+        })}
+      />
+    ));
+    const cpu = await screen.findByTestId('drawer-trend-card-cpu');
+    const worth = screen.getByTestId('node-drawer-exceptions');
+    expect(
+      worth.compareDocumentPosition(cpu) & window.Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const row = within(worth).getByText('Updates').closest('tr')!;
+    expect(row).toHaveTextContent('Unavailable · Proxmox source unavailable');
+    expect(
+      within(row)
+        .getByText(/Proxmox source unavailable/)
+        .closest('td'),
+    ).toHaveClass('text-amber-700');
+  });
+
+  const guestAlert = makeAlert({
+    id: 'guest-memory',
+    resourceId: 'qemu-281',
+    resourceName: 'msp-eval-lab',
+    message: 'VM memory at 85.4%',
+    threshold: 85,
+  });
+
+  it("marks a trend card only for the node's own alert, not a guest's on the same node", async () => {
+    render(() => <NodeDrawer node={makeNode()} alerts={[guestAlert]} />);
+    const memory = await screen.findByTestId('drawer-trend-card-memory');
+    // The guest's alert is still listed under Needs attention.
+    expect(screen.getByText('VM memory at 85.4%')).toBeInTheDocument();
+    expect(memory).not.toHaveClass('border-amber-400');
+    expect(screen.queryByTestId('drawer-trend-threshold')).toBeNull();
+  });
+
+  it("draws the node's own memory alert on its memory card", async () => {
+    render(() => <NodeDrawer node={makeNode()} alerts={[makeAlert(), guestAlert]} />);
+    const memory = await screen.findByTestId('drawer-trend-card-memory');
+    expect(memory).toHaveClass('border-amber-400');
+    expect(await within(memory).findByTestId('drawer-trend-threshold')).toBeInTheDocument();
+  });
+
+  it("does not present an offline node's last readings as live", async () => {
+    render(() => <NodeDrawer node={makeNode({ status: 'offline' })} />);
+    const cpu = await screen.findByTestId('drawer-trend-card-cpu');
+    expect(within(cpu).getByText('not current')).toBeInTheDocument();
+    expect(cpu).toHaveTextContent('Node is offline. Showing its history only.');
+    // No used-of-total bytes beside a withheld reading.
+    expect(screen.getByTestId('drawer-trend-card-memory').textContent).not.toMatch(/ of /);
+  });
+
+  it('keeps NVMe and GPU sensor readings visible rather than inside closed Details', () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          temperature: {
+            ...makeNode().temperature!,
+            nvme: [{ device: 'nvme0', temp: 71 }],
+          },
+        })}
+      />
+    ));
+    const sensors = screen.getByTestId('node-drawer-sensors');
+    expect(sensors.closest('details')).toBeNull();
+    expect(within(sensors).getByText(/nvme0 71/)).toBeInTheDocument();
+  });
+
+  it("uses the table's own-alert list when its id differs from the node record", async () => {
+    // Proxmox node alerts are keyed on the cluster-qualified id (homelab-pve-node-1),
+    // not the drawer node's id, so the table supplies the node's own alerts.
+    const nodeAlert = makeAlert({
+      resourceId: 'homelab-pve-node-1',
+      level: 'critical',
+      threshold: 95,
+    });
+    render(() => <NodeDrawer node={makeNode()} alerts={[nodeAlert]} ownAlerts={[nodeAlert]} />);
+    const memory = await screen.findByTestId('drawer-trend-card-memory');
+    expect(memory).toHaveClass('border-red-400');
+    expect(await within(memory).findByTestId('drawer-trend-threshold')).toBeInTheDocument();
+  });
+
+  it('labels retained node memory as last known instead of live', async () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          memory: {
+            total: 8000,
+            used: 3200,
+            free: 4800,
+            usage: 40,
+            observation: { state: 'last-known', source: 'node-meminfo' },
+          },
+        })}
+      />
+    ));
+    const memory = await screen.findByTestId('drawer-trend-card-memory');
+    expect(within(memory).getByText('last known')).toBeInTheDocument();
+    expect(within(memory).getByText('40.0%')).toBeInTheDocument();
+  });
+
+  it('does not show a filled-in zero for a node with no disk measurement', async () => {
+    render(() => (
+      <NodeDrawer node={makeNode({ disk: { total: 0, used: 0, free: 0, usage: 0 } })} />
+    ));
+    const disk = await screen.findByTestId('drawer-trend-card-disk');
+    expect(within(disk).queryByText('0.0%')).toBeNull();
+    expect(within(disk).getByText('—')).toBeInTheDocument();
+  });
+
+  it("headlines the backend's primary CPU temperature, the reading its line records", async () => {
+    // The details carry a hotter core than the backend's primary reading. The
+    // card must show the backend value: the history beneath it was recorded
+    // under the backend rule, so a recomputed headline would disagree with it.
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          cpuTemperature: 44,
+          temperature: {
+            cpuPackage: 44,
+            cpuMax: 51,
+            cores: [{ core: 0, temp: 51 }],
+            available: true,
+            hasCPU: true,
+            lastUpdate: new Date().toISOString(),
+          },
+        })}
+      />
+    ));
+    const temperature = await screen.findByTestId('drawer-trend-card-temperature');
+    expect(within(temperature).getByText('44°C')).toBeInTheDocument();
+    expect(temperature.textContent).not.toContain('51');
+  });
+
+  it('opens History on the week, since the Overview cards already cover 24 hours', async () => {
+    render(() => <NodeDrawer node={makeNode()} />);
+    await screen.findByTestId('drawer-trend-card-cpu');
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    await waitFor(() =>
+      expect(chartsApiMocks.getMetricsHistory.mock.calls.map(([params]) => params.range)).toEqual([
+        '24h',
+        '7d',
+      ]),
+    );
+    expect(screen.getByTestId('guest-history-range-control')).toHaveValue('7d');
+  });
+
+  it('reads the 24h trend once while Overview shows and mounts History only on demand', async () => {
+    render(() => <NodeDrawer node={makeNode()} />);
+    await screen.findByTestId('drawer-trend-card-cpu');
+    await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1));
+    expect(chartsApiMocks.getMetricsHistory.mock.calls[0][0]).toMatchObject({ range: '24h' });
+    expect(screen.queryByTestId('guest-history-group-chart')).toBeNull();
   });
 });

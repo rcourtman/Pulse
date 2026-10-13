@@ -75,25 +75,23 @@ that already belong to the canonical system.
    surface, prefer the largest same-surface slice that still has one coherent
    proof story. Split work only when there is a real risk, concept, or proof
    boundary, not merely because smaller residue items can be named.
-13. Treat scores and evidence as signals, not targets.
-   Lane scores, missing evidence references, and proof counts are diagnostic
-   signals that help identify the real runtime, product, ownership, or
-   governance gap. They are not the work item by themselves. Fix the actual
-   gap first, then record the proof that the gap is closed.
+13. Evidence counts do not determine the work target.
+   Check the actual runtime, product, ownership or governance gap first, then
+   record proof that the behavior is correct.
 14. Use worktrees when a mutating slice needs physical isolation.
    Claims and lane ownership reduce logical overlap, but they do not isolate
    hooks, dirty state, or staged scope. Use a dedicated worktree when a slice
    needs that isolation — for example when a subagent needs to mutate
    independently and land back cleanly. A shared checkout is fine for normal
    single-session work.
-15. Let the active target choose the default queue.
+15. Use the active target and current evidence to choose work.
    When the active target is a lane-expansion initiative and
-   `status_audit.py --pretty` exposes an `available_candidate_lane_queue`,
-   treat that queue as the default next-pick surface.
+   `status_audit.py --pretty` exposes `available_candidate_lane_options`,
+   use those scope and ownership facts as context for choosing work.
    Cleanup, presentation polish, and guardrail-only residue should normally
    support a selected candidate lane or an active blocker rather than
-   displacing the queue.
-   That default queue does not override the product-quality stop gate: if a
+   displacing the active user direction.
+   This selection context does not override the product-quality stop gate: if a
    customer-facing baseline is still not good enough to deserve iteration,
    step back to the owning redesign or canonical model first.
 16. Make every governed slice explicit.

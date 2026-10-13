@@ -128,6 +128,20 @@ select the canonical owner without interpreting alert strings independently.
 references and absent current owners. Scoped Patrol tests cover linked owners
 and conflicting unqualified source IDs.
 
+### Resource CPU temperature uses the one primary rule
+
+`proxmox.temperature`, `agent.temperature` and a Kubernetes node's
+linked-host temperature come from `models.PrimaryCPUTemperatureCelsius` and
+`models.HostSensorPrimaryCPUTemperatureCelsius`, the rule node and agent
+history record under (see the monitoring contract). The adapter-local
+`maxNodeTemp`/`maxCPUTemp` copies are gone. `nodeFromResource` carries the
+resource's top-level temperature (the agent's reading first, then the
+node's: the same source as the drawer's history target) as
+`Node.cpuTemperature`; the node drawer shows that value and never rebuilds a
+headline from `temperatureDetails`. Proof: `adapters_test.go`
+(`TestResourceTemperatureUsesPrimaryCPURuleForNodeAndAgent`) and
+`resourceStateAdapters.test.ts`.
+
 ### Proxmox node temperature cell follows its own open alert — issue #2068
 
 `ProxmoxNodesTable` finds the node's own temperature alert through
@@ -135,6 +149,18 @@ and conflicting unqualified source IDs.
 the shared live-status copy to `TemperatureGauge`. Other node alerts never
 recolour the cell. The Mail Gateway drawer formats its attention rows through
 `getAlertAttentionCopy`.
+
+### Proxmox node drawer trend cards follow the node's own alerts
+
+`ProxmoxNodesTable` passes `NodeDrawer` two lists. `alerts` keeps the
+node-name match, so Needs attention also lists the node's guests. `ownAlerts`
+is the same `hostOverrideIdCandidates` identity match without the name, and
+only it colours the drawer's CPU, memory, temperature and disk trend cards and
+draws their triggers. Node alerts are keyed on the cluster-qualified id (for
+example `homelab-delly2`), which the drawer's own node record does not carry,
+so the drawer must not rebuild this match itself. `NodeDrawer.test.tsx` covers
+a guest alert that leaves the card plain and a table-supplied node alert that
+colours it.
 
 ### Canonical Discovery honours VM guest-read deferrals
 
@@ -1736,17 +1762,6 @@ coverage: `TestRegistrySeededFromMonitorJudgesFreshnessByItsThresholds` and
 `TestContract_ResourceListJudgesFreshnessLikeTheMonitorBroadcast` in
 `internal/api/contract_test.go`.
 
-Service-discovery readiness is a unified-resource payload contract, not a
-drawer-local decoration. Resource list/detail payloads that expose a
-`discoveryTarget` must also carry the backend-authored `discoveryReadiness`
-projection when the discovery owner is available. That projection is
-metadata-only (`fresh`, `stale`, `missing`, `running`, `failed`, `unavailable`,
-or `unsupported`, with provenance, generated/observed freshness, target
-coordinates, optional service/category, and bounded fact count) and must not
-include raw command output, provider commands, environment variables, config
-paths, or secret-bearing metadata. Workload and resource drawers, Assistant
-handoffs, and optional table columns consume this field instead of inferring
-freshness from independent discovery reads.
 Across platform/runtime pages, workflow tabs are evidence-gated from the
 canonical model that owns their rows. `Overview` is the stable landing tab;
 supporting tabs appear only when their native inventory or signal exists, and
@@ -2988,7 +3003,7 @@ application resource-provider or WebSocket lifecycle.
     become a per-row store pattern.
     Regression coverage:
     `TestSQLiteStoreActionAuditOriginRoundTrip`,
-    `TestSQLiteActionAuditOriginOperationalRecordReader`, and the matching
+    `TestActionAuditOriginReaderReturnsLatestTransition`, and the matching
     memory/batch reader tests in `internal/unifiedresources/store_test.go`.
     Incident next-step fallback follows the same canonical resource boundary:
     storage guidance is reserved for storage, physical-disk, network-share,
@@ -3129,26 +3144,9 @@ whole-fleet CPU relief, publication or release availability.
 
 ### AI Discovery removed (2026-10-11)
 
-AI Discovery, the model-backed service-identification layer, is gone. The
-`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
-the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
-mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
-identified-service cards, readiness badges, provenance markers, suggested
-web-interface URLs, the Workloads AI Context column, the chat "Discovery is
-off" hint and the AI Service Context settings page were all removed. No
-telemetry counter ever measured its use (the `discovery_enabled` telemetry
-field folded it together with network subnet discovery), the maintainer judged it a flop, and
-it carried a separate scheduler, store and model route for context that
-`pulse_query`, `pulse_read` and the unified-resource context sections already
-supply.
-Network subnet discovery (`internal/discovery`, `/api/discover`, the
-Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
-are separate features and stay. Stored `discovery_enabled`,
-`discovery_interval_hours` and `discovery_model` AI settings are ignored on
-load. The old `/settings/pulse-intelligence/discovery` route redirects to
-Assistant settings.
-
-`Resource.discoveryReadiness` and the agent resource-context `DiscoveryReadiness` field are gone; the agent context `Runtime` section keeps the `Target type/agent/resource/hostname` facts sourced from `discoveryTarget`.
+The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)
+owns removed service-identification fields and compatibility behavior. Resource
+context retains `discoveryTarget` coordinates in its Runtime projection.
 
 ### Interface-associated display addresses
 
@@ -3166,14 +3164,6 @@ management-interface, supplied identity and explicit-override controls to the
 production host adapter; monitoring's #2757 fixtures bind guest list/broadcast
 order and name/address/traffic association. Native readings and publication
 remain separate evidence.
-
-Discovery-led availability proposals present their evidence and canonical
-attachment boundary as short, complete sentences in both the inline card and
-machine-wide review. The colocated component test pins that operator-facing
-copy so the shared copy-style audit cannot regress it back to semicolon-joined
-instructions. The card's editable check name, interval and observation
-location use the shared form label and control chrome (`FormSelect` for the
-two choices), so they match the availability settings form they hand off to.
 
 ### Provider workflows hydrate only their active route inventory
 
@@ -3493,7 +3483,11 @@ silently move operator intent. Weekdays normalize to unique Monday-through-
 Sunday order. `maintenanceScope` defaults to `resource`; the only inherited
 value is `resource_and_descendants`, resolved against the canonical registry
 parent chain with cycle protection. Concrete occurrence start/end boundaries
-are derived by the same model for Alerts and post-window verification. SQLite
+are derived by the same model for Alerts, Patrol and post-window verification;
+consumers read the active occurrence, never the one-shot fields, which a
+recurring schedule leaves nil. `ActiveMaintenanceCoverageAt` is the one
+inheritance rule: own window plus ancestor windows scoped
+`resource_and_descendants`, latest active end wins, maintenance only. SQLite
 persists recurrence JSON and scope in additive columns while legacy one-shot
 rows retain their existing meaning. Scheduling, updating, changing scope, or
 clearing either form remains an atomic operator-state plus resource-timeline
@@ -3557,6 +3551,19 @@ below its explanatory copy so the button cannot squeeze policy text into a
 narrow side column; desktop retains the compact side-by-side layout.
 The UI must never infer eligibility from capability names, severity, or the
 human approval floor.
+Each control's help says what it does to Alerts, Patrol and automatic fixes in
+plain words, never in implementation terms (no "persisted resource policy",
+"action broker", "dispatch" or "canonical inventory hierarchy"). The
+maintenance-window help says it silences alerts and dismisses new Patrol
+findings, because an active window suppresses alert activation and
+auto-dismisses new findings while keeping them in history. The descendant-scope
+help says descendants' alerts are silenced and their new Patrol findings
+dismissed, because Alerts and Patrol resolve maintenance through the one
+`ActiveMaintenanceCoverageAt` rule over the live canonical parent chain. The `Never auto-remediate` label stays as named, because
+help pages and the Assistant's refusal message refer to it; its help and lock
+confirmation say it blocks every automated fix, including approved ones, and
+that blocked runs are logged as failed actions (an Assistant planning refusal
+creates no action record).
 
 The `/api/resources/{id}/operator-state` API surface (GET / PUT /
 DELETE) in `internal/api/resources_operator_state.go` is the
@@ -4763,7 +4770,7 @@ agent resources may include `agent.sensors.thermalState` even when
 `agent.temperature` and `agent.sensors.temperatureCelsius` are absent, so
 platform consumers can show macOS pressure without creating provider-local
 thermal payloads or fake Celsius values.
-AI discovery and query surfaces now follow the same rule. Assistant runtime
+Assistant query and resource-context surfaces follow the same rule. Runtime
 paths such as `pulse_query` and unified AI context must expose TrueNAS-backed
 canonical `agent`, `vm`, `app-container`, `storage`, and `physical-disk`
 resources through those shared contracts, filtering dataset-topology storage
@@ -5238,12 +5245,19 @@ Docker-only semantics when host telemetry is also present. Runtime-local
 filters like `agent` or cluster context may still be added as secondary scope,
 but the canonical platform query must remain the first-class route-state
 boundary for shared workload navigation.
-That same shared workload-route contract also owns exact guest selection for
-node-scoped workloads. Proxmox VM and system-container links must emit the
-canonical workload identity (`<instance>:<node>:<vmid>`) in the shared
-`resource` query rather than an opaque unified-resource id, so direct route
-loads and cross-surface drill-downs reopen the correct workload drawer instead
-of landing on an unselected table state.
+Shared workload routes, rows and selection use the exact unified `Resource.id`
+for every workload kind. Moving a Proxmox guest to another node does not create
+a new selection identity. Existing node-scoped bookmarks resolve through the
+registry's current/declared-succession/unique-alias boundary, with ambiguity
+refused. Provider coordinates remain explicit compatibility inputs for guest
+metadata, native collection and History targets. They must not be rebuilt into
+primary row identity or used to merge independent instance clones.
+History uses an explicit backend metrics target when present. Its legacy
+Proxmox fallback formats the current instance, node and VMID through the shared
+native guest formatter, independently of the canonical selection ID. A guest
+move changes that native target while retaining the selected canonical row.
+The workload target tests and current-source desktop, intermediate and phone
+browser matrix cover both supplied targets and missing-target fallback.
 Unified resources carry no recovery route-state vocabulary. The recovery
 query serializer (`RECOVERY_QUERY_PARAMS`, `parseRecoveryLinkSearch`,
 `buildRecoveryRouteSearch`) was deleted from
@@ -5361,43 +5375,6 @@ already shown elsewhere in the drawer.
 The analysis panel now expands directly inside the outer `Access` disclosure
 instead of as a second peer support block, so the access surface reads as one
 flattened reveal instead of another card group under the overview.
-That access-side analysis surface still follows the same shell/runtime split as
-the rest of the drawer: `DiscoveryTab.tsx` owns presentation and disclosures,
-while `useDiscoveryTabState.ts` owns API fetches, websocket progress, and
-note/discovery mutations.
-Discovery validity in that runtime state must defer to the shared
-`discoveryPresentation.ts` meaningful-context gate. CLI access, confidence, and
-diagnostics may support an audit trail, but they must not turn placeholder
-records such as unknown service/category/version with no ports, paths, facts,
-or suggested URL into a valid identified result. Generic workload types such
-as `service`, `container`, or `lxc` remain placeholders until Discovery also
-provides a more specific service signal.
-Discovery endpoint candidates are support context, not authoritative resource
-links. Resource and workload drawers may pass observed Discovery URLs into the
-shared web-interface field with visible provenance, copy/open affordances, and
-an explicit adopt/save path, but row-name links and persisted metadata must
-continue to use the operator-saved web-interface URL. Version, config-path,
-port, and endpoint facts surfaced outside the Discovery sub-tab must be
-labelled as Discovery-observed so API-owned resource facts and command-derived
-facts remain distinguishable.
-Availability proposals are the bounded exception that can become active
-resource evidence only through explicit review. The resource drawer supplies
-the canonical resource ID; the proposal surface previews inferred endpoint and
-behavior separately from operator-controlled name, cadence, and observation
-location; and the final action posts one enabled target with that exact
-`linkedResourceId`. Equivalent attached or standalone endpoints are detected
-before creation. Machine-scoped review may dismiss or restore several service
-proposals, but an item without the current canonical resource context remains
-review-only rather than attaching by hostname, address, or display name.
-That label must be visible through the shared Discovery provenance marker on
-compact cards, suggested URL panels, and other out-of-tab Discovery values
-rather than buried in helper text or inferred from the tab where the operator
-found the value.
-Command-availability guidance inside that analysis surface must consume the
-shared `frontend-modern/src/utils/discoveryPresentation.ts` settings targets
-and scan-error copy instead of hard-coding legacy settings labels such as
-Unified Agents, API Tokens, or `/settings/integrations/api`; the canonical API
-access route is `/settings/security/api`.
 The overview keeps access, investigation detail, service detail, and host
 detail as collapsed sibling disclosures under the primary card pair, so the
 drawer keeps
@@ -5592,12 +5569,14 @@ falls back to the canonical redacted label if that governed summary is
 missing, so path-only and IP-only redactions do not regress to raw identity
 leakage or over-redaction in chat context. That same unified-resource contract
 now also owns the canonical mention identity path for shared Assistant reads:
-chat surfaces must carry the backend-issued unified resource ID for canonical
-`agent`, `vm`, `storage`, and `app-container` records, and backend mention
-resolution must be able to recover those resources by canonical ID and
-canonical name through the shared read-state instead of relying on
-provider-local route families or frontend reconstruction of VMware- or
-TrueNAS-specific coordinates.
+chat surfaces carry the backend-issued ID for every supported mention kind.
+ResolveResourceReferenceContext binds explicit selections to one owned record.
+ResolveResourceContext allows unique name lookup for callers without a
+selection. Both share current native coordinates and provider-scoped parent
+ownership. Unknown selections and duplicated names refuse routing. Provider
+renames update current display names without replacing canonical identity or
+overriding a present higher-priority source. Native and legacy wire formats
+remain bounded input compatibility, never a second primary identity model.
 Assistant finding handoffs now resolve product-originated resource references
 through the same canonical unified-resource helper before building policy
 context, so handoff handling guidance uses `CanonicalGovernanceMetadata(...)`,
@@ -6080,6 +6059,10 @@ sparklines match chart series to rows through the chart-key candidates in
 owns the typed extraction of platform-data fragments from unified resources,
 and `frontend-modern/src/utils/resourceStateAdapters.ts` owns canonical
 projection from unified resources into node/PBS/PMG runtime view models.
+Legacy flat fields may synthesize a Proxmox facet only when current sources
+include Proxmox, or source ownership is absent and the legacy shape applies.
+Storage `instance` and `node` coordinates do not override VMware, TrueNAS or
+agent ownership. Explicit ownership facets remain authoritative.
 Future resource-to-runtime mapping changes should extend these unified-resource
 owners instead of rebuilding ad hoc platform-data parsing or action-target
 fallback logic inside alerts, settings, recovery, AI, or infrastructure-local

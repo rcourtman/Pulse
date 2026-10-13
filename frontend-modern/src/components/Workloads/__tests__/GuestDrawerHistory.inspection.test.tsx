@@ -86,14 +86,14 @@ describe('GuestDrawerHistory stored-observation inspection', () => {
       `${new Date(time).toLocaleString()}. CPU 11.0%. Memory no observation. Disk no observation.`,
     );
     expect(utilization()).toHaveTextContent('CPU11.0%');
-    expect(utilization()).toHaveTextContent('Memory-');
+    expect(utilization()).toHaveTextContent('Memoryno reading');
     expect(utilization()).not.toHaveTextContent('88.0%');
     choose(slider, 1);
     expect(slider).toHaveAttribute(
       'aria-valuetext',
       `${new Date(time + 30_000).toLocaleString()}. CPU no observation. Memory 30.0%. Disk no observation.`,
     );
-    expect(utilization()).toHaveTextContent('CPU-');
+    expect(utilization()).toHaveTextContent('CPUno reading');
     expect(utilization()).toHaveTextContent('Memory30.0%');
     expect(slider).toHaveFocus();
   });
@@ -188,9 +188,10 @@ describe('GuestDrawerHistory stored-observation inspection', () => {
       else setRange('24h');
       await waitFor(() => expect(inspect()).toHaveValue('3'));
       expect(utilization()).toHaveTextContent('CPU43.0%');
-      expect(
-        within(utilization()).queryByTestId('guest-history-hover-time'),
-      ).not.toBeInTheDocument();
+      const restoredTime = within(utilization()).getByTestId('guest-history-hover-time');
+      expect(restoredTime).toHaveTextContent('Latest stored');
+      expect(restoredTime).toHaveAttribute('datetime', new Date(time + 120_000).toISOString());
+      expect(utilization().querySelectorAll('[data-history-hover-marker]')).toHaveLength(0);
     },
   );
 
@@ -242,7 +243,7 @@ describe('GuestDrawerHistory stored-observation inspection', () => {
       `1 stored observation time. ${new Date(time).toLocaleString()}. CPU 11.0%. Memory no observation. Disk no observation.`,
     );
     expect(screen.queryByRole('slider')).not.toBeInTheDocument();
-    expect(utilization().querySelector('path')).toBeNull();
+    expect(utilization().querySelector('path[data-history-series]')).toBeNull();
   });
 
   it.each(['empty', 'invalid'] as const)(

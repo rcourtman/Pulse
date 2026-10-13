@@ -3,7 +3,6 @@ import {
   celsiusToFahrenheit,
   formatTemperature,
   getTemperatureSymbol,
-  getCpuTemperature,
   getTemperatureTextClass,
   temperatureStore,
 } from '../temperature';
@@ -55,59 +54,6 @@ describe('temperature', () => {
       expect(getTemperatureSymbol()).toBe('°C');
       temperatureStore.setUnit('fahrenheit');
       expect(getTemperatureSymbol()).toBe('°F');
-    });
-  });
-
-  describe('getCpuTemperature', () => {
-    it('returns null if not available', () => {
-      expect(getCpuTemperature(null)).toBeNull();
-      expect(getCpuTemperature({ available: false, lastUpdate: '' } as any)).toBeNull();
-    });
-
-    it('picks the maximum value from various sources', () => {
-      const temp = {
-        available: true,
-        lastUpdate: '',
-        cpuPackage: 50,
-        cpuMax: 55,
-        cores: [
-          { name: 'Core 0', temp: 52 },
-          { name: 'Core 1', temp: 58 },
-        ],
-      };
-      // Should pick 58
-      expect(getCpuTemperature(temp as any)).toBe(58);
-    });
-
-    it('handles missing fields gracefully', () => {
-      const temp = {
-        available: true,
-        lastUpdate: '',
-        cpuPackage: 60,
-        // others missing
-      };
-      expect(getCpuTemperature(temp as any)).toBe(60);
-    });
-
-    it('filters invalid temperatures', () => {
-      const temp = {
-        available: true,
-        lastUpdate: '',
-        cpuPackage: NaN,
-        cpuMax: Infinity,
-        cores: [{ name: 'C1', temp: 45 }],
-      };
-      expect(getCpuTemperature(temp as any)).toBe(45);
-    });
-
-    it('returns null if no valid temperatures found', () => {
-      const temp = {
-        available: true,
-        lastUpdate: '',
-        cpuPackage: NaN,
-        cores: [],
-      };
-      expect(getCpuTemperature(temp as any)).toBeNull();
     });
   });
 

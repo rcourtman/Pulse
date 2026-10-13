@@ -1,4 +1,12 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  onMount,
+  type Accessor,
+} from 'solid-js';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
 import { getOrgID } from '@/utils/apiClient';
@@ -207,7 +215,8 @@ const queueGuestMetadataPersist = (storageKey: string, metadata: GuestMetadataRe
   }
 };
 
-export function useWorkloadGuestMetadataState() {
+export function useWorkloadGuestMetadataState(metadataIds?: Accessor<ReadonlySet<string>>) {
+  let refreshRevision = 0;
   const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
   const guestMetadataStorageKey = createMemo(() => guestMetadataStorageKeyForOrg(orgScope()));
   const [guestMetadata, setGuestMetadata] = createSignal<GuestMetadataRecord>(
@@ -225,8 +234,11 @@ export function useWorkloadGuestMetadataState() {
     });
 
   const refreshGuestMetadata = async () => {
+    const revision = ++refreshRevision;
+    const storageKey = guestMetadataStorageKey();
     try {
       const metadata = await GuestMetadataAPI.getAllMetadata();
+      if (revision !== refreshRevision || storageKey !== guestMetadataStorageKey()) return;
       updateGuestMetadataState(() => metadata || {});
       logger.debug('Guest metadata refreshed');
     } catch (error) {
@@ -244,6 +256,7 @@ export function useWorkloadGuestMetadataState() {
       return;
     }
 
+    refreshRevision += 1;
     updateGuestMetadataState((prev) => {
       const previousEntry = prev[guestId];
 
@@ -295,6 +308,12 @@ export function useWorkloadGuestMetadataState() {
       };
     });
   };
+
+  // The server migrates provider metadata keys before publishing a node move.
+  // Refetch when that boundary coordinate changes, rather than retaining only
+  // the initial map under the previous node key. Metric-only ticks keep it.
+  if (metadataIds)
+    createEffect(on(metadataIds, () => void refreshGuestMetadata(), { defer: true }));
 
   onMount(() => {
     void refreshGuestMetadata();

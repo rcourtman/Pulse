@@ -25,6 +25,28 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Pro Patrol defaults to Ask first until the operator chooses
+
+`AIConfig.PatrolAutonomyLevel` stays empty until an operator saves a Patrol
+mode, and only explicit saves write it. `AIConfig.PatrolAutonomyLevelChosen`
+reports that, and `AIConfig.ResolvedPatrolAutonomyLevel(entitled)` returns
+`approval` (Ask first) for a never-chosen install that is entitled to
+investigation, otherwise the stored or monitor level.
+`Service.GetEffectivePatrolAutonomyLevel` applies the same default, but only on
+a positive licence answer from `Service.PatrolInvestigationLicensed`, which
+treats a missing licence checker as unlicensed. `HasLicenseFeature` stays
+fail-open for its existing callers; the default must not, because a startup
+window without a checker would otherwise start spending provider budget on an
+install that may not be Pro. Unlicensed and unknown installs stay Watch only, an
+explicit choice always wins, and readiness reads the same resolved level. The
+default sends new and re-detected warning and critical findings to
+investigation through the existing dispatch path and budget checker; it adds no
+execution authority, because Ask first still waits for approval before any
+change. Proofs: `internal/ai/service_patrol_default_test.go`,
+`internal/config/ai_config_test.go`
+(`TestResolvedPatrolAutonomyLevelDefaultsOnlyNeverChosenLicensedInstalls`) and
+`internal/api/patrol_autopilot_test.go` (`TestPatrolAutonomyReportsTheProDefault`).
+
 ### Guest memory remains qualified through tools and local observers
 
 The existing guest get/list/topology tools and Assistant inventory context carry
@@ -83,11 +105,8 @@ parser. These controls do not establish issue #2762's installed input or cause,
 a cleared finding, or a containing release. Monitoring collection, guest-agent
 admission, configured alert thresholds, history storage and access are unchanged.
 
-A legacy client echoing the projected `controlled` mode into an unrelated AI
-settings PUT must retain a stored `autonomous` preference and its existing
-legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
-uses actual encrypted GET/PUT persistence with and without the entitlement,
-then checks explicit read-only opt-out and later opt-in remain possible.
+Legacy Assistant mode echo and stored-preference compatibility follow the
+[API settings contract](api-contracts.md#assistant-control_level-is-an-interactive-projection).
 
 ### Assistant protection is the per-resource lock, not a settings list
 
@@ -2182,7 +2201,7 @@ tool-result payloads must project through
 `OrchestratorToolResultInfo.ProviderToolResult` so the public investigation
 handoff contract inherits the same `agentcapabilities` input-map,
 thought-signature, and provider-result normalization as Assistant and MCP —
-`TestOrchestratorAndChatAdaptersMapTheSameMessageFields` enforces it.
+`TestOrchestratorAndChatAdaptersMapTheirMessageContracts` enforces it.
 
 Assistant frontend presentation changes under
 `frontend-modern/src/components/AI/Chat/` must keep live tool activity aligned
@@ -5193,8 +5212,7 @@ companion tests (`internal/ai/findings_lifecycle_test.go`) pin the behavior.
 
 The interaction-quality scenario corpus
 (`internal/ai/chat/interaction_scenario_corpus_test.go`) is the canonical
-regression home for chat-feel promises, mirroring the Discovery corpus
-(`internal/servicediscovery/scenario_corpus_test.go`). Each scenario drives a
+regression home for chat-feel promises. Each scenario drives a
 full `ExecuteStream` turn against a scripted provider and pins the
 browser-facing event stream — ordered event types, forbidden event types,
 answer-text teeth, and payload teeth — for the user-visible promises shipped
@@ -5830,9 +5848,19 @@ attributes the suppression on the lifecycle timeline
 (`operator_state_cause: maintenance_window`, with
 `maintenance_end_at` metadata), and persists the finding for audit
 history. The active boundary may come from a one-shot or recurring schedule;
-both are evaluated by the canonical operator-state model. Descendant-scope
-inheritance is alert-intent behavior and does not weaken exact-resource
-action-remediation locks or invent inherited action authority.
+both are evaluated by the canonical operator-state model, and the projection
+carries the active occurrence's own start and end
+(`ActiveMaintenanceOccurrenceAt`), never the one-shot fields, which a recurring
+schedule leaves nil. Patrol inherits maintenance exactly as alert intent does:
+`unifiedresources.ActiveMaintenanceCoverageAt` resolves the resource's own
+window and every ancestor window scoped `resource_and_descendants` on the live
+canonical parent chain, and the latest-ending active window wins. A window
+stored on an ancestor reaches the projection with `Inherited` and its
+`SourceID`; the dismissal note says the window is on a parent resource and the
+lifecycle event carries `maintenance_inherited` and `maintenance_source_id`.
+Only maintenance is inherited. Monitoring mode, lifecycle, criticality and
+action-remediation locks stay exact-resource state, so descendant scope never
+weakens a lock or invents inherited action authority.
 
 Operator state outranks per-action approval on the Pulse Actions path:
 `validateExecutionPolicy` in `internal/actionlifecycle/service.go` reads the
@@ -5846,7 +5874,8 @@ were removed with the unreachable handlers. The `IntentionallyOffline` branch is
 counterpart — same auto-dismiss but with
 `operator_state_cause: intentionally_offline` and no
 `maintenance_end_at` field because the suppression has no scheduled
-end. Maintenance windows take priority over intentionally-offline
+end — and, like `expected_offline`, it silences only availability findings
+(see "Patrol consumes canonical monitoring and lifecycle policy"). Maintenance windows take priority over intentionally-offline
 when both are active, because the time-bounded suppression is the
 more honest one to surface to the operator. Deployments without a
 provider keep the original new-finding behavior — suppression is
@@ -6191,43 +6220,8 @@ runtime must carry that approval identifier into the final
 `agentexec.ExecuteCommandPayload` so the host agent can re-check the shared
 command policy locally and fail closed on blocked or still-unapproved commands
 instead of treating control-plane approval as an implicit bypass.
-Discovery deep scans are the one runtime that does not flow through the
-approval boundary. `internal/ai/discovery_adapter.go` is the only call site
-allowed to mark an `agentexec.ExecuteCommandPayload` as `Trusted`. The
-catalog of probes lives in `internal/servicediscovery/commands.go`, is
-read-only by construction (`cat`, `ps`, `ss`, `find` under known config
-roots) and is wrapped in `docker exec`, `pct exec`, or `qm guest exec`
-without ever interpolating caller-supplied strings. Both the server-side
-`agentexec` authorize path and the agent-side `hostagent` authorize path
-must honor that `Trusted` flag by bypassing the approval requirement,
-while still enforcing `PolicyBlock`. AI tool calls, Patrol fixes, and
-Assistant remediation must continue to flow through the governed approval
-record path and must never set `Trusted` on their payloads.
-Discovery command-backed scans are additionally gated by the operator's
-Discovery setting, not by the mere presence of a service-discovery store,
-connected agent, or command-capable agent token. `discovery_enabled=false`
-must fail closed for background sweeps, `/api/discovery/run`, forced
-single-resource discovery, and `pulse_discovery` refreshes before any
-`DeepScanner` command dispatch. `discovery_enabled=true` with
-`discovery_interval_hours: 0` is the only manual-command-scan mode: recurring
-scans stay stopped, but explicit admin-triggered refreshes may use the
-hardcoded trusted catalog.
-Each per-organization AI service now passes its organization-pinned
-`AgentServer` interface directly into `internal/ai/discovery_adapter.go`.
-Deep discovery does not recover the concrete global `agentexec.Server` or
-silently drop command execution when the runtime supplies an
-`agentexec.OrganizationServer`; connected-agent lookup and command dispatch
-therefore remain on the same tenant-scoped view. The interface-backed service
-regression in `internal/ai/service_test.go` requires a real deep-discovery run
-to dispatch the trusted probe catalog and retain its command evidence.
-The value boundary for keeping Discovery is observed workload context:
-Assistant and Patrol may consume normalized service name, version, endpoint,
-port, config path, data path, log path, bind-mount, confidence, and user-note
-fields through `pulse_discovery` or scoped prefetch. Raw command output remains
-debug/admin material and must not become the primary Assistant context. When a
-Discovery record includes a suggested web URL, the tool response and prefetch
-summary may include that URL as observed context, but it must be treated as a
-candidate rather than an operator-approved management URL.
+AI tool calls, Patrol fixes and Assistant remediation must not mark
+command payloads as `Trusted` to bypass the governed approval path.
 The same action-audit boundary now also requires persisted action records to
 carry a normalized plan and preflight: action id, request id, capability,
 approval policy, dry-run availability, safety checks, verification steps, and
@@ -6711,21 +6705,24 @@ the summary layout locally.
 The chat prefetch path now also calls the shared governed-summary predicate
 directly at each mention site, so it no longer carries a local wrapper around
 the canonical policy decision or a separate mention-summary trim helper.
-Structured mention resolution also uses the shared AI tools discovery
-canonicalization helpers now, so chat prefetch and discovery responses agree
-on resource-type and target-ID formatting instead of maintaining chat-local
-copies.
+Structured mentions and command routing use the shared unified-resource
+reference resolver. An explicit ID selects one owned record for current name,
+type, policy and native execution coordinates. Client labels, node hints and
+unscoped provider IDs cannot replace an unknown or ambiguous selection.
 The chat mention picker now also carries the canonical preferred resource
 label as `label` through the structured mention payload, and the insertion
 path uses that same label for prompt text and cursor placement, so mention
 search, selection, and submission do not depend on a raw `displayName` field
 fork.
-Structured `app-container` mentions must now use canonical unified-resource
-identity (`app-container:<host>:<provider_uid>`) instead of a Docker-transport
-ID. Frontend mention pickers should emit that canonical ID for every
-app-container, including API-backed platforms such as TrueNAS, while backend
-structured-mention resolution may continue to accept legacy `docker:...`
-mentions only as a compatibility path.
+All mention kinds carry the registry-issued ID from /api/resources unchanged.
+The ID's spelling is not an execution contract. Bounded legacy mention and
+session-registration formats remain readable only when they identify a unique
+current owner. ResolvedContext stores records by that ID and indexes only
+unambiguous names and aliases, including after JSON reload and pinned clearing.
+Native provider IDs remain executor coordinates. Session registration and
+explicit-access marking share ResourceRegistration.ResolvedID rather than
+rebuilding identity independently. Recent context omits unresolved owners and
+continues to withhold governed identifiers.
 Compatibility-only top-level TrueNAS mention types must also collapse to the
 canonical `agent` host type at that same handler boundary, so the AI runtime
 does not carry a parallel raw `truenas` mention contract once transport input
@@ -8139,7 +8136,23 @@ The findings operator-state projection carries canonical `MonitoringMode` and
 lock state. Active maintenance, expected-offline, muted, and retired policy
 produce distinct lifecycle causes in durable finding history. Suppression is
 reversible when the canonical cause lifts. Legacy providers that project only
-`IntentionallyOffline` retain their established cause and behavior.
+`IntentionallyOffline` (no `MonitoringMode`) retain their established
+`intentionally_offline` cause and read as expected-offline.
+
+Expected-offline is availability-specific in Patrol exactly as it is in the
+alert runtime. `ResourceOperatorStateProjection.monitoringSuppressionCauseFor`
+decides per finding: retired and muted silence every finding, while
+expected-offline (and the legacy flag) silence only findings in the shared
+down condition class (`findingConditionClass` in
+`internal/ai/findings_alert_mirror.go`: stopped, exited, offline, unreachable,
+PDM offline, Proxmox guest stopped). Capacity, performance, backup, security,
+and disk-health findings on an expected-offline resource stay visible; SMART
+"offline uncorrectable" reports are disk health, not the resource being down.
+The wake path judges the re-detected finding with the same helper, so a
+finding silenced under muted wakes when the resource moves to expected-offline
+unless it is itself an availability finding.
+`internal/ai/findings_expected_offline_test.go` pins the split with muted as
+the negative control.
 
 Retired lifecycle also projects an effective remediation lock into Patrol
 investigation and the shared execution admission paths, so a resource cannot
@@ -8634,11 +8647,9 @@ recompute digest counts from run history, findings, or cost events, and must
 not call the endpoint through any other client. Proof:
 `frontend-modern/src/api/__tests__/patrol.test.ts`.
 
-The explicit issue explanation journey is qualified separately from provider
-reasoning and real remediation in
-`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
-proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
-response does not establish a useful customer outcome or model qualification.
+Issue explanation follows the [customer-journey qualification boundary](../../../../qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md#real-outcome-qualification-still-required),
+which separates scripted interaction proof from provider reasoning, remediation
+and repeatable customer outcomes.
 
 ### Subscription routing content boundary
 

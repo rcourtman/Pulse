@@ -20,6 +20,25 @@
 
 ## Purpose
 
+### Patrol setup panel uses existing form primitives
+
+`PatrolSetupPanel.tsx` builds the provider choice from `SelectionCardGroup`
+(compact), the inputs from the shared form classes, results from
+`InlineNotice`, and actions from `Button`. It adds no shared primitive; at
+phone width the cards stack two per row and the action buttons keep 44px
+targets.
+The workspace mounts it through `lazy` and `Suspense` with no fallback, so the
+setup card shows the panel once its chunk loads.
+An unreachable provider keeps the existing setup card and `ButtonLink`, now
+pointing at Provider & Models.
+
+### Patrol header default-mode notice uses existing primitives
+
+The Pro default notice in `PatrolIntelligenceHeader.tsx` is a `role="status"`
+block with two plain buttons that call the existing autonomy save. It adds no
+shared primitive, badge or banner variant, and it wraps on phone widths with
+44px targets.
+
 ### Canonical VM History respects native filesystem power state (12 October 2026)
 
 The canonical resource drawer uses `getWorkloadGuestDiskRead`, the same VM
@@ -237,6 +256,17 @@ light/dark and narrow/desktop layouts using synthetic observations only.
 Presentation acceptance does not establish native thaw, covered-filesystem
 writes, guest liveness, service restoration or reporter recovery.
 
+### Node drawer CPU temperature reads the backend reading
+
+The node drawer's CPU temperature trend card, its Summary temperature row and
+`getNodeDrawerCurrentMetrics` read `Node.cpuTemperature`, the backend's
+primary CPU reading, which the history line beneath the card records under the
+same rule. `getCpuTemperature` (a frontend maximum over package, CPU maximum
+and cores) is removed from `utils/temperature.ts`; no drawer may rebuild a
+headline from `temperature` details. Proof: `NodeDrawer.test.tsx` (the card
+shows the backend value while the details hold a hotter core) and the
+`nodeDrawerModel` branch tests.
+
 ### Drawer attention detail line and temperature alert floor — issue #2068
 
 `DrawerAttentionSection` items accept an optional `detail` (a muted second
@@ -343,7 +373,7 @@ page, API, alert policy or operator permission is introduced.
 
 The existing workload drawer distinguishes assigned Pulse Agent action ownership,
 observed agent version metadata and Proxmox-reported guest-read state. Neither a
-version string nor a parent-node Discovery target may be called **connected**.
+version string nor a parent-node execution target may be called **connected**.
 Reported available, deferred, expected-unreachable, not-running, disabled and
 unknown states remain visible even before a version or filesystem sample exists.
 A current operation lock/backup takes precedence over a cached available flag.
@@ -358,7 +388,8 @@ requires independent thaw and writes to covered filesystems. Running power
 state, an OK backup or reported agent availability establishes none of those.
 Fresh same-guest evidence withdraws the precaution without a new diagnostic or
 collector request. Existing filesystem provenance, metric values, History,
-Discovery/action permissions and monitoring policy are unchanged. Memory qualification uses its own authoritative observation; disk-read state
+action permissions and monitoring policy are unchanged. Memory qualification
+uses its own authoritative observation; disk-read state
 cannot qualify a different metric or renew its observation time.
 
 Verification: `GuestDrawerOverview.agent-state.test.tsx` covers each current state
@@ -372,41 +403,8 @@ thaw, safe writes, installed acceptance or a containing published release.
 
 ### Backup inventory ownership is source-scoped and unambiguous
 
-The existing Backups Coverage and By date views do not select a workload from
-an arbitrary substring, display label or first matching row when VMIDs repeat.
-PVE files, guest snapshots and task evidence use the supplied connection scope
-before native node names or aliases. One VMID inside a matching PVE connection
-stays associated after node migration; a known conflicting connection cannot be
-rescued by a reused node name or a singleton fallback. With no connection scope,
-an exact native node/alias must identify one candidate; wholly unscoped singleton
-observations retain their existing compatibility behaviour.
-
-PBS instance and datastore identify a repository, not a PVE workload. A PBS
-namespace disambiguates repeated VMIDs only with a unique exact native node,
-alias or PVE connection label. Unique type/VMID PBS inventory retains the
-existing root-namespace association. This bounded presentation fix does not
-implement the runtime PBS source learner or alter server-owned protection policy.
-
-Unresolved artifacts remain listed once and keep complete, collision-safe source
-keys (PVE connection/node or PBS instance/datastore/namespace), including host
-backup labels. Equal VMIDs, repository labels or host names cannot pool them
-across unproven sources. Untyped PVE tasks may join only PVE-scoped rows, not a
-PBS-only unresolved row with a lookalike namespace. The existing collapsed group
-and count say **unmatched**, not that the guest necessarily ceased to exist;
-its explanation wraps on phones. These rows remain **not evaluated**, separate
-from canonical provider-owned protection posture and live workload counts.
-
-Verification: `proxmoxBackupRecoveryModel.identity.test.ts` reproduces prefix
-and reused-node collisions, order independence, migration/alias controls,
-conflicting scope, ambiguous type/namespace and separated unresolved sources.
-Mounted `ProxmoxBackupsTable.test.tsx` backup-identity cases cover both views,
-artifact preservation, reorder/display rename, expansion identity and no extra
-inventory read. `browser-tests/backup-identity.cjs` uses production tables,
-router, inventory readers and CSS with synthetic responses on desktop Chromium
-and touch WebKit at 390px/320px, including keyboard/touch disclosure, ambiguity,
-readable unmatched explanation and same-resource recovery. No native backup
-identity, restore, guest thaw or containing-release acceptance follows from
-these source/render observations.
+Both Backups views follow the [storage source-association contract](storage-recovery.md#backup-inventory-ownership-is-source-scoped-and-unambiguous),
+including its source controls and qualification limits.
 
 ### Diagnostics are live checks; downloads require a privacy review
 
@@ -826,6 +824,14 @@ on component mount. Closing clears the registered input so later keyboard
 commands cannot target a detached composer. A handoff must leave Escape and
 keyboard input in Assistant, not the underlying alert search.
 
+Assistant mention suggestions preserve each resource.id. Provider scope and
+current node identify same-label guests where policy permits them, and search
+can use those visible fields. Selected chips retain independent canonical
+IDs, allow removal without discarding prompt text, and show current owned
+labels after inventory refresh. Governed labels never expose node or site
+metadata through either suggestions or chips. Prompt history keeps the same
+identity, including older bounded payloads interpreted by the runtime.
+
 Mobile incident drawers transfer their exact context to Assistant and close
 through the shared explicit handoff callback. Keeping the source drawer above
 Assistant, or dropping its occurrence identity to make navigation work, fails
@@ -1145,6 +1151,17 @@ reading, timestamp or chart geometry. A successful empty read says `No stored
 history in this range`; it does not imply that collection is running or that
 changing provider configuration will produce a sample. Zero remains a valid
 reported reading, while an absent metric remains unavailable.
+When a panel has stored observations, its default legend uses the newest
+stored timestamp across that panel and shows only values actually observed at
+that time. It labels the time `Latest stored`; missing sibling series remain
+dashes, with a visible explanation, rather than borrowing an older series value
+or a live/retained fallback. Pointer and keyboard inspection use the same
+single-time rule, and leaving inspection restores that default. Each panel owns
+its own timestamp. Only a panel with no stored observations may show explicitly
+qualified current, last-known or unknown-freshness fallback values.
+`GuestDrawerHistory.readout.test.tsx` verifies the default, fallback transition,
+zero, panel independence, inspection, refresh and access-denial boundaries;
+the existing pointer and sparse controls preserve dated interaction and geometry.
 A lone stored series renders one point at its actual timestamp and value,
 including measured zero, never an invented line. A group with one observation
 time exposes that date visibly with `Single observation. No trend yet.` and
@@ -1157,6 +1174,21 @@ invalid data, refresh and replacement. `browser-tests/history-window.cjs` also
 checks sparse/empty/current states through the production PBS drawer and direct
 shared renderer. This is presentation proof, not provider collection or #1723
 installed acceptance.
+Because the plot stretches its viewBox to the panel
+(`preserveAspectRatio="none"`), single-observation dots and hover markers are
+zero-length, round-capped strokes with `vector-effect="non-scaling-stroke"`,
+drawn in screen pixels so they stay round at any width; never a `<circle>` in
+the plot. Series lines carry `data-history-series`, which is how tests tell a
+line from a dot. A series without a reading at the inspected time reads
+`no reading` in the readout itself; there is no separate explanatory line that
+would appear and vanish, and move the chart, as the inspected time changes.
+Gridline labels state the plotted scale's value at each line: percent for
+utilization, °C for thermals, and a compact rate such as `5.0M/s` for network
+and disk I/O, each centred on its SVG gridline. The I/O midpoint used to read
+"Avg", which was the scale midpoint, not a measured average (demand ledger
+"Numeric axis labels on history I/O charts", issue #1720). A panel with missing
+readings says so in one line: `Missing observations: <series>. Lines break
+where a reading is missing.`
 Shared history-chart gridlines must carry numeric labels derived from the
 plotted scale rather than semantic `Avg` / `Max` placeholders. Byte and
 byte-rate axes include their human-readable unit at each gridline, and the
@@ -1620,7 +1652,7 @@ The Backups surface passes its complete deduplicated route inventory to the PBS 
 
 One agent can be surfaced twice for a single PBS host: folded into its PVE guest and as a standalone `source=pbs` host row. Those two rows are one machine, not an ambiguous pair. Correlation must collapse candidates that share an agent identity and prefer the guest representation, whose canonical metrics target carries the persisted host history; the PBS service target has no stored host series and renders the no-history state. Two candidates with distinct agent identities remain ambiguous, and a candidate with no agent identity must not be treated as proof of sameness.
 
-A live snapshot can briefly omit the correlated host row while the PBS server row remains, for example while a realtime refresh replaces the merged estate. The correlation must retain the last resolved host per PBS server across that omission instead of falling back to the PBS service target, so the drawer's Discovery and Metrics Target rows and its History series do not flicker. Reuse the remembered host only while it is still fresh relative to the server, and drop it once stale so a removed or replaced host is not advertised indefinitely; a host row that is present but ambiguous still declines.
+A live snapshot can briefly omit the correlated host row while the PBS server row remains, for example while a realtime refresh replaces the merged estate. The correlation must retain the last resolved host per PBS server across that omission instead of falling back to the PBS service target, so the drawer's linked host and History series do not flicker. Reuse the remembered host only while it is still fresh relative to the server, and drop it once stale so a removed or replaced host is not advertised indefinitely; a host row that is present but ambiguous still declines.
 
 Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and
 merged guest targets, missing disks, duplicate guest/host representations of one
@@ -2489,8 +2521,8 @@ not a replacement status card, CTA band, or page-local nested card.
    `frontend-modern/src/components/GitHubStarBanner.tsx` may own its display
    timing, product copy, and GitHub destination, but its primary and dismiss
    controls must compose `Button` and `ActionIconButton` instead of carrying
-   local floating-prompt button shells. The prompt must wait for fourteen
-   distinct active days with connected infrastructure, consume at most one
+   local floating-prompt button shells. The prompt must wait for the first
+   return on a later day with connected infrastructure, consume at most one
    lifetime appearance, treat close as permanent dismissal, and never restore
    recurring snooze behavior. It must yield the browser session to an existing
    release, disclosure, or other low-priority app-shell notice and suppress
@@ -2575,7 +2607,7 @@ not a replacement status card, CTA band, or page-local nested card.
    This contract also covers secondary drawer facts in availability status and
    suggestion cards, resource change-history entries, Docker/PBS/PMG service
    support panels, Docker container-update management cards, action history,
-   Discovery summaries, and the specialized Proxmox Mail Gateway drawer.
+   and the specialized Proxmox Mail Gateway drawer.
    Headers, status summaries, actions, disk capacity summaries, and RAID state
    pairs may retain intentional endpoint alignment; ordinary label/value facts
    in those surfaces may not.
@@ -4372,13 +4404,8 @@ production table, router and styles; it does not qualify full-app scrolling.
     self-hosted plan surfaces must hand
     off to Pulse Account/public Cloud ownership rather than route to an
     in-product Cloud trial/signup page.
-40. Keep AI Discovery retired. The model-backed service-identification layer
-    (Discovery tab, identified-service cards, readiness badges, provenance
-    markers, suggested web-interface URLs, and the AI Service Context settings
-    page) was removed on 2026-10-11. Do not reintroduce drawer, row, or
-    Assistant-briefing surfaces for AI-identified services without a new
-    evidence-backed `FEATURE_REQUESTS.md` entry; persisted/manual web-interface
-    metadata is the only row-link source.
+40. Follow the AI runtime contract for retired AI Discovery behavior.
+    Persisted/manual web-interface metadata remains the only row-link source.
 41. Keep settings sidebar search able to find pages by the vocabulary users
     actually type, not only by rendered copy. `SettingsNavItem.keywords` in
     `frontend-modern/src/components/Settings/settingsNavigationModel.ts` is the
@@ -4571,28 +4598,11 @@ their per-suite fixture reuses only identical source/path renders, returns
 isolated clones and invalidates changed input. No renderer, guide bytes,
 assertions or test deadlines are weakened.
 
-### AI Discovery removed (2026-10-11)
+### Retired frontend ownership
 
-AI Discovery, the model-backed service-identification layer, is gone. The
-`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
-the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
-mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
-identified-service cards, readiness badges, provenance markers, suggested
-web-interface URLs, the Workloads AI Context column, the chat "Discovery is
-off" hint and the AI Service Context settings page were all removed. No
-telemetry counter ever measured its use (the `discovery_enabled` telemetry
-field folded it together with network subnet discovery), the maintainer judged it a flop, and
-it carried a separate scheduler, store and model route for context that
-`pulse_query`, `pulse_read` and the unified-resource context sections already
-supply.
-Network subnet discovery (`internal/discovery`, `/api/discover`, the
-Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
-are separate features and stay. Stored `discovery_enabled`,
-`discovery_interval_hours` and `discovery_model` AI settings are ignored on
-load. The old `/settings/pulse-intelligence/discovery` route redirects to
-Assistant settings.
-
-`DiscoveryLoadingFallback`, `DiscoveryReadinessBadge`, `DiscoveryProvenanceMarker` and the now-orphaned `CopyableCodeRow` were deleted with their registry rules; the drawer spinner guard now names `LoadingSpinner` as its canonical owner.
+AI Discovery retirement and its compatibility boundaries are owned by
+`ai-runtime.md`. Deleted Discovery primitives have no current UI obligations.
+`LoadingSpinner` owns the remaining drawer loading boundary.
 
 ### Manual update freshness
 
@@ -4690,10 +4700,6 @@ by the shared-template registry rather than page-local discretion.
 Update progress status indicators are included in that loading boundary:
 progress-stage loading must compose `LoadingSpinner` rather than local spinner
 SVGs.
-`DiscoveryLoadingFallback` owns the discovery-tab Suspense fallback row for
-resource, workload, and Docker host drawers: centered row layout, status
-semantics, discovery loading copy, and canonical `LoadingSpinner` composition
-live there rather than in drawer-local fallback markup.
 `FilterButtonGroup` owns feature table view toggles as well as settings
 segmented selectors: page-specific labels and selected values stay in the
 owning feature model, but the visible segmented selector shell must come from
@@ -4859,11 +4865,6 @@ Patrol status payload. That text is page-owned operational metadata inside the
 existing header row, not a new shared primitive, nested status card, or
 secondary verdict band.
 
-`frontend-modern/src/utils/discoveryPresentation.ts` owns resource discovery
-command guidance targets. Discovery surfaces that need to tell operators where
-to enable command execution or verify `agent:exec` scope must use that helper's
-canonical `Settings → Infrastructure` and `Settings → API Access` handoffs
-instead of hard-coding legacy settings labels or old route paths.
 Shared frontend empty states, thresholds empty states, and discovery guidance
 that mention the Infrastructure settings destination now consume
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` for the
@@ -5435,7 +5436,37 @@ compact `DetailSectionTable` rows as Overview; those facts must not switch to a
 provider-local card mosaic or require another tap. Only genuinely large or
 interactive provider-support content belongs behind
 `TechnicalDetailsDisclosure`, which owns its collapsed, lazily mounted
-boundary. `DetailSectionTable` keeps the single bordered table at narrow widths
+boundary.
+The Proxmox guest and node drawers (`GuestDrawerOverview.tsx`,
+`NodeDrawerOverview.tsx`) are the exception, by maintainer decision on
+2026-10-13 (demand ledger "Drawer Overview leads with attention and trends",
+a named bet): a grid of equal-weight inventory cards buried the drawer's job.
+Their Overview leads with active alerts (or one "No active alerts" line), then
+24h trend cards for the metrics the row shows, which add the time dimension
+the row lacks rather than restating it. Any warning- or danger-toned detail row
+is lifted into a "Worth checking" section in front, whichever section owns it,
+so demotion never hides a reason a reading cannot be trusted. Guest
+filesystems, physical disks, RAID, node GPU and NVMe sensor readings (which
+carry no heat tone of their own), and any availability check that is not both
+healthy and fresh stay visible; "availability checks passing" is said only of
+fresh healthy evidence. Trend cards withhold the live value of an offline or
+stale node, and a guest's withdrawn memory reading shows no bytes either.
+A node card is coloured only by the node's own alerts, which
+`ProxmoxNodesTable.tsx` passes as `ownAlerts` by identity match; the drawer's
+`alerts` list also carries its guests' alerts through the node-name match. A
+one-line facts strip carries OS, address, a healthy last completed backup and
+tags. The complete inventory sits in a closed "Details"
+`TechnicalDetailsDisclosure` with `keepMounted`, so its rows stay in the
+document for find-in-page and tests while hidden. Other drawers keep the rule
+above until that bet is graded. "Worth checking" renders through
+`DrawerExceptionList.tsx` directly under the alerts line, above the trend
+cards: one compact label/value line per lifted row with the shared
+`detailValueToneClass` tone, not a card per section. Each trend card marks its
+headline value "now" and states its range as "24h low–high", so the live
+number is not read as the last point of the stored line. A guest memory reading
+from a cache-inclusive source says "may include cache" on the Memory card
+itself; the full note (why, and what to do) is the Details row "About this
+reading" and appears once. `DetailSectionTable` keeps the single bordered table at narrow widths
 where density matters, then presents those same canonical rows as bounded
 section cards on desktop. Desktop cards share the available row width, stretch
 to the same row height, and use stable three- or four-column tracks. An
@@ -5460,13 +5491,6 @@ automatic-action policy, saved access configuration, and action audit belong
 to a dedicated `Manage` tab and must not render inside Overview. Guest, node,
 Docker-host, and unified-resource drawers must compose these shared primitives
 instead of defining provider-local attention or technical disclosure shells.
-The same drawer family must consume the canonical
-`useDiscoveryFeatureAvailability` boundary before exposing Discovery chrome or
-content. Until the shared AI runtime settings explicitly report Discovery as
-enabled, drawers render no Discovery tab, readiness state, explanatory copy,
-analysis reveal, or identified-service suggestion and issue no passive
-discovery-record read. Provider-specific drawer shells must not reinterpret a
-technical discovery target as operator consent to enable the feature.
 Drawer headers reserve their limited space for the subject and the canonical
 full-row collapse control, plus a direct object-specific lifecycle action only
 where the object contract requires one. `ObjectDrawerHeader` owns that
@@ -5760,10 +5784,9 @@ Actions audit; the audit remains the authority before any later retry.
 The shared web interface URL field now follows that same owner split.
 `frontend-modern/src/components/shared/WebInterfaceUrlField.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useWebInterfaceUrlFieldState.ts`
-owns metadata fetch/save/remove lifecycle, success/error state, and suggested
-URL runtime, and `frontend-modern/src/components/shared/webInterfaceUrlFieldModel.ts`
-owns URL validation, target-label normalization, and suggested-URL presentation
-rules. The shared primitive now also supports an embedded mode with a caller-
+owns metadata fetch/save/remove lifecycle and success/error state.
+`frontend-modern/src/components/shared/webInterfaceUrlFieldModel.ts` owns URL
+validation and target-label normalization. The shared primitive now also supports an embedded mode with a caller-
 owned title so feature drawers can place web-interface controls inside a larger
 access surface without forking the save/remove/runtime behavior. Future
 web-interface URL work should extend those owners instead of pushing metadata
@@ -5773,12 +5796,8 @@ transport or validation back into the shared shell.
 metadata write gate: browser sessions always pass, while API-token sessions
 such as kiosk links need `monitoring:write` or the wildcard scope. Read-only
 sessions keep the saved URL with its open and copy controls and a one-line
-explanation, but get no input, Save, Remove, or suggested-URL adoption that the
+explanation, but get no input, Save, or Remove controls that the
 server would refuse.
-Missing-suggested-URL diagnostics remain useful only when the operator has no
-saved or entered URL; once a custom web-interface URL is present, the shared
-field must suppress "no suggested URL" warnings so Discovery does not make a
-valid manual endpoint look broken.
 Saved web-interface launch affordances must also stay on a shared primitive
 instead of page-local table columns or one-off external-link anchors.
 `frontend-modern/src/components/shared/WebInterfaceLink.tsx` owns URL
@@ -7654,7 +7673,7 @@ maintenance routes through `AIChatMaintenanceSection.tsx`, and readiness plus
 save/test actions route through `AISettingsStatusAndActions.tsx`.
 `AISettingsStatusAndActions.tsx` may expose provider connection status and
 test actions only for the Provider & Models page; section pages reuse the save
-bar without making Patrol, Assistant, or Discovery look like provider setup
+bar without making Patrol or Assistant look like provider setup
 screens. Future AI settings work must extend those section owners instead of
 re-inlining large runtime subsections into the shell.
 Provider-specific settings fields inside
@@ -7772,40 +7791,11 @@ skips its optional sign-in delivery. No frontend runtime file changes in this
 slice; the API proofs are
 `TestContract_HostedMagicLinkRequestValidatesOriginBeforeMutation` and
 `TestStripeWebhook_CheckoutMagicLinkValidatesOriginBeforeMutation`.
-`frontend-modern/src/utils/discoveryPresentation.ts` now owns the
-customer-facing discovery-section framing copy, scan-scope labels, subnet
-guidance, command-execution settings targets, API Access handoff labels, and
-environment-lock messaging so
-`frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx` stays a
-shared presentation shell instead of re-accumulating that wording inline.
-Resource discovery command guidance must use that same presentation owner for
-settings handoffs. `frontend-modern/src/utils/discoveryPresentation.ts` owns
-the shared command-execution and `agent:exec` token-scope links; discovery
-surfaces may explain those states, but the visible links must remain
-`Settings → Infrastructure` and `Settings → API Access` through that helper,
-not inline legacy labels or old settings paths.
-That same presentation owner also packages the identified-service summary
-consumed by surfaces outside the Discovery sub-tab.
-`getDiscoveryIdentifiedSummary` is the canonical reducer that turns a stored
-`ResourceDiscovery` into the compact card payload (service name, category,
-confidence percent, port and path counts, cli access hint, service version,
-observed timestamp, provenance label, and suggested web-interface URL
-metadata). New surfaces that want to label a workload with its identified
-service or offer a Discovery-sourced endpoint candidate must read through that
-helper rather than re-implementing the empty/low-signal gate, so the
-Discovery tab and out-of-tab surfaces collapse the same records and avoid
-surfacing "Unknown" rows or zero-confidence noise. Manual/persisted
-web-interface URLs still win: Discovery suggestions may be copied, opened, or
-adopted through the shared `WebInterfaceUrlField`, but they must not silently
-replace metadata or make row-name links active until the operator saves them.
-No-URL diagnostics and command access hints are not endpoint candidates; they
-can explain a Discovery result inside Discovery-owned surfaces, but they must
-not trigger out-of-tab identified-service cards or suggested-URL panels without
-another meaningful service signal.
-The visible provenance marker for those values is the shared
-`DiscoveryProvenanceMarker`; local surfaces may choose the labelled or
-icon-only variant, but must not invent alternate Discovery badges or hide the
-source on compact cards.
+`frontend-modern/src/utils/infrastructureSettingsPresentation.ts` owns network
+discovery framing, scan-scope labels, subnet guidance and environment-lock
+copy consumed by `DiscoverySettingsForm.tsx`. Network discovery remains an
+Infrastructure feature, separate from the retired AI service scanner.
+
 That same settings-shell boundary now also owns the shared settings
 presentation helpers that those panels consume. `frontend-modern/src/utils/systemSettingsPresentation.ts`
 is the canonical owner for shared system-settings presets, summaries, and
@@ -8614,8 +8604,8 @@ reintroduce a literal bar height. The declared `:root` value is a
 pre-measurement fallback only and deliberately under-estimates: reserving more
 than the bar's real height leaves a band between an overlay's backdrop and the
 bar that is neither dimmed nor click-blocked, while reserving slightly less is
-covered by the opaque bar. Surfaces with their own placement at wider
-viewports, such as the star banner's `md:bottom-4`, keep it.
+covered by the opaque bar. The star banner follows the published height at
+every viewport with a small gap above the bar, without a breakpoint override.
 
 Proofs live in `frontend-modern/src/components/shared/__tests__/MobileNavBar.test.tsx`,
 `frontend-modern/src/components/__tests__/GitHubStarBanner.test.tsx`, and
@@ -8721,6 +8711,17 @@ listener of its own. Snooze never moves, so its dialog state survives a
 breakpoint crossing. The More button keeps its existing catalog labels and
 sets `aria-controls` only while its region is rendered.
 
+### Alert cards deep-link guests through the workloads route search
+
+`AlertOverviewAlertCard` builds a guest alert's link with
+`buildWorkloadsRouteSearch({ resource })` and passes the alert's resource id
+unchanged, or for a per-filesystem alert the backend-stamped
+`guestResourceId` of the guest that owns the filesystem, also unchanged. It
+adds no identity mapping of its own: the workloads selection
+state resolves non-row ids through the resource registry, and the summary
+focus bridge reveals the selected row, so the alert link and every other
+`?resource=` link share one resolution and reveal path.
+
 ### Alert groups use the shared localization boundary
 
 Alert group disclosure and group acknowledgement copy routes through
@@ -8769,9 +8770,17 @@ return, active state, badges, and narrow-layout containment remain unchanged.
 The Proxmox node drawer presents checked zero, current positive, stale,
 unavailable, and not-checked package evidence as a labelled detail row with
 bounded copy and checked time. The compact table badge remains reserved for a
-current positive observation. Provider errors are never rendered. Component
-evidence is covered by `NodeDrawerOverview.updateEvidence.test.tsx`,
-`proxmoxUpdateEvidence.test.ts`, and `ProxmoxNodesTable.test.tsx`.
+current positive observation. Provider errors are never rendered. An
+unavailable check whose reason is `permission_denied` reads neutral, so the
+node Overview keeps it in Details rather than Worth checking: Proxmox gates the
+package list on `Sys.Modify`, and `docs/TROUBLESHOOTING.md` calls keeping the
+narrower monitoring role a valid choice. Other unavailable reasons stay warnings.
+Node Details rows wrap their values (`wrap: true`) rather than truncating them,
+because Details is where a reader goes for the full value: the update reason,
+the linked agent ID and the CPU model read whole at desktop and phone widths. Component
+and browser evidence covers both 1440px and 390px layouts in
+`NodeDrawerOverview.updateEvidence.test.tsx`, `ProxmoxNodesTable.test.tsx`, and
+`frontend-modern/browser-verification.json`.
 
 Denied update-list access exposes visible guidance beside that status through
 the shared HelpIcon and help-content registry. It explains that inventory and
@@ -8780,7 +8789,7 @@ read-only access, and describes Sys.Modify as broader access that also permits
 refreshing package indexes. A denied response does not establish the exact
 missing privilege or an empty update list. Status text wraps through the shared
 detail-row contract at phone widths, including retained counts and checked time.
-The operator-context section and its help control retain their identity while
+The Summary section owns its help control while
 readings and relative timestamps update. The shared help dialog remains inside
 the viewport with scrollable content, keyboard dismissal and focus return.
 Current-source browser receipts under `frontend-modern/browser-verification/`
@@ -8846,11 +8855,9 @@ App.architecture.test.ts protects the CSS scope and scroll ownership;
 non-scrolling wrapper. Browser receipts do not establish physical Android touch
 behaviour or every asynchronous update state.
 
-The explicit issue explanation journey is qualified separately from provider
-reasoning and real remediation in
-`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
-proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
-response does not establish a useful customer outcome or model qualification.
+Issue explanation follows the [customer-journey qualification boundary](../../../../qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md#real-outcome-qualification-still-required),
+which separates scripted interaction proof from provider reasoning, remediation
+and repeatable customer outcomes.
 
 ### Alert health attention preserves asynchronous ownership
 
@@ -8866,20 +8873,8 @@ queue-action responses, without claiming backend notification delivery.
 
 ### Alert status distinguishes dispatch from destination evidence
 
-The active alert card renders a valid diagnosis `lastNotified` timestamp as
-“Dispatch requested”, never “Notified”: the alert manager records this field
-before invoking delivery callbacks. A cooldown's `nextEligibleAt` is labelled
-“next eligible”, not a promised send time. Neither field proves destination
-acceptance or recipient receipt; that evidence must not be inferred from the
-muted presentation tone. Missing or invalid timestamps retain the existing
-pending/cooldown fallback; acknowledged alerts retain their badge without a
-second status line. No API field, notification policy or shared primitive changes.
-
-The existing wrapping status text must remain readable at desktop and phone
-widths despite the longer labels. The presentation and Overview delivery-status
-tests cover the evidence boundary; `scripts/check-alert-dispatch-copy.mjs`
-qualifies the real Overview with scripted API data in Chromium, not installed
-notification delivery.
+Shared presentation preserves the [alerts dispatch-evidence contract](alerts.md#alert-status-distinguishes-dispatch-from-destination-evidence),
+including its source controls and qualification limits.
 
 ### Resource incident reads retain lifecycle ownership
 
@@ -9422,3 +9417,21 @@ provider precedence, stopping/recovery and zero. The local
 Workloads snapshot adapter/drawer, History and CSS on desktop and phone, with
 synthetic GET responses. These controls do not establish native restart, thaw,
 covered-filesystem writes, installed recovery or containing software.
+
+### Guest backup completion readout (12 October 2026)
+
+The existing guest Overview's Last completed backup row shows elapsed age
+(hours/minutes for recent points, days for older ones), never a rolling-day
+Today/Yesterday claim. A validated completion also has visible UTC date/time
+in a semantic `time` element with its original ISO timestamp. Invalid, future
+or absent times produce no completion element. The row still distinguishes
+running activity from completed protection and preserves the policy's tone;
+the passive clock may rejudge a previously future timestamp when it becomes
+valid, but cannot supply new completion evidence.
+
+`GuestDrawer.backup-clock.test.tsx` and the connected drawer/model controls
+cover these states and update on time alone. Desktop Chromium and touch-phone
+WebKit exercise the real policy producer, consuming drawer, shared clock and
+existing table evidence. No route, guest check, backup, threshold, collector or
+permission changes. This presentation result does not establish thaw, covered
+filesystem writes, native restart recovery or containing released software.

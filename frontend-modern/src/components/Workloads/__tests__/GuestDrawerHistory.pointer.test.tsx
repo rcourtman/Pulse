@@ -60,9 +60,9 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
     expect(within(utilization()).getByTestId('guest-history-hover-time')).toHaveTextContent(
       formatHistoryChartTimeLabel(time + 30_000, '24h'),
     );
-    expect(utilization()).toHaveTextContent('CPU-');
+    expect(utilization()).toHaveTextContent('CPUno reading');
     expect(utilization()).toHaveTextContent('Memory30.0%');
-    expect(utilization().querySelectorAll('circle[r="3"]')).toHaveLength(1);
+    expect(utilization().querySelectorAll('[data-history-hover-marker]')).toHaveLength(1);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -78,18 +78,21 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
     await screen.findByRole('slider', { name: 'Inspect Utilization history' });
     const plot = hover(utilization(), 0);
     expect(utilization()).toHaveTextContent('CPU11.0%');
-    expect(utilization()).toHaveTextContent('Memory-');
-    expect(utilization()).toHaveTextContent('Disk-');
+    expect(utilization()).toHaveTextContent('Memoryno reading');
+    expect(utilization()).toHaveTextContent('Diskno reading');
     expect(utilization()).not.toHaveTextContent('98.0%');
     expect(
       within(utilization()).getByRole('img', { name: 'Utilization history' }),
     ).toHaveAccessibleDescription(
-      `${new Date(time).toLocaleString()}. CPU 11.0%. Memory no observation. Disk no observation. Missing observations: CPU, Memory. Lines stop where a series has no reading at another stored time in this panel. This does not identify the cause or duration of a monitoring outage.`,
+      `${new Date(time).toLocaleString()}. CPU 11.0%. Memory no observation. Disk no observation. Missing observations: CPU, Memory. Lines break where a reading is missing.`,
     );
     fireEvent.pointerLeave(plot);
     expect(utilization()).toHaveTextContent('CPU43.0%');
     expect(utilization()).toHaveTextContent('Memory55.0%');
-    expect(within(utilization()).queryByTestId('guest-history-hover-time')).toBeNull();
+    expect(within(utilization()).getByTestId('guest-history-hover-time')).toHaveTextContent(
+      'Latest stored',
+    );
+    expect(utilization()).toHaveTextContent('Diskno reading');
   });
 
   it('can inspect a lone zero observation without drawing a synthetic trend', async () => {
@@ -97,11 +100,11 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
     render(() => <GuestDrawerHistory target={target} range="24h" />);
     await screen.findByRole('slider', { name: 'Inspect Utilization history' });
     hover(utilization(), 45_000);
-    expect(utilization()).toHaveTextContent('CPU-');
-    expect(utilization()).toHaveTextContent('Memory-');
+    expect(utilization()).toHaveTextContent('CPUno reading');
+    expect(utilization()).toHaveTextContent('Memoryno reading');
     expect(utilization()).toHaveTextContent('Disk0.0%');
-    expect(utilization().querySelectorAll('circle[r="3"]')).toHaveLength(1);
-    expect(utilization().querySelectorAll('path')).toHaveLength(1);
+    expect(utilization().querySelectorAll('[data-history-hover-marker]')).toHaveLength(1);
+    expect(utilization().querySelectorAll('path[data-history-series]')).toHaveLength(1);
     expect(utilization().querySelectorAll('[data-history-observation]')).toHaveLength(4);
   });
 
@@ -112,10 +115,10 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
     hover(utilization(), 120_000);
     expect(utilization()).toHaveTextContent('CPU43.0%');
     expect(utilization()).toHaveTextContent('Memory55.0%');
-    expect(utilization()).toHaveTextContent('Disk-');
-    const markers = [...utilization().querySelectorAll('circle[r="3"]')];
+    expect(utilization()).toHaveTextContent('Diskno reading');
+    const markers = [...utilization().querySelectorAll('[data-history-hover-marker]')];
     expect(markers).toHaveLength(2);
-    expect(markers[0].getAttribute('cx')).toBe(markers[1].getAttribute('cx'));
+    expect(markers[0].getAttribute('data-x')).toBe(markers[1].getAttribute('data-x'));
   });
 
   it('snaps between observations and resolves a tie to the earlier actual time', async () => {
@@ -123,9 +126,9 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
     render(() => <GuestDrawerHistory target={target} range="24h" />);
     await screen.findByRole('slider', { name: 'Inspect Utilization history' });
     hover(utilization(), 37_500);
-    expect(utilization()).toHaveTextContent('CPU-');
+    expect(utilization()).toHaveTextContent('CPUno reading');
     expect(utilization()).toHaveTextContent('Memory30.0%');
-    expect(utilization()).toHaveTextContent('Disk-');
+    expect(utilization()).toHaveTextContent('Diskno reading');
   });
 
   it('keeps keyboard selection authoritative and restores pointer inspection after blur', async () => {
@@ -136,10 +139,10 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
     fireEvent.input(slider, { target: { value: '0' } });
     hover(utilization(), 30_000);
     expect(utilization()).toHaveTextContent('CPU11.0%');
-    expect(utilization()).toHaveTextContent('Memory-');
+    expect(utilization()).toHaveTextContent('Memoryno reading');
     fireEvent.blur(slider);
     hover(utilization(), 30_000);
-    expect(utilization()).toHaveTextContent('CPU-');
+    expect(utilization()).toHaveTextContent('CPUno reading');
     expect(utilization()).toHaveTextContent('Memory30.0%');
   });
 
@@ -152,10 +155,10 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
     await vi.advanceTimersByTimeAsync(0);
     hover(utilization(), 30_000);
     await vi.advanceTimersByTimeAsync(30_000);
-    expect(utilization()).toHaveTextContent('CPU-');
+    expect(utilization()).toHaveTextContent('CPUno reading');
     expect(utilization()).toHaveTextContent('Memory31.0%');
-    expect(utilization().querySelectorAll('path')).toHaveLength(0);
-    expect(utilization().querySelectorAll('circle[r="3"]')).toHaveLength(1);
+    expect(utilization().querySelectorAll('path[data-history-series]')).toHaveLength(0);
+    expect(utilization().querySelectorAll('[data-history-hover-marker]')).toHaveLength(1);
   });
 
   it.each(['target', 'range'] as const)(
@@ -174,7 +177,7 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
       await waitFor(() =>
         expect(within(utilization()).queryByTestId('guest-history-hover-time')).toBeNull(),
       );
-      expect(utilization().querySelectorAll('circle[r="3"]')).toHaveLength(0);
+      expect(utilization().querySelectorAll('[data-history-hover-marker]')).toHaveLength(0);
     },
   );
 
@@ -194,9 +197,9 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
     const network = groups.find((group) => group.dataset.historyGroup === 'network')!;
     hover(network, 0);
     expect(network).toHaveTextContent('In0 B/s');
-    expect(network).toHaveTextContent('Out-');
+    expect(network).toHaveTextContent('Outno reading');
     hover(network, 30_000);
-    expect(network).toHaveTextContent('In-');
+    expect(network).toHaveTextContent('Inno reading');
     expect(network).toHaveTextContent('Out4.00 KB/s');
     const thermals = groups.find((group) => group.dataset.historyGroup === 'thermals')!;
     hover(thermals, 0);

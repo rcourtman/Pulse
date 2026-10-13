@@ -144,8 +144,5 @@ describe('GuestDrawerOverview filesystem labels', () => {
     ).toBeNull();
     expect(screen.getByText(/— · \?\/10.0 GB · MP1/)).toBeInTheDocument();
     expect(screen.getByText('CPUs').closest('tr')).toHaveClass('lg:grid-cols-[7rem_minmax(0,1fr)]');
-    expect(screen.getByText('Values').closest('tr')).toHaveClass(
-      'lg:grid-cols-[7rem_minmax(0,1fr)]',
-    );
   });
 });

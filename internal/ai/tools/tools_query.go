@@ -1731,32 +1731,7 @@ func (e *PulseToolExecutor) registerResolvedResourceWithExplicitAccess(reg Resou
 	}
 	e.resolvedContext.AddResolvedResource(reg)
 
-	// Build the resource ID to mark explicit access (must match AddResolvedResource format)
-	// Format: {kind}:{host}:{provider_uid} for scoped resources
-	//         {kind}:{provider_uid} for global resources
-	var resourceID string
-	if reg.ProviderUID != "" {
-		if reg.HostUID != "" || reg.HostName != "" {
-			hostScope := reg.HostUID
-			if hostScope == "" {
-				hostScope = reg.HostName
-			}
-			resourceID = reg.Kind + ":" + hostScope + ":" + reg.ProviderUID
-		} else {
-			resourceID = reg.Kind + ":" + reg.ProviderUID
-		}
-	} else {
-		if reg.HostUID != "" || reg.HostName != "" {
-			hostScope := reg.HostUID
-			if hostScope == "" {
-				hostScope = reg.HostName
-			}
-			resourceID = reg.Kind + ":" + hostScope + ":" + reg.Name
-		} else {
-			resourceID = reg.Kind + ":" + reg.Name
-		}
-	}
-	e.resolvedContext.MarkExplicitAccess(resourceID)
+	e.resolvedContext.MarkExplicitAccess(reg.ResolvedID())
 }
 
 // ValidationResult holds the result of resource validation.
@@ -2646,6 +2621,7 @@ func canonicalAgentRegistration(resource unifiedresources.Resource) (ResourceReg
 		adapter = "direct"
 	}
 	return ResourceRegistration{
+		ResourceID:  resource.ID,
 		Kind:        "agent",
 		ProviderUID: providerUID,
 		Name:        name,
@@ -2711,6 +2687,7 @@ func canonicalStorageRegistration(resource unifiedresources.Resource) (ResourceR
 
 	executorID := firstNonEmptyString(canonicalStorageHost(resource), name, providerUID)
 	return ResourceRegistration{
+		ResourceID:  resource.ID,
 		Kind:        "storage",
 		ProviderUID: providerUID,
 		Name:        name,
@@ -2735,44 +2712,57 @@ func canonicalHandoffUnifiedResource(provider UnifiedResourceProvider, resourceI
 	if provider == nil {
 		return unifiedresources.Resource{}, "", false
 	}
-
-	refs := appendUniqueStrings(nil, resourceID, resourceName)
-	normalizedType := strings.TrimSpace(strings.ToLower(resourceType))
-	switch normalizedType {
-	case "node":
-		normalizedType = "agent"
-	case "physical-disk":
-		normalizedType = "physical_disk"
-	}
-
-	switch normalizedType {
-	case "agent", "docker-host":
-		refs = appendUniqueStrings(refs, node)
-		if resource, ok := findCanonicalResourceByReference(provider.GetByType(unifiedresources.ResourceTypeAgent), refs...); ok {
-			return resource, normalizedType, true
+	resourceID = strings.TrimSpace(resourceID)
+	if rs, ok := provider.(unifiedresources.ReferenceReadState); ok {
+		var resolved unifiedresources.ResolvedResourceContext
+		if resourceID != "" {
+			resolved = unifiedresources.ResolveResourceReferenceContext(rs, resourceID)
+		} else {
+			resolved = unifiedresources.ResolveResourceContext(rs, resourceName)
 		}
-	case "vm":
-		if resource, ok := findCanonicalGuestResourceByReferences(provider, "vm", refs...); ok {
-			return resource, normalizedType, true
-		}
-	case "system-container", "lxc":
-		if resource, ok := findCanonicalGuestResourceByReferences(provider, "system-container", refs...); ok {
-			return resource, normalizedType, true
-		}
-	case "app-container":
-		if resource, ok := findCanonicalAppContainerResourceByReferences(provider, refs...); ok {
-			return resource, normalizedType, true
-		}
-	case "storage":
-		if resource, ok := findCanonicalResourceByReference(canonicalStoragePoolResources(provider), refs...); ok {
-			return resource, normalizedType, true
+		if resolved.Resource != nil {
+			return *resolved.Resource, string(unifiedresources.ContractResourceType(*resolved.Resource)), true
 		}
 	}
-	if resource, ok := findCanonicalHandoffResourceByAnyType(provider, refs...); ok {
-		return resource, string(unifiedresources.ContractResourceType(resource)), true
+	// Minimal read providers have no reference index. Match an explicit ID exactly
+	// across their records and never substitute a client label or node.
+	ref := resourceID
+	if ref == "" {
+		ref = strings.TrimSpace(resourceName)
 	}
-
-	return unifiedresources.Resource{}, normalizedType, false
+	if ref == "" {
+		return unifiedresources.Resource{}, "", false
+	}
+	var found *unifiedresources.Resource
+	for _, kind := range canonicalHandoffFallbackResourceTypes {
+		for _, resource := range provider.GetByType(kind) {
+			matches := resource.ID == ref
+			if resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.SourceID) == ref {
+				matches = true
+			}
+			if reg, ok := canonicalResourceRegistration(resource); ok {
+				reg.ResourceID = ""
+				if reg.ResolvedID() == ref {
+					matches = true
+				}
+			}
+			if resourceID == "" {
+				matches = strings.EqualFold(resourceDisplayName(resource), ref) || strings.EqualFold(resource.Name, ref)
+			}
+			if !matches {
+				continue
+			}
+			if found != nil && found.ID != resource.ID {
+				return unifiedresources.Resource{}, "", false
+			}
+			copy := resource
+			found = &copy
+		}
+	}
+	if found == nil {
+		return unifiedresources.Resource{}, "", false
+	}
+	return *found, string(unifiedresources.ContractResourceType(*found)), true
 }
 
 var canonicalHandoffFallbackResourceTypes = []unifiedresources.ResourceType{
@@ -2842,17 +2832,21 @@ func findCanonicalHandoffResourceByAnyType(provider UnifiedResourceProvider, ref
 // unified provider, because invented registrations would bypass capability and
 // executor policy.
 func CanonicalHandoffResourceRegistration(provider UnifiedResourceProvider, resourceID, resourceName, resourceType, node string) (ResourceRegistration, bool) {
-	resource, normalizedType, ok := canonicalHandoffUnifiedResource(provider, resourceID, resourceName, resourceType, node)
+	resource, _, ok := canonicalHandoffUnifiedResource(provider, resourceID, resourceName, resourceType, node)
 	if !ok {
 		return ResourceRegistration{}, false
 	}
 
-	switch normalizedType {
-	case "agent", "docker-host":
+	return canonicalResourceRegistration(resource)
+}
+
+func canonicalResourceRegistration(resource unifiedresources.Resource) (ResourceRegistration, bool) {
+	switch string(unifiedresources.ContractResourceType(resource)) {
+	case "agent":
 		return canonicalAgentRegistration(resource)
 	case "vm":
 		return canonicalGuestRegistration("vm", resource)
-	case "system-container", "lxc":
+	case "system-container":
 		return canonicalGuestRegistration("system-container", resource)
 	case "app-container":
 		return resolvedAppContainerRegistration(resource)
@@ -3101,6 +3095,7 @@ func guestViewGetResult[V queryGuestView](e *PulseToolExecutor, guests []V, kind
 
 		// Register in resolved context WITH explicit access (single-resource get operation)
 		e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
+			ResourceID:    g.ID(),
 			Kind:          kind,
 			ProviderUID:   fmt.Sprintf("%d", g.VMID()), // VMID is the stable provider ID
 			Name:          g.Name(),
@@ -3240,6 +3235,7 @@ func canonicalGuestRegistration(kind string, resource unifiedresources.Resource)
 	host := canonicalGuestTarget(resource)
 	aliases := appendUniqueStrings(nil, canonicalGuestSearchCandidates(kind, resource)...)
 	reg := ResourceRegistration{
+		ResourceID:  resource.ID,
 		Kind:        kind,
 		ProviderUID: providerUID,
 		Name:        name,
@@ -3483,6 +3479,7 @@ func resolvedAppContainerRegistration(resource unifiedresources.Resource) (Resou
 	}
 
 	reg := ResourceRegistration{
+		ResourceID:  resource.ID,
 		Kind:        "app-container",
 		ProviderUID: containerID,
 		Name:        name,

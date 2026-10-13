@@ -272,7 +272,8 @@ describe('Pulse system-alert overview scope', () => {
         incidentCode: 'vmware_alarm_state',
         resourceSources: ['vmware'],
       },
-      href: '/vmware/overview',
+      // A guest alert also names the guest for the workloads table to open.
+      href: '/vmware/overview?resource=vm%3Avc-1%3Avm-2041',
       platformType: 'vmware-vsphere',
     },
     {
@@ -377,7 +378,7 @@ describe('Pulse system-alert overview scope', () => {
       resourceId: 'docker-01:docker-01:100',
       resourceType: 'vm',
       message: "VM 'billing-db-01' is powered off",
-      href: '/proxmox/overview',
+      href: '/proxmox/overview?resource=docker-01%3Adocker-01%3A100',
       platformType: 'proxmox',
     },
     {
@@ -385,7 +386,7 @@ describe('Pulse system-alert overview scope', () => {
       resourceId: 'agent:pve1:100',
       resourceType: 'VM',
       message: 'VM CPU at 95%',
-      href: '/proxmox/overview',
+      href: '/proxmox/overview?resource=agent%3Apve1%3A100',
       platformType: 'proxmox',
     },
     {
@@ -393,7 +394,7 @@ describe('Pulse system-alert overview scope', () => {
       resourceId: 'lab:pve1:101',
       resourceType: 'vm',
       message: "VM 'vmware-test' is powered off",
-      href: '/proxmox/overview',
+      href: '/proxmox/overview?resource=lab%3Apve1%3A101',
       platformType: 'proxmox',
     },
     {
@@ -531,6 +532,104 @@ describe('Pulse system-alert overview scope', () => {
       window.dispatchEvent(new Event('resize'));
       await waitFor(() => expect(screen.queryByRole('button', { name: 'Investigate' })).toBeNull());
       expect(screen.getByRole('button', { name: 'Snooze' })).toBe(snooze);
+    });
+  });
+
+  describe('resource links', () => {
+    const linkFor = (overrides: Parameters<typeof makeSystemAlert>[1]) => {
+      const alert = makeSystemAlert('powered-off', {
+        id: `${overrides?.resourceId}::powered-state`,
+        ...overrides,
+      });
+      render(() => (
+        <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+      ));
+      return screen.getByRole('link', { name: alert.resourceName }).getAttribute('href');
+    };
+
+    it('opens the Proxmox guest a VM or container alert is about', () => {
+      // The workloads table resolves the alert's source id through the
+      // resource registry, opens that guest and scrolls to it.
+      expect(
+        linkFor({
+          resourceId: 'mock-cluster-1-pve1-105',
+          resourceName: 'postgres-replica-01',
+          metadata: { resourceType: 'vm' },
+        }),
+      ).toBe('/proxmox/overview?resource=mock-cluster-1-pve1-105');
+      cleanup();
+      expect(
+        linkFor({
+          resourceId: 'mock-cluster-1-pve2-121',
+          resourceName: 'dev-portal-01',
+          metadata: { resourceType: 'container' },
+        }),
+      ).toBe('/proxmox/overview?resource=mock-cluster-1-pve2-121');
+    });
+
+    it('opens a vSphere VM on the vSphere page', () => {
+      expect(
+        linkFor({
+          resourceId: 'vm-vsphere-42',
+          resourceName: 'web-01',
+          metadata: { resourceType: 'vm', platformType: 'vmware-vsphere' },
+        }),
+      ).toBe('/vmware/overview?resource=vm-vsphere-42');
+    });
+
+    it('opens the guest a filesystem alert carries', () => {
+      // The alert's own `<guest>-disk-<key>` id names no row; the backend
+      // stamps the guest it belongs to.
+      expect(
+        linkFor({
+          resourceId: 'mock-cluster-1-pve1-105-disk-root',
+          resourceName: 'postgres-replica-01',
+          metadata: {
+            resourceType: 'vm',
+            mountpoint: '/',
+            diskIndex: 0,
+            guestResourceId: 'mock-cluster-1-pve1-105',
+          },
+        }),
+      ).toBe('/proxmox/overview?resource=mock-cluster-1-pve1-105');
+    });
+
+    it('keeps the platform page for a guest filesystem or an orphaned backup', () => {
+      // Per-filesystem alerts raised before the backend stamped the owning
+      // guest name only `<guest>-disk-<key>`, which no row answers to.
+      expect(
+        linkFor({
+          resourceId: 'mock-cluster-1-pve1-105-disk-root',
+          resourceName: 'postgres-replica-01 (/)',
+          metadata: { resourceType: 'vm', mountpoint: '/', diskIndex: 0 },
+        }),
+      ).toBe('/proxmox/overview');
+      cleanup();
+      expect(
+        linkFor({
+          resourceId: 'backup-subject:pve:ct:404',
+          resourceName: 'retired-ct',
+          metadata: { resourceType: 'system-container' },
+        }),
+      ).toBe('/proxmox/overview');
+    });
+
+    it('keeps the platform page for resources the workloads table does not list', () => {
+      expect(
+        linkFor({
+          resourceId: 'docker:nebula-1-mock/nebula-1-c94124aef15b',
+          resourceName: 'grafana-agent',
+          metadata: { resourceType: 'app-container' },
+        }),
+      ).toBe('/docker/overview');
+      cleanup();
+      expect(
+        linkFor({
+          resourceId: 'mock-cluster-1-pve1-local',
+          resourceName: 'west-a-iso-library',
+          metadata: { resourceType: 'storage' },
+        }),
+      ).toBe('/proxmox/overview');
     });
   });
 });

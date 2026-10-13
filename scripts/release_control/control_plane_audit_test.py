@@ -122,7 +122,7 @@ class ControlPlaneAuditTest(unittest.TestCase):
             ],
         )
         if entrypoint["active_target_id"] == "v6-product-lane-expansion":
-            self.assertEqual(entrypoint["default_pick_surface"], "available_candidate_lane_queue")
+            self.assertEqual(entrypoint["default_pick_surface"], "available_candidate_lane_options")
             self.assertIn("candidate lanes", entrypoint["selection_rule"])
             self.assertIn(
                 "python3 scripts/release_control/status_lookup.py --candidate-lane <CANDIDATE_LANE_ID> --pretty",

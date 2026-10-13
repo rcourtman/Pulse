@@ -11,7 +11,7 @@ import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Alert, Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
-import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
+import { getWorkloadMetadataId } from '@/utils/workloads';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import guestDrawerSource from './GuestDrawer.tsx?raw';
 import guestDrawerManageSource from './GuestDrawerManage.tsx?raw';
@@ -103,6 +103,7 @@ function makeGuest(overrides: Partial<WorkloadGuest> = {}): WorkloadGuest {
     instance: 'inst1',
     status: 'running',
     type: 'qemu',
+    metricsTarget: { resourceType: 'vm', resourceId: 'inst1:node1:100' },
     cpu: 0.25,
     cpus: 4,
     memory: { total: 4294967296, used: 2147483648, free: 2147483648, usage: 0.5 },
@@ -132,7 +133,9 @@ function makeGuestWithDiscoveryTarget(overrides: Partial<WorkloadGuest> = {}): W
   });
 }
 
-const technicalDetails = () => within(screen.getByTestId('guest-technical-details'));
+// Filesystems and lifted warning rows render outside Details; the render
+// helper opens Details, so read the whole Overview.
+const technicalDetails = () => within(screen.getByTestId('guest-drawer-overview'));
 
 const makeHistoryPoints = (base: number) => [
   { timestamp: 1, value: base, min: base, max: base },
@@ -219,7 +222,7 @@ describe('GuestDrawer', () => {
     expect(screen.getAllByTestId('guest-history-group-chart')[0]).toBe(chart);
     expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent('0.0%current');
     expect(chart.querySelector('[data-history-deferred="memory"]')).toBeNull();
-    expect(chart.querySelector('path')).toBeNull();
+    expect(chart.querySelector('path[data-history-series]')).toBeNull();
     expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1);
   });
 
@@ -242,7 +245,7 @@ describe('GuestDrawer', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'History' }));
     await screen.findByRole('slider', { name: 'Inspect Utilization history' });
     const chart = screen.getAllByTestId('guest-history-group-chart')[0];
-    expect(chart.querySelectorAll('path')).toHaveLength(1);
+    expect(chart.querySelectorAll('path[data-history-series]')).toHaveLength(1);
     expect(chart.querySelectorAll('[data-history-observation="memory"]')).toHaveLength(2);
     expect(chart.querySelector('[data-history-gaps]')).toHaveTextContent(
       'Missing observations: Memory.',
@@ -264,7 +267,7 @@ describe('GuestDrawer', () => {
     expect(chartsApiMocks.getMetricsHistory.mock.calls[0][0]).toMatchObject({
       resourceType: 'vm',
       resourceId: 'inst1:node1:100',
-      range: '24h',
+      range: '7d',
       maxPoints: 240,
     });
     chartsApiMocks.getMetricsHistory.mockResolvedValue({
@@ -273,7 +276,7 @@ describe('GuestDrawer', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
     await waitFor(() => expect(chart.querySelector('[data-history-gaps]')).toBeNull());
-    expect(chart.querySelectorAll('path')).toHaveLength(2);
+    expect(chart.querySelectorAll('path[data-history-series]')).toHaveLength(2);
     expect(chart.querySelector('[data-history-observation="memory"]')).toBeNull();
     expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(2);
   });
@@ -319,12 +322,12 @@ describe('GuestDrawer', () => {
     const details = technicalDetails();
     expect(details.getByText('Backup time unavailable: invalid timestamp.')).toBeVisible();
     expect(details.queryByText('No completed backup found')).not.toBeInTheDocument();
-    expect(details.queryByText('Today')).not.toBeInTheDocument();
+    expect(details.queryByText('1 hour ago')).not.toBeInTheDocument();
     setGuest({ ...guest(), lastBackup: Date.now() + 86_400_000, backupInProgress: true });
     expect(details.getByText(/timestamp is in the future/)).toBeVisible();
     expect(details.getByText('Running · not completed yet')).toBeVisible();
     setGuest({ ...guest(), lastBackup: Date.now() - 3600_000, backupInProgress: false });
-    expect(details.getByText('Today')).toBeVisible();
+    expect(details.getByText('1 hour ago')).toBeVisible();
     expect(details.queryByText(/unavailable/)).not.toBeInTheDocument();
     setGuest({ ...guest(), lastBackup: 0 });
     expect(details.getByText('No completed backup found')).toBeVisible();
@@ -379,14 +382,14 @@ describe('GuestDrawer', () => {
     expect(history.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
       'Not a current measurement.',
     );
-    expect(history.querySelector('path')).toBeNull();
+    expect(history.querySelector('path[data-history-series]')).toBeNull();
     // Same target/range snapshots retain the chart and original History read.
     expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1);
     for (const [request] of chartsApiMocks.getMetricsHistory.mock.calls) {
       expect(request).toMatchObject({
         resourceType: 'vm',
         resourceId: 'inst1:node1:100',
-        range: '24h',
+        range: '7d',
       });
     }
   });
@@ -614,7 +617,7 @@ describe('GuestDrawer', () => {
           expect.objectContaining({
             resourceType: 'vm',
             resourceId: 'inst1:node1:100',
-            range: '24h',
+            range: '7d',
           }),
         );
       });
@@ -648,7 +651,7 @@ describe('GuestDrawer', () => {
       const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
       expect(utilizationChart).toHaveTextContent('CPU25.0%current');
       expect(utilizationChart).toHaveTextContent('No stored history in this range');
-      expect(utilizationChart.querySelector('path')).toBeNull();
+      expect(utilizationChart.querySelector('path[data-history-series]')).toBeNull();
     });
 
     it('renders unavailable current disk usage as a dash', async () => {
@@ -720,7 +723,9 @@ describe('GuestDrawer', () => {
 
       await fireEvent.pointerLeave(plot);
 
-      expect(within(utilizationChart).queryByTestId('guest-history-hover-time')).toBeNull();
+      expect(within(utilizationChart).getByTestId('guest-history-hover-time')).toHaveTextContent(
+        'Latest stored',
+      );
       expect(utilizationChart).toHaveTextContent('20.0%');
       expect(utilizationChart).toHaveTextContent('30.0%');
       expect(utilizationChart).toHaveTextContent('40.0%');
@@ -1009,17 +1014,17 @@ describe('GuestDrawer', () => {
       vi.setSystemTime(new Date('2026-03-02T12:00:00Z'));
     });
 
-    it('shows "Today" for a backup from today', () => {
+    it('shows elapsed hours for a recent backup', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
       expect(screen.getByText('Last completed backup')).toBeInTheDocument();
-      expect(technicalDetails().getByText('Today')).toBeInTheDocument();
+      expect(technicalDetails().getByText('2 hours ago')).toBeInTheDocument();
     });
 
-    it('shows "Yesterday" for a 1-day-old backup', () => {
+    it('shows elapsed days for a 1-day-old backup', () => {
       const yesterday = new Date('2026-03-01T12:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: yesterday })} onClose={vi.fn()} />);
-      expect(technicalDetails().getByText('Yesterday')).toBeInTheDocument();
+      expect(technicalDetails().getByText('1d ago')).toBeInTheDocument();
     });
 
     it('shows "Xd ago" for older backups', () => {
@@ -1052,7 +1057,7 @@ describe('GuestDrawer', () => {
     it('applies green color for recent backups', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
-      const ageCell = technicalDetails().getByText('Today').closest('td');
+      const ageCell = technicalDetails().getByText('2 hours ago').closest('td');
       expect(ageCell).toHaveClass('text-emerald-700');
     });
 
@@ -1078,7 +1083,7 @@ describe('GuestDrawer', () => {
 
     it.each([
       ['2026-02-20T12:00:00Z', '10d ago', 'text-amber-700'],
-      ['2026-03-02T10:00:00Z', 'Today', 'text-emerald-700'],
+      ['2026-03-02T10:00:00Z', '2 hours ago', 'text-emerald-700'],
     ])('preserves completed backup age and tone during a new backup (%s)', (date, age, tone) => {
       solidRender(() => (
         <GuestDrawer
@@ -1106,7 +1111,9 @@ describe('GuestDrawer', () => {
       expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
       setGuest({ ...guest(), lastBackup: new Date('2026-03-02T10:00:00Z').getTime() });
       expect(technicalDetails().queryByText('No completed backup found')).not.toBeInTheDocument();
-      expect(technicalDetails().getByText('Today').closest('td')).toHaveClass('text-emerald-700');
+      expect(technicalDetails().getByText('2 hours ago').closest('td')).toHaveClass(
+        'text-emerald-700',
+      );
       expect(container.querySelector('[data-testid="guest-technical-details"]')).toBe(drawer);
     });
 
@@ -1120,36 +1127,45 @@ describe('GuestDrawer', () => {
   // ── Tags card ──
 
   describe('Tags card', () => {
+    const tagChips = () =>
+      Array.from(
+        screen.getByTestId('guest-drawer-facts').querySelectorAll('span.rounded-full'),
+      ).map((chip) => chip.textContent);
+
     it('renders tags from an array', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ tags: ['production', 'web'] })} onClose={vi.fn()} />
       ));
-      expect(screen.getByText('Tags')).toBeInTheDocument();
-      expect(technicalDetails().getByText('production, web')).toBeInTheDocument();
+      expect(tagChips()).toEqual(['production', 'web']);
     });
 
     it('renders tags from a comma-separated string', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ tags: 'db,critical' as any })} onClose={vi.fn()} />
       ));
-      expect(technicalDetails().getByText('db, critical')).toBeInTheDocument();
+      expect(tagChips()).toEqual(['db', 'critical']);
     });
 
     it('trims whitespace from tags', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ tags: ' spaced , padded ' as any })} onClose={vi.fn()} />
       ));
-      expect(technicalDetails().getByText('spaced, padded')).toBeInTheDocument();
+      expect(tagChips()).toEqual(['spaced', 'padded']);
     });
 
-    it('hides Tags card when tags is null', () => {
+    it('renders no tag chips when tags is null', () => {
       render(() => <GuestDrawer guest={makeGuest({ tags: null })} onClose={vi.fn()} />);
       expect(screen.queryByText('Tags')).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('guest-drawer-facts')?.querySelectorAll('span.rounded-full') ?? [],
+      ).toHaveLength(0);
     });
 
-    it('hides Tags card when tags is empty array', () => {
+    it('renders no tag chips when tags is empty array', () => {
       render(() => <GuestDrawer guest={makeGuest({ tags: [] })} onClose={vi.fn()} />);
-      expect(screen.queryByText('Tags')).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('guest-drawer-facts')?.querySelectorAll('span.rounded-full') ?? [],
+      ).toHaveLength(0);
     });
   });
 
@@ -1404,10 +1420,10 @@ describe('GuestDrawer', () => {
   // ── WebInterfaceUrlField ──
 
   describe('WebInterfaceUrlField', () => {
-    it('passes canonical metadataId using shared workload identity', () => {
+    it('keeps the guest metadata key separate from canonical row identity', () => {
       render(() => <GuestDrawer guest={makeGuest({ id: 'my-guest-id' })} onClose={vi.fn()} />);
       expect(screen.getByTestId('url-id').textContent).toBe(
-        getCanonicalWorkloadId(makeGuest({ id: 'my-guest-id' })),
+        getWorkloadMetadataId(makeGuest({ id: 'my-guest-id' })),
       );
     });
 
@@ -1430,16 +1446,14 @@ describe('GuestDrawer', () => {
       );
     });
 
-    it('builds canonical id from instance:node:vmid when id is empty', () => {
+    it('does not invent a resource identity for a guest with no ID', () => {
       render(() => (
         <GuestDrawer
           guest={makeGuest({ id: '', instance: 'pve', node: 'n1', vmid: 200 })}
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByTestId('url-id').textContent).toBe(
-        getCanonicalWorkloadId(makeGuest({ id: '', instance: 'pve', node: 'n1', vmid: 200 })),
-      );
+      expect(screen.queryByTestId('url-id')).not.toBeInTheDocument();
     });
 
     it('labels app-container guests as "container"', () => {

@@ -104,7 +104,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     );
     expect(group().querySelector('[data-history-current]')).toBeNull();
     expect(group().querySelector('[data-history-last-known]')).toBeNull();
-    expect(group().querySelector('path')).toBeNull();
+    expect(group().querySelector('path[data-history-series]')).toBeNull();
     expect(dots()).toHaveLength(0);
   });
 
@@ -128,7 +128,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     expect(group().querySelector('[data-history-last-known="disk"]')).toHaveAccessibleDescription(
       'Disk reading: Guest reads paused.',
     );
-    expect(group().querySelector('path')).toBeNull();
+    expect(group().querySelector('path[data-history-series]')).toBeNull();
     expect(dots()).toHaveLength(0);
   });
 
@@ -146,9 +146,15 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
       await waitFor(() => expect(dots()).toHaveLength(1));
       const chart = group(id);
       const dot = chart.querySelector(`[data-history-observation="${metric}"]`)!;
-      expect(Number(dot.getAttribute('cx'))).toBeCloseTo(193);
-      expect(Number(dot.getAttribute('cy'))).toBeCloseTo(74);
-      expect(chart.querySelector('path')).toBeNull();
+      expect(Number(dot.getAttribute('data-x'))).toBeCloseTo(193);
+      expect(Number(dot.getAttribute('data-y'))).toBeCloseTo(74);
+      // The plot stretches non-uniformly; a <circle> there renders as an oval.
+      // Dots are round-capped, non-scaling strokes drawn in screen pixels.
+      expect(chart.querySelector('[data-testid="guest-history-plot"] circle')).toBeNull();
+      expect(
+        dot.querySelectorAll('path[stroke-linecap="round"][vector-effect="non-scaling-stroke"]'),
+      ).toHaveLength(2);
+      expect(chart.querySelector('path[data-history-series]')).toBeNull();
       expect(chart.querySelector('[data-history-current]')).toBeNull();
       expect(chart).not.toHaveTextContent('No stored history in this range');
       expect(chart).toHaveTextContent('Single observation. No trend yet.');
@@ -165,7 +171,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     },
   );
 
-  it('preserves interleaved lone observations and labels only the live fallback', async () => {
+  it('preserves interleaved lone observations without mixing in a live fallback', async () => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(
       response({
         cpu: [point(start, 10), point(end, 20)],
@@ -174,20 +180,19 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     );
     mount({ cpu: 99, memory: 98, disk: 88 });
     await waitFor(() => expect(dots()).toHaveLength(3));
-    expect(group().querySelectorAll('path')).toHaveLength(0);
+    expect(group().querySelectorAll('path[data-history-series]')).toHaveLength(0);
     expect(group().querySelectorAll('[data-history-observation="memory"]')).toHaveLength(1);
     expect(group().querySelectorAll('[data-history-observation="cpu"]')).toHaveLength(2);
-    expect(group().querySelectorAll('[data-history-current]')).toHaveLength(1);
-    expect(group().querySelector('[data-history-current="disk"]')).toHaveTextContent(
-      'Disk88.0%current',
-    );
+    expect(group().querySelectorAll('[data-history-current]')).toHaveLength(0);
+    expect(group()).toHaveTextContent('Memoryno reading');
+    expect(group()).toHaveTextContent('Diskno reading');
     expect(group()).not.toHaveTextContent('Single observation. No trend yet.');
     const slider = within(group()).getByRole('slider');
     slider.focus();
     fireEvent.input(slider, { target: { value: '1' } });
-    expect(group()).toHaveTextContent('CPU-');
+    expect(group()).toHaveTextContent('CPUno reading');
     expect(group()).toHaveTextContent('Memory0.0%');
-    expect(group()).toHaveTextContent('Disk-');
+    expect(group()).toHaveTextContent('Diskno reading');
     expect(group().querySelector('[data-history-current]')).toBeNull();
     expect(dots()).toHaveLength(3);
   });
@@ -201,10 +206,13 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     );
     mount();
     await waitFor(() => expect(dots()).toHaveLength(2));
-    expect(group().querySelector('path')).toBeNull();
-    expect(group().querySelector('[data-history-observation="cpu"]')).toHaveAttribute('cx', '34');
+    expect(group().querySelector('path[data-history-series]')).toBeNull();
+    expect(group().querySelector('[data-history-observation="cpu"]')).toHaveAttribute(
+      'data-x',
+      '34',
+    );
     expect(group().querySelector('[data-history-observation="memory"]')).toHaveAttribute(
-      'cx',
+      'data-x',
       '352',
     );
     const slider = within(group()).getByRole('slider');
@@ -238,7 +246,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
       );
       expect(document.querySelectorAll('[data-history-current]')).toHaveLength(1);
       expect(dots()).toHaveLength(0);
-      expect(document.querySelectorAll('path')).toHaveLength(0);
+      expect(document.querySelectorAll('path[data-history-series]')).toHaveLength(0);
       expect(screen.queryByRole('slider')).not.toBeInTheDocument();
       expect(screen.queryByText('Single observation. No trend yet.')).not.toBeInTheDocument();
     },
@@ -259,7 +267,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     expect(document.body).not.toHaveTextContent('private diagnostic');
     fireEvent.click(screen.getByRole('button', { name: 'Retry history' }));
     await screen.findByRole('slider');
-    expect(group().querySelectorAll('path')).toHaveLength(1);
+    expect(group().querySelectorAll('path[data-history-series]')).toHaveLength(1);
     expect(dots()).toHaveLength(0);
     expect(group()).not.toHaveTextContent('Single observation. No trend yet.');
     expect(fetch).toHaveBeenCalledTimes(3);

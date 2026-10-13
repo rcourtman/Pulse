@@ -72,7 +72,7 @@ describe('workloadTopology', () => {
       expect(map['cluster-b-node-b']).toBe(nodeB);
     });
 
-    it('builds guest parent node mapping using id lookup first, then composite fallback', () => {
+    it('maps each supplied guest ID to its current provider parent', () => {
       const nodeA = makeNode('cluster-a-node-a', 'cluster-a', 'node-a');
       const nodeB = makeNode('cluster-b-node-b', 'cluster-b', 'node-b');
       const nodeMap = buildNodeByInstance([nodeA, nodeB]);
@@ -107,9 +107,9 @@ describe('workloadTopology', () => {
         nodeMap,
       );
 
-      expect(mapping['cluster-a:node-a:101']).toBe(nodeA);
-      expect(mapping['cluster-b:node-b:102']).toBe(nodeB);
-      expect(mapping['cluster-c:node-c:103']).toBeUndefined();
+      expect(mapping[guestWithIdLookup.id]).toBe(nodeA);
+      expect(mapping[guestWithFallback.id]).toBe(nodeB);
+      expect(mapping[guestWithoutParent.id]).toBeUndefined();
     });
   });
 

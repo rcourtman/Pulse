@@ -337,6 +337,46 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(agentLinked?.temperature?.cpuMin).toBeUndefined();
   });
 
+  it("carries the backend's primary CPU temperature, not one rebuilt from details", () => {
+    // The details hold a core hotter than the resource temperature. The node
+    // keeps the resource value, the reading its history line records.
+    const proxmox = {
+      nodeName: 'pve-node-2',
+      temperature: 52,
+      temperatureDetails: {
+        available: true,
+        hasCPU: true,
+        cpuPackage: 52,
+        cpuMax: 57,
+        cores: [{ core: 0, temp: 57 }],
+        lastUpdate: '2026-10-06T15:00:00Z',
+      },
+    };
+    const node = nodeFromResource({
+      ...createNodeResource({ proxmox }),
+      temperature: 52,
+      proxmox,
+    } as unknown as Resource);
+    expect(node?.cpuTemperature).toBe(52);
+
+    // A linked agent's reading wins, the same source as the agent history line.
+    const agentLinked = nodeFromResource({
+      ...createNodeResource({ proxmox, agent: { agentId: 'pve-agent', temperature: 61 } }),
+      temperature: 61,
+      proxmox,
+    } as unknown as Resource);
+    expect(agentLinked?.cpuTemperature).toBe(61);
+
+    // No usable reading means no headline value at all.
+    for (const temperature of [undefined, 0, Number.NaN]) {
+      const unread = nodeFromResource({
+        ...createNodeResource({ proxmox: { nodeName: 'pve-node-2' } }),
+        temperature,
+      } as unknown as Resource);
+      expect(unread?.cpuTemperature).toBeUndefined();
+    }
+  });
+
   it('preserves linked-agent GPU telemetry for the Proxmox node drawer', () => {
     const gpu = {
       id: '0',
@@ -1324,6 +1364,46 @@ describe('resourceStateAdapters nodeFromResource', () => {
       'agent-runtime-1',
       'agent-runtime-2',
     ]);
+  });
+
+  it.each(['vmware', 'truenas', 'agent'])(
+    'keeps flat storage coordinates within their %s source',
+    (source) => {
+      const platformType = source === 'vmware' ? 'vmware-vsphere' : source;
+      const incoming = {
+        ...createNodeResource({ instance: 'storage-canonical', node: '', cpus: 4 }),
+        id: 'storage-canonical',
+        type: 'storage',
+        platformType,
+        sources: [source],
+        vmware:
+          source === 'vmware' ? { connectionId: 'vc-1', connectionName: 'Lab vCenter' } : undefined,
+      } as Resource;
+      const [resource] = mergeCanonicalResourceSnapshot([incoming], []);
+      expect(resource.proxmox).toBeUndefined();
+      expect((resource.platformData as Record<string, unknown>).proxmox).toBeUndefined();
+      expect(resource.platformType).toBe(platformType);
+      expect(resource.vmware).toEqual(incoming.vmware);
+      const [refreshed] = mergeCanonicalResourceDeltaSnapshot(
+        [incoming],
+        [resource],
+        new Set([incoming.id]),
+      );
+      expect(refreshed.proxmox).toBeUndefined();
+      expect(refreshed.vmware).toEqual(incoming.vmware);
+    },
+  );
+
+  it('keeps explicit Proxmox ownership on an agent-reported disk', () => {
+    const incoming = {
+      ...createNodeResource({ instance: 'legacy-storage-coordinate' }),
+      type: 'physical_disk',
+      platformType: 'agent',
+      sources: ['agent'],
+      proxmox: { instance: 'owned-pve', nodeName: 'owned-node' },
+    } as Resource;
+    const [resource] = mergeCanonicalResourceSnapshot([incoming], []);
+    expect(resource.proxmox).toEqual(incoming.proxmox);
   });
 
   it('uses authoritative top-level sources for realtime storage platform canonicalization', () => {

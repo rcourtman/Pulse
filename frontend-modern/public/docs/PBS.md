@@ -347,7 +347,8 @@ backup or working protection from the strip alone.
 | --- | --- |
 | **With PBS snapshots** or a matching backup row | That Pulse's protection assessment received the same subject-linked backup evidence. A similar name or guest ID alone is not identity proof. |
 | **Verified** on a PBS backup | That every backup is current, every covered disk is included, or the guest recovered after the backup. Verification is evidence about that backup, not a successful restore. |
-| **Protected**, **Attention**, **Unprotected** or **Unknown** | An independent check that backups are restorable. These are Pulse's assessment from the backup evidence it can read, not instructions to change backups. |
+| **Protected** in a restore point's **State** | That this point is verified. This displays the backup's protected flag before its verification state; it is not the workload's protection assessment. |
+| **Protected**, **Attention**, **Unprotected** or **Unknown** on the workload | An independent check that backups are restorable. These are Pulse's assessment from the backup evidence it can read, not instructions to change backups. |
 
 Check one affected guest without changing its setup:
 
@@ -359,14 +360,27 @@ Check one affected guest without changing its setup:
 2. Compare the listed backup with the existing record in PBS: server,
    datastore, namespace (including root), guest type/ID and backup time.
    Independent PVE installations can reuse an ID; confirm the owning
-   installation too. A **guest snapshot** is not a PBS backup. Check the
-   existing backup task and verification result in PBS, not just the last
-   time Pulse refreshed.
+   installation too. Under **Restore evidence**, choose the newest point whose
+   **Source** is **PBS**, and read its **Created** time and **State**. Hover the
+   Created age for its absolute timestamp; if unavailable, keep the time
+   unknown. A relative age or Pulse's refresh time is not a matching backup
+   timestamp. A **guest snapshot** is not a PBS backup. Check the existing
+   backup task and verification result for that same point in PBS.
 3. If the records still disagree, report the Pulse version, one guest's
    protection explanation, PBS Job/History/Access values and the matching
-   backup's time and verification result. Use consistent placeholders for
-   private server, datastore, namespace and guest identities. Do not share
-   tokens, full API responses, HAR exports, or screenshots with secrets.
+   point's Created time, State and PBS verification result. Use consistent
+   placeholders for private server, datastore, namespace and guest identities.
+   Do not share tokens, full API responses, HAR exports, or screenshots with secrets.
+
+**If PBS says verified but Pulse disagrees:** an older or absent point in Pulse
+is an inventory discrepancy, before comparing verification. **Unverified** on
+the matching point means Pulse has no successful verification evidence for it;
+it does not prove that PBS's verification job failed. **Verified** with a
+workload still needing attention is a separate assessment disagreement: retain
+its explanation and Provider evidence. A **Protected** point leaves its
+verification state unknown from that label alone. **Job OK** is not an
+individual point's verification result. Use the records already available,
+without running Diagnostics or another verification just to compare them.
 
 Do not delete backups, clear History, change retention or freshness settings,
 recreate tokens/connections, restart or downgrade Pulse, or run a new backup,

@@ -328,20 +328,27 @@ const hasLegacyProxmoxShape = (
   resource: Resource,
   platformData: JsonRecord,
   sources?: string[],
-): boolean =>
-  resource.platformType === 'proxmox-pve' ||
-  sourceListHas(sources, 'proxmox-pve') ||
-  [
-    'instance',
-    'node',
-    'clusterName',
-    'vmid',
-    'cpus',
-    'template',
-    'swapUsed',
-    'swapTotal',
-    'balloon',
-  ].some((key) => platformData[key] !== undefined);
+): boolean => {
+  // Flat instance/node fields also describe storage from other providers.
+  // Current source ownership takes precedence over the legacy field shape.
+  if (sources && sources.length > 0) {
+    return sourceListHas(sources, 'proxmox-pve');
+  }
+  return (
+    resource.platformType === 'proxmox-pve' ||
+    [
+      'instance',
+      'node',
+      'clusterName',
+      'vmid',
+      'cpus',
+      'template',
+      'swapUsed',
+      'swapTotal',
+      'balloon',
+    ].some((key) => platformData[key] !== undefined)
+  );
+};
 
 const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformData'] => {
   const platformData = asRecord(resource.platformData);
@@ -1439,6 +1446,14 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     },
     sensors: agentFacet?.sensors,
     temperature: buildTemperature(resource, proxmox),
+    // The backend's primary CPU reading: the agent's when one is linked, the
+    // same source the node's history line reads.
+    cpuTemperature:
+      typeof resource.temperature === 'number' &&
+      Number.isFinite(resource.temperature) &&
+      resource.temperature > 0
+        ? resource.temperature
+        : undefined,
     temperatureMonitoringEnabled:
       asBoolean(platform?.temperatureMonitoringEnabled) ??
       asBoolean(proxmox?.temperatureMonitoringEnabled) ??

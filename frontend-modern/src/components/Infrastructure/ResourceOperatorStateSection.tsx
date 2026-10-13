@@ -571,8 +571,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         <div>
           <h3 class="text-sm font-semibold text-base-content">Operator overrides</h3>
           <p class="text-xs text-muted">
-            Control Alerts, Patrol, lifecycle, priority, and automated remediation from one
-            persisted resource policy.
+            How Pulse alerts on, prioritizes and acts on this resource.
           </p>
         </div>
         <Show when={persisted()?.setBy || persisted()?.setAt}>
@@ -685,8 +684,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
           <div class="min-w-0 flex-1">
             <span class="text-sm font-medium text-base-content">Maintenance window</span>
             <p class="text-[11px] text-muted mt-0.5 leading-tight">
-              Suspend findings on this resource for a defined window. Useful for scheduled upgrades,
-              planned downtime, or reboots where Pulse should stay quiet until the window closes.
+              Silence alerts and dismiss new Patrol findings during planned work, such as upgrades
+              or reboots.
             </p>
           </div>
           <Show
@@ -845,7 +844,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             onChange={(event) =>
               setScheduleScope(event.currentTarget.value as 'resource' | 'resource_and_descendants')
             }
-            help="Descendant scope follows Pulse's canonical inventory hierarchy and covers resources added beneath this one later."
+            help="With descendants, everything under this resource is covered too, including resources added later: alerts are silenced and new Patrol findings dismissed."
             helpClass="text-[11px] leading-tight"
           >
             <option value="resource">This resource only</option>
@@ -931,7 +930,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                         {capabilityDisplayName(capability.name)}
                       </span>
                       <span class="block text-muted">
-                        {capability.description || 'Backend-governed resource action'}
+                        {capability.description || 'Resource action'}
                       </span>
                       <span class="mt-0.5 block text-muted">
                         {capability.autoAuthorization === 'low_risk'
@@ -1051,9 +1050,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             Never auto-remediate
           </span>
           <p class="text-[11px] text-muted mt-0.5 leading-tight">
-            Refuse all automated remediation against this resource, even with a valid approval. The
-            action broker logs every refused dispatch as a Failed audit record. Use for resources
-            where Pulse must not act under any circumstance.
+            Block every automated fix on this resource, including approved ones. Blocked runs are
+            logged as failed actions.
           </p>
         </div>
         <Toggle
@@ -1068,8 +1066,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         <div class="rounded-sm border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/25 dark:text-red-100">
           <p class="font-semibold">Lock this resource against all automated remediation?</p>
           <p class="mt-1 leading-relaxed">
-            Pulse will refuse every dispatch targeting this resource, including approved actions
-            from Patrol or the Assistant. Operators must clear the lock to allow remediation again.
+            Pulse will block every automated fix on this resource, including ones already approved
+            in Patrol or the Assistant, until this is turned off.
           </p>
           <div class="mt-2 flex items-center gap-2">
             <button

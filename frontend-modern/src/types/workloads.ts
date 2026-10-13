@@ -23,7 +23,7 @@ export type WorkloadGuest = (VM | Container) & {
   workloadType?: WorkloadType;
   /** Backend identities that may own active alerts for this canonical workload. */
   alertResourceIds?: string[];
-  /** Exact unified-resource ID; a Proxmox row ID can be a different VMID-based display key. */
+  /** Exact unified-resource identity, also used as the canonical workload row ID. */
   canonicalResourceId?: string;
   /** Exact unified parent identity, independent of provider display labels. */
   parentResourceId?: string;

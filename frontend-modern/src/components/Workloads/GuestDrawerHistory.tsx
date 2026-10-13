@@ -10,14 +10,7 @@ import {
   type Component,
 } from 'solid-js';
 
-import {
-  ChartsAPI,
-  type AggregatedMetricPoint,
-  type AllMetricsHistoryResponse,
-  type HistoryTimeRange,
-  type ResourceType,
-  type SingleMetricHistoryResponse,
-} from '@/api/charts';
+import { type AggregatedMetricPoint, type HistoryTimeRange } from '@/api/charts';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { filterSelectClass } from '@/components/shared/FilterToolbar';
 import { Button } from '@/components/shared/Button';
@@ -28,12 +21,11 @@ import {
   formatHistoryChartTooltipValue,
   formatHistoryChartTimeLabel,
 } from '@/components/shared/historyChartModel';
-import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
+import { formatCompactSpeed } from '@/utils/format';
 
 import {
-  GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   GUEST_DRAWER_HISTORY_GROUPS,
   buildGuestDrawerHistoryPath,
   getGuestDrawerHistoryRangeBounds,
@@ -46,6 +38,10 @@ import {
   type GuestDrawerHistoryTarget,
   type GuestDrawerHistoryTimeBounds,
 } from './guestDrawerModel';
+import {
+  createGuestDrawerHistoryQuery,
+  createGuestDrawerHistorySource,
+} from './guestDrawerHistoryQuery';
 
 interface GuestDrawerHistoryProps {
   currentMetrics?: Record<string, number | null | undefined>;
@@ -60,12 +56,6 @@ interface GuestDrawerHistoryRangeSelectProps {
   range: HistoryTimeRange;
 }
 
-interface GuestDrawerHistoryQueryKey {
-  resourceType: ResourceType;
-  resourceId: string;
-  range: HistoryTimeRange;
-}
-
 interface GuestDrawerHistoryGroupChartProps {
   currentMetrics?: Record<string, number | null | undefined>;
   deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
@@ -75,26 +65,15 @@ interface GuestDrawerHistoryGroupChartProps {
   range: HistoryTimeRange;
   sourceKey: string;
   timeBounds: GuestDrawerHistoryTimeBounds | null;
+  touchInspection: boolean;
 }
 
-const GUEST_DRAWER_HISTORY_MAX_POINTS = 240;
-const GUEST_DRAWER_HISTORY_POLL_MS = 30_000;
 const GUEST_DRAWER_HISTORY_CHART_WIDTH = 360;
 const GUEST_DRAWER_HISTORY_CHART_HEIGHT = 92;
 const GUEST_DRAWER_HISTORY_PLOT_LEFT = 34;
 const GUEST_DRAWER_HISTORY_PLOT_RIGHT = 8;
 const GUEST_DRAWER_HISTORY_PLOT_TOP = 8;
 const GUEST_DRAWER_HISTORY_PLOT_BOTTOM = 18;
-
-const EMPTY_HISTORY_RESPONSE: AllMetricsHistoryResponse = {
-  resourceType: '',
-  resourceId: '',
-  range: GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
-  start: 0,
-  end: 0,
-  metrics: {},
-  source: 'store',
-};
 
 const formatRangeLabel = (range: HistoryTimeRange): string => {
   switch (range) {
@@ -138,35 +117,19 @@ export const GuestDrawerHistoryRangeSelect: Component<GuestDrawerHistoryRangeSel
   </FormSelect>
 );
 
-const normalizeHistoryResponse = (
-  result: SingleMetricHistoryResponse | AllMetricsHistoryResponse,
-): AllMetricsHistoryResponse => {
-  if ('metrics' in result) return result;
-  return {
-    resourceType: result.resourceType,
-    resourceId: result.resourceId,
-    range: result.range,
-    start: result.start,
-    end: result.end,
-    metrics: { [result.metric]: result.points ?? [] },
-    source: result.source,
-  };
-};
-
-const getAxisLabel = (unit: string, pct: number): string => {
-  if (unit === '%') {
-    if (pct === 0) return '100%';
-    if (pct === 0.5) return '50%';
-    return '0%';
-  }
-  if (unit === 'C') {
-    if (pct === 0) return 'Max';
-    if (pct === 0.5) return 'Mid';
-    return 'Min';
-  }
-  if (pct === 0) return 'Max';
-  if (pct === 0.5) return 'Avg';
-  return '0';
+// Gridline labels state the scale's actual value at each line, so a reader
+// can tell a KB/s peak from a MB/s one. ("Avg" used to mark the midpoint of
+// the scale, which is not the measured average.)
+const getAxisLabel = (
+  unit: string,
+  pct: number,
+  scale: { minValue: number; maxValue: number },
+): string => {
+  const value = scale.maxValue - pct * (scale.maxValue - scale.minValue);
+  if (unit === '%') return `${Math.round(value)}%`;
+  if (unit === 'C') return `${Math.round(value)}°C`;
+  if (unit === 'B/s') return value <= 0 ? '0' : `${formatCompactSpeed(value)}/s`;
+  return `${Math.round(value)}`;
 };
 
 const clampNumber = (value: number, min: number, max: number): number =>
@@ -212,10 +175,64 @@ const findClosestGuestDrawerHistoryTimestamp = (
   return closest;
 };
 
+interface HistoryPointMarkerProps {
+  x: number;
+  y: number;
+  diameter: number;
+  color: string;
+  'data-history-observation'?: string;
+  'data-history-hover-marker'?: string;
+}
+
+// The plot stretches its viewBox to the panel (preserveAspectRatio="none"), so
+// a <circle> renders as an oval. A zero-length, round-capped stroke with a
+// non-scaling stroke is drawn in screen pixels and stays round at any width.
+// The surface-coloured ring underneath keeps the dot legible over a line.
+const HistoryPointMarker: Component<HistoryPointMarkerProps> = (props) => {
+  const d = () => `M${props.x} ${props.y}h0`;
+  return (
+    <g
+      aria-hidden="true"
+      data-history-observation={props['data-history-observation']}
+      data-history-hover-marker={props['data-history-hover-marker']}
+      data-x={props.x}
+      data-y={props.y}
+    >
+      <path
+        d={d()}
+        stroke="currentColor"
+        class="text-surface"
+        stroke-width={props.diameter + 2}
+        stroke-linecap="round"
+        vector-effect="non-scaling-stroke"
+      />
+      <path
+        d={d()}
+        stroke={props.color}
+        stroke-width={props.diameter}
+        stroke-linecap="round"
+        vector-effect="non-scaling-stroke"
+      />
+    </g>
+  );
+};
+
 const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps> = (props) => {
   const [hoverTimestamp, setHoverTimestamp] = createSignal<number | null>(null);
   const [selectedTimestamp, setSelectedTimestamp] = createSignal<number | null>(null);
   const inspectionId = `history-inspection-${createUniqueId()}`;
+  createEffect(
+    on(
+      () => props.touchInspection,
+      (touch, previousTouch) => {
+        // Native touch scrubbing need not focus the input. Give inspection
+        // back to the mouse when no focused control still owns the selection.
+        if (previousTouch && !touch && document.activeElement?.id !== inspectionId) {
+          setSelectedTimestamp(null);
+        }
+      },
+    ),
+  );
   createEffect(
     on(
       () => props.sourceKey,
@@ -259,6 +276,10 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       ? null
       : findClosestGuestDrawerHistoryTimestamp(observationTimes(), hovered);
   });
+  // The default legend is a single dated observation too. Independent latest
+  // values would combine different times (or a live fallback) into a tuple
+  // which never existed, disagreeing with the chart's accessible description.
+  const readoutTimestamp = createMemo(() => activeTimestamp() ?? observationTimes().at(-1) ?? null);
   const observationValueText = (timestamp: number | undefined): string => {
     if (timestamp === undefined) return 'No stored history observations.';
     const values = series().map((item) => {
@@ -289,7 +310,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       .filter((item) => item.segments.length > 1)
       .map((item) => item.label);
     return labels.length > 0
-      ? `Missing observations: ${labels.join(', ')}. Lines stop where a series has no reading at another stored time in this panel. This does not identify the cause or duration of a monitoring outage.`
+      ? `Missing observations: ${labels.join(', ')}. Lines break where a reading is missing.`
       : null;
   });
   const drawableSeries = createMemo(() =>
@@ -327,25 +348,16 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       .filter((item): item is NonNullable<typeof item> => item !== null);
   });
   const hoverX = createMemo(() => hoveredSeries()[0]?.x ?? null);
-  const hoveredByMetric = createMemo(() => {
-    const byMetric = new Map<string, ReturnType<typeof hoveredSeries>[number]>();
-    for (const item of hoveredSeries()) {
-      byMetric.set(item.metric, item);
-    }
-    return byMetric;
-  });
   const displaySeries = createMemo(() =>
     series().map((item, index) => {
-      const hovered = hoveredByMetric().get(item.metric);
+      const timestamp = readoutTimestamp();
+      const point = item.points.find((point) => point.timestamp === timestamp);
       const deferred = props.deferredMetrics?.[item.metric];
       const fallbackValue = deferred
         ? deferred.lastKnownValue
         : props.currentMetrics?.[item.metric];
       const isFallback =
-        activeTimestamp() === null &&
-        item.points.length === 0 &&
-        typeof fallbackValue === 'number' &&
-        Number.isFinite(fallbackValue);
+        timestamp === null && typeof fallbackValue === 'number' && Number.isFinite(fallbackValue);
       return {
         ...item,
         deferred,
@@ -353,21 +365,28 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         isCurrent: isFallback && !deferred,
         isLastKnown: isFallback && Boolean(deferred) && !deferred?.valueLabel,
         isUnknown: isFallback && deferred?.valueLabel === 'freshness unknown',
-        valueLabel: hovered
-          ? getGuestDrawerHistoryValueLabel([hovered.point], item.unit)
-          : activeTimestamp() !== null
-            ? '-'
-            : item.points.length > 0
-              ? getGuestDrawerHistoryValueLabel(item.points, item.unit)
-              : typeof fallbackValue === 'number' && Number.isFinite(fallbackValue)
-                ? formatHistoryChartTooltipValue(fallbackValue, item.unit)
-                : '-',
+        valueLabel: point
+          ? getGuestDrawerHistoryValueLabel([point], item.unit)
+          : // A stored time where this series has no reading says so in place,
+            // rather than through a note that appears and disappears (and moves
+            // the chart) as the inspected time changes.
+            timestamp !== null
+            ? 'no reading'
+            : typeof fallbackValue === 'number' && Number.isFinite(fallbackValue)
+              ? formatHistoryChartTooltipValue(fallbackValue, item.unit)
+              : '-',
       };
     }),
   );
-  const hoverTimeLabel = createMemo(() => {
-    const timestamp = activeTimestamp();
-    return timestamp === null ? '' : formatHistoryChartTimeLabel(timestamp, props.range);
+  const readoutTime = createMemo(() => {
+    const timestamp = readoutTimestamp();
+    if (timestamp === null) return null;
+    const date = new Date(timestamp);
+    return {
+      label: formatHistoryChartTimeLabel(timestamp, props.range),
+      dateTime: date.toISOString(),
+      fullLabel: date.toLocaleString(),
+    };
   });
 
   const handleHoverMove = (event: MouseEvent & { currentTarget: SVGSVGElement }) => {
@@ -395,18 +414,22 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       data-history-group={props.group.id}
     >
       <div class="mb-2 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-        <div class="inline-flex items-baseline gap-2">
+        <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
           <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
             {props.group.label}
           </h4>
-          <Show when={hoverTimeLabel()}>
-            {(label) => (
-              <span
+          <Show when={readoutTime()}>
+            {(time) => (
+              <time
                 class="text-[10px] font-semibold tabular-nums text-base-content"
                 data-testid="guest-history-hover-time"
+                dateTime={time().dateTime}
+                title={time().fullLabel}
+                aria-label={`Stored observation: ${time().fullLabel}`}
               >
-                {label()}
-              </span>
+                {activeTimestamp() === null ? 'Latest stored · ' : 'Stored · '}
+                {time().label}
+              </time>
             )}
           </Show>
         </div>
@@ -456,11 +479,13 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         <For each={[0, 0.5, 1]}>
           {(tick) => (
             <span
-              class={`pointer-events-none absolute left-0 w-8 text-right text-[10px] text-muted ${
-                tick === 0 ? 'top-1' : tick === 0.5 ? 'top-1/2 -translate-y-1/2' : 'bottom-3'
+              // Centred on the SVG gridlines at y = 8, 41 and 74 of the 92-unit
+              // viewBox (8.7%, 44.6%, 80.4%), so each label sits on its line.
+              class={`pointer-events-none absolute left-0 w-8 -translate-y-1/2 text-right text-[10px] tabular-nums text-muted ${
+                tick === 0 ? 'top-[8.7%]' : tick === 0.5 ? 'top-[44.6%]' : 'top-[80.4%]'
               }`}
             >
-              {getAxisLabel(props.group.unit, tick)}
+              {getAxisLabel(props.group.unit, tick, scale())}
             </span>
           )}
         </For>
@@ -496,6 +521,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                 <For each={drawableSeries()}>
                   {(item) => (
                     <path
+                      data-history-series={item.metric}
                       d={buildGuestDrawerHistoryPath(
                         item.points,
                         scale(),
@@ -515,21 +541,16 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                 </For>
                 <For each={singlePointSeries()}>
                   {(item) => (
-                    <circle
-                      aria-hidden="true"
+                    <HistoryPointMarker
                       data-history-observation={item.metric}
-                      cx={getGuestDrawerHistoryX(
+                      x={getGuestDrawerHistoryX(
                         item.points[0].timestamp,
                         rangeBounds().startTime,
                         rangeBounds().endTime,
                       )}
-                      cy={getGuestDrawerHistoryY(item.points[0].value, scale())}
-                      r="3.5"
-                      fill={item.color}
-                      stroke="currentColor"
-                      stroke-width="1"
-                      class="text-surface"
-                      vector-effect="non-scaling-stroke"
+                      y={getGuestDrawerHistoryY(item.points[0].value, scale())}
+                      diameter={7}
+                      color={item.color}
                     />
                   )}
                 </For>
@@ -550,15 +571,12 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             />
             <For each={hoveredSeries()}>
               {(item) => (
-                <circle
-                  cx={item.x}
-                  cy={item.y}
-                  fill={item.color}
-                  r="3"
-                  stroke="currentColor"
-                  stroke-width="1"
-                  class="text-surface"
-                  vector-effect="non-scaling-stroke"
+                <HistoryPointMarker
+                  data-history-hover-marker={item.metric}
+                  x={item.x}
+                  y={item.y}
+                  diameter={6}
+                  color={item.color}
                 />
               )}
             </For>
@@ -629,7 +647,12 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         )}
       </Show>
       <Show when={observationTimes().length > 1}>
-        <div class="mt-2">
+        {/* Keep native keyboard and assistive-technology access while hiding
+            mouse-redundant controls. Touch also reveals them on hybrid devices. */}
+        <div
+          class={`mt-2 ${props.touchInspection ? '' : '[@media(hover:hover)_and_(pointer:fine)]:not-focus-within:sr-only'}`}
+          data-testid="guest-history-inspection-control"
+        >
           <label for={inspectionId} class="flex justify-between gap-2 text-[10px] text-muted">
             <span>Inspect history</span>
             <span aria-hidden="true">
@@ -646,7 +669,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             max={observationTimes().length - 1}
             step="1"
             value={selectedIndex()}
-            class="h-11 w-full cursor-pointer rounded-xs focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-6"
+            class={`h-11 w-full cursor-pointer rounded-xs focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${props.touchInspection ? '' : '[@media(hover:hover)_and_(pointer:fine)]:h-6'}`}
             onFocus={() => {
               setHoverTimestamp(null);
               setSelectedTimestamp(observationTimes()[selectedIndex()] ?? null);
@@ -667,58 +690,18 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
 };
 
 export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) => {
+  const [touchInspection, setTouchInspection] = createSignal(false);
   onMount(() => {
     void loadRuntimeCapabilities();
   });
 
   const locked = createMemo(() => isRangeLocked(props.range));
-  // Snapshot replacement often creates a new target object with unchanged
-  // coordinates. Only a real target/range/access change owns a new read.
-  const historySource = createMemo<GuestDrawerHistoryQueryKey | null>(
-    () => {
-      const target = props.target;
-      if (!target || locked()) return null;
-      return {
-        resourceType: target.resourceType,
-        resourceId: target.resourceId,
-        range: props.range,
-      };
-    },
-    null,
-    {
-      equals: (previous, next) =>
-        previous === next ||
-        Boolean(
-          previous &&
-          next &&
-          previous.resourceType === next.resourceType &&
-          previous.resourceId === next.resourceId &&
-          previous.range === next.range,
-        ),
-    },
+  const historySource = createGuestDrawerHistorySource(
+    () => props.target,
+    () => props.range,
+    () => !locked(),
   );
-  const historyQuery = createNonSuspendingQuery<
-    AllMetricsHistoryResponse,
-    GuestDrawerHistoryQueryKey
-  >({
-    source: historySource,
-    fetcher: async (key, signal) =>
-      normalizeHistoryResponse(
-        await ChartsAPI.getMetricsHistory({
-          resourceType: key.resourceType,
-          resourceId: key.resourceId,
-          range: key.range,
-          maxPoints: GUEST_DRAWER_HISTORY_MAX_POINTS,
-          signal,
-        }),
-      ),
-    initialValue: EMPTY_HISTORY_RESPONSE,
-    cacheKey: (key) => `guest-drawer-history:${key.resourceType}:${key.resourceId}:${key.range}`,
-    // Former-host or former-range observations are not evidence for this
-    // target. Matching cached reads and same-source polling remain retained.
-    retainPreviousValueOnSourceChange: false,
-    pollMs: GUEST_DRAWER_HISTORY_POLL_MS,
-  });
+  const historyQuery = createGuestDrawerHistoryQuery(historySource);
 
   const metrics = createMemo(() => historyQuery.value().metrics ?? {});
   const groups = createMemo(() => props.groups ?? GUEST_DRAWER_HISTORY_GROUPS);
@@ -746,7 +729,13 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
       when={props.target}
       fallback={<div class="py-6 text-center text-sm text-muted">History unavailable</div>}
     >
-      <div class="space-y-3">
+      <div
+        class="space-y-3"
+        onPointerDown={(event) => setTouchInspection(event.pointerType === 'touch')}
+        onPointerMove={(event) => {
+          if (event.pointerType === 'mouse') setTouchInspection(false);
+        }}
+      >
         <Show
           when={!locked()}
           fallback={
@@ -803,6 +792,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                     range={props.range}
                     sourceKey={`${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`}
                     timeBounds={timeBounds()}
+                    touchInspection={touchInspection()}
                   />
                 )}
               </For>

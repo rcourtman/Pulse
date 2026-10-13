@@ -50,7 +50,7 @@ func TestInjectRecentSessionContext_InjectsNeutralResourceFacts(t *testing.T) {
 	if !strings.Contains(content, "Session context from earlier Assistant turns. Use only if relevant to the user's message; otherwise ignore it or ask a clarifying question.") {
 		t.Fatalf("expected neutral session context framing, got: %s", content)
 	}
-	if !strings.Contains(content, "- api (app-container on minipc); tool addressing fact: target_host=\"host-1\"") {
+	if !strings.Contains(content, "- api (app-container on minipc); tool addressing fact: target_host=\"app-container:minipc:abc\"") {
 		t.Fatalf("expected primary resource facts, got: %s", content)
 	}
 	if !strings.Contains(content, "- db (vm on node-2)") {
@@ -195,7 +195,7 @@ func TestInjectRecentSessionContext_UsesResourceIDFactForTrueNASApp(t *testing.T
 	service.injectRecentSessionContext(session.ID, messages, store)
 
 	content := messages[0].Content
-	if !strings.Contains(content, "- Nextcloud (app-container on truenas-main); tool addressing fact: resource_id=\"Nextcloud\"") {
+	if !strings.Contains(content, "- Nextcloud (app-container on truenas-main); tool addressing fact: resource_id=\"app-container:truenas-main:nextcloud\"") {
 		t.Fatalf("expected resource_id fact, got: %s", content)
 	}
 }
@@ -225,10 +225,33 @@ func TestInjectRecentSessionContext_UsesQueryResourceIDFactForVMware(t *testing.
 	service.injectRecentSessionContext(session.ID, messages, store)
 
 	content := messages[0].Content
-	if !strings.Contains(content, "- esxi-01.lab.local (agent on Lab VC); tool addressing fact: resource_id=\"esxi-01.lab.local\"") {
+	if !strings.Contains(content, "- esxi-01.lab.local (agent on Lab VC); tool addressing fact: resource_id=\"agent:vc-1:host:host-101\"") {
 		t.Fatalf("expected resource_id fact, got: %s", content)
 	}
 	if strings.Contains(content, "target_host=\"esxi-01.lab.local\"") {
 		t.Fatalf("expected VMware recent context to avoid target_host routing, got: %s", content)
+	}
+}
+
+func TestInjectRecentSessionContextUnknownIDCannotBorrowAnotherOwner(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := store.Create()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.GetResolvedContext(session.ID).AddResourceWithExplicitAccess("same-name", &ResolvedResource{
+		ResourceID: "vm-unknown", ProviderUID: "vm-known", Name: "same-name", Kind: "vm", TargetHost: "secret-node",
+	})
+	provider := handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+		unifiedresources.ResourceTypeVM: {{ID: "vm-known", Name: "same-name", Type: unifiedresources.ResourceTypeVM}},
+	}}
+	messages := []Message{{Role: "user", Content: "what happened?"}}
+	service := &Service{unifiedResourceProvider: provider}
+	service.injectRecentSessionContext(session.ID, messages, store)
+	if messages[0].Content != "what happened?" {
+		t.Fatalf("unknown session ID borrowed identity or policy: %s", messages[0].Content)
 	}
 }

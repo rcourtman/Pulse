@@ -260,10 +260,11 @@ func (m *Monitor) collectNodeTemperatureData(
 		temp := mergeTemperatureData(hostAgentTemp, sshTemp)
 
 		if temp != nil && temp.Available {
-			// Get the current CPU temperature (prefer package, fall back to max)
-			currentTemp := temp.CPUPackage
-			if currentTemp == 0 && temp.CPUMax > 0 {
-				currentTemp = temp.CPUMax
+			// Track the low and record from the primary reading, so the
+			// record is never below the headline the node shows.
+			currentTemp := 0.0
+			if primary := models.PrimaryCPUTemperatureCelsius(temp); primary != nil {
+				currentTemp = *primary
 			}
 
 			// Find previous temperature data for this node to preserve min/max

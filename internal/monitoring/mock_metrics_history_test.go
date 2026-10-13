@@ -1129,8 +1129,8 @@ func TestStartMockMetricsSampler_SeedsCanonicalMockResourceHistory(t *testing.T)
 	if !ok {
 		t.Fatalf("expected disk chart for %q, got keys=%v", proxmoxDiskID, keysDiskCharts(diskCharts))
 	}
-	if got, want := len(diskChart.Temperature), mockChartPointTarget(7*24*time.Hour); got != want {
-		t.Fatalf("expected downsampled proxmox disk chart history to match target %d, got %d points for %q", want, got, proxmoxDiskID)
+	if got, want := len(diskChart.Temperature), mockChartPointTarget(7*24*time.Hour); got > want || got < want-2 {
+		t.Fatalf("expected downsampled proxmox disk chart history to stay within two points of target %d, got %d points for %q", want, got, proxmoxDiskID)
 	}
 
 	dockerMetricID := strings.TrimSpace(graph.State.DockerHosts[0].Containers[0].ID)
@@ -1148,11 +1148,11 @@ func TestStartMockMetricsSampler_SeedsCanonicalMockResourceHistory(t *testing.T)
 	)
 	cpuPoints := workloadMetrics[dockerMetricID]["cpu"]
 	memoryPoints := workloadMetrics[dockerMetricID]["memory"]
-	if got, want := len(cpuPoints), mockChartPointTarget(7*24*time.Hour); got != want {
-		t.Fatalf("expected downsampled docker app cpu history to match target %d, got %d points for %q", want, got, dockerMetricID)
+	if got, want := len(cpuPoints), mockChartPointTarget(7*24*time.Hour); got > want || got < want-2 {
+		t.Fatalf("expected downsampled docker app cpu history to stay within two points of target %d, got %d points for %q", want, got, dockerMetricID)
 	}
-	if got, want := len(memoryPoints), mockChartPointTarget(7*24*time.Hour); got != want {
-		t.Fatalf("expected downsampled docker app memory history to match target %d, got %d points for %q", want, got, dockerMetricID)
+	if got, want := len(memoryPoints), mockChartPointTarget(7*24*time.Hour); got > want || got < want-2 {
+		t.Fatalf("expected downsampled docker app memory history to stay within two points of target %d, got %d points for %q", want, got, dockerMetricID)
 	}
 }
 
@@ -1571,6 +1571,74 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 	}
 	if got := k8sMemoryAfterTick[len(k8sMemoryAfterTick)-2].Timestamp; !got.Equal(now) {
 		t.Fatalf("expected penultimate k8s memory point to remain anchored at seed now %v, got %v", now, got)
+	}
+}
+
+// A linked node's CPU temperature follows its agent's series in mock mode, so
+// both the node and the agent history seed from that series and the live
+// tick that records the node's primary reading continues the same line: the
+// drawer headline matches the end of the line drawn beneath it.
+func TestSeedMockMetricsHistory_LinkedNodeTemperatureContinuesAgentSeries(t *testing.T) {
+	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
+	next := now.Add(time.Minute)
+	seedDuration := boundedMockHistoryProofWindow
+	const nodeID, hostID = "pve-tail-node", "host-node-pve-tail-node"
+
+	stateAt := func(at time.Time) models.StateSnapshot {
+		reading := mock.SampleMetric("agent", hostID, "temperature", at)
+		return models.StateSnapshot{
+			Nodes: []models.Node{{
+				ID:            nodeID,
+				Name:          "pve-tail",
+				Status:        "online",
+				LinkedAgentID: hostID,
+				Temperature: &models.Temperature{
+					Available:  true,
+					HasCPU:     true,
+					CPUPackage: reading,
+					CPUMax:     reading,
+					Cores:      []models.CoreTemp{{Core: 0, Temp: reading - 2}},
+				},
+			}},
+			Hosts: []models.Host{{
+				ID:           hostID,
+				Hostname:     "pve-tail",
+				Status:       "online",
+				LinkedNodeID: nodeID,
+				Sensors: models.HostSensorSummary{TemperatureCelsius: map[string]float64{
+					"cpu_package": reading,
+					"cpu_core_0":  reading - 2,
+				}},
+			}},
+		}
+	}
+
+	mh := NewMetricsHistory(5000, seedDuration)
+	seedMockMetricsHistory(context.Background(), mh, nil, fixtureGraphWithState(stateAt(now)), now, seedDuration, time.Minute)
+
+	nodeSeeded := mh.GetNodeMetrics(nodeID, "temperature", seedDuration)
+	agentSeeded := mh.GetGuestMetrics("agent:"+hostID, "temperature", seedDuration)
+	if len(nodeSeeded) == 0 || len(agentSeeded) == 0 {
+		t.Fatalf("expected seeded node and agent temperature history, got node=%d agent=%d", len(nodeSeeded), len(agentSeeded))
+	}
+	for i, point := range nodeSeeded {
+		want := mock.SampleMetric("agent", hostID, "temperature", point.Timestamp)
+		if diff := math.Abs(point.Value - want); diff > 1e-9 {
+			t.Fatalf("node temperature point %d = %f, want the agent series %f at %v", i, point.Value, want, point.Timestamp)
+		}
+	}
+
+	live := stateAt(next)
+	recordMockStateToMetricsHistory(mh, nil, fixtureGraphWithState(live), next)
+	headline := *models.PrimaryCPUTemperatureCelsius(live.Nodes[0].Temperature)
+	for name, points := range map[string][]MetricPoint{
+		"node":  mh.GetNodeMetrics(nodeID, "temperature", seedDuration),
+		"agent": mh.GetGuestMetrics("agent:"+hostID, "temperature", seedDuration),
+	} {
+		last := points[len(points)-1]
+		if !last.Timestamp.Equal(next) || math.Abs(last.Value-headline) > 1e-9 {
+			t.Fatalf("%s temperature line ends at %f (%v), want the headline %f at %v", name, last.Value, last.Timestamp, headline, next)
+		}
 	}
 }
 

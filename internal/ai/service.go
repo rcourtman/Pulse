@@ -840,19 +840,36 @@ func (s *Service) HasLicenseFeature(feature string) bool {
 	return checker.HasFeature(feature)
 }
 
+// PatrolInvestigationLicensed reports a positive licence answer for Patrol
+// investigation. Unlike HasLicenseFeature it treats a missing checker as not
+// licensed, so the Pro default mode never applies before the licence is known.
+func (s *Service) PatrolInvestigationLicensed() bool {
+	s.mu.RLock()
+	checker := s.licenseChecker
+	s.mu.RUnlock()
+	return checker != nil && checker.HasFeature(FeatureAIAutoFix)
+}
+
 const minCommunityPatrolInterval = 1 * time.Hour
 
 // GetEffectivePatrolAutonomyLevel returns the autonomy level that should be enforced at runtime
 // for the current license state.
 //
 // Community tier is locked to "monitor" (findings-only). Higher levels imply investigation and
-// are gated behind ai_autofix (Pro/Cloud).
+// are gated behind ai_autofix (Pro/Cloud). A licensed install that never chose a mode runs
+// "approval" (Ask first), so the investigation it pays for is on by default.
 func (s *Service) GetEffectivePatrolAutonomyLevel() string {
 	cfg := s.GetConfig()
 	if cfg == nil {
 		return config.PatrolAutonomyMonitor
 	}
 	if !s.HasLicenseFeature(FeatureAIAutoFix) {
+		return config.PatrolAutonomyMonitor
+	}
+	if !cfg.PatrolAutonomyLevelChosen() {
+		if s.PatrolInvestigationLicensed() {
+			return config.PatrolAutonomyApproval
+		}
 		return config.PatrolAutonomyMonitor
 	}
 	s.mu.RLock()

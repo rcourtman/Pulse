@@ -28,10 +28,12 @@ Patrol mode sets how far Pulse can go when Patrol finds something that needs att
 | **Safe auto-fix** | `assisted` | Yes | Yes | Execute automatically | Approval required | Pro / legacy Pro+ / Cloud |
 | **Autopilot** | `full` | Yes | Yes | Execute automatically | Execute automatically | Pro / legacy Pro+ / Cloud |
 
-- **Watch only** (default): Patrol creates findings but takes no action. This is the Community and Relay baseline. Suitable for learning what Patrol detects before enabling investigation or fix execution.
+- **Watch only**: Patrol creates findings but takes no action. This is the Community and Relay baseline and the default without Pro. Suitable for learning what Patrol detects before enabling investigation or fix execution.
 - **Ask first** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution.
 - **Safe auto-fix** (Pro and above): Warning-level safe fix plans can execute automatically. Critical findings still require approval. This is the recommended starting point for most Pro and legacy Pro+ users who enable fix execution.
 - **Autopilot** (Pro and above): Safe fix plans can execute without approval. Requires an explicit toggle and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
+
+On Pro, an install that has never chosen a mode runs **Ask first**, so new warning and critical findings are investigated without an extra step. Until you choose, the Patrol page explains this and offers to keep Ask first or switch to Watch only; either choice is saved and the notice goes away. Investigations use your AI provider and count toward the 30-day budget. A mode you have saved, including Watch only, is never changed.
 
 ### Configuration
 

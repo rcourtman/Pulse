@@ -229,6 +229,15 @@ func (a *MonitorAdapter) currentRegistry() *ResourceRegistry {
 	return registry
 }
 
+// GetByReference delegates identity and alias resolution to the current registry.
+func (a *MonitorAdapter) GetByReference(reference string) (*Resource, string, bool) {
+	registry := a.currentRegistry()
+	if registry == nil {
+		return nil, "", false
+	}
+	return registry.GetByReference(reference)
+}
+
 // RecordChange forwards canonical resource-history events into the underlying
 // resource store when monitoring has a durable store attached. Alert lifecycle
 // events carry source-native references (Proxmox node and guest IDs, agent

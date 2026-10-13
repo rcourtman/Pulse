@@ -13,7 +13,6 @@
     "readiness",
     "readiness_assertions",
     "evidence_reference_policy",
-    "priority_engine",
     "lanes",
     "release_gates",
     "lane_followups",
@@ -84,9 +83,6 @@
     },
     "evidence_reference_policy": {
       "$ref": "#/$defs/evidence_reference_policy"
-    },
-    "priority_engine": {
-      "$ref": "#/$defs/priority_engine"
     },
     "lanes": {
       "type": "array",
@@ -258,7 +254,7 @@
       "properties": {
         "repo_ready_rule": {
           "type": "string",
-          "const": "all lanes target-met and evidence-present plus all repo-ready assertions passed"
+          "const": "all lanes complete or bounded-residual and evidence-present plus all repo-ready assertions passed"
         },
         "rc_ready_rule": {
           "type": "string",
@@ -270,96 +266,10 @@
         }
       }
     },
-    "priority_engine": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "formula",
-        "floor_rule",
-        "weights"
-      ],
-      "properties": {
-        "formula": {
-          "type": "string",
-          "minLength": 1
-        },
-        "floor_rule": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "release_critical_lanes",
-            "minimum_score"
-          ],
-          "properties": {
-            "release_critical_lanes": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": {
-                "type": "string",
-                "pattern": "^L[0-9]+$"
-              }
-            },
-            "minimum_score": {
-              "type": "number"
-            }
-          }
-        },
-        "weights": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "gap_multiplier",
-            "blocker_bonus",
-            "criticality_range",
-            "staleness_range",
-            "dependency_range"
-          ],
-          "properties": {
-            "gap_multiplier": {
-              "type": "number"
-            },
-            "blocker_bonus": {
-              "type": "number"
-            },
-            "criticality_range": {
-              "type": "string",
-              "minLength": 1
-            },
-            "staleness_range": {
-              "type": "string",
-              "minLength": 1
-            },
-            "dependency_range": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
-        }
-      }
-    },
     "lane": {
       "type": "object",
       "additionalProperties": false,
       "allOf": [
-        {
-          "if": {
-            "properties": {
-              "status": {
-                "const": "partial"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "current_score": {
-                "not": {
-                  "const": 0
-                }
-              }
-            }
-          }
-        },
         {
           "if": {
             "properties": {
@@ -370,9 +280,6 @@
           },
           "then": {
             "properties": {
-              "current_score": {
-                "const": 0
-              },
               "completion": {
                 "properties": {
                   "state": {
@@ -492,8 +399,6 @@
       "required": [
         "id",
         "name",
-        "target_score",
-        "current_score",
         "status",
         "completion",
         "blockers",
@@ -508,16 +413,6 @@
         "name": {
           "type": "string",
           "minLength": 1
-        },
-        "target_score": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 10
-        },
-        "current_score": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 10
         },
         "status": {
           "type": "string",
@@ -1167,7 +1062,6 @@
         "lane_ids",
         "subsystem_ids",
         "proposed_resolution",
-        "coverage_impact",
         "evidence"
       ],
       "properties": {
@@ -1220,11 +1114,6 @@
             "lane-expansion",
             "target-update"
           ]
-        },
-        "coverage_impact": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
         },
         "evidence": {
           "type": "array",

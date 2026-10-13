@@ -294,7 +294,13 @@ more field of the facet already in the canonical payload
 (`proxmox.temperatureDetails`), only when the existing record selection yields
 no usable reading, and keeps it only when it holds a CPU reading. That is one
 extra record mapping per such node per adapter call. It adds no resource read,
-merge pass, timer or subscription.
+merge pass, timer or subscription. `Node.cpuTemperature` copies the resource's
+existing top-level temperature scalar, one field read per adapter call.
+
+Mock CPU temperatures refresh on the existing tick: each online node with a CPU
+reading takes one `SampleMetric` and rebuilds its core list (copied, never
+mutated in place), and each agent host rewrites its CPU keys from the sample
+it already took. No new timer, pass or fixture-wide scan is added.
 
 ### Unavailable filesystem values share the existing disk model
 
@@ -366,22 +372,8 @@ metric tracks at narrow width; this is readability, not a throughput claim.
 
 ### Bounded confidence/priority work in broadcast grouping — issue #2199
 
-The general identity matcher retains every confidence, reason, ordering and
-review flag. Top-level grouping requests only its existing high-confidence
-floor (0.90), so hostname-only and IP-only peer sets are not built when no
-eligible composite signal exists. High-confidence results are identical to
-filtering the full general matcher; machine ID, UUID and hostname+MAC still
-keep their existing precedence. Host/IP fallback still requires exactly one
-strictly better-priority owner. Equal/worse-priority peers are discarded before
-allocating/sorting fallback candidates, and a best-priority group has no possible
-attachment target. No identity, ambiguity, count, group ID or explanation rule
-changes, and no cached output hides live transitions.
-
-Independent pre-repair matching/grouping oracles, candidate-floor differential
-cases/fuzzing, a discarded-peer allocation bound, mixed grouping records and the
-complete existing identity/topology suites protect these constraints. The
-residual synthetic broadcast profile identified discarded matching/grouping as
-the dominant cost; it is not a profile of the reporter's installed agent fleet.
+Broadcast performance work preserves the [unified grouping semantics and allocation bounds](unified-resources.md#bounded-confidencepriority-work-in-broadcast-grouping--issue-2199),
+including its source controls and qualification limits.
 
 ### Connected-dashboard snapshot ownership — issue #2199
 
@@ -399,6 +391,11 @@ errors and encoded identities with generic encoding; mutation tests protect
 retained buffers. Complete broadcast benchmarks include projection and delta
 queues rather than treating an ID-only or component allocation result as field
 CPU relief. Installed connected/closed-dashboard CPU remains separate evidence.
+
+Realtime normalization also keeps provider ownership source-authoritative.
+Flat storage instance/node fields may synthesize Proxmox facts only when the
+current sources permit it, with explicit ownership facets preserved. Full and
+delta merges apply the same bounded per-row rule without estate-wide lookup.
 
 The resource adapter fast delta path must remain content-equivalent to the full merge for explicit Proxmox memory withdrawal. An absent canonical metric plus incoming Proxmox usageUnavailable clears the old display value; store patch operations must emit that clear even when only the raw facet key changed. This bounded per-changed-row check must not introduce an estate-wide scan or defeat untouched-row identity preservation. Adapter tests cover both delta paths and store writes, including trusted-zero recovery and ordinary partial omission.
 
@@ -1305,6 +1302,14 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     rows without platform metadata retain the Proxmox-compatible behavior at
     the migration boundary.
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
+    The selected resource owns its drawer tab and History range. Regrouping the
+    same resource under a new parent or node retains both even if its drawer
+    remounts. Closing or selecting another resource restores the default view.
+    History continues to consume the explicit backend-owned metrics target.
+    Legacy VM and system-container inputs without that target use the shared
+    native provider-key formatter for History. This compatibility fallback
+    follows the current node and never changes canonical selection identity.
+    Backend targets take precedence over every client-derived fallback.
     The guest drawer header owns the saved web-interface launch action. It
     reuses the shared `WebInterfaceLink` and drawer-header action class, so
     phone and narrow rows keep hiding the adjacent row link for name legibility
@@ -1391,7 +1396,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     max-disk derivations must skip sentinel rows rather than surface them as
     0% or negative percents.
 13. Extend workload guest metadata cache persistence, metadata refresh, org-scope switching, and optimistic custom-URL updates through `frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts` rather than rebuilding workload-local storage caches, event listeners, or guest metadata API wiring inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
-14. Extend workload deep-link selection and hovered-row continuity semantics through `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`, and extend table scroll preservation plus reactive selection state through `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`, rather than rebuilding resource-query parsing, selected-row scroll pinning, or hovered-row invalidation inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`; canonical typed workload IDs such as `app-container:<host>:<provider-id>` must remain exact route/selection keys and must not be reinterpreted into synthetic node scopes
+    A changed set of native metadata keys refreshes that cache after accepted
+    inventory publication. Metric-only updates do not refetch it. Superseded
+    responses cannot overwrite a newer refresh, confirmed edit or tenant scope.
+14. Extend workload deep-link selection and hovered-row continuity semantics through `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`, and extend table scroll preservation plus reactive selection state through `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`, rather than rebuilding resource-query parsing, selected-row scroll pinning, or hovered-row invalidation inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`. Every workload row and selection key is the exact unified `Resource.id`. Route-driven selection lets the shared focus bridge reveal its destination. Initial viewport measurement retains the selection window and still measures row and detail geometry. Scroll and resize events remain authoritative for subsequent window movement. Local row clicks preserve the existing viewport, and that preservation must not undo a route reveal. Historical references use the API contract's existing server resolver and never a client-reconstructed node or pod identity.
 15. Extend workload route ownership, route-driven option catalogs, and toolbar filter config through `frontend-modern/src/components/Workloads/useWorkloadRouteState.ts`, `frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts`, `frontend-modern/src/components/Workloads/workloadRouteModel.ts`, `frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts`, and `frontend-modern/src/components/Workloads/workloadRouteStateModel.ts`, and extend query-param synchronization plus managed workload URL semantics through `frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts` and `frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts`, rather than rebuilding route sync, alias parsing, option derivation, toolbar callback/config wiring, reset policy, node-selection compatibility rules, param precedence, or managed workload URLs inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
     Workloads route host scopes must resolve through `frontend-modern/src/components/Workloads/workloadTopology.ts`: app-container scopes use the canonical Docker/runtime host id before host labels or node fallbacks, while VM and system-container scopes keep the instance-node key. Route `agent` filters and option catalogs must consume that shared scope so Infrastructure related-workload links cannot drift from Workloads filtering.
     Workloads route-state writes must preserve the owning platform/runtime
@@ -2745,15 +2753,10 @@ app-container routing and Docker-only actions. `frontend-modern/src/hooks/useWor
 `frontend-modern/src/components/Workloads/workloadTopology.ts`, and
 `frontend-modern/src/components/Workloads/useGuestRowState.ts` must preserve a
 canonical app-container navigation path while keeping Docker runtime action
-identifiers explicit. Discovery affordances on the Workloads drawer must follow
-the canonical `discoveryTarget` contract, not generic app-container host
-fallbacks. Guest-drawer manual discovery run controls must route through the
-shared `DiscoveryTab` manual-run action and the canonical target identifiers
-instead of adding Workloads-local discovery trigger state. TrueNAS
-app-containers may reuse runtime metadata such as image and
-runtime strings, but they must not inherit Docker-only update affordances or
-agent-only Discovery tabs on the Workloads row path unless the unified
-resource contract explicitly supplies discovery ownership.
+identifiers explicit. Agent resource context follows backend-authored
+`discoveryTarget` coordinates. TrueNAS app-containers may reuse image and
+runtime metadata, while Docker-only update actions remain scoped to
+Docker-managed workloads.
 That same row-and-selection boundary also requires canonical app-container
 identity to stay intact on the workload surface. Workload rows, deep links,
 drawer selection, anomaly correlation, and route-state filters must key on the
@@ -2886,12 +2889,19 @@ and supplement known utilization with the threshold-colored progress metadata
 derived by `diskListModel.ts`. `GuestDrawerOverview.tsx` passes that metadata
 to the shared detail-row primitive; it does not parse display strings, create
 local bar geometry, or render a bar for the negative unknown-usage sentinel.
-Within that compact technical layout, `GuestDrawerOverview.tsx` declares the
-`Filesystems` section before the `Tags` section, so the shared
-`DetailSectionTable` span algorithm gives the longer mount-point list the wider
-panel and keeps the short tag list in the narrower slot. Future section-order
-changes in that overview must preserve the filesystem-first ordering rather
-than letting the shorter tag list take the wide column.
+`GuestDrawerOverview.tsx` renders the `Filesystems` section on its own, in
+front of the collapsed Details, so the mount-point list never shares a card
+row with shorter sections; tags render as chips in the Overview facts strip
+rather than as a `Tags` detail section. The Overview's 24h trend cards
+(`DrawerTrendCards.tsx`, lazy-loaded out of the WorkloadsSurface chunk) and
+the History tab read one query from `guestDrawerHistoryQuery.ts` with one cache
+key, and each mounts only while its tab is visible: the node drawer's History
+no longer stays mounted and polling while hidden. Because those cards already
+cover the last 24 hours, the guest and node drawers open History on
+`TRENDED_DRAWER_HISTORY_DEFAULT_RANGE` (7 days, within the free plan's
+retention) rather than repeating them; a 24h History selection reuses the
+cards' cached read. Drawers without trend cards (Docker host, resource
+detail) keep the 24h `GUEST_DRAWER_HISTORY_DEFAULT_RANGE`.
 Panel width alone does not make mount paths readable. Filesystem disk rows must
 opt into the shared `layout: 'stacked'` presentation so their full mount path
 wraps above usage and progress at desktop and phone widths. Shared-prefix paths
@@ -3437,35 +3447,6 @@ other than `will_fix_later`. The newer `AutoResolved` attribution flag
 on the same UnifiedFinding shape stays a fixed-size `bool` in the same
 struct, so the operator-vs-Pulse closure attribution adds no per-row
 allocation pressure on the same hot path.
-That same Workloads drawer boundary now also owns passive discovery
-surfacing in the overview. `useGuestDrawerState.ts` may issue a single
-`GET /api/discovery/{type}/{target}/{id}` per drawer open through
-`getDiscovery` to populate an "Identified Service" card in
-`GuestDrawerOverview.tsx`, but must never trigger a scan or modify
-discovery state — manual scans, progress UI, and approval prompts stay
-owned by `DiscoveryTab` and `useDiscoveryTabState`. Render is gated by
-`getDiscoveryIdentifiedSummary` so empty or low-signal records collapse
-the card entirely instead of mounting an empty container. The drawer
-fetch must reuse the existing `discoveryTarget` derivation (resource
-type, agent id, resource id) rather than re-implementing target
-resolution, so workloads without canonical discovery ownership (e.g.
-TrueNAS app-containers without explicit `discoveryTarget`) skip the
-fetch cleanly.
-Observed service version, source labels, observed age, and suggested web
-URL candidates may be rendered from that same cached discovery summary,
-but they must not add a second discovery request, route-level Suspense
-dependency, row-time endpoint probe, or auto-save mutation. Suggested
-URLs remain copy/open/adopt affordances only; persisting them as a
-workload link stays a user action through the existing Web Interface URL
-field. For Docker-managed app-containers, that field must receive the stable
-host-plus-container-name metadata ID rather than the runtime container ID, while
-the row and drawer still use the canonical workload ID for all non-metadata
-state.
-The compact provenance marker for those values is presentation-only. It
-may identify already-loaded Discovery fields, but must not introduce
-additional discovery fetches, provider lookups, endpoint probes, or
-per-row layout measurement on the Workloads hot path.
-
 The canonical Workloads table mobile floor is 36rem. The mobile table branch
 must preserve that intrinsic width inside its existing scroll shell instead of
 combining it with `min-w-full`, which allows the operational columns to
@@ -3617,17 +3598,9 @@ nothing at all when workload rows are present.
 
 ### Per-tenant resource stores are released on offboarding and shutdown
 
-`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
-process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
-called from `Router.CleanupTenant` alongside the other per-tenant teardown;
-`CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
-Without this an offboarded tenant kept its file descriptors and its
-`unified_resources.db-wal`/`-shm` files alive and its directory could not be
-fully removed. Closed stores are evicted from the cache so a later request opens
-a fresh handle rather than using a closed one
-(`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
-are idempotent and nil-safe
-(`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+Tenant offboarding and process shutdown use the [API store-lifecycle contract](api-contracts.md#per-tenant-resource-stores-are-released-on-offboarding-and-shutdown),
+including its source controls and qualification limits.
+
 ### Report-ack version echo adds no steady-state work
 
 The `serverVersion` field on unified-agent report acks is a constant string
@@ -4032,6 +4005,21 @@ only explicit matching refreshes; the full `GuestDrawer.test.tsx` pins the
 unchanged cap and no live-recovery read. `guestHistorySegments.test.ts` pins
 complete point preservation at the existing request bound. Neither claims a
 timing benchmark, fleet CPU attribution or native incident relief.
+Round dot markers (zero-length round-capped strokes) and the in-place
+`no reading` readout change presentation only: they add no read, timer or DOM
+node per observation beyond the marker's two paths, and the readout no longer
+inserts or removes a line as the inspected time changes.
+Numeric gridline labels are computed from the scale the panel already holds;
+the compact "Worth checking" list and the trend cards' "now" and "24h low–high"
+labels reuse rows and ranges already derived. None adds a read or timer.
+
+The default stored-history legend resolves one latest timestamp from that
+same bounded, normalized panel index, then looks up each configured series at
+that time. It does not join unrelated latest or live values, add collection or
+fetch missing siblings. The 240-point cap, 30-second poll, query coordinates,
+cache and segment geometry remain unchanged. Mounted readout, pointer and
+sparse controls verify only explicit query refreshes and correctly qualified
+empty-panel fallback; this is not a timing or native-recovery claim.
 
 
 ### Accessible Workloads backup evidence
@@ -4108,3 +4096,21 @@ notification is introduced. Current snapshot/delta fast paths retain their
 existing scope; only availability complete-record replacement changes, never
 other partial provider facets or independent metric updates. This is truthful
 presentation and scoped invalidation, not a measured whole-fleet CPU saving.
+
+### Open guest drawers age completed backups passively (12 October 2026)
+
+`useGuestDrawerState` derives completed-backup age and policy tone from the
+existing shared 30-second clock, not just a new guest snapshot. This adds a
+clock subscription for the mounted drawer, not a timer per row, network read,
+refresh, guest probe or alert evaluation. Disposal releases the subscription.
+The supplied completed timestamp is immutable under ticks and backup activity;
+only replacement completion evidence changes it. Configured fresh/stale hours
+retain their existing inclusive boundaries and unknown/absent distinctions.
+
+`GuestDrawer.backup-clock.test.tsx` covers passive default/custom policy
+crossings, unchanged completion time, tab round trips, later completion,
+future/backwards-clock uncertainty and timer disposal. Connected
+`GuestDrawer.test.tsx` and `guestDrawerModel.branchcov2.test.ts` retain existing
+backup-activity, configured policy and caution/absence controls. Browser proof
+uses the real read-only AlertsAPI/store and existing drawer/table badge with
+synthetic timestamps, not native backup safety, guest recovery or availability.

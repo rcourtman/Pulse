@@ -1,8 +1,15 @@
-import { Show } from 'solid-js';
+import { For, Show, Suspense, createMemo, lazy } from 'solid-js';
+
+import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { HelpIcon } from '@/components/shared/HelpIcon';
-import { TechnicalDetailsSection } from '@/components/shared/TechnicalDetailsDisclosure';
+import {
+  TechnicalDetailsDisclosure,
+  TechnicalDetailsSection,
+} from '@/components/shared/TechnicalDetailsDisclosure';
+import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import { DrawerExceptionList } from './DrawerExceptionList';
 import {
   compactDetailRows,
   compactDetailSections,
@@ -16,16 +23,45 @@ import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
 import { formatBytes, formatRelativeTime, normalizeDiskArray } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
+import { getMemoryObservationPresentation } from '@/utils/memoryObservation';
 import { getProxmoxUpdateEvidencePresentation } from '@/utils/proxmoxUpdateEvidence';
-import { formatTemperature, getCpuTemperature, getTemperatureTextClass } from '@/utils/temperature';
+import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
 import { buildDrawerDiskListItems } from './DrawerDiskListCard';
+import type { DrawerTrendCardConfig } from './DrawerTrendCards';
+import {
+  collectDrawerExceptionRows,
+  getDrawerMetricAlert,
+  withoutDrawerExceptionRows,
+} from './drawerOverviewModel';
+import type {
+  GuestDrawerHistoryDeferredMetric,
+  GuestDrawerHistoryTarget,
+} from './guestDrawerModel';
+
+// Loaded once a node drawer opens, so the Proxmox table chunk does not carry it.
+const DrawerTrendCards = lazy(() => import('./DrawerTrendCards'));
+
+const hostSeriesColor = (metric: string): string =>
+  HOST_METRICS_HISTORY_GROUPS.flatMap((group) => group.series).find(
+    (series) => series.metric === metric,
+  )?.color ?? 'currentColor';
+
+const finitePercent = (value: number | null | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.min(100, value)
+    : undefined;
 
 interface NodeDrawerOverviewProps {
   node: Node;
   disks?: Disk[];
   temperatureThresholds?: MetricDisplayThresholds | null;
   alerts?: Alert[];
+  historyTarget?: GuestDrawerHistoryTarget | null;
+  /** True while Overview is the visible tab; hidden trends do not poll. */
+  trendsEnabled?: boolean;
+  /** The node's own alerts, without its guests', for the trend cards. */
+  metricAlerts?: Alert[];
 }
 
 interface NodeOverviewRow {
@@ -177,9 +213,12 @@ const getDetailTone = (valueClass: string | undefined): DetailValueTone => {
 const toDetailRows = (rows: NodeOverviewRow[]): DetailRow[] =>
   compactDetailRows(
     rows.map((row) =>
+      // Details is where a reader goes for the full value; wrap rather than
+      // cut it off behind an ellipsis and a hover-only title.
       makeDetailRow(row.label, row.value, {
         title: row.title,
         tone: getDetailTone(row.valueClass),
+        wrap: true,
       }),
     ),
   );
@@ -301,6 +340,15 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     return buildDrawerDiskListItems(disks);
   };
 
+  const thermalRows = () =>
+    getThermalRows(
+      props.node.temperature,
+      props.temperatureThresholds,
+      (props.node.sensors?.gpu?.length ?? 0) > 0,
+    );
+  const isSensorRow = (row: NodeOverviewRow): boolean =>
+    row.label === 'NVMe' || row.label === 'GPU';
+
   const technicalSections = () =>
     compactDetailSections([
       { label: 'Platform', rows: toDetailRows(platformRows()) },
@@ -328,16 +376,22 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
             : toDetailRows(storageRows()),
       },
       { label: 'Telemetry', rows: toDetailRows(telemetryRows()) },
-      { label: 'GPU', rows: toDetailRows(getGPUTelemetryRows(props.node)) },
       {
         label: 'Thermals',
-        rows: toDetailRows(
-          getThermalRows(
-            props.node.temperature,
-            props.temperatureThresholds,
-            (props.node.sensors?.gpu?.length ?? 0) > 0,
-          ),
-        ),
+        rows: toDetailRows(thermalRows().filter((row) => !isSensorRow(row))),
+      },
+    ]);
+
+  // GPU and NVMe readings carry no heat judgement of their own, so nothing
+  // would lift a hot one out of Details; they stay visible instead.
+  const sensorSections = () =>
+    compactDetailSections([
+      {
+        label: 'Sensors',
+        rows: toDetailRows([
+          ...thermalRows().filter(isSensorRow),
+          ...getGPUTelemetryRows(props.node),
+        ]),
       },
     ]);
 
@@ -357,12 +411,11 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     </Show>
   );
 
-  // Keep the interactive guidance owned by the drawer, rather than rebuilding
-  // its section and help state whenever node readings or relative ages change.
-  const operatorContextSection: DetailSection = {
-    label: 'Operator context',
+  // The drawer owns the interactive help across reading and age updates.
+  const summarySection: DetailSection = {
+    label: 'Summary',
     get rows() {
-      const primaryTemperature = getCpuTemperature(props.node.temperature);
+      const primaryTemperature = props.node.cpuTemperature;
       const updates = updateEvidence();
       const temperatureClass =
         typeof primaryTemperature === 'number'
@@ -373,6 +426,7 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
         makeDetailRow(
           'Pulse coverage',
           linkedAgentId() ? `Agent ${stripAgentPrefix(linkedAgentId())}` : 'PVE API only',
+          { wrap: true },
         ),
         updates
           ? makeDetailRow('Updates', updates.value, {
@@ -394,10 +448,127 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     },
   };
 
-  const overviewSections = () => [operatorContextSection];
+  const overviewSections = () => [summarySection];
+
+  const exceptionRows = createMemo(() =>
+    collectDrawerExceptionRows([...overviewSections(), ...technicalSections()]),
+  );
+
+  // The table withholds readings from an offline or stale node; the trend
+  // cards do the same instead of presenting the last numbers as live.
+  const liveReadingsWithheld = (): string | null => {
+    const health = (props.node.connectionHealth || '').trim().toLowerCase();
+    if (props.node.status === 'offline') return 'Node is offline. Showing its history only.';
+    if (
+      props.node.status === 'unknown' ||
+      health === 'error' ||
+      health === 'degraded' ||
+      health === 'stale'
+    ) {
+      return 'Proxmox readings for this node are stale. Showing its history only.';
+    }
+    return null;
+  };
+
+  const trendCards = (): DrawerTrendCardConfig[] => {
+    const card = (
+      metric: string,
+      label: string,
+      unit: DrawerTrendCardConfig['unit'],
+      current: number | undefined,
+      detail?: string,
+      deferred?: GuestDrawerHistoryDeferredMetric,
+    ): DrawerTrendCardConfig => {
+      const alert = getDrawerMetricAlert(props.metricAlerts, metric);
+      const withheld = liveReadingsWithheld();
+      return {
+        metric,
+        label,
+        unit,
+        color: hostSeriesColor(metric),
+        current: withheld ? undefined : current,
+        deferred: withheld ? { message: withheld } : deferred,
+        detail: withheld ? undefined : detail,
+        alertSeverity: alert?.severity,
+        alertThreshold: alert?.threshold,
+      };
+    };
+    const memory = props.node.memory;
+    const disk = props.node.disk;
+    // The adapter fills missing usage with zero; a known total is the
+    // evidence that a percentage was measured at all.
+    const memoryValue =
+      memory?.usageUnavailable || !((memory?.total ?? 0) > 0)
+        ? undefined
+        : finitePercent(memory?.usage);
+    // A retained or undated reading is shown as last known, the same rule the
+    // guest cards follow, rather than as a live value.
+    const memoryReading = getMemoryObservationPresentation(memoryValue, memory?.observation);
+    const memoryDeferred: GuestDrawerHistoryDeferredMetric | undefined =
+      memoryReading && memoryReading.state !== 'current'
+        ? {
+            lastKnownValue: memoryReading.state === 'unavailable' ? undefined : memoryValue,
+            ...(memoryReading.state === 'unknown'
+              ? { valueLabel: 'freshness unknown' as const }
+              : {}),
+            message: memoryReading.message,
+          }
+        : undefined;
+    const memoryCurrent = memoryDeferred ? undefined : memoryValue;
+    const diskMeasured = (disk?.total ?? 0) > 0;
+    // The backend's primary reading, recorded under the same rule as the line.
+    const temperature = props.node.cpuTemperature;
+    return [
+      card(
+        'cpu',
+        'CPU',
+        '%',
+        finitePercent(props.node.cpu),
+        loadAverageLabel() !== '-' ? `load ${props.node.loadAverage?.[0]?.toFixed(2)}` : undefined,
+      ),
+      card(
+        'memory',
+        'Memory',
+        '%',
+        memoryCurrent,
+        (memoryCurrent ?? memoryDeferred?.lastKnownValue) !== undefined
+          ? `${formatBytes(memory.used ?? 0)} of ${formatBytes(memory.total)}`
+          : undefined,
+        memoryDeferred,
+      ),
+      ...(typeof temperature === 'number'
+        ? [card('temperature', 'CPU temperature', 'C', temperature)]
+        : []),
+      card(
+        'disk',
+        'Root disk',
+        '%',
+        diskMeasured ? finitePercent(disk?.usage) : undefined,
+        diskMeasured
+          ? `${formatBytes(disk?.used ?? 0)} of ${formatBytes(disk?.total ?? 0)}`
+          : undefined,
+      ),
+    ];
+  };
+
+  const facts = () => {
+    const model = cleanText(props.node.cpuInfo?.model);
+    const cores = props.node.cpuInfo?.cores;
+    const firstAddress = (props.node.networkInterfaces || [])
+      .flatMap((networkInterface) => networkInterface.addresses || [])
+      .map((address) => cleanText(address))
+      .find(Boolean);
+    return [
+      versionLabel() ? `Proxmox VE ${versionLabel()}` : '',
+      [model, hasPositiveNumber(cores) ? `${cores} logical CPUs` : ''].filter(Boolean).join(' · '),
+      (props.node.memory?.total ?? 0) > 0 ? `${formatBytes(props.node.memory.total)} RAM` : '',
+      firstAddress ?? '',
+      clusterLabel() && clusterLabel() !== 'Standalone' ? `Cluster ${clusterLabel()}` : '',
+    ].filter((fact) => fact.trim().length > 0);
+  };
 
   return (
-    <div class="space-y-3">
+    <div class="space-y-3" data-testid="node-drawer-overview">
       <DrawerAttentionSection
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
@@ -412,9 +583,45 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
           acknowledged: alert.acknowledged,
         }))}
       />
-      <TechnicalDetailsSection
+      <Show when={(props.alerts ?? []).length === 0}>
+        <p data-testid="drawer-no-attention" class="text-xs font-medium text-base-content">
+          {ALERTS_EMPTY_STATE}
+        </p>
+      </Show>
+
+      <DrawerExceptionList testId="node-drawer-exceptions" rows={exceptionRows()} />
+
+      <Show when={props.historyTarget}>
+        <Suspense fallback={<div class="h-28" aria-hidden="true" />}>
+          <DrawerTrendCards
+            target={props.historyTarget ?? null}
+            enabled={props.trendsEnabled ?? true}
+            cards={trendCards()}
+          />
+        </Suspense>
+      </Show>
+
+      <Show when={sensorSections().length > 0}>
+        <TechnicalDetailsSection dataTestId="node-drawer-sensors" sections={sensorSections()} />
+      </Show>
+
+      <Show when={facts().length > 0}>
+        <div
+          data-testid="node-drawer-facts"
+          class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
+        >
+          <For each={facts()}>{(fact) => <span class="wrap-break-word">{fact}</span>}</For>
+        </div>
+      </Show>
+
+      <TechnicalDetailsDisclosure
         dataTestId="node-technical-details"
-        sections={[...overviewSections(), ...technicalSections()]}
+        title="Details"
+        keepMounted
+        subtitle="platform, hardware, memory, network, storage and sensors"
+        class="border-t border-border pt-2"
+        contentClass="mt-2"
+        sections={withoutDrawerExceptionRows([...overviewSections(), ...technicalSections()])}
       />
     </div>
   );

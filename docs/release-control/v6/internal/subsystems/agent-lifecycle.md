@@ -15,6 +15,101 @@
 
 ## Purpose
 
+### Patrol maintenance coverage adds no agent authority
+
+The Patrol operator-state projection in `internal/api/router.go` now reads the
+active maintenance occurrence (one-shot or recurring) and inherits ancestor
+windows scoped `resource_and_descendants`, as alert intent does. It only
+auto-dismisses new findings; it adds no agent route, command or execution
+authority, and remediation locks stay exact-resource state.
+
+### Pro Patrol default adds no agent authority
+
+The Patrol autonomy handler change only reports whether the Pro Ask first
+default applies (`default_mode_applied`). It adds no agent route, command or
+execution authority; Ask first still requires approval before any change.
+
+### TrueNAS SCALE removal retires every owned middleware boot task before recovery erasure
+
+TrueNAS SCALE has an independent activation owner: its Init/Shutdown bootstrap
+can recreate and enable the systemd unit after a normal disable. A recovered
+state directory or an unrelated `/etc/version` alone is not appliance identity.
+The uninstall caller selects SCALE only from a bootstrap footprint or vendor
+marker. The existing protected/explicit state-removal authority must select the
+same state directory and exact bootstrap path; linked, writable or non-regular
+bootstrap files refuse before task/service mutation.
+
+One complete, bounded middleware inventory must identify every exact generated
+SCRIPT/POSTINIT task, including duplicates. Unknown ownership, indirect command
+activation or another-install bootstrap refuses without deleting unrelated
+tasks. The JSON reader rejects duplicate keys/IDs, invalid types, failed/empty/
+diagnostic/incomplete reads, over 512 tasks or over 1 MiB; it returns only owned
+numeric IDs and enablement, never task commands, names or credentials. A
+missing/empty SCRIPT path or COMMAND target is unknown activation, not an
+unrelated task or evidence that the owned task is absent. All owned
+tasks are disabled with checked calls and independent exact-set readback before
+systemd stop. A partial stop/disable stays stopped/disabled: do not re-enable or
+automatically restart after a refusal.
+
+The complete systemd target set and independent kernel collector/bootstrap
+process inventory and a final exact disabled-task readback must be quiescent
+before same-instance server removal, including task changes during systemd stop.
+After remote confirmation, the exact disabled task set is re-read before the first
+task deletion. Every owned deletion is checked; final whole-unit/process
+quiescence and complete task absence precede credential, stored binary,
+bootstrap and state erasure. A changed set, refusal, ignored deletion, new task
+or reactivation retains local recovery, even if earlier task/server operations
+succeeded. No favourable replacement observation, task recreation or credential
+churn is performed. Unrelated tasks survive unchanged.
+
+`TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure` requires all
+sixteen `agent_truenas_teardown.py` actual-function/full-caller controls,
+including multiple tasks, partial/refused/unknown operations, post-remote
+changes, ignored/recreated deletion, process privacy and a real timeout child.
+These run against closed middleware/systemd/process models and private ordinary-
+user files, not a native appliance. Existing systemd/OpenRC/DSM/rc.d/SysV gates,
+transport trust and identity remain. TrueNAS CORE retains its linked rc.d/
+appliance refusal; Unraid/QNAP boot ownership, Windows and signed installed
+Linux/PowerShell/native/TLS/cleanup acceptance remain separate. This does not
+expand the original removal job into macOS or introduce another dispatcher.
+
+### DSM Upstart removal retains recovery until automatic activation and the job are absent
+
+DSM 6 Upstart jobs (including leftovers on DSM 7) are not classified as SysV.
+Before remote removal, the installer validates protected regular Pulse job and
+manual-override files, observes one complete combined status and independent
+process inventory, installs a non-clobbering `manual` override, reloads and
+checks the effective configuration has no start condition, then confirms stopped
+status and process absence. A missing manager, transitional/unknown state,
+diagnostic, duplicate, empty or failed observation refuses without another
+sample. A successful stop/override may remain after failure; do not restart or
+restore automatic activation. Foreign override/configuration and any previous
+`.removal.*` recovery copy refuse without deletion.
+
+After remote confirmation, a fresh gate precedes retiring the job. Its original
+configuration inode is staged outside Upstart's `.conf` namespace until checked
+reload, exact unknown-job status and independent process absence establish
+retirement. On unconfirmed retirement it is restored only if the original path
+is still absent, leaving the manual override and all local recovery state;
+atomic non-replacement links refuse concurrently created files or directories,
+including during restore; the staged recovery copy is retained on conflict.
+Override write, permission and link operations each have explicit checked
+failure handling. Their non-credential temporary is also registered with the
+existing installer EXIT cleanup, executed by the production-function controls.
+Credential-bearing staged job recovery is never registered for EXIT deletion. Only confirmed retirement removes the staged config and manual
+before credential/state erasure. No credentials, arguments or config contents
+are returned by these observations. Existing same-instance URL, exact record,
+TLS, systemd/OpenRC/rc.d/SysV and state-directory ownership remain unchanged.
+
+The registered `scripts/installtests/install_sh_test.go` requires all fifteen
+`agent_upstart_teardown.py` production-function/caller controls, including exact
+file restoration, effective activation, late refusal, stopped/absent/repeated
+removal and real timeout-child termination. These are confined ordinary-user
+files and closed manager/process/transport models, not native DSM/Upstart,
+current-compiler or installed Linux/PowerShell acceptance. Unraid/QNAP/TrueNAS
+boot/watchdog ownership, Windows and the original native/TLS/cleanup journey
+remain separate; this does not broaden #1099 into macOS acceptance.
+
 ### FreeBSD rc.d and SysV removal retains recovery on unknown or live state
 
 Before server deregistration or local erasure, Unix uninstall selects its
@@ -189,11 +284,8 @@ last-use, identity continuity, environment non-use and adverse representations.
 That synthetic process journey does not exercise the terminal prompt, complete
 privileged installer, a reporter's configuration or installed recovery.
 
-A legacy client echoing the projected `controlled` mode into an unrelated AI
-settings PUT must retain a stored `autonomous` preference and its existing
-legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
-uses actual encrypted GET/PUT persistence with and without the entitlement,
-then checks explicit read-only opt-out and later opt-in remain possible.
+Legacy Assistant mode echo and stored-preference compatibility follow the
+[API settings contract](api-contracts.md#assistant-control_level-is-an-interactive-projection).
 
 ### Assistant control presentation does not change agent authority
 
@@ -1252,6 +1344,14 @@ Proxmox node and backup-server setup may request an explicitly insecure
 Unified Agent installer command. The choice must remain off by default, be
 visible at the point where the command is generated, and affect both the
 installer download and the agent's subsequent Pulse TLS connection.
+
+### Agent temperature history follows the shared primary CPU rule
+
+`monitor_agents.go` records an agent's `temperature` history with
+`models.HostSensorPrimaryCPUTemperatureCelsius`, the hottest usable `cpu*`
+sensor key, so the series matches the agent resource temperature and the
+linked node's reading. Report ingest, lease, removal and re-enrollment are
+unchanged; only the value chosen from an accepted report's sensor map moved.
 
 ### Copied removal uses the installed credential, not installation input
 
@@ -3721,10 +3821,8 @@ approval/identity checks, output bounds and fresh config admission.
 
 `TestCommandClientGuestOutcomeContract` covers status/output projection,
 truncation, ambiguity and independent subsequent admission.
-`TestGuestExecRealServerAgentDiscoveryAdmission` must carry decoded healthy
-evidence, exclude failed guest output, and resume on an explicit healthy scan
-over the real registered server/agent WebSocket boundary. Fake provider/config
-fixtures do not establish native PVE/HAOS safety or delivered behaviour.
+Command-result source controls do not establish native PVE/HAOS safety or
+delivered behaviour.
 
 ### Docker update readback is not mutation history
 
@@ -4118,24 +4216,9 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ### AI Discovery removed (2026-10-11)
 
-AI Discovery, the model-backed service-identification layer, is gone. The
-`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
-the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
-mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
-identified-service cards, readiness badges, provenance markers, suggested
-web-interface URLs, the Workloads AI Context column, the chat "Discovery is
-off" hint and the AI Service Context settings page were all removed. No
-telemetry counter ever measured its use (the `discovery_enabled` telemetry
-field folded it together with network subnet discovery), the maintainer judged it a flop, and
-it carried a separate scheduler, store and model route for context that
-`pulse_query`, `pulse_read` and the unified-resource context sections already
-supply.
-Network subnet discovery (`internal/discovery`, `/api/discover`, the
-Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
-are separate features and stay. Stored `discovery_enabled`,
-`discovery_interval_hours` and `discovery_model` AI settings are ignored on
-load. The old `/settings/pulse-intelligence/discovery` route redirects to
-Assistant settings.
+Agent resource context retains the backend-authored `discoveryTarget` coordinates.
+The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)
+owns the removed service-identification layer and its compatibility behavior.
 
 ### Registered Windows native-exit completion proof (8 October 2026)
 
@@ -4215,10 +4298,8 @@ overlap, thaw, writes, liveness and resumption are verified. Do not unlock,
 thaw or automatically restart from this guard. Raw host-shell commands and
 typed VM lifecycle operations are not relabelled as guarded guest reads.
 
-`TestCommandClientGuestExecutionAdmissionContract` pins no unverified handoff;
-`TestGuestExecRealServerAgentDiscoveryAdmission` connects real registration,
-server/agent WebSockets and VM/nested-Docker Discovery with fake config/provider
-boundaries. `TestVMGuestExecCapabilityBoundToRegisteredSession` pins old/unknown
+`TestCommandClientGuestExecutionAdmissionContract` pins no unverified handoff.
+`TestVMGuestExecCapabilityBoundToRegisteredSession` pins old/unknown
 agent rejection and retained deferral. Config ambiguity, cancellation,
 serialization/capacity and explicit-resumption controls are source proofs, not
 native PVE/HAOS-QGA, thaw, installed-agent or release acceptance.
@@ -7128,9 +7209,10 @@ identifier before executing any `PolicyRequireApproval` command so a missed
 control-plane gate cannot silently turn into host-level RCE. The single
 exception is commands marked `Trusted` in the wire payload: those originate
 from a vetted Pulse-internal subsystem whose command catalog is hardcoded
-in Pulse source (today only the servicediscovery deep scanner, which wraps
-read-only inspections in `docker exec`). `PolicyBlock` still applies to
-trusted payloads. The `Trusted` field must never be set by a code path that
+in Pulse source. The Proxmox guest Docker checker and inventory collector use
+the fixed read-only catalog in `internal/monitoring/docker_detection.go`, wired
+through the authenticated executor in `internal/api/router.go`.
+`PolicyBlock` still applies to trusted payloads. The `Trusted` field must never be set by a code path that
 deserialises user input or accepts a caller-supplied command string.
 That same copied install transport must also normalize canonical base URLs
 before composing installer asset paths: when operators enter a trailing-slash
@@ -8246,17 +8328,9 @@ workload liveness or containment in installed software.
 
 ### Per-tenant resource stores are released on offboarding and shutdown
 
-`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
-process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
-called from `Router.CleanupTenant` alongside the other per-tenant teardown;
-`CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
-Without this an offboarded tenant kept its file descriptors and its
-`unified_resources.db-wal`/`-shm` files alive and its directory could not be
-fully removed. Closed stores are evicted from the cache so a later request opens
-a fresh handle rather than using a closed one
-(`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
-are idempotent and nil-safe
-(`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+Tenant offboarding and process shutdown use the [API store-lifecycle contract](api-contracts.md#per-tenant-resource-stores-are-released-on-offboarding-and-shutdown),
+including its source controls and qualification limits.
+
 ### Server upgrades nudge agent self-update within one report cycle
 
 The unified-agent report ack now carries the server's version
@@ -9167,14 +9241,8 @@ sampling only, not report schemas, identity, enrollment or command authority.
 
 ### Asymmetric bridge evidence regression coverage
 
-`TestApplyHostReportBridgeIdentity` verifies two consecutive reports through
-host ingestion and checks both host-to-node and reciprocal node-to-agent links.
-Custom management bridges, private IPv4 and ULA addresses retain association
-when names differ and the provider endpoint is DNS-based. A Docker or generated
-bridge on either side alone must not supply inferred identity: testing only
-symmetric bridges would miss removal of filtering from one inventory.
-This proof does not establish safety for arbitrarily renamed Docker bridges
-or repair persisted links, and is not reporter or installed-release validation.
+Host report ingestion preserves the [monitoring bridge-evidence controls](monitoring.md#asymmetric-bridge-evidence-regression-coverage),
+including its source controls and qualification limits.
 
 ### Durable host/node association intent (6 September 2026)
 
@@ -9222,20 +9290,8 @@ the alert manager and canonical resource timeline.
 
 ### Node setup action v7 compatibility
 
-Workflow consumers pin `actions/setup-node` to
-`820762786026740c76f36085b0efc47a31fe5020` (v7.0.0). The action manifest
-retains the Node 24 execution runtime, setup/cache-save entry points and existing
-inputs. Its internal ESM/toolkit upgrade does not change the requested Node 24
-application toolchain. Consumers do not supply `registry-url` or depend on the
-removed dummy `NODE_AUTH_TOKEN` export. Explicit npm lockfile caching for test
-jobs and disabled automatic package-manager caching for privileged release jobs
-remain unchanged; no permission, dispatch input or signing backend changes.
-
-`test_setup_node_upgrade_preserves_consumer_contract` in the existing workflow
-trust suite verifies every consumer pin, absence of the affected auth assumptions,
-workflow trust controls and the retained native Windows command/lifecycle proof
-steps. Native Windows execution remains a hosted check, not a local Linux claim.
-This upgrade is independent of the grouped signing/Docker/Tailscale updates.
+Workflow consumers and their trust controls follow the [deployment toolchain contract](deployment-installability.md#node-setup-action-v7-compatibility),
+including its source controls and qualification limits.
 
 ### Command-channel registration frame ordering
 
@@ -9262,20 +9318,8 @@ an explicit timeout, and the original server still fails the ordering assertion.
 
 ### Physical-disk provider identity round trip
 
-The monitor's disk readback preserves the Proxmox source ID separately from
-its canonical resource ID. Skipped physical-disk polls may refresh SMART data
-but must not feed canonical hashes into source inventory, changing identity at
-each subsequent projection. Views without Proxmox source metadata retain the
-legacy ID fallback. This does not relax cross-host/device correlation, migrate
-old duplicates, change agent authority, or redefine serial-less disk matching.
-
-`TestPhysicalDiskSkippedPollPreservesSourceIdentity` in
-`internal/monitoring/physical_disk_roundtrip_test.go` drives eight real skipped
-polls and adapter rebuilds for both path-shaped and bare device names, checking
-provider keys, canonical IDs, JSON projection, temperature/size/cadence, separate
-nodes/controller members, and confirmed inventory removal.
-`TestPhysicalDiskReadbackSourceIDFallback` covers missing source metadata.
-This is synthetic runtime evidence, not USB hardware or reporter acceptance.
+Disk ingest and readback follow the [unified source-identity contract](unified-resources.md#physical-disk-provider-identity-round-trip),
+including its source controls and qualification limits.
 
 ### Coalesced host readings follow configured source freshness
 
@@ -9290,18 +9334,9 @@ registration, linking, heartbeat or removal. Proof:
 
 ### Quick security setup preserves unrelated settings
 
-Authenticated force setup in `internal/api/security_setup_fix.go` retains the
-existing authentication and settings-write authorization checks. Rotating local
-credentials does not reset non-auth system preferences.
-`ConfigPersistence.InitializeSystemSettings` in `internal/config/persistence.go`
-creates defaults only when system settings are absent, under the same instance
-mutex as ordinary saves; existing bytes (including unknown fields and malformed
-data requiring recovery) are not rewritten. A read error prevents initialization,
-while authentication setup retains its existing nonfatal settings-error behavior.
-This does not change token scopes, agent admission, or existing agent cleanup.
-Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
-`TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
-`TestInitializeSystemSettingsReadError`.
+Quick security setup follows the [API settings-preservation contract](api-contracts.md#quick-security-setup-preserves-unrelated-settings),
+including byte-preserving first-run initialization and read-error handling.
+It grants no additional agent or recovery authority.
 
 ### Unified metric replay guard does not change agent admission
 
@@ -9600,16 +9635,6 @@ registration, enrolment, install, update or removal path changed.
 
 ### Mock-mode read views fold linked fixture agents
 
-`internal/monitoring/monitor.go` changed only so the mock-mode unified view
-applies the operator's manual links (unified-resources contract, "Mock-mode
-unified view applies operator links"). A fixture agent the operator linked
-into a guest now folds into that guest in mock read views, as a linked agent
-already does in live mode, so host snapshots built from them
-(`HostsSnapshot`) stop listing it while the guest carries its facet. Agent
-registration, enrolment, report admission, removal, continuity and the
-fixture agent set itself are unchanged, and the view writes nothing to the
-resource store.
-
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` changed only so a `POST`, `PUT`, `PATCH` or
@@ -9660,39 +9685,13 @@ continuity are unchanged.
 
 ### Windows installer acceptance engine and absence (8 October 2026)
 
-Native installer parsing, service-removal failure controls and actual lifecycle
-execution use Windows PowerShell 5.1, never a PowerShell 7 substitute. A missing
-or mismatched engine on Windows fails rather than skips. The dedicated runner
-rejects pre-existing or unknown service/state instead of deleting it before the
-proof. Both first and repeated uninstall require independent SCM, binary, state
-and listener absence; only the exact SCM not-found identity/category proves
-absence. Failed listener enumeration remains a failure. This changes validation,
-not installer authority, transport, enrolment or host containment.
-
-`TestWindowsAgentLifecycleRequiresExactEngineAndIndependentAbsence` rejects the
-complete supplied parent and fourteen removed/changed controls. Native
-`TestWindowsAgentLifecycleObservationRuntime` executes the actual harness
-functions with fourteen no-mutation absence/failure/repeated-uninstall/owned-cleanup controls;
-the existing real lifecycle job then uses real SCM. Linux skips are explicit and
-do not establish a Windows parser, native runtime, reboot or installed result.
-
-Clean-runner admission checks service, binary, state and listener absence before
-machine-environment mutation. A rejected admission cannot clear a pre-existing
-machine setting. Cleanup restores only the captured prior setting, even when
-owned server teardown fails; an unconfirmed stop fails and retains the handle
-rather than reporting clean teardown. Real Windows execution and full terminal
-cleanup evidence still have to be returned by the existing native CI job.
+Installer lifecycle qualification follows the [deployment Windows acceptance contract](deployment-installability.md#windows-installer-acceptance-engine-and-absence-8-october-2026),
+including its source controls and qualification limits.
 
 ### Reconciled node-agent relink fold bookkeeping
 
-A declared node-agent join can consume one split row before its newer
-operator relink is applied. The relink records that side's ID and source in
-the current holder-bound `ManualLinkFold` index, so identity-pin succession
-keeps the operator decision and the resources API seed retains the same fold
-for report-merge. No synthetic telemetry, identity key, enrollment or service
-link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
-the monitor and its re-ingested API seed retain the fold across all split
-shapes, then survive pin persistence and a repeated split.
+Relink consumers preserve the [unified fold-bookkeeping contract](unified-resources.md#reconciled-node-agent-relink-fold-bookkeeping),
+including its source controls and qualification limits.
 
 ### Mock-mode metrics-target lookups ride the fixture structure revision
 

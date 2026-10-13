@@ -13,7 +13,7 @@ import { getNodeDisplayName } from '@/utils/nodes';
 import { getSimpleStatusIndicator } from '@/utils/status';
 
 import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
-import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from './guestDrawerModel';
+import { TRENDED_DRAWER_HISTORY_DEFAULT_RANGE } from './guestDrawerModel';
 import { NodeDrawerOverview } from './NodeDrawerOverview';
 import {
   getNodeDrawerCurrentMetrics,
@@ -26,6 +26,11 @@ interface NodeDrawerProps {
   disks?: Disk[];
   temperatureThresholds?: MetricDisplayThresholds | null;
   alerts?: Alert[];
+  /**
+   * The node's own alerts, matched by its identities rather than by node
+   * name. `alerts` also lists its guests'; only these describe its metrics.
+   */
+  ownAlerts?: Alert[];
   onClose?: () => void;
 }
 
@@ -34,7 +39,7 @@ type NodeDrawerTab = 'overview' | 'history' | 'manage';
 export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<NodeDrawerTab>('overview');
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
-    GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
+    TRENDED_DRAWER_HISTORY_DEFAULT_RANGE,
   );
   const alertsActivation = useAlertsActivation();
 
@@ -43,6 +48,13 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   const historyTarget = createMemo(() => getNodeDrawerHistoryTarget(props.node));
   const historyGroups = createMemo(() => getNodeDrawerHistoryGroups(props.node));
   const currentMetrics = createMemo(() => getNodeDrawerCurrentMetrics(props.node));
+  // The drawer lists alerts for the node's guests too; only the node's own
+  // alerts describe the metrics on its trend cards.
+  const ownAlerts = createMemo(() => {
+    if (props.ownAlerts) return props.ownAlerts;
+    const ids = new Set(nodeOverrideIdCandidates(props.node));
+    return (props.alerts ?? []).filter((alert) => ids.has(alert.resourceId));
+  });
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.node.status));
   const temperatureThresholds = createMemo(() =>
     props.temperatureThresholds !== undefined
@@ -107,17 +119,24 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           disks={props.disks}
           temperatureThresholds={temperatureThresholds()}
           alerts={props.alerts}
+          historyTarget={historyTarget()}
+          trendsEnabled={activeTab() === 'overview'}
+          metricAlerts={ownAlerts()}
         />
       </div>
 
-      <div class={`[overflow-anchor:none] ${activeTab() === 'history' ? '' : 'hidden'}`}>
-        <GuestDrawerHistory
-          currentMetrics={currentMetrics()}
-          groups={historyGroups()}
-          range={historyRange()}
-          target={historyTarget()}
-        />
-      </div>
+      {/* Mounted on demand, like the guest drawer's History: a hidden History
+          would poll the same resource the Overview trends already read. */}
+      <Show when={activeTab() === 'history'}>
+        <div class="[overflow-anchor:none]">
+          <GuestDrawerHistory
+            currentMetrics={currentMetrics()}
+            groups={historyGroups()}
+            range={historyRange()}
+            target={historyTarget()}
+          />
+        </div>
+      </Show>
 
       <div class={`[overflow-anchor:none] ${activeTab() === 'manage' ? '' : 'hidden'}`}>
         <Show when={activeTab() === 'manage'}>

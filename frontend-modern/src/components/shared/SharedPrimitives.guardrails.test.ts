@@ -5080,7 +5080,6 @@ describe('shared primitive guardrails', () => {
     expect(gitHubStarBannerSource).toContain('@/components/shared/Button');
     expect(gitHubStarBannerSource).toContain('<ActionIconButton');
     expect(gitHubStarBannerSource).toContain('<Button');
-    expect(gitHubStarBannerSource).toContain('const ACTIVE_DAYS_BEFORE_PROMPT = 14;');
     expect(gitHubStarBannerSource).toContain("reserveLowPriorityNoticeSession('github-star')");
     expect(gitHubStarBannerSource).toContain('GITHUB_STAR_PROMPT_SHOWN');
     expect(gitHubStarBannerSource).not.toContain('Maybe later');
@@ -8762,7 +8761,20 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/TechnicalDetailsDisclosure.tsx',
     );
     expect(disclosureSource).toContain('onToggle');
-    expect(disclosureSource).toContain('<Show when={expanded()}>');
+    // Lazily mounted by default; keepMounted is an explicit opt-in for a
+    // disclosure that holds a surface's complete record (drawer Details).
+    expect(disclosureSource).toContain('<Show when={props.keepMounted || expanded()}>');
+    expect(disclosureSource).toContain('keepMounted?: boolean;');
+    // The drawer's compact Worth checking list reuses the detail-row tone
+    // mapping rather than keeping a local palette that could drift.
+    expect(readFrontendSource('src/components/shared/DetailSectionTable.tsx')).toContain(
+      'export const detailValueToneClass',
+    );
+    const exceptionListSource = readFrontendSource(
+      'src/components/Workloads/DrawerExceptionList.tsx',
+    );
+    expect(exceptionListSource).toContain('detailValueToneClass(row.tone)');
+    expect(exceptionListSource).not.toMatch(/text-(amber|rose|red)-700/);
     expect(disclosureSource).toContain('sections?: DetailSection[]');
     expect(disclosureSource).toContain('<DetailSectionTable');
     expect(disclosureSource).toContain('export const TechnicalDetailsSection');

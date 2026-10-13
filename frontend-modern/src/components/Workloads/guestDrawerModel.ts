@@ -1,3 +1,4 @@
+import type { Accessor, Setter } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Alert, VM } from '@/types/api';
 import type {
@@ -31,6 +32,7 @@ type Guest = WorkloadGuest;
 
 export interface GuestDrawerProps {
   guest: Guest;
+  viewState?: GuestDrawerViewState;
   onClose: () => void;
   metadataId?: string;
   customUrl?: string;
@@ -43,6 +45,14 @@ export interface GuestDrawerProps {
 }
 
 export type GuestDrawerTab = 'overview' | 'history' | 'manage';
+
+export interface GuestDrawerViewState {
+  activeTab: Accessor<GuestDrawerTab>;
+  setActiveTab: Setter<GuestDrawerTab>;
+  historyRange: Accessor<HistoryTimeRange>;
+  setHistoryRange: Setter<HistoryTimeRange>;
+  reset: () => void;
+}
 
 export interface GuestDrawerHistoryTarget {
   resourceType: HistoryResourceType;
@@ -83,6 +93,7 @@ export interface GuestDrawerBackupPresentation {
   ageClass: string;
   ageLabel: string;
   dateLabel: string;
+  completedAt?: string;
 }
 
 export const isGuestDrawerVM = (guest: Guest): guest is VM => resolveWorkloadType(guest) === 'vm';
@@ -183,6 +194,14 @@ export const getGuestDrawerCurrentMetrics = (guest: Guest): Record<string, numbe
 };
 
 export const GUEST_DRAWER_HISTORY_DEFAULT_RANGE: HistoryTimeRange = '24h';
+
+// The Overview's trend cards cover the last 24 hours.
+export const DRAWER_TREND_RANGE: HistoryTimeRange = '24h';
+
+// Drawers whose Overview already shows those 24h trend cards open History on
+// the week, so the tab adds context instead of repeating them. The free plan
+// keeps 7 days, so this range is never locked.
+export const TRENDED_DRAWER_HISTORY_DEFAULT_RANGE: HistoryTimeRange = '7d';
 
 export const GUEST_DRAWER_HISTORY_GROUPS: GuestDrawerHistoryGroupConfig[] = [
   {
@@ -632,7 +651,7 @@ export const normalizeGuestDrawerTags = (tags: Guest['tags']): string[] => {
 export const getGuestDrawerBackupPresentation = (
   lastBackup: string | number | Date | null | undefined,
   thresholds?: BackupThresholds,
-  now: Date = new Date(),
+  now: number | Date = Date.now(),
 ): GuestDrawerBackupPresentation => {
   const timestamp = lastBackup instanceof Date ? lastBackup.getTime() : lastBackup;
   const info = getBackupInfo(timestamp, thresholds, now);
@@ -644,12 +663,15 @@ export const getGuestDrawerBackupPresentation = (
       dateLabel: 'Unknown',
     };
   }
-  const backupDate = new Date(timestamp!);
+  const completedAt = new Date(timestamp!).toISOString();
   const daysSince = Math.floor(info.ageMs / (1000 * 60 * 60 * 24));
 
   return {
     ageClass: statusPresentation.color,
-    ageLabel: daysSince === 0 ? 'Today' : daysSince === 1 ? 'Yesterday' : `${daysSince}d ago`,
-    dateLabel: backupDate.toLocaleDateString(),
+    // Elapsed age, not a rolling-day calendar claim: a 23-hour-old backup
+    // need not have completed today. Keep older ages in days, like the table.
+    ageLabel: daysSince === 0 ? info.ageFormatted : `${daysSince}d ago`,
+    dateLabel: completedAt.replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC'),
+    completedAt,
   };
 };

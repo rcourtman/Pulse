@@ -169,6 +169,16 @@ isolation. `guest_observation_test.go` no longer treats a retained-reading gap
 as elapsed breach evidence. These controls establish source lifecycle
 truthfulness, not native freeze/thaw safety or external notification delivery.
 
+### Node temperature alerts judge the primary CPU reading
+
+`checkNodeTemperature` evaluates `models.PrimaryCPUTemperatureCelsius`, the
+hottest usable package, CPU-maximum or core reading, instead of the package
+with a CPU-maximum fallback. The alert value is therefore the reading the
+node's table, drawer headline and history show, and a core running above the
+package now drives the alert. The interruption rule is unchanged: no usable
+reading interrupts timing and never clears an open alert. Proof:
+`alerts_test.go` (`TestCheckNodeTemperatureJudgesPrimaryCPUReading`).
+
 ### Open threshold alerts carry a volatile live status — issue #2068
 
 `evaluateCanonicalMetricAlert` builds `MetricStatus` from the evaluator's own
@@ -4045,6 +4055,30 @@ through `aria-controls` only while that region is rendered. This is
 presentation only: acknowledgement, snooze, investigation and policy
 handlers are unchanged.
 
+### A guest alert's name opens that guest
+
+On the overview, a VM or container alert whose platform page is Proxmox or
+vSphere links its resource name to that page with `?resource=` set to the
+alert's own resource id. The shared workloads table resolves that id
+(including a Proxmox source id such as `<cluster>-<node>-<vmid>`) through
+the resource registry, opens the guest's drawer and reveals it, so a
+notification reaches the affected guest in one tap instead of the top of a
+page with every guest on it. Other alerts (hosts, storage, Docker
+containers, Kubernetes, TrueNAS, Pulse system alerts) keep their platform
+page link, because their pages do not read `?resource=`. So do orphaned
+backup alerts (`backup-subject:...`), whose ids name no resource the
+registry can open. A guest's per-filesystem alert (`<guest>-disk-<key>`,
+marked by `mountpoint` or `diskIndex` metadata) names no registry resource
+either, so `CheckGuest` in `internal/alerts/guest.go` stamps its owning
+guest as `guestResourceId` metadata: the same guest ID the guest's own
+alerts are raised under, on the canonical-spec and legacy `checkMetric`
+paths alike (`TestGuestFilesystemAlertsNameOwningGuest`). The card links a
+filesystem alert to `?resource=<guestResourceId>`, opening the guest whose
+filesystem filled; a filesystem alert without that key (raised before the
+stamp) keeps the platform page link and never falls back to its own id.
+The platform used for the monitoring policy menu is still read from the
+page path alone.
+
 ### Thresholds lead with each group's default limits
 
 The Thresholds page answers "what will alert me, and at what limits" before
@@ -4313,11 +4347,9 @@ populated inventory and checks incident access on desktop and the 390px mobile
 rail. Enabled acknowledgement controls prove access only, not persisted
 acknowledgement or external notification receipt.
 
-The explicit issue explanation journey is qualified separately from provider
-reasoning and real remediation in
-`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
-proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
-response does not establish a useful customer outcome or model qualification.
+Issue explanation follows the [customer-journey qualification boundary](../../../../qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md#real-outcome-qualification-still-required),
+which separates scripted interaction proof from provider reasoning, remediation
+and repeatable customer outcomes.
 
 ### Delivery health requests have latest-started ownership
 
@@ -4545,10 +4577,6 @@ preserve all three supported minimum-severity values: all, warning, critical.
 Unknown values still fall back to all. The email adapter round-trip matrix and
 webhook edit/save regression cover issue #2069 without altering delivery filters
 or sending provider notifications. Component proof is not installed delivery.
-
-Formatting-only follow-up retains this warning-level contract. The production-component
-browser matrix was rerun after formatting at desktop and narrow widths, including
-all/critical/warning save/reload, cancel, and warning webhook creation.
 
 ### SMTP rate-limit preference persistence
 

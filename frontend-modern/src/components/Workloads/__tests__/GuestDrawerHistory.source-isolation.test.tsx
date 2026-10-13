@@ -6,6 +6,7 @@ import {
   createNonSuspendingQuery,
   resetCreateNonSuspendingQueryCacheForTest,
 } from '@/hooks/createNonSuspendingQuery';
+import DrawerTrendCards from '../DrawerTrendCards';
 import { GuestDrawerHistory } from '../GuestDrawerHistory';
 import type { GuestDrawerHistoryTarget } from '../guestDrawerModel';
 
@@ -234,4 +235,37 @@ describe('GuestDrawerHistory source isolation', () => {
     view.unmount();
     expect(active!.aborted).toBe(true);
   });
+
+  it.each([
+    ['opens on', '24h', 1],
+    ['does not borrow', '6h', 0],
+  ] as const)(
+    "%s the Overview trend's read for the same target when the range is %s",
+    async (_label, range, expectedPaths) => {
+      const fetch = vi
+        .spyOn(ChartsAPI, 'getMetricsHistory')
+        .mockResolvedValueOnce(response('host-shared'))
+        .mockImplementation(() => new Promise(() => {}));
+      const target = { resourceType: 'agent' as const, resourceId: 'host-shared' };
+      const overview = render(() => (
+        <DrawerTrendCards
+          target={target}
+          enabled
+          cards={[{ metric: 'cpu', label: 'CPU', unit: '%', color: '#8b5cf6', current: 88 }]}
+        />
+      ));
+      await waitFor(() =>
+        expect(screen.getByTestId('drawer-trend-card-cpu')).toHaveTextContent(
+          '24h low–high: 87.0%–88.0%',
+        ),
+      );
+      overview.unmount();
+
+      // The History tab's own read never settles here: anything it draws came
+      // from the Overview's read through the shared query cache key.
+      const { container } = render(() => <GuestDrawerHistory target={target} range={range} />);
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+      expect(paths(container)).toHaveLength(expectedPaths);
+    },
+  );
 });

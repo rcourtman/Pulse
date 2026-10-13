@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "31aba74aac9f63a28ff9953ae657dcd0c32db7da",
+  "changed_paths": ["frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "c24203dcf80299d91be2ebd31d326a5fc5479ad49776e7e390a4d77d6c926c58"
+  },
+  "routes": [
+    "/tmp/history-readout/index.html (isolated real Workloads and canonical VM/LXC drawers; no added product route)"
+  ],
+  "states": [
+    "mixed stored times with missing siblings and live carriers",
+    "aligned single observations with real zero",
+    "panel-local network/disk times",
+    "transient 503 retains dated history",
+    "403 withdraws history",
+    "empty panel explicitly qualified current fallback"
+  ],
+  "interactions": [
+    "Open real History tab in both drawers for VM and LXC",
+    "native Home/ArrowRight keyboard and WebKit touch slider; blur returns latest stored time",
+    "explicit real ChartsAPI refresh and retry; no writes",
+    "inspect six captured images with native view_image"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-12T15:21:28.907992Z",
+  "proof_scope": "Synthetic read-only ChartsAPI wire responses through real Workloads and canonical VM/LXC drawers, production History and CSS. No collection/native/release acceptance.",
+  "browser_proof": {
+    "checks": 48,
+    "loaded_production_hashes": 254,
+    "captures": 6,
+    "client_exit": 0,
+    "playwright": "1.56.1",
+    "browser_cleanup": {
+      "desktop-light": "context closed",
+      "desktop-light-browser": "closed",
+      "phone-dark": "context closed",
+      "phone-dark-browser": "closed",
+      "server": "closed"
+    },
+    "bound_dossier": "RECEIPTS.md / browser/result.json and native-image-review.json"
+  }
+}

@@ -15,6 +15,64 @@
 
 ## Purpose
 
+### One-page Patrol setup on the Patrol page
+
+When Patrol is blocked because no provider is connected, Pulse Intelligence
+is off, or the provider refused the saved key (`provider_auth`),
+`PatrolIntelligenceWorkspace.tsx` shows `PatrolSetupPanel.tsx` inside the
+setup card instead of a link to Provider & Models. The panel covers the two
+routes most paid installs use: a cloud API key (Anthropic, OpenAI, Gemini,
+DeepSeek, OpenRouter) or Ollama. It names the model Pulse will use from the
+Patrol model guidance table and prices it with the cost preview before
+anything is saved, at the schedule it will save: a per-token model on the
+untouched 6-hour default gets the same slower schedule picking it on Patrol
+settings proposes. Connect writes the key or Ollama URL with `enabled: true`,
+runs the provider test that Provider & Models runs (the model list hides a
+refused key behind an empty list; only a `provider_*` cause stops setup,
+because the test probes the provider's default model and a model-level cause
+is what setup is about to replace), picks the guided model from the
+provider's own list (best guidance level, undated alias first, never a
+caution model), saves it as the Patrol model (and as the shared model only
+when there is none), then runs the Patrol model check and shows its verdict.
+Ready means the check verified a Patrol mode; the panel then offers `Run
+Patrol now`, which re-reads Patrol state before the run gate. Once started,
+the panel stays mounted until the operator finishes, because polling flips
+the readiness cause mid-setup. The saved key is cleared from the page after
+connect. Subscription CLIs, custom endpoints, other providers and model
+overrides stay on Provider & Models, linked from the panel. `provider_auth`
+also routes the setup action to Provider & Models instead of the model check.
+`patrolSetupModel.ts` holds the pure decisions. Proofs:
+`frontend-modern/src/features/patrol/__tests__/patrolSetupModel.test.ts`,
+`frontend-modern/src/features/patrol/__tests__/PatrolSetupPanel.render.test.tsx`,
+`frontend-modern/src/features/patrol/__tests__/patrolControlPresentation.test.ts`
+and `frontend-modern/src/utils/__tests__/patrolRuntimeActions.test.ts`.
+The workspace loads `PatrolSetupPanel.tsx` lazily, passing the readiness
+provider as `readinessProvider`, so the panel's AI settings, provider and cost
+code stays out of the `AIIntelligence` chunk and its bundle budget.
+An unreachable provider (`provider_connection`: wrong URL, server down,
+network) also routes the setup action to Provider & Models, with the subtitle
+`PATROL_WORKSPACE_UNREACHABLE_DESCRIPTION` and no model-check hint, but it does
+not open the setup panel: a passing network blip must not ask a cloud user to
+re-enter a key that works.
+
+### Pro default notice and the not-running header
+
+A Pro install that never chose a Patrol mode runs Ask first.
+`PatrolIntelligenceHeader.tsx` says so once, in
+`patrol-default-mode-notice`: Patrol investigates new warning and critical
+findings, proposes a fix, changes nothing without approval, and spends the
+operator's AI provider budget. Its two actions save `Ask first` or `Watch only`,
+and either save clears the notice. The notice renders only when
+`default_mode_applied` is true and the install is not plan-locked, so the free
+Patrol surface stays free of paid-capability copy. When Patrol is enabled but
+cannot run yet (the setup-only state), the header reads `Patrol is not running
+yet` instead of `Watching your infrastructure`, so the header no longer claims
+monitoring that is not happening. `usePatrolIntelligenceState.ts` accepts only an
+explicit `default_mode_applied: true`, so an older server never shows the notice.
+Proofs:
+`frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceHeader.render.test.tsx`
+and `frontend-modern/src/features/patrol/__tests__/usePatrolIntelligenceState.test.ts`.
+
 ### Manual suppression reversal — issue #2528
 
 Patrol Activity exposes the existing suppression collection independently of
@@ -130,6 +188,8 @@ sources, and retains the note as operator context.
 37. `frontend-modern/src/features/patrol/patrolHomePresentation.ts`
 38. `frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx`
 39. `frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx`
+40. `frontend-modern/src/features/patrol/PatrolSetupPanel.tsx`
+41. `frontend-modern/src/features/patrol/patrolSetupModel.ts`
 
 ## Shared Boundaries
 
@@ -1328,24 +1388,12 @@ contract.
 
 ### AI Discovery removed (2026-10-11)
 
-AI Discovery, the model-backed service-identification layer, is gone. The
-`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
-the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
-mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
-identified-service cards, readiness badges, provenance markers, suggested
-web-interface URLs, the Workloads AI Context column, the chat "Discovery is
-off" hint and the AI Service Context settings page were all removed. No
-telemetry counter ever measured its use (the `discovery_enabled` telemetry
-field folded it together with network subnet discovery), the maintainer judged it a flop, and
-it carried a separate scheduler, store and model route for context that
-`pulse_query`, `pulse_read` and the unified-resource context sections already
-supply.
-Network subnet discovery (`internal/discovery`, `/api/discover`, the
-Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
-are separate features and stay. Stored `discovery_enabled`,
-`discovery_interval_hours` and `discovery_model` AI settings are ignored on
-load. The old `/settings/pulse-intelligence/discovery` route redirects to
-Assistant settings.
+Patrol reads canonical resource evidence through the shared AI runtime.
+The [retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11) applies
+to the removed service-identification layer, independently of the retained
+Watch only, Ask first, Safe auto-fix and Autopilot modes.
+
+### Patrol operator workflow
 
 The Patrol 2.0 frontend now uses a one-task-at-a-time, decision-first
 information hierarchy. The compact, borderless command row owns enabled
@@ -2530,7 +2578,11 @@ both: maintenance window suppression takes priority and emits
 `maintenance_end_at` metadata; the `IntentionallyOffline` branch is
 the indefinite fallback that emits `operator_state_cause:
 intentionally_offline` with no end-at field because the suppression
-has no scheduled end. Both branches set `DismissedReason =
+has no scheduled end. That branch, like canonical `expected_offline`,
+silences only availability findings (the shared down condition class);
+capacity, performance, backup, security, and disk-health findings on the
+resource stay visible, matching the alert runtime. Only `muted`, retired
+lifecycle, and active maintenance silence every finding. Both branches set `DismissedReason =
 expected_behavior` and write a `UserNote` naming the cause so the
 operator can audit why future findings stayed quiet without
 expanding each row. Default deployments without a provider behave
@@ -2837,11 +2889,9 @@ is unavailable rather than showing zeros. Proofs:
 `frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx` (card ordering),
 and the browser receipt in `frontend-modern/browser-verification.json`.
 
-The explicit issue explanation journey is qualified separately from provider
-reasoning and real remediation in
-`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
-proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
-response does not establish a useful customer outcome or model qualification.
+Issue explanation follows the [customer-journey qualification boundary](../../../../qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md#real-outcome-qualification-still-required),
+which separates scripted interaction proof from provider reasoning, remediation
+and repeatable customer outcomes.
 
 ### Expired action continuity (2026-09-07)
 

@@ -212,7 +212,7 @@ describe('guest memory original-observation provenance', () => {
     expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
       'Memory35.0%current',
     );
-    expect(chart.querySelector('path')).toBeNull();
+    expect(chart.querySelector('path[data-history-series]')).toBeNull();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -227,7 +227,9 @@ describe('guest memory original-observation provenance', () => {
       response({ memory: [point(original, 20), point(later, 30)] }),
     );
     mount(() => guest(annotation('last-known'), 25));
-    await waitFor(() => expect(utilization().querySelectorAll('path')).toHaveLength(1));
+    await waitFor(() =>
+      expect(utilization().querySelectorAll('path[data-history-series]')).toHaveLength(1),
+    );
     const chart = utilization();
     expect(chart).toHaveTextContent('Memory30.0%');
     expect(chart.querySelector('[data-history-current="memory"]')).toBeNull();

@@ -503,6 +503,17 @@ retained one keeps its own state, source and time
 `TestFixtureRefreshMovesCurrentGuestMemoryObservationTime`). This is fixture
 realism, not a change to live source selection.
 
+The per-node LXC collector that runs when `cluster/resources` is unavailable
+(`monitor_polling_containers.go`) annotates through the same
+`guestMemoryObservation` builder as the cluster path, passing the selected
+source, the listing's `ObservedAt`, the previous snapshot and the linked agent.
+A running container therefore reads `current` from `cluster-resources` (or
+`agent`) at the listing time and a stopped one `unavailable` from
+`powered-off`, rather than an unannotated value the UI qualifies as freshness
+unknown for every container on that node
+(`TestPerNodeLXCMemoryObservationMatchesClusterPath`). The fallback's numeric
+selection, stabilisation and alerting are unchanged.
+
 Low-trust memory stabilisation uses the original memory observation time for
 its existing two-minute reconnect and ten-minute healthy-guest windows, not
 the diagnostic poll's `RetrievedAt`. Repeated carried-forward polls cannot
@@ -593,6 +604,22 @@ accept fresh memory on resumption. SQL retention, sampling limits, memory
 source selection and wire formats are unchanged. The History cleanup tests
 cover every supported series, byte-array reclamation and connected readers;
 these controls do not attribute a reporter's native process-memory growth.
+
+### Mock chart history keeps one timeline per resource
+
+Mock chart history thins every series of a resource onto one wall-clock grid
+(`sampleMetricSeriesOnMockChartGrid` in `internal/monitoring/mock_chart_history.go`,
+called by `downsampleMetricSeriesForMockChart`). It keeps the first reading in
+each epoch-aligned bucket and the newest reading, each at its own timestamp, so
+which readings survive depends only on when they were taken, never on their values.
+The poller writes all of a resource's metrics at the same times, and the drawer
+History panels break a line where another series in the panel has a reading this
+one lacks; per-series LTTB picked value-dependent timestamps, so mock guests and
+nodes drew as dots with "Missing observations" on the public demo. Live poller
+history, the store query path, chart point targets and mock values are unchanged.
+`TestMockChartHistorySharesTimestampsAcrossMetrics` in `monitor_metrics_slo_test.go`
+pins identical cpu/memory/disk/network/disk-I/O timestamps for a mock VM, container
+and node, on synthetic and seeded history, at 1h, 4h, 24h and 7d.
 
 ### Podman interval CPU selection — issue #2447
 
@@ -1509,23 +1536,6 @@ live/collapsed/expanded/History acceptance.
 
 
 
-**Availability backfill preserves concurrent discovery changes (7 September 2026)**
-
-The backfill List snapshot is a work list, not an authoritative record to save.
-Read the current discovery, derive a missing suggestion from its current identity,
-and persist under one store write lock. State-provider reads stay outside that
-lock. Preserve newer identity, URL, engine version, user notes and existing
-(including dismissed) proposals; never resurrect a discovery deleted after List.
-A failed persistence attempt remains an error without installing the proposed
-change in cache. `TestService_BackfillPreservesConcurrentManualRepair` in `service_test.go`
-deterministically pauses SetReadState
-backfill after List, completes manual ESPHome repair, then resumes backfill and
-checks both cache and encrypted restart.
-`TestStore_BackfillAvailabilitySuggestionUsesCurrentRecord` in `store_test.go`
-covers current-identity
-inference, dismissal, deletion, unsupported identity and persistence failure.
-This is discovery state-integrity proof, not incident or notification acceptance.
-
 **Correlated VM memory fallback — issue #1962 (7 September 2026)**
 
 The next Proxmox guest poll indexes live agent memory embedded in VM read views,
@@ -1722,6 +1732,41 @@ Verification:
 - `TestMaybePollPhysicalDisksAsync_AgentFallbackWhenDiskQueryFails` in
   `internal/monitoring/monitor_pve_disk_fallback_test.go` remains required:
   association cleanup must not remove the one-way link used by SMART fallback.
+
+### One primary CPU temperature rule for node and agent history
+
+`models.PrimaryCPUTemperatureCelsius` (`internal/models/temperature_primary.go`)
+is the only rule that names a machine's single CPU temperature: the hottest
+usable reading among the package (Intel Package id, AMD Tctl/Tdie), the
+producer's CPU maximum and every core. `models.HostSensorPrimaryCPUTemperatureCelsius`
+applies it to an agent's flat sensor map (the hottest `cpu*` key). Node history
+(`monitor_pve_storage.go`), agent history (`monitor_agents.go`), the mock seed
+and live ticks (`mock_metrics_history.go`) and the CPU low/record tracking
+(`monitor_polling_node_helpers.go`, `mergeTemperatureData` in
+`host_agent_temps.go`) all call it. The package-first agent copy and the
+CPUMax-first node copy are gone: on an agent-fed node `CPUMax` is built from
+cores alone and can sit below the package, and elsewhere a core can run above
+the package, so the two copies split an agent-linked node's drawer headline
+from the line beneath it. For the keys an agent reports (`cpu_package`,
+`cpu_core_N`) the map form equals the rule applied to the node temperature
+`convertHostSensorsToTemperature` builds from the same map. A raised record now
+also carries its `MaxRecorded` time. TrueNAS keeps its own package-versus-core
+outlier safeguard (`maxTrueNASSystemTemperature`, #2122) because that quirk is
+specific to its producer.
+
+Mock mode follows the same shape. A node and its linked agent carry one CPU
+reading, sampled from the agent's series (`mock.CPUTemperatureSeries`), which
+is also the series that seeds both histories, under the keys a real agent
+reports; the package carries the sample and cores sit a stable amount below,
+so the rule returns the sample exactly. Agent hosts no longer carry a second
+package reading under a `cpu.package` key. Proof: `monitor_host_agents_test.go`
+(`TestApplyHostReportChartsThePrimaryCPUTemperatureEverySurfaceShows`),
+`monitor_additional_test.go`, `host_agent_temps_test.go`,
+`mock_metrics_history_test.go`
+(`TestSeedMockMetricsHistory_LinkedNodeTemperatureContinuesAgentSeries`) and
+`internal/mock/generator_test.go`
+(`TestFixtureNodeAndLinkedAgentShareOnePrimaryCPUTemperature`); each fails
+against the previous rules.
 
 ### Physical-disk observation cadence
 
@@ -2779,10 +2824,9 @@ alerts, 5 vSphere incidents and 137 backup-age alerts in live mode, and counted
 a mock-mode observation toward a live connection's three-observation
 confirmation. `TestLeavingMockModeWaitsForAnInFlightEvaluation` holds an
 evaluation in its CPU window read, outside the alert manager's lock, and fails
-if the switch returns first; `TestLiveRefreshIgnoresARegistryRepublishedFromMockMode`
-lets a mock-mode rebuild republish while a live refresh is held before reading
-the registry back, then checks the next live refresh evaluates live records.
-Each of those two fails against a fence without its wait or its overlap check.
+if the switch returns first; `TestLiveRefreshRejectsCollectedRecordsFromMockMode`
+holds collected fixture records across a mode switch and checks that a live
+refresh publishes and evaluates live provider records without fixture leakage.
 `TestDockerPruneIgnoresTheRegistryMockModeLeft` raises a live Docker alert
 before any live rebuild and fails if pruning reads the fixture registry, and
 `TestPreviousStateCarryIgnoresTheRegistryMockModeLeft` fails if the
@@ -3136,7 +3180,10 @@ service-history reads plus denial/recovery without fabricated samples.
    If a store-backed read-state has not yet been refreshed for the PVE instance
    whose current monitor state already contains guests, backup/snapshot polling
    refreshes the canonical resource store from the current state and continues
-   through the read-state interface. It must not fall back to direct legacy
+   through the read-state interface. Explicit selections use the optional
+   `ReferenceReadState` capability on the current `MonitorAdapter` generation,
+   preserving registry identity across rename or node movement instead of
+   binding a same-name guest from another provider. It must not fall back to direct legacy
    guest slices as the primary source of truth. Clustered PVE snapshot polling
    must therefore see guests collected earlier in the same cycle before calling
    the Proxmox guest snapshot APIs.
@@ -3495,26 +3542,9 @@ service-history reads plus denial/recovery without fabricated samples.
 
 `internal/monitoring/monitor_host_agents_test.go` and `pkg/agents/host/proxmox_lxc_test.go` must prove JSON wire-report ingestion through `ApplyHostReport`, partial/complete-empty recovery, contradictory IDs, unchanged node/agent/name/TTL protection, and no invalid-list-to-healthy-empty conversion. Omitted telemetry is never zero. Source proofs are distinct from native PVE and released availability.
 
-### Discovery accepts successful command evidence only
-
-Only stdout from a successful result with zero exit status and no error enters
-Discovery analysis or saved observations. Stderr, failed/partial output, a nil
-result and contradictory success/status cannot identify a service. Independent
-healthy output survives optional probe failures. When an attempted scan has
-failures and no successful stdout evidence, return a fixed no-evidence error
-and truthful terminal progress; manual metadata fallback and background
-enhancement must not replace saved results, notes or observation times. An
-explicit later healthy scan resumes normally; no failed command is replayed.
-
-`TestDiscoveryFailedCommandEvidenceContract` covers VM/nested-Docker/LXC/host/
-Docker output admission, optional partial evidence, saved manual/background
-results and explicit recovery. Registered server/agent controls cover actual
-guest result propagation, with fake config/provider boundaries. This is source
-truthfulness, not native thaw, containing-release or workload acceptance.
-
 1. Update this contract when monitoring truth ownership changes
 2. Tighten guardrails when `GetState()`-centric paths are removed
-3. Keep discovery-provider, host-agent ingest, guest-memory trust, metrics-history, storage-risk, Docker/Podman container collection, Docker report/model payloads, Proxmox Ceph and ZFS compatibility, Docker Swarm collection, mock runtime fixtures, and container bootstrap proof routes explicit in `registry.json`
+3. Keep network-discovery, host-agent ingest, guest-memory trust, metrics-history, storage-risk, Docker/Podman container collection, Docker report/model payloads, Proxmox Ceph and ZFS compatibility, Docker Swarm collection, mock runtime fixtures, and container bootstrap proof routes explicit in `registry.json`
 4. Update related read-state or monitor tests when new collector paths land
 5. Keep platform ingestion semantics aligned with
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`: hybrid is a
@@ -3672,26 +3702,10 @@ truthfulness, not native thaw, containing-release or workload acceptance.
 
 ### AI Discovery removed (2026-10-11)
 
-AI Discovery, the model-backed service-identification layer, is gone. The
-`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
-the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
-mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
-identified-service cards, readiness badges, provenance markers, suggested
-web-interface URLs, the Workloads AI Context column, the chat "Discovery is
-off" hint and the AI Service Context settings page were all removed. No
-telemetry counter ever measured its use (the `discovery_enabled` telemetry
-field folded it together with network subnet discovery), the maintainer judged it a flop, and
-it carried a separate scheduler, store and model route for context that
-`pulse_query`, `pulse_read` and the unified-resource context sections already
-supply.
-Network subnet discovery (`internal/discovery`, `/api/discover`, the
-Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
-are separate features and stay. Stored `discovery_enabled`,
-`discovery_interval_hours` and `discovery_model` AI settings are ignored on
-load. The old `/settings/pulse-intelligence/discovery` route redirects to
-Assistant settings.
-
-The service-discovery availability-suggestion helpers under `internal/servicediscovery` were deleted with the package; availability probes are configured directly.
+The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)
+owns the removed service-identification scheduler and suggestion helpers.
+Network subnet discovery remains monitoring-owned. Availability probes activate
+through the canonical saved-target configuration path.
 
 ### Interface-associated guest address selection
 
@@ -3754,41 +3768,6 @@ failure, empty/invalid/windowed samples, canonical identity, revocation,
 existing reader behaviour and the real authenticated/scoped Pulse route.
 
 V2 partial inventories preserve usable filesystem readings while leaving typed-helper health degraded. Global inventory failure still yields no inventory. No host-network exception, guest mutation, database/retention change or temperature substitution accompanies this repair.
-
-### Discovery observes VM guest execution pauses
-
-Verified VM results describe the guest's terminal status and decoded output,
-not successful CLI delivery. Discovery admits only successful stdout as command
-evidence for every resource type; stderr and failed/partial output are not
-observations. An attempted scan with failures but no successful stdout returns
-an error without replacing saved results or invoking analysis. Normal empty
-successful probes and independent healthy output alongside optional failures
-retain their existing semantics.
-
-Manual, automatic and nested-Docker VM scans use the existing agent execution
-boundary; they cannot infer safety from the Web drawer's snapshot. VM routing
-requires an exact connected agent ID or a unique owning-node hostname, never a
-sole unrelated agent or guest-name hint. The agent independently requires its
-current local VM config and checks the operation lock. Discovery runs VM probes
-serially and stops on any explicit guest safety deferral, including optional
-probes. Deferred in-flight output is not fresh discovery evidence; progress
-retains an error and actual partial completion rather than 100% success.
-
-A manual deferral is returned as an error without replacing saved discoveries,
-notes or raw observations with metadata fallback. Background enhancement keeps
-its existing evidence rather than analysing partial deferred output. Clearing
-a pause triggers no scan or retry by itself; an existing normal trigger or
-explicit request starts a new, guarded attempt. Healthy catalogue commands,
-non-VM parallelism, permissions, feature gates and saved-result access remain.
-
-`TestDiscoveryGuestSafetyStopsAndPreservesSavedEvidence` covers both VM/nested
-Docker scans, first/later optional-command deferral, manual error and automatic
-saved-evidence preservation. Node ambiguity controls exclude misrouting. These
-source-connected controls and the agent protocol guard do not reserve QGA
-against PVE backup start, establish native thaw, or satisfy the existing native
-overlap/covered-write/liveness/resumption dependency. Preserve the monitoring
-and alert outage precaution until that operational outcome is verified.
-
 
 ### Mock-mode unified view applies operator links
 
@@ -4308,16 +4287,8 @@ evidence envelopes, telemetry, logs, or Patrol context. Execution-defined
 contract edits use the existing server-authored configuration revision so
 history visibly breaks at the new proof definition instead of blending unlike
 checks.
-Discovery-led assurance proposals remain monitoring-owned read evidence until
-an operator explicitly creates a canonical availability target. The
-`internal/servicediscovery` suggestion contract derives only bounded
-HTTP/HTTPS/TCP candidates, normalizes each candidate into a stable evidence
-fingerprint, and persists dismissal against that exact fingerprint. Equivalent
-rediscovery retains a dismissal; a material endpoint, service identity, or
-inference-reason change clears it. Disposition writes reject stale
-fingerprints, and neither discovery refresh nor dismissal may create, enable,
-schedule, or execute a network check. The explicit availability-target create
-path remains the sole activation boundary.
+The explicit availability-target create path is the activation boundary for
+saved availability probes.
 HTTPS checks also author one canonical certificate observation from the same
 probe execution. `internal/availabilityprobe` captures the presented leaf and
 `pkg/tlsutil/certificate.go` derives subject, issuer, SANs, SHA-256 fingerprint,
@@ -5355,12 +5326,12 @@ temperature, so a retained standby or silent-agent reading never reappears as a
 point at the current time.
 The SMART history writers in `internal/monitoring/monitor.go` and
 `monitor_agents.go` call that helper rather than a private copy of the rule,
-and `GetPhysicalDiskTemperatureCharts` pads a short disk temperature series out
-to now only with a collected reading: with a retained one the stored samples
-stay as they are, and a disk with none gets no series. Mock mode can still
-substitute its generic demo series for that disk ID before this step; that
-series is not derived from the disk's reading. Proof:
-`TestDiskTemperatureChartsPadOnlyWithCollectedReading` in
+and `GetPhysicalDiskTemperatureCharts` returns observed history samples without
+padding a short series to now, even when the current reading was collected.
+Retained readings never manufacture history. A live disk with no history keeps
+its metadata without a fabricated series. Mock mode may use its seeded demo
+history, which is separate from a disk reading. Proof:
+`TestDiskTemperatureChartsRetainOnlyObservedSamples` in
 `internal/monitoring/monitor_metrics_slo_test.go`.
 Unified-resource physical-disk round trips must retain named
 `StorageGroup` membership rather than degrading it to the generic `Used`
@@ -6303,7 +6274,10 @@ canonical parent chain for maintenance only. An ancestor contributes an active
 occurrence only when its scope is `resource_and_descendants`; monitoring mode,
 lifecycle state, and every other operator field remain exact-resource policy.
 When active windows overlap, the adapter projects the occurrence with the
-latest end together with its source id and inherited marker.
+latest end together with its source id and inherited marker. That resolution
+is `unifiedresources.ActiveMaintenanceCoverageAt`, the rule Patrol's
+operator-state projection shares, so a host window scoped to descendants
+silences its guests' alerts and Patrol findings alike.
 
 Backup-aware offline intent consumes a PVE task only when VMID, instance, and
 node match and the task is active. `pollBackupTasks` stamps server observation
@@ -6541,6 +6515,11 @@ snapshot cannot resurrect a deleted or migrated entry or overwrite an operator
 edit. The existing tenant-local JSON shape, private file permissions and atomic
 temporary-file/rename path stay unchanged. A failed write is reported and not
 spin-retried; a later ordinary identity poll can retry the unpersisted state.
+An accepted guest-key migration retains its operator fields under the new key
+in memory even when persistence fails. Atomic persistence keeps the previous
+successful disk snapshot, and the existing writer records and retries the
+retained state on an ordinary update. A failed write cannot restore an obsolete
+in-memory key after the guest's new coordinates have been admitted.
 
 `WaitForPendingWrites` reports quiescence, not durable success. `Close` seals
 mutation admission and observes the background writer and any admitted
@@ -6892,20 +6871,8 @@ that already admitted or provider-accepted deliveries can be recalled.
 
 ### Physical-disk provider identity round trip
 
-The monitor's disk readback preserves the Proxmox source ID separately from
-its canonical resource ID. Skipped physical-disk polls may refresh SMART data
-but must not feed canonical hashes into source inventory, changing identity at
-each subsequent projection. Views without Proxmox source metadata retain the
-legacy ID fallback. This does not relax cross-host/device correlation, migrate
-old duplicates, change agent authority, or redefine serial-less disk matching.
-
-`TestPhysicalDiskSkippedPollPreservesSourceIdentity` in
-`internal/monitoring/physical_disk_roundtrip_test.go` drives eight real skipped
-polls and adapter rebuilds for both path-shaped and bare device names, checking
-provider keys, canonical IDs, JSON projection, temperature/size/cadence, separate
-nodes/controller members, and confirmed inventory removal.
-`TestPhysicalDiskReadbackSourceIDFallback` covers missing source metadata.
-This is synthetic runtime evidence, not USB hardware or reporter acceptance.
+Disk ingest and readback follow the [unified source-identity contract](unified-resources.md#physical-disk-provider-identity-round-trip),
+including its source controls and qualification limits.
 
 ### Unified metric replay guard bounds registry-rebuild writes
 
@@ -7188,14 +7155,7 @@ for a mock-style view.
 
 ### Reconciled node-agent relink fold bookkeeping
 
-A declared node-agent join can consume one split row before its newer
-operator relink is applied. The relink records that side's ID and source in
-the current holder-bound `ManualLinkFold` index, so identity-pin succession
-keeps the operator decision and the resources API seed retains the same fold
-for report-merge. No synthetic telemetry, identity key, enrollment or service
-link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
-the monitor and its re-ingested API seed retain the fold across all split
-shapes, then survive pin persistence and a repeated split.
+Relink consumers preserve the [unified fold-bookkeeping contract](unified-resources.md#reconciled-node-agent-relink-fold-bookkeeping).
 
 Mock-link lifecycle validation drives the owning ingest/rebuild boundary
 after unlink and relink: read hydration intentionally reuses a registry
@@ -7309,6 +7269,11 @@ admitted publication; late inventories/details cannot recreate or erase the
 replacement's guest readings. An interrupted inventory does not grant fallback.
 One cycle per live binding owns collection until it completes, including when
 its caller is cancelled. Another connection can still advance independently.
+Before publishing accepted VM/container coordinates, that same owner migrates
+their persisted guest metadata keys. Readers cannot observe a new node ahead
+of its saved web URL, tags and notes. Rejected or replaced cycles do not migrate
+metadata. Collector-local post-publication callbacks own diagnostics and alerts,
+while metadata migration belongs to the complete accepted publication.
 
 Deep-enrichment/caller-deadline expiry is distinct from explicit parent-cycle
 cancellation: already collected authoritative inventory still publishes even

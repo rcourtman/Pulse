@@ -55,6 +55,7 @@ import {
   buildStandalonePath,
   buildTrueNASPath,
   buildVmwarePath,
+  buildWorkloadsRouteSearch,
 } from '@/routing/resourceLinks';
 import {
   PRIMARY_PLATFORM_NAV_IDS,
@@ -102,6 +103,19 @@ const THRESHOLD_UNIT_BY_ALERT_TYPE: Record<string, string> = {
   networkOut: ' MB/s',
   'disk-wearout': '%',
 };
+
+// Guest alerts whose platform page lists them in the shared workloads table.
+// That table opens the guest named by ?resource=, resolving source ids such
+// as a Proxmox alert's through the resource registry, and scrolls to it.
+const GUEST_ALERT_RESOURCE_TYPES = new Set([
+  'vm',
+  'qemu',
+  'container',
+  'lxc',
+  'system-container',
+  'oci-container',
+]);
+const GUEST_WORKLOAD_PAGE_PATHS = [PROXMOX_PATH, VMWARE_PATH];
 
 const platformPagePath = (platform: string | undefined): string | undefined => {
   if (!platform) return undefined;
@@ -222,7 +236,33 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
     return resolvePlatformTypeFromSources(sources);
   };
 
+  // The name opens the guest an alert is about; other resources keep their
+  // platform page.
   const resourceLink = (): string => {
+    const page = platformLink();
+    const metadata = props.alert.metadata;
+    const resourceType = metadata?.resourceType;
+    // A per-filesystem alert names `<guest>-disk-<key>` and an orphaned backup
+    // names `backup-subject:...`; neither is a resource the registry can open.
+    // A filesystem alert that carries its guest's id opens that guest.
+    const isFilesystem = metadata?.mountpoint !== undefined || metadata?.diskIndex !== undefined;
+    const owningGuestId =
+      typeof metadata?.guestResourceId === 'string' ? metadata.guestResourceId.trim() : '';
+    const resourceId = isFilesystem ? owningGuestId : props.alert.resourceId?.trim();
+    const namesSubResource = Boolean(resourceId?.startsWith('backup-subject:'));
+    if (
+      !resourceId ||
+      namesSubResource ||
+      typeof resourceType !== 'string' ||
+      !GUEST_ALERT_RESOURCE_TYPES.has(resourceType.trim().toLowerCase()) ||
+      !GUEST_WORKLOAD_PAGE_PATHS.some((path) => page.startsWith(path))
+    ) {
+      return page;
+    }
+    return `${page}${buildWorkloadsRouteSearch({ resource: resourceId })}`;
+  };
+
+  const platformLink = (): string => {
     const platformPage = platformPagePath(metadataPlatform());
     if (platformPage) return platformPage;
     const rid = props.alert.resourceId ?? '';
@@ -257,7 +297,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
   const platformTypeForPolicy = (): string | undefined => {
     const platform = metadataPlatform();
     if (platform) return platform;
-    const link = resourceLink();
+    const link = platformLink();
     if (link.startsWith(PROXMOX_PATH)) return 'proxmox';
     if (link.startsWith(DOCKER_PATH)) return 'docker';
     if (link.startsWith(KUBERNETES_PATH)) return 'kubernetes';
@@ -274,7 +314,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
     if (resourceId.startsWith('agent:')) return 'agent';
     if (resourceId.includes('docker')) return 'app-container';
     if (resourceId.includes('k8s') || resourceId.includes('kubernetes')) return 'pod';
-    if (resourceLink() === buildProxmoxPath()) return 'vm';
+    if (platformLink() === buildProxmoxPath()) return 'vm';
     return undefined;
   };
 

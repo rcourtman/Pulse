@@ -41,7 +41,7 @@ const response = (
 const group = (id = 'utilization') =>
   screen.getAllByTestId('guest-history-group-chart').find((el) => el.dataset.historyGroup === id)!;
 const paths = (colour: string, id = 'utilization') => [
-  ...group(id).querySelectorAll(`path[stroke="${colour}"]`),
+  ...group(id).querySelectorAll(`path[data-history-series][stroke="${colour}"]`),
 ];
 const marks = (metric: string, id = 'utilization') =>
   group(id).querySelectorAll(`[data-history-observation="${metric}"]`);
@@ -61,9 +61,7 @@ describe('drawer History does not join missing stored observations', () => {
     expect(paths('#10b981')).toHaveLength(0);
     expect(marks('disk')).toHaveLength(2);
     expect(note()).toHaveTextContent('Missing observations: Memory, Disk.');
-    expect(note()).toHaveTextContent(
-      'Lines stop where a series has no reading at another stored time in this panel.',
-    );
+    expect(note()).toHaveTextContent('Lines break where a reading is missing.');
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -84,7 +82,7 @@ describe('drawer History does not join missing stored observations', () => {
       'aria-valuetext',
       expect.stringContaining('Memory no observation.'),
     );
-    expect(group()).toHaveTextContent('Memory-');
+    expect(group()).toHaveTextContent('Memoryno reading');
     fireEvent.input(slider, { target: { value: '2' } });
     expect(group()).toHaveTextContent('Memory0.0%');
   });
@@ -98,7 +96,7 @@ describe('drawer History does not join missing stored observations', () => {
     );
     mount();
     await screen.findByRole('slider', { name: 'Inspect Utilization history' });
-    expect(group().querySelectorAll('path')).toHaveLength(0);
+    expect(group().querySelectorAll('path[data-history-series]')).toHaveLength(0);
     expect(marks('cpu')).toHaveLength(2);
     expect(marks('memory')).toHaveLength(2);
     expect(note()).toHaveTextContent('Missing observations: CPU, Memory.');

@@ -3251,6 +3251,61 @@ func TestApplyHostReportPersistsAgentTemperatureMetric(t *testing.T) {
 	}
 }
 
+// An agent-linked node's drawer headlines the unified resource temperature and
+// draws the agent's "temperature" history beneath it; both must come from one
+// rule. The node's own Temperature, built from the same sensors, must agree
+// too, because node alerts, the node table and node history read it.
+func TestApplyHostReportChartsThePrimaryCPUTemperatureEverySurfaceShows(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		sensors map[string]float64
+		want    float64
+	}{
+		// Package above every core: the node's CPUMax (built from cores)
+		// sits below the package, which once split node and agent history.
+		{name: "package hottest", sensors: map[string]float64{"cpu_package": 61, "cpu_core_0": 55, "cpu_core_1": 57}, want: 61},
+		// A core above the package: the agent rule once kept the package.
+		{name: "core hottest", sensors: map[string]float64{"cpu_package": 60, "cpu_core_0": 66, "cpu_core_1": 58}, want: 66},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			monitor := &Monitor{
+				state:             models.NewState(),
+				alertManager:      alerts.NewManager(),
+				hostTokenBindings: make(map[string]string),
+				config:            &config.Config{},
+				rateTracker:       NewRateTracker(),
+				metricsHistory:    NewMetricsHistory(10, time.Hour),
+			}
+			t.Cleanup(func() { monitor.alertManager.Stop() })
+
+			host, err := monitor.ApplyHostReport(agentshost.Report{
+				Agent:     agentshost.AgentInfo{ID: "agent-primary-temp", Version: "1.0.0", IntervalSeconds: 30},
+				Host:      agentshost.HostInfo{ID: "machine-primary-temp", Hostname: "primary-temp", MachineID: "machine-primary-temp"},
+				Metrics:   agentshost.Metrics{CPUUsagePercent: 10},
+				Sensors:   agentshost.Sensors{TemperatureCelsius: tc.sensors},
+				Timestamp: time.Now().UTC(),
+			}, nil)
+			if err != nil {
+				t.Fatalf("ApplyHostReport: %v", err)
+			}
+
+			points := monitor.GetGuestMetrics("agent:"+host.ID, time.Hour)["temperature"]
+			if len(points) == 0 || points[len(points)-1].Value != tc.want {
+				t.Fatalf("agent temperature history = %+v, want last point %v", points, tc.want)
+			}
+			// The unified resource's agent.temperature (the drawer headline).
+			if got := models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors); got == nil || *got != tc.want {
+				t.Fatalf("agent resource temperature = %v, want %v", got, tc.want)
+			}
+			// The linked node's Temperature, as the poller builds it from these sensors.
+			nodeTemperature := convertHostSensorsToTemperature(host.Sensors, host.LastSeen)
+			if got := models.PrimaryCPUTemperatureCelsius(nodeTemperature); got == nil || *got != tc.want {
+				t.Fatalf("linked node temperature = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestApplyHostReportPreservesTypedSensorSummary(t *testing.T) {
 	storeCfg := metrics.DefaultConfig(t.TempDir())
 	storeCfg.WriteBufferSize = 1

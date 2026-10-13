@@ -1,7 +1,6 @@
 package monitoring
 
 import (
-	"math"
 	"regexp"
 	"slices"
 	"sort"
@@ -666,8 +665,8 @@ func mergeTemperatureData(hostAgentTemp, proxyTemp *models.Temperature) *models.
 	result := &models.Temperature{
 		CPUPackage:   hostAgentTemp.CPUPackage,
 		CPUMax:       hostAgentTemp.CPUMax,
-		CPUMin:       proxyTemp.CPUMin,                                           // Preserve historical min
-		CPUMaxRecord: math.Max(hostAgentTemp.CPUPackage, proxyTemp.CPUMaxRecord), // Update historical max
+		CPUMin:       proxyTemp.CPUMin,       // Preserve historical min
+		CPUMaxRecord: proxyTemp.CPUMaxRecord, // Raised below from the merged primary reading
 		MinRecorded:  proxyTemp.MinRecorded,
 		MaxRecorded:  proxyTemp.MaxRecorded,
 		Cores:        hostAgentTemp.Cores,
@@ -719,10 +718,10 @@ func mergeTemperatureData(hostAgentTemp, proxyTemp *models.Temperature) *models.
 		result.HasNVMe = true
 	}
 
-	// Update historical max if current is higher
-	currentTemp := result.CPUPackage
-	if currentTemp == 0 && result.CPUMax > 0 {
-		currentTemp = result.CPUMax
+	// Update historical max if the primary reading is higher
+	currentTemp := 0.0
+	if primary := models.PrimaryCPUTemperatureCelsius(result); primary != nil {
+		currentTemp = *primary
 	}
 	if currentTemp > result.CPUMaxRecord {
 		result.CPUMaxRecord = currentTemp

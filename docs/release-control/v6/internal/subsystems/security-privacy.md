@@ -18,6 +18,13 @@
 
 ## Purpose
 
+### Patrol maintenance coverage widens no authority
+
+Patrol inherits only maintenance from an ancestor window scoped
+`resource_and_descendants`. Monitoring mode, lifecycle and the
+`NeverAutoRemediate` lock are never inherited, so descendant scope can quiet
+findings but cannot unlock or grant automated action on any resource.
+
 ### Startup provisioning cannot replace retained access
 
 `pkg/server/server.go` admits environment-selected startup import only into an
@@ -2267,17 +2274,8 @@ legacy `.json` knowledge files and plaintext `.enc` knowledge files may only
 serve as migration input, and the knowledge store must rewrite canonical
 encrypted-at-rest storage immediately on load instead of leaving guest
 knowledge plaintext on disk until a future note update.
-That same trust boundary also applies at store construction time: the AI
-knowledge store and the service discovery store may not fail open into
-plaintext-at-rest mode when crypto initialization fails. If encryption cannot
-be established for those stores, construction must fail closed instead of
-quietly persisting runtime state unencrypted.
-That same rule also applies to persisted service-discovery records after store
-construction: `internal/servicediscovery/store.go` may only accept plaintext
-`.enc` discovery files as migration input. Once a discovery record can be
-read, canonical persistence must rewrite encrypted-at-rest storage immediately
-on load/list/id-scan instead of leaving plaintext discovery metadata or user
-secrets on the steady-state runtime path.
+The AI knowledge store must fail closed at construction when encryption cannot
+be established. It must not persist runtime state in plaintext.
 That same trust boundary also covers audit-signing key persistence:
 `pkg/audit/signer.go` may keep the 32-byte HMAC signing key in runtime memory,
 but `.audit-signing.key` may only accept plaintext key material as migration
@@ -2761,26 +2759,20 @@ capability is not treated as the authorization boundary.
 and image normalization.
 ### Licensed-feature adoption telemetry stays count-only
 
-Schema v6 of the outbound usage payload adds nine licensed-feature adoption
-signals so Pro feature usage is measurable at all: `alert_ai_enabled`,
-`rbac_custom_roles`, `rbac_user_assignments`, `audit_logging_persistent`,
-`audit_events_30d`, `report_schedules`, `report_schedules_enabled`,
-`report_schedules_run_30d`, and `agent_profiles`. Every one is a count or a
-coarse boolean. Role names, permission sets, usernames, schedule names,
-delivery recipients, report scope and contents, profile names, and every audit
-event field (type, actor, target, outcome, detail) stay on the install.
-`audit_logging_persistent` reports only that a persistent store is active
-rather than console logging, and `audit_events_30d` is a retained-row count
-inside the same 30-day window used by the other counters, so it cannot be
-linked to one pseudonymous identifier indefinitely. Config-sourced signals are
-read in `applyLicensedFeatureConfigSnapshot`
-(`pkg/server/telemetry_licensed_features.go`); RBAC and audit are read behind
-the router in `Router.ApplyLicensedFeatureTelemetrySnapshot`
-(`internal/api/telemetry_licensed_features.go`). Both are disclosed in
-`docs/PRIVACY.md` and its `frontend-modern/public/docs/` copy, pinned by
-`TestAllTelemetryFieldsAreDisclosed`, and the counts are pinned by
+Licensed-feature adoption telemetry exports only the coarse counts and booleans
+declared in `internal/telemetry/licensed_feature_fields.go`. Role names,
+permission sets, usernames, schedule names, delivery recipients, report scope
+and contents, profile names, and every audit event field stay on the install.
+Config signals come from `pkg/server/telemetry_licensed_features.go`; RBAC counts
+come from `internal/api/telemetry_licensed_features.go`, and licensed audit-read
+activity follows the gated recorder below.
+
+`docs/PRIVACY.md` and its shipped copy disclose the current fields.
+`TestAllTelemetryFieldsAreDisclosed`,
 `TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`
-and `TestApplyLicensedFeatureTelemetrySnapshot_CountsOnlyOperatorAuthoredRBAC`.
+and `TestApplyLicensedFeatureTelemetrySnapshot_CountsOnlyOperatorAuthoredRBAC`
+pin disclosure and count semantics. Audit-store presence and background write
+volume are not adoption signals.
 
 ### Telemetry RBAC reads never provision an RBAC store
 
@@ -2793,17 +2785,11 @@ side effect of a background read. A store reporting a migration failure is
 skipped rather than counted, so a degraded store cannot silently understate
 adoption. `TestTenantRBACProvider_PeekManagerDoesNotProvision` and
 `TestTenantRBACProvider_PeekManagerNilProviderIsSafe` in
-`internal/api/rbac_tenant_provider_test.go` pin both properties, and
-`TestApplyLicensedFeatureTelemetrySnapshot_DoesNotCreateRBACStores` pins it
-through the router boundary.
+`internal/api/rbac_tenant_provider_test.go` pin both properties.
+`ApplyLicensedFeatureTelemetrySnapshot` uses that cached-only read boundary.
 ### Audit adoption telemetry counts gated reads, never store presence
 
-Schema v7 replaced `audit_logging_persistent` and `audit_events_30d` with
-`audit_reads_30d`. The first two did not discriminate: `pkg/server` installs the
-SQLite audit logger on every install for defense in depth and gates only the
-read and export endpoints, so the boolean was true on every install that
-reported it and the event count measured background write volume, saturating
-the receiver clamp on unlicensed community installs. `audit_reads_30d` counts
+`audit_reads_30d` counts
 requests that cleared `RequireLicenseFeature(featureAuditLoggingValue, ...)` on
 an audit read or export surface, which requires a human action and so cannot
 settle into a constant. The recorder in
@@ -2939,17 +2925,9 @@ because it looks like data in the fleet aggregate.
 names.
 ### Per-tenant resource stores are released on offboarding and shutdown
 
-`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
-process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
-called from `Router.CleanupTenant` alongside the other per-tenant teardown;
-`CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
-Without this an offboarded tenant kept its file descriptors and its
-`unified_resources.db-wal`/`-shm` files alive and its directory could not be
-fully removed. Closed stores are evicted from the cache so a later request opens
-a fresh handle rather than using a closed one
-(`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
-are idempotent and nil-safe
-(`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+Tenant offboarding and process shutdown use the [API store-lifecycle contract](api-contracts.md#per-tenant-resource-stores-are-released-on-offboarding-and-shutdown),
+including its source controls and qualification limits.
+
 ### Report-ack server versions cannot steer agents beyond one validated check
 
 The unified-agent report ack's `serverVersion` echo gives acks a version
@@ -3220,20 +3198,8 @@ a CSRF-checked `POST`. No authentication, scope or session rule changed.
 
 ### Node setup action v7 compatibility
 
-Workflow consumers pin `actions/setup-node` to
-`820762786026740c76f36085b0efc47a31fe5020` (v7.0.0). The action manifest
-retains the Node 24 execution runtime, setup/cache-save entry points and existing
-inputs. Its internal ESM/toolkit upgrade does not change the requested Node 24
-application toolchain. Consumers do not supply `registry-url` or depend on the
-removed dummy `NODE_AUTH_TOKEN` export. Explicit npm lockfile caching for test
-jobs and disabled automatic package-manager caching for privileged release jobs
-remain unchanged; no permission, dispatch input or signing backend changes.
-
-`test_setup_node_upgrade_preserves_consumer_contract` in the existing workflow
-trust suite verifies every consumer pin, absence of the affected auth assumptions,
-workflow trust controls and the retained native Windows command/lifecycle proof
-steps. Native Windows execution remains a hosted check, not a local Linux claim.
-This upgrade is independent of the grouped signing/Docker/Tailscale updates.
+Workflow consumers and their trust controls follow the [deployment toolchain contract](deployment-installability.md#node-setup-action-v7-compatibility),
+including its source controls and qualification limits.
 
 ### Updates settings copy rename
 
@@ -3258,6 +3224,14 @@ paused-delivery banner strings in English, German and Spanish. This is alert
 presentation copy only: no API token name, scope preset, privacy disclosure,
 telemetry statement or security term changes, and no request, storage or
 authorization path moves.
+
+### Live temperature fallback uses the shared primary rule
+
+`router.go`'s live metrics fallback now picks node and agent CPU temperature
+through `models.PrimaryCPUTemperatureCelsius` and its sensor-map form instead
+of local copies. It serves the same rows to the same authorized callers; the
+route, authentication, scope checks, tenant resolution and response shape are
+unchanged.
 
 ### Retained disk temperatures are not served as live history
 
