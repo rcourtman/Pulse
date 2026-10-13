@@ -60,13 +60,13 @@ async function box(locator) {
       const record = { name, browser: browser.version(), width, theme, requests: [], errors: [], states: [] }; result.cases.push(record);
       page.on('pageerror', (error) => record.errors.push(error.message));
       await page.clock.install({ time: new Date('2026-10-13T13:00:00Z') });
-      await page.route('**/*', (route) => {
+      await context.route('**/*', (route) => {
         const request = route.request(), url = new URL(request.url());
         record.requests.push({ method: request.method(), path: url.pathname, search: url.search });
         assert.equal(url.origin, origin); assert.equal(request.method(), 'GET');
         assert(!/\/(?:diagnostics|run-command|guest-agent|qemu)(?:\/|$)/.test(url.pathname));
         if (!url.pathname.startsWith('/api/')) return route.continue();
-        if (url.pathname === '/api/metrics/history') {
+        if (url.pathname === '/api/metrics-store/history') {
           const end = Date.parse('2026-10-13T13:00:00Z'), start = end - 86400000;
           const metrics = Object.fromEntries(['cpu', 'memory', 'disk', 'temperature'].map((metric) => [metric, [
             { timestamp: start, value: 20, min: 10, max: 40 }, { timestamp: end, value: 30, min: 20, max: 90 },
@@ -76,8 +76,8 @@ async function box(locator) {
         if (url.pathname === '/api/license/runtime-capabilities') return route.fulfill({ json: { capabilities: [], hosted_mode: false, max_history_days: 7, runtime: { build: 'free' }, blocked_capabilities: [] } });
         return route.fulfill({ json: { success: true, data: [], alerts: [], anomalies: [], config: null } });
       });
-      const capture = async (suffix) => {
-        const file = `${name}-${suffix}.png`; await page.screenshot({ path: output + '/' + file, fullPage: true });
+      const capture = async (suffix, target = page) => {
+        const file = `${name}-${suffix}.png`; await target.screenshot({ path: output + '/' + file, fullPage: true });
         result.captures.push({ file, bytes: fs.statSync(output + '/' + file).size, sha256: hash(fs.readFileSync(output + '/' + file)) });
       };
       const noOverflow = async () => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
@@ -98,7 +98,7 @@ async function box(locator) {
       record.os = await box(fact); assert.equal(record.os.text, os); assert(record.os.scroll <= record.os.client); assert.equal(record.os.whiteSpace, 'normal');
       assert(record.os.right <= width && record.os.left >= 0); await noOverflow();
       const reading = overview.getByRole('link', { name: 'Filesystem reading guidance' });
-      await reading.scrollIntoViewIfNeeded(); await page.keyboard.press('Tab'); await reading.focus();
+      await reading.scrollIntoViewIfNeeded(); await reading.focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
       record.reading = await box(reading); assert.equal(record.reading.focusVisible, true); assert.equal(record.reading.outline, 'solid'); assert.equal(record.reading.outlineWidth, '2px');
       assert.equal(record.reading.height, width < 768 ? 44 : 16); await capture('guest-unknown');
       await activate(reading); await page.waitForURL('**/docs/VM_DISK_MONITORING#*');
@@ -144,6 +144,15 @@ async function box(locator) {
       record.trigger = await box(trigger); assert(record.trigger.height >= (width < 768 ? 44 : 32));
       record.help = await box(help); assert(record.help.right <= width && record.help.left >= 0);
       await noOverflow(); await capture('node-help');
+      const learnMore = help.getByRole('link', { name: 'Learn more', exact: true });
+      assert.equal(await learnMore.getAttribute('href'), '/docs/TROUBLESHOOTING#proxmox-pending-update-access');
+      const [docsPage] = await Promise.all([context.waitForEvent('page'), learnMore.click()]);
+      await docsPage.waitForLoadState('networkidle');
+      await docsPage.getByRole('heading', { name: 'Proxmox pending-update access', exact: true }).waitFor();
+      const docDigest = await docsPage.evaluate(async () => { const b = await (await fetch('/docs/TROUBLESHOOTING.md')).arrayBuffer(); return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', b))).map((x) => x.toString(16).padStart(2, '0')).join(''); });
+      assert.equal(docDigest, binding.artifacts['docs/TROUBLESHOOTING.md']);
+      record.updateDoc = { url: docsPage.url(), sha256: docDigest };
+      await capture('node-docs', docsPage); await docsPage.close();
       await page.keyboard.press('Escape'); await help.waitFor({ state: 'hidden' }); assert.equal(await trigger.evaluate((e) => e === document.activeElement), true);
       await activate(nodeDetails.locator('summary')); assert.notEqual(await nodeDetails.getAttribute('open'), null);
       await activate(nodeDetails.locator('summary')); assert.equal(await nodeDetails.getAttribute('open'), null);
