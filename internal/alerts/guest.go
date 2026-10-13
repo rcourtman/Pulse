@@ -354,6 +354,9 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				"diskIndex":  idx,
 				"label":      label,
 				"tags":       append([]string(nil), snapshot.Tags...),
+				// The filesystem ID names no registry resource; this is the
+				// guest the alert belongs to, as its guest-level alerts name it.
+				"guestResourceId": guestID,
 			}
 			resourceType, ok := unifiedMetricResourceType(snapshot.resourceType())
 			if !ok {

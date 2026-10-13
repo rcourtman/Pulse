@@ -8689,7 +8689,9 @@ sets `aria-controls` only while its region is rendered.
 
 `AlertOverviewAlertCard` builds a guest alert's link with
 `buildWorkloadsRouteSearch({ resource })` and passes the alert's resource id
-unchanged. It adds no identity mapping of its own: the workloads selection
+unchanged, or for a per-filesystem alert the backend-stamped
+`guestResourceId` of the guest that owns the filesystem, also unchanged. It
+adds no identity mapping of its own: the workloads selection
 state resolves non-row ids through the resource registry, and the summary
 focus bridge reveals the selected row, so the alert link and every other
 `?resource=` link share one resolution and reveal path.

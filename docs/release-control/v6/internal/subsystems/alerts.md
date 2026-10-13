@@ -4055,11 +4055,19 @@ the resource registry, opens the guest's drawer and reveals it, so a
 notification reaches the affected guest in one tap instead of the top of a
 page with every guest on it. Other alerts (hosts, storage, Docker
 containers, Kubernetes, TrueNAS, Pulse system alerts) keep their platform
-page link, because their pages do not read `?resource=`. So do a guest's
-per-filesystem alerts (`<guest>-disk-<key>`, marked by `mountpoint` or
-`diskIndex` metadata) and orphaned backup alerts (`backup-subject:...`),
-whose ids name no resource the registry can open. The platform used
-for the monitoring policy menu is still read from the page path alone.
+page link, because their pages do not read `?resource=`. So do orphaned
+backup alerts (`backup-subject:...`), whose ids name no resource the
+registry can open. A guest's per-filesystem alert (`<guest>-disk-<key>`,
+marked by `mountpoint` or `diskIndex` metadata) names no registry resource
+either, so `CheckGuest` in `internal/alerts/guest.go` stamps its owning
+guest as `guestResourceId` metadata: the same guest ID the guest's own
+alerts are raised under, on the canonical-spec and legacy `checkMetric`
+paths alike (`TestGuestFilesystemAlertsNameOwningGuest`). The card links a
+filesystem alert to `?resource=<guestResourceId>`, opening the guest whose
+filesystem filled; a filesystem alert without that key (raised before the
+stamp) keeps the platform page link and never falls back to its own id.
+The platform used for the monitoring policy menu is still read from the
+page path alone.
 
 ### Thresholds lead with each group's default limits
 

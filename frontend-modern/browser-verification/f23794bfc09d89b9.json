@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "7dfe2b9c7f97018c3b8d5dfc5b41dc78a4517a2b",
+  "verified_at": "2026-10-13T08:20:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "892129cd308a908fef7bbc400a903b5861c8ba4d7ade502a98330d6521419e7c"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "embedded production build of 7dfe2b9c7f plus this change (backend guestResourceId stamp and card), private mock stack (PULSE_MOCK_MODE, 4 nodes, 28 Proxmox guests) with the guest disk threshold lowered to 30% so filesystems alert",
+    "/api/alerts/active: all 34 filesystem alerts carry guestResourceId equal to their guest's id (VMs and the edge-proxy-01 LXC)",
+    "Alerts overview: filesystem alerts (orders-api-01 /, /logs, /data; edge-proxy-01 /) link to /proxmox/overview?resource=<owning guest id>, alongside guest-level alerts that keep their own id",
+    "1280px: edge-proxy-01 (LXC) opens with its drawer expanded and the row in view; its Filesystems panel shows / at 41%, the filesystem the alert names",
+    "375px and 800px: orders-api-01 (VM) opens with its drawer expanded and in view; its Filesystems panel shows / at 52% and /logs at 51%"
+  ],
+  "interactions": [
+    "1280px: click on the edge-proxy-01 Disk (/) alert name navigates to that guest's open drawer",
+    "375px: real tap on the orders-api-01 Disk (/logs) alert name navigates to that guest's open drawer; browser Back returns to /alerts/overview",
+    "800px: activating the orders-api-01 Disk (/) alert link opens the same guest"
+  ]
+}
