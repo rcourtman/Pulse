@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "012b5cbdae37324e86e6cc14309c8e6e90d472d8",
+  "verified_at": "2026-10-13T12:50:23.498676Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/FAQ.md",
+    "docs/UNIFIED_AGENT.md",
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/public/docs/FAQ.md",
+    "frontend-modern/public/docs/UNIFIED_AGENT.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md",
+    "frontend-modern/src/features/docs/__tests__/unifiedAgentBootstrapGuide.test.ts"
+  ],
+  "content_sha256": {
+    "docs/FAQ.md": "7520d2750734f97a27bf752010d8368f78153cdcc5415be3dc33849887cc0ffb",
+    "docs/UNIFIED_AGENT.md": "217b2adb4efb4abed0900d04f97d74861e24fe26b788acef92e31c7e63f79175",
+    "docs/TROUBLESHOOTING.md": "802fa6aade112cb1034bc4ea0e545974a7fb2d921cdde4828eaf369797504e49",
+    "frontend-modern/public/docs/FAQ.md": "7520d2750734f97a27bf752010d8368f78153cdcc5415be3dc33849887cc0ffb",
+    "frontend-modern/public/docs/UNIFIED_AGENT.md": "217b2adb4efb4abed0900d04f97d74861e24fe26b788acef92e31c7e63f79175",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "802fa6aade112cb1034bc4ea0e545974a7fb2d921cdde4828eaf369797504e49",
+    "frontend-modern/src/features/docs/__tests__/unifiedAgentBootstrapGuide.test.ts": "eed0fa4139a1d70f281ff1930dcde415ad8fce40700257c1fd01c866f018c71f",
+    "frontend-modern/src/pages/Docs.tsx": "2ddb5a1daef50d23a99a7d1cb510c73cd7a85600f07ea9f69ad72f741f3b5229",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "572a3b4bc5bc1114adef5aa64bb0ea833c0dbe5865bbd57d3dc767fd1965aa55",
+    "frontend-modern/src/components/shared/PageHeader.tsx": "428d4c02380ba13a38d1ee7404c56b538562df904aecb66f11786ef0dbb8d259",
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c"
+  },
+  "routes": [
+    "/docs/FAQ#how-do-i-add-a-node",
+    "/docs/UNIFIED_AGENT#copied-agent-command-fails-before-installation",
+    "/docs/TROUBLESHOOTING#choose-the-affected-workflow"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Desktop light and phone dark; actual Docs fetch, markdown renderer, PageHeader and router with a minimal surrounding shell. Exact shipped FAQ/Unified Agent/Troubleshooting document bytes were fetched and matched.",
+    "All eight captures opened with native view_image. Changed paragraphs and underlined links are readable; long flags wrap without horizontal clipping. Desktop heading focus outlines are visible, and narrow-view paragraphs retain spacing. This is not a contrast audit or native appliance acceptance."
+  ],
+  "interactions": [
+    "Keyboard Enter and phone taps follow FAQ/troubleshooting entry links, private-file anchor and history back, and reporting/update/removal destinations in the existing Docs shell. No recovery command executes.",
+    "All 2801 source inputs and all six static assets match the prepared-source binding; every served payload is rehashed. No API/WS request or page error, browser and server close.",
+    "Preview compiler ran only in the offline source-proof VM, with the existing current-browser target. The old output-bound browser attempt was not replayed, and production compiler target, browser output/deadline/cgroup/isolation limits are unchanged."
+  ],
+  "browser": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37"
+  },
+  "proof_scope": "Help presentation/navigation only; full frontend, review/containing CI, protected publication and installed/native QNAP recovery are distinct."
+}
