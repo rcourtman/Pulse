@@ -3409,6 +3409,11 @@ describe('GuestRow accessible reading explanations', () => {
     renderGuestRow({
       guest: makeGuest({
         memory: makeMemory({
+          // The current caption is actionable only at the configured warning.
+          // Quiet low-pressure cache readings remain covered independently.
+          used: 0.8 * 4294967296,
+          free: 0.2 * 4294967296,
+          usage: 80,
           observation: {
             state: 'current',
             source: 'status-mem',
