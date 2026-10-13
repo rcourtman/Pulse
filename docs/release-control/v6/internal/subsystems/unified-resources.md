@@ -128,6 +128,20 @@ select the canonical owner without interpreting alert strings independently.
 references and absent current owners. Scoped Patrol tests cover linked owners
 and conflicting unqualified source IDs.
 
+### Resource CPU temperature uses the one primary rule
+
+`proxmox.temperature`, `agent.temperature` and a Kubernetes node's
+linked-host temperature come from `models.PrimaryCPUTemperatureCelsius` and
+`models.HostSensorPrimaryCPUTemperatureCelsius`, the rule node and agent
+history record under (see the monitoring contract). The adapter-local
+`maxNodeTemp`/`maxCPUTemp` copies are gone. `nodeFromResource` carries the
+resource's top-level temperature (the agent's reading first, then the
+node's: the same source as the drawer's history target) as
+`Node.cpuTemperature`; the node drawer shows that value and never rebuilds a
+headline from `temperatureDetails`. Proof: `adapters_test.go`
+(`TestResourceTemperatureUsesPrimaryCPURuleForNodeAndAgent`) and
+`resourceStateAdapters.test.ts`.
+
 ### Proxmox node temperature cell follows its own open alert — issue #2068
 
 `ProxmoxNodesTable` finds the node's own temperature alert through

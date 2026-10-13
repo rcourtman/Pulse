@@ -139,13 +139,11 @@ func (m *Manager) CheckNode(node models.Node) {
 // feeding 0°C would resolve an open alert without proving the node cooled down,
 // so the open alert is kept and only its timing runs are interrupted.
 func (m *Manager) checkNodeTemperature(node models.Node, threshold *HysteresisThreshold) {
+	// The alert judges the same reading the node's table, drawer and history
+	// show, so an alert never names a value the operator cannot find.
 	var temp float64
-	if node.Temperature != nil && node.Temperature.Available {
-		// Use CPU package temp if available, otherwise use max core temp
-		temp = node.Temperature.CPUPackage
-		if temp == 0 {
-			temp = node.Temperature.CPUMax
-		}
+	if primary := models.PrimaryCPUTemperatureCelsius(node.Temperature); primary != nil {
+		temp = *primary
 	}
 	spec, err := buildCanonicalMetricSpec(node.ID, node.Name, unifiedresources.ResourceType("node"), "temperature", threshold)
 	if err != nil {

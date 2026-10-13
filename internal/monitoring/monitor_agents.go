@@ -3838,7 +3838,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	if len(host.Disks) > 0 {
 		hostDiskPercent = host.Disks[0].Usage
 	}
-	hostTemperature := hostPrimaryTemperatureCelsius(host.Sensors)
+	hostTemperature := models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors)
 	hostGPUUtilization, hostGPUMemory, hostGPUTemperature := hostGPUMetrics(host.Sensors)
 
 	if !shouldSkipNativeMockStateMetricWrites() {
@@ -4118,31 +4118,6 @@ func cloneAgentStatusTime(value *time.Time) *time.Time {
 	return &copy
 }
 
-func hostPrimaryTemperatureCelsius(sensors models.HostSensorSummary) *float64 {
-	if len(sensors.TemperatureCelsius) == 0 {
-		return nil
-	}
-	if value, ok := sensors.TemperatureCelsius["cpu_package"]; ok && value > 0 {
-		return &value
-	}
-
-	var best float64
-	found := false
-	for key, value := range sensors.TemperatureCelsius {
-		if value <= 0 || !strings.HasPrefix(strings.ToLower(key), "cpu") {
-			continue
-		}
-		if !found || value > best {
-			best = value
-			found = true
-		}
-	}
-	if !found {
-		return nil
-	}
-	return &best
-}
-
 func hostGPUMetrics(sensors models.HostSensorSummary) (
 	utilizationPercent *float64,
 	memoryPercent *float64,
@@ -4175,36 +4150,6 @@ func hostGPUMetrics(sensors models.HostSensorSummary) (
 		}
 	}
 	return utilizationPercent, memoryPercent, temperatureCelsius
-}
-
-func nodePrimaryTemperatureCelsius(temperature *models.Temperature) *float64 {
-	if temperature == nil || !temperature.Available {
-		return nil
-	}
-	if temperature.CPUMax > 0 {
-		value := temperature.CPUMax
-		return &value
-	}
-	if temperature.CPUPackage > 0 {
-		value := temperature.CPUPackage
-		return &value
-	}
-
-	var best float64
-	found := false
-	for _, core := range temperature.Cores {
-		if core.Temp <= 0 {
-			continue
-		}
-		if !found || core.Temp > best {
-			best = core.Temp
-			found = true
-		}
-	}
-	if !found {
-		return nil
-	}
-	return &best
 }
 
 func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {

@@ -177,6 +177,12 @@ export interface Node {
   /** Typed telemetry from a linked Unified Agent, when this PVE node is hybrid. */
   sensors?: HostSensorSummary;
   temperature?: Temperature; // CPU/NVMe temperatures
+  /**
+   * The node's primary CPU temperature in Celsius, chosen by the backend
+   * (models.PrimaryCPUTemperatureCelsius) and recorded under the same rule in
+   * the node's history. Show this value; never recompute it from `temperature`.
+   */
+  cpuTemperature?: number;
   temperatureMonitoringEnabled?: boolean | null; // Per-node temperature monitoring override
   pendingUpdates?: number; // Number of pending apt updates
   pendingUpdatesCheckedAt?: string; // When updates were last checked

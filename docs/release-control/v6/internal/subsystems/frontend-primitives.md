@@ -256,6 +256,17 @@ light/dark and narrow/desktop layouts using synthetic observations only.
 Presentation acceptance does not establish native thaw, covered-filesystem
 writes, guest liveness, service restoration or reporter recovery.
 
+### Node drawer CPU temperature reads the backend reading
+
+The node drawer's CPU temperature trend card, its Summary temperature row and
+`getNodeDrawerCurrentMetrics` read `Node.cpuTemperature`, the backend's
+primary CPU reading, which the history line beneath the card records under the
+same rule. `getCpuTemperature` (a frontend maximum over package, CPU maximum
+and cores) is removed from `utils/temperature.ts`; no drawer may rebuild a
+headline from `temperature` details. Proof: `NodeDrawer.test.tsx` (the card
+shows the backend value while the details hold a hotter core) and the
+`nodeDrawerModel` branch tests.
+
 ### Drawer attention detail line and temperature alert floor — issue #2068
 
 `DrawerAttentionSection` items accept an optional `detail` (a muted second

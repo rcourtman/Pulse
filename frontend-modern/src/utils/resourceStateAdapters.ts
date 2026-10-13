@@ -1446,6 +1446,14 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     },
     sensors: agentFacet?.sensors,
     temperature: buildTemperature(resource, proxmox),
+    // The backend's primary CPU reading: the agent's when one is linked, the
+    // same source the node's history line reads.
+    cpuTemperature:
+      typeof resource.temperature === 'number' &&
+      Number.isFinite(resource.temperature) &&
+      resource.temperature > 0
+        ? resource.temperature
+        : undefined,
     temperatureMonitoringEnabled:
       asBoolean(platform?.temperatureMonitoringEnabled) ??
       asBoolean(proxmox?.temperatureMonitoringEnabled) ??

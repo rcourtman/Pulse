@@ -169,6 +169,16 @@ isolation. `guest_observation_test.go` no longer treats a retained-reading gap
 as elapsed breach evidence. These controls establish source lifecycle
 truthfulness, not native freeze/thaw safety or external notification delivery.
 
+### Node temperature alerts judge the primary CPU reading
+
+`checkNodeTemperature` evaluates `models.PrimaryCPUTemperatureCelsius`, the
+hottest usable package, CPU-maximum or core reading, instead of the package
+with a CPU-maximum fallback. The alert value is therefore the reading the
+node's table, drawer headline and history show, and a core running above the
+package now drives the alert. The interruption rule is unchanged: no usable
+reading interrupts timing and never clears an open alert. Proof:
+`alerts_test.go` (`TestCheckNodeTemperatureJudgesPrimaryCPUReading`).
+
 ### Open threshold alerts carry a volatile live status — issue #2068
 
 `evaluateCanonicalMetricAlert` builds `MetricStatus` from the evaluator's own

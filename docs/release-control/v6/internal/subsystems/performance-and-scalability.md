@@ -294,7 +294,13 @@ more field of the facet already in the canonical payload
 (`proxmox.temperatureDetails`), only when the existing record selection yields
 no usable reading, and keeps it only when it holds a CPU reading. That is one
 extra record mapping per such node per adapter call. It adds no resource read,
-merge pass, timer or subscription.
+merge pass, timer or subscription. `Node.cpuTemperature` copies the resource's
+existing top-level temperature scalar, one field read per adapter call.
+
+Mock CPU temperatures refresh on the existing tick: each online node with a CPU
+reading takes one `SampleMetric` and rebuilds its core list (copied, never
+mutated in place), and each agent host rewrites its CPU keys from the sample
+it already took. No new timer, pass or fixture-wide scan is added.
 
 ### Unavailable filesystem values share the existing disk model
 

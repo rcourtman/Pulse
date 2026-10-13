@@ -3769,7 +3769,7 @@ func generateHosts(config MockConfig) []models.Host {
 		sensors := models.HostSensorSummary{}
 		if profile.Platform == "linux" || profile.Platform == "macos" {
 			sensors.TemperatureCelsius = map[string]float64{
-				"cpu.package": SampleMetric("agent", hostID, "temperature", now),
+				"cpu_package": SampleMetric("agent", hostID, "temperature", now),
 			}
 			if rand.Float64() < 0.4 {
 				sensors.Additional = map[string]float64{
@@ -3908,12 +3908,20 @@ func ensureMockNodeHostLinks(data *models.StateSnapshot) {
 	for i := range data.Nodes {
 		node := &data.Nodes[i]
 		hostIndex, exists := hostsByLinkedNodeID[node.ID]
-		if exists && hostIndex >= 0 && hostIndex < len(data.Hosts) {
-			linkedHost := buildMockLinkedHostFromNode(*node, data.Hosts[hostIndex].ID, hostIndex, now)
+		exists = exists && hostIndex >= 0 && hostIndex < len(data.Hosts)
+		// The linked agent's sensors are built from the node's reading, so
+		// the node takes the agent's sampled value before the agent is built.
+		node.LinkedAgentID = mockLinkedHostIDForNode(node.ID)
+		if exists {
+			node.LinkedAgentID = data.Hosts[hostIndex].ID
+		}
+		refreshMockNodeCPUTemperature(node, now)
+		if exists {
+			linkedHost := buildMockLinkedHostFromNode(*node, node.LinkedAgentID, hostIndex, now)
 			data.Hosts[hostIndex] = linkedHost
 			node.LinkedAgentID = linkedHost.ID
 		} else {
-			linkedHost := buildMockLinkedHostFromNode(*node, "", nextHostIndex, now)
+			linkedHost := buildMockLinkedHostFromNode(*node, node.LinkedAgentID, nextHostIndex, now)
 			data.Hosts = append(data.Hosts, linkedHost)
 			hostsByLinkedNodeID[node.ID] = len(data.Hosts) - 1
 			nextHostIndex++
@@ -4234,9 +4242,13 @@ func ensureMockFixtureHostIORates(data *models.StateSnapshot) {
 	}
 }
 
+func mockLinkedHostIDForNode(nodeID string) string {
+	return fmt.Sprintf("host-node-%s", nodeID)
+}
+
 func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int, now time.Time) models.Host {
 	if hostID == "" {
-		hostID = fmt.Sprintf("host-node-%s", node.ID)
+		hostID = mockLinkedHostIDForNode(node.ID)
 	}
 
 	cpuCount := node.CPUInfo.Cores
@@ -4401,6 +4413,66 @@ func nodeStatusToHostStatus(status string) string {
 	default:
 		return "online"
 	}
+}
+
+// A mock machine's CPU temperature follows one sampler series, the same
+// series that seeds its history, so the current reading continues the line
+// drawn beneath it. A node with a linked agent follows the agent's series:
+// the poller merges the agent's sensors into the node, and the node's drawer
+// and history read the agent. The package carries the sampled value and each
+// core sits a stable amount below it, so models.PrimaryCPUTemperatureCelsius
+// returns exactly the sample for the node and for its agent.
+func CPUTemperatureSeries(node models.Node) (resourceClass, resourceID string) {
+	if linkedAgentID := strings.TrimSpace(node.LinkedAgentID); linkedAgentID != "" {
+		return "agent", linkedAgentID
+	}
+	return "node", node.ID
+}
+
+func mockCoreTemperature(primary float64, seriesID string, core int) float64 {
+	offset := 0.5 + float64(mockStableHash64(seriesID, fmt.Sprintf("core-%d", core), "temperature-offset")%56)/10
+	return math.Max(primary-offset, 1)
+}
+
+// refreshMockNodeCPUTemperature replaces the node's CPU readings (not the
+// low/record tracking or other sensors) with the current sample. The
+// Temperature is copied, never mutated in place, because published snapshots
+// may still share the old pointer.
+func refreshMockNodeCPUTemperature(node *models.Node, now time.Time) {
+	if node == nil || node.Temperature == nil || !node.Temperature.Available || !node.Temperature.HasCPU {
+		return
+	}
+	resourceClass, seriesID := CPUTemperatureSeries(*node)
+	primary := SampleMetric(resourceClass, seriesID, "temperature", now)
+	temperature := *node.Temperature
+	temperature.CPUPackage = primary
+	temperature.CPUMax = primary
+	temperature.Cores = make([]models.CoreTemp, len(node.Temperature.Cores))
+	for i, core := range node.Temperature.Cores {
+		temperature.Cores[i] = models.CoreTemp{Core: core.Core, Temp: mockCoreTemperature(primary, seriesID, core.Core)}
+	}
+	node.Temperature = &temperature
+}
+
+// refreshMockHostCPUSensors writes the agent's current sample under the keys a
+// real agent reports: cpu_package, plus cpu_core_N for the cores it already
+// carries. A linked agent's keys come from its node, so both read one value.
+func refreshMockHostCPUSensors(host *models.Host, now time.Time) {
+	if host == nil || host.Sensors.TemperatureCelsius == nil {
+		return
+	}
+	primary := SampleMetric("agent", host.ID, "temperature", now)
+	sensors := make(map[string]float64, len(host.Sensors.TemperatureCelsius)+1)
+	for key, value := range host.Sensors.TemperatureCelsius {
+		var core int
+		if _, err := fmt.Sscanf(key, "cpu_core_%d", &core); err == nil && key == fmt.Sprintf("cpu_core_%d", core) {
+			sensors[key] = mockCoreTemperature(primary, host.ID, core)
+			continue
+		}
+		sensors[key] = value
+	}
+	sensors["cpu_package"] = primary
+	host.Sensors.TemperatureCelsius = sensors
 }
 
 func nodeTemperatureToHostSensors(temperature *models.Temperature) models.HostSensorSummary {
@@ -6465,6 +6537,7 @@ func updateFixtureStateMetricsSelectedAt(
 		node.CPU = SampleMetric("node", node.ID, "cpu", refreshNow) / 100.0
 		applyMemoryUsage(&node.Memory, SampleMetric("node", node.ID, "memory", refreshNow))
 		applyDiskUsage(&node.Disk, SampleMetric("node", node.ID, "disk", refreshNow))
+		refreshMockNodeCPUTemperature(node, refreshNow)
 	}
 
 	// Update VM metrics
@@ -7069,9 +7142,7 @@ func updateHosts(data *models.StateSnapshot, config MockConfig, now time.Time) {
 			applyDiskUsage(&host.Disks[j], SampleMetric("agent", diskID, "disk", now))
 		}
 
-		if host.Sensors.TemperatureCelsius != nil {
-			host.Sensors.TemperatureCelsius["cpu.package"] = SampleMetric("agent", host.ID, "temperature", now)
-		}
+		refreshMockHostCPUSensors(host, now)
 
 		if len(host.LoadAverage) == 3 {
 			for j := range host.LoadAverage {

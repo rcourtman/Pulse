@@ -3373,6 +3373,13 @@ settings persistence path are unchanged — so tenant workspace preservation,
 recovery flows that copy `system.json` forward, and backup or restore
 attribution are unaffected.
 
+### Live temperature fallback opens no storage path
+
+The shared `internal/api` live metrics fallback (`router.go`) now chooses CPU
+temperature through `models.PrimaryCPUTemperatureCelsius` instead of local
+copies. It writes nothing, adds no persisted field and touches no backup,
+restore or recovery flow.
+
 ### Agent exec token binding repairs are fail-closed durable writes
 
 Command-token binding metadata (`bound_agent_id`, `bound_hostname`,
