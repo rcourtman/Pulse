@@ -58,7 +58,7 @@ describe('missing API-only PBS help', () => {
   it('links the existing troubleshooting entry and safety/history guides to real headings', () => {
     const entry = render('TROUBLESHOOTING').querySelector(`a[href="/docs/PBS#${fragment}"]`);
     expect(entry).not.toBeNull();
-    expect(entry?.closest('li')?.textContent).toContain('installing an agent does not prove API recovery');
+    expect(prose(entry!.closest('li')!)).toContain('installing an agent does not prove API recovery');
     for (const link of section().querySelectorAll('a[href]')) {
       const href = link.getAttribute('href')!;
       const target = /^#(.+)$/.exec(href);
