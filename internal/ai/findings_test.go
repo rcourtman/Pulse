@@ -1804,11 +1804,12 @@ func TestFindingsStore_Add_DoesNotAutoAcknowledgeOutsideMaintenanceWindow(t *tes
 
 func TestFindingsStore_Add_AutoAcknowledgesOnIntentionallyOfflineResource(t *testing.T) {
 	// When the operator has marked a resource as intentionally offline,
-	// any new finding raised against it must be auto-dismissed as
-	// expected_behavior with operator_state_cause=intentionally_offline.
-	// The intent is an indefinite "shut up about this resource" — no
-	// time window — so the lifecycle event must not include a
-	// maintenance_end_at field.
+	// a new availability finding raised against it must be auto-dismissed
+	// as expected_behavior with operator_state_cause=intentionally_offline.
+	// The intent is an indefinite "this resource is expected to be down" —
+	// no time window — so the lifecycle event must not include a
+	// maintenance_end_at field. Non-availability findings stay visible; see
+	// findings_expected_offline_test.go.
 	store := NewFindingsStore()
 	provider := ResourceOperatorStateProviderFunc(func(canonicalID string, now time.Time) (ResourceOperatorStateProjection, bool) {
 		if canonicalID != "vm:archived" {
@@ -1824,6 +1825,7 @@ func TestFindingsStore_Add_AutoAcknowledgesOnIntentionallyOfflineResource(t *tes
 		ID:         "f-archived",
 		ResourceID: "vm:archived",
 		Severity:   FindingSeverityWarning,
+		Category:   FindingCategoryReliability,
 		Title:      "Resource is offline",
 	})
 
@@ -2005,6 +2007,7 @@ func TestFindingsStore_Add_WakesAfterIntentionallyOfflineCleared(t *testing.T) {
 		ID:         "f-offline-wake",
 		ResourceID: "vm:archived",
 		Severity:   FindingSeverityWarning,
+		Category:   FindingCategoryReliability,
 		Title:      "Resource is offline",
 	})
 	if got := store.Get("f-offline-wake"); got == nil || got.DismissedReason != "expected_behavior" {
@@ -2021,6 +2024,7 @@ func TestFindingsStore_Add_WakesAfterIntentionallyOfflineCleared(t *testing.T) {
 		ID:         "f-offline-wake",
 		ResourceID: "vm:archived",
 		Severity:   FindingSeverityWarning,
+		Category:   FindingCategoryReliability,
 		Title:      "Resource is offline",
 	})
 	got := store.Get("f-offline-wake")
@@ -2135,13 +2139,18 @@ func TestFindingsStore_OperatorStateSuppressedFindingsDoNotTriggerInvestigation(
 	cases := []struct {
 		name      string
 		signal    ResourceOperatorStateProjection
+		category  FindingCategory
+		title     string
 		wantCause string
 	}{
 		{
+			// Intentionally offline silences availability findings only.
 			name: "intentionally_offline",
 			signal: ResourceOperatorStateProjection{
 				IntentionallyOffline: true,
 			},
+			category:  FindingCategoryReliability,
+			title:     "VM 101 is offline",
 			wantCause: "intentionally_offline",
 		},
 		{
@@ -2152,6 +2161,8 @@ func TestFindingsStore_OperatorStateSuppressedFindingsDoNotTriggerInvestigation(
 					EndAt:   time.Now().Add(time.Hour),
 				},
 			},
+			category:  FindingCategoryPerformance,
+			title:     "CPU saturated",
 			wantCause: "maintenance_window",
 		},
 	}
@@ -2170,7 +2181,8 @@ func TestFindingsStore_OperatorStateSuppressedFindingsDoNotTriggerInvestigation(
 				ID:         "f-suppressed",
 				ResourceID: "vm:101",
 				Severity:   FindingSeverityWarning,
-				Title:      "CPU saturated",
+				Category:   tc.category,
+				Title:      tc.title,
 			})
 
 			got := store.Get("f-suppressed")

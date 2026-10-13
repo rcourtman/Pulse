@@ -32,7 +32,7 @@ func isolatedRouteAllocationCheck(t *testing.T, measure func()) {
 func runRouteAllocationTest(t *testing.T, name string) {
 	t.Helper()
 	switch name {
-	case "TestNormalizeSegment_DoesNotAllocate", "TestNormalizeRoute_RootFastPathDoesNotAllocate", "TestNormalizeRoute_BoundedAllocations":
+	case "TestNormalizeSegment_DoesNotAllocate", "TestNormalizeRoute_RootFastPathDoesNotAllocate", "TestNormalizeRoute_BoundedAllocations", "TestNormalizeRoute_LabelAllocationProfile":
 	default:
 		t.Fatalf("unknown route allocation measurement %q", name)
 	}

@@ -111,6 +111,10 @@ func findingConditionClass(f *Finding) string {
 			return mirrorConditionRestartLoop
 		case contains("unhealthy", "health check"):
 			return mirrorConditionContainerHealth
+		case key == "smart-failure", contains("smart", "uncorrectable"):
+			// SMART reports count "offline uncorrectable" sectors; that is
+			// disk health, not the resource being down.
+			return ""
 		case contains("stopped", "exited", "offline", "powered off", "is down", "unreachable", "not running"):
 			return mirrorConditionDown
 		}
