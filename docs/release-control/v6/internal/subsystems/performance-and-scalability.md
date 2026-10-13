@@ -366,22 +366,8 @@ metric tracks at narrow width; this is readability, not a throughput claim.
 
 ### Bounded confidence/priority work in broadcast grouping — issue #2199
 
-The general identity matcher retains every confidence, reason, ordering and
-review flag. Top-level grouping requests only its existing high-confidence
-floor (0.90), so hostname-only and IP-only peer sets are not built when no
-eligible composite signal exists. High-confidence results are identical to
-filtering the full general matcher; machine ID, UUID and hostname+MAC still
-keep their existing precedence. Host/IP fallback still requires exactly one
-strictly better-priority owner. Equal/worse-priority peers are discarded before
-allocating/sorting fallback candidates, and a best-priority group has no possible
-attachment target. No identity, ambiguity, count, group ID or explanation rule
-changes, and no cached output hides live transitions.
-
-Independent pre-repair matching/grouping oracles, candidate-floor differential
-cases/fuzzing, a discarded-peer allocation bound, mixed grouping records and the
-complete existing identity/topology suites protect these constraints. The
-residual synthetic broadcast profile identified discarded matching/grouping as
-the dominant cost; it is not a profile of the reporter's installed agent fleet.
+Broadcast performance work preserves the [unified grouping semantics and allocation bounds](unified-resources.md#bounded-confidencepriority-work-in-broadcast-grouping--issue-2199),
+including its source controls and qualification limits.
 
 ### Connected-dashboard snapshot ownership — issue #2199
 
@@ -3601,17 +3587,9 @@ nothing at all when workload rows are present.
 
 ### Per-tenant resource stores are released on offboarding and shutdown
 
-`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
-process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
-called from `Router.CleanupTenant` alongside the other per-tenant teardown;
-`CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
-Without this an offboarded tenant kept its file descriptors and its
-`unified_resources.db-wal`/`-shm` files alive and its directory could not be
-fully removed. Closed stores are evicted from the cache so a later request opens
-a fresh handle rather than using a closed one
-(`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
-are idempotent and nil-safe
-(`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+Tenant offboarding and process shutdown use the [API store-lifecycle contract](api-contracts.md#per-tenant-resource-stores-are-released-on-offboarding-and-shutdown),
+including its source controls and qualification limits.
+
 ### Report-ack version echo adds no steady-state work
 
 The `serverVersion` field on unified-agent report acks is a constant string

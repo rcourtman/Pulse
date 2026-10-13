@@ -2989,7 +2989,7 @@ application resource-provider or WebSocket lifecycle.
     become a per-row store pattern.
     Regression coverage:
     `TestSQLiteStoreActionAuditOriginRoundTrip`,
-    `TestSQLiteActionAuditOriginOperationalRecordReader`, and the matching
+    `TestActionAuditOriginReaderReturnsLatestTransition`, and the matching
     memory/batch reader tests in `internal/unifiedresources/store_test.go`.
     Incident next-step fallback follows the same canonical resource boundary:
     storage guidance is reserved for storage, physical-disk, network-share,

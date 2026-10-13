@@ -392,41 +392,8 @@ thaw, safe writes, installed acceptance or a containing published release.
 
 ### Backup inventory ownership is source-scoped and unambiguous
 
-The existing Backups Coverage and By date views do not select a workload from
-an arbitrary substring, display label or first matching row when VMIDs repeat.
-PVE files, guest snapshots and task evidence use the supplied connection scope
-before native node names or aliases. One VMID inside a matching PVE connection
-stays associated after node migration; a known conflicting connection cannot be
-rescued by a reused node name or a singleton fallback. With no connection scope,
-an exact native node/alias must identify one candidate; wholly unscoped singleton
-observations retain their existing compatibility behaviour.
-
-PBS instance and datastore identify a repository, not a PVE workload. A PBS
-namespace disambiguates repeated VMIDs only with a unique exact native node,
-alias or PVE connection label. Unique type/VMID PBS inventory retains the
-existing root-namespace association. This bounded presentation fix does not
-implement the runtime PBS source learner or alter server-owned protection policy.
-
-Unresolved artifacts remain listed once and keep complete, collision-safe source
-keys (PVE connection/node or PBS instance/datastore/namespace), including host
-backup labels. Equal VMIDs, repository labels or host names cannot pool them
-across unproven sources. Untyped PVE tasks may join only PVE-scoped rows, not a
-PBS-only unresolved row with a lookalike namespace. The existing collapsed group
-and count say **unmatched**, not that the guest necessarily ceased to exist;
-its explanation wraps on phones. These rows remain **not evaluated**, separate
-from canonical provider-owned protection posture and live workload counts.
-
-Verification: `proxmoxBackupRecoveryModel.identity.test.ts` reproduces prefix
-and reused-node collisions, order independence, migration/alias controls,
-conflicting scope, ambiguous type/namespace and separated unresolved sources.
-Mounted `ProxmoxBackupsTable.test.tsx` backup-identity cases cover both views,
-artifact preservation, reorder/display rename, expansion identity and no extra
-inventory read. `browser-tests/backup-identity.cjs` uses production tables,
-router, inventory readers and CSS with synthetic responses on desktop Chromium
-and touch WebKit at 390px/320px, including keyboard/touch disclosure, ambiguity,
-readable unmatched explanation and same-resource recovery. No native backup
-identity, restore, guest thaw or containing-release acceptance follows from
-these source/render observations.
+Both Backups views follow the [storage source-association contract](storage-recovery.md#backup-inventory-ownership-is-source-scoped-and-unambiguous),
+including its source controls and qualification limits.
 
 ### Diagnostics are live checks; downloads require a privacy review
 
@@ -8829,11 +8796,9 @@ App.architecture.test.ts protects the CSS scope and scroll ownership;
 non-scrolling wrapper. Browser receipts do not establish physical Android touch
 behaviour or every asynchronous update state.
 
-The explicit issue explanation journey is qualified separately from provider
-reasoning and real remediation in
-`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
-proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
-response does not establish a useful customer outcome or model qualification.
+Issue explanation follows the [customer-journey qualification boundary](../../../../qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md#real-outcome-qualification-still-required),
+which separates scripted interaction proof from provider reasoning, remediation
+and repeatable customer outcomes.
 
 ### Alert health attention preserves asynchronous ownership
 
@@ -8849,20 +8814,8 @@ queue-action responses, without claiming backend notification delivery.
 
 ### Alert status distinguishes dispatch from destination evidence
 
-The active alert card renders a valid diagnosis `lastNotified` timestamp as
-“Dispatch requested”, never “Notified”: the alert manager records this field
-before invoking delivery callbacks. A cooldown's `nextEligibleAt` is labelled
-“next eligible”, not a promised send time. Neither field proves destination
-acceptance or recipient receipt; that evidence must not be inferred from the
-muted presentation tone. Missing or invalid timestamps retain the existing
-pending/cooldown fallback; acknowledged alerts retain their badge without a
-second status line. No API field, notification policy or shared primitive changes.
-
-The existing wrapping status text must remain readable at desktop and phone
-widths despite the longer labels. The presentation and Overview delivery-status
-tests cover the evidence boundary; `scripts/check-alert-dispatch-copy.mjs`
-qualifies the real Overview with scripted API data in Chromium, not installed
-notification delivery.
+Shared presentation preserves the [alerts dispatch-evidence contract](alerts.md#alert-status-distinguishes-dispatch-from-destination-evidence),
+including its source controls and qualification limits.
 
 ### Resource incident reads retain lifecycle ownership
 

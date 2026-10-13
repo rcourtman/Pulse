@@ -2889,11 +2889,9 @@ is unavailable rather than showing zeros. Proofs:
 `frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx` (card ordering),
 and the browser receipt in `frontend-modern/browser-verification.json`.
 
-The explicit issue explanation journey is qualified separately from provider
-reasoning and real remediation in
-`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
-proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
-response does not establish a useful customer outcome or model qualification.
+Issue explanation follows the [customer-journey qualification boundary](../../../../qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md#real-outcome-qualification-still-required),
+which separates scripted interaction proof from provider reasoning, remediation
+and repeatable customer outcomes.
 
 ### Expired action continuity (2026-09-07)
 

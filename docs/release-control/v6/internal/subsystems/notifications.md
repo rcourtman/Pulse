@@ -1335,10 +1335,6 @@ normalization. Existing backend severity admission and delivery queues remain
 unchanged. The notification API adapter round trips and WebhookConfig edit/save
 regression establish frontend control preservation, not provider delivery.
 
-Formatting-only follow-up retains this warning-level contract. The production-component
-browser matrix was rerun after formatting at desktop and narrow widths, including
-all/critical/warning save/reload, cancel, and warning webhook creation.
-
 ### Resolution cancellation is occurrence-qualified
 
 The monitor's delayed recovery path calls `CancelResolvedAlert` with the

@@ -2201,7 +2201,7 @@ tool-result payloads must project through
 `OrchestratorToolResultInfo.ProviderToolResult` so the public investigation
 handoff contract inherits the same `agentcapabilities` input-map,
 thought-signature, and provider-result normalization as Assistant and MCP —
-`TestOrchestratorAndChatAdaptersMapTheSameMessageFields` enforces it.
+`TestOrchestratorAndChatAdaptersMapTheirMessageContracts` enforces it.
 
 Assistant frontend presentation changes under
 `frontend-modern/src/components/AI/Chat/` must keep live tool activity aligned
@@ -8647,11 +8647,9 @@ recompute digest counts from run history, findings, or cost events, and must
 not call the endpoint through any other client. Proof:
 `frontend-modern/src/api/__tests__/patrol.test.ts`.
 
-The explicit issue explanation journey is qualified separately from provider
-reasoning and real remediation in
-`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
-proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
-response does not establish a useful customer outcome or model qualification.
+Issue explanation follows the [customer-journey qualification boundary](../../../../qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md#real-outcome-qualification-still-required),
+which separates scripted interaction proof from provider reasoning, remediation
+and repeatable customer outcomes.
 
 ### Subscription routing content boundary
 
