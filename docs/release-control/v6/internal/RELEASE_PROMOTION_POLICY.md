@@ -244,6 +244,15 @@ release steward, its publisher, the nightly rehearsal and the release-line
 lane. Every other document that describes releases defers to this section and
 to that direction.
 
+0. **Betas.** From the last stable release until the candidate is due, the
+   train cuts a beta for the next minor from the head of `main` every 24 hours
+   when there are new changes. This follows the founder's direction on
+   13 October 2026 to publish almost daily betas. Published betas remain at
+   least 24 hours apart, and no beta is cut within a day of the candidate being
+   due. Already recorded publication and retry deadlines are honoured when
+   the cadence changes. Betas use the normal prerelease qualification and
+   publication path, do not soak or promote, and a failed beta does not hold
+   the candidate or stable release.
 1. **Cut.** Fourteen days after the last stable release, or earlier on
    `pulse-maintainer-ship request`, the train cuts a release candidate for the
    next minor version from the head of `main`. A release carries everything on

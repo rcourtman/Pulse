@@ -11282,6 +11282,18 @@
       "lane_ids": [
         "L1"
       ]
+    },
+    {
+      "id": "daily-beta-release-cadence",
+      "summary": "Founder direction on 2026-10-13: publish almost daily betas. The release train cuts the next minor beta from main every 24 hours when there are new changes, honours already recorded publication and retry deadlines, skips empty cuts and the final day before the release candidate is due, and retains prerelease qualification and at least 24 hours between published betas. Beta failures do not hold the release candidate or stable release. The 14-day candidate cadence, exact-candidate stable promotion and clean 24-hour RC soak remain unchanged. RELEASE_PROMOTION_POLICY.md, Release Train, is the in-repository statement; the infrastructure repository owns the executable schedule.",
+      "kind": "release-policy",
+      "decided_at": "2026-10-13",
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "lane_ids": [
+        "L1"
+      ]
     }
   ]
 }
