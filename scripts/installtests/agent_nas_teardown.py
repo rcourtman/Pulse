@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -56,6 +57,19 @@ def generated_collector_is_running(listing, runtime):
                 and fields[1].startswith(str(runtime) + " ")):
             return True
     return False
+
+
+def write_wide_ps_adapter(tools, executable):
+    """Observe real fixture processes without Darwin's display-width truncation.
+
+    These Linux NAS wrappers run in a long private Darwin temporary path during
+    CI. Both comm and args contain that path. Widen only the fixture transport;
+    the production parser, exact ownership checks and deadlines are unchanged.
+    """
+    target = tools / "ps"
+    target.write_text("#!/bin/sh\nexec " + shlex.quote(str(executable)) + ' -ww "$@"\n')
+    target.chmod(0o700)
+    return target
 
 
 MODEL = r'''#!/usr/bin/python3
@@ -415,6 +429,12 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                 watchdog = root / 'state/start-pulse-agent.sh'
                 (root / 'tools/pkill').write_text('#!/bin/sh\nexit 0\n'); (root / 'tools/pkill').chmod(0o700)
                 (root / 'tools/flash').write_text('#!/bin/sh\nexit 0\n'); (root / 'tools/flash').chmod(0o700)
+                # Capture the native executable before placing the adapter on
+                # PATH. The same untruncated kernel rows feed startup and the
+                # unchanged production teardown parser (no model or PID claim).
+                native_ps = shutil.which('ps')
+                self.assertIsNotNone(native_ps, 'native process reader missing')
+                fixture_ps = write_wide_ps_adapter(root / 'tools', Path(native_ps).resolve())
                 env = dict(os.environ, PATH=str(root / 'tools') + ':' + os.environ['PATH'])
                 setup = '\n'.join(k + '=' + shlex.quote(str(v)) for k, v in dict(
                     STATE_DIR=root / 'state', STATE_DIR_REMOVAL_AUTHORITY=root / 'state', INSTALL_DIR=root / 'bin',
@@ -453,10 +473,15 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                     try:
                         deadline = time.monotonic() + 8
                         while time.monotonic() < deadline:
-                            listing = subprocess.run(['ps', '-ax', '-o', 'comm=', '-o', 'args='], capture_output=True, text=True, check=True).stdout
+                            listing = subprocess.run([str(fixture_ps), '-ax', '-o', 'comm=', '-o', 'args='], capture_output=True, text=True, check=True).stdout
                             if generated_collector_is_running(listing, runtime): break
                             self.assertIsNone(process.poll(), output.read_text()); time.sleep(.05)
-                        else: self.fail('private generated collector did not start')
+                        else:
+                            # Retain only owned fixture rows/logs, never other
+                            # process arguments, if hosted startup still fails.
+                            owned = '\n'.join(line for line in listing.splitlines() if str(root) in line)
+                            logs = '\n'.join(p.read_text() for p in (root / 'logs').glob('*.log'))
+                            self.fail('private generated collector did not start\n' + owned + '\n' + output.read_text() + '\n' + logs)
                         result = subprocess.run(['bash', str(control)], env=env, capture_output=True, text=True, timeout=12)
                         self.assertEqual(result.returncode, 0, result.stdout + result.stderr + output.read_text())
                         process.wait(timeout=3)
@@ -466,6 +491,23 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                         try: os.killpg(process.pid, signal.SIGKILL)
                         except ProcessLookupError: pass
                         process.wait(timeout=3)
+
+    def test_private_process_reader_requests_full_width_without_changing_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            native = root / 'native ps'
+            # Fixed synthetic argv recorder, not a process-inventory model.
+            native.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            native.chmod(0o700)
+            tools = root / 'tools'; tools.mkdir()
+            adapter = write_wide_ps_adapter(tools, native)
+            for fields in (
+                ['-ax', '-o', 'comm=', '-o', 'args='],
+                ['-ax', '-o', 'pid=', '-o', 'ppid=', '-o', 'comm=', '-o', 'args='],
+            ):
+                with self.subTest(fields=fields):
+                    result = subprocess.run([str(adapter), *fields], capture_output=True, text=True, check=True)
+                    self.assertEqual(result.stdout.splitlines(), ['-ww', *fields])
 
     def test_generated_collector_observation_keeps_exact_identity_on_both_unix_formats(self):
         runtime = Path('/synthetic/owned/bin/pulse-agent')
