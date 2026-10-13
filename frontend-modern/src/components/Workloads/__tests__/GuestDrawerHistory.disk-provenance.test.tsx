@@ -87,9 +87,13 @@ describe('GuestDrawerHistory filesystem provenance', () => {
     expect(getGuestDrawerCurrentMetrics(value()).disk).toBe(90);
     mount(value);
     const chart = utilization();
-    await waitFor(() => expect(chart.querySelectorAll('path').length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(chart.querySelectorAll('path[data-history-series]').length).toBeGreaterThan(0),
+    );
     const paths = () =>
-      Array.from(chart.querySelectorAll('path'), (item) => item.getAttribute('d'));
+      Array.from(chart.querySelectorAll('path[data-history-series]'), (item) =>
+        item.getAttribute('d'),
+      );
     const storedPaths = paths();
     setValue({ ...value(), status: 'stopped', diskStatusReason: undefined });
     expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
@@ -138,7 +142,7 @@ describe('GuestDrawerHistory filesystem provenance', () => {
       expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
         'Memory25.0%current',
       );
-      expect(chart.querySelector('path')).toBeNull();
+      expect(chart.querySelector('path[data-history-series]')).toBeNull();
       expect(chart.querySelector('[data-history-observation]')).toBeNull();
       expect(fetch).toHaveBeenCalledTimes(1);
     },
@@ -213,7 +217,9 @@ describe('GuestDrawerHistory filesystem provenance', () => {
       }),
     );
     mount(() => guest('prev-agent-timeout'));
-    await waitFor(() => expect(utilization().querySelectorAll('path')).toHaveLength(2));
+    await waitFor(() =>
+      expect(utilization().querySelectorAll('path[data-history-series]')).toHaveLength(2),
+    );
     const chart = utilization();
     expect(chart).toHaveTextContent('Disk30.0%');
     expect(chart.querySelector('[data-history-last-known]')).toBeNull();
@@ -242,7 +248,7 @@ describe('GuestDrawerHistory filesystem provenance', () => {
     const slider = screen.getByRole('slider');
     slider.focus();
     fireEvent.input(slider, { target: { value: '0' } });
-    expect(utilization()).toHaveTextContent('Disk-');
+    expect(utilization()).toHaveTextContent('Diskno reading');
     expect(utilization().querySelector('[data-history-last-known]')).toBeNull();
     expect(slider).toHaveAttribute(
       'aria-valuetext',
@@ -250,7 +256,7 @@ describe('GuestDrawerHistory filesystem provenance', () => {
     );
     fireEvent.blur(slider);
     expect(utilization().querySelector('[data-history-last-known="disk"]')).toBeNull();
-    expect(utilization()).toHaveTextContent('Disk-');
+    expect(utilization()).toHaveTextContent('Diskno reading');
     expect(within(utilization()).getByTestId('guest-history-hover-time')).toHaveAttribute(
       'datetime',
       new Date(end).toISOString(),

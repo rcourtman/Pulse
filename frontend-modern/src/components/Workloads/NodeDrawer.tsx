@@ -13,7 +13,7 @@ import { getNodeDisplayName } from '@/utils/nodes';
 import { getSimpleStatusIndicator } from '@/utils/status';
 
 import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
-import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from './guestDrawerModel';
+import { TRENDED_DRAWER_HISTORY_DEFAULT_RANGE } from './guestDrawerModel';
 import { NodeDrawerOverview } from './NodeDrawerOverview';
 import {
   getNodeDrawerCurrentMetrics,
@@ -39,7 +39,7 @@ type NodeDrawerTab = 'overview' | 'history' | 'manage';
 export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<NodeDrawerTab>('overview');
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
-    GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
+    TRENDED_DRAWER_HISTORY_DEFAULT_RANGE,
   );
   const alertsActivation = useAlertsActivation();
 

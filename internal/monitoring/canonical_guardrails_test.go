@@ -2182,7 +2182,7 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 			snippets: []string{
 				"func mockCanonicalMetricSeries(resourceType, resourceID, metricType string, timestamps []time.Time) []MetricPoint {",
 				"values := canonicalMetricSeries(resourceType, resourceID, metricType, timestamps)",
-				"return lttb(points, chartDownsampleTarget)",
+				"func sampleMetricSeriesOnMockChartGrid(points []MetricPoint, interval time.Duration) []MetricPoint {",
 				`usageValues := canonicalMetricSeries("storage", storageID, "usage", timestamps)`,
 			},
 		},

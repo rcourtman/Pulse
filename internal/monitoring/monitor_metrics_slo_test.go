@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"testing"
@@ -852,4 +853,208 @@ func TestMockStorageChartReadsTheEstateOnlyForAnUncachedChart(t *testing.T) {
 	if reads != 1 {
 		t.Fatalf("a cached chart read the estate again: %d reads", reads)
 	}
+}
+
+// The poller writes every metric of a resource at the same timestamps, and
+// the drawer history panels break a line wherever another series in the panel
+// has a reading this one lacks. Mock history must therefore keep one shared
+// set of timestamps per resource, or every mock chart draws as dots.
+var (
+	mockGuestSharedTimestampMetrics = []string{"cpu", "memory", "memoryused", "disk", "diskread", "diskwrite", "netin", "netout"}
+	mockNodeSharedTimestampMetrics  = []string{"cpu", "memory", "disk", "netin", "netout"}
+	mockSharedTimestampDurations    = []time.Duration{time.Hour, 4 * time.Hour, 24 * time.Hour, 7 * 24 * time.Hour}
+)
+
+func TestSampleMetricSeriesOnMockChartGridKeepsTimestampsIndependentOfValues(t *testing.T) {
+	start := time.Date(2026, time.October, 13, 0, 0, 0, 0, time.UTC)
+	flat := make([]MetricPoint, 0, 721)
+	spiky := make([]MetricPoint, 0, 721)
+	for i := 0; i <= 720; i++ {
+		ts := start.Add(time.Duration(i) * 2 * time.Minute)
+		flat = append(flat, MetricPoint{Timestamp: ts, Value: 20 + math.Sin(float64(i)/40)})
+		value := 5.0
+		if i%37 == 0 || i%53 == 0 {
+			value = 90
+		}
+		spiky = append(spiky, MetricPoint{Timestamp: ts, Value: value})
+	}
+
+	// Control: LTTB picks points by value, so these two series keep
+	// different timestamps. This is the behaviour that broke mock charts.
+	if sameMetricTimestamps(lttb(cloneMetricSeries(flat), 48), lttb(cloneMetricSeries(spiky), 48)) {
+		t.Fatal("control: expected LTTB to keep different timestamps for differently shaped series")
+	}
+
+	interval := mockChartGridInterval(24 * time.Hour)
+	gridFlat := sampleMetricSeriesOnMockChartGrid(flat, interval)
+	gridSpiky := sampleMetricSeriesOnMockChartGrid(spiky, interval)
+	if !sameMetricTimestamps(gridFlat, gridSpiky) {
+		t.Fatalf("grid sampling kept different timestamps: %v vs %v", metricTimestamps(gridFlat), metricTimestamps(gridSpiky))
+	}
+	if got, limit := len(gridFlat), mockChartPointTarget(24*time.Hour); got > limit || got < limit-2 {
+		t.Fatalf("expected grid sampling to stay within two points of %d, got %d", limit, got)
+	}
+	if first := gridSpiky[0]; first != spiky[0] {
+		t.Fatalf("expected the first reading to be kept as-is, got %+v want %+v", first, spiky[0])
+	}
+	if last, newest := gridSpiky[len(gridSpiky)-1], spiky[len(spiky)-1]; last != newest {
+		t.Fatalf("expected the newest reading to be kept as-is, got %+v want %+v", last, newest)
+	}
+	readings := make(map[int64]float64, len(spiky))
+	for _, point := range spiky {
+		readings[point.Timestamp.UnixNano()] = point.Value
+	}
+	for i, point := range gridSpiky {
+		if i > 0 && !point.Timestamp.After(gridSpiky[i-1].Timestamp) {
+			t.Fatalf("grid timestamps not strictly ascending at %d", i)
+		}
+		if value, ok := readings[point.Timestamp.UnixNano()]; !ok || value != point.Value {
+			t.Fatalf("grid point %+v is not a reading from the input series", point)
+		}
+	}
+}
+
+func TestMockChartHistorySharesTimestampsAcrossMetrics(t *testing.T) {
+	previousEnabled := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	t.Cleanup(func() {
+		mustSetMockEnabled(t, false)
+		mock.SetMockConfig(previousConfig)
+		if previousEnabled {
+			mustSetMockEnabled(t, true)
+			mock.SetMockConfig(previousConfig)
+		}
+	})
+
+	// The first mock node is "mixed": at least base-2 VMs and base-3 LXCs.
+	cfg := compactMockChartFixtureConfig()
+	cfg.VMsPerNode = 3
+	cfg.LXCsPerNode = 4
+	mustSetMockEnabled(t, false)
+	mock.SetMockConfig(cfg)
+	mustSetMockEnabled(t, true)
+
+	graph := mock.CurrentFixtureGraph()
+	if len(graph.State.Containers) == 0 || len(graph.State.VMs) == 0 || len(graph.State.Nodes) == 0 {
+		t.Fatalf(
+			"expected mock nodes, VMs and containers in the fixture graph, got %d nodes, %d VMs, %d containers",
+			len(graph.State.Nodes), len(graph.State.VMs), len(graph.State.Containers),
+		)
+	}
+	container := graph.State.Containers[0].ID
+	vm := graph.State.VMs[0].ID
+	node := graph.State.Nodes[0].ID
+
+	newMonitor := func() *Monitor {
+		resources, _ := mock.UnifiedResourceSnapshot()
+		registry := unifiedresources.NewRegistry(nil)
+		registry.IngestResources(resources)
+		return &Monitor{
+			metricsHistory: NewMetricsHistory(1000, 24*time.Hour),
+			state:          models.NewState(),
+			resourceStore:  unifiedresources.NewMonitorAdapter(registry),
+		}
+	}
+
+	check := func(t *testing.T, monitor *Monitor) {
+		for _, duration := range mockSharedTimestampDurations {
+			// The newest reading sits on the current minute; rerun if the
+			// minute turned over between two per-metric node reads.
+			for attempt := 0; ; attempt++ {
+				minute := time.Now().Truncate(time.Minute)
+				monitor.invalidateMockChartCaches()
+				guests := map[string]map[string][]MetricPoint{
+					"container " + container: monitor.GetGuestMetricsForChart(container, "container", container, duration),
+					"vm " + vm:               monitor.GetGuestMetricsForChart(vm, "vm", vm, duration),
+				}
+				nodeSeries := make(map[string][]MetricPoint, len(mockNodeSharedTimestampMetrics))
+				for _, metric := range mockNodeSharedTimestampMetrics {
+					nodeSeries[metric] = monitor.GetNodeMetricsForChart(node, metric, duration)
+				}
+				if !time.Now().Truncate(time.Minute).Equal(minute) && attempt < 2 {
+					continue
+				}
+				for name, series := range guests {
+					assertMockSeriesShareTimestamps(t, name, duration, series, mockGuestSharedTimestampMetrics)
+				}
+				assertMockSeriesShareTimestamps(t, "node "+node, duration, nodeSeries, mockNodeSharedTimestampMetrics)
+				break
+			}
+		}
+	}
+
+	t.Run("synthetic history", func(t *testing.T) {
+		check(t, newMonitor())
+	})
+
+	t.Run("seeded history", func(t *testing.T) {
+		monitor := newMonitor()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		monitor.startMockMetricsSampler(ctx)
+		t.Cleanup(func() { monitor.stopMockMetricsSampler() })
+		check(t, monitor)
+	})
+}
+
+func assertMockSeriesShareTimestamps(t *testing.T, resource string, duration time.Duration, series map[string][]MetricPoint, metrics []string) {
+	t.Helper()
+	reference := series["cpu"]
+	if len(reference) < 2 {
+		t.Fatalf("%s %s: expected a cpu history, got %d points", resource, duration, len(reference))
+	}
+	minValue, maxValue := reference[0].Value, reference[0].Value
+	for _, point := range reference {
+		minValue = math.Min(minValue, point.Value)
+		maxValue = math.Max(maxValue, point.Value)
+	}
+	if minValue == maxValue {
+		t.Fatalf("%s %s: cpu history is flat at %v; mock values should still vary", resource, duration, minValue)
+	}
+	for _, metric := range metrics {
+		points := series[metric]
+		if len(points) == 0 {
+			t.Fatalf("%s %s: expected a %s history", resource, duration, metric)
+		}
+		if !sameMetricTimestamps(reference, points) {
+			t.Fatalf(
+				"%s %s: %s timestamps diverge from cpu (%d vs %d points, %d shared)",
+				resource, duration, metric, len(points), len(reference), sharedMetricTimestampCount(reference, points),
+			)
+		}
+	}
+}
+
+func metricTimestamps(points []MetricPoint) []int64 {
+	out := make([]int64, len(points))
+	for i, point := range points {
+		out[i] = point.Timestamp.UnixNano()
+	}
+	return out
+}
+
+func sameMetricTimestamps(a, b []MetricPoint) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !a[i].Timestamp.Equal(b[i].Timestamp) {
+			return false
+		}
+	}
+	return true
+}
+
+func sharedMetricTimestampCount(a, b []MetricPoint) int {
+	seen := make(map[int64]struct{}, len(a))
+	for _, point := range a {
+		seen[point.Timestamp.UnixNano()] = struct{}{}
+	}
+	shared := 0
+	for _, point := range b {
+		if _, ok := seen[point.Timestamp.UnixNano()]; ok {
+			shared++
+		}
+	}
+	return shared
 }

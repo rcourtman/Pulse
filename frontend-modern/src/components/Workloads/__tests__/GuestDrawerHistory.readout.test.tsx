@@ -58,8 +58,8 @@ describe('drawer History default readout belongs to one stored time', () => {
       ));
       await ready();
       expect(group()).toHaveTextContent('CPU22.0%');
-      expect(group()).toHaveTextContent('Memory-');
-      expect(group()).toHaveTextContent('Disk-');
+      expect(group()).toHaveTextContent('Memoryno reading');
+      expect(group()).toHaveTextContent('Diskno reading');
       expect(group()).not.toHaveTextContent(/95.0%|98.0%|88.0%|99.0%/);
       expect(group().querySelector('[data-history-current]')).toBeNull();
       expect(readoutTime()).toHaveTextContent('Latest stored');
@@ -81,7 +81,7 @@ describe('drawer History default readout belongs to one stored time', () => {
     expect(group()).toHaveTextContent('Memory0.0%');
     expect(group()).toHaveTextContent('Disk0.0%');
     expect(readoutTime()).toHaveAttribute('datetime', new Date(start + 60_000).toISOString());
-    expect(group().querySelector('path')).toBeNull();
+    expect(group().querySelector('path[data-history-series]')).toBeNull();
     expect(group().querySelectorAll('[data-history-observation]')).toHaveLength(3);
   });
 
@@ -112,8 +112,8 @@ describe('drawer History default readout belongs to one stored time', () => {
     fetch.mockResolvedValue(response({ cpu: [point(2, 22)] }));
     refresh();
     await waitFor(() => expect(group()).toHaveTextContent('CPU22.0%'));
-    expect(group()).toHaveTextContent('Memory-');
-    expect(group()).toHaveTextContent('Disk-');
+    expect(group()).toHaveTextContent('Memoryno reading');
+    expect(group()).toHaveTextContent('Diskno reading');
     expect(group().querySelector('[data-history-last-known]')).toBeNull();
     expect(group().querySelector('[data-history-unknown]')).toBeNull();
   });
@@ -128,10 +128,10 @@ describe('drawer History default readout belongs to one stored time', () => {
     slider.focus();
     fireEvent.input(slider, { target: { value: '1' } });
     expect(group()).toHaveTextContent('Memory95.0%');
-    expect(group()).toHaveTextContent('CPU-');
+    expect(group()).toHaveTextContent('CPUno reading');
     fireEvent.blur(slider);
     expect(group()).toHaveTextContent('CPU22.0%');
-    expect(group()).toHaveTextContent('Memory-');
+    expect(group()).toHaveTextContent('Memoryno reading');
     expect(readoutTime()).toHaveTextContent('Latest stored');
     setLive(77);
     expect(group()).not.toHaveTextContent('77.0%');
@@ -139,7 +139,7 @@ describe('drawer History default readout belongs to one stored time', () => {
     fetch.mockResolvedValue(response({ cpu: [point(2, 22)], memory: [point(3, 25)] }));
     refresh();
     await waitFor(() => expect(group()).toHaveTextContent('Memory25.0%'));
-    expect(group()).toHaveTextContent('CPU-');
+    expect(group()).toHaveTextContent('CPUno reading');
     expect(readoutTime()).toHaveAttribute('datetime', new Date(start + 180_000).toISOString());
   });
 
@@ -155,14 +155,14 @@ describe('drawer History default readout belongs to one stored time', () => {
     );
     render(() => <GuestDrawerHistory target={target} range="1h" />);
     await screen.findByRole('slider', { name: 'Inspect Network I/O history' });
-    expect(group('network')).toHaveTextContent('In-');
+    expect(group('network')).toHaveTextContent('Inno reading');
     expect(group('network')).toHaveTextContent('Out0 B/s');
     expect(readoutTime('network')).toHaveAttribute(
       'datetime',
       new Date(start + 120_000).toISOString(),
     );
     expect(group('disk-io')).toHaveTextContent('Read0 B/s');
-    expect(group('disk-io')).toHaveTextContent('Write-');
+    expect(group('disk-io')).toHaveTextContent('Writeno reading');
     expect(readoutTime('disk-io')).toHaveAttribute(
       'datetime',
       new Date(start + 180_000).toISOString(),
@@ -179,7 +179,7 @@ describe('drawer History default readout belongs to one stored time', () => {
     refresh();
     await screen.findByRole('button', { name: 'Retry history' });
     expect(readoutTime()).toHaveAttribute('datetime', new Date(start + 120_000).toISOString());
-    expect(group()).toHaveTextContent('Memory-');
+    expect(group()).toHaveTextContent('Memoryno reading');
     fireEvent.click(screen.getByRole('button', { name: 'Retry history' }));
     await waitFor(() => expect(screen.queryByTestId('guest-history-group-chart')).toBeNull());
     expect(screen.queryByTestId('guest-history-hover-time')).toBeNull();

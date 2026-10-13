@@ -4,7 +4,7 @@ import type { AggregatedMetricPoint } from '@/api/charts';
 import { formatHistoryChartTooltipValue } from '@/components/shared/historyChartModel';
 
 import {
-  GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
+  DRAWER_TREND_RANGE,
   getGuestDrawerHistoryScale,
   normalizeGuestDrawerHistoryPoints,
   type GuestDrawerHistoryDeferredMetric,
@@ -89,7 +89,7 @@ const valueToneClass = (severity: DrawerTrendCardConfig['alertSeverity']): strin
 const DrawerTrendCards: Component<DrawerTrendCardsProps> = (props) => {
   const source = createGuestDrawerHistorySource(
     () => props.target,
-    () => GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
+    () => DRAWER_TREND_RANGE,
     () => props.enabled,
   );
   const query = createGuestDrawerHistoryQuery(source);

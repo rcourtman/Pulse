@@ -739,6 +739,22 @@ source selection and wire formats are unchanged. The History cleanup tests
 cover every supported series, byte-array reclamation and connected readers;
 these controls do not attribute a reporter's native process-memory growth.
 
+### Mock chart history keeps one timeline per resource
+
+Mock chart history thins every series of a resource onto one wall-clock grid
+(`sampleMetricSeriesOnMockChartGrid` in `internal/monitoring/mock_chart_history.go`,
+called by `downsampleMetricSeriesForMockChart`). It keeps the first reading in
+each epoch-aligned bucket and the newest reading, each at its own timestamp, so
+which readings survive depends only on when they were taken, never on their values.
+The poller writes all of a resource's metrics at the same times, and the drawer
+History panels break a line where another series in the panel has a reading this
+one lacks; per-series LTTB picked value-dependent timestamps, so mock guests and
+nodes drew as dots with "Missing observations" on the public demo. Live poller
+history, the store query path, chart point targets and mock values are unchanged.
+`TestMockChartHistorySharesTimestampsAcrossMetrics` in `monitor_metrics_slo_test.go`
+pins identical cpu/memory/disk/network/disk-I/O timestamps for a mock VM, container
+and node, on synthetic and seeded history, at 1h, 4h, 24h and 7d.
+
 ### Podman interval CPU selection — issue #2447
 
 Every Podman one-shot response uses consecutive cumulative CPU-time nanoseconds

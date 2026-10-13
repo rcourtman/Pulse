@@ -56,7 +56,7 @@ const group = (id: string) =>
 const pathXs = (chart: HTMLElement) =>
   [
     ...chart
-      .querySelector('path')!
+      .querySelector('path[data-history-series]')!
       .getAttribute('d')!
       .matchAll(/[ML](-?[\d.]+),/g),
   ].map((match) => Number(match[1]));
@@ -67,7 +67,7 @@ const selectSharedTime = (chart: HTMLElement) => {
   const slider = within(chart).getByRole('slider');
   slider.focus();
   fireEvent.input(slider, { target: { value: '1' } });
-  return chart.querySelector('circle[r="3"]')!;
+  return chart.querySelector('[data-history-hover-marker]')!;
 };
 
 describe('GuestDrawerHistory shared time window', () => {
@@ -85,8 +85,8 @@ describe('GuestDrawerHistory shared time window', () => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
     mount();
     await screen.findByRole('slider', { name: 'Inspect Network I/O history' });
-    const utilizationX = selectSharedTime(group('utilization')).getAttribute('cx');
-    const networkX = selectSharedTime(group('network')).getAttribute('cx');
+    const utilizationX = selectSharedTime(group('utilization')).getAttribute('data-x');
+    const networkX = selectSharedTime(group('network')).getAttribute('data-x');
     expect(networkX).toBe(utilizationX);
     expect(Number(networkX)).toBeCloseTo(expectedX(end - 5 * 60_000));
   });
@@ -112,10 +112,15 @@ describe('GuestDrawerHistory shared time window', () => {
       .mockRejectedValueOnce(new Error('Private fixture detail'));
     mount();
     await screen.findByRole('slider', { name: 'Inspect Utilization history' });
-    const before = group('utilization').querySelector('path')!.getAttribute('d');
+    const before = group('utilization')
+      .querySelector('path[data-history-series]')!
+      .getAttribute('d');
     fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
     await screen.findByText('History refresh failed. Showing previously loaded history.');
-    expect(group('utilization').querySelector('path')).toHaveAttribute('d', before);
+    expect(group('utilization').querySelector('path[data-history-series]')).toHaveAttribute(
+      'd',
+      before,
+    );
     expect(axis(group('utilization')).querySelector('time')).toHaveAttribute(
       'datetime',
       new Date(start).toISOString(),
@@ -141,7 +146,9 @@ describe('GuestDrawerHistory shared time window', () => {
       valueText,
     );
     expect(
-      Number(group('utilization').querySelector('circle[r="3"]')!.getAttribute('cx')),
+      Number(
+        group('utilization').querySelector('[data-history-hover-marker]')!.getAttribute('data-x'),
+      ),
     ).toBeCloseTo(expectedX(end - 5 * 60_000, start + shift, end + shift));
     expect(axis(group('utilization')).querySelectorAll('time')[1]).toHaveAttribute(
       'datetime',
@@ -168,7 +175,7 @@ describe('GuestDrawerHistory shared time window', () => {
     await waitFor(() =>
       expect(screen.queryAllByTestId('guest-history-time-window')).toHaveLength(0),
     );
-    expect(group('utilization').querySelectorAll('path')).toHaveLength(0);
+    expect(group('utilization').querySelectorAll('path[data-history-series]')).toHaveLength(0);
     finish(response({ range: '1h', start: end - hour }));
     await waitFor(() => expect(screen.getAllByTestId('guest-history-time-window')).toHaveLength(4));
     expect(pathXs(group('utilization'))[0]).toBeCloseTo(expectedX(end - 10 * 60_000, end - hour));
@@ -181,7 +188,7 @@ describe('GuestDrawerHistory shared time window', () => {
       expect(screen.getAllByText('No stored history in this range')).toHaveLength(4),
     );
     expect(screen.queryByRole('slider')).toBeNull();
-    expect(document.querySelectorAll('path')).toHaveLength(0);
+    expect(document.querySelectorAll('path[data-history-series]')).toHaveLength(0);
     expect(screen.getAllByTestId('guest-history-time-window')).toHaveLength(4);
   });
 
@@ -197,8 +204,8 @@ describe('GuestDrawerHistory shared time window', () => {
       'datetime',
       new Date(end - hour).toISOString(),
     );
-    expect(selectSharedTime(group('utilization')).getAttribute('cx')).toBe(
-      selectSharedTime(group('network')).getAttribute('cx'),
+    expect(selectSharedTime(group('utilization')).getAttribute('data-x')).toBe(
+      selectSharedTime(group('network')).getAttribute('data-x'),
     );
   });
 
