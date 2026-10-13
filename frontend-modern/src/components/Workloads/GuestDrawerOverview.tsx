@@ -260,7 +260,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             footerContent:
               diskStatusMessage && isGuestDrawerVM(props.guest) ? (
                 <a
-                  class="text-xs font-semibold underline underline-offset-2"
+                  class="inline-flex min-h-11 items-center rounded-sm text-xs font-semibold text-base-content underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content sm:min-h-0"
                   href={`${getShippedDocUrl('VM_DISK_MONITORING.md')}#a-missing-reading-is-not-an-installation-diagnosis`}
                 >
                   Filesystem reading guidance

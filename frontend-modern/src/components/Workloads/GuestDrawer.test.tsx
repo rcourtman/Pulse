@@ -279,6 +279,40 @@ describe('GuestDrawer', () => {
     expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the accessible filesystem guidance target across read-reason updates', () => {
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        diskStatusReason: 'agent-not-running',
+        disks: [{ mountpoint: '/', total: 10 * 1024 ** 3, used: 5 * 1024 ** 3, usage: 50 }],
+      }),
+    );
+    solidRender(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    const guidance = screen.getByRole('link', { name: 'Filesystem reading guidance' });
+    expect(guidance).toHaveAttribute(
+      'href',
+      '/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis',
+    );
+    expect(guidance).toHaveClass(
+      'inline-flex',
+      'min-h-11',
+      'sm:min-h-0',
+      'text-base-content',
+      'focus-visible:outline-2',
+      'focus-visible:outline-offset-2',
+      'focus-visible:outline-base-content',
+    );
+    setGuest({ ...guest(), diskStatusReason: 'prev-vm-locked' });
+    expect(screen.getByRole('link', { name: 'Filesystem reading guidance' })).toHaveAttribute(
+      'href',
+      guidance.getAttribute('href'),
+    );
+    expect(technicalDetails().getByText(/^Using last known disk stats\./)).toHaveTextContent(
+      'VM operation lock, such as a backup',
+    );
+    setGuest({ ...guest(), diskStatusReason: '' });
+    expect(screen.queryByRole('link', { name: 'Filesystem reading guidance' })).toBeNull();
+  });
+
   it('keeps the backup precaution visible across drawer tabs without starting a guest check', async () => {
     const [guest, setGuest] = createSignal(
       makeGuest({
