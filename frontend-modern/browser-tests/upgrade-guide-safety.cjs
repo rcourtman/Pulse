@@ -9,7 +9,7 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
 (async () => {
   const root = path.resolve('frontend-modern');
-  const output = path.resolve('tmp/upgrade-guide-browser');
+  const output = path.resolve('tmp/upgrade-guide-browser-observed');
   fs.mkdirSync(output, { recursive: true });
   const source = fs.readFileSync(path.join(root, 'public/docs/UPGRADE_v6.md'));
   assert.equal(hash(source), hash(fs.readFileSync(path.resolve('docs/UPGRADE_v6.md'))));
@@ -45,7 +45,9 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
       page.on('console', message => { if (message.type() === 'error') record.pageErrors.push(message.text()); });
       page.on('response', async response => {
         if (new URL(response.url()).pathname === '/docs/UPGRADE_v6.md') {
-          record.servedGuide.push({ status: response.status(), sha256: hash(await response.body()) });
+          const body = await response.body();
+          fs.writeFileSync(path.join(output, `served-${width}.md`), body);
+          record.servedGuide.push({ status: response.status(), sha256: hash(body), bytes: body.length });
         }
       });
       await page.route('**/*', route => {
