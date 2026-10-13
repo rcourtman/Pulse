@@ -103,7 +103,9 @@ func TestHandleClusterVMResourcePreservesHealthyGuestMemoryFromPreviousSnapshot(
 	defer mon.alertManager.Stop()
 	defer mon.notificationMgr.Stop()
 
-	previousSample := time.Now().Add(-time.Minute)
+	// Exercise the healthy-guest path after the original-source window,
+	// while remaining inside the distinct ten-minute healthy retention window.
+	previousSample := time.Now().Add(-3 * time.Minute)
 	mon.recordGuestSnapshot("test", "qemu", "node1", 101, GuestMemorySnapshot{
 		Name:         "vm-101",
 		Status:       "running",
@@ -176,7 +178,9 @@ func TestPollVMsWithNodesPreservesHealthyGuestMemoryFromPreviousSnapshot(t *test
 	defer mon.alertManager.Stop()
 	defer mon.notificationMgr.Stop()
 
-	previousSample := time.Now().Add(-time.Minute)
+	// Exercise the healthy-guest path after the original-source window,
+	// while remaining inside the distinct ten-minute healthy retention window.
+	previousSample := time.Now().Add(-3 * time.Minute)
 	mon.recordGuestSnapshot("test", "qemu", "node1", 101, GuestMemorySnapshot{
 		Name:         "vm-101",
 		Status:       "running",
