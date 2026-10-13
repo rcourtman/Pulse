@@ -540,7 +540,7 @@ describe('useWorkloadSelectionState', () => {
     expect(result.selectedGuestDrawerState.historyRange()).toBe('12h');
     result.setSelectedGuestId('independent-clone');
     expect(result.selectedGuestDrawerState.activeTab()).toBe('overview');
-    expect(result.selectedGuestDrawerState.historyRange()).toBe('24h');
+    expect(result.selectedGuestDrawerState.historyRange()).toBe('7d');
     result.selectedGuestDrawerState.setActiveTab('manage');
     result.clearPinnedSummaryScope();
     expect(result.selectedGuestDrawerState.activeTab()).toBe('overview');

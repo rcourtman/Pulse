@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "0a44d276db4bdb53c7187f6074ee4b005c1d4872",
+  "verified_at": "2026-10-13T14:06:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/DrawerTrendCards.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerHistoryQuery.ts",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/DrawerTrendCards.tsx": "4761f86943587f997b99fc5be572f24038003926123702722d4d63dd68e6bd2f",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "236e7520d3461e36a8223e4c3abca6c09b4a359796c236271501fba7e375e5c2",
+    "frontend-modern/src/components/Workloads/guestDrawerHistoryQuery.ts": "480828c88b3a7a957d9a908f125324ca301ba586d2f0fe21e00c6ce16717b4d7",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "5b2692573a15459652a4feaea31703eb22af3056ed599a551d1a5e23577c5639",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "93cf7b37056e5397704106b2edb65441fec75ace95ef9c9b410c4e8bb4427ccb"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "private preview: origin/main 0a44d276db plus these frontend files, built with the frontend embedded and run locally in mock mode with a seeded metrics store (demo auto sign-in)",
+    "guest artifact-cache-310 and node Analytics A: Overview trend cards render; History tab opens with the range control on 7 days and three or four panels across a 7-day axis (mock history only spans about a day, so it fills the right end)",
+    "390px phone: node History at 7 days, no element extends past the viewport, page scrollWidth equals the viewport"
+  ],
+  "interactions": [
+    "expanded the guest, opened History: metrics-store reads were range=24h (Overview cards) then range=7d (History), range control value 7d",
+    "collapsed it, expanded the node, opened History: reads 24h then 7d, range control value 7d"
+  ]
+}

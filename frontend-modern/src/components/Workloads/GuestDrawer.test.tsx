@@ -267,7 +267,7 @@ describe('GuestDrawer', () => {
     expect(chartsApiMocks.getMetricsHistory.mock.calls[0][0]).toMatchObject({
       resourceType: 'vm',
       resourceId: 'inst1:node1:100',
-      range: '24h',
+      range: '7d',
       maxPoints: 240,
     });
     chartsApiMocks.getMetricsHistory.mockResolvedValue({
@@ -389,7 +389,7 @@ describe('GuestDrawer', () => {
       expect(request).toMatchObject({
         resourceType: 'vm',
         resourceId: 'inst1:node1:100',
-        range: '24h',
+        range: '7d',
       });
     }
   });
@@ -617,7 +617,7 @@ describe('GuestDrawer', () => {
           expect.objectContaining({
             resourceType: 'vm',
             resourceId: 'inst1:node1:100',
-            range: '24h',
+            range: '7d',
           }),
         );
       });

@@ -2890,7 +2890,12 @@ rather than as a `Tags` detail section. The Overview's 24h trend cards
 (`DrawerTrendCards.tsx`, lazy-loaded out of the WorkloadsSurface chunk) and
 the History tab read one query from `guestDrawerHistoryQuery.ts` with one cache
 key, and each mounts only while its tab is visible: the node drawer's History
-no longer stays mounted and polling while hidden.
+no longer stays mounted and polling while hidden. Because those cards already
+cover the last 24 hours, the guest and node drawers open History on
+`TRENDED_DRAWER_HISTORY_DEFAULT_RANGE` (7 days, within the free plan's
+retention) rather than repeating them; a 24h History selection reuses the
+cards' cached read. Drawers without trend cards (Docker host, resource
+detail) keep the 24h `GUEST_DRAWER_HISTORY_DEFAULT_RANGE`.
 Panel width alone does not make mount paths readable. Filesystem disk rows must
 opt into the shared `layout: 'stacked'` presentation so their full mount path
 wraps above usage and progress at desktop and phone widths. Shared-prefix paths

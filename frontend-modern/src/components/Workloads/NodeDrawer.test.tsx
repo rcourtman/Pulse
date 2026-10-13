@@ -324,7 +324,7 @@ describe('NodeDrawer', () => {
         expect.objectContaining({
           resourceType: 'node',
           resourceId: 'cluster-pve-native',
-          range: '24h',
+          range: '7d',
         }),
       ),
     );
@@ -351,7 +351,7 @@ describe('NodeDrawer', () => {
         expect.objectContaining({
           resourceType: 'node',
           resourceId: 'homelab-pve-node-1',
-          range: '24h',
+          range: '7d',
         }),
       );
     });
@@ -380,7 +380,7 @@ describe('NodeDrawer', () => {
         expect.objectContaining({
           resourceType: 'agent',
           resourceId: 'pve-node-1',
-          range: '24h',
+          range: '7d',
         }),
       );
     });
@@ -485,6 +485,19 @@ describe('NodeDrawer Overview trends', () => {
     const disk = await screen.findByTestId('drawer-trend-card-disk');
     expect(within(disk).queryByText('0.0%')).toBeNull();
     expect(within(disk).getByText('—')).toBeInTheDocument();
+  });
+
+  it('opens History on the week, since the Overview cards already cover 24 hours', async () => {
+    render(() => <NodeDrawer node={makeNode()} />);
+    await screen.findByTestId('drawer-trend-card-cpu');
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    await waitFor(() =>
+      expect(chartsApiMocks.getMetricsHistory.mock.calls.map(([params]) => params.range)).toEqual([
+        '24h',
+        '7d',
+      ]),
+    );
+    expect(screen.getByTestId('guest-history-range-control')).toHaveValue('7d');
   });
 
   it('reads the 24h trend once while Overview shows and mounts History only on demand', async () => {
