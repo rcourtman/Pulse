@@ -284,11 +284,8 @@ last-use, identity continuity, environment non-use and adverse representations.
 That synthetic process journey does not exercise the terminal prompt, complete
 privileged installer, a reporter's configuration or installed recovery.
 
-A legacy client echoing the projected `controlled` mode into an unrelated AI
-settings PUT must retain a stored `autonomous` preference and its existing
-legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
-uses actual encrypted GET/PUT persistence with and without the entitlement,
-then checks explicit read-only opt-out and later opt-in remain possible.
+Legacy Assistant mode echo and stored-preference compatibility follow the
+[API settings contract](api-contracts.md#assistant-control_level-is-an-interactive-projection).
 
 ### Assistant control presentation does not change agent authority
 
@@ -9370,18 +9367,9 @@ registration, linking, heartbeat or removal. Proof:
 
 ### Quick security setup preserves unrelated settings
 
-Authenticated force setup in `internal/api/security_setup_fix.go` retains the
-existing authentication and settings-write authorization checks. Rotating local
-credentials does not reset non-auth system preferences.
-`ConfigPersistence.InitializeSystemSettings` in `internal/config/persistence.go`
-creates defaults only when system settings are absent, under the same instance
-mutex as ordinary saves; existing bytes (including unknown fields and malformed
-data requiring recovery) are not rewritten. A read error prevents initialization,
-while authentication setup retains its existing nonfatal settings-error behavior.
-This does not change token scopes, agent admission, or existing agent cleanup.
-Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
-`TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
-`TestInitializeSystemSettingsReadError`.
+Quick security setup follows the [API settings-preservation contract](api-contracts.md#quick-security-setup-preserves-unrelated-settings),
+including byte-preserving first-run initialization and read-error handling.
+It grants no additional agent or recovery authority.
 
 ### Unified metric replay guard does not change agent admission
 

@@ -105,11 +105,8 @@ parser. These controls do not establish issue #2762's installed input or cause,
 a cleared finding, or a containing release. Monitoring collection, guest-agent
 admission, configured alert thresholds, history storage and access are unchanged.
 
-A legacy client echoing the projected `controlled` mode into an unrelated AI
-settings PUT must retain a stored `autonomous` preference and its existing
-legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
-uses actual encrypted GET/PUT persistence with and without the entitlement,
-then checks explicit read-only opt-out and later opt-in remain possible.
+Legacy Assistant mode echo and stored-preference compatibility follow the
+[API settings contract](api-contracts.md#assistant-control_level-is-an-interactive-projection).
 
 ### Assistant protection is the per-resource lock, not a settings list
 
