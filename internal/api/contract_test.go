@@ -7546,7 +7546,7 @@ func TestContract_DiagnosticsDockerPrepareTokenInstallCommandUsesLifecycleTransp
 	if strings.Contains(got, "--disable-host") {
 		t.Fatalf("install command preserved stale disable-host flag: %s", got)
 	}
-	if !strings.Contains(got, `sudo bash -c`) || !strings.Contains(got, `--token-file "$token_file"`) || !strings.Contains(got, "--preflight-only") {
+	if !strings.Contains(got, `"$@" bash -c`) || !strings.Contains(got, `--token-file "$token_file"`) || !strings.Contains(got, "--preflight-only") {
 		t.Fatal("install command missing private-token/preflight root-or-sudo boundary")
 	}
 	if strings.Contains(got, "token-123") || strings.Contains(got, "| bash") || strings.Contains(got, "| sudo") {
@@ -7579,7 +7579,7 @@ func TestContract_DiagnosticsDockerPrepareTokenPreservesExplicitWorkloadOnlyMode
 func TestContract_SetupScriptURLCommandUsesFailFastQuotedTransport(t *testing.T) {
 	url := "https://pulse.example.com/api/setup-script?type=pve&host=pve1.local"
 	got := buildSetupScriptCommand(url, "token-123")
-	for _, required := range []string{"curl -fsSL " + posixShellQuote(url) + ` -o "$install_script"`, "sudo bash -c", "PULSE_SETUP_TOKEN_FILE="} {
+	for _, required := range []string{"curl -fsSL " + posixShellQuote(url) + ` -o "$install_script"`, `"$@" bash -c`, "PULSE_SETUP_TOKEN_FILE="} {
 		if !strings.Contains(got, required) {
 			t.Fatalf("missing secure bootstrap fragment %s", required)
 		}
@@ -11141,7 +11141,7 @@ func TestContract_ProxmoxInstallCommandUsesPrivilegeEscalationWrapper(t *testing
 	if !strings.Contains(got, `if [ "$(id -u)" -eq 0 ]; then`) {
 		t.Fatalf("install command missing root-or-sudo wrapper: %s", got)
 	}
-	if !strings.Contains(got, `sudo bash -c`) {
+	if !strings.Contains(got, `"$@" bash -c`) {
 		t.Fatalf("install command missing sudo fallback: %s", got)
 	}
 	if !strings.Contains(got, `token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)`) {
@@ -27167,5 +27167,44 @@ func TestContract_DiagnosticsTLSGuidanceSurvivesSerialization(t *testing.T) {
 				t.Fatal("diagnostic guidance changed the observed connection failure")
 			}
 		})
+	}
+}
+
+func TestContract_PortablePrivateBootstrapPayloads(t *testing.T) {
+	const token = "synthetic-portable-install-token"
+	artifact := configapi.BuildSetupScriptInstallArtifact("https://pulse.example", "pbs", "https://pbs.example:8007", "https://pulse.example", false, token, 1900000000)
+	payload := map[string]any{
+		"setup":     artifact,
+		"proxmox":   AgentInstallCommandResponse{Command: configapi.BuildProxmoxAgentInstallCommand(configapi.AgentInstallCommandOptions{BaseURL: "https://pulse.example", Token: token, InstallType: "pbs", IncludeInstallType: true}), Token: token},
+		"container": map[string]string{"command": buildContainerRuntimeAgentInstallCommand("https://pulse.example", token, false), "token": token},
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]map[string]any
+	if err := json.Unmarshal(encoded, &wire); err != nil {
+		t.Fatal(err)
+	}
+	for kind, fields := range wire {
+		command, ok := fields["command"].(string)
+		if !ok || strings.Contains(command, token) || strings.ContainsAny(command, "\r\n") || strings.Count(command, "bash -c ") != 1 {
+			t.Fatalf("%s wire command lost its single private body", kind)
+		}
+		for _, required := range []string{`"$@" bash -c`, "tty_control=(stty)", "tty_control=(busybox stty)", "Cannot restore terminal settings.", ` -o "$install_script"`} {
+			if !strings.Contains(command, required) {
+				t.Fatalf("%s wire command lost %s", kind, required)
+			}
+		}
+		credentialKey := "token"
+		if kind == "setup" {
+			credentialKey = "setupToken"
+			if fields["commandWithEnv"] != command || fields["commandWithoutEnv"] != command || fields["downloadURL"] != fields["url"] {
+				t.Fatal("setup artifact aliases or credential-free download changed")
+			}
+		}
+		if fields[credentialKey] != token {
+			t.Fatalf("%s lost its separate credential field", kind)
+		}
 	}
 }

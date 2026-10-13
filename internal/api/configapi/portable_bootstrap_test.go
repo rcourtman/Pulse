@@ -1,6 +1,7 @@
 package configapi
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -268,5 +269,28 @@ func TestPrivateBootstrapSinglePrivilegedBody(t *testing.T) {
 			}
 			t.Logf("ordinary %s command: %d bytes", caller.name, len(command))
 		})
+	}
+}
+
+// The browser uses these actual builder fields, never a handwritten command.
+// All credentials/endpoints here are inert synthetic values, not issued tokens.
+func TestPrivateBootstrapConsumerPayload(t *testing.T) {
+	const base = "http://127.0.0.1:5237"
+	payload := make(map[string]any)
+	for _, kind := range []string{"pve", "pbs"} {
+		token := strings.Repeat("a", 32)
+		payload[kind+"-setup"] = BuildSetupScriptInstallArtifact(base, kind, "https://"+kind+".example:"+map[string]string{"pve": "8006", "pbs": "8007"}[kind], base, false, token, 1900000000)
+		payload[kind+"-agent"] = map[string]string{
+			"command": BuildProxmoxAgentInstallCommand(AgentInstallCommandOptions{BaseURL: base, Token: strings.Repeat("b", 32), InstallType: kind, IncludeInstallType: true}),
+			"token":   strings.Repeat("b", 32),
+		}
+	}
+	payload["container"] = map[string]string{"command": BuildContainerRuntimeAgentInstallCommand(base, strings.Repeat("c", 32), false), "token": strings.Repeat("c", 32)}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if os.Getenv("PULSE_EMIT_BOOTSTRAP_CONSUMER") == "1" {
+		t.Logf("PRIVATE_BOOTSTRAP_PAYLOAD=%s", base64.StdEncoding.EncodeToString(body))
 	}
 }

@@ -197,7 +197,7 @@ func TestPrivateBootstrapKeepsSecretsOutOfCommands(t *testing.T) {
 			if strings.Contains(command, secret) || strings.ContainsAny(command, "\r\n") || strings.Contains(command, "PULSE_SETUP_TOKEN=") || strings.Contains(command, "--token '") || strings.Contains(command, "| bash") {
 				t.Fatal("copied command exposes a credential or executes a partial fetch")
 			}
-			if !strings.Contains(command, "read -r -s -p") || !strings.Contains(command, "sudo bash -c") || !strings.Contains(command, " -o \"$install_script\"") {
+			if !strings.Contains(command, "read -r -s -p") || !strings.Contains(command, `"$@" bash -c`) || !strings.Contains(command, " -o \"$install_script\"") {
 				t.Fatal("missing private prompt, sudo or complete download")
 			}
 		})
