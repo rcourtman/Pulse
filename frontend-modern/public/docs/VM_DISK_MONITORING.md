@@ -313,10 +313,15 @@ custom monitoring role if the required read privileges are absent.
 
 ### Current, retained and unavailable disk readings
 
-In **Workloads**, read the disk cell's explanation or open the guest's details
-and look under **Filesystems → Status**. Compact rows use **Prior** and **N/A**;
-wider rows use **Last known** and **Unavailable**. Where an observation time is
-shown, keep it with the reading; an unavailable time leaves freshness unknown.
+In **Workloads**, select the disk reading indicator for its explanation, or
+open the same guest's details and look under **Filesystems → Status**. Use the
+details on a phone or with a keyboard rather than relying on a hover tooltip.
+Retained readings use **Prior** in compact rows and **Last known** in wider rows.
+An unavailable reading may show a dash or an unavailable label: the presence or
+absence of a caption does not establish freshness or explain the cause. Read
+the same guest's explanation before treating it as an agent setup problem.
+Where an observation time is shown, keep it with the reading; an unavailable
+time leaves freshness unknown.
 
 | Reading | What it establishes |
 | --- | --- |
