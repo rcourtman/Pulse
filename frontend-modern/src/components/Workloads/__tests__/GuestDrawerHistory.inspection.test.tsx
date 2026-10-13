@@ -408,3 +408,47 @@ describe('drawer History range picker', () => {
     ]);
   });
 });
+
+describe('drawer History on a phone', () => {
+  const groupIds = () =>
+    screen
+      .getAllByTestId('guest-history-group-chart')
+      .filter((chart) => chart.dataset.phoneCollapsed !== 'true')
+      .map((chart) => chart.dataset.historyGroup);
+
+  it('keeps the first panel and collapses the rest behind one toggle', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    render(() => <GuestDrawerHistory target={target} range="24h" />);
+    await screen.findAllByTestId('guest-history-group-chart');
+    expect(groupIds()).toEqual(['utilization']);
+    for (const chart of screen.getAllByTestId('guest-history-group-chart').slice(1)) {
+      expect(chart).toHaveClass('max-sm:hidden');
+    }
+    const toggle = screen.getByTestId('history-phone-toggle');
+    expect(toggle).toHaveClass('sm:hidden');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveTextContent('Show Network I/O, Disk I/O');
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveTextContent('Show fewer charts');
+    expect(groupIds()).toEqual(['utilization', 'network', 'disk-io']);
+    for (const chart of screen.getAllByTestId('guest-history-group-chart')) {
+      expect(chart).not.toHaveClass('max-sm:hidden');
+    }
+  });
+
+  it('keeps a panel with an active alert visible on a phone', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    render(() => (
+      <GuestDrawerHistory
+        target={target}
+        range="24h"
+        alerts={{ diskread: { severity: 'warning', value: 1024 } }}
+      />
+    ));
+    await screen.findAllByTestId('guest-history-group-chart');
+    expect(groupIds()).toEqual(['utilization', 'disk-io']);
+    expect(screen.getByTestId('history-phone-toggle')).toHaveTextContent('Show Network I/O');
+  });
+});

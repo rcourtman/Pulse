@@ -71,6 +71,8 @@ interface GuestDrawerHistoryRangeSelectProps {
 
 interface GuestDrawerHistoryGroupChartProps {
   alerts?: Record<string, GuestDrawerHistoryAlert | undefined>;
+  /** Collapsed below the sm breakpoint until the reader asks for more charts. */
+  hiddenOnPhone?: boolean;
   currentMetrics?: Record<string, number | null | undefined>;
   deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
   group: GuestDrawerHistoryGroupConfig;
@@ -472,8 +474,9 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
 
   return (
     <section
-      class="flex min-h-[154px] flex-col rounded-xs border border-border bg-surface p-2.5"
+      class={`flex min-h-[154px] flex-col rounded-xs border border-border bg-surface p-2.5 ${props.hiddenOnPhone ? 'max-sm:hidden' : ''}`}
       data-testid="guest-history-group-chart"
+      data-phone-collapsed={props.hiddenOnPhone ? 'true' : undefined}
       data-history-group={props.group.id}
     >
       <div class="mb-2 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
@@ -806,6 +809,12 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
 
 export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) => {
   const [touchInspection, setTouchInspection] = createSignal(false);
+  // On a phone every panel stacks, so a drawer's Overview ran four charts
+  // deep before its disks and details. Phones show the first panel, plus any
+  // panel with an active alert, and the rest on request. Wider layouts show
+  // every panel; the class only applies below the sm breakpoint.
+  const [showAllOnPhone, setShowAllOnPhone] = createSignal(false);
+  const gridId = `history-groups-${createUniqueId()}`;
   onMount(() => {
     void loadRuntimeCapabilities();
   });
@@ -829,6 +838,13 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
       ),
       historyQuery.value(),
     ),
+  );
+  const groupHasAlert = (group: GuestDrawerHistoryGroupConfig) =>
+    group.series.some((series) => Boolean(props.alerts?.[series.metric]));
+  const isPhoneCollapsed = (group: GuestDrawerHistoryGroupConfig, index: number) =>
+    !showAllOnPhone() && index > 0 && !groupHasAlert(group);
+  const phoneCollapsedGroups = createMemo(() =>
+    groups().filter((group, index) => index > 0 && !groupHasAlert(group)),
   );
   const hasHistoryPoints = createMemo(() =>
     groups().some((group) =>
@@ -903,12 +919,14 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
         >
           <Show when={!historyQuery.error() || hasHistoryPoints()}>
             <div
+              id={gridId}
               class={`grid gap-3 md:grid-cols-2 ${groups().length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}
             >
               <For each={groups()}>
-                {(group) => (
+                {(group, index) => (
                   <GuestDrawerHistoryGroupChart
                     alerts={props.alerts}
+                    hiddenOnPhone={isPhoneCollapsed(group, index())}
                     group={group}
                     loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
                     metrics={metrics()}
@@ -922,6 +940,22 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                 )}
               </For>
             </div>
+            <Show when={phoneCollapsedGroups().length > 0 || showAllOnPhone()}>
+              <button
+                type="button"
+                class="flex min-h-11 w-full items-center justify-center gap-1 rounded-xs border border-border bg-surface px-3 text-xs font-medium text-base-content sm:hidden"
+                aria-controls={gridId}
+                aria-expanded={showAllOnPhone()}
+                data-testid="history-phone-toggle"
+                onClick={() => setShowAllOnPhone((open) => !open)}
+              >
+                {showAllOnPhone()
+                  ? 'Show fewer charts'
+                  : `Show ${phoneCollapsedGroups()
+                      .map((group) => group.label)
+                      .join(', ')}`}
+              </button>
+            </Show>
           </Show>
         </Show>
       </div>
