@@ -1012,9 +1012,9 @@ cluster aliases, VM/source isolation, unchanged expiry and valid resumption.
 null, partial-row, escaped-text and truncated-measurement compatibility.
 `TestGuestAgentTypedReplyMonitoringContract` connects all three field kinds to
 the real poll builder, broadcast resource and History, with untouched
-healthy-read cache and observation origins: original memory/disk and
-metadata evidence remain last-known, CPU advances, and guest metrics are not
-renewed. This is synthetic source/consuming-surface proof, not attribution of
+healthy-read cache and observation origins: original memory/disk remain
+last-known with their QGA provenance, metadata is not renewed, CPU advances,
+and guest metrics are not renewed. This is synthetic source/consuming-surface proof, not attribution of
 the original freeze or native thaw/restart recovery.
 
 The completed-error boundary uses the actual HTTP status retained by the request

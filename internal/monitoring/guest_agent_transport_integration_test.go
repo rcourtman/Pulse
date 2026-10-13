@@ -160,6 +160,10 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T, kinds ..
 			m.guestMetadataLimiter = make(map[string]time.Time)
 			phase.Store(1)
 			res.CPU = 0.2
+			wantMemorySource := "previous-snapshot"
+			if strings.HasPrefix(kind, "typed ") {
+				wantMemorySource = "guest-agent-meminfo" // The untouched warm cache retains its actual origin.
+			}
 			for i := 0; i < 2; i++ {
 				deferred, source := build()
 				wantReason := "prev-agent-cooldown"
@@ -173,7 +177,7 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T, kinds ..
 						wantReason = "prev-agent-redirect"
 					}
 				}
-				if deferred.ID != initial.ID || deferred.GuestAgentStatus != "deferred" || deferred.DiskStatusReason != wantReason || deferred.Memory.Used != initial.Memory.Used || source != "previous-snapshot" || deferred.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(deferred.NetworkInterfaces, initial.NetworkInterfaces) {
+				if deferred.ID != initial.ID || deferred.GuestAgentStatus != "deferred" || deferred.DiskStatusReason != wantReason || deferred.Memory.Used != initial.Memory.Used || source != wantMemorySource || deferred.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(deferred.NetworkInterfaces, initial.NetworkInterfaces) {
 					t.Fatalf("uncertain command lost truthful continuity: source=%s vm=%+v", source, deferred)
 				}
 				if strings.HasPrefix(kind, "typed ") && (deferred.Memory.Observation.State != "last-known" || !deferred.Memory.Observation.ObservedAt.Equal(initial.Memory.Observation.ObservedAt)) {
