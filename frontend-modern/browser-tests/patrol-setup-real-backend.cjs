@@ -245,11 +245,11 @@ async function capture(page, name, target) {
         await historyEntry.waitFor();
         await capture(page, `${spec.name}-first-run-history`, historyEntry);
         await activate(historyEntry);
-        await page.getByText('Check record', { exact: true }).waitFor();
+        await page.getByText('Check details', { exact: true }).waitFor();
         await capture(
           page,
           `${spec.name}-first-run-record`,
-          page.getByText('Check record', { exact: true }),
+          page.getByText('Check details', { exact: true }),
         );
         record(`${spec.name}: actual History entry opens the completed run`, {
           run_id: acceptance.run_id,
