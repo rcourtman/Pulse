@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "5168ae6460521b8cf98149835037802b0c5e457f",
+  "verified_at": "2026-10-13T22:46:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "c2d26c2153ed586b2685766dc4c7b1843dfbb46799eab8c7d5e6f266d8155367",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx": "0cb80626d85ff783b07495779a7f3791778dcbdbec4692aedfdff62369e2a753"
+  },
+  "routes": [
+    "/proxmox/storage",
+    "/proxmox/storage?tab=disks"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "final built bytes of this tree (origin/main 170f726c93 plus PR 2918 and this change) embedded in a darwin binary, mock mode with 7 days of seeded metrics, headless Chromium on pulse-dev through a reverse tunnel, full-resolution element screenshots read by eye",
+    "pool detail (a zfspool service pool, East Production D): no tab strip; the Capacity Trend card leads with its range picker in the card header and the 7-day usage chart, followed by the Configuration and ZFS Pool cards",
+    "physical disk detail (WD Red Pro 8TB, Replace Now): no tab strip; the health verdict and Temperature SMART card, then a History heading with its range picker beside it over the Temperature and Reallocated Sectors charts, then Live I/O (30m) with Read, Write and Busy",
+    "390px phone: both details stack their cards in one column with no horizontal overflow"
+  ],
+  "interactions": [
+    "expanded a service pool row on /proxmox/storage and the first physical disk row on the Physical Disks tab at 1440 and 390px",
+    "counted tab strips inside each detail (0) and confirmed the capacity trend and disk history sections render on open"
+  ]
+}

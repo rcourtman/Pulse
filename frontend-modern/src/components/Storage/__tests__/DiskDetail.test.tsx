@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { render, screen, within } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { DiskDetail } from '@/components/Storage/DiskDetail';
@@ -54,10 +54,8 @@ describe('DiskDetail', () => {
   it('keeps disk detail range choices inside the current history entitlement', () => {
     render(() => <DiskDetail disk={buildDisk()} nodes={[]} />);
 
-    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByRole('combobox', { name: 'Disk history range' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    // One view: no tab strip, the range picker sits beside the history charts.
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
 
     const rangeSelector = screen.getByRole('combobox', {
       name: 'Disk history range',
@@ -72,7 +70,6 @@ describe('DiskDetail', () => {
     ]);
     expect(Array.from(rangeSelector.options).map((option) => option.value)).not.toContain('14d');
     expect(Array.from(rangeSelector.options).map((option) => option.value)).not.toContain('90d');
-    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getAllByTestId('history-chart-hover-group')).toHaveLength(2);
   });
 
@@ -184,7 +181,6 @@ describe('DiskDetail', () => {
     delete disk.physicalDisk!.smart;
     disk.physicalDisk!.collection = { io: { state: 'unsupported' } };
     render(() => <DiskDetail disk={disk} nodes={[]} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
     expect(screen.getAllByTestId('history-chart').map((chart) => chart.textContent)).toEqual([
       'disk:agent-tower:sda:smart_temp:24h',
       'disk:agent-tower:sda:smart_reallocated_sectors:24h',

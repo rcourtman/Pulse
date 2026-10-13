@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import { StoragePoolDetail } from '../StoragePoolDetail';
 import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
@@ -69,8 +69,6 @@ describe('Storage pool ownership through live snapshots', () => {
     expect(screen.getByText('Peer disk')).toBeVisible();
     expect(screen.getByText('99 errors')).toBeVisible();
     expect(screen.getByText('82°C')).toBeVisible();
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     expect(screen.getByText('Peer disk')).toBeVisible();
 
     setResource(pool(undefined));

@@ -1,9 +1,8 @@
-import { Component, For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { filterSelectClass } from '@/components/shared/FilterToolbar';
 import { HistoryChart, HistoryChartHoverGroup } from '@/components/shared/HistoryChart';
-import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import type { HistoryTimeRange } from '@/api/charts';
 import { maxHistoryDays } from '@/stores/license';
 import {
@@ -25,6 +24,7 @@ import {
   STORAGE_DETAIL_BADGE_CLASS,
   STORAGE_DETAIL_CARD_CLASS,
   STORAGE_DETAIL_EMPTY_CLASS,
+  STORAGE_DETAIL_HEADER_ROW_CLASS,
   STORAGE_DISK_DETAIL_ATTRIBUTE_GRID_CLASS,
   STORAGE_DISK_DETAIL_HEADER_CLASS,
   STORAGE_DISK_DETAIL_HISTORY_GRID_CLASS,
@@ -50,10 +50,7 @@ interface DiskDetailProps {
   alertResourceIds?: string[];
 }
 
-type DiskDetailTab = 'overview' | 'history';
-
 export const DiskDetail: Component<DiskDetailProps> = (props) => {
-  const [activeTab, setActiveTab] = createSignal<DiskDetailTab>('overview');
   const {
     chartRange,
     setChartRange,
@@ -72,9 +69,6 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
   const rangeOptions = createMemo(() =>
     getUnlockedHistoryRangeOptions(DISK_DETAIL_HISTORY_RANGE_OPTIONS, maxHistoryDays()),
   );
-  const hasHistory = createMemo(
-    () => Boolean(historyResourceId()) || Boolean(metricResourceId() && liveIOAvailable()),
-  );
   const hasOverviewDetails = createMemo(
     () => collectionMessages().length > 0 || attributeCards().length > 0,
   );
@@ -87,12 +81,6 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
     );
     if (nextRange !== chartRange()) {
       setChartRange(nextRange);
-    }
-  });
-
-  createEffect(() => {
-    if (activeTab() === 'history' && !hasHistory()) {
-      setActiveTab('overview');
     }
   });
 
@@ -128,34 +116,9 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
         </div>
       </div>
 
-      <Subtabs
-        class="mb-1"
-        ariaLabel="Physical disk detail sections"
-        value={activeTab()}
-        onChange={(value) => setActiveTab(value as DiskDetailTab)}
-        tabs={[
-          { value: 'overview', label: 'Overview' },
-          ...(hasHistory() ? [{ value: 'history', label: 'History' } satisfies SubtabOption] : []),
-        ]}
-        trailing={
-          <Show when={activeTab() === 'history'}>
-            <FormSelect
-              label="Disk history range"
-              labelClass="sr-only"
-              fieldBaseClass="contents"
-              value={chartRange()}
-              onChange={(event) => setChartRange(event.currentTarget.value as HistoryTimeRange)}
-              selectBaseClass={`${filterSelectClass} h-7 min-h-11 py-0 text-[11px] sm:min-h-0`}
-            >
-              <For each={rangeOptions()}>
-                {(option) => <option value={option.value}>{option.label}</option>}
-              </For>
-            </FormSelect>
-          </Show>
-        }
-      />
-
-      <div class={activeTab() === 'overview' ? 'space-y-3' : 'hidden'}>
+      {/* One view: the SMART evidence behind the health verdict, then its
+          trend and live I/O. There is no separate History tab. */}
+      <div class="space-y-3">
         <Show when={collectionMessages().length > 0}>
           <div class={STORAGE_DETAIL_EMPTY_CLASS} role="status">
             <For each={collectionMessages()}>{(message) => <p>{message}</p>}</For>
@@ -181,81 +144,92 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
             Detailed SMART attributes are not available for this disk.
           </div>
         </Show>
-      </div>
 
-      <div class={`[overflow-anchor:none] ${activeTab() === 'history' ? 'space-y-3' : 'hidden'}`}>
-        <Show when={activeTab() === 'history'}>
-          <Show when={metricResourceId() && liveIOAvailable()}>
-            <div class={STORAGE_DISK_DETAIL_SECTION_CLASS}>
-              <h4
-                class={`${STORAGE_DETAIL_SECTION_TITLE_CLASS} ${STORAGE_DISK_DETAIL_SECTION_HEADING_CLASS}`}
+        <Show
+          when={historyResourceId()}
+          fallback={
+            <div class={STORAGE_DETAIL_EMPTY_CLASS}>{getDiskDetailHistoryFallbackMessage()}</div>
+          }
+        >
+          <div class={STORAGE_DISK_DETAIL_SECTION_CLASS} data-testid="disk-detail-history">
+            <div class={STORAGE_DETAIL_HEADER_ROW_CLASS}>
+              <h4 class={STORAGE_DETAIL_SECTION_TITLE_CLASS}>History</h4>
+              <FormSelect
+                label="Disk history range"
+                labelClass="sr-only"
+                fieldBaseClass="contents"
+                value={chartRange()}
+                onChange={(event) => setChartRange(event.currentTarget.value as HistoryTimeRange)}
+                selectBaseClass={`${filterSelectClass} h-7 min-h-11 py-0 text-[11px] sm:min-h-0`}
               >
-                Live I/O (30m)
-                <span class={STORAGE_DETAIL_BADGE_CLASS}>{getDiskDetailLiveBadgeLabel()}</span>
-              </h4>
-              <HistoryChartHoverGroup>
-                <div class={STORAGE_DISK_DETAIL_LIVE_GRID_CLASS}>
-                  <For each={DISK_DETAIL_LIVE_CHARTS}>
-                    {(chart) => (
-                      <div class={STORAGE_DETAIL_CARD_CLASS}>
-                        <HistoryChart
-                          resourceType="disk"
-                          resourceId={metricResourceId()!}
-                          metric={
-                            chart.series === 'read'
-                              ? 'diskread'
-                              : chart.series === 'write'
-                                ? 'diskwrite'
-                                : 'disk'
-                          }
-                          label={chart.label}
-                          unit={chart.unit}
-                          range="30m"
-                          hideSelector
-                          hideLock
-                          height={120}
-                          compact={true}
-                        />
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </HistoryChartHoverGroup>
+                <For each={rangeOptions()}>
+                  {(option) => <option value={option.value}>{option.label}</option>}
+                </For>
+              </FormSelect>
             </div>
-          </Show>
+            <HistoryChartHoverGroup>
+              <div class={STORAGE_DISK_DETAIL_HISTORY_GRID_CLASS}>
+                <For each={historyCharts()}>
+                  {(chart) => (
+                    <div class={STORAGE_DETAIL_CARD_CLASS}>
+                      <HistoryChart
+                        resourceType="disk"
+                        resourceId={historyResourceId()!}
+                        metric={chart.metric}
+                        label={chart.label}
+                        unit={chart.unit}
+                        height={120}
+                        color={chart.color}
+                        range={chartRange()}
+                        hideSelector={true}
+                        compact={true}
+                        hideLock={true}
+                      />
+                    </div>
+                  )}
+                </For>
+              </div>
+            </HistoryChartHoverGroup>
+          </div>
+        </Show>
 
-          <Show
-            when={historyResourceId()}
-            fallback={
-              <div class={STORAGE_DETAIL_EMPTY_CLASS}>{getDiskDetailHistoryFallbackMessage()}</div>
-            }
-          >
-            <div class={STORAGE_DISK_DETAIL_SECTION_CLASS}>
-              <HistoryChartHoverGroup>
-                <div class={STORAGE_DISK_DETAIL_HISTORY_GRID_CLASS}>
-                  <For each={historyCharts()}>
-                    {(chart) => (
-                      <div class={STORAGE_DETAIL_CARD_CLASS}>
-                        <HistoryChart
-                          resourceType="disk"
-                          resourceId={historyResourceId()!}
-                          metric={chart.metric}
-                          label={chart.label}
-                          unit={chart.unit}
-                          height={120}
-                          color={chart.color}
-                          range={chartRange()}
-                          hideSelector={true}
-                          compact={true}
-                          hideLock={true}
-                        />
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </HistoryChartHoverGroup>
-            </div>
-          </Show>
+        <Show when={metricResourceId() && liveIOAvailable()}>
+          <div class={STORAGE_DISK_DETAIL_SECTION_CLASS}>
+            <h4
+              class={`${STORAGE_DETAIL_SECTION_TITLE_CLASS} ${STORAGE_DISK_DETAIL_SECTION_HEADING_CLASS}`}
+            >
+              Live I/O (30m)
+              <span class={STORAGE_DETAIL_BADGE_CLASS}>{getDiskDetailLiveBadgeLabel()}</span>
+            </h4>
+            <HistoryChartHoverGroup>
+              <div class={STORAGE_DISK_DETAIL_LIVE_GRID_CLASS}>
+                <For each={DISK_DETAIL_LIVE_CHARTS}>
+                  {(chart) => (
+                    <div class={STORAGE_DETAIL_CARD_CLASS}>
+                      <HistoryChart
+                        resourceType="disk"
+                        resourceId={metricResourceId()!}
+                        metric={
+                          chart.series === 'read'
+                            ? 'diskread'
+                            : chart.series === 'write'
+                              ? 'diskwrite'
+                              : 'disk'
+                        }
+                        label={chart.label}
+                        unit={chart.unit}
+                        range="30m"
+                        hideSelector
+                        hideLock
+                        height={120}
+                        compact={true}
+                      />
+                    </div>
+                  )}
+                </For>
+              </div>
+            </HistoryChartHoverGroup>
+          </div>
         </Show>
       </div>
     </div>

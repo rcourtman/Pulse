@@ -2894,14 +2894,17 @@ canonical pre-handler authorization proof covering both transfer routes.
 15. Keep storage chart identity on the shared storage path. Pool rows, disk
     rows, the pool Growth column, and storage detail charts must all address
     history through the canonical unified-resource metrics-target IDs.
-    Expanded pool and physical-disk details must also follow the canonical
-    object-detail information architecture: current configuration, topology,
-    health, and SMART facts land on `Overview`; stored capacity and I/O charts
-    land behind the shared `Subtabs` `History` tab; and the active range uses
-    the shared filter-select presentation in that tab row. Storage must not
-    place historical charts directly into the default detail view or restore
-    the retired storage-local range-selector classes and inline SVG select
-    decoration.
+    Expanded pool and physical-disk details follow the canonical
+    object-detail information architecture, which since 2026-10-13
+    (maintainer decision, carried from the resource drawers) keeps stored
+    history in the default view rather than behind a `History` tab: a pool
+    detail leads with its Capacity Trend card, whose header holds the range
+    picker, then configuration, topology and devices; a disk detail shows its
+    health verdict and SMART facts, then its History charts with the range
+    picker beside their heading, then live I/O. With only one view left, these
+    details render no `Subtabs` strip. The range picker keeps the shared
+    filter-select presentation; storage must not restore the retired
+    storage-local range-selector classes and inline SVG select decoration.
     Storage-page pool growth readouts belong to that same contract: the table
     may derive per-pool used-capacity deltas from the shared
     `/api/storage-charts` summary payload, but it must not fan out row-local
@@ -3440,8 +3443,8 @@ outside the fixed remount budget.
 
 `useStoragePoolsTableWindowing.ts` reconciles flattened group and pool items by
 their stable logical key. A refreshed unified-resource snapshot updates the
-existing row proxy instead of remounting `StoragePoolDetail`, so the selected
-Overview/History tab and history range survive normal polling. Provider-derived
+existing row proxy instead of remounting `StoragePoolDetail`, so the open
+detail and its history range survive normal polling. Provider-derived
 mock storage and Ceph rows resolve capacity history through their canonical
 metrics target and receive deterministic `usage` fallback from current unified
 capacity when no legacy history row exists. The row-identity regression and

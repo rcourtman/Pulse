@@ -1303,11 +1303,12 @@ describe('shared primitive guardrails', () => {
     expect(subtabsSource).toContain('sm:hidden');
   });
 
-  it('keeps object detail history behind the canonical Overview and History subtabs', () => {
+  it('charts object detail history in the detail itself, not behind a History tab', () => {
+    // Storage disk and pool details had only Overview and History, so with the
+    // charts in the one view they need no tab strip at all.
     for (const source of [diskDetailSource, storagePoolDetailSource]) {
-      expect(source).toContain('@/components/shared/Subtabs');
-      expect(source).toContain("value: 'overview', label: 'Overview'");
-      expect(source).toContain("value: 'history', label: 'History'");
+      expect(source).not.toContain('@/components/shared/Subtabs');
+      expect(source).not.toContain("value: 'history', label: 'History'");
     }
     // Guest, node, Docker host and resource-detail drawers chart their history
     // on Overview itself, with the range picker beside the charts. A History
@@ -1324,7 +1325,7 @@ describe('shared primitive guardrails', () => {
 
     for (const storageDetailSource of [diskDetailSource, storagePoolDetailSource]) {
       expect(storageDetailSource).toContain('filterSelectClass');
-      expect(storageDetailSource).toContain("activeTab() === 'history'");
+      expect(storageDetailSource).not.toContain('activeTab()');
       expect(storageDetailSource).not.toContain('STORAGE_DETAIL_SELECT_CLASS');
       expect(storageDetailSource).not.toContain('STORAGE_DETAIL_HEADER_SELECT_CLASS');
     }
