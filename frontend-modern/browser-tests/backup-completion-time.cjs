@@ -3,6 +3,9 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { chromium, webkit } = require('playwright');
+const {
+  createPublicationFixtureServer,
+} = require('/workspace/frontend-modern/browser-tests/publication-fixture-server.cjs');
 const root = '/workspace';
 const frontend = path.join(root, 'frontend-modern');
 const output = path.join(root, 'tmp/backup-completion-time/browser');
@@ -17,7 +20,6 @@ const runtime = [
 ];
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const result = {
-  base: '60bd0ffc621436e036e80140c85a687fcbae3cfa',
   sourceHashes: Object.fromEntries(
     runtime.map((p) => [p, hash(fs.readFileSync(path.join(root, p)))]),
   ),
@@ -42,20 +44,14 @@ let server;
       'node_modules/@playwright/test'
     ].version,
   );
-  const { createServer } = await import(
-    path.join(frontend, 'node_modules/vite/dist/node/index.js')
+  server = createPublicationFixtureServer(
+    frontend,
+    5298,
+    'browser-tests/backup-completion-time.html',
   );
-  server = await createServer({
-    root: frontend,
-    configFile: path.join(frontend, 'vite.config.ts'),
-    cacheDir: path.join(output, 'vite-cache'),
-    optimizeDeps: { noDiscovery: true, include: ['solid-js', 'solid-js/web', '@solidjs/router'] },
-    server: { host: '127.0.0.1', port: 5298, strictPort: true },
-    logLevel: 'error',
-  });
+  result.compiled = server.binding;
+  result.source_sha = server.binding.source_sha;
   await server.listen();
-  await server.transformRequest('/src/index.css');
-  await server.transformRequest('/browser-tests/backup-completion-time.tsx');
   for (const spec of [
     {
       name: 'desktop-west',
@@ -366,7 +362,11 @@ let server;
   assert.equal(result.errors.length, 0);
   assert.equal(result.consoleErrors.length, 0);
   assert(!result.requests.some((r) => r.unmatched));
-  for (const p of runtime) assert.equal(result.loaded[p], result.sourceHashes[p]);
+  for (const p of runtime)
+    assert.equal(
+      result.compiled.sources[p.replace('frontend-modern/', '')],
+      result.sourceHashes[p],
+    );
   result.result = 'passed';
 })()
   .catch((e) => {
