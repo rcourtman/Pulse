@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "b3b7c286693fe06d083f0c2520c3d80621609d39",
+  "changed_paths": [
+    "frontend-modern/public/docs/KUBERNETES.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/KUBERNETES.md": "eca65c5254be14009d796b2a5e9c199cbac680d1916737dee990f096fb95bee9"
+  },
+  "routes": [
+    "/docs/KUBERNETES#unified-agent-on-kubernetes-daemonset",
+    "/docs/KUBERNETES#rbac",
+    "/docs/KUBERNETES#add-host-metrics-optional",
+    "/docs/UNIFIED_AGENT#duplicate-agents",
+    "/docs/KUBERNETES#4-troubleshooting"
+  ],
+  "states": [
+    "Actual application Docs static producer and sanitised renderer in a Vite source preview; local API security GET fixture only.",
+    "Kubernetes CPU/memory API metrics access, minimal read-only role and deliberate separate host identities."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and phone touch follow same-page and cross-guide links.",
+    "Rendered RBAC YAML matches the exact canonical producer, without any Kubernetes action."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-13T22:50:41.435Z",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "opened": [
+      "chromium-metrics-path.jpg",
+      "chromium-rbac-scope.jpg",
+      "chromium-metrics-role.jpg",
+      "chromium-host-boundary.jpg",
+      "webkit-metrics-path.jpg",
+      "webkit-rbac-scope.jpg",
+      "webkit-metrics-role.jpg",
+      "webkit-host-boundary.jpg"
+    ],
+    "observations": [
+      "Desktop: API metrics permissions, limited inventory scope, service-account/namespace binding and preserved host-identity guidance are legible in their actual Docs context.",
+      "390 px WebKit: recommendation bullets, host warnings and recovery links wrap within the page. The new metrics rule fits the code viewport; existing long YAML comments remain in a horizontally scrollable code block, not page overflow.",
+      "Keyboard Enter and phone touch reach RBAC, existing host identity recovery and the failure-specific table. No provisioning, token, host, workload or identity action is performed."
+    ],
+    "remaining": null
+  },
+  "browser_cleanup": {
+    "closed": true,
+    "preview_exit": 143,
+    "preview_signal": null
+  },
+  "evidence": "PI OUTCOME.md / RECEIPTS.md / BROWSER.json retain twelve accepted consuming rows/eight final native inspections, first missing-touch driver failure and exact source-proof execution gap. Browser success does not establish source-suite/build, native Kubernetes, protected delivery or reporter resolution."
+}
