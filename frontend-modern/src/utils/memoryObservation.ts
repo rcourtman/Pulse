@@ -206,7 +206,7 @@ export const getMemoryObservationPresentation = (
     };
   }
   const sourceStatus =
-    state !== 'unavailable' && options.agentStale && observation?.source === 'agent'
+    options.agentStale && observation?.source === 'agent'
       ? ' The Pulse Agent that supplied this reading stopped reporting.'
       : '';
   return {

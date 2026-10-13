@@ -732,13 +732,13 @@ export function GuestRow(props: GuestRowProps) {
                   }
                 >
                   {(label) => (
-                <WorkloadReadingStatus
-                  metric="Memory"
-                  guestId={guestId()}
-                  guestName={props.guest.name}
-                  label={label()}
-                  message={status().message}
-                />
+                    <WorkloadReadingStatus
+                      metric="Memory"
+                      guestId={guestId()}
+                      guestName={props.guest.name}
+                      label={label()}
+                      message={status().message}
+                    />
                   )}
                 </Show>
               )}
@@ -797,14 +797,14 @@ export function GuestRow(props: GuestRowProps) {
                   }
                 >
                   {(label) => (
-                <WorkloadReadingStatus
-                  metric="Disk"
-                  guestId={guestId()}
-                  guestName={props.guest.name}
-                  label={label()}
-                  message={status().message}
-                  needsAction={status().needsAction}
-                />
+                    <WorkloadReadingStatus
+                      metric="Disk"
+                      guestId={guestId()}
+                      guestName={props.guest.name}
+                      label={label()}
+                      message={status().message}
+                      needsAction={status().needsAction}
+                    />
                   )}
                 </Show>
               )}

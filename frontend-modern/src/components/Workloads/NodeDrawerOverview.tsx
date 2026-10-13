@@ -16,7 +16,6 @@ import {
   compactDetailSections,
   makeDetailRow,
   type DetailRow,
-  type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import type { Alert, Disk, HostGPUSensor, Node, Temperature } from '@/types/api';
@@ -448,7 +447,6 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
       },
     ]);
   };
-
 
   const exceptionRows = createMemo(() =>
     collectDrawerExceptionRows([...overviewSections(), ...technicalSections()]),
