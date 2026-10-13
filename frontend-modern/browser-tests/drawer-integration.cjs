@@ -181,14 +181,14 @@ async function box(locator) {
                 {
                   timestamp: start,
                   value: /in|out|read|write/.test(metric) ? 1024 ** 2 : 20,
-                  min: 10,
-                  max: 40,
+                  min: /in|out|read|write/.test(metric) ? 1024 ** 2 : 10,
+                  max: /in|out|read|write/.test(metric) ? 1024 ** 2 : 40,
                 },
                 {
                   timestamp: end,
                   value: /in|out|read|write/.test(metric) ? 2 * 1024 ** 2 : 30,
-                  min: 20,
-                  max: 90,
+                  min: /in|out|read|write/.test(metric) ? 2 * 1024 ** 2 : 20,
+                  max: /in|out|read|write/.test(metric) ? 2 * 1024 ** 2 : 90,
                 },
               ],
             ]),
@@ -380,6 +380,15 @@ async function box(locator) {
       for (const axis of ['100%', '50%', '0%'])
         await historyCpu.getByText(axis, { exact: true }).waitFor();
       assert.equal(await page.getByText('Avg', { exact: true }).count(), 0);
+      for (const group of ['network', 'disk-io']) {
+        const labels = await page
+          .locator(`[data-history-group="${group}"] span.pointer-events-none`)
+          .allTextContents();
+        assert(
+          labels.some((label) => /M\/s$/.test(label)),
+          'MiB/s fixture must have matching magnitude axes: ' + labels,
+        );
+      }
       const plot = historyCpu.getByTestId('guest-history-plot');
       await plot.scrollIntoViewIfNeeded();
       const rect = await plot.boundingBox();
