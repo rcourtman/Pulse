@@ -5478,7 +5478,8 @@ url=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -o) out="$2"; shift 2 ;;
-        -fsSL) shift ;;
+        --disable|-fsSL) shift ;;
+        --connect-timeout|--max-time|--proto|--proto-redir) shift 2 ;;
         *) [[ -z "$url" ]] || exit 95; url="$1"; shift ;;
     esac
 done
@@ -5580,8 +5581,9 @@ fi
 				return
 			}
 			logContent, err := os.ReadFile(filepath.Join(tmpDir, "curl.log"))
-			want := "-fsSL https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh -o "
-			wantSignature := "-fsSL https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig -o "
+			policy := "--disable -fsSL --connect-timeout 5 --max-time 60 --proto =https --proto-redir =https "
+			want := policy + "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh -o "
+			wantSignature := policy + "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig -o "
 			requests := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 			if err != nil || len(requests) != 2 || !strings.HasPrefix(requests[0], want) ||
 				!strings.HasPrefix(requests[1], wantSignature) {
