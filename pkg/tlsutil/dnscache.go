@@ -3,6 +3,7 @@ package tlsutil
 import (
 	"context"
 	"net"
+	"net/netip"
 	"runtime"
 	"sync"
 	"time"
@@ -104,29 +105,85 @@ func LookupHostCached(ctx context.Context, host string) ([]net.IP, error) {
 // On macOS, connections to RFC 1918 addresses are routed through a subprocess
 // (nc) to bypass VPN/NECP routing captures that affect the host process.
 func DialContextWithCache(ctx context.Context, network, address string) (net.Conn, error) {
-	resolver := GetDNSResolver()
-
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
 	}
 
 	// Look up the IP address using the cached resolver
-	ips, err := resolver.LookupHost(ctx, host)
+	ips, err := GetDNSResolver().LookupHost(ctx, host)
 	if err != nil {
 		return nil, err
 	}
 
-	// Use the first IP address
-	if len(ips) == 0 {
-		return nil, &net.DNSError{
-			Err:  "no IP addresses found",
-			Name: host,
+	return dialCachedAddresses(ctx, network, host, port, ips, dialResolvedAddress)
+}
+
+// Retry only socket establishment, using this one cached DNS answer. A failed
+// first address must not conceal a reachable alternative or start another DNS
+// lookup. Keep the resolver's order and divide the remaining dial budget so a
+// stalled address cannot consume the time reserved for later candidates.
+func dialCachedAddresses(ctx context.Context, network, host, port string, ips []string, dial func(context.Context, string, string, time.Duration) (net.Conn, error)) (net.Conn, error) {
+	deadline := time.Now().Add(10 * time.Second)
+	if callerDeadline, ok := ctx.Deadline(); ok && callerDeadline.Before(deadline) {
+		deadline = callerDeadline
+	}
+	addresses := make([]string, 0, len(ips))
+	seen := make(map[netip.Addr]bool, len(ips))
+	for _, raw := range ips {
+		ip, err := netip.ParseAddr(raw)
+		if err != nil {
+			continue
 		}
+		ip = ip.Unmap()
+		if ((network == "tcp4" || network == "udp4") && !ip.Is4()) ||
+			((network == "tcp6" || network == "udp6") && !ip.Is6()) || seen[ip] {
+			continue
+		}
+		seen[ip] = true
+		addresses = append(addresses, net.JoinHostPort(ip.String(), port))
+	}
+	if len(addresses) == 0 {
+		return nil, &net.DNSError{Err: "no suitable IP addresses found", Name: host}
 	}
 
-	resolvedIP := net.ParseIP(ips[0])
-	resolvedAddr := net.JoinHostPort(ips[0], port)
+	var firstErr error
+	for i, address := range addresses {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, &net.OpError{Op: "dial", Net: network, Err: context.DeadlineExceeded}
+		}
+		timeout := max(time.Nanosecond, remaining/time.Duration(len(addresses)-i))
+		conn, err := dial(ctx, network, address, timeout)
+		if err == nil {
+			if contextErr := ctx.Err(); contextErr != nil {
+				conn.Close()
+				return nil, contextErr
+			}
+			return conn, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return nil, firstErr
+}
+
+func dialResolvedAddress(ctx context.Context, network, resolvedAddr string, timeout time.Duration) (net.Conn, error) {
+	host, _, err := net.SplitHostPort(resolvedAddr)
+	if err != nil {
+		return nil, err
+	}
+	resolvedIP := net.ParseIP(host)
 
 	// On macOS, route local-network connections through a subprocess to bypass
 	// Tailscale NECP routing captures that prevent the host process from
@@ -137,7 +194,7 @@ func DialContextWithCache(ctx context.Context, network, address string) (net.Con
 
 	// Create a dialer with the resolved IP
 	dialer := &net.Dialer{
-		Timeout:   10 * time.Second,
+		Timeout:   timeout,
 		KeepAlive: 30 * time.Second,
 	}
 

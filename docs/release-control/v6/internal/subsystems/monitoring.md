@@ -6599,6 +6599,19 @@ the temperature SSH key on disk) and from every system-settings save
 settings API), so repairing the key — or saving settings after repairing SSH
 access any other way — is retried on the next cycle rather than after a window
 that has compounded to fifteen minutes.
+The shared socket dialler also tries the usable addresses in that one cached
+answer rather than discarding all but the first. It preserves answer order,
+filters explicit IPv4/IPv6 networks and deduplicates equivalent literals.
+Serial socket attempts share a ten-second ceiling or the earlier caller
+deadline; each attempt reserves a share for the remaining addresses.
+Cancellation stops later attempts and closes a connection that arrives after
+the caller ends. This is TCP/socket establishment, not HTTP replay, a change
+to discovery admission, new DNS resolution or a relaxation of TLS/authority.
+`pkg/tlsutil/dns_fallback_test.go` covers actual second-address sockets, retained
+cache reuse, caller budgets, cancellation, family selection and pinned HTTPS.
+The existing macOS private-address subprocess route is preserved; Linux socket
+controls do not establish native macOS/VPN acceptance.
+
 `internal/monitoring/issue1638_dns_cache_test.go` is the registered proof that
 repeat polls stay on the DNS cache, that the link-local blocklist still rejects
 hostname endpoints resolving into it, and that the SSH backoffs suppress,
