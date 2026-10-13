@@ -228,10 +228,10 @@ const resource = (read) => {
           }
           assert.equal(await badge.count(), reason ? 1 : 0);
           if (reason) {
-            assert.match(
-              await badge.innerText(),
-              retained ? /Last known|Prior/ : /Unavailable|N\/A/,
-            );
+            // Only a retained reading gets a visible label; an unavailable
+            // read keeps its reason as assistive text and the cell title.
+            assert.equal(await badge.locator('[aria-hidden="true"]').count(), retained ? 1 : 0);
+            if (retained) assert.match(await badge.innerText(), /Last known|Prior/);
             assert.match(
               await cell.getAttribute('title'),
               retained ? /Using last known/ : /Guest reads|Guest request/,

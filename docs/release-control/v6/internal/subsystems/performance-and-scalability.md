@@ -327,8 +327,8 @@ proof, not a native CPU improvement, QGA/thaw result or delivery acceptance.
 
 ### Guest filesystem provenance preserves dense row geometry
 
-Visible retained/unavailable filesystem cues must fit the existing dense row
-rhythm, including canonical phone/narrow column weights, without adding a new
+Visible retained and fixable-read filesystem cues must fit the existing dense row
+rhythm (an unavailable setup-gap read adds no visible cue at all), including canonical phone/narrow column weights, without adding a new
 collector, history request, layout observer, focus target or event path. Keep
 compact copy on narrow rows and the full safe reason in assistive text and the
 existing drawer. Inline sparkline plots may shrink to preserve their numeric
@@ -3101,9 +3101,11 @@ composition, balloon and swap geometry for inspection, in a neutral tone;
 their composition tooltip carries the original source/time caveat. A current
 linked-agent memory observation remains current while QEMU disk reads defer.
 A current cache-inclusive Proxmox reading still reaches the row presentation,
-so the VM row can say `May include cache`; rows whose reading is current and
-cache-aware keep returning no presentation without formatting a date or source
-label (`memoryObservation.test.ts` pins both paths).
+so the VM row can say `May include cache` once the guest's own memory meets
+its warning threshold (below it the caveat is title and assistive text only);
+rows whose reading is current and cache-aware keep returning no presentation
+without formatting a date or source label (`memoryObservation.test.ts` pins
+both paths).
 Tooltip headings, numeric values and neutral labels use theme-aware text so
 the source caveat and composition remain readable on both light and dark surfaces.
 An unavailable reading, including the shared bar's explicit unavailable input,

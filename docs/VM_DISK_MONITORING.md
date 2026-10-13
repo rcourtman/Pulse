@@ -313,16 +313,18 @@ custom monitoring role if the required read privileges are absent.
 
 ### Current, retained and unavailable disk readings
 
-In **Workloads**, read the disk cell's explanation or open the guest's details
-and look under **Filesystems → Status**. Compact rows use **Prior** and **N/A**;
-wider rows use **Last known** and **Unavailable**. Where an observation time is
-shown, keep it with the reading; an unavailable time leaves freshness unknown.
+In **Workloads**, hover the disk cell for its explanation or open the guest's
+details and look under **Filesystems → Status**. A retained reading is labelled
+**Last known** (**Prior** in compact rows). A reading Pulse could not take shows
+a dash; only a read you can fix is labelled, **No permission** or **Agent error**
+(**Denied** or **Error** in compact rows). Where an observation time is shown,
+keep it with the reading; an unavailable time leaves freshness unknown.
 
 | Reading | What it establishes |
 | --- | --- |
 | Current filesystem usage | Usage for the reported guest and filesystem, from its collection source. It does not establish that every filesystem is covered or that a backup can be restored. |
 | **Prior**, **Last known**, or **Using last known disk stats** | Retained evidence, not current free space. A visible number or History sample does not make it fresh. |
-| **N/A**, **Unavailable**, a dash, or a paused/deferred read | Usage is unknown, not zero and not proof that the disk is full. A cooldown ending does not establish a successful new read. |
+| A dash, **Usage unavailable**, **No permission**, **Agent error**, or a paused/deferred read | Usage is unknown, not zero and not proof that the disk is full. A cooldown ending does not establish a successful new read. |
 
 **A numeric disk search or disk sort is not a monitoring-coverage check.** To
 review missing readings, clear numeric disk conditions and restrictive table
