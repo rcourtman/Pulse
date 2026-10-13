@@ -208,6 +208,16 @@ test("hybrid guest memory follows canonical snapshots in the browser", async ({
     send();
     await expect(memoryCell).toContainText("0%");
     await expect(memoryCell).not.toContainText("N/A");
+    // The Memory section sits in the drawer's Details disclosure, closed by
+    // default. Open it once, as a reader would, before judging its geometry.
+    const technicalDetails = drawer.getByTestId("guest-technical-details");
+    if (
+      !(await technicalDetails.evaluate(
+        (element) => (element as HTMLDetailsElement).open,
+      ))
+    ) {
+      await technicalDetails.locator("summary").click();
+    }
     // Centre the recovered details above the fixed narrow-screen navigation.
     await memoryDetails.evaluate((element) =>
       element.scrollIntoView({ block: "center", inline: "nearest" }),
