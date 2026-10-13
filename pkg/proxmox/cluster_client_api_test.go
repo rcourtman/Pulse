@@ -669,3 +669,78 @@ func TestGuestAgentIPv4MappedTrustScope(t *testing.T) {
 		}
 	}
 }
+
+// A local TLS barrier holds only the unauthenticated first-use capture. A
+// caller cancellation must release the probe without waiting for that peer;
+// returning later without a pin is not enough to bound polling shutdown.
+func TestClusterClientFirstUseCaptureCancellation(t *testing.T) {
+	for _, mode := range []string{"cancel", "deadline"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newClusterTrustFixture(t)
+			primaryPin := clusterTrustPin(clusterTrustCertificate(t))
+			cc := NewClusterClient("cancelled-capture", clusterTrustConfig("https://primary.trust.invalid", primaryPin), []string{f.server.URL}, nil)
+			lastErr := clusterTrustMismatch(t, f, primaryPin)
+			ctx, cancel := context.WithCancel(context.Background())
+			if mode == "deadline" {
+				cancel()
+				ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+			}
+			defer cancel()
+			type result struct {
+				client  *Client
+				err     error
+				retried bool
+			}
+			done := make(chan result, 1)
+			f.capture.Store(true)
+			released := false
+			release := func() {
+				if !released {
+					close(f.resume)
+					released = true
+				}
+			}
+			defer release()
+			go func() {
+				client, err, retried := cc.refreshTOFUFingerprintAndRetry(ctx, f.server.URL, time.Second, lastErr)
+				done <- result{client, err, retried}
+			}()
+			select {
+			case <-f.entered:
+			case got := <-done:
+				t.Fatalf("probe did not reach the owned TLS barrier: %v", got.err)
+			case <-time.After(10 * time.Second):
+				t.Fatal("probe did not reach the owned TLS barrier")
+			}
+			if mode == "cancel" {
+				cancel()
+			}
+			<-ctx.Done()
+			var got result
+			select {
+			case got = <-done:
+			case <-time.After(time.Second):
+				t.Error("cancelled capture still waits for the peer's TLS handshake")
+				release() // Join even the adverse parent without leaving a blocked peer.
+				got = <-done
+			}
+			if got.client != nil {
+				got.client.httpClient.CloseIdleConnections()
+			}
+			if got.client != nil || got.retried || !errors.Is(got.err, lastErr) || len(cc.endpointFingerprints) != 0 || f.requests.Load() != 0 {
+				t.Errorf("cancelled capture changed trust or sent authentication: retried=%t pins=%d requests=%d err=%v", got.retried, len(cc.endpointFingerprints), f.requests.Load(), got.err)
+			}
+			release()
+			// Ending this caller is not a revocation of ordinary declared-member
+			// first use. A fresh caller must still establish the same owned leaf
+			// and make exactly one pin-verified authenticated request.
+			client, err, retried := cc.refreshTOFUFingerprintAndRetry(context.Background(), f.server.URL, time.Second, lastErr)
+			if client != nil {
+				defer client.httpClient.CloseIdleConnections()
+			}
+			if err != nil || !retried || client == nil || cc.getEndpointFingerprint(f.server.URL) != clusterTrustPin(f.active.Load()) || f.requests.Load() != 1 {
+				t.Errorf("ordinary first use after cancelled probe failed: retried=%t requests=%d err=%v", retried, f.requests.Load(), err)
+			}
+		})
+	}
+}

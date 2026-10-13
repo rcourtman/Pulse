@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+func TestFetchFingerprintCancellationContract(t *testing.T) {
+	testFetchFingerprintCancellation(t)
+}
+
 func TestCreateHTTPClientRedirectAuthorityValidation(t *testing.T) {
 	for _, mode := range []struct {
 		name        string
