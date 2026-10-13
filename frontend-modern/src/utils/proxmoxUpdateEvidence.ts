@@ -78,7 +78,11 @@ export const getProxmoxUpdateEvidencePresentation = (
       return {
         value: ['Unavailable', reason].filter(Boolean).join(' · '),
         title: reason || 'Update evidence is unavailable',
-        tone: 'warning',
+        // Proxmox requires Sys.Modify for the package-update list, which is
+        // broader than monitoring needs; docs/TROUBLESHOOTING.md calls keeping
+        // the narrower role a valid choice. That is a setting, not a fault, so
+        // it reads neutral. A source outage or failed check stays a warning.
+        tone: node.pendingUpdatesReason === 'permission_denied' ? 'default' : 'warning',
         current: false,
       };
     case 'not_checked':

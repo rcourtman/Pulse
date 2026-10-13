@@ -52,8 +52,18 @@ describe('Proxmox update evidence presentation', () => {
       }),
     ).toMatchObject({
       value: 'Unavailable · Update check access denied',
+      tone: 'default',
       current: false,
     });
+  });
+
+  it('keeps an unavailable check that is not a permission choice as a warning', () => {
+    expect(
+      getProxmoxUpdateEvidencePresentation({
+        pendingUpdatesStatus: 'unavailable',
+        pendingUpdatesReason: 'source_unavailable',
+      }),
+    ).toMatchObject({ value: 'Unavailable · Proxmox source unavailable', tone: 'warning' });
   });
 
   it('only treats checked or legacy-positive evidence as current', () => {

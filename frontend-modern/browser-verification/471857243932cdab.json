@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "588b48b4cf158c6d03aa9cc076deedee3b7cd860",
+  "verified_at": "2026-10-13T14:41:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/DrawerTrendCards.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerHistoryQuery.ts",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/DrawerTrendCards.tsx": "4761f86943587f997b99fc5be572f24038003926123702722d4d63dd68e6bd2f",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "751bdc1f976171edfad5f340d60c08e6163a30cbfa8f16d5ee55ed81ced6858a",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "236e7520d3461e36a8223e4c3abca6c09b4a359796c236271501fba7e375e5c2",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "cbd22eb98704675d504f0ab6b2fda387b89448c30b1fde2d1b76ecbd87d94ea1",
+    "frontend-modern/src/components/Workloads/guestDrawerHistoryQuery.ts": "480828c88b3a7a957d9a908f125324ca301ba586d2f0fe21e00c6ce16717b4d7",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "5b2692573a15459652a4feaea31703eb22af3056ed599a551d1a5e23577c5639",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "93cf7b37056e5397704106b2edb65441fec75ace95ef9c9b410c4e8bb4427ccb",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts": "571beff7a87d1167e76462fa8891250ad7bc74b253976ba1c040866b7e298efc"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "private preview build with these files, mock mode; headless Chromium on pulse-dev through a reverse tunnel, websocket closed and /api/resources rewritten so every Proxmox node carries pendingUpdatesStatus=unavailable with the reason under test",
+    "permission_denied at 1440px: node Analytics A Overview has no Worth checking section; Details Summary shows 'Updates: Unavailable \u00b7 Update check access denied' wrapped over two lines in neutral text; Pulse coverage agent ID and CPU model also wrap in full (full-resolution screenshots reviewed)",
+    "source_unavailable at 1440px: Worth checking lists 'Updates: Unavailable \u00b7 Proxmox source unavailable' in warning tone",
+    "permission_denied at 390px: Details table rows wrap the update reason, agent ID and CPU model; no horizontal overflow"
+  ],
+  "interactions": [
+    "expanded the first node row and opened Details by clicking its summary in each scenario"
+  ]
+}

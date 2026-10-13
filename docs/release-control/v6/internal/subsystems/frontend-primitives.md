@@ -8741,7 +8741,14 @@ return, active state, badges, and narrow-layout containment remain unchanged.
 The Proxmox node drawer presents checked zero, current positive, stale,
 unavailable, and not-checked package evidence as a labelled detail row with
 bounded copy and checked time. The compact table badge remains reserved for a
-current positive observation. Provider errors are never rendered. Component
+current positive observation. Provider errors are never rendered. An
+unavailable check whose reason is `permission_denied` reads neutral, so the
+node Overview keeps it in Details rather than Worth checking: Proxmox gates the
+package list on `Sys.Modify`, and `docs/TROUBLESHOOTING.md` calls keeping the
+narrower monitoring role a valid choice. Other unavailable reasons stay warnings.
+Node Details rows wrap their values (`wrap: true`) rather than truncating them,
+because Details is where a reader goes for the full value: the update reason,
+the linked agent ID and the CPU model read whole at desktop and phone widths. Component
 and browser evidence covers both 1440px and 390px layouts in
 `NodeDrawerOverview.updateEvidence.test.tsx`, `ProxmoxNodesTable.test.tsx`, and
 `frontend-modern/browser-verification.json`.

@@ -210,9 +210,12 @@ const getDetailTone = (valueClass: string | undefined): DetailValueTone => {
 const toDetailRows = (rows: NodeOverviewRow[]): DetailRow[] =>
   compactDetailRows(
     rows.map((row) =>
+      // Details is where a reader goes for the full value; wrap rather than
+      // cut it off behind an ellipsis and a hover-only title.
       makeDetailRow(row.label, row.value, {
         title: row.title,
         tone: getDetailTone(row.valueClass),
+        wrap: true,
       }),
     ),
   );
@@ -404,11 +407,13 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
           makeDetailRow(
             'Pulse coverage',
             linkedAgentId() ? `Agent ${stripAgentPrefix(linkedAgentId())}` : 'PVE API only',
+            { wrap: true },
           ),
           updates
             ? makeDetailRow('Updates', updates.value, {
                 tone: updates.tone,
                 title: updates.title,
+                wrap: true,
               })
             : null,
           typeof primaryTemperature === 'number' &&
