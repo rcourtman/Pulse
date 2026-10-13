@@ -184,219 +184,59 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 	rs := p.readState
 
 	for _, sm := range structured {
-		// Parse the structured ID to extract resource details.
-		// Frontend ID formats: "vm:node:vmid", "system-container:node:vmid",
-		// "app-container:host:providerUid" (canonical), legacy "docker:hostId:containerId",
-		// "agent:id", "node:instance:name"
-		parts := strings.Split(sm.ID, ":")
-
-		// Enforce canonical v6 frontend mention types only.
-		legacyMentionType := strings.ToLower(strings.TrimSpace(sm.Type))
-		if legacyMentionType == "container" || legacyMentionType == "lxc" || legacyMentionType == "docker" || legacyMentionType == "docker-container" {
-			log.Warn().
-				Str("name", sm.Name).
-				Str("id", sm.ID).
-				Msg("[ContextPrefetch] Ignoring unsupported legacy structured mention type")
+		if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(sm.Type) {
 			continue
 		}
-		resourceType := tools.CanonicalToolResourceType(sm.Type)
-
-		// Use the canonical unified-resource resolver for routing plus policy metadata.
-		resolved := unifiedresources.ResolveResourceContext(rs, sm.Name)
-		policy, aiSafeSummary := resourceMentionGovernance(resolved.Resource)
+		var resolved unifiedresources.ResolvedResourceContext
+		if strings.TrimSpace(sm.ID) != "" {
+			resolved = unifiedresources.ResolveResourceReferenceContext(rs, sm.ID)
+		} else {
+			resolved = unifiedresources.ResolveResourceContext(rs, sm.Name)
+		}
+		resource := resolved.Resource
+		if resource == nil || !resolved.Location.Found {
+			continue
+		}
 		loc := resolved.Location
-
+		resourceType := tools.CanonicalToolResourceType(loc.ResourceType)
+		policy, summary := resourceMentionGovernance(resource)
+		mention := ResourceMention{
+			Name: loc.Name, ResourceType: resourceType,
+			ResourceID: mentionResourceIDFromResolved(resourceType, resource),
+			TargetID:   mentionTargetIDFromResolved(resourceType, resource),
+			Adapter:    mentionAdapterFromResolved(resource), MatchedText: sm.Name,
+			Policy: policy, AISafeSummary: summary, UnifiedResourceID: resource.ID,
+			TargetHost: loc.TargetHost, SupportsControl: resourceSupportsControl(resourceType, resource),
+		}
 		switch resourceType {
-		case "vm":
-			vmID := ""
-			node := sm.Node
-			if len(parts) >= 3 {
-				node = parts[1]
-				vmID = strings.Join(parts[2:], ":")
-			}
-			vmID = firstNonEmptyTrimmed(vmID, mentionResourceIDFromResolved("vm", resolved.Resource))
-			node = firstNonEmptyTrimmed(node, mentionTargetIDFromResolved("vm", resolved.Resource))
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      "vm",
-				ResourceID:        vmID,
-				TargetID:          node,
-				Adapter:           mentionAdapterFromResolved(resolved.Resource),
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				TargetHost:        loc.TargetHost,
-				SupportsControl:   resourceSupportsControl("vm", resolved.Resource),
-			})
-
-		case "system-container":
-			vmID := ""
-			node := sm.Node
-			if len(parts) >= 3 {
-				node = parts[1]
-				vmID = strings.Join(parts[2:], ":")
-			}
-			vmID = firstNonEmptyTrimmed(vmID, mentionResourceIDFromResolved("system-container", resolved.Resource))
-			node = firstNonEmptyTrimmed(node, mentionTargetIDFromResolved("system-container", resolved.Resource))
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      "system-container",
-				ResourceID:        vmID,
-				TargetID:          node,
-				Adapter:           mentionAdapterFromResolved(resolved.Resource),
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				TargetHost:        loc.TargetHost,
-				SupportsControl:   resourceSupportsControl("system-container", resolved.Resource),
-			})
-
 		case "app-container":
-			hostID, containerID := parseStructuredAppContainerMentionID(sm.ID, rs)
-			if resolved.Resource != nil {
-				resolvedHost, resolvedContainerID := resolvedAppContainerMentionCoordinates(resolved.Resource)
-				hostID = firstNonEmptyTrimmed(hostID, resolvedHost)
-				containerID = firstNonEmptyTrimmed(containerID, resolvedContainerID)
-			}
-
-			// Gather bind mounts via ReadState
-			var mounts []MountInfo
-			if rs != nil {
-				for _, container := range rs.DockerContainers() {
-					if container == nil {
-						continue
-					}
-					if container.Name() == sm.Name || container.ContainerID() == containerID {
-						for _, m := range container.Mounts() {
-							if m.Source != "" && m.Destination != "" {
-								mounts = append(mounts, MountInfo{
-									Source:      m.Source,
-									Destination: m.Destination,
-								})
-							}
-						}
-						break
+			mention.TargetID, mention.ResourceID = resolvedAppContainerMentionCoordinates(resource)
+			mention.DockerHostName, mention.DockerHostType = loc.DockerHostName, loc.DockerHostType
+			mention.DockerHostVMID, mention.NodeName = loc.DockerHostVMID, loc.Node
+			for _, container := range rs.DockerContainers() {
+				if container == nil || container.ID() != resource.ID {
+					continue
+				}
+				for _, mount := range container.Mounts() {
+					if mount.Source != "" && mount.Destination != "" {
+						mention.BindMounts = append(mention.BindMounts, MountInfo{Source: mount.Source, Destination: mount.Destination})
 					}
 				}
+				break
 			}
-
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      "app-container",
-				ResourceID:        containerID,
-				TargetID:          hostID,
-				Adapter:           mentionAdapterFromResolved(resolved.Resource),
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				BindMounts:        mounts,
-				DockerHostName:    loc.DockerHostName,
-				DockerHostType:    loc.DockerHostType,
-				DockerHostVMID:    loc.DockerHostVMID,
-				NodeName:          loc.Node,
-				TargetHost:        loc.TargetHost,
-			})
-
 		case "storage":
-			resourceID := firstNonEmptyTrimmed(sm.ID, resolvedUnifiedResourceID(resolved.Resource), mentionResourceIDFromResolved("storage", resolved.Resource))
-			targetID := firstNonEmptyTrimmed(sm.Node, mentionTargetIDFromResolved("storage", resolved.Resource), loc.TargetHost)
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      "storage",
-				ResourceID:        resourceID,
-				TargetID:          targetID,
-				Adapter:           mentionAdapterFromResolved(resolved.Resource),
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				SupportsControl:   resourceSupportsControl("storage", resolved.Resource),
-				TargetHost:        firstNonEmptyTrimmed(loc.TargetHost, targetID),
-			})
-
-		case "node":
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      "node",
-				ResourceID:        sm.Name,
-				TargetID:          sm.Name,
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				TargetHost:        loc.TargetHost,
-			})
-
+			mention.ResourceID = resource.ID
+			mention.TargetID = firstNonEmptyTrimmed(mention.TargetID, loc.TargetID, loc.TargetHost)
 		case "agent":
-			hostID := ""
-			if len(parts) >= 2 {
-				hostID = strings.Join(parts[1:], ":")
-			}
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      "agent",
-				ResourceID:        hostID,
-				TargetID:          hostID,
-				Adapter:           mentionAdapterFromResolved(resolved.Resource),
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				SupportsControl:   resourceSupportsControl("agent", resolved.Resource),
-				TargetHost:        loc.TargetHost,
-			})
-
-		default:
-			if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(sm.Type) {
-				log.Warn().
-					Str("name", sm.Name).
-					Str("id", sm.ID).
-					Msg("[ContextPrefetch] Ignoring unsupported structured mention type")
-				continue
-			}
-			log.Warn().
-				Str("name", sm.Name).
-				Str("type", sm.Type).
-				Msg("[ContextPrefetch] Unknown structured mention type, falling back to ResolveResource")
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      resourceType,
-				ResourceID:        firstNonEmptyTrimmed(sm.ID, mentionResourceIDFromResolved(resourceType, resolved.Resource)),
-				TargetID:          firstNonEmptyTrimmed(sm.Node, mentionTargetIDFromResolved(resourceType, resolved.Resource)),
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				TargetHost:        loc.TargetHost,
-			})
+			mention.ResourceID = firstNonEmptyTrimmed(mention.ResourceID, loc.TargetID, resource.ID)
+			mention.TargetID = firstNonEmptyTrimmed(mention.TargetID, loc.TargetID)
+		case "node":
+			mention.ResourceID, mention.TargetID = loc.Name, loc.Node
 		}
+		mentions = append(mentions, mention)
 	}
 
 	return mentions
-}
-
-type appContainerResourceGetter interface {
-	GetByType(unifiedresources.ResourceType) []unifiedresources.Resource
-}
-
-type appContainerResourceLister interface {
-	ListByType(unifiedresources.ResourceType) []unifiedresources.Resource
-}
-
-func appContainerResourcesFromReadState(rs unifiedresources.ReadState) []unifiedresources.Resource {
-	if rs == nil {
-		return nil
-	}
-	if getter, ok := any(rs).(appContainerResourceGetter); ok {
-		return getter.GetByType(unifiedresources.ResourceTypeAppContainer)
-	}
-	if lister, ok := any(rs).(appContainerResourceLister); ok {
-		return lister.ListByType(unifiedresources.ResourceTypeAppContainer)
-	}
-	return nil
 }
 
 func appContainerResourceHost(resource unifiedresources.Resource) string {
@@ -419,35 +259,6 @@ func appContainerResourceHost(resource unifiedresources.Resource) string {
 		}
 	}
 	return ""
-}
-
-func parseStructuredAppContainerMentionID(mentionID string, rs unifiedresources.ReadState) (hostID string, containerID string) {
-	const canonicalPrefix = "app-container:"
-	if strings.HasPrefix(mentionID, canonicalPrefix) {
-		if rs != nil {
-			for _, resource := range appContainerResourcesFromReadState(rs) {
-				if !strings.EqualFold(strings.TrimSpace(resource.ID), mentionID) {
-					continue
-				}
-				host := appContainerResourceHost(resource)
-				if host == "" {
-					continue
-				}
-				if providerUID := appContainerProviderUID(resource, host); providerUID != "" {
-					return host, providerUID
-				}
-			}
-		}
-
-		raw := strings.TrimPrefix(mentionID, canonicalPrefix)
-		parts := strings.SplitN(raw, ":", 2)
-		if len(parts) == 2 && strings.TrimSpace(parts[0]) != "" && strings.TrimSpace(parts[1]) != "" {
-			return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
-		}
-		return "", ""
-	}
-
-	return parseStructuredDockerMentionID(mentionID, rs)
 }
 
 func appContainerProviderUID(resource unifiedresources.Resource, host string) string {
@@ -478,19 +289,11 @@ func resolvedAppContainerMentionCoordinates(resource *unifiedresources.Resource)
 		return "", ""
 	}
 	hostID = appContainerResourceHost(*resource)
+	if resource.Docker != nil && strings.TrimSpace(resource.Docker.HostSourceID) != "" {
+		hostID = strings.TrimSpace(resource.Docker.HostSourceID)
+	}
 	containerID = appContainerProviderUID(*resource, hostID)
 	return strings.TrimSpace(hostID), strings.TrimSpace(containerID)
-}
-
-func resolvedUnifiedResourceID(resource *unifiedresources.Resource) string {
-	if resource == nil {
-		return ""
-	}
-	return strings.TrimSpace(resource.ID)
-}
-
-func resolvedStructuredUnifiedResourceID(structuredID string, resource *unifiedresources.Resource) string {
-	return firstNonEmptyTrimmed(resolvedUnifiedResourceID(resource), structuredID)
 }
 
 func mentionResourceIDFromResolved(resourceType string, resource *unifiedresources.Resource) string {
@@ -568,56 +371,6 @@ func firstNonEmptyTrimmed(values ...string) string {
 	return ""
 }
 
-func parseStructuredDockerMentionID(mentionID string, rs unifiedresources.ReadState) (hostID string, containerID string) {
-	const prefix = "docker:"
-	if !strings.HasPrefix(mentionID, prefix) {
-		return "", ""
-	}
-
-	raw := strings.TrimPrefix(mentionID, prefix)
-	if raw == "" {
-		return "", ""
-	}
-
-	// Prefer matching known docker host IDs via ReadState so host IDs containing
-	// colons remain intact (V6 unified IDs can include colon separators).
-	bestHostID := ""
-	bestContainerID := ""
-	if rs != nil {
-		for _, dockerHost := range rs.DockerHosts() {
-			if dockerHost == nil {
-				continue
-			}
-			id := strings.TrimSpace(dockerHost.HostSourceID())
-			if id == "" {
-				continue
-			}
-			hostPrefix := id + ":"
-			if !strings.HasPrefix(raw, hostPrefix) {
-				continue
-			}
-			candidateContainerID := strings.TrimPrefix(raw, hostPrefix)
-			if candidateContainerID == "" {
-				continue
-			}
-			if len(id) > len(bestHostID) {
-				bestHostID = id
-				bestContainerID = candidateContainerID
-			}
-		}
-	}
-	if bestHostID != "" {
-		return bestHostID, bestContainerID
-	}
-
-	// Legacy fallback: split once after the docker prefix.
-	parts := strings.SplitN(raw, ":", 2)
-	if len(parts) < 2 {
-		return "", ""
-	}
-	return parts[0], parts[1]
-}
-
 // formatContextSummary creates a formatted summary of the resolved mentions.
 func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention) string {
 	if len(mentions) == 0 {
@@ -654,7 +407,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention) str
 				sb.WriteString(fmt.Sprintf("Location: Docker on host \"%s\"\n", mention.DockerHostName))
 			}
 
-			sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", mention.TargetHost))
+			sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", firstNonEmptyTrimmed(mention.UnifiedResourceID, mention.TargetHost)))
 
 			// Bind mounts - clarify these are on the LXC/VM filesystem
 			if len(mention.BindMounts) > 0 {
@@ -677,7 +430,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention) str
 		if (mention.ResourceType == "system-container" || mention.ResourceType == "vm") && mention.ResourceID != "" {
 			sb.WriteString(fmt.Sprintf("VMID: %s\n", mention.ResourceID))
 			if mention.SupportsControl {
-				sb.WriteString(fmt.Sprintf("Shared guest control actions are available with guest_id=\"%s\" and action=\"start|stop|shutdown|restart\".\n", mention.ResourceID))
+				sb.WriteString(fmt.Sprintf("Shared guest control actions use pulse_control with type=\"resource\", resource_id=\"%s\" and action=\"start|stop|shutdown|restart\".\n", firstNonEmptyTrimmed(mention.UnifiedResourceID, mention.ResourceID)))
 			} else {
 				sb.WriteString("This guest is read-only in Pulse; shared write/control actions are unavailable for this resource.\n")
 			}

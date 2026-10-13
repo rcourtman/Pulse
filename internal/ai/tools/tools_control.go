@@ -193,23 +193,52 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 	// This prevents hostname collisions from masquerading as host targets.
 	loc := e.resolveResourceLocation(targetHost)
 
+	if loc.Ambiguous {
+		result.ResolvedKind = "ambiguous"
+		return result
+	}
+	nodeAgent := func() string {
+		if loc.AgentID != "" {
+			for _, agent := range agents {
+				if agent.AgentID == loc.AgentID {
+					return agent.AgentID
+				}
+			}
+			return ""
+		}
+		reference := loc.NodeResourceID
+		if reference == "" {
+			reference = loc.Node
+		}
+		return e.findAgentForNode(reference)
+	}
 	if loc.Found {
 		result.ResolvedKind = loc.ResourceType
 		// Route based on resource type
 		switch loc.ResourceType {
 		case "agent":
-			for _, agent := range agents {
-				if unifiedresources.HostnamesEquivalent(agent.Hostname, loc.TargetHost) || agent.AgentID == loc.TargetID {
-					result.AgentID = agent.AgentID
-					result.AgentHostname = agent.Hostname
-					result.ResolvedKind = "agent"
-					return result
-				}
+			reference := loc.AgentID
+			if reference == "" {
+				reference = loc.TargetID
 			}
+			if reference == "" {
+				reference = loc.TargetHost
+			}
+			var agent agentexec.ConnectedAgent
+			var ok bool
+			if loc.AgentID != "" || loc.TargetID != "" {
+				agent, ok = connectedAgentByID(agents, reference)
+			} else {
+				agent, ok = uniqueConnectedAgent(agents, reference)
+			}
+			if ok {
+				result.AgentID, result.AgentHostname = agent.AgentID, agent.Hostname
+			}
+			return result
 
 		case "node":
 			// Direct hypervisor node
-			nodeAgentID := e.findAgentForNode(loc.Node)
+			nodeAgentID := nodeAgent()
 			result.AgentID = nodeAgentID
 			result.ResolvedKind = "node"
 			result.ResolvedNode = loc.Node
@@ -223,7 +252,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 
 		case "system-container":
 			// System container - route through node agent via pct exec
-			nodeAgentID := e.findAgentForNode(loc.Node)
+			nodeAgentID := nodeAgent()
 			result.ResolvedKind = "system-container"
 			result.ResolvedNode = loc.Node
 			result.TargetType = "container"
@@ -242,7 +271,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 
 		case "vm":
 			// VM - route through node agent via qm guest exec
-			nodeAgentID := e.findAgentForNode(loc.Node)
+			nodeAgentID := nodeAgent()
 			result.ResolvedKind = "vm"
 			result.ResolvedNode = loc.Node
 			result.TargetType = "vm"
@@ -265,7 +294,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 			result.ResolvedNode = loc.Node
 
 			if loc.DockerHostType == "system-container" {
-				nodeAgentID := e.findAgentForNode(loc.Node)
+				nodeAgentID := nodeAgent()
 				result.TargetType = "container"
 				result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
 				result.Transport = "pct_exec"
@@ -281,7 +310,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 				return result
 			}
 			if loc.DockerHostType == "vm" {
-				nodeAgentID := e.findAgentForNode(loc.Node)
+				nodeAgentID := nodeAgent()
 				result.TargetType = "vm"
 				result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
 				result.Transport = "qm_guest_exec"
@@ -296,29 +325,30 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 				}
 				return result
 			}
-			// Standalone Docker host - find agent directly
-			for _, agent := range agents {
-				if unifiedresources.HostnamesEquivalent(agent.Hostname, loc.TargetHost) || agent.AgentID == loc.TargetHost {
-					result.AgentID = agent.AgentID
-					result.AgentHostname = agent.Hostname
-					return result
-				}
+			// Standalone parents keep an explicit agent identity when available.
+			reference := loc.AgentID
+			if reference == "" {
+				reference = loc.TargetHost
 			}
+			var agent agentexec.ConnectedAgent
+			var ok bool
+			if loc.AgentID != "" {
+				agent, ok = connectedAgentByID(agents, reference)
+			} else {
+				agent, ok = uniqueConnectedAgent(agents, reference)
+			}
+			if ok {
+				result.AgentID, result.AgentHostname = agent.AgentID, agent.Hostname
+			}
+
 		}
 		// A known resource must never fall through to a different hostname match.
 		return result
 	}
 
-	// STEP 2: FALLBACK — agent hostname match.
-	// Only used when the state doesn't know about this resource at all.
-	// This handles standalone hosts without Proxmox topology.
-	for _, agent := range agents {
-		if unifiedresources.HostnamesEquivalent(agent.Hostname, targetHost) || agent.AgentID == targetHost {
-			result.AgentID = agent.AgentID
-			result.AgentHostname = agent.Hostname
-			result.ResolvedKind = "agent"
-			return result
-		}
+	// A connected agent absent from the inventory is a bounded legacy boundary.
+	if agent, ok := uniqueConnectedAgent(agents, targetHost); ok {
+		result.AgentID, result.AgentHostname, result.ResolvedKind = agent.AgentID, agent.Hostname, "agent"
 	}
 
 	return result
@@ -356,50 +386,121 @@ func (e *PulseToolExecutor) readStateForControl() (unifiedresources.ReadState, e
 	return nil, fmt.Errorf("read state not available")
 }
 
-func (e *PulseToolExecutor) findAgentForNode(nodeName string) string {
-	if e.agentServer == nil {
-		return ""
-	}
-
-	agents := e.agentServer.GetConnectedAgents()
-	for _, agent := range agents {
-		if unifiedresources.HostnamesEquivalent(agent.Hostname, nodeName) {
-			return agent.AgentID
-		}
-	}
-
-	rs, err := e.readStateForControl()
-	if err != nil {
-		return ""
-	}
-
-	// Map linked node IDs to node names for quick lookup.
-	nodeNamesByID := make(map[string]string)
-	for _, node := range rs.Nodes() {
-		name := node.Name()
-		if name == "" {
-			name = node.NodeName()
-		}
-		if node.ID() != "" {
-			nodeNamesByID[node.ID()] = name
-		}
-	}
-
-	for _, host := range rs.Hosts() {
-		linked := host.LinkedNodeID()
-		if linked == "" {
-			continue
-		}
-		if !unifiedresources.HostnamesEquivalent(nodeNamesByID[linked], nodeName) {
-			continue
-		}
+func connectedAgentByID(agents []agentexec.ConnectedAgent, id string) (agentexec.ConnectedAgent, bool) {
+	if id != "" {
 		for _, agent := range agents {
-			if unifiedresources.HostnamesEquivalent(agent.Hostname, host.Hostname()) || agent.AgentID == host.ID() {
-				return agent.AgentID
+			if agent.AgentID == id {
+				return agent, true
 			}
 		}
 	}
+	return agentexec.ConnectedAgent{}, false
+}
 
+func uniqueConnectedAgent(agents []agentexec.ConnectedAgent, reference string) (agentexec.ConnectedAgent, bool) {
+	if strings.TrimSpace(reference) == "" {
+		return agentexec.ConnectedAgent{}, false
+	}
+	for _, agent := range agents {
+		if agent.AgentID == reference {
+			return agent, true
+		}
+	}
+	var result agentexec.ConnectedAgent
+	found := false
+	for _, agent := range agents {
+		if !unifiedresources.HostnamesEquivalent(agent.Hostname, reference) {
+			continue
+		}
+		if found && result.AgentID != agent.AgentID {
+			return agentexec.ConnectedAgent{}, false
+		}
+		result, found = agent, true
+	}
+	return result, found
+}
+
+func (e *PulseToolExecutor) findAgentForNode(reference string) string {
+	if e.agentServer == nil {
+		return ""
+	}
+	agents := e.agentServer.GetConnectedAgents()
+	rs, err := e.readStateForControl()
+	if err != nil {
+		if agent, found := uniqueConnectedAgent(agents, reference); found {
+			return agent.AgentID
+		}
+		return ""
+	}
+	var nodeID, hostname string
+	for _, node := range rs.Nodes() {
+		if node != nil && node.ID() == reference {
+			nodeID, hostname = node.ID(), node.NodeName()
+			break
+		}
+	}
+	if nodeID == "" {
+		for _, node := range rs.Nodes() {
+			if node == nil || !unifiedresources.HostnamesEquivalent(node.NodeName(), reference) {
+				continue
+			}
+			if nodeID != "" && nodeID != node.ID() {
+				return ""
+			}
+			nodeID, hostname = node.ID(), node.NodeName()
+		}
+	}
+	if nodeID == "" {
+		if agent, found := uniqueConnectedAgent(agents, reference); found {
+			return agent.AgentID
+		}
+		return ""
+	}
+	owned := unifiedresources.ResolveResourceContext(rs, nodeID)
+	if owned.Resource != nil && owned.Resource.Agent != nil && owned.Resource.Agent.AgentID != "" {
+		for _, agent := range agents {
+			if agent.AgentID == owned.Resource.Agent.AgentID {
+				return agent.AgentID
+			}
+		}
+		return ""
+	}
+	candidate := ""
+	for _, host := range rs.Hosts() {
+		if host == nil || host.LinkedNodeID() == "" {
+			continue
+		}
+		linkedID := host.LinkedNodeID()
+		if resolver, ok := rs.(unifiedresources.ReferenceReadState); ok {
+			_, id, found := resolver.GetByReference(linkedID)
+			if found {
+				linkedID = id
+			}
+		}
+		if linkedID != nodeID {
+			continue
+		}
+		agent, found := connectedAgentByID(agents, host.AgentID())
+		if !found {
+			continue
+		}
+		if candidate != "" && candidate != agent.AgentID {
+			return ""
+		}
+		candidate = agent.AgentID
+	}
+	if candidate != "" {
+		return candidate
+	}
+	// A hostname can route an old unlinked node only when both sides are unique.
+	for _, node := range rs.Nodes() {
+		if node != nil && node.ID() != nodeID && unifiedresources.HostnamesEquivalent(node.NodeName(), hostname) {
+			return ""
+		}
+	}
+	if agent, found := uniqueConnectedAgent(agents, hostname); found {
+		return agent.AgentID
+	}
 	return ""
 }
 

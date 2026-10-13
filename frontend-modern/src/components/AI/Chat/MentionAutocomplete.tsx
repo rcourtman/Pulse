@@ -8,6 +8,7 @@ export interface MentionResource {
   type: 'vm' | 'system-container' | 'app-container' | 'agent' | 'storage';
   status?: string;
   node?: string;
+  scope?: string;
 }
 
 interface MentionAutocompleteProps {
@@ -31,7 +32,9 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     const q = props.query.toLowerCase();
     if (!q) return props.resources.slice(0, 10); // Show first 10 if no query
 
-    return props.resources.filter((r) => r.label.toLowerCase().includes(q)).slice(0, 10); // Limit to 10 results
+    return props.resources
+      .filter((r) => [r.label, r.node, r.scope].some((value) => value?.toLowerCase().includes(q)))
+      .slice(0, 10); // Limit to 10 results
   };
 
   // Reset selection when query changes
@@ -208,8 +211,8 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
                 tabIndex={-1}
                 aria-selected={index() === selectedIndex()}
                 aria-label={`Mention ${resource.label}: ${resource.type}${
-                  resource.node ? ` on ${resource.node}` : ''
-                }${resource.status ? `, ${resource.status}` : ''}`}
+                  resource.node && resource.node !== resource.scope ? ` on ${resource.node}` : ''
+                }${resource.scope ? ` in ${resource.scope}` : ''}${resource.status ? `, ${resource.status}` : ''}`}
                 class={`w-full px-3 py-2 flex items-center gap-3 text-left hover:bg-surface-hover transition-colors ${
                   index() === selectedIndex() ? 'bg-surface-hover' : ''
                 }`}
@@ -234,9 +237,13 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
                       />
                     </Show>
                   </div>
-                  <div class="text-xs text-muted">
+                  <div class="text-xs text-muted break-words">
                     {resource.type}
-                    <Show when={resource.node}>
+                    <Show when={resource.scope}>
+                      {' · '}
+                      {resource.scope}
+                    </Show>
+                    <Show when={resource.node && resource.node !== resource.scope}>
                       {' · '}
                       {resource.node}
                     </Show>

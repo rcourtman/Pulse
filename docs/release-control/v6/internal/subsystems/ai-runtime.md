@@ -6697,21 +6697,24 @@ the summary layout locally.
 The chat prefetch path now also calls the shared governed-summary predicate
 directly at each mention site, so it no longer carries a local wrapper around
 the canonical policy decision or a separate mention-summary trim helper.
-Structured mention resolution also uses the shared AI tools discovery
-canonicalization helpers now, so chat prefetch and discovery responses agree
-on resource-type and target-ID formatting instead of maintaining chat-local
-copies.
+Structured mentions and command routing use the shared unified-resource
+reference resolver. An explicit ID selects one owned record for current name,
+type, policy and native execution coordinates. Client labels, node hints and
+unscoped provider IDs cannot replace an unknown or ambiguous selection.
 The chat mention picker now also carries the canonical preferred resource
 label as `label` through the structured mention payload, and the insertion
 path uses that same label for prompt text and cursor placement, so mention
 search, selection, and submission do not depend on a raw `displayName` field
 fork.
-Structured `app-container` mentions must now use canonical unified-resource
-identity (`app-container:<host>:<provider_uid>`) instead of a Docker-transport
-ID. Frontend mention pickers should emit that canonical ID for every
-app-container, including API-backed platforms such as TrueNAS, while backend
-structured-mention resolution may continue to accept legacy `docker:...`
-mentions only as a compatibility path.
+All mention kinds carry the registry-issued ID from /api/resources unchanged.
+The ID's spelling is not an execution contract. Bounded legacy mention and
+session-registration formats remain readable only when they identify a unique
+current owner. ResolvedContext stores records by that ID and indexes only
+unambiguous names and aliases, including after JSON reload and pinned clearing.
+Native provider IDs remain executor coordinates. Session registration and
+explicit-access marking share ResourceRegistration.ResolvedID rather than
+rebuilding identity independently. Recent context omits unresolved owners and
+continues to withhold governed identifiers.
 Compatibility-only top-level TrueNAS mention types must also collapse to the
 canonical `agent` host type at that same handler boundary, so the AI runtime
 does not carry a parallel raw `truenas` mention contract once transport input

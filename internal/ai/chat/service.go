@@ -2736,7 +2736,7 @@ func (s *Service) hydrateHandoffResources(sessionID string, handoffResources []H
 			continue
 		}
 		resolvedCtx.AddResolvedResource(reg)
-		if resolved, ok := resolvedCtx.GetResolvedResourceByAlias(reg.Name); ok {
+		if resolved, ok := resolvedCtx.GetResolvedResourceByID(reg.ResolvedID()); ok {
 			resolvedCtx.MarkExplicitAccess(resolved.GetResourceID())
 			log.Debug().
 				Str("session_id", sessionID).
@@ -3906,7 +3906,10 @@ func (s *Service) injectRecentSessionContext(sessionID string, messages []Messag
 		if !ok || res == nil {
 			continue
 		}
-		policy, aiSafeSummary := recentSessionResourceGovernance(resourceProvider, resourceID, res)
+		policy, aiSafeSummary, owned := recentSessionResourceGovernance(resourceProvider, resourceID, res)
+		if !owned {
+			continue
+		}
 		label := res.Name
 		if label == "" {
 			label = resourceID
@@ -3992,29 +3995,19 @@ func (s *Service) injectRecentSessionContext(sessionID string, messages []Messag
 	messages[lastIdx].Content = context + "\n\n---\nUser message:\n" + messages[lastIdx].Content
 }
 
-func recentSessionResourceGovernance(provider tools.UnifiedResourceProvider, resourceID string, res *ResolvedResource) (*unifiedresources.ResourcePolicy, string) {
-	if provider == nil || res == nil {
-		return nil, ""
+func recentSessionResourceGovernance(provider tools.UnifiedResourceProvider, resourceID string, res *ResolvedResource) (*unifiedresources.ResourcePolicy, string, bool) {
+	if res == nil {
+		return nil, "", false
 	}
-	resourceType := res.Kind
-	if resourceType == "" {
-		resourceType = res.ResourceType
+	if provider == nil {
+		return nil, "", true
 	}
-	node := res.Node
-	if node == "" {
-		node = res.Scope.HostName
-	}
-	resource, ok := tools.CanonicalHandoffUnifiedResource(provider, firstNonEmptyRecentString(resourceID, res.ResourceID, res.ProviderUID), res.Name, resourceType, node)
-	if !ok && res.ResourceID != "" && res.ResourceID != resourceID {
-		resource, ok = tools.CanonicalHandoffUnifiedResource(provider, res.ResourceID, res.Name, resourceType, node)
-	}
-	if !ok && res.ProviderUID != "" {
-		resource, ok = tools.CanonicalHandoffUnifiedResource(provider, res.ProviderUID, res.Name, resourceType, node)
-	}
+	resource, ok := tools.CanonicalHandoffUnifiedResource(provider, firstNonEmptyRecentString(resourceID, res.ResourceID), "", "", "")
 	if !ok {
-		return nil, ""
+		return nil, "", false
 	}
-	return unifiedresources.CanonicalGovernanceMetadata(&resource)
+	policy, summary := unifiedresources.CanonicalGovernanceMetadata(&resource)
+	return policy, summary, true
 }
 
 func firstNonEmptyRecentString(values ...string) string {

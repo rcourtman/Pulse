@@ -425,6 +425,11 @@ retained buffers. Complete broadcast benchmarks include projection and delta
 queues rather than treating an ID-only or component allocation result as field
 CPU relief. Installed connected/closed-dashboard CPU remains separate evidence.
 
+Realtime normalization also keeps provider ownership source-authoritative.
+Flat storage instance/node fields may synthesize Proxmox facts only when the
+current sources permit it, with explicit ownership facets preserved. Full and
+delta merges apply the same bounded per-row rule without estate-wide lookup.
+
 The resource adapter fast delta path must remain content-equivalent to the full merge for explicit Proxmox memory withdrawal. An absent canonical metric plus incoming Proxmox usageUnavailable clears the old display value; store patch operations must emit that clear even when only the raw facet key changed. This bounded per-changed-row check must not introduce an estate-wide scan or defeat untouched-row identity preservation. Adapter tests cover both delta paths and store writes, including trusted-zero recovery and ordinary partial omission.
 
 The PR #1935 log-level parser benchmark remains an unresolved environment-bound

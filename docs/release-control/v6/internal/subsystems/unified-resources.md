@@ -5526,12 +5526,14 @@ falls back to the canonical redacted label if that governed summary is
 missing, so path-only and IP-only redactions do not regress to raw identity
 leakage or over-redaction in chat context. That same unified-resource contract
 now also owns the canonical mention identity path for shared Assistant reads:
-chat surfaces must carry the backend-issued unified resource ID for canonical
-`agent`, `vm`, `storage`, and `app-container` records, and backend mention
-resolution must be able to recover those resources by canonical ID and
-canonical name through the shared read-state instead of relying on
-provider-local route families or frontend reconstruction of VMware- or
-TrueNAS-specific coordinates.
+chat surfaces carry the backend-issued ID for every supported mention kind.
+ResolveResourceReferenceContext binds explicit selections to one owned record.
+ResolveResourceContext allows unique name lookup for callers without a
+selection. Both share current native coordinates and provider-scoped parent
+ownership. Unknown selections and duplicated names refuse routing. Provider
+renames update current display names without replacing canonical identity or
+overriding a present higher-priority source. Native and legacy wire formats
+remain bounded input compatibility, never a second primary identity model.
 Assistant finding handoffs now resolve product-originated resource references
 through the same canonical unified-resource helper before building policy
 context, so handoff handling guidance uses `CanonicalGovernanceMetadata(...)`,
@@ -6014,6 +6016,10 @@ sparklines match chart series to rows through the chart-key candidates in
 owns the typed extraction of platform-data fragments from unified resources,
 and `frontend-modern/src/utils/resourceStateAdapters.ts` owns canonical
 projection from unified resources into node/PBS/PMG runtime view models.
+Legacy flat fields may synthesize a Proxmox facet only when current sources
+include Proxmox, or source ownership is absent and the legacy shape applies.
+Storage `instance` and `node` coordinates do not override VMware, TrueNAS or
+agent ownership. Explicit ownership facets remain authoritative.
 Future resource-to-runtime mapping changes should extend these unified-resource
 owners instead of rebuilding ad hoc platform-data parsing or action-target
 fallback logic inside alerts, settings, recovery, AI, or infrastructure-local
