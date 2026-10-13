@@ -14,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -300,7 +301,7 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 	if err != nil {
 		log.Warn().
 			Str("cluster", cc.name).
-			Str("endpoint", endpoint).
+			Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(endpoint)).
 			Err(err).
 			Msg("Failed to refresh TOFU fingerprint after mismatch")
 		return nil, lastErr, false
@@ -327,7 +328,7 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 	if captured {
 		log.Warn().
 			Str("cluster", cc.name).
-			Str("endpoint", endpoint).
+			Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(endpoint)).
 			Msg("Trusting cluster member certificate on first use; the pinned primary fingerprint cannot match per-node certificates")
 	}
 
@@ -355,7 +356,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 	if len(cc.endpoints) == 1 {
 		log.Info().
 			Str("cluster", cc.name).
-			Str("endpoint", cc.endpoints[0]).
+			Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(cc.endpoints[0])).
 			Msg("Single endpoint cluster - skipping initial health check")
 		return
 	}
@@ -384,7 +385,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 				cc.mu.Unlock()
 				log.Info().
 					Str("cluster", cc.name).
-					Str("endpoint", ep).
+					Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
 					Err(err).
 					Msg("Cluster endpoint marked unhealthy on initialization")
 				return
@@ -417,7 +418,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 					cc.mu.Unlock()
 					log.Warn().
 						Str("cluster", cc.name).
-						Str("endpoint", ep).
+						Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
 						Err(clientErr).
 						Msg("Failed to create full client after successful health check")
 				} else {
@@ -429,12 +430,12 @@ func (cc *ClusterClient) initialHealthCheck() {
 					if vmSpecificErr {
 						log.Debug().
 							Str("cluster", cc.name).
-							Str("endpoint", ep).
+							Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
 							Msg("Cluster endpoint healthy despite VM-specific errors")
 					} else {
 						log.Info().
 							Str("cluster", cc.name).
-							Str("endpoint", ep).
+							Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
 							Msg("Cluster endpoint passed initial health check")
 					}
 				}
@@ -447,7 +448,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 				cc.mu.Unlock()
 				log.Info().
 					Str("cluster", cc.name).
-					Str("endpoint", ep).
+					Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
 					Err(err).
 					Msg("Cluster endpoint failed initial health check")
 			}
@@ -512,6 +513,22 @@ func (cc *ClusterClient) hasRecoverableUnhealthyEndpointLocked(now time.Time) bo
 	return false
 }
 
+type endpointHealthDiagnostic struct {
+	Endpoint string `json:"endpoint"`
+	Healthy  bool   `json:"healthy"`
+}
+
+// endpointHealthDiagnosticsLocked is logging-only. A slice preserves multiple
+// invalid endpoints with the same safe label without exposing map keys. cc.mu
+// is held by the caller; routing and health storage retain their own identities.
+func (cc *ClusterClient) endpointHealthDiagnosticsLocked() []endpointHealthDiagnostic {
+	statuses := make([]endpointHealthDiagnostic, 0, len(cc.nodeHealth))
+	for endpoint, healthy := range cc.nodeHealth {
+		statuses = append(statuses, endpointHealthDiagnostic{securityutil.InfrastructureEndpointDiagnostic(endpoint), healthy})
+	}
+	return statuses
+}
+
 // getHealthyClient returns the first available endpoint in configured priority
 // order. The first endpoint is the operator-configured cluster URL; discovered
 // member addresses are failover candidates rather than a random load-balancing
@@ -542,7 +559,9 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			Str("cluster", cc.name).
 			Int("healthy", len(healthyEndpoints)).
 			Int("total", len(cc.nodeHealth)).
-			Interface("nodeHealth", cc.nodeHealth).
+			Func(func(event *zerolog.Event) {
+				event.Interface("nodeHealth", cc.endpointHealthDiagnosticsLocked())
+			}).
 			Msg("No healthy endpoints available - attempting recovery")
 	} else {
 		log.Debug().
@@ -550,7 +569,9 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			Int("healthy", len(healthyEndpoints)).
 			Int("cooling", len(coolingEndpoints)).
 			Int("total", len(cc.nodeHealth)).
-			Interface("nodeHealth", cc.nodeHealth).
+			Func(func(event *zerolog.Event) {
+				event.Interface("nodeHealth", cc.endpointHealthDiagnosticsLocked())
+			}).
 			Msg("Checking for healthy endpoints")
 	}
 
@@ -584,7 +605,7 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		if len(cc.endpoints) == 1 {
 			log.Warn().
 				Str("cluster", cc.name).
-				Str("endpoint", cc.endpoints[0]).
+				Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(cc.endpoints[0])).
 				Msg("Single endpoint appears unhealthy but attempting to use it anyway")
 			healthyEndpoints = cc.endpoints
 			// Mark it as healthy optimistically
@@ -602,15 +623,15 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 				if !cc.nodeHealth[ep] {
 					unhealthyList = append(unhealthyList, ep)
 					if reason := strings.TrimSpace(cc.lastError[ep]); reason != "" {
-						endpointReasons = append(endpointReasons, fmt.Sprintf("%s: %s", ep, reason))
+						endpointReasons = append(endpointReasons, fmt.Sprintf("%s: %s", securityutil.InfrastructureEndpointDiagnostic(ep), reason))
 					} else {
-						endpointReasons = append(endpointReasons, fmt.Sprintf("%s: no recorded reason", ep))
+						endpointReasons = append(endpointReasons, fmt.Sprintf("%s: no recorded reason", securityutil.InfrastructureEndpointDiagnostic(ep)))
 					}
 				}
 			}
 			log.Error().
 				Str("cluster", cc.name).
-				Strs("unhealthyEndpoints", unhealthyList).
+				Strs("unhealthyEndpoints", securityutil.InfrastructureEndpointsDiagnostic(unhealthyList)).
 				Int("totalEndpoints", len(cc.endpoints)).
 				Msg("All cluster endpoints are unhealthy - verify network connectivity and API accessibility from Pulse server")
 			return nil, fmt.Errorf("no healthy nodes available in cluster %s (%d endpoints failed: %s)", cc.name, len(cc.endpoints), strings.Join(endpointReasons, "; "))
@@ -637,10 +658,10 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			cc.nodeHealth[selectedEndpoint] = false
 			log.Debug().
 				Str("cluster", cc.name).
-				Str("endpoint", selectedEndpoint).
+				Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint)).
 				Err(err).
 				Msg("Failed to create client for cluster endpoint")
-			return nil, fmt.Errorf("failed to create client for %s: %w", selectedEndpoint, err)
+			return nil, fmt.Errorf("failed to create client for %s: %w", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint), err)
 		}
 
 		// Connectivity test - 5 seconds to allow for TLS handshake (~3s typical)
@@ -653,7 +674,7 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			if isRateLimited, _ := isTransientRateLimitError(testErr); isRateLimited {
 				log.Debug().
 					Str("cluster", cc.name).
-					Str("endpoint", selectedEndpoint).
+					Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint)).
 					Err(testErr).
 					Msg("Ignoring transient rate limit error during connectivity test")
 				// Continue with client creation since the node is accessible, just rate limited
@@ -667,7 +688,7 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 					// The node is actually healthy, so don't mark it unhealthy
 					log.Debug().
 						Str("cluster", cc.name).
-						Str("endpoint", selectedEndpoint).
+						Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint)).
 						Err(testErr).
 						Msg("Ignoring VM-specific error during connectivity test")
 					// Continue with client creation since the node is actually accessible
@@ -676,17 +697,17 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 					cc.nodeHealth[selectedEndpoint] = false
 					log.Warn().
 						Str("cluster", cc.name).
-						Str("endpoint", selectedEndpoint).
+						Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint)).
 						Err(testErr).
 						Msg("Failed to connect to Proxmox endpoint; endpoint removed from rotation until next refresh")
-					return nil, fmt.Errorf("endpoint %s failed connectivity test: %w", selectedEndpoint, testErr)
+					return nil, fmt.Errorf("endpoint %s failed connectivity test: %w", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint), testErr)
 				}
 			}
 		}
 
 		log.Debug().
 			Str("cluster", cc.name).
-			Str("endpoint", selectedEndpoint).
+			Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint)).
 			Int("nodes", len(testNodes)).
 			Msg("Cluster endpoint passed connectivity test")
 
@@ -698,7 +719,7 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		if err != nil {
 			// This shouldn't happen since we just tested it
 			cc.nodeHealth[selectedEndpoint] = false
-			return nil, fmt.Errorf("failed to create client for %s: %w", selectedEndpoint, err)
+			return nil, fmt.Errorf("failed to create client for %s: %w", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint), err)
 		}
 
 		cc.clients[selectedEndpoint] = newClient
@@ -716,7 +737,7 @@ func (cc *ClusterClient) markUnhealthyWithError(endpoint string, errMsg string) 
 	if cc.nodeHealth[endpoint] {
 		log.Warn().
 			Str("cluster", cc.name).
-			Str("endpoint", endpoint).
+			Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(endpoint)).
 			Str("error", errMsg).
 			Msg("Marking cluster node as unhealthy")
 		cc.nodeHealth[endpoint] = false
@@ -764,7 +785,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 		if len(throttledEndpoints) > 0 {
 			log.Debug().
 				Str("cluster", cc.name).
-				Strs("throttledEndpoints", throttledEndpoints).
+				Strs("throttledEndpoints", securityutil.InfrastructureEndpointsDiagnostic(throttledEndpoints)).
 				Msg("Skipping recovery check - endpoints checked recently")
 		}
 		return
@@ -772,7 +793,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 
 	log.Info().
 		Str("cluster", cc.name).
-		Strs("unhealthyEndpoints", unhealthyEndpoints).
+		Strs("unhealthyEndpoints", securityutil.InfrastructureEndpointsDiagnostic(unhealthyEndpoints)).
 		Int("count", len(unhealthyEndpoints)).
 		Msg("Attempting to recover unhealthy cluster endpoints")
 
@@ -815,7 +836,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 				recordFailure(ep, err)
 				log.Debug().
 					Str("cluster", cc.name).
-					Str("endpoint", ep).
+					Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
 					Err(err).
 					Msg("Failed to create client during recovery attempt")
 				return
@@ -852,19 +873,19 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 				if vmSpecificErr {
 					log.Info().
 						Str("cluster", cc.name).
-						Str("endpoint", ep).
+						Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
 						Msg("Recovered unhealthy cluster node (ignoring VM-specific errors)")
 				} else {
 					log.Info().
 						Str("cluster", cc.name).
-						Str("endpoint", ep).
+						Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
 						Msg("Recovered unhealthy cluster node")
 				}
 			} else {
 				recordFailure(ep, err)
 				log.Debug().
 					Str("cluster", cc.name).
-					Str("endpoint", ep).
+					Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
 					Err(err).
 					Msg("Recovery attempt failed - endpoint still unhealthy")
 			}
@@ -898,14 +919,14 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 		reasons := make([]string, 0, len(failureReasons))
 		for _, ep := range unhealthyEndpoints {
 			if reason, ok := failureReasons[ep]; ok {
-				reasons = append(reasons, ep+": "+reason)
+				reasons = append(reasons, securityutil.InfrastructureEndpointDiagnostic(ep)+": "+reason)
 			}
 		}
 		failureMu.Unlock()
 		log.Warn().
 			Str("cluster", cc.name).
 			Int("attempted", len(unhealthyEndpoints)).
-			Strs("failedEndpoints", unhealthyEndpoints).
+			Strs("failedEndpoints", securityutil.InfrastructureEndpointsDiagnostic(unhealthyEndpoints)).
 			Strs("failureReasons", reasons).
 			Msg("No endpoints recovered - cluster may be unreachable from Pulse server")
 	}
@@ -960,7 +981,7 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 
 			event := log.Warn().
 				Str("cluster", cc.name).
-				Str("endpoint", clientEndpoint).
+				Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(clientEndpoint)).
 				Err(err).
 				Dur("backoff", backoff).
 				Int("attempt", i+1)
@@ -995,7 +1016,7 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			cc.markUnhealthyWithError(clientEndpoint, err.Error())
 			log.Warn().
 				Str("cluster", cc.name).
-				Str("endpoint", clientEndpoint).
+				Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(clientEndpoint)).
 				Err(err).
 				Int("attempt", i+1).
 				Msg("Connectivity error, trying next cluster endpoint")
@@ -1006,7 +1027,7 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		// (HTTP 4xx/5xx, parsing error, VM-specific error, etc.)
 		log.Debug().
 			Str("cluster", cc.name).
-			Str("endpoint", clientEndpoint).
+			Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(clientEndpoint)).
 			Err(err).
 			Msg("Request-level error, endpoint reachable - not marking unhealthy")
 		return err

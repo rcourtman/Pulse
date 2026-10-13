@@ -6354,6 +6354,7 @@
               "internal/monitoring/issue1613_contract_test.go",
               "internal/monitoring/monitor_pve_guest_lxc_test.go",
               "internal/monitoring/ratetracker_test.go",
+              "pkg/proxmox/host_diagnostics_regression_test.go",
               "pkg/proxmox/io_counters_test.go"
             ]
           },
@@ -6384,7 +6385,8 @@
               "internal/monitoring/monitor_pve_cluster_refresh_test.go",
               "internal/monitoring/monitor_pve_disk_fallback_test.go",
               "pkg/proxmox/cluster_client_additional_api4_test.go",
-              "pkg/proxmox/cluster_client_api_test.go"
+              "pkg/proxmox/cluster_client_api_test.go",
+              "pkg/proxmox/host_diagnostics_regression_test.go"
             ]
           },
           {
@@ -6470,7 +6472,8 @@
             "exact_files": [
               "pkg/pbs/auth_session_concurrency_test.go",
               "pkg/pbs/client_http_test.go",
-              "pkg/pbs/client_test.go"
+              "pkg/pbs/client_test.go",
+              "pkg/pbs/host_diagnostics_regression_test.go"
             ]
           },
           {
@@ -7566,6 +7569,7 @@
         "internal/config/watcher.go",
         "internal/crypto/crypto.go",
         "internal/logging/logging.go",
+        "internal/securityutil/infrastructure_url.go",
         "internal/securityutil/private_path_other.go",
         "internal/securityutil/private_path_windows.go",
         "internal/securityutil/secure_storage_dir.go",
@@ -7852,6 +7856,21 @@
               "pkg/auth/sqlite_manager_queryplan_test.go",
               "pkg/auth/sqlite_manager_test.go",
               "pkg/server/server_test.go"
+            ]
+          },
+          {
+            "id": "infrastructure-endpoint-diagnostics",
+            "label": "rejected infrastructure URL confidentiality proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/securityutil/infrastructure_url.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/securityutil/infrastructure_url_test.go",
+              "pkg/pbs/host_diagnostics_regression_test.go",
+              "pkg/proxmox/host_diagnostics_regression_test.go"
             ]
           }
         ],

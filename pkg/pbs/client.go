@@ -118,20 +118,22 @@ type auth struct {
 // NewClient creates a new PBS API client
 func NewClient(cfg ClientConfig) (*Client, error) {
 	// Normalize host URL - ensure it has a protocol
-	if !strings.HasPrefix(cfg.Host, "http://") && !strings.HasPrefix(cfg.Host, "https://") {
+	defaultedScheme := !strings.HasPrefix(cfg.Host, "http://") && !strings.HasPrefix(cfg.Host, "https://")
+	if defaultedScheme {
 		// Default to HTTPS if no protocol specified
 		cfg.Host = "https://" + cfg.Host
-		// Log that we're defaulting to HTTPS
-		log.Debug().Str("host", cfg.Host).Msg("No protocol specified in PBS host, defaulting to HTTPS")
 	}
 
-	// Warn if using HTTP
-	if strings.HasPrefix(cfg.Host, "http://") {
-		log.Warn().Str("host", cfg.Host).Msg("Using HTTP for PBS connection. PBS typically requires HTTPS. If connection fails, try using https:// instead")
-	}
-	baseHostURL, err := securityutil.NormalizeHTTPBaseURL(cfg.Host, "")
+	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(cfg.Host, "")
 	if err != nil {
 		return nil, fmt.Errorf("invalid PBS host: %w", err)
+	}
+	// Logs must use validated input: a refused host can contain credentials.
+	if defaultedScheme {
+		log.Debug().Str("host", baseHostURL.String()).Msg("No protocol specified in PBS host, defaulting to HTTPS")
+	}
+	if baseHostURL.Scheme == "http" {
+		log.Warn().Str("host", baseHostURL.String()).Msg("Using HTTP for PBS connection. PBS typically requires HTTPS. If connection fails, try using https:// instead")
 	}
 	baseAPIURL := securityutil.AppendURLPath(baseHostURL, "api2", "json")
 
