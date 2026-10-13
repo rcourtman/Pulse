@@ -82,8 +82,15 @@ async function box(locator) {
       };
       const noOverflow = async () => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
       const activate = async (control) => { if (width < 768) await control.tap(); else { await control.focus(); await page.keyboard.press('Enter'); } };
-      await page.goto(origin + '/guest', { waitUntil: 'networkidle' });
-      await activate(page.getByText('composition-guest', { exact: true }).first());
+      const openGuest = async () => {
+        await page.goto(origin + '/guest', { waitUntil: 'networkidle' });
+        if (width < 768) await page.getByText('composition-guest', { exact: true }).first().tap();
+        else {
+          const row = page.locator('[data-guest-id="fixture:pve1:101"] [data-row-action]').first();
+          await row.focus(); await page.keyboard.press('Enter');
+        }
+      };
+      await openGuest();
       const overview = page.getByTestId('guest-drawer-overview'); await overview.waitFor();
       const details = page.getByTestId('guest-technical-details'); assert.equal(await details.getAttribute('open'), null);
       const os = (await page.evaluate(() => window.__composition.evidence())).os;
@@ -99,7 +106,7 @@ async function box(locator) {
       record.filesystemDoc = page.url();
       const digest = await page.evaluate(async () => { const b = await (await fetch('/docs/VM_DISK_MONITORING.md')).arrayBuffer(); return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', b))).map((x) => x.toString(16).padStart(2, '0')).join(''); });
       assert.equal(digest, binding.artifacts['docs/VM_DISK_MONITORING.md']);
-      await page.goto(origin + '/guest', { waitUntil: 'networkidle' }); await activate(page.getByText('composition-guest', { exact: true }).first());
+      await openGuest();
       await page.evaluate(() => window.__composition.mode('retained'));
       await overview.getByText(/Using last known/).waitFor(); await overview.getByText('/data', { exact: true }).waitFor();
       assert.equal(await details.getAttribute('open'), null); await noOverflow(); await capture('guest-retained');
