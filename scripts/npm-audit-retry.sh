@@ -110,8 +110,12 @@ DEADLINE=$(( $(date +%s) + MAX_SECONDS ))
 audit_runner_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 run_audit() {
   local limit="$1" out="$2"
+  # Keep Bash's existing executable-script fallback (ENOEXEC), including on
+  # macOS. The fixed exec program forwards argv literally; no npm argument or
+  # executable path is interpolated into shell code.
   python3 "${audit_runner_dir}/npm_audit_process.py" \
-    "${limit}" "${out}" "${NPM_BIN}" "${AUDIT_ARGS[@]}"
+    "${limit}" "${out}" "${BASH}" -c 'exec "$@"' npm-audit \
+    "${NPM_BIN}" "${AUDIT_ARGS[@]}"
 }
 
 # Classify one audit run. Prints a verdict word, summary and (for a finding)

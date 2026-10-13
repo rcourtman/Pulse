@@ -34,7 +34,7 @@ class NpmAuditProcessCleanupTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             pidfile = root / "child.pid"
-            npm = root / "npm"
+            npm = root / "npm fixture;not-code"
             counts = dict.fromkeys(("info", "low", "moderate", "high", "critical", "total"), 0)
             if finding:
                 counts.update(high=1, total=1)

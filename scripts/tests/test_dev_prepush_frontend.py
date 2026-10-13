@@ -264,13 +264,18 @@ class DevPrepushFrontendTest(DevPrepushFixture):
         self.assertEqual(guards, [])
 
     def test_audit_path_lookalike_does_not_query(self):
-        for path in ("scripts/npm-audit-retry.sh.extra", "scripts/npm_audit_process.py.extra"):
-            with self.subTest(path=path):
-                self.change(path)
-                result, calls, guards = self.run_gate(dependencies=False)
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertEqual(calls, [])
-                self.assertEqual(len(guards), 1 if path.endswith(".sh.extra") else 2)
+        self.change("scripts/npm-audit-retry.sh.extra")
+        result, calls, guards = self.run_gate(dependencies=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(calls, [])
+        self.assertEqual(len(guards), 1)
+
+    def test_audit_process_path_lookalike_does_not_query(self):
+        self.change("scripts/npm_audit_process.py.extra")
+        result, calls, guards = self.run_gate(dependencies=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(calls, [])
+        self.assertEqual(len(guards), 1)
 
     def test_local_strict_paths_match_ci(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/build-and-test.yml").read_text())
