@@ -52,7 +52,7 @@ func nativeInstallerFixtureSteps(t *testing.T) (nativeGuidanceStep, nativeGuidan
 
 func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
 	supply, installer := nativeInstallerFixtureSteps(t)
-	for _, scenario := range []string{"real tools", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing mv", "non-GNU mv", "missing tar", "non-GNU tar"} {
+	for _, scenario := range []string{"real tools", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing mv", "non-GNU mv", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			bin, prefix, tarPrefix, runnerTemp := filepath.Join(root, "bin"), filepath.Join(root, "brew with spaces"), filepath.Join(root, "gnu tar with spaces"), filepath.Join(root, "runner temp")
@@ -64,16 +64,17 @@ func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
 			brew := `#!/bin/sh
 printf '%s\n' "$*" >> "$BREW_CALLS"
 case "$*" in
-  'install bash gnu-tar') exit "${BREW_EXIT:-0}" ;;
+  'install bash gnu-tar gawk') exit "${BREW_EXIT:-0}" ;;
   '--prefix bash'|'--prefix coreutils') printf '%s\n' "$TOOLS_PREFIX" ;;
   '--prefix gnu-tar') printf '%s\n' "$TAR_PREFIX" ;;
+  '--prefix gawk') printf '%s\n' "$TOOLS_PREFIX" ;;
   *) exit 64 ;;
 esac
 `
 			if err := os.WriteFile(filepath.Join(bin, "brew"), []byte(brew), 0700); err != nil {
 				t.Fatal(err)
 			}
-			tools := []string{"bash", "stat", "chmod", "chown", "mv", "tar"}
+			tools := []string{"bash", "stat", "chmod", "chown", "mv", "tar", "awk"}
 			installed := make(map[string]string)
 			for _, name := range tools {
 				leaf, toolPrefix := name, prefix
@@ -97,7 +98,11 @@ esac
 						t.Fatal(err)
 					}
 				} else {
-					realTool, err := exec.LookPath(name)
+					realName := name
+					if name == "awk" {
+						realName = "gawk"
+					}
+					realTool, err := exec.LookPath(realName)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -109,7 +114,7 @@ esac
 			// Native macOS defaults must not be the fallback for Linux-only
 			// archive extraction or atomic replacement. The supplied real GNU
 			// tools below must win even when the native names are unsuitable.
-			for _, name := range []string{"mv", "tar"} {
+			for _, name := range []string{"mv", "tar", "awk"} {
 				if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nprintf 'native BSD utility reached\\n' >&2\nexit 64\n"), 0700); err != nil {
 					t.Fatal(err)
 				}
@@ -156,14 +161,14 @@ esac
 			}
 			entries, err := os.ReadDir(fixtureBin)
 			if err != nil || len(entries) != len(tools) {
-				t.Fatal("fixture supply must select only Bash/stat/chmod/chown/mv/tar")
+				t.Fatal("fixture supply must select only Bash/stat/chmod/chown/mv/tar/awk")
 			}
 			for _, name := range tools {
 				if target, err := os.Readlink(filepath.Join(fixtureBin, name)); err != nil || target != installed[name] {
 					t.Fatalf("%s did not bind the verified installed executable", name)
 				}
 			}
-			if data, err := os.ReadFile(calls); err != nil || string(data) != "install bash gnu-tar\n--prefix bash\n--prefix coreutils\n--prefix gnu-tar\n" {
+			if data, err := os.ReadFile(calls); err != nil || string(data) != "install bash gnu-tar gawk\n--prefix bash\n--prefix coreutils\n--prefix gnu-tar\n--prefix gawk\n" {
 				t.Fatal("fixture supply changed its fixed package/resource selection")
 			}
 			// Exercise the actual workflow step's local PATH boundary, replacing
@@ -172,7 +177,7 @@ esac
 set -eu
 test "$*" = 'scripts/installtests/run_unix_contracts.py' || exit 91
 test "$(command -v bash)" = "$PULSE_INSTALLER_FIXTURE_BIN/bash" || exit 92
-for tool in stat chmod chown mv tar; do
+for tool in stat chmod chown mv tar awk; do
   test "$(command -v "$tool")" = "$PULSE_INSTALLER_FIXTURE_BIN/$tool" || exit 93
 done
 # Exercise the actual Linux-only flags with real executables and file bytes.
@@ -186,6 +191,18 @@ cp "$PROBE_ROOT/extracted/source" "$PROBE_ROOT/staged"
 mv -T "$PROBE_ROOT/staged" "$PROBE_ROOT/published"
 cmp "$PROBE_ROOT/source" "$PROBE_ROOT/published"
 test ! -e "$PROBE_ROOT/staged"
+# Exercise the NAS filter's actual octal byte range, not a --version double.
+# Safe text must pass; NUL and other disallowed controls must fail. Neither
+# false-positive empty matching nor dropping binary bytes is acceptable.
+printf 'safe boot text\n' > "$PROBE_ROOT/boot-safe"
+printf 'unsafe\000boot\n' > "$PROBE_ROOT/boot-nul"
+printf 'unsafe\001boot\n' > "$PROBE_ROOT/boot-control"
+awk 'BEGIN { bad = 0 } /[\000-\010\013-\037\177]/ { bad = 1 } END { exit bad }' "$PROBE_ROOT/boot-safe"
+for file in boot-nul boot-control; do
+  if awk 'BEGIN { bad = 0 } /[\000-\010\013-\037\177]/ { bad = 1 } END { exit bad }' "$PROBE_ROOT/$file"; then
+    exit 94
+  fi
+done
 exit "${SUITE_EXIT:-0}"
 `
 			if err := os.WriteFile(filepath.Join(bin, "python3"), []byte(probe), 0700); err != nil {

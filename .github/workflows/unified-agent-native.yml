@@ -220,7 +220,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          brew install bash gnu-tar
+          brew install bash gnu-tar gawk
           linux_bash="$(brew --prefix bash)/bin/bash"
           test -x "$linux_bash"
           "$linux_bash" -c '(( BASH_VERSINFO[0] >= 5 ))'
@@ -237,6 +237,13 @@ jobs:
           test -x "$gnu_tar"
           "$gnu_tar" --version | grep -q 'GNU tar'
           ln -s "$gnu_tar" "$fixture_bin/tar"
+          # The NAS boot filter rejects embedded NUL/control bytes with octal
+          # ranges. Use the same binary-aware awk semantics as its Linux jobs,
+          # not the native macOS parser, only within these server fixtures.
+          gnu_awk="$(brew --prefix gawk)/bin/gawk"
+          test -x "$gnu_awk"
+          "$gnu_awk" --version | grep -q 'GNU Awk'
+          ln -s "$gnu_awk" "$fixture_bin/awk"
           printf 'PULSE_INSTALLER_FIXTURE_BIN=%s\n' "$fixture_bin" >> "$GITHUB_ENV"
 
       - name: Test native Unix installer contracts
