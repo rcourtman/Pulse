@@ -67,7 +67,58 @@ func mockCanonicalMetricSeries(resourceType, resourceID, metricType string, time
 		}
 	}
 
-	return lttb(points, chartDownsampleTarget)
+	return points
+}
+
+// mockChartGridInterval is the bucket width that keeps a mock chart within
+// mockChartPointTarget points. A window that does not start on a bucket edge
+// touches one more bucket than it spans, and the newest reading is kept on top
+// of one reading per bucket, hence target-2.
+func mockChartGridInterval(duration time.Duration) time.Duration {
+	if duration <= 0 {
+		duration = time.Hour
+	}
+	buckets := time.Duration(mockChartPointTarget(duration) - 2)
+	if buckets < 1 {
+		buckets = 1
+	}
+	interval := (duration + buckets - 1) / buckets
+	return ((interval + time.Second - 1) / time.Second) * time.Second
+}
+
+// sampleMetricSeriesOnMockChartGrid keeps the first reading in each
+// wall-clock bucket of the given width, plus the newest reading so the chart
+// ends at the live value. Buckets are aligned to the Unix epoch and readings
+// keep their own timestamps, so which readings survive depends only on when
+// they were taken, never on their values: every metric of one resource
+// sampled at the same times keeps the same timestamps, as the poller writes
+// them. points must be in ascending timestamp order.
+func sampleMetricSeriesOnMockChartGrid(points []MetricPoint, interval time.Duration) []MetricPoint {
+	if len(points) == 0 {
+		return nil
+	}
+	width := int64(interval)
+	if width <= 0 {
+		return cloneMetricSeries(points)
+	}
+
+	bucketOf := func(ts time.Time) int64 {
+		nanos := ts.UnixNano()
+		bucket := nanos / width
+		if nanos < 0 && nanos%width != 0 {
+			bucket--
+		}
+		return bucket
+	}
+
+	sampled := make([]MetricPoint, 0, len(points))
+	for i, point := range points {
+		if i > 0 && i < len(points)-1 && bucketOf(point.Timestamp) == bucketOf(points[i-1].Timestamp) {
+			continue
+		}
+		sampled = append(sampled, point)
+	}
+	return sampled
 }
 
 func mockGuestMetricsForChart(resourceType, resourceID string, duration time.Duration) map[string][]MetricPoint {
@@ -224,9 +275,9 @@ func (m *Monitor) mockStorageMetricsForChart(storageID string, duration time.Dur
 	}
 
 	return map[string][]MetricPoint{
-		"usage": lttb(usagePoints, chartDownsampleTarget),
-		"used":  lttb(usedPoints, chartDownsampleTarget),
-		"avail": lttb(availPoints, chartDownsampleTarget),
-		"total": lttb(totalPoints, chartDownsampleTarget),
+		"usage": usagePoints,
+		"used":  usedPoints,
+		"avail": availPoints,
+		"total": totalPoints,
 	}
 }
