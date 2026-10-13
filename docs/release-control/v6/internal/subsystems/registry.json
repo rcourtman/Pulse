@@ -6341,7 +6341,7 @@
           },
           {
             "id": "proxmox-guest-counter-runtime",
-            "label": "Proxmox guest cumulative-counter presence and receipt-time proof",
+            "label": "Proxmox guest counter presence, receipt-time and memory integrity proof",
             "match_prefixes": [],
             "match_files": [
               "pkg/proxmox/client.go",
@@ -6351,11 +6351,13 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/api/router_state_test.go",
+              "internal/monitoring/guest_meminfo_integrity_test.go",
               "internal/monitoring/issue1613_contract_test.go",
               "internal/monitoring/monitor_pve_guest_lxc_test.go",
               "internal/monitoring/ratetracker_test.go",
               "pkg/proxmox/host_diagnostics_regression_test.go",
-              "pkg/proxmox/io_counters_test.go"
+              "pkg/proxmox/io_counters_test.go",
+              "pkg/proxmox/meminfo_integrity_test.go"
             ]
           },
           {
@@ -6556,6 +6558,8 @@
               "internal/monitoring/canonical_guardrails_test.go",
               "internal/monitoring/ceph_test.go",
               "internal/monitoring/deadman_test.go",
+              "internal/monitoring/guest_meminfo_integrity_test.go",
+              "internal/monitoring/guest_memory_stability_test.go",
               "internal/monitoring/guest_poll_ownership_test.go",
               "internal/monitoring/issue1485_unraid_lifecycle_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",

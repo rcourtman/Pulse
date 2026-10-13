@@ -157,7 +157,15 @@ func TestVMConfigCompleteWhitespaceAtResponseLimit(t *testing.T) {
 		fmt.Fprint(w, strings.Repeat(" ", int(maxResponseBodyBytes)-len(config)))
 	}))
 	defer server.Close()
-	got, err := backupTestClient(t, server.URL).GetVMConfig(context.Background(), "node", 105)
+	// This checks the complete 8 MiB response boundary, not throughput. The
+	// shared one-second client fixture can time out while race-instrumented
+	// body collection/decoding is still completing. Keep a bounded hang guard
+	// here without changing any production timeout or lock/size requirement.
+	client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := client.GetVMConfig(context.Background(), "node", 105)
 	if err != nil || got["name"] != "fixture" || got["agent"] != float64(1) {
 		t.Fatalf("complete bounded config rejected or changed: %#v %v", got, err)
 	}
