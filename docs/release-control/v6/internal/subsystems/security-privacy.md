@@ -18,6 +18,13 @@
 
 ## Purpose
 
+### Patrol maintenance coverage widens no authority
+
+Patrol inherits only maintenance from an ancestor window scoped
+`resource_and_descendants`. Monitoring mode, lifecycle and the
+`NeverAutoRemediate` lock are never inherited, so descendant scope can quiet
+findings but cannot unlock or grant automated action on any resource.
+
 ### Startup provisioning cannot replace retained access
 
 `pkg/server/server.go` admits environment-selected startup import only into an

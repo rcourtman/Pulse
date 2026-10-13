@@ -337,6 +337,61 @@ func (s ResourceOperatorState) ActiveMaintenanceOccurrenceAt(now time.Time) (Mai
 	return MaintenanceWindowOccurrence{}, false
 }
 
+// MaintenanceCoverage is the active maintenance occurrence covering a
+// resource: its own window, or one inherited from an ancestor whose window is
+// scoped to resource_and_descendants. SourceID names the resource the window
+// is stored on.
+type MaintenanceCoverage struct {
+	Occurrence MaintenanceWindowOccurrence
+	Reason     string
+	Scope      MaintenanceScope
+	SourceID   string
+	Inherited  bool
+}
+
+// ActiveMaintenanceCoverageAt resolves the maintenance covering resourceID at
+// now, the one rule Alerts and Patrol share. own is the resource's own state
+// (nil when it has none); ancestorIDs is the live canonical parent chain,
+// nearest first, and read returns an ancestor's state (found=false when it
+// has none or cannot be read). Only an ancestor window scoped to
+// resource_and_descendants covers descendants. When several active windows
+// overlap, the one ending latest wins, so attention never resumes before the
+// last covering window closes.
+//
+// Coverage is maintenance only. Monitoring mode, lifecycle and remediation
+// locks stay exact-resource state and are never inherited.
+func ActiveMaintenanceCoverageAt(now time.Time, resourceID string, own *ResourceOperatorState, ancestorIDs []string, read func(canonicalID string) (ResourceOperatorState, bool)) (MaintenanceCoverage, bool) {
+	var coverage MaintenanceCoverage
+	covered := false
+	consider := func(candidate ResourceOperatorState, sourceID string, inherited bool) {
+		occurrence, active := candidate.ActiveMaintenanceOccurrenceAt(now)
+		if !active || (covered && !occurrence.EndAt.After(coverage.Occurrence.EndAt)) {
+			return
+		}
+		coverage = MaintenanceCoverage{
+			Occurrence: occurrence,
+			Reason:     candidate.MaintenanceReason,
+			Scope:      candidate.MaintenanceScope,
+			SourceID:   sourceID,
+			Inherited:  inherited,
+		}
+		covered = true
+	}
+	if own != nil {
+		consider(*own, resourceID, false)
+	}
+	if read != nil {
+		for _, ancestorID := range ancestorIDs {
+			ancestor, found := read(ancestorID)
+			if !found || ancestor.MaintenanceScope != MaintenanceScopeResourceAndDescendants {
+				continue
+			}
+			consider(ancestor, ancestorID, true)
+		}
+	}
+	return coverage, covered
+}
+
 // MaintenanceOccurrencesEndingBetween returns concrete occurrences whose end
 // is in (since, until]. It gives the maintenance sentinel a bounded,
 // restart-safe way to verify every recurring window without inventing a

@@ -73,41 +73,32 @@ func (m *Monitor) installOperatorIntentResolver(store ResourceStoreInterface) {
 			}
 		}
 
-		applyActiveMaintenance := func(candidate unifiedresources.ResourceOperatorState, sourceID string, inherited bool) {
-			occurrence, active := candidate.ActiveMaintenanceOccurrenceAt(now)
-			if !active {
-				return
+		var own *unifiedresources.ResourceOperatorState
+		if found {
+			own = &state
+		}
+		var ancestorIDs []string
+		if hasAncestorReader {
+			ancestorIDs = identity.(resourceIntentAncestorReader).ResolveCanonicalResourceAncestors(resourceID)
+		}
+		coverage, covered := unifiedresources.ActiveMaintenanceCoverageAt(now, resourceID, own, ancestorIDs, func(ancestorID string) (unifiedresources.ResourceOperatorState, bool) {
+			ancestorState, ancestorFound, ancestorErr := reader.GetResourceOperatorState(ancestorID)
+			if ancestorErr != nil {
+				log.Warn().Err(ancestorErr).Str("resourceID", resourceID).Str("ancestorID", ancestorID).Msg("Failed to read inherited operator maintenance state")
+				return unifiedresources.ResourceOperatorState{}, false
 			}
-			// Overlapping exact/inherited schedules remain suppressed until the
-			// latest active end. This avoids promising an early delivery resume.
-			if context.MaintenanceEndAt != nil && !occurrence.EndAt.After(*context.MaintenanceEndAt) {
-				return
-			}
-			startAt, endAt := occurrence.StartAt, occurrence.EndAt
+			return ancestorState, ancestorFound
+		})
+		if covered {
+			startAt, endAt := coverage.Occurrence.StartAt, coverage.Occurrence.EndAt
 			context.MaintenanceStartAt = &startAt
 			context.MaintenanceEndAt = &endAt
-			context.MaintenanceReason = candidate.MaintenanceReason
-			context.MaintenanceSourceID = sourceID
-			context.MaintenanceInherited = inherited
-			context.MaintenanceScope = string(candidate.MaintenanceScope)
+			context.MaintenanceReason = coverage.Reason
+			context.MaintenanceSourceID = coverage.SourceID
+			context.MaintenanceInherited = coverage.Inherited
+			context.MaintenanceScope = string(coverage.Scope)
 		}
-		if found {
-			applyActiveMaintenance(state, resourceID, false)
-		}
-		if hasAncestorReader {
-			for _, ancestorID := range identity.(resourceIntentAncestorReader).ResolveCanonicalResourceAncestors(resourceID) {
-				ancestorState, ancestorFound, ancestorErr := reader.GetResourceOperatorState(ancestorID)
-				if ancestorErr != nil {
-					log.Warn().Err(ancestorErr).Str("resourceID", resourceID).Str("ancestorID", ancestorID).Msg("Failed to read inherited operator maintenance state")
-					continue
-				}
-				if !ancestorFound || ancestorState.MaintenanceScope != unifiedresources.MaintenanceScopeResourceAndDescendants {
-					continue
-				}
-				applyActiveMaintenance(ancestorState, ancestorID, true)
-			}
-		}
-		return context, found || context.MaintenanceEndAt != nil
+		return context, found || covered
 	})
 	// Alerts restore before the resource store is attached during startup.
 	// Reconcile that restored set as soon as persisted policy is available.
