@@ -5867,7 +5867,8 @@ were removed with the unreachable handlers. The `IntentionallyOffline` branch is
 counterpart — same auto-dismiss but with
 `operator_state_cause: intentionally_offline` and no
 `maintenance_end_at` field because the suppression has no scheduled
-end. Maintenance windows take priority over intentionally-offline
+end — and, like `expected_offline`, it silences only availability findings
+(see "Patrol consumes canonical monitoring and lifecycle policy"). Maintenance windows take priority over intentionally-offline
 when both are active, because the time-bounded suppression is the
 more honest one to surface to the operator. Deployments without a
 provider keep the original new-finding behavior — suppression is
@@ -8128,7 +8129,23 @@ The findings operator-state projection carries canonical `MonitoringMode` and
 lock state. Active maintenance, expected-offline, muted, and retired policy
 produce distinct lifecycle causes in durable finding history. Suppression is
 reversible when the canonical cause lifts. Legacy providers that project only
-`IntentionallyOffline` retain their established cause and behavior.
+`IntentionallyOffline` (no `MonitoringMode`) retain their established
+`intentionally_offline` cause and read as expected-offline.
+
+Expected-offline is availability-specific in Patrol exactly as it is in the
+alert runtime. `ResourceOperatorStateProjection.monitoringSuppressionCauseFor`
+decides per finding: retired and muted silence every finding, while
+expected-offline (and the legacy flag) silence only findings in the shared
+down condition class (`findingConditionClass` in
+`internal/ai/findings_alert_mirror.go`: stopped, exited, offline, unreachable,
+PDM offline, Proxmox guest stopped). Capacity, performance, backup, security,
+and disk-health findings on an expected-offline resource stay visible; SMART
+"offline uncorrectable" reports are disk health, not the resource being down.
+The wake path judges the re-detected finding with the same helper, so a
+finding silenced under muted wakes when the resource moves to expected-offline
+unless it is itself an availability finding.
+`internal/ai/findings_expected_offline_test.go` pins the split with muted as
+the negative control.
 
 Retired lifecycle also projects an effective remediation lock into Patrol
 investigation and the shared execution admission paths, so a resource cannot
