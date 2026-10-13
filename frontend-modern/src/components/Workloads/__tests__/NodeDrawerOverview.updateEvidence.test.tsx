@@ -43,6 +43,8 @@ describe('NodeDrawerOverview update evidence', () => {
         ...(status === 'stale' ? { pendingUpdatesReason: 'check_failed' as const } : {}),
       });
       render(() => <NodeDrawerOverview node={node} />);
+      // The alert-first Overview demotes healthy inventory, not warning rows.
+      (screen.getByTestId('node-technical-details') as HTMLDetailsElement).open = true;
       expect(screen.getByText(/No pending updates.*checked 1 min ago/)).toBeInTheDocument();
       vi.advanceTimersByTime(60_000);
       expect(screen.getByText(/No pending updates.*checked 2 mins ago/)).toHaveAttribute(
@@ -66,6 +68,7 @@ describe('NodeDrawerOverview update evidence', () => {
       />
     ));
 
+    (screen.getByTestId('node-technical-details') as HTMLDetailsElement).open = true;
     expect(screen.getByText('Updates')).toBeInTheDocument();
     expect(screen.getByText(/No pending updates · checked/)).toBeInTheDocument();
   });
@@ -81,9 +84,14 @@ describe('NodeDrawerOverview update evidence', () => {
     ));
 
     const status = screen.getByText('Unavailable · Update check access denied');
+    expect(screen.getByTestId('node-technical-details')).not.toHaveAttribute('open');
+    expect(status.closest('details')).toBeNull();
     expect(status).toHaveClass('whitespace-normal');
     expect(status).not.toHaveClass('truncate');
     expect(screen.getByText(/Other monitoring can still work/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Why update checks are unavailable' }).closest('details'),
+    ).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Why update checks are unavailable' }));
     const help = screen.getByRole('dialog', { name: 'Proxmox update-check access' });
     expect(help).toHaveTextContent('Sys.Modify');
@@ -109,9 +117,17 @@ describe('NodeDrawerOverview update evidence', () => {
     render(() => <NodeDrawerOverview node={node()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Why update checks are unavailable' }));
     const help = screen.getByRole('dialog', { name: 'Proxmox update-check access' });
+    const trigger = screen.getByRole('button', { name: 'Why update checks are unavailable' });
+    const details = screen.getByTestId('node-technical-details') as HTMLDetailsElement;
+    details.open = true;
+    details.open = false;
     setNode({ ...node(), cpu: 0.2 });
     vi.advanceTimersByTime(60_000);
     expect(screen.getByRole('dialog', { name: 'Proxmox update-check access' })).toBe(help);
+    expect(screen.getByRole('button', { name: 'Why update checks are unavailable' })).toBe(trigger);
     expect(screen.getByText(/7 pending.*stale.*checked 2 mins ago/)).toBeInTheDocument();
+    setNode({ ...node(), pendingUpdatesStatus: 'unavailable' });
+    expect(screen.getByRole('dialog', { name: 'Proxmox update-check access' })).toBe(help);
+    expect(screen.getByText('Unavailable · Update check access denied')).toBeVisible();
   });
 });

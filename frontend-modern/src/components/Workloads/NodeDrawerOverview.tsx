@@ -1,5 +1,6 @@
 import { For, Show, Suspense, createMemo, lazy } from 'solid-js';
 
+import { HelpIcon } from '@/components/shared/HelpIcon';
 import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
@@ -7,14 +8,12 @@ import {
   TechnicalDetailsSection,
 } from '@/components/shared/TechnicalDetailsDisclosure';
 import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
-import { HelpIcon } from '@/components/shared/HelpIcon';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import {
   compactDetailRows,
   compactDetailSections,
   makeDetailRow,
   type DetailRow,
-  type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import type { Alert, Disk, HostGPUSensor, Node, Temperature } from '@/types/api';
@@ -402,44 +401,42 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     </Show>
   );
 
-  // Keep the interactive guidance owned by the drawer, rather than rebuilding
-  // its section and help state whenever node readings or relative ages change.
-  const operatorContextSection: DetailSection = {
-    label: 'Summary',
-    get rows() {
-      const primaryTemperature = getCpuTemperature(props.node.temperature);
-      const updates = updateEvidence();
-      const temperatureClass =
-        typeof primaryTemperature === 'number'
-          ? getTemperatureTextClass(primaryTemperature, props.temperatureThresholds)
-          : '';
-      return compactDetailRows([
-        makeDetailRow('Platform', versionLabel() ? `PVE ${versionLabel()}` : null),
-        makeDetailRow(
-          'Pulse coverage',
-          linkedAgentId() ? `Agent ${stripAgentPrefix(linkedAgentId())}` : 'PVE API only',
-        ),
-        updates
-          ? makeDetailRow('Updates', updates.value, {
-              tone: updates.tone,
-              title: updates.title,
-              wrap: true,
-            })
-          : null,
-        typeof primaryTemperature === 'number' &&
-        (temperatureClass.includes('yellow') || temperatureClass.includes('red'))
-          ? makeDetailRow('Temperature', formatTemperature(primaryTemperature), {
-              tone: temperatureClass.includes('red') ? 'danger' : 'warning',
-            })
-          : null,
-      ]);
-    },
-    get footerContent() {
-      return updateEvidence()?.helpContentId ? updateAccessGuidance : undefined;
-    },
+  // Inventory may move into Details, but denied-update guidance stays visible
+  // and owned by the drawer so readings do not recreate an open help dialog.
+  const overviewSections = () => {
+    const primaryTemperature = getCpuTemperature(props.node.temperature);
+    const updates = updateEvidence();
+    const temperatureClass =
+      typeof primaryTemperature === 'number'
+        ? getTemperatureTextClass(primaryTemperature, props.temperatureThresholds)
+        : '';
+    return compactDetailSections([
+      {
+        label: 'Summary',
+        rows: compactDetailRows([
+          makeDetailRow('Platform', versionLabel() ? `PVE ${versionLabel()}` : null),
+          makeDetailRow(
+            'Pulse coverage',
+            linkedAgentId() ? `Agent ${stripAgentPrefix(linkedAgentId())}` : 'PVE API only',
+          ),
+          updates
+            ? makeDetailRow('Updates', updates.value, {
+                tone: updates.tone,
+                title: updates.title,
+                wrap: true,
+              })
+            : null,
+          typeof primaryTemperature === 'number' &&
+          (temperatureClass.includes('yellow') || temperatureClass.includes('red'))
+            ? makeDetailRow('Temperature', formatTemperature(primaryTemperature), {
+                tone: temperatureClass.includes('red') ? 'danger' : 'warning',
+              })
+            : null,
+        ]),
+      },
+    ]);
   };
 
-  const overviewSections = () => [operatorContextSection];
   const exceptionRows = createMemo(() =>
     collectDrawerExceptionRows([...overviewSections(), ...technicalSections()]),
   );
@@ -594,6 +591,8 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
           sections={[{ label: 'Worth checking', rows: exceptionRows() }]}
         />
       </Show>
+
+      {updateAccessGuidance}
 
       <Show when={sensorSections().length > 0}>
         <TechnicalDetailsSection dataTestId="node-drawer-sensors" sections={sensorSections()} />

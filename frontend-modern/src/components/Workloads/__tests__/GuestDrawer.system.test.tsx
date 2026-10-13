@@ -29,13 +29,7 @@ const guest = (overrides: Partial<WorkloadGuest> = {}): WorkloadGuest => ({
   ...overrides,
 });
 
-// Upstream keeps the full record in a collapsed, mounted Details section.
-// Exercise its native open state before judging the retained System row.
-const systemRow = () => {
-  const details = screen.getByTestId('guest-technical-details') as HTMLDetailsElement;
-  details.open = true;
-  return within(details).getByText('System', { selector: 'td' }).closest('tr')!;
-};
+const systemFacts = () => screen.getByTestId('guest-drawer-facts');
 
 afterEach(cleanup);
 
@@ -53,13 +47,15 @@ describe('readable guest System evidence', () => {
           onClose={() => {}}
         />
       ));
-      const value = within(systemRow()).getByText(
+      const value = within(systemFacts()).getByText(
         'Microsoft Windows Server 2025 Datacenter Evaluation • 10.0.26100.1742 (64-bit)',
       );
       expect(value).toBeVisible();
-      expect(value).toHaveClass('whitespace-normal', 'wrap-break-word');
+      expect(value).toHaveClass('whitespace-normal', 'wrap-anywhere');
       expect(value).not.toHaveClass('truncate');
-      expect(systemRow().querySelector('button, [tabindex]')).toBeNull();
+      expect(value.closest('details')).toBeNull();
+      expect(screen.getByTestId('guest-technical-details')).not.toHaveAttribute('open');
+      expect(systemFacts().querySelector('button, [tabindex]')).toBeNull();
     },
   );
 
@@ -70,7 +66,7 @@ describe('readable guest System evidence', () => {
     'keeps an observed name or version without inventing the missing part',
     (osName, osVersion, summary) => {
       render(() => <GuestDrawer guest={guest({ osName, osVersion })} onClose={() => {}} />);
-      expect(within(systemRow()).getByText(summary)).toBeVisible();
+      expect(within(systemFacts()).getByText(summary)).toBeVisible();
     },
   );
 
@@ -78,14 +74,14 @@ describe('readable guest System evidence', () => {
     const [value, setValue] = createSignal(guest());
     render(() => <GuestDrawer guest={value()} onClose={() => {}} />);
     const drawer = screen.getByTestId('guest-technical-details');
-    expect(screen.queryByText('System', { selector: 'td' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('guest-drawer-facts')).not.toBeInTheDocument();
     setValue({ ...value(), osName: 'Debian GNU/Linux', osVersion: '13.7 (trixie)' });
-    expect(within(systemRow()).getByText('Debian GNU/Linux • 13.7 (trixie)')).toBeVisible();
+    expect(within(systemFacts()).getByText('Debian GNU/Linux • 13.7 (trixie)')).toBeVisible();
     setValue({ ...value(), osName: 'Ubuntu', osVersion: '24.04.3 LTS' });
-    expect(within(systemRow()).getByText('Ubuntu • 24.04.3 LTS')).toBeVisible();
+    expect(within(systemFacts()).getByText('Ubuntu • 24.04.3 LTS')).toBeVisible();
     expect(screen.queryByText('Debian GNU/Linux • 13.7 (trixie)')).not.toBeInTheDocument();
     setValue({ ...value(), osName: '', osVersion: '' });
-    expect(screen.queryByText('System', { selector: 'td' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('guest-drawer-facts')).not.toBeInTheDocument();
     expect(screen.getByTestId('guest-technical-details')).toBe(drawer);
   });
 
@@ -96,7 +92,7 @@ describe('readable guest System evidence', () => {
         onClose={() => {}}
       />
     ));
-    expect(within(systemRow()).getByText('Windows • 2025')).toBeVisible();
+    expect(within(systemFacts()).getByText('Windows • 2025')).toBeVisible();
     expect(screen.getByText('Not running')).toBeVisible();
     expect(screen.queryByText('Reported available')).not.toBeInTheDocument();
   });

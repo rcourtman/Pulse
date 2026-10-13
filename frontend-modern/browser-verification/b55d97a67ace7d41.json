@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "c06f13d3b074276bc0fdea7c52b4beb4d27cf412",
+  "verified_at": "2026-10-13T13:36:16.413Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "2569a85a2c339ebc3786c8321b2bfd0e7ac6847ba28c24b4ade5130f844a8baf",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "4bf00886c0d18ed0f619f655956932906796c65e5f6517409959affcbe6bfd40"
+  },
+  "routes": [
+    "/guest (offline production Workloads projection/row/drawer fixture)",
+    "/node (offline production NodeDrawer fixture)",
+    "/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis",
+    "/docs/TROUBLESHOOTING#proxmox-pending-update-access"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Desktop Chromium141 and phone WebKit26; Playwright1.56.1 matches the integration lock; both themes, exact static/runtime/artifact hashes.",
+    "Full long Windows caption remains visible outside closed Details, without truncation or horizontal overflow. Filesystem guidance stays16px desktop/44px phone with an actual captured2px focus outline.",
+    "Unknown filesystems disclose absence rather than zero. Retained /data and disk-trend evidence say last known; backup precautions and alert-first24h trends remain. Fresh synthetic readings remove both stale explanations and the reading-guidance link.",
+    "Node guest warning does not colour the node Memory card. Denied update evidence/help remain outside closed Details and the same open dialog/trigger survive CPU updates, an advanced relative clock and stale-to-unavailable evidence.",
+    "Shipped Docs consumed at both widths with matching native-fetch hashes; all16 final captures opened with the native view_image tool. The phone troubleshooting capture is the actual linked viewport, not an over-ceiling full document."
+  ],
+  "interactions": [
+    "Native row keyboard disclosure/phone tap; reciprocal Tab navigation and Enter/touch filesystem guidance into the actual Docs renderer.",
+    "Synthetic retained/fresh snapshot transitions; actual History/Overview tab activation and closed Details interaction.",
+    "Update HelpIcon keyboard/touch activation, preserved dialog across updates, Learn more popup to shipped Docs, Escape restores the same trigger, Details open/close, true checked success withdraws denial help."
+  ],
+  "limits": "Synthetic observations and credential-free local GET fixtures. No native guest/thaw/restart, Proxmox permission change, QNAP install/update/removal, deployed or release acceptance."
+}

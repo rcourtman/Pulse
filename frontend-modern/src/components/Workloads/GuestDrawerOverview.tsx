@@ -144,10 +144,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       {
         label: 'Summary',
         rows: compactDetailRows([
-          makeDetailRow('System', props.hasOsInfo ? props.guestOsSummary : null, {
-            // The full OS name/version must be readable without a hover title.
-            wrap: true,
-          }),
+          // OS and primary IP lead the facts strip; they are not repeated here.
           makeDetailRow('Pulse coverage', coverageLabel(), {
             title: props.hasWorkloadActionAgent
               ? props.workloadActionAgentTitle
@@ -542,7 +539,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           data-testid="guest-drawer-facts"
           class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
         >
-          <For each={facts()}>{(fact) => <span class="wrap-break-word">{fact}</span>}</For>
+          <For each={facts()}>
+            {(fact) => <span class="max-w-full whitespace-normal wrap-anywhere">{fact}</span>}
+          </For>
           <For each={tagChips()}>
             {(tag) => (
               <span class="max-w-full rounded-full border border-border px-2 py-0.5 text-[11px] break-all">

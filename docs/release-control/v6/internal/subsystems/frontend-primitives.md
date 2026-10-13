@@ -20,6 +20,28 @@
 
 ## Purpose
 
+### Alert-first drawer composition retains usable evidence guidance (13 October 2026)
+
+The guest's full OS caption moves to the visible, wrapping facts strip; it is
+not shortened or made tooltip-only when Summary moves into closed Details.
+Filesystem evidence and its existing reading-guidance link stay outside that
+disclosure, including unknown and last-known readings. The link keeps its
+44px phone target, compact desktop target and keyboard outline.
+
+The node's denied-update explanation and HelpIcon are owned by the drawer,
+outside the demoted Summary and the lifted warning rows. An ordinary same-node
+reading or relative-age update must not replace the open help dialog or its
+trigger. Update evidence wraps in Worth checking. Alert-first 24h cards,
+metric-owned alert colours, on-demand History, closed inventory Details and
+unchanged advice/actions remain. This is presentation/access continuity, not
+native QGA/backup or update-permission recovery.
+
+`NodeDrawerOverview.updateEvidence.test.tsx` and
+`GuestDrawerOverview.filesystems.test.tsx` cover the connected merge outcomes;
+`browser-tests/drawer-composition.cjs` consumes the actual adapter, drawers,
+shared history query and Docs with synthetic observations at desktop/phone
+widths, including keyboard/touch guidance and same-node updates.
+
 ### History honours explicit selected-source staleness (13 October 2026)
 
 The shared memory presentation reads the server's explicit `agent.stale`
