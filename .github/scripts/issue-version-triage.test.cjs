@@ -320,6 +320,117 @@ test("additional topic classification is explicit and fail-quiet for legacy form
   );
 });
 
+test("edited form headings accept Markdown indentation and closing hashes", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  for (const newline of ["\n", "\r\n"]) {
+    for (let level = 1; level <= 6; level += 1) {
+      for (let indent = 0; indent <= 3; indent += 1) {
+        for (const closing of ["", " #", " ######## \t"]) {
+          const heading = (name) => " ".repeat(indent) + "#".repeat(level) + "\t" + name + closing;
+          const body = [heading("Pulse version"), "6.5.0", "",
+            heading("Feedback type"), "Documentation issue", "",
+            heading("Additional actionable topics"), "The second host loses its Docker inventory."]
+            .join(newline);
+          assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0", body);
+          assert.equal(classifyV6FeedbackType(body), "documentation", body);
+          assert.equal(classifyAdditionalActionableTopics(body), true, body);
+        }
+      }
+    }
+  }
+});
+
+test("closing hashes and indentation do not let neighbouring fields become topics", () => {
+  for (const followingField of ["Pulse version", "Additional context", "Logs, screenshots, or diagnostics", "Confirmations"]) {
+    const body = ["  ### Additional actionable topics ###", "None", "",
+      `   ## ${followingField} ####`, "An error outside the declared topic field."].join("\n");
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), false, body);
+  }
+  const body = [" ### Additional actionable topics #", "None", "",
+    "  #### Separate backup problem ###", "Backups belong to the wrong host.", "",
+    "   ### Pulse version ####", "6.5.0"].join("\n");
+  assert.equal(triage.internals.classifyAdditionalActionableTopics(body), true);
+});
+
+test("plain hash-prefixed text cannot declare issue-form metadata", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  for (const prefix of ["####### ", "###", "    ### ", "\t### ", "> ### "]) {
+    const body = [prefix + "Pulse version", "6.5.0", "",
+      prefix + "Feedback type", "Bug / regression", "",
+      prefix + "Additional actionable topics", "Copied template text."].join("\n");
+    assert.equal(extractPulseVersion("No version in title", body), null, body);
+    assert.equal(classifyV6FeedbackType(body), null, body);
+    assert.equal(classifyAdditionalActionableTopics(body), null, body);
+  }
+  // A seven-hash line inside a topic is ordinary field content, not a boundary.
+  assert.equal(classifyAdditionalActionableTopics(
+    "### Additional actionable topics\nNone\n####### Pulse version\nA second symptom.\n"
+  ), true);
+});
+
+test("only a separated final hash run closes an issue-form heading", () => {
+  for (const suffix of ["#", " ### example", " ## #"]) {
+    const body = `### Additional actionable topics${suffix}\nA second bug.\n`;
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), null, body);
+  }
+});
+
+test("edited headings stay hidden inside comments and pasted code", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  const copied = [" ### Pulse version ###", "6.4.1", "  ### Feedback type ###",
+    "Bug / regression", "   ### Additional actionable topics ###", "Copied example."].join("\n");
+  for (const [open, close] of [["<!--", "-->"], ["```markdown", "```"], ["~~~markdown", "~~~"]]) {
+    const body = [open, copied, close, "  ### Pulse version ###", "unknown",
+      "  ### Feedback type ###", "Documentation issue", "  ### Additional actionable topics ###", "None"]
+      .join("\n");
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), null, body);
+    assert.equal(classifyV6FeedbackType(body), "documentation", body);
+    assert.equal(classifyAdditionalActionableTopics(body), false, body);
+  }
+});
+
+test("edited version headings retain fenced values and authoritative unknowns", () => {
+  for (const value of ["6.5.0-rc.1", "unknown", "6.5"]) {
+    const body = [" ### Pulse version ###", "```text", value, "```", "",
+      "  ### Agent version ###", "6.4.5"].join("\n");
+    assert.equal(triage.internals.extractPulseVersion("Upgrade from v6.4.5", body),
+      value === "6.5.0-rc.1" ? value : null, body);
+  }
+});
+
+test("label consumer uses edited headings without changing Community-owned state", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2900, title: "Upgrade from v6.4.5",
+    body: " ### Feedback type ###\nBug / regression\n  ### Pulse version ###\n6.5.0\n" +
+      "   ### Additional actionable topics ###\nThe second host loses Docker inventory.\n",
+    labels: ["enhancement", "needs-retest-on-latest", "needs-human", "operator-reviewed", "affects-6.4.5"]
+      .map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels),
+    [["affects-6.5.0", "bug", "needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2900]);
+});
+
+test("invalid headings cannot create classification or decomposition mutations", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2901, title: "An example in a documentation report",
+    body: "####### Feedback type\nBug / regression\n####### Pulse version\n6.5.0\n" +
+      "####### Additional actionable topics\nCopied template text.\n",
+    labels: ["documentation", "needs-retest-on-latest", "needs-human", "operator-reviewed"]
+      .map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createLabel, []);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+});
+
 test("topic classification reads later paragraphs after an empty first line", () => {
   for (const firstLine of ["None", "<!-- List distinct topics here. -->", "_No response_"]) {
     const body = [
