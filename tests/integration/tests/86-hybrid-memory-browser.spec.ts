@@ -1,31 +1,31 @@
 import { expect, test, type WebSocketRoute } from "@playwright/test";
 
-// Collapsed table borders can extend outside an overflow container even when
-// every reading is fully visible. Measure the text, not the decorative tbody.
+// A table section can extend outside an overflow container even when every
+// reading is fully visible. Measure text lines, not the decorative tbody edge.
 function textIsUnclipped(element: HTMLElement, bottomClearance: number) {
   const text = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   let found = false;
   for (let node = text.nextNode(); node; node = text.nextNode()) {
     if (!node.textContent?.trim()) continue;
-      const clip = {
-        left: 0,
-        top: 0,
-        right: window.innerWidth,
-        bottom: window.innerHeight - bottomClearance,
-      };
-      for (let parent: HTMLElement | null = node.parentElement; parent; parent = parent.parentElement) {
-        const style = getComputedStyle(parent);
-        if (style.visibility !== "visible" || Number(style.opacity) === 0) return false;
-        const rect = parent.getBoundingClientRect();
-        if (/^(auto|scroll|hidden|clip)$/.test(style.overflowX)) {
-          clip.left = Math.max(clip.left, rect.left + parent.clientLeft);
-          clip.right = Math.min(clip.right, rect.left + parent.clientLeft + parent.clientWidth);
-        }
-        if (/^(auto|scroll|hidden|clip)$/.test(style.overflowY)) {
-          clip.top = Math.max(clip.top, rect.top + parent.clientTop);
-          clip.bottom = Math.min(clip.bottom, rect.top + parent.clientTop + parent.clientHeight);
-        }
+    const clip = {
+      left: 0,
+      top: 0,
+      right: window.innerWidth,
+      bottom: window.innerHeight - bottomClearance,
+    };
+    for (let parent: HTMLElement | null = node.parentElement; parent; parent = parent.parentElement) {
+      const style = getComputedStyle(parent);
+      if (style.visibility !== "visible" || Number(style.opacity) === 0) return false;
+      const rect = parent.getBoundingClientRect();
+      if (/^(auto|scroll|hidden|clip)$/.test(style.overflowX)) {
+        clip.left = Math.max(clip.left, rect.left + parent.clientLeft);
+        clip.right = Math.min(clip.right, rect.left + parent.clientLeft + parent.clientWidth);
       }
+      if (/^(auto|scroll|hidden|clip)$/.test(style.overflowY)) {
+        clip.top = Math.max(clip.top, rect.top + parent.clientTop);
+        clip.bottom = Math.min(clip.bottom, rect.top + parent.clientTop + parent.clientHeight);
+      }
+    }
     const range = document.createRange();
     range.selectNodeContents(node);
     const lines = [...range.getClientRects()].filter((rect) => rect.width > 0 && rect.height > 0);
@@ -289,21 +289,21 @@ test("hybrid guest memory follows canonical snapshots in the browser", async ({
   expect(errors).toEqual([]);
 });
 
-test("memory text geometry rejects clipping without rejecting collapsed borders", async ({ page }, testInfo) => {
+test("memory text geometry rejects clipping without rejecting table edges", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Chromium geometry controls");
   for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     await page.setContent(`
       <div id="clip" style="width:200px; overflow:hidden">
-        <table style="width:100%; border-collapse:collapse">
+        <table style="width:220px; border-collapse:collapse">
           <tbody style="border:4px solid black">
-            <tr><th colspan="2" style="padding:8px">Memory</th></tr>
-            <tr><td style="padding:8px">Total</td><td style="padding:8px">100 MB</td></tr>
-            <tr><td style="padding:8px">Free</td><td style="padding:8px">100 MB</td></tr>
+            <tr><th colspan="2" style="padding:24px">Memory</th></tr>
+            <tr><td style="padding:24px">Total</td><td style="padding:24px">100 MB</td></tr>
+            <tr><td style="padding:24px">Free</td><td style="padding:24px">100 MB</td></tr>
           </tbody>
         </table>
       </div>`);
-    // Deliberately clipped collapsed borders do not obscure the five readings.
+    // The wider table clips its decorative edge, not any of the five readings.
     await expect(page.locator("tbody")).not.toBeInViewport({ ratio: 1 });
     const cells = page.locator("th, td");
     await expect(cells).toHaveCount(5);
@@ -322,7 +322,7 @@ test("memory text geometry rejects clipping without rejecting collapsed borders"
       await page.locator("#clip").evaluate((element, value) => element.setAttribute("style", value), style);
       expect(await heading.evaluate(textIsUnclipped, 64), style).toBe(false);
     }
-    await page.setContent('<td></td><p><span style="display:inline-block; width:10px; overflow:hidden">100 MB</span></p>');
+    await page.setContent('<p><span style="display:inline-block; width:10px; overflow:hidden">100 MB</span></p>');
     expect(await page.locator("p").evaluate(textIsUnclipped, 64)).toBe(false);
     await page.locator("span").evaluate((element) => element.setAttribute("style", "visibility:hidden"));
     expect(await page.locator("p").evaluate(textIsUnclipped, 64)).toBe(false);
