@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "14b9b3fbaca62696741aa19845eedbde1cbbb28c",
+  "verified_at": "2026-10-13T15:41:16.054533Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/agentInstallCommand.ts",
+    "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/agentInstallCommand.ts": "b6bdfc4a8a8b9253d1dfedb651ed07dc7945542382a672baf2c89b8d2482b18b",
+    "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx": "f2a75e62b318b48f528262c77b0fd3f778d95c535575da6d1873869632e126ff"
+  },
+  "routes": [
+    "/browser-tests/unix-private-install.html (offline actual Settings installer/state/TokenRevealDialog/Agent Doctor consuming fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Chromium141 desktop and WebKit26 phone, both light and dark; Playwright1.56.1 matches integration lock. 2811 source inputs and three served artifact hashes match14b9b3fb.",
+    "Synthetic token reveal stays separate from Unix commands; Linux/NAS and FreeBSD private-file alternatives are credential-free and preserve trusted-file instructions. Actual clipboard values match displayed commands.",
+    "Doctor authentication repair uses the new selected-tool reader and existing identity/profile; ordinary saved-state update and uninstall still need no new token/prompt. Custom CA and URL survive the real state/copy consumers.",
+    "Optional authentication confirms tokenless commands without any private-file or prompt block. Token reveal does not mint a second credential.",
+    "All16 final captures opened natively; readable fields/advice and keyboard outlines, no page horizontal overflow; browser/server closed."
+  ],
+  "interactions": [
+    "Generate synthetic host token; copy separate token; dismiss with Escape and reopen existing reveal without reminting.",
+    "Keyboard Enter/phone tap on actual Linux installer/private-file copy and Doctor row expansion; actual Doctor repair copy.",
+    "Advanced URL/custom CA edits into actual lifecycle commands; preserve identity/flags for credential repair and saved-state update/removal semantics.",
+    "Confirm optional tokenless installation after synthetic auth transition."
+  ],
+  "limits": "Modelled API/agent/privilege/installer data, no native QNAP or backend-mirror, deployment/publication/release/reporter acceptance."
+}
