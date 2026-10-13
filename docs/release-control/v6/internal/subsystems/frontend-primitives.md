@@ -285,7 +285,10 @@ Retained and freshness-unknown values keep a visible cue in bars, sparklines,
 the hover History lens and host-capacity mode; compact layouts shorten only the
 visible label, not the accessible original source/time explanation. Sparkline
 accessible values never call retained, unknown or unavailable memory current.
-Unavailable numeric carriers remain N/A while recorded History stays intact.
+An unavailable reading shows the cell's dash in bars mode (N/A only as a
+sparkline value) while recorded History stays intact; it has no visible label,
+because no number is left to qualify, and its reason stays in the cell title,
+the chart's native hover title and assistive text.
 An independent qualified memory reading is not paused by a disk deferral.
 Neither Last seen, backup completion nor running power state renews memory.
 Unannotated unrelated platforms and actual zero readings retain their meaning.
@@ -295,11 +298,18 @@ the backend marks `MayIncludeCache`) keeps its numbers, colour and thresholds;
 the shared presentation adds `mayIncludeCache` and a `cacheNote` saying a high
 percentage alone does not show memory pressure and which fix can supply the
 guest's own figure. A VM row shows `May include cache` (`Cache?` in compact
-layouts); a container, whose Proxmox reading is always the cgroup value, keeps
-the caveat in the bar tooltip and drawer instead of a label on every row. A
-retained or freshness-unknown reading keeps its own freshness label with the
-caveat in its explanation, an unavailable reading is never qualified, and the
-drawer states the note as visible text in `About this reading`.
+layouts) only while the guest's own memory meets its warning or critical
+threshold, the figure that colours the bar in host-share mode too, which is
+when a cache-inclusive figure reads as pressure; below that the caveat is the
+cell title, the chart's native hover title and assistive text, not a label on every
+agentless VM. A container, whose Proxmox reading is always the cgroup value,
+keeps the caveat in the bar tooltip and drawer instead of a label on every
+row. A retained or freshness-unknown reading keeps its own freshness label
+with the caveat in its explanation, an unavailable reading is never qualified,
+and the drawer states the note as visible text in `About this reading`. An
+unavailable explanation names only what is known: a powered-off guest reads
+`Unavailable while the guest is powered off.`, and no message says
+`Unknown source`.
 Agent setup advice first states that setup, restarts and live guest-agent probes
 must be deferred during backups or a guest incident. This precaution stays with
 VM/container fallback guidance regardless of freshness or a reported backup lock;
@@ -313,6 +323,17 @@ production rows and drawers, visible/accessible labels, pointer/touch/keyboard,
 light/dark and narrow/desktop layouts using synthetic observations only.
 Presentation acceptance does not establish native thaw, covered-filesystem
 writes, guest liveness, service restoration or reporter recovery.
+
+### Node drawer CPU temperature reads the backend reading
+
+The node drawer's Thermals chart reading, its Summary temperature row and
+`getNodeDrawerCurrentMetrics` read `Node.cpuTemperature`, the backend's
+primary CPU reading, which the chart's stored line records under the same
+rule. `getCpuTemperature` (a frontend maximum over package, CPU maximum and
+cores) is removed from `utils/temperature.ts`; no drawer may rebuild a reading
+from `temperature` details. Proof: `NodeDrawer.test.tsx` (the chart's live
+fallback shows the backend value while the details hold a hotter core) and the
+`nodeDrawerModel` branch tests.
 
 ### Drawer attention detail line and temperature alert floor — issue #2068
 
@@ -569,10 +590,14 @@ previous data and fresh resumption with production components and CSS on desktop
 Chromium and touch WebKit. Synthetic observations do not establish the native
 command-ID cause, guest thaw, fresh History collection or containing release.
 
-The shipped row also keeps a visible filesystem provenance cue in every disk
+The shipped row also keeps a filesystem provenance cue in every disk
 presentation: resting bars, selected sparklines, the pointer/focus history lens
 and the pre-sample empty state. `prev-` is labelled **Last known** (**Prior** in
-compact rows); an unavailable read is **Unavailable** (**N/A** in compact rows).
+compact rows). An unavailable read shows the cell's dash with no visible label
+(a stopped VM or missing guest agent is a setup state, not news), except a
+broken read the user can fix: **No permission** or **Agent error** (**Denied**
+or **Error** in compact rows), in amber. Every reason stays in the cell title
+and the sparkline's native hover title.
 The full fixed-reason explanation is ordinary assistive text as well as the
 existing cell title and drawer content, not a live region repeated across a
 fleet. Retained sparkline values are announced as **last known**, never current;
@@ -1276,7 +1301,7 @@ display identity. The presence of discovery routing does not enable Agent-only
 disk-throughput charts. Explicit Agent linkage owns that capability distinction.
 `nodeDrawerModel.branchcov0713.test.ts` pins target precedence and unsupported
 target fallback, while `NodeDrawer.test.tsx` verifies the chart request and
-API-only chart groups through the rendered History tab.
+API-only chart groups through the rendered Overview charts.
 
 Platform inventory presentation has one structural owner across provider pages,
 drawers, and inline detail rows. `PlatformTableShell` owns framed page tables;
@@ -5489,31 +5514,49 @@ The Proxmox guest and node drawers (`GuestDrawerOverview.tsx`,
 2026-10-13 (demand ledger "Drawer Overview leads with attention and trends",
 a named bet): a grid of equal-weight inventory cards buried the drawer's job.
 Their Overview leads with active alerts (or one "No active alerts" line), then
-24h trend cards for the metrics the row shows, which add the time dimension
-the row lacks rather than restating it. Any warning- or danger-toned detail row
+the resource's history charts (`GuestDrawerHistory`, lazy-loaded) opening on
+24 hours with the range picker beside them. These drawers have no History tab
+(nor, since the same change was carried to them, do the Docker host drawer and
+the shared resource-detail drawer for agents, containers and other platform
+rows):
+by maintainer decision on 2026-10-13 the tab was removed because it repeated
+Overview's charts at another range in another style. The charts poll only
+while Overview shows, and before any history is stored they show the live
+reading, qualified "current" or "last known". An active alert on a charted
+metric tones that reading and, when it carries a numeric trigger, draws it as
+a dashed line in its severity colour; `getDrawerChartAlerts` maps alert types
+to chart metrics and converts I/O triggers from the alert engine's MiB/s to
+the charts' bytes per second. Each line is a bucket average, so a tinted band
+behind it spans every bucket's own lowest and highest reading
+(`buildGuestDrawerHistoryBandPath`): a short spike stays visible after
+downsampling. While a time is inspected the readout names that bucket's peak
+when it rises at least a tenth of the plot above the average, and the
+accessible value states each reading's average and range. Any
+warning- or danger-toned detail row
 is lifted into a "Worth checking" section in front, whichever section owns it,
 so demotion never hides a reason a reading cannot be trusted. Guest
 filesystems, physical disks, RAID, node GPU and NVMe sensor readings (which
 carry no heat tone of their own), and any availability check that is not both
 healthy and fresh stay visible; "availability checks passing" is said only of
-fresh healthy evidence. Trend cards withhold the live value of an offline or
-stale node, and a guest's withdrawn memory reading shows no bytes either.
-A node card is coloured only by the node's own alerts, which
+fresh healthy evidence. An offline or stale node says so in one line above
+its charts, which then take no live fallback reading, and a guest's withdrawn
+memory reading shows no memory size either.
+A node chart draws alert lines only for the node's own alerts, which
 `ProxmoxNodesTable.tsx` passes as `ownAlerts` by identity match; the drawer's
 `alerts` list also carries its guests' alerts through the node-name match. A
-one-line facts strip carries OS, address, a healthy last completed backup and
-tags. The complete inventory sits in a closed "Details"
+one-line facts strip carries OS, the amounts the charts' percentages are of
+(guest vCPUs and used-of-total RAM and disk; node CPUs and used-of-total RAM
+and root disk, capacity only while its readings are withheld), address, a
+healthy last completed backup and tags. The complete inventory sits in a closed "Details"
 `TechnicalDetailsDisclosure` with `keepMounted`, so its rows stay in the
 document for find-in-page and tests while hidden. Other drawers keep the rule
 above until that bet is graded. "Worth checking" renders through
-`DrawerExceptionList.tsx` directly under the alerts line, above the trend
-cards: one compact label/value line per lifted row with the shared
-`detailValueToneClass` tone, not a card per section. Each trend card marks its
-headline value "now" and states its range as "24h low–high", so the live
-number is not read as the last point of the stored line. A guest memory reading
-from a cache-inclusive source says "may include cache" on the Memory card
-itself; the full note (why, and what to do) is the Details row "About this
-reading" and appears once. `DetailSectionTable` keeps the single bordered table at narrow widths
+`DrawerExceptionList.tsx` directly under the alerts line, above the charts:
+one compact label/value line per lifted row with the shared
+`detailValueToneClass` tone, not a card per section. A guest memory reading
+from a cache-inclusive source says "may include cache" beside its RAM amount
+in the facts strip; the full note (why, and what to do) is the Details row
+"About this reading" and appears once. `DetailSectionTable` keeps the single bordered table at narrow widths
 where density matters, then presents those same canonical rows as bounded
 section cards on desktop. Desktop cards share the available row width, stretch
 to the same row height, and use stable three- or four-column tracks. An
@@ -8842,6 +8885,21 @@ stay warnings. Node Details values wrap rather than truncate. This preserves
 full reasons, agent IDs and CPU models at desktop and phone widths.
 
 
+
+Denied update-list access exposes visible guidance beside that status through
+the shared HelpIcon and help-content registry. It explains that inventory and
+metrics use separate permission checks, preserves the choice to monitor with
+read-only access, and describes Sys.Modify as broader access that also permits
+refreshing package indexes. A denied response does not establish the exact
+missing privilege or an empty update list. Status text wraps through the shared
+detail-row contract at phone widths, including retained counts and checked time.
+The Summary section owns its help control while
+readings and relative timestamps update. The shared help dialog remains inside
+the viewport with scrollable content, keyboard dismissal and focus return.
+Current-source browser receipts under `frontend-modern/browser-verification/`
+cover desktop, intermediate, phone and short landscape layouts. These checks
+establish presentation and interaction, not installed Proxmox permissions or
+released acceptance.
 
 ### Docker drawers expose reduced helper coverage without actions
 

@@ -13,7 +13,20 @@ vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
 }));
 
 vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
-  GuestDrawerHistory: () => <div data-testid="docker-host-history" />,
+  GuestDrawerHistory: (props: {
+    target: { resourceType: string; resourceId: string };
+    range: string;
+    enabled?: boolean;
+    onRangeChange?: (range: string) => void;
+  }) => (
+    <div
+      data-testid="docker-host-history"
+      data-target={props.target.resourceId}
+      data-range={props.range}
+      data-enabled={String(props.enabled)}
+      data-range-picker={String(Boolean(props.onRangeChange))}
+    />
+  ),
   GuestDrawerHistoryRangeSelect: () => <select aria-label="History range" />,
 }));
 
@@ -93,6 +106,19 @@ describe('DockerHostDrawer open alerts', () => {
     expect(section).toHaveTextContent("Docker host 'Docker 1' is offline");
     expect(section).toHaveTextContent('Service backend-sftp has 0/2 running tasks');
     expect(section).not.toHaveTextContent('Another host service is down');
+  });
+});
+
+describe('DockerHostDrawer history', () => {
+  it('charts history on Overview with its range picker, and pauses it behind Manage', () => {
+    render(() => <DockerHostDrawer host={host()} />);
+    expect(screen.queryByRole('tab', { name: 'History' })).toBeNull();
+    const history = screen.getByTestId('docker-host-history');
+    expect(history).toHaveAttribute('data-range', '24h');
+    expect(history).toHaveAttribute('data-range-picker', 'true');
+    expect(history).toHaveAttribute('data-enabled', 'true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+    expect(screen.getByTestId('docker-host-history')).toHaveAttribute('data-enabled', 'false');
   });
 });
 

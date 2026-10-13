@@ -186,7 +186,7 @@ describe('ResourceDetailDrawer for Docker containers', () => {
     expect(onResourceActionSettled).not.toHaveBeenCalled();
   });
 
-  it('adds a metrics history tab for app-containers with a metrics target', async () => {
+  it('charts metrics history on Overview for app-containers with a metrics target', async () => {
     render(() => (
       <ResourceDetailDrawer
         resource={resource({
@@ -198,15 +198,14 @@ describe('ResourceDetailDrawer for Docker containers', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-
+    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument();
     const history = screen.getByTestId('container-history');
     expect(history).toHaveAttribute('data-resource-type', 'app-container');
     expect(history).toHaveAttribute('data-resource-id', 'abc123def456');
     expect(history).toHaveAttribute('data-cpu', '75');
   });
 
-  it('omits the history tab when no metrics target resolves', () => {
+  it('omits history charts when no metrics target resolves', () => {
     render(() => (
       <ResourceDetailDrawer
         resource={resource({
@@ -217,7 +216,7 @@ describe('ResourceDetailDrawer for Docker containers', () => {
       />
     ));
 
-    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('container-history')).not.toBeInTheDocument();
   });
 
   it('renders container runtime facts in the table-row summary', () => {

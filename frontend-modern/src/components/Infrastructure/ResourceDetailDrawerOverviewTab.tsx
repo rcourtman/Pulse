@@ -11,6 +11,8 @@ import { useWebSocket } from '@/contexts/appRuntime';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { getAlertsForUnifiedResource } from '@/utils/alerts';
+import { GuestDrawerHistory } from '@/components/Workloads/GuestDrawerHistory';
+import { getDrawerChartAlerts } from '@/components/Workloads/drawerOverviewModel';
 import { formatUptime, formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
@@ -328,12 +330,15 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     Boolean(drawer.facetBundleError());
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
-  const attentionItems = () => {
-    const alerts = getAlertsForUnifiedResource(
-      resource(),
-      activeAlerts,
-      alertsActivation.detectionEnabled(),
+  const resourceAlerts = () =>
+    getAlertsForUnifiedResource(resource(), activeAlerts, alertsActivation.detectionEnabled());
+  const chartAlerts = () =>
+    getDrawerChartAlerts(
+      resourceAlerts(),
+      drawer.metricsHistoryGroups().flatMap((group) => group.series.map((series) => series.metric)),
     );
+  const attentionItems = () => {
+    const alerts = resourceAlerts();
     const items: DrawerAttentionItem[] = alerts.map((alert) => ({
       id: alert.id,
       message: alert.message,
@@ -379,6 +384,24 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
   return (
     <div class="space-y-3">
       <DrawerAttentionSection items={attentionItems()} />
+      {/* Stored history leads the reading path: the charts answer "is this
+          normal or getting worse?" before the inventory below. */}
+      <Show when={drawer.metricsHistoryTarget()}>
+        {(target) => (
+          <div data-testid="resource-metrics-history">
+            <GuestDrawerHistory
+              target={target()}
+              range={drawer.metricsHistoryRange()}
+              onRangeChange={drawer.setMetricsHistoryRange}
+              enabled={drawer.activeTab() === 'overview'}
+              currentMetrics={drawer.metricsHistoryCurrentMetrics()}
+              deferredMetrics={drawer.metricsHistoryDeferredMetrics()}
+              groups={drawer.metricsHistoryGroups()}
+              alerts={chartAlerts()}
+            />
+          </div>
+        )}
+      </Show>
       <TechnicalDetailsSection dataTestId="resource-technical-details">
         <InlineResourceSummaryTables
           resource={resource()}

@@ -275,7 +275,7 @@ describe('GuestRow', () => {
     });
 
     it('renders unknown canonical telemetry as unavailable instead of reported zero', () => {
-      renderGuestRow({
+      const { container } = renderGuestRow({
         guest: makeGuest({
           cpu: 0,
           networkIn: 0,
@@ -296,7 +296,10 @@ describe('GuestRow', () => {
       });
 
       expect(screen.queryByTestId('cpu-bar')).toBeNull();
-      expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'true');
+      expect(screen.queryByTestId('memory-bar')).toBeNull();
+      const memoryCell = container.querySelector('[data-workload-col="memory"]')!;
+      expect(memoryCell).toHaveAttribute('title', 'Unavailable.');
+      expect(memoryCell).toHaveTextContent(/^-/);
       expect(screen.queryByText('0 B/s')).toBeNull();
       expect(screen.queryByText('0s')).toBeNull();
       expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(4);
@@ -358,7 +361,18 @@ describe('GuestRow', () => {
         ],
       );
       renderGuestRow({
-        guest: makeGuest({ memory: makeMemory({ used: 2 * 1024 ** 3, total: 4 * 1024 ** 3 }) }),
+        guest: makeGuest({
+          memory: makeMemory({
+            used: 2 * 1024 ** 3,
+            total: 4 * 1024 ** 3,
+            // A current reading: the chart keeps its own title on hover.
+            observation: {
+              state: 'current',
+              source: 'guest-agent-meminfo',
+              observedAt: '2026-09-30T11:00:00Z',
+            },
+          }),
+        }),
         visibleColumnIds: ['name', 'memory'],
         memoryDisplayBasis: 'host',
         parentMemoryTotal: 16 * 1024 ** 3,
@@ -389,7 +403,8 @@ describe('GuestRow', () => {
         memoryDisplayBasis: 'host',
       });
 
-      expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'true');
+      expect(screen.queryByTestId('memory-bar')).toBeNull();
+      expect(screen.getByTitle('Host memory total unavailable')).toHaveTextContent('-');
     });
 
     it('does not inflate a sub-one-percent host memory share', () => {
@@ -756,7 +771,13 @@ describe('GuestRow', () => {
         setGuest(makeGuest({ status: 'stopped', diskStatusReason: undefined }));
         const cell = container.querySelector('[data-workload-col="disk"]')!;
         expect(screen.queryByTestId('disk-bar')).toBeNull();
-        expect(cell).toHaveTextContent('Unavailable');
+        // A stopped VM has no filesystem reading to give: the dash says so,
+        // and the reason is the title and assistive text, not a caption.
+        expect(cell.querySelector('[data-workload-disk-read-status]')).toHaveClass('sr-only');
+        expect(cell.querySelector('[aria-hidden="true"]')).toBeNull();
+        expect(cell).toHaveTextContent(
+          'Guest filesystem stats unavailable while the VM is stopped.',
+        );
         expect(cell).toHaveAccessibleDescription();
         expect(cell.getAttribute('title')).toBe(
           'Guest filesystem stats unavailable while the VM is stopped.',
@@ -925,7 +946,7 @@ describe('GuestRow', () => {
           });
           expect(screen.queryByTestId('disk-bar')).toBeNull();
           const cell = container.querySelector('[data-workload-col="disk"]')!;
-          expect(cell).toHaveTextContent('Unavailable');
+          expect(cell.querySelector('[data-workload-disk-read-status]')).toHaveClass('sr-only');
           const chart = cell.querySelector('[role="img"]');
           if (chart) expect(chart.getAttribute('aria-label')).not.toMatch(/50%/);
         },
@@ -1006,15 +1027,21 @@ describe('GuestRow', () => {
             metricDisplayMode: mode,
           });
           const notice = container.querySelector('[data-workload-disk-read-status]');
-          expect(notice).toHaveTextContent('Unavailable');
+          // A deferral is not a fault the user can fix, so no visible caption.
+          expect(notice).toHaveClass('sr-only');
           expect(notice).toHaveTextContent(message);
           expect(notice).not.toHaveTextContent('Last known');
           // The reason is on hover too, not only for screen readers.
-          expect(notice).toHaveAttribute('title', message);
+          expect(container.querySelector('[data-workload-col="disk"]')).toHaveAttribute(
+            'title',
+            message,
+          );
+          if (mode === 'sparklines')
+            expect(screen.getByTestId('metric-mini-sparkline')).toHaveAttribute('title', message);
         },
       );
 
-      it(`keeps a setup gap muted and a broken ${mode} read amber`, () => {
+      it(`captions only a broken ${mode} read, in amber, and leaves a setup gap to the dash`, () => {
         const render = (diskStatusReason: string) =>
           renderGuestRow({
             guest: makeGuest({
@@ -1025,10 +1052,24 @@ describe('GuestRow', () => {
             visibleColumnIds: ['name', 'disk'],
             metricDisplayMode: mode,
           }).container.querySelector('[data-workload-disk-read-status]');
-        expect(render('vm-stopped')?.className).toContain('text-muted');
-        expect(render('agent-disabled')?.className).toContain('text-muted');
-        expect(render('permission-denied')?.className).toContain('text-amber-700');
-        expect(render('prev-agent-error')?.className).toContain('text-amber-700');
+        for (const reason of ['vm-stopped', 'agent-disabled', 'agent-not-running']) {
+          const notice = render(reason);
+          expect(notice).toHaveClass('sr-only');
+          expect(notice?.querySelector('[aria-hidden="true"]')).toBeNull();
+        }
+        const denied = render('permission-denied');
+        expect(denied?.className).toContain('text-amber-700');
+        expect(denied?.querySelector('[aria-hidden="true"]')).toHaveTextContent(/^No permission$/);
+        expect(denied?.querySelector('.sr-only')).toHaveTextContent('Permission denied.');
+        const agentError = render('agent-error');
+        expect(agentError?.className).toContain('text-amber-700');
+        expect(agentError?.querySelector('[aria-hidden="true"]')).toHaveTextContent(
+          /^Agent error$/,
+        );
+        // A retained reading says so first; its reason stays amber.
+        const retained = render('prev-agent-error');
+        expect(retained?.className).toContain('text-amber-700');
+        expect(retained?.querySelector('[aria-hidden="true"]')).toHaveTextContent(/^Last known$/);
       });
 
       it(`withdraws the ${mode} notice only on a fresh same-VM observation`, () => {
@@ -1128,10 +1169,19 @@ describe('GuestRow', () => {
         }),
       );
       notice = container.querySelector('[data-workload-disk-read-status]');
-      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('N/A');
-      expect(notice?.querySelector('.sr-only')).toHaveTextContent(
+      expect(notice?.querySelector('[aria-hidden="true"]')).toBeNull();
+      expect(notice).toHaveTextContent(
         'Guest reads paused while Proxmox reports a VM operation lock',
       );
+      setGuest(
+        makeGuest({
+          diskStatusReason: 'permission-denied',
+          disk: makeDisk({ total: 0, used: 0, usage: -1 }),
+        }),
+      );
+      notice = container.querySelector('[data-workload-disk-read-status]');
+      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent(/^Denied$/);
+      expect(notice?.querySelector('.sr-only')).toHaveTextContent('Permission denied.');
     });
 
     it('leaves independent fresh data and non-VM rows unmarked', () => {
@@ -1191,8 +1241,11 @@ describe('GuestRow', () => {
       setGuest(agentGuest({ agentStale: true, status: 'stopped', diskStatusReason: 'vm-stopped' }));
       expect(screen.queryByTestId('disk-bar')).toBeNull();
       notice = container.querySelector('[data-workload-disk-read-status]');
-      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('Unavailable');
-      expect(notice).toHaveAttribute(
+      expect(notice?.querySelector('[aria-hidden="true"]')).toBeNull();
+      expect(notice).toHaveTextContent(
+        'Guest filesystem stats unavailable while the VM is stopped.',
+      );
+      expect(container.querySelector('[data-workload-col="disk"]')).toHaveAttribute(
         'title',
         'Guest filesystem stats unavailable while the VM is stopped.',
       );
@@ -1363,27 +1416,45 @@ describe('GuestRow', () => {
           visibleColumnIds: ['name', 'memory'],
           metricHistory: history,
         });
-        expect(container.querySelector(noticeSelector)).toHaveTextContent('Unavailable');
+        // No number is shown, so a visible "Unavailable" would only repeat
+        // the empty cell; the reason stays assistive text and the cell title.
+        const notice = container.querySelector(noticeSelector);
+        expect(notice).toHaveClass('sr-only');
+        expect(notice).toHaveTextContent(
+          'Unavailable. Source: QEMU guest agent. Observed: 2026-09-30 11:00:00 UTC.',
+        );
+        expect(container.querySelector('[data-workload-col="memory"]')).toHaveAttribute(
+          'title',
+          notice?.textContent ?? '',
+        );
         if (mode === 'sparklines') {
           expect(
             screen.getByRole('img', { name: 'test-vm memory history, unavailable N/A' }),
           ).toBeInTheDocument();
+          // The chart fills the cell, so it carries the reason on hover too.
+          expect(screen.getByTestId('metric-mini-sparkline')).toHaveAttribute(
+            'title',
+            notice?.textContent ?? '',
+          );
           expect(container.querySelector('path')?.getAttribute('d')).toContain('M');
           expect(screen.queryByText('50%')).not.toBeInTheDocument();
         } else {
-          expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'true');
-          expect(screen.getByTestId('memory-bar')).toHaveAttribute(
-            'data-reading-state',
-            'unavailable',
-          );
+          // An empty bar reading N/A becomes the dash the disk cell uses.
+          expect(screen.queryByTestId('memory-bar')).not.toBeInTheDocument();
+          expect(container.querySelector('[data-workload-col="memory"]')).toHaveTextContent('-');
+          expect(screen.queryByText('50%')).not.toBeInTheDocument();
         }
       });
 
-      it(`says a current VM reading from a cache-inclusive source may include cache in ${mode}`, () => {
+      it(`says a high current VM reading from a cache-inclusive source may include cache in ${mode}`, () => {
         const { container } = renderGuestRow({
           guest: makeGuest({
             type: 'qemu',
-            memory: observation('current', observedAt, 'status-mem'),
+            memory: {
+              ...observation('current', observedAt, 'status-mem'),
+              used: 0.8 * 4294967296,
+              usage: 80,
+            },
           }),
           metricDisplayMode: mode,
           visibleColumnIds: ['name', 'memory'],
@@ -1399,11 +1470,127 @@ describe('GuestRow', () => {
         if (mode === 'sparklines') {
           // The value itself is a current reading; only its source is qualified.
           expect(
-            screen.getByRole('img', { name: 'test-vm memory history, current 50%' }),
+            screen.getByRole('img', { name: 'test-vm memory history, current 80%' }),
           ).toBeInTheDocument();
         } else {
           expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-reading-state', 'current');
         }
+      });
+
+      it(`leaves a normal cache-inclusive VM reading unlabelled in ${mode}`, () => {
+        // Nothing reads as pressure below the guest's warning threshold, so
+        // the caveat stays in the bar tooltip and drawer.
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'qemu',
+            memory: observation('current', observedAt, 'status-mem'),
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        const notice = container.querySelector(noticeSelector);
+        expect(notice).toHaveClass('sr-only');
+        expect(notice).toHaveTextContent('may include cached memory');
+        expect(container.querySelector('[data-workload-col="memory"]')).toHaveAttribute(
+          'title',
+          notice?.textContent ?? '',
+        );
+        if (mode === 'bars') {
+          expect(screen.getByTestId('memory-bar').getAttribute('data-reading-message')).toContain(
+            'may include cached memory',
+          );
+        } else {
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, current 50%' }),
+          ).toBeInTheDocument();
+        }
+      });
+
+      it(`captions a cache reading by the configured warning and the guest's bytes in ${mode}`, () => {
+        // The mocked guest thresholds warn at 70%, below the 75% default, and
+        // the bar is coloured by used/total, not a disagreeing usage field.
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'qemu',
+            memory: {
+              ...observation('current', observedAt, 'status-mem'),
+              used: 0.72 * 4294967296,
+              usage: 40,
+            },
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        expect(
+          container.querySelector(noticeSelector)?.querySelector('[aria-hidden]'),
+        ).toHaveTextContent('May include cache');
+      });
+
+      it(`keeps a high container cache reading free of a ${mode} caption`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'lxc',
+            memory: {
+              ...observation('current', observedAt, 'cluster-resources'),
+              used: 0.9 * 4294967296,
+              usage: 90,
+            },
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        expect(container.querySelector(noticeSelector)).toBeNull();
+      });
+
+      it(`adds and withdraws the ${mode} cache caption as the same guest crosses warning`, () => {
+        const memoryAt = (percent: number) => ({
+          ...observation('current', observedAt, 'status-mem'),
+          used: (percent / 100) * 4294967296,
+          usage: percent,
+        });
+        const [guest, setGuest] = createSignal(makeGuest({ type: 'qemu', memory: memoryAt(50) }));
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                metricDisplayMode={mode}
+                visibleColumnIds={['name', 'memory']}
+              />
+            </tbody>
+          </table>
+        ));
+        const row = container.querySelector('tr');
+        const caption = () => container.querySelector(`${noticeSelector} [aria-hidden]`);
+        expect(caption()).toBeNull();
+        setGuest(makeGuest({ type: 'qemu', memory: memoryAt(90) }));
+        expect(caption()).toHaveTextContent('May include cache');
+        setGuest(makeGuest({ type: 'qemu', memory: memoryAt(30) }));
+        expect(caption()).toBeNull();
+        expect(container.querySelector(noticeSelector)).toHaveClass('sr-only');
+        expect(container.querySelector('tr')).toBe(row);
+      });
+
+      it(`judges the cache cue by the guest's own memory in host-share ${mode}`, () => {
+        // 80% of a 4 GiB guest is a small share of a 64 GiB host, but the bar
+        // is coloured by the guest's own figure, and so is the cue.
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'qemu',
+            memory: {
+              ...observation('current', observedAt, 'status-mem'),
+              used: 0.8 * 4294967296,
+              usage: 80,
+            },
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+          memoryDisplayBasis: 'host',
+          parentMemoryTotal: 64 * 1024 ** 3,
+        });
+        expect(
+          container.querySelector(noticeSelector)?.querySelector('[aria-hidden]'),
+        ).toHaveTextContent('May include cache');
       });
 
       it(`keeps a container's cache caveat out of the ${mode} row label`, () => {
@@ -1435,6 +1622,11 @@ describe('GuestRow', () => {
           visibleColumnIds: ['name', 'memory'],
         });
         expect(container.querySelector(noticeSelector)).toBeNull();
+        if (mode === 'sparklines')
+          expect(screen.getByTestId('metric-mini-sparkline')).toHaveAttribute(
+            'title',
+            'test-vm memory history',
+          );
       });
 
       it(`withdraws the ${mode} cue only for a qualified same-guest reading`, () => {
@@ -1531,7 +1723,6 @@ describe('GuestRow', () => {
     it.each([
       ['last-known', 'Prior'],
       ['future-state', 'Unknown'],
-      ['unavailable', 'N/A'],
     ])('fits compact %s copy without losing the accessible source and time', (state, label) => {
       const { container } = renderGuestRow({
         guest: makeGuest({ memory: observation(state) }),
@@ -1545,11 +1736,27 @@ describe('GuestRow', () => {
       expect(notice).not.toHaveTextContent('future-state');
     });
 
+    it('keeps a compact unavailable reading to the dash and its accessible reason', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest({ memory: observation('unavailable') }),
+        visibleColumnIds: ['name', 'memory'],
+        workloadTableLayoutMode: 'phone',
+      });
+      const notice = container.querySelector(noticeSelector);
+      expect(notice).toHaveClass('sr-only');
+      expect(notice).toHaveTextContent('QEMU guest agent');
+      expect(notice).toHaveTextContent('2026-09-30 11:00:00 UTC');
+    });
+
     it('fits the compact cache cue without losing the accessible caveat', () => {
       const { container } = renderGuestRow({
         guest: makeGuest({
           type: 'qemu',
-          memory: observation('current', observedAt, 'cluster-resources'),
+          memory: {
+            ...observation('current', observedAt, 'cluster-resources'),
+            used: 0.9 * 4294967296,
+            usage: 90,
+          },
         }),
         visibleColumnIds: ['name', 'memory'],
         workloadTableLayoutMode: 'phone',

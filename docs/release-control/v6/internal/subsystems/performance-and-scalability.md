@@ -337,7 +337,13 @@ more field of the facet already in the canonical payload
 (`proxmox.temperatureDetails`), only when the existing record selection yields
 no usable reading, and keeps it only when it holds a CPU reading. That is one
 extra record mapping per such node per adapter call. It adds no resource read,
-merge pass, timer or subscription.
+merge pass, timer or subscription. `Node.cpuTemperature` copies the resource's
+existing top-level temperature scalar, one field read per adapter call.
+
+Mock CPU temperatures refresh on the existing tick: each online node with a CPU
+reading takes one `SampleMetric` and rebuilds its core list (copied, never
+mutated in place), and each agent host rewrites its CPU keys from the sample
+it already took. No new timer, pass or fixture-wide scan is added.
 
 ### Unavailable filesystem values share the existing disk model
 
@@ -364,8 +370,8 @@ proof, not a native CPU improvement, QGA/thaw result or delivery acceptance.
 
 ### Guest filesystem provenance preserves dense row geometry
 
-Visible retained/unavailable filesystem cues must fit the existing dense row
-rhythm, including canonical phone/narrow column weights, without adding a new
+Visible retained and fixable-read filesystem cues must fit the existing dense row
+rhythm (an unavailable setup-gap read adds no visible cue), including canonical phone/narrow column weights, without adding a new
 collector, history request or layout observer. Keep compact copy on narrow rows
 and the full safe reason in assistive text, the existing drawer and the
 read-only reading disclosure described below. Inline sparkline plots may shrink to preserve their numeric
@@ -2931,16 +2937,19 @@ local bar geometry, or render a bar for the negative unknown-usage sentinel.
 `GuestDrawerOverview.tsx` renders the `Filesystems` section on its own, in
 front of the collapsed Details, so the mount-point list never shares a card
 row with shorter sections; tags render as chips in the Overview facts strip
-rather than as a `Tags` detail section. The Overview's 24h trend cards
-(`DrawerTrendCards.tsx`, lazy-loaded out of the WorkloadsSurface chunk) and
-the History tab read one query from `guestDrawerHistoryQuery.ts` with one cache
-key, and each mounts only while its tab is visible: the node drawer's History
-no longer stays mounted and polling while hidden. Because those cards already
-cover the last 24 hours, the guest and node drawers open History on
-`TRENDED_DRAWER_HISTORY_DEFAULT_RANGE` (7 days, within the free plan's
-retention) rather than repeating them; a 24h History selection reuses the
-cards' cached read. Drawers without trend cards (Docker host, resource
-detail) keep the 24h `GUEST_DRAWER_HISTORY_DEFAULT_RANGE`.
+rather than as a `Tags` detail section. The guest and node drawers chart
+history on Overview itself: `GuestDrawerOverview.tsx` and
+`NodeDrawerOverview.tsx` lazy-load `GuestDrawerHistory` out of the
+WorkloadsSurface chunk, open it on the 24h `GUEST_DRAWER_HISTORY_DEFAULT_RANGE`
+and pass `enabled={false}` while Manage shows, so one query from
+`guestDrawerHistoryQuery.ts` polls only while the charts are visible. These
+drawers have no History tab, so there is no second read of the same resource
+at another range (the deleted `DrawerTrendCards.tsx` and the History tab each
+held one). The Docker host drawer and the shared resource-detail drawer
+(agents, containers, PBS, TrueNAS, Kubernetes and other platform rows) follow
+the same rule: `DockerHostDrawerOverview.tsx` and
+`ResourceDetailDrawerOverviewTab.tsx` render `GuestDrawerHistory` on Overview
+on the same 24h default and pass `enabled={false}` while another tab shows.
 Panel width alone does not make mount paths readable. Filesystem disk rows must
 opt into the shared `layout: 'stacked'` presentation so their full mount path
 wraps above usage and progress at desktop and phone widths. Shared-prefix paths
@@ -3140,9 +3149,11 @@ composition, balloon and swap geometry for inspection, in a neutral tone;
 their composition tooltip carries the original source/time caveat. A current
 linked-agent memory observation remains current while QEMU disk reads defer.
 A current cache-inclusive Proxmox reading still reaches the row presentation,
-so the VM row can say `May include cache`; rows whose reading is current and
-cache-aware keep returning no presentation without formatting a date or source
-label (`memoryObservation.test.ts` pins both paths).
+so the VM row can say `May include cache` once the guest's own memory meets
+its warning threshold (below it the caveat is title and assistive text only);
+rows whose reading is current and cache-aware keep returning no presentation
+without formatting a date or source label (`memoryObservation.test.ts` pins
+both paths).
 Tooltip headings, numeric values and neutral labels use theme-aware text so
 the source caveat and composition remain readable on both light and dark surfaces.
 An unavailable reading, including the shared bar's explicit unavailable input,
@@ -3782,7 +3793,7 @@ internal/mock/platform_fixtures_test.go pin the generation behavior.
 The workload adapter copies resource.parentId into parentResourceId. vSphere
 workload groups use that server parent identity while cluster, connection and
 host display labels are enriched. A metadata update therefore keeps the row
-and its drawer mounted, including its selected History tab. The workload
+and its drawer mounted, including its selected tab. The workload
 instance fallback uses an explicit cluster and never the workload's own name.
 Legacy rows without a canonical parent retain the existing scoped fallback.
 
@@ -4049,8 +4060,10 @@ Round dot markers (zero-length round-capped strokes) and the in-place
 node per observation beyond the marker's two paths, and the readout no longer
 inserts or removes a line as the inspected time changes.
 Numeric gridline labels are computed from the scale the panel already holds;
-the compact "Worth checking" list and the trend cards' "now" and "24h low–high"
-labels reuse rows and ranges already derived. None adds a read or timer.
+the compact "Worth checking" list reuses rows already derived, and an alert's
+dashed trigger line reuses the alert the drawer already holds. The min-max band
+reads the `min`/`max` each stored bucket already carries: one extra path per
+series with any spread (none for flat data). None adds a read or timer.
 
 The default stored-history legend resolves one latest timestamp from that
 same bounded, normalized panel index, then looks up each configured series at

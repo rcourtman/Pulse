@@ -4,7 +4,6 @@ import {
   HOST_METRICS_HISTORY_GROUPS,
 } from '@/components/shared/hostMetricsHistoryModel';
 import type { HostGPUSensor, Node } from '@/types/api';
-import { getCpuTemperature } from '@/utils/temperature';
 
 import type { GuestDrawerHistoryGroupConfig, GuestDrawerHistoryTarget } from './guestDrawerModel';
 
@@ -65,7 +64,7 @@ const maxGPUValue = (
 
 export const getNodeDrawerCurrentMetrics = (node: Node): Record<string, number | undefined> => {
   const metrics: Record<string, number | undefined> = {
-    temperature: getCpuTemperature(node.temperature) ?? undefined,
+    temperature: node.cpuTemperature,
   };
   if ((node.sensors?.gpu?.length ?? 0) === 0) return metrics;
 

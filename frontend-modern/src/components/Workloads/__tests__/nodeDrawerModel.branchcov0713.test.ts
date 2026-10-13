@@ -30,6 +30,7 @@ const makeNode = (overrides: Partial<Node> = {}): Node => ({
     hasCPU: true,
     lastUpdate: new Date().toISOString(),
   },
+  cpuTemperature: 65,
   temperatureMonitoringEnabled: true,
   lastSeen: new Date().toISOString(),
   connectionHealth: 'online',
@@ -179,98 +180,17 @@ describe('nodeDrawerModel (branch coverage 0713)', () => {
   });
 
   describe('getNodeDrawerCurrentMetrics', () => {
-    it('returns temperature: undefined for an empty temperature object', () => {
-      // temperature?.available on {} -> undefined -> !undefined === true -> null -> ?? undefined.
-      const node = makeNode({ temperature: {} as unknown as Temperature });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: undefined,
-      });
-    });
-
-    it('treats a truthy non-boolean available value (1) as available', () => {
-      // !1 === false so the guard passes; cpuPackage 50 is the sole candidate.
+    it('returns temperature: undefined when only sensor details exist', () => {
       const node = makeNode({
-        temperature: makeTemp({
-          available: 1 as unknown as boolean,
-          cpuPackage: 50,
-          cpuMax: undefined,
-        }),
+        cpuTemperature: undefined,
+        temperature: makeTemp({ cpuPackage: 62, cpuMax: 68 }),
       });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: 50,
-      });
-    });
-
-    it('returns cpuPackage when it is the largest of all valid sources', () => {
-      // cpuPackage 95 > cpuMax 70 and core temps 80/60 -> Math.max selects cpuPackage.
-      const node = makeNode({
-        temperature: makeTemp({
-          cpuPackage: 95,
-          cpuMax: 70,
-          cores: [
-            { core: 0, temp: 80 },
-            { core: 1, temp: 60 },
-          ],
-        }),
-      });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: 95,
-      });
-    });
-
-    it('skips an Infinity core temp and returns the max of the finite cores', () => {
-      // core temp Infinity -> Number.isFinite false -> skipped; Math.max(88, 72) === 88.
-      const node = makeNode({
-        temperature: makeTemp({
-          cpuPackage: undefined,
-          cpuMax: undefined,
-          cores: [
-            { core: 0, temp: 88 },
-            { core: 1, temp: Number.POSITIVE_INFINITY },
-            { core: 2, temp: 72 },
-          ],
-        }),
-      });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: 88,
-      });
-    });
-
-    it('returns undefined when cores is an empty array and cpu fields are absent', () => {
-      // Array.isArray([]) === true -> forEach runs zero times; candidates empty -> null.
-      const node = makeNode({
-        temperature: makeTemp({ cpuPackage: undefined, cpuMax: undefined, cores: [] }),
-      });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: undefined,
-      });
-    });
-
-    it('preserves Number.MAX_VALUE as a finite boundary candidate', () => {
-      // Number.isFinite(MAX_VALUE) === true -> valid; sole candidate -> returned unchanged.
-      const node = makeNode({
-        temperature: makeTemp({ cpuPackage: Number.MAX_VALUE, cpuMax: undefined }),
-      });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: Number.MAX_VALUE,
-      });
-    });
-
-    it('returns cpuMax when cpuPackage is absent and cores are absent', () => {
-      // cpuPackage undefined -> isValidTemperature false -> skipped; cpuMax 68 is the sole candidate.
-      const node = makeNode({
-        temperature: makeTemp({ cpuPackage: undefined, cpuMax: 68 }),
-      });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: 68,
-      });
+      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({ temperature: undefined });
     });
 
     it('always returns an object with exactly the single key "temperature"', () => {
       // Shape contract: exactly one key regardless of the resolved value.
-      const node = makeNode({
-        temperature: makeTemp({ cpuPackage: 42, cpuMax: undefined }),
-      });
+      const node = makeNode({ cpuTemperature: 42 });
       const result = getNodeDrawerCurrentMetrics(node);
       expect(Object.keys(result)).toEqual(['temperature']);
       expect(result.temperature).toBe(42);

@@ -134,7 +134,9 @@ test.describe("TrueNAS storage disk history", () => {
       drawer.getByText(/Device \/dev\/sdc has SMART test/).first(),
     ).toBeVisible();
 
-    await drawer.getByRole("tab", { name: "History" }).click();
+    // The disk's history charts sit on the drawer's Overview, so opening the
+    // drawer is what starts the history read; there is no History tab.
+    await expect(drawer.getByRole("tab", { name: "History" })).toHaveCount(0);
 
     await expect
       .poll(() =>

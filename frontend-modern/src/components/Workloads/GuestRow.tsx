@@ -34,6 +34,7 @@ import {
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import { createRowTextSelectionGuard, nativeRowClickTarget } from '@/components/shared/Table';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
+import { getMetricSeverity } from '@/utils/metricThresholds';
 import {
   getWorkloadMemoryGuestKind,
   getWorkloadMemoryObservationPresentation,
@@ -183,35 +184,54 @@ export function GuestRow(props: GuestRowProps) {
       memoryReading()?.state === 'unavailable' ||
       (isHostMemoryBasis() && hostMemoryTotal() <= 0),
   );
+  // The guest's own memory severity, even when the bar shows its host share:
+  // the bar is coloured by the same figure.
+  const guestMemoryAtWarning = createMemo(() => {
+    const memory = props.guest.memory;
+    const percent =
+      typeof memory?.used === 'number' && typeof memory.total === 'number' && memory.total > 0
+        ? (memory.used / memory.total) * 100
+        : memory?.usage;
+    if (typeof percent !== 'number' || !Number.isFinite(percent)) return false;
+    return getMetricSeverity(percent, 'memory', memoryThresholds()) !== 'normal';
+  });
   const memoryReadStatus = createMemo(() => {
     const reading = memoryReading();
     if (!reading) return undefined;
-    // A current reading needs no label, except a VM's cache-inclusive one: the
-    // user can set up the guest agent for the VM's own figure. Containers have
-    // no such step, so their caveat stays in the tooltip and drawer.
-    const cacheCue =
+    // With no number shown for another reason (memory telemetry off, no host
+    // total for a host share), there is no reading to qualify.
+    if (memoryDisplayUnavailable() && reading.state !== 'unavailable') return undefined;
+    // A current reading needs no qualification, except a VM's cache-inclusive
+    // one: the guest agent can supply the VM's own figure. Containers have no
+    // such step, so their caveat stays in the tooltip and drawer.
+    const cacheReading =
       reading.state === 'current' &&
       reading.mayIncludeCache &&
       getWorkloadMemoryGuestKind(props.guest) === 'vm';
-    if (reading.state === 'current' && !cacheCue) return undefined;
+    if (reading.state === 'current' && !cacheReading) return undefined;
     return {
       message: reading.message,
-      label: cacheCue
-        ? usesCompactTableLayout()
-          ? 'Cache?'
-          : 'May include cache'
+      // Visible only where it changes what the user concludes: a cache
+      // reading that looks like memory pressure, or a number that is not
+      // current. An unavailable reading already shows no number, so a label
+      // would only repeat it. Every reason stays in the title, assistive text
+      // and drawer.
+      label: cacheReading
+        ? guestMemoryAtWarning()
+          ? usesCompactTableLayout()
+            ? 'Cache?'
+            : 'May include cache'
+          : null
         : reading.state === 'last-known'
           ? usesCompactTableLayout()
             ? 'Prior'
             : 'Last known'
           : reading.state === 'unavailable'
-            ? usesCompactTableLayout()
-              ? 'N/A'
-              : 'Unavailable'
+            ? null
             : usesCompactTableLayout()
               ? 'Unknown'
               : 'Freshness unknown',
-      valueLabelContext: cacheCue
+      valueLabelContext: cacheReading
         ? ('current' as const)
         : reading.state === 'last-known'
           ? ('last known' as const)
@@ -220,6 +240,14 @@ export function GuestRow(props: GuestRowProps) {
             : ('freshness unknown' as const),
     };
   });
+  // The cell title carries a reading's reason; the dash explains only what
+  // the cell does not.
+  const memoryUnavailableTooltip = () =>
+    memoryReadStatus()
+      ? undefined
+      : isHostMemoryBasis() && hostMemoryTotal() <= 0
+        ? 'Host memory total unavailable'
+        : 'Memory usage unavailable';
   const memoryValueLabelContext = (): MetricMiniSparklineValueLabelContext =>
     memoryDisplayUnavailable()
       ? 'unavailable'
@@ -255,6 +283,7 @@ export function GuestRow(props: GuestRowProps) {
     options: {
       valueLabel: () => string;
       title: () => string;
+      tooltip?: () => string | undefined;
       unit?: string;
       formatValue: (value: number) => string;
       seriesOptions?: () => Parameters<WorkloadMetricHistoryReader['getGuestMetricSeries']>[2];
@@ -272,6 +301,7 @@ export function GuestRow(props: GuestRowProps) {
       valueLabelContext={options.valueLabelContext?.()}
       valueLabelMode="inline"
       title={options.title()}
+      tooltip={options.tooltip?.()}
       unit={options.unit ?? '%'}
       formatValue={options.formatValue}
       cursorRatio={historyCursorRatio()}
@@ -301,6 +331,10 @@ export function GuestRow(props: GuestRowProps) {
         isHostMemoryBasis()
           ? `${props.guest.name} host memory share history`
           : `${props.guest.name} memory history`,
+      // The chart covers the cell, so it carries the reading's reason on hover.
+      tooltip: () =>
+        memoryReadStatus()?.message ??
+        (memoryDisplayUnavailable() ? memoryUnavailableTooltip() : undefined),
       formatValue: formatMetricPercent,
       seriesOptions: () => ({
         memoryDisplayBasis: props.memoryDisplayBasis,
@@ -312,6 +346,7 @@ export function GuestRow(props: GuestRowProps) {
     renderMetricSparkline('disk', {
       valueLabel: () => (hasDiskUsage() ? formatMetricPercent(props.guest.disk?.usage) : '—'),
       title: () => `${props.guest.name} disk usage history`,
+      tooltip: () => diskReadStatus()?.message,
       formatValue: formatMetricPercent,
       valueLabelContext: () => diskValueLabelContext(),
     });
@@ -341,18 +376,30 @@ export function GuestRow(props: GuestRowProps) {
   };
   // A native title or bar tooltip is not a visible freshness cue on touch,
   // and disappears from the chart's accessible value when the history lens opens.
+  // A retained number and a broken read the user can fix get a visible label.
+  // Other unavailable reads (VM stopped, no guest agent) already show a dash,
+  // so their reason stays in the title, assistive text and drawer.
   const diskReadStatus = createMemo(() => {
     const read = diskUsageRead();
     if (read.state === 'current') return undefined;
     const retained = read.state === 'last-known';
+    const reason = isVM(props.guest)
+      ? (props.guest.diskStatusReason ?? '').replace(/^prev-/, '')
+      : '';
     return {
       label: retained
         ? usesCompactTableLayout()
           ? 'Prior'
           : 'Last known'
-        : usesCompactTableLayout()
-          ? 'N/A'
-          : 'Unavailable',
+        : !read.needsAction
+          ? null
+          : reason === 'permission-denied'
+            ? usesCompactTableLayout()
+              ? 'Denied'
+              : 'No permission'
+            : usesCompactTableLayout()
+              ? 'Error'
+              : 'Agent error',
       message: read.message,
       valueLabelContext: retained ? ('last known' as const) : ('current' as const),
       // Most reasons are a setup gap (no guest agent, VM stopped) rather than a
@@ -614,38 +661,55 @@ export function GuestRow(props: GuestRowProps) {
                   <Show
                     when={historyLensVisible()}
                     fallback={
-                      <div title={isHostMemoryBasis() ? undefined : (memoryTooltip() ?? undefined)}>
-                        <StackedMemoryBar
-                          used={props.guest.memory?.used || 0}
-                          total={memoryDisplayTotal()}
-                          unavailable={memoryDisplayUnavailable()}
-                          reading={memoryReading()}
-                          percentOnly={isHostMemoryBasis() ? undefined : memoryPercentOnly()}
-                          cache={isHostMemoryBasis() ? 0 : (props.guest.memory?.cache ?? 0)}
-                          cacheInclusiveLabel={isHostMemoryBasis() ? undefined : 'Shown in Proxmox'}
-                          balloon={isHostMemoryBasis() ? 0 : (props.guest.memory?.balloon ?? 0)}
-                          swapUsed={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapUsed ?? 0)}
-                          swapTotal={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapTotal ?? 0)}
-                          resourceId={metricsKey()}
-                          anomaly={isHostMemoryBasis() ? null : memoryAnomaly()}
-                          thresholds={memoryThresholds()}
-                          severityPercent={
-                            isHostMemoryBasis()
-                              ? usagePercent(
-                                  props.guest.memory?.used,
-                                  props.guest.memory?.total,
-                                  props.guest.memory?.usage,
-                                )
-                              : undefined
-                          }
-                          comparisonTotalLabel={isHostMemoryBasis() ? 'Host total' : undefined}
-                          tooltipTitle={
-                            isHostMemoryBasis()
-                              ? `${props.parentNodeName?.trim() || 'Host'} memory share`
-                              : undefined
-                          }
-                        />
-                      </div>
+                      <Show
+                        when={!memoryDisplayUnavailable()}
+                        fallback={
+                          <div class="flex justify-center">
+                            <span class="text-xs text-slate-400" title={memoryUnavailableTooltip()}>
+                              -
+                            </span>
+                          </div>
+                        }
+                      >
+                        <div
+                          title={isHostMemoryBasis() ? undefined : (memoryTooltip() ?? undefined)}
+                        >
+                          <StackedMemoryBar
+                            used={props.guest.memory?.used || 0}
+                            total={memoryDisplayTotal()}
+                            unavailable={memoryDisplayUnavailable()}
+                            reading={memoryReading()}
+                            percentOnly={isHostMemoryBasis() ? undefined : memoryPercentOnly()}
+                            cache={isHostMemoryBasis() ? 0 : (props.guest.memory?.cache ?? 0)}
+                            cacheInclusiveLabel={
+                              isHostMemoryBasis() ? undefined : 'Shown in Proxmox'
+                            }
+                            balloon={isHostMemoryBasis() ? 0 : (props.guest.memory?.balloon ?? 0)}
+                            swapUsed={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapUsed ?? 0)}
+                            swapTotal={
+                              isHostMemoryBasis() ? 0 : (props.guest.memory?.swapTotal ?? 0)
+                            }
+                            resourceId={metricsKey()}
+                            anomaly={isHostMemoryBasis() ? null : memoryAnomaly()}
+                            thresholds={memoryThresholds()}
+                            severityPercent={
+                              isHostMemoryBasis()
+                                ? usagePercent(
+                                    props.guest.memory?.used,
+                                    props.guest.memory?.total,
+                                    props.guest.memory?.usage,
+                                  )
+                                : undefined
+                            }
+                            comparisonTotalLabel={isHostMemoryBasis() ? 'Host total' : undefined}
+                            tooltipTitle={
+                              isHostMemoryBasis()
+                                ? `${props.parentNodeName?.trim() || 'Host'} memory share`
+                                : undefined
+                            }
+                          />
+                        </div>
+                      </Show>
                     }
                   >
                     <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
@@ -659,13 +723,24 @@ export function GuestRow(props: GuestRowProps) {
             </Show>
             <Show when={memoryReadStatus()}>
               {(status) => (
+                <Show
+                  when={status().label}
+                  fallback={
+                    <span data-workload-memory-read-status class="sr-only">
+                      {status().message}
+                    </span>
+                  }
+                >
+                  {(label) => (
                 <WorkloadReadingStatus
                   metric="Memory"
                   guestId={guestId()}
                   guestName={props.guest.name}
-                  label={status().label}
+                  label={label()}
                   message={status().message}
                 />
+                  )}
+                </Show>
               )}
             </Show>
           </td>
@@ -713,14 +788,25 @@ export function GuestRow(props: GuestRowProps) {
             </Show>
             <Show when={diskReadStatus()}>
               {(status) => (
+                <Show
+                  when={status().label}
+                  fallback={
+                    <span data-workload-disk-read-status class="sr-only">
+                      {status().message}
+                    </span>
+                  }
+                >
+                  {(label) => (
                 <WorkloadReadingStatus
                   metric="Disk"
                   guestId={guestId()}
                   guestName={props.guest.name}
-                  label={status().label}
+                  label={label()}
                   message={status().message}
                   needsAction={status().needsAction}
                 />
+                  )}
+                </Show>
               )}
             </Show>
           </td>

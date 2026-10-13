@@ -32,9 +32,24 @@ import {
 } from '@/utils/format';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import type { HistoryTimeRange } from '@/api/charts';
+import { GuestDrawerHistory } from '@/components/Workloads/GuestDrawerHistory';
+import { getDrawerChartAlerts } from '@/components/Workloads/drawerOverviewModel';
+import type {
+  GuestDrawerHistoryGroupConfig,
+  GuestDrawerHistoryTarget,
+} from '@/components/Workloads/guestDrawerModel';
 
 interface DockerHostDrawerOverviewProps {
   host: Resource;
+  historyTarget?: GuestDrawerHistoryTarget | null;
+  historyRange?: HistoryTimeRange;
+  onHistoryRangeChange?: (range: HistoryTimeRange) => void;
+  historyGroups?: GuestDrawerHistoryGroupConfig[];
+  /** Live readings the charts show before any history is stored. */
+  currentMetrics?: Record<string, number | undefined>;
+  /** True while Overview is the visible tab; hidden charts do not poll. */
+  historyEnabled?: boolean;
 }
 
 interface DockerOverviewRow {
@@ -183,6 +198,13 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
   const agent = () => props.host.agent;
   const linkedAgentId = () => cleanText(agent()?.agentId);
   const summaryOnly = () => cleanText(docker()?.collectionMode) === 'typed-helper-summary';
+  const hostAlerts = () =>
+    getAlertsForUnifiedResource(props.host, activeAlerts, alertsActivation.detectionEnabled());
+  const chartAlerts = () =>
+    getDrawerChartAlerts(
+      hostAlerts(),
+      (props.historyGroups ?? []).flatMap((group) => group.series.map((series) => series.metric)),
+    );
   const temperatureThresholds = createMemo(() =>
     alertsActivation.getMetricThresholds(
       'node',
@@ -367,11 +389,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
                 },
               ]
             : []),
-          ...getAlertsForUnifiedResource(
-            props.host,
-            activeAlerts,
-            alertsActivation.detectionEnabled(),
-          ).map((alert) => ({
+          ...hostAlerts().map((alert) => ({
             id: alert.id,
             message: alert.message,
             subject: cleanText(alert.resourceName) || props.host.displayName || props.host.name,
@@ -388,6 +406,19 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
             checks={props.host.availabilityChecks}
           />
         </div>
+      </Show>
+      <Show when={props.historyTarget}>
+        {(target) => (
+          <GuestDrawerHistory
+            target={target()}
+            range={props.historyRange ?? '24h'}
+            onRangeChange={props.onHistoryRangeChange}
+            enabled={props.historyEnabled ?? true}
+            groups={props.historyGroups}
+            currentMetrics={props.currentMetrics}
+            alerts={chartAlerts()}
+          />
+        )}
       </Show>
       <TechnicalDetailsSection
         dataTestId="docker-host-technical-details"

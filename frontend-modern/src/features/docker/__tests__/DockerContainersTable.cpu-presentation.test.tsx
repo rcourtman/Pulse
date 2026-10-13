@@ -133,7 +133,6 @@ describe('Docker container CPU presentation through the real row and drawer', ()
     expect(screen.getByTestId('container-drawer-cpu-scale')).toHaveTextContent(
       CONTAINER_CPU_CAPACITY_DESCRIPTION,
     );
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
     const slider = await screen.findByRole('slider', { name: 'Inspect Utilization history' });
     await waitFor(() => expect(slider).toHaveAttribute('max', '2'));
     fireEvent.input(slider, { target: { value: '1' } });

@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "base_sha": "651ae94b31040c3c22e9ddcbd41b2aa67047e7e1",
+  "verified_at": "2026-10-13T19:55:51Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "8eaabb6ea91e0cca999b3242aed5b0843e59ba8379f204db47a140c5b907ee2f",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts": "8fd0dc4746f382a8755b7a49b2d2384d1f6cbf2c885acfe630aff30e6ce3f574"
+  },
+  "routes": [
+    "/node-update-proof.html",
+    "/docs/TROUBLESHOOTING#proxmox-pending-update-access"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 640
+    },
+    {
+      "width": 844,
+      "height": 390
+    }
+  ],
+  "states": [
+    "Default collapsed Details and expanded Details",
+    "Denied access is neutral and stays in Details",
+    "Retained positive and zero counts with checked time",
+    "Checked recovery removes denied guidance",
+    "Failed source remains under Worth checking",
+    "Scrollable short-landscape help and focused shipped-document section"
+  ],
+  "interactions": [
+    "Pointer, keyboard and touch open the node drawer, Details and help",
+    "Hover/focus, Close and Escape with focus return",
+    "Outside click and keyboard Details collapse dismiss the overlay",
+    "Polling after time advancement retains the same open help dialog and ages retained evidence",
+    "Live resize through phone and landscape keeps the dialog contained",
+    "Landscape scrolling reaches Learn more",
+    "Pointer, Enter and touch activate shipped documentation with section focus",
+    "Reload starts with Details closed and no retained overlay"
+  ],
+  "command": "Playwright with installed Chrome against the task-owned pulse-dev Vite server on port 8087 after the integrated production build",
+  "notes": [
+    "Production NodeDrawer and shared table fixture use synthetic node and bounded API data. Docs uses the actual public application viewer, shipped markdown and fragment focus.",
+    "All listed viewports exercised against the current source. Inspected desktop, phone, small-phone and landscape pixels, full update status and actual docs. No horizontal overflow or page errors.",
+    "Visible popup placement was checked with normal browser timing. Time advancement and subsequent metric polling were used for retained-evidence identity and age checks. Native relative-clock aging is covered by the passing component tests.",
+    "Raw matrix, resize and touch results and screenshots are under /Volumes/Development/.caches/support-triage-20261013/. Owned browser and private Vite server stopped after verification."
+  ]
+}

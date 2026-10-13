@@ -134,7 +134,7 @@ for (const width of [1280, 390]) {
       const expand = page.getByRole('button', { name: `Expand details for backup-${type}`, exact: true });
       await expand.focus();
       await page.keyboard.press('Enter');
-      await page.getByRole('tab', { name: 'History', exact: true }).click();
+      // History charts sit on the drawer's Overview; opening it starts the read.
       await expect.poll(() => targets).toContain(`${type}/history-${type}`);
       expect(targets.some(t => t.includes('wrong-'))).toBe(false);
       const utilization = page.getByTestId('guest-history-group-chart').first();

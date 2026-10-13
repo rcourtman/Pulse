@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "526fa790ae7dac9d52e876db22667ce69dcf89dd",
+  "verified_at": "2026-10-13T19:15:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts",
+    "frontend-modern/src/utils/temperature.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "88f27fb21c92c332a9e6c966e0376cf76bc532c221bcc18dc7e2764cc0bcf037",
+    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts": "11289917b21f0f3fc7695e53d91e0300d2f805de580df9e6279874de266d49ad",
+    "frontend-modern/src/types/api.ts": "2fc598f7dd7593c22c534f95cc2d81f7f3b62b8f065e0a2486ac62b9708a7a53",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "b1709f01615f4e4114ef638eecd899fc4c505eb2e8feb3bed9233219a34eed32",
+    "frontend-modern/src/utils/temperature.ts": "4c17f00ba945a20ae19805aa47995b98c5848025b163e5a852a9b3348749e1ad"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock DEMO_MODE stack built from this tree (8 Proxmox nodes, every node linked to a mock agent, seeded metrics store), rebased onto 526fa790ae",
+    "Node drawer Overview for West Production A, B and E: CPU temperature card headline equals the end of its 24h line and the nodes table Temp cell (50/42/43 C)",
+    "Node drawer History tab Thermals group: CPU legend value equals the Overview headline (50 C)",
+    "API cross-check: resource agent.temperature equals proxmox.temperature and the last /api/metrics-store/history agent temperature point for each node"
+  ],
+  "interactions": [
+    "Expand node row to open the inline drawer at desktop and phone widths",
+    "Switch drawer Overview to History and inspect the Thermals chart",
+    "Read the phone CPU temperature chart label: now 42 C, 41 C to 42 C over 24 hours"
+  ],
+  "browser": {
+    "client": "Claude desktop browser pane",
+    "engine": "Chromium"
+  },
+  "scope": "Mock-mode fixture estate on a local private stack; no real hardware sensors."
+}

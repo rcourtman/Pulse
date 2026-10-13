@@ -34,6 +34,7 @@ const makeNode = (overrides: Partial<Node> = {}): Node => ({
     hasCPU: true,
     lastUpdate: new Date().toISOString(),
   },
+  cpuTemperature: 65,
   temperatureMonitoringEnabled: true,
   lastSeen: new Date().toISOString(),
   connectionHealth: 'online',
@@ -203,111 +204,24 @@ describe('nodeDrawerModel (branch coverage 2)', () => {
   });
 
   describe('getNodeDrawerCurrentMetrics', () => {
-    it('returns temperature: undefined when node.temperature is undefined', () => {
-      // getCpuTemperature(undefined) -> !temperature?.available -> null -> ?? undefined.
-      const node = makeNode({ temperature: undefined });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: undefined,
-      });
+    it('returns the backend primary CPU temperature unchanged', () => {
+      const node = makeNode({ cpuTemperature: 71.5 });
+      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({ temperature: 71.5 });
     });
 
-    it('returns temperature: undefined when node.temperature is null', () => {
-      // getCpuTemperature(null) -> !temperature?.available -> null -> ?? undefined (right arm).
-      const node = makeNode({ temperature: null as unknown as Temperature });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: undefined,
-      });
+    it('returns temperature: undefined when the backend sent no primary reading', () => {
+      const node = makeNode({ cpuTemperature: undefined });
+      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({ temperature: undefined });
     });
 
-    it('returns temperature: undefined when temperature.available is false', () => {
-      // !temperature?.available true arm -> null -> ?? undefined.
+    it('never recomputes the reading from the sensor details', () => {
+      // A hotter core in the details must not override the backend's rule,
+      // because the history line beneath the headline was recorded by it.
       const node = makeNode({
-        temperature: makeTemp({ available: false, cpuPackage: 62 }),
+        cpuTemperature: 44,
+        temperature: makeTemp({ cpuPackage: 44, cpuMax: 51, cores: [{ core: 0, temp: 51 }] }),
       });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: undefined,
-      });
-    });
-
-    it('returns the cpuPackage value when available and finite', () => {
-      // ?? left arm: getCpuTemperature returns a number (cpuPackage only candidate).
-      const node = makeNode({
-        temperature: makeTemp({ cpuPackage: 62 }),
-      });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: 62,
-      });
-    });
-
-    it('skips a non-finite cpuPackage and falls back to cpuMax', () => {
-      // isValidTemperature(cpuPackage) false (NaN); cpuMax valid -> single candidate.
-      const node = makeNode({
-        temperature: makeTemp({ cpuPackage: Number.NaN, cpuMax: 70 }),
-      });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: 70,
-      });
-    });
-
-    it('returns Math.max across cpuPackage, cpuMax, and valid core temps', () => {
-      // cores is an array -> forEach -> isValidTemperature(core.temp) true -> candidate.
-      const node = makeNode({
-        temperature: makeTemp({
-          cpuPackage: 50,
-          cpuMax: 80,
-          cores: [
-            { core: 0, temp: 90 },
-            { core: 1, temp: 30 },
-          ],
-        }),
-      });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: 90,
-      });
-    });
-
-    it('ignores non-finite core temps and still returns the max of valid candidates', () => {
-      // core.temp NaN -> isValidTemperature false -> skipped; cpuMax=80 wins.
-      const node = makeNode({
-        temperature: makeTemp({
-          cpuPackage: Number.NaN,
-          cpuMax: 80,
-          cores: [{ core: 0, temp: Number.NaN }],
-        }),
-      });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: 80,
-      });
-    });
-
-    it('returns temperature: undefined when available is true but no candidates are valid', () => {
-      // cpuPackage/cpuMax NaN, cores absent -> candidates empty -> null -> ?? undefined.
-      const node = makeNode({
-        temperature: makeTemp({ cpuPackage: Number.NaN, cpuMax: Number.NaN }),
-      });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: undefined,
-      });
-    });
-
-    it('returns temperature: undefined when cores is not an array and cpu fields are absent', () => {
-      // Array.isArray(undefined) === false -> cores branch skipped; no candidates -> null.
-      const node = makeNode({
-        temperature: makeTemp({ cpuPackage: undefined, cpuMax: undefined }),
-      });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: undefined,
-      });
-    });
-
-    it('prefers a higher cpuMax over cpuPackage via Math.max', () => {
-      // cpuPackage=40, cpuMax=55, no cores -> Math.max(40,55)=55.
-      const node = makeNode({
-        temperature: makeTemp({ cpuPackage: 40, cpuMax: 55 }),
-      });
-      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
-        temperature: 55,
-      });
+      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({ temperature: 44 });
     });
 
     it('projects bounded aggregate GPU values into current history metrics', () => {

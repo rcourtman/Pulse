@@ -65,7 +65,7 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 		HostURL:                      node.Host,
 		GuestURL:                     node.GuestURL,
 		ConnectionHealth:             node.ConnectionHealth,
-		Temperature:                  maxNodeTemp(node.Temperature),
+		Temperature:                  models.PrimaryCPUTemperatureCelsius(node.Temperature),
 		TemperatureDetails:           cloneTemperature(node.Temperature),
 		PVEVersion:                   node.PVEVersion,
 		KernelVersion:                node.KernelVersion,
@@ -194,7 +194,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		LoadAverage:             append([]float64(nil), host.LoadAverage...),
 		UptimeSeconds:           host.UptimeSeconds,
 		IntervalSeconds:         host.IntervalSeconds,
-		Temperature:             maxCPUTemp(host.Sensors),
+		Temperature:             models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors),
 		NetworkInterfaces:       convertInterfaces(host.NetworkInterfaces),
 		Disks:                   convertDisks(host.Disks),
 		Memory:                  agentMemoryMetaFromModel(host.Memory),
@@ -3076,7 +3076,7 @@ func resourceFromKubernetesNode(cluster models.KubernetesCluster, node models.Ku
 	var temperature *float64
 	if linkedHost != nil {
 		uptimeSeconds = linkedHost.UptimeSeconds
-		temperature = maxCPUTemp(linkedHost.Sensors)
+		temperature = models.HostSensorPrimaryCPUTemperatureCelsius(linkedHost.Sensors)
 	}
 	resource := Resource{
 		Type:      ResourceTypeK8sNode,
@@ -4004,63 +4004,6 @@ func extractHostname(raw string) string {
 		raw = strings.Split(raw, ":")[0]
 	}
 	return raw
-}
-
-// maxCPUTemp returns the highest CPU temperature from host sensor readings.
-// It looks for cpu_package first, then falls back to max of any cpu_core_* key.
-func maxCPUTemp(sensors models.HostSensorSummary) *float64 {
-	temps := sensors.TemperatureCelsius
-	if len(temps) == 0 {
-		return nil
-	}
-	// Prefer cpu_package if available.
-	if v, ok := temps["cpu_package"]; ok {
-		return &v
-	}
-	// Fall back to max of any cpu-related key.
-	var best float64
-	found := false
-	for k, v := range temps {
-		if strings.HasPrefix(k, "cpu") {
-			if !found || v > best {
-				best = v
-				found = true
-			}
-		}
-	}
-	if found {
-		return &best
-	}
-	return nil
-}
-
-// maxNodeTemp returns the best CPU temperature from a proxmox node temperature snapshot.
-func maxNodeTemp(temperature *models.Temperature) *float64 {
-	if temperature == nil || !temperature.Available {
-		return nil
-	}
-
-	if temperature.CPUMax > 0 {
-		v := temperature.CPUMax
-		return &v
-	}
-	if temperature.CPUPackage > 0 {
-		v := temperature.CPUPackage
-		return &v
-	}
-
-	var best float64
-	found := false
-	for _, core := range temperature.Cores {
-		if !found || core.Temp > best {
-			best = core.Temp
-			found = true
-		}
-	}
-	if found {
-		return &best
-	}
-	return nil
 }
 
 func maxPMGUptime(nodes []models.PMGNodeStatus) int64 {

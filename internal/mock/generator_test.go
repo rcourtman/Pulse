@@ -272,6 +272,55 @@ func TestBuildFixtureStateLinksAllNodesToHostAgents(t *testing.T) {
 	}
 }
 
+// A node and its linked agent carry one CPU reading under the agent's real
+// keys, taken from the series that seeds the agent's history, so the node
+// drawer's headline continues the line drawn beneath it.
+func TestFixtureNodeAndLinkedAgentShareOnePrimaryCPUTemperature(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.NodeCount = 7
+	cfg.GenericHostCount = 2
+	cfg.RandomMetrics = true
+
+	data := buildFixtureState(cfg)
+	check := func(stage string, at time.Time, sampled bool) {
+		t.Helper()
+		hostsByID := make(map[string]models.Host, len(data.Hosts))
+		for _, host := range data.Hosts {
+			hostsByID[host.ID] = host
+			if _, legacy := host.Sensors.TemperatureCelsius["cpu.package"]; legacy {
+				t.Fatalf("%s: host %s carries a second package reading under cpu.package", stage, host.ID)
+			}
+		}
+		compared := 0
+		for _, node := range data.Nodes {
+			nodeReading := models.PrimaryCPUTemperatureCelsius(node.Temperature)
+			if nodeReading == nil || node.Status != "online" {
+				continue
+			}
+			host, ok := hostsByID[node.LinkedAgentID]
+			if !ok || host.Status == "offline" {
+				continue
+			}
+			hostReading := models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors)
+			if hostReading == nil || *hostReading != *nodeReading {
+				t.Fatalf("%s: node %s reads %v but its agent %s reads %v", stage, node.ID, *nodeReading, host.ID, hostReading)
+			}
+			if want := SampleMetric("agent", host.ID, "temperature", at); sampled && *nodeReading != want {
+				t.Fatalf("%s: node %s reads %v, want the agent series sample %v", stage, node.ID, *nodeReading, want)
+			}
+			compared++
+		}
+		if compared == 0 {
+			t.Fatalf("%s: no online node with a CPU reading to compare", stage)
+		}
+	}
+	check("build", time.Time{}, false)
+
+	refreshAt := time.Now().Add(time.Minute)
+	updateFixtureStateMetricsAt(&data, cfg, refreshAt)
+	check("refresh", refreshAt, true)
+}
+
 func TestBuildFixtureStatePopulatesHostIORates(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.NodeCount = 6

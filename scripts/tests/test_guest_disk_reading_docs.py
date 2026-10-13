@@ -33,7 +33,7 @@ class GuestDiskReadingDocsTest(unittest.TestCase):
         row = (ROOT / "frontend-modern/src/components/Workloads/GuestRow.tsx").read_text()
         drawer = (ROOT / "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx").read_text()
         presentation = (ROOT / "frontend-modern/src/utils/workloadGuestPresentation.ts").read_text()
-        for label in ("Prior", "Last known"):
+        for label in ("Prior", "Last known", "No permission", "Agent error", "Denied", "Error"):
             with self.subTest(label=label):
                 self.assertIn(label, text)
                 self.assertIn(f"'{label}'", row)

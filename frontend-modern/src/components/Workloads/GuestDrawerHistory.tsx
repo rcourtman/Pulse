@@ -27,6 +27,7 @@ import { formatCompactSpeed } from '@/utils/format';
 
 import {
   GUEST_DRAWER_HISTORY_GROUPS,
+  buildGuestDrawerHistoryBandPath,
   buildGuestDrawerHistoryPath,
   getGuestDrawerHistoryRangeBounds,
   getGuestDrawerHistoryScale,
@@ -43,12 +44,23 @@ import {
   createGuestDrawerHistorySource,
 } from './guestDrawerHistoryQuery';
 
+/** An active alert on one charted metric; a numeric trigger draws a dashed line. */
+export interface GuestDrawerHistoryAlert {
+  severity: 'warning' | 'critical';
+  value?: number;
+}
+
 interface GuestDrawerHistoryProps {
   currentMetrics?: Record<string, number | null | undefined>;
   deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
   groups?: GuestDrawerHistoryGroupConfig[];
   range: HistoryTimeRange;
   target: GuestDrawerHistoryTarget | null;
+  /** Shows the range picker beside the charts, for hosts without a tab strip slot. */
+  onRangeChange?: (range: HistoryTimeRange) => void;
+  /** False while the charts are hidden (another drawer tab), so they do not poll. */
+  enabled?: boolean;
+  alerts?: Record<string, GuestDrawerHistoryAlert | undefined>;
 }
 
 interface GuestDrawerHistoryRangeSelectProps {
@@ -57,6 +69,7 @@ interface GuestDrawerHistoryRangeSelectProps {
 }
 
 interface GuestDrawerHistoryGroupChartProps {
+  alerts?: Record<string, GuestDrawerHistoryAlert | undefined>;
   currentMetrics?: Record<string, number | null | undefined>;
   deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
   group: GuestDrawerHistoryGroupConfig;
@@ -98,24 +111,30 @@ const formatRangeLabel = (range: HistoryTimeRange): string => {
   }
 };
 
+// A guest and a node drawer can be open together, so each picker owns its id.
 export const GuestDrawerHistoryRangeSelect: Component<GuestDrawerHistoryRangeSelectProps> = (
   props,
-) => (
-  <FormSelect
-    id="guest-history-range"
-    label="History range"
-    labelClass="sr-only"
-    fieldBaseClass="contents"
-    selectBaseClass={`${filterSelectClass} h-7 min-h-11 py-0 text-[11px] sm:min-h-0`}
-    data-testid="guest-history-range-control"
-    value={props.range}
-    onChange={(event) => props.onRangeChange(event.currentTarget.value as HistoryTimeRange)}
-  >
-    <For each={HISTORY_CHART_RANGES}>
-      {(option) => <option value={option}>{formatRangeLabel(option)}</option>}
-    </For>
-  </FormSelect>
-);
+) => {
+  // Created once: a getter prop would mint a new id on every read, splitting
+  // the label from its select.
+  const id = `guest-history-range-${createUniqueId()}`;
+  return (
+    <FormSelect
+      id={id}
+      label="History range"
+      labelClass="sr-only"
+      fieldBaseClass="contents"
+      selectBaseClass={`${filterSelectClass} h-7 min-h-11 py-0 text-[11px] sm:min-h-0`}
+      data-testid="guest-history-range-control"
+      value={props.range}
+      onChange={(event) => props.onRangeChange(event.currentTarget.value as HistoryTimeRange)}
+    >
+      <For each={HISTORY_CHART_RANGES}>
+        {(option) => <option value={option}>{formatRangeLabel(option)}</option>}
+      </For>
+    </FormSelect>
+  );
+};
 
 // Gridline labels state the scale's actual value at each line, so a reader
 // can tell a KB/s peak from a MB/s one. ("Avg" used to mark the midpoint of
@@ -131,6 +150,13 @@ const getAxisLabel = (
   if (unit === 'B/s') return value <= 0 ? '0' : `${formatCompactSpeed(value)}/s`;
   return `${Math.round(value)}`;
 };
+
+const alertToneClass = (severity: GuestDrawerHistoryAlert['severity'] | undefined) =>
+  severity === 'critical'
+    ? 'font-semibold text-red-700 dark:text-red-300'
+    : severity === 'warning'
+      ? 'font-semibold text-amber-700 dark:text-amber-300'
+      : '';
 
 const clampNumber = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
@@ -284,7 +310,13 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     if (timestamp === undefined) return 'No stored history observations.';
     const values = series().map((item) => {
       const point = item.points.find((point) => point.timestamp === timestamp);
-      return `${item.label} ${point ? formatHistoryChartTooltipValue(point.value, item.unit) : 'no observation'}`;
+      if (!point) return `${item.label} no observation`;
+      const value = formatHistoryChartTooltipValue(point.value, item.unit);
+      const low = formatHistoryChartTooltipValue(point.min ?? point.value, item.unit);
+      const high = formatHistoryChartTooltipValue(point.max ?? point.value, item.unit);
+      return low === high
+        ? `${item.label} ${value}`
+        : `${item.label} ${value} average, ${low} to ${high}`;
     });
     return `${new Date(timestamp).toLocaleString()}. ${values.join('. ')}.`;
   };
@@ -326,7 +358,49 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
   const singleObservation = createMemo(() =>
     observationTimes().length === 1 ? { timestamp: observationTimes()[0] } : null,
   );
-  const scale = createMemo(() => getGuestDrawerHistoryScale(series(), props.group.unit));
+  const thresholds = createMemo(() =>
+    series().flatMap((item) => {
+      const alert = props.alerts?.[item.metric];
+      return alert && typeof alert.value === 'number' && Number.isFinite(alert.value)
+        ? [{ metric: item.metric, label: item.label, severity: alert.severity, value: alert.value }]
+        : [];
+    }),
+  );
+  const alertDescription = createMemo(() =>
+    series()
+      .flatMap((item) => {
+        const alert = props.alerts?.[item.metric];
+        if (!alert) return [];
+        const trigger =
+          typeof alert.value === 'number' && Number.isFinite(alert.value)
+            ? ` at ${formatHistoryChartTooltipValue(alert.value, item.unit)}`
+            : '';
+        return [`${item.label} ${alert.severity} alert${trigger}.`];
+      })
+      .join(' '),
+  );
+  // An alert trigger outside the observed range widens the scale, so the
+  // dashed line sits at its real value, not clamped to an edge.
+  const scale = createMemo(() =>
+    getGuestDrawerHistoryScale(
+      [
+        ...series(),
+        ...(observationTimes().length > 0
+          ? thresholds().map((threshold) => ({
+              points: [
+                {
+                  timestamp: observationTimes()[0],
+                  value: threshold.value,
+                  min: threshold.value,
+                  max: threshold.value,
+                },
+              ],
+            }))
+          : []),
+      ],
+      props.group.unit,
+    ),
+  );
   const bounds = () => props.timeBounds;
   const hasStoredData = createMemo(() => observationTimes().length > 0 && bounds() !== null);
   const hoveredSeries = createMemo(() => {
@@ -358,8 +432,19 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         : props.currentMetrics?.[item.metric];
       const isFallback =
         timestamp === null && typeof fallbackValue === 'number' && Number.isFinite(fallbackValue);
+      // While a time is inspected, name the bucket's peak when it rises a
+      // visible distance (a tenth of the plot) above the average the line
+      // shows. The default readout stays one number per series.
+      const peakVisible =
+        point !== undefined &&
+        activeTimestamp() !== null &&
+        (point.max ?? point.value) - point.value >= 0.1 * (scale().maxValue - scale().minValue);
       return {
         ...item,
+        peakLabel:
+          point && peakVisible
+            ? `peak ${formatHistoryChartTooltipValue(point.max ?? point.value, item.unit)}`
+            : null,
         deferred,
         descriptionId: `${inspectionId}-deferred-${index}`,
         isCurrent: isFallback && !deferred,
@@ -421,7 +506,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           <Show when={readoutTime()}>
             {(time) => (
               <time
-                class="text-[10px] font-semibold tabular-nums text-base-content"
+                class="text-[10px] tabular-nums text-muted"
                 data-testid="guest-history-hover-time"
                 dateTime={time().dateTime}
                 title={time().fullLabel}
@@ -433,7 +518,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             )}
           </Show>
         </div>
-        <div class="flex flex-wrap justify-end gap-x-3 gap-y-1 text-[11px] text-muted">
+        <div class="flex flex-wrap justify-end gap-x-3 gap-y-1 text-xs text-muted">
           <For each={displaySeries()}>
             {(item) => (
               <span
@@ -447,7 +532,12 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                   <circle cx="5" cy="5" r="4" fill={item.color} />
                 </svg>
                 <span class="font-medium text-base-content">{item.label}</span>
-                <span>{item.valueLabel}</span>
+                <span class={alertToneClass(props.alerts?.[item.metric]?.severity)}>
+                  {item.valueLabel}
+                </span>
+                <Show when={item.peakLabel}>
+                  {(label) => <span data-history-peak={item.metric}>{label()}</span>}
+                </Show>
                 <Show when={item.isCurrent}>
                   <span>current</span>
                 </Show>
@@ -515,9 +605,55 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
               />
             )}
           </For>
+          <For each={thresholds()}>
+            {(threshold) => (
+              <line
+                data-history-threshold={threshold.metric}
+                x1={GUEST_DRAWER_HISTORY_PLOT_LEFT}
+                x2={GUEST_DRAWER_HISTORY_CHART_WIDTH - GUEST_DRAWER_HISTORY_PLOT_RIGHT}
+                y1={getGuestDrawerHistoryY(threshold.value, scale())}
+                y2={getGuestDrawerHistoryY(threshold.value, scale())}
+                stroke="currentColor"
+                class={threshold.severity === 'critical' ? 'text-red-500' : 'text-amber-500'}
+                stroke-width="1"
+                stroke-dasharray="4 4"
+                vector-effect="non-scaling-stroke"
+              >
+                <title>{`${threshold.label} alert at ${formatHistoryChartTooltipValue(threshold.value, props.group.unit)}`}</title>
+              </line>
+            )}
+          </For>
           <Show when={bounds()}>
             {(rangeBounds) => (
               <>
+                <For each={drawableSeries()}>
+                  {(item) => (
+                    <Show
+                      when={buildGuestDrawerHistoryBandPath(
+                        item.points,
+                        scale(),
+                        rangeBounds().startTime,
+                        rangeBounds().endTime,
+                        GUEST_DRAWER_HISTORY_CHART_WIDTH,
+                        GUEST_DRAWER_HISTORY_CHART_HEIGHT,
+                      )}
+                    >
+                      {(band) => (
+                        <path
+                          data-history-band={item.metric}
+                          d={band()}
+                          fill={item.color}
+                          fill-opacity="0.2"
+                          stroke={item.color}
+                          stroke-opacity="0.45"
+                          stroke-width="1"
+                          stroke-linejoin="round"
+                          vector-effect="non-scaling-stroke"
+                        />
+                      )}
+                    </Show>
+                  )}
+                </For>
                 <For each={drawableSeries()}>
                   {(item) => (
                     <path
@@ -625,6 +761,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       </Show>
       <p id={`${inspectionId}-description`} class="sr-only">
         {chartDescription()}
+        {alertDescription() ? ` ${alertDescription()}` : ''}
       </p>
       <Show when={gapMessage()}>
         {(message) => (
@@ -699,7 +836,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   const historySource = createGuestDrawerHistorySource(
     () => props.target,
     () => props.range,
-    () => !locked(),
+    () => !locked() && props.enabled !== false,
   );
   const historyQuery = createGuestDrawerHistoryQuery(historySource);
 
@@ -736,32 +873,29 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
           if (event.pointerType === 'mouse') setTouchInspection(false);
         }}
       >
-        <Show
-          when={!locked()}
-          fallback={
-            <div class="rounded-xs border border-border bg-surface p-5 text-sm text-muted">
-              {formatRangeLabel(props.range)} history requires a higher license plan. This
-              instance's plan retains {maxHistoryDays()} days.
-            </div>
-          }
-        >
-          <div class="flex flex-wrap items-start justify-end gap-3">
-            <div
-              class="min-w-0 flex-1"
-              role="status"
-              aria-label="History refresh status"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              <Show when={historyQuery.error()}>
-                <InlineNotice tone={hasHistoryPoints() ? 'warning' : 'danger'}>
-                  {getAPIReadAccessErrorMessage(historyQuery.error()) ||
-                    (hasHistoryPoints()
-                      ? 'History refresh failed. Showing previously loaded history.'
-                      : 'Failed to load history data')}
-                </InlineNotice>
-              </Show>
-            </div>
+        <div class="flex flex-wrap items-start justify-end gap-2">
+          <div
+            class="min-w-0 flex-1"
+            role="status"
+            aria-label="History refresh status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <Show when={!locked() && historyQuery.error()}>
+              <InlineNotice tone={hasHistoryPoints() ? 'warning' : 'danger'}>
+                {getAPIReadAccessErrorMessage(historyQuery.error()) ||
+                  (hasHistoryPoints()
+                    ? 'History refresh failed. Showing previously loaded history.'
+                    : 'Failed to load history data')}
+              </InlineNotice>
+            </Show>
+          </div>
+          <Show when={props.onRangeChange}>
+            {(onRangeChange) => (
+              <GuestDrawerHistoryRangeSelect range={props.range} onRangeChange={onRangeChange()} />
+            )}
+          </Show>
+          <Show when={!locked()}>
             <Button
               size="sm"
               class="min-h-11 shrink-0 aria-disabled:opacity-50 sm:min-h-8"
@@ -778,12 +912,25 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
               </Show>
               {historyQuery.error() ? 'Retry history' : 'Refresh history'}
             </Button>
-          </div>
+          </Show>
+        </div>
+        <Show
+          when={!locked()}
+          fallback={
+            <div class="rounded-xs border border-border bg-surface p-5 text-sm text-muted">
+              {formatRangeLabel(props.range)} history requires a higher license plan. This
+              instance's plan retains {maxHistoryDays()} days.
+            </div>
+          }
+        >
           <Show when={!historyQuery.error() || hasHistoryPoints()}>
-            <div class={`grid gap-3 ${groups().length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
+            <div
+              class={`grid gap-3 md:grid-cols-2 ${groups().length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}
+            >
               <For each={groups()}>
                 {(group) => (
                   <GuestDrawerHistoryGroupChart
+                    alerts={props.alerts}
                     group={group}
                     loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
                     metrics={metrics()}

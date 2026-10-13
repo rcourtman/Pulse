@@ -862,3 +862,21 @@ func TestMergeTemperatureData_HistoricalOverrides(t *testing.T) {
 		}
 	})
 }
+
+// The CPU record follows the primary reading, so the drawer's record row is
+// never below its headline, and a raised record carries its time.
+func TestMergeTemperatureData_RecordFollowsPrimaryReading(t *testing.T) {
+	recordedBefore := time.Now().Add(-time.Hour)
+	host := &models.Temperature{
+		CPUPackage: 60,
+		CPUMax:     66,
+		Cores:      []models.CoreTemp{{Core: 0, Temp: 66}},
+		HasCPU:     true,
+		Available:  true,
+	}
+	proxy := &models.Temperature{CPUMaxRecord: 62, MaxRecorded: recordedBefore, HasCPU: true}
+
+	result := mergeTemperatureData(host, proxy)
+	assert.Equal(t, 66.0, result.CPUMaxRecord)
+	assert.True(t, result.MaxRecorded.After(recordedBefore), "raised record must carry its time")
+}

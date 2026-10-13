@@ -791,7 +791,9 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('<select');
     }
 
-    expect(guestDrawerHistorySource).toContain('id="guest-history-range"');
+    expect(guestDrawerHistorySource).toContain(
+      'const id = `guest-history-range-${createUniqueId()}`;',
+    );
     expect(guestDrawerHistorySource).toContain('data-testid="guest-history-range-control"');
   });
 
@@ -1302,16 +1304,20 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps object detail history behind the canonical Overview and History subtabs', () => {
-    for (const source of [
-      diskDetailSource,
-      guestDrawerSource,
-      nodeDrawerSource,
-      storagePoolDetailSource,
-    ]) {
+    for (const source of [diskDetailSource, storagePoolDetailSource]) {
       expect(source).toContain('@/components/shared/Subtabs');
       expect(source).toContain("value: 'overview', label: 'Overview'");
       expect(source).toContain("value: 'history', label: 'History'");
     }
+    // Guest, node, Docker host and resource-detail drawers chart their history
+    // on Overview itself, with the range picker beside the charts. A History
+    // tab there repeated Overview's charts, or hid them a tab away.
+    for (const source of [guestDrawerSource, nodeDrawerSource, dockerHostDrawerSource]) {
+      expect(source).toContain('@/components/shared/Subtabs');
+      expect(source).toContain("value: 'overview', label: 'Overview'");
+      expect(source).not.toContain("value: 'history', label: 'History'");
+    }
+    expect(resourceDetailDrawerSource).not.toContain("activeTab() === 'history'");
 
     expect(resourceDetailDrawerSource).toContain('@/components/shared/Subtabs');
     expect(resourceDetailDrawerSource).toContain('tabs={drawer.tabs().map');

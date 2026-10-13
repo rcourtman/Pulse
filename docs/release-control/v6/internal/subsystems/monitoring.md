@@ -1891,6 +1891,41 @@ Verification:
   `internal/monitoring/monitor_pve_disk_fallback_test.go` remains required:
   association cleanup must not remove the one-way link used by SMART fallback.
 
+### One primary CPU temperature rule for node and agent history
+
+`models.PrimaryCPUTemperatureCelsius` (`internal/models/temperature_primary.go`)
+is the only rule that names a machine's single CPU temperature: the hottest
+usable reading among the package (Intel Package id, AMD Tctl/Tdie), the
+producer's CPU maximum and every core. `models.HostSensorPrimaryCPUTemperatureCelsius`
+applies it to an agent's flat sensor map (the hottest `cpu*` key). Node history
+(`monitor_pve_storage.go`), agent history (`monitor_agents.go`), the mock seed
+and live ticks (`mock_metrics_history.go`) and the CPU low/record tracking
+(`monitor_polling_node_helpers.go`, `mergeTemperatureData` in
+`host_agent_temps.go`) all call it. The package-first agent copy and the
+CPUMax-first node copy are gone: on an agent-fed node `CPUMax` is built from
+cores alone and can sit below the package, and elsewhere a core can run above
+the package, so the two copies split an agent-linked node's drawer headline
+from the line beneath it. For the keys an agent reports (`cpu_package`,
+`cpu_core_N`) the map form equals the rule applied to the node temperature
+`convertHostSensorsToTemperature` builds from the same map. A raised record now
+also carries its `MaxRecorded` time. TrueNAS keeps its own package-versus-core
+outlier safeguard (`maxTrueNASSystemTemperature`, #2122) because that quirk is
+specific to its producer.
+
+Mock mode follows the same shape. A node and its linked agent carry one CPU
+reading, sampled from the agent's series (`mock.CPUTemperatureSeries`), which
+is also the series that seeds both histories, under the keys a real agent
+reports; the package carries the sample and cores sit a stable amount below,
+so the rule returns the sample exactly. Agent hosts no longer carry a second
+package reading under a `cpu.package` key. Proof: `monitor_host_agents_test.go`
+(`TestApplyHostReportChartsThePrimaryCPUTemperatureEverySurfaceShows`),
+`monitor_additional_test.go`, `host_agent_temps_test.go`,
+`mock_metrics_history_test.go`
+(`TestSeedMockMetricsHistory_LinkedNodeTemperatureContinuesAgentSeries`) and
+`internal/mock/generator_test.go`
+(`TestFixtureNodeAndLinkedAgentShareOnePrimaryCPUTemperature`); each fails
+against the previous rules.
+
 ### Physical-disk observation cadence
 
 Physical disk inventory has an independent collector schedule. The PVE poller
