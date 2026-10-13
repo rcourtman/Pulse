@@ -86,6 +86,7 @@ class RenderReleaseBodyTest(unittest.TestCase):
             "and existing Relay subscribers now have Pro features at their current price.",
             body,
         )
+        self.assertIn("does not require a companion mobile release", body)
         self.assertIn(
             "https://github.com/rcourtman/Pulse/compare/v6.5.0...v6.6.0-beta.2", body,
         )
