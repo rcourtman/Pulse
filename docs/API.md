@@ -84,7 +84,7 @@ pulse_api() (
   chmod 600 "$auth_file" || exit "$?"
   result_file=$(mktemp "$auth_dir/api-response.XXXXXX") || exit "$?"
   curl_exit=0
-  status=$(curl --disable --fail-with-body --silent --show-error \
+  status=$(curl --disable --fail-with-body --silent --show-error --globoff \
     --proto '=http' --noproxy 127.0.0.1 --connect-timeout 5 --max-time 20 \
     --header "@$auth_file" --output "$result_file" --write-out '%{http_code}' \
     "$@" "http://127.0.0.1:7655$api_path") || curl_exit=$?
@@ -126,6 +126,13 @@ body. A method being supported is not permission to change a resource. Choose
 each administrative change separately and check its current state afterwards.
 A timeout or incomplete response can occur **after a change was applied**;
 do not repeat a POST, PUT or DELETE merely because the response was lost.
+
+Keep `--globoff`: shell quotes alone do not disable curl's URL globbing. Without
+it, a path containing a brace list such as `{review,ops}` or a range such as
+`[1-3]` can send several requests, including several POST, PUT or DELETE
+requests. The helper treats these characters literally, not as a batch of
+targets. Still quote the whole path in the shell, and URL-encode dynamic resource
+IDs and query values; `--globoff` does not encode them for you.
 
 Keep `--disable` first: it ignores local curl configuration that could enable
 trace output, bypass TLS or follow redirects. On an authentication-enabled
