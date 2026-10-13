@@ -1,4 +1,5 @@
 import type { Disk } from '@/types/api';
+import { getFilesystemByteUsagePercent } from '@/utils/filesystemByteUsage';
 import type { WorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
 import type { AnomalyReport } from '@/types/aiIntelligence';
 import {
@@ -121,11 +122,11 @@ function getDiskUsagePercent(disk: Disk): number {
   return 0;
 }
 
-// The poller reports usage -1 for mounts it only knows from the guest config
-// (capacity may be known, live usage is not). Those cannot be drawn as usage
-// bars; they surface in the tooltip instead.
+// Unknown sentinels and invalid/incomplete byte readings cannot contribute
+// to utilization, totals or severity. Keep their identity/capacity in the
+// tooltip, with the same admission as the per-filesystem drawer rows.
 export function isStackedDiskUsageUnknown(disk: Disk): boolean {
-  return typeof disk.usage === 'number' && disk.usage < 0;
+  return getFilesystemByteUsagePercent(disk) === null;
 }
 
 const UNKNOWN_DISK_COLOR = 'rgba(148, 163, 184, 0.5)';
@@ -219,7 +220,10 @@ function buildTooltipContent(
           color: UNKNOWN_DISK_COLOR,
           label: getDiskLabel(disk, index),
           percent: '—',
-          total: (disk.total ?? 0) > 0 ? formatBytes(disk.total ?? 0) : '—',
+          total:
+            typeof disk.total === 'number' && Number.isFinite(disk.total) && disk.total > 0
+              ? formatBytes(disk.total)
+              : '—',
           used: '?',
         };
       }
@@ -280,17 +284,31 @@ export function buildStackedDiskBarPresentation(
   props: StackedDiskBarProps,
   containerWidth: number,
 ): StackedDiskBarPresentation {
-  // Retained numbers explain the last report, not live pressure. Unannotated
-  // host/platform callers preserve their existing behaviour.
-  const unavailable = props.reading?.state === 'unavailable';
-  const current = !props.reading || props.reading.state === 'current';
+  const allDisks = props.disks ?? [];
+  const measuredDisks = allDisks.filter((disk) => !isStackedDiskUsageUnknown(disk));
+  // Independently supplied aggregate percentages keep their legacy fallback;
+  // they do not make an unmeasured per-filesystem byte row usable.
+  const aggregate = props.aggregateDisk;
+  const hasAggregateUsage = Boolean(
+    aggregate &&
+    (getFilesystemByteUsagePercent(aggregate) !== null ||
+      ((aggregate.total ?? 0) <= 0 &&
+        typeof aggregate.usage === 'number' &&
+        Number.isFinite(aggregate.usage) &&
+        aggregate.usage >= 0)),
+  );
+  // Retained numbers explain the last report, not live pressure. If every
+  // supplied filesystem is unmeasured, do not fall through to a fabricated 0%.
+  const unavailable =
+    props.reading?.state === 'unavailable' ||
+    ((allDisks.length > 0 || Boolean(aggregate)) &&
+      measuredDisks.length === 0 &&
+      !hasAggregateUsage);
+  const current = !unavailable && (!props.reading || props.reading.state === 'current');
   const valuePrefix = props.reading?.state === 'last-known' ? 'Last known ' : '';
   const anomaly = current ? props.anomaly : null;
-  const aggregateDisk = unavailable ? undefined : props.aggregateDisk;
-  const allDisks = props.disks ?? [];
-  // Usage visualisations only draw disks with measured usage; config-only
-  // mounts (usage -1) stay listed in the tooltip.
-  const disks = unavailable ? [] : allDisks.filter((disk) => !isStackedDiskUsageUnknown(disk));
+  const aggregateDisk = unavailable ? undefined : aggregate;
+  const disks = unavailable ? [] : measuredDisks;
   const hasDisks = disks.length > 0;
   const hasMultipleDisks = disks.length > 1;
   const aggregateMode = props.mode === 'aggregate';

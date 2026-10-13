@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "33267809f325631a0863aced8cb56b81c2bc1070",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/DrawerDiskListCard.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
+    "frontend-modern/src/utils/filesystemByteUsage.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/DrawerDiskListCard.tsx": "339639c52459e85a322c9fa8da80cd22b982c2c32af5f805f02196d37f845a9d",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "9c8ba41601e63934215a64e77eadf0f386acf1c901483a9805f2aa24c719fdad",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "a023f8653c8636e205db59f92ee6582cb8d18f7aff57d893de5ed9749e87b27f",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "cb4e3aab9b5da6afabdb609d2eddd70ccb0d3d90a8c408928f2f773dbc125d54",
+    "frontend-modern/src/utils/filesystemByteUsage.ts": "2c7b16951cfed3794d97cb18a10556f12b437fc22ac760661b92287bc6720d24"
+  },
+  "routes": [
+    "/browser-tests/host-disk-usage.html?kind=node (synthetic canonical Resources API -> useUnifiedResources -> production ProxmoxNodesTable and host drawer)",
+    "/browser-tests/host-disk-usage.html?kind=docker (synthetic canonical Resources API -> useUnifiedResources -> production DockerHostsTable and host drawer)"
+  ],
+  "states": [
+    "Explicit unknown usage with positive capacity; used bytes without capacity",
+    "Genuine empty filesystem with omitted used=0 and independent 95% critical peer",
+    "Same resource identity unknown -> measured 70% -> unknown -> all unknown",
+    "Measured-only node combined summary, independent node aggregate and Docker N/A fallback",
+    "Existing EFI mount filtering and independent peer readings retained"
+  ],
+  "interactions": [
+    "Desktop sequential Tab/Enter opens production disclosure; phone node disclosure tap and Docker row/name tap",
+    "Explicit same-ID Resources API refetch updates the same open drawer and summary without renewing old utilization",
+    "Ordinary collapse removes drawer without another resource read; only synthetic local GET requests",
+    "Inspect desktop/narrow pixels and no horizontal page overflow"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37",
+      "color_scheme": "light"
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "browser": "WebKit",
+      "browser_version": "26.0",
+      "color_scheme": "dark",
+      "has_touch": true
+    }
+  ],
+  "verified_at": "2026-10-13T02:56:37.497486Z",
+  "playwright_version": "1.56.1",
+  "checks": 24,
+  "pixel_review": "All twelve retained captures opened with native view_image. Desktop and 375px phone layouts fit; unavailable values are neutral and capacity text wraps, genuine omitted zero is 0% / 0 B, and the measured 95% peer stays red. Same-ID refresh shows 70% / 70 GB then withdraws it on unknown; all-unknown Docker is N/A while the separately reported node aggregate stays 25%. Phone node combined summary is 48% of measured bytes, becoming 55% after the valid 70% read. Existing mount-label truncation remains, with full labels in titles; this candidate does not claim to repair it.",
+  "capture_sha256": {
+    "desktop-node-unavailable.png": "ae9b2b1f60632248da32e8182a4d4f35d8757ee37569fe787250943537a06e23",
+    "desktop-node-measured.png": "eef96ebf5fcb90d9051e8d0700f0829a9a45794f87e240150d8ba490bf217f30",
+    "desktop-node-all-unknown.png": "8e9d93c9e36d193d9e65d976c5c3443fcfee1f84b43e0acde3b3d9340d55a1cf",
+    "desktop-docker-unavailable.png": "d9d54ffcb936925c3c1ef6238cbb8dbb6809ceb34bd276d0a60574a998b14955",
+    "desktop-docker-measured.png": "ba03c84cfdac1b48bda331674147de98fb3db9307aa39d73a6b121013dd5d2d0",
+    "desktop-docker-all-unknown.png": "c85300b4f4bd277d6a823c5d74995976ce1c3c47cd7636703272b3f3c202cb93",
+    "phone-node-unavailable.png": "2bfde1d525d694f431f263d346cfb13530471254c84d7eca6ba0116d276007cd",
+    "phone-node-measured.png": "9c15a52dde6eb7fa61be48998c9762900073fbe80c85dec68b1adb985c3b2339",
+    "phone-node-all-unknown.png": "9a874976a2e5e825f165bff3429e98c7d8618404fa90450f81911a7a89cffeb2",
+    "phone-docker-unavailable.png": "16fd68d8191ced1b29290a6f636af18010384394354b5770177678ce978975f2",
+    "phone-docker-measured.png": "b73544524267c34e8e47101a17af620f443d89cd4de204b2ca52720897d7535e",
+    "phone-docker-all-unknown.png": "0a62f92fd968e41e947b1380b1256ac6d439fbe2ff5bdad1198660edcb81077a"
+  },
+  "scope_limit": "Canonical resource HTTP client -> ProxmoxNodesTable/DockerHostsTable -> production host drawers with synthetic disk observations. No provider, disk, guest, backup or recovery operation. This is synthetic presentation, not native guest/host recovery, released availability or independent thaw/write safety."
+}

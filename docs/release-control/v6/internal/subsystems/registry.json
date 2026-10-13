@@ -5948,6 +5948,8 @@
               "frontend-modern/src/components/shared/InlineNotice.test.tsx",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts",
+              "frontend-modern/src/components/Workloads/__tests__/DrawerDiskListCard.readings.test.tsx",
+              "frontend-modern/src/components/Workloads/__tests__/HostDrawer.filesystem-readings.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/NodeDrawerOverview.updateEvidence.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",
               "frontend-modern/src/utils/__tests__/proxmoxUpdateEvidence.test.ts"
@@ -7161,6 +7163,7 @@
         "frontend-modern/src/stores/websocket.ts",
         "frontend-modern/src/types/workloads.ts",
         "frontend-modern/src/useAppRuntimeState.ts",
+        "frontend-modern/src/utils/filesystemByteUsage.ts",
         "frontend-modern/src/utils/resourceStateAdapters.ts",
         "frontend-modern/src/utils/searchQuery.ts",
         "frontend-modern/src/utils/thresholdSliderPresentation.ts",
@@ -7316,6 +7319,7 @@
               "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
               "frontend-modern/src/hooks/useWorkloads.ts",
               "frontend-modern/src/types/workloads.ts",
+              "frontend-modern/src/utils/filesystemByteUsage.ts",
               "frontend-modern/src/utils/searchQuery.ts",
               "frontend-modern/src/utils/thresholdSliderPresentation.ts",
               "frontend-modern/src/utils/workloads.ts"
@@ -8336,6 +8340,8 @@
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceFacetSummary.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceOperatorStateSection.test.ts",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+              "frontend-modern/src/components/Workloads/__tests__/DrawerDiskListCard.readings.test.tsx",
+              "frontend-modern/src/components/Workloads/__tests__/HostDrawer.filesystem-readings.test.tsx",
               "frontend-modern/src/features/docker/__tests__/DockerAlertsTable.test.tsx",
               "frontend-modern/src/features/docker/__tests__/dockerContainerLifecycleActions.test.ts",
               "frontend-modern/src/features/docker/__tests__/dockerContainerTableModel.test.ts",

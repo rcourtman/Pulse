@@ -9426,3 +9426,35 @@ VM/LXC rows, policy producer, hover, keyboard/touch dialogs and the guest drawer
 in non-UTC desktop and phone contexts. This is unambiguous presentation, not
 PBS verification ingestion, independent thaw, filesystem liveness, native
 guest restart recovery or containing software availability.
+
+### Host drawers distinguish unknown filesystem usage from empty filesystems
+
+The existing Proxmox node and Docker host per-filesystem rows use the shared
+host disk presentation. An explicit negative usage sentinel, negative or
+non-finite used bytes, or absent/non-positive/non-finite capacity produces
+**Usage unavailable**, with any finite positive capacity retained separately.
+Unavailable usage has neutral text and no utilization bar; a retained capacity
+alone is not a healthy zero. Finite byte ratios preserve their existing
+threshold presentation. Real zero-byte values, including zeros omitted by the
+canonical DiskInfo JSON representation, remain valid empty filesystems when
+capacity is known and no unknown sentinel is present.
+
+The shared usage text wraps in both existing drawers, rather than relying on
+a tooltip or rendering an old percentage after a new unavailable read. The
+existing mount filtering, row disclosure and single-filesystem summary stay
+unchanged. The connected `HostDrawer.filesystem-readings.test.tsx` and shared
+`DrawerDiskListCard.readings.test.tsx` controls cover unknown/capacity/zero,
+invalid bytes and same-mounted-drawer replacement. The desktop Chromium and
+narrow touch WebKit `browser-tests/host-disk-usage.cjs` fixture consumes synthetic
+Resources responses through the actual platform tables and drawers. No new
+route, monitoring policy, provider operation or native recovery claim is added.
+
+The shared `filesystemByteUsage.ts` admission also applies to filesystem inputs
+of `stackedDiskBarModel.ts`: unusable byte rows remain neutral in tooltips and
+do not contribute used bytes, capacity, bars, combined percentages or highest
+usage. All-unmeasured filesystem lists with no independent accepted aggregate
+render N/A, not a fabricated zero. Independently supplied aggregate metrics and
+retained/unavailable source classifications preserve their existing semantics.
+The connected stacked-model controls retain explicit aggregate fallback tests;
+the browser fixture checks mixed and all-unknown lists in the actual summaries
+as well as both drawers, including live replacement at narrow widths.

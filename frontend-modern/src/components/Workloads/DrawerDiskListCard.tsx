@@ -3,47 +3,38 @@ import { For, Show } from 'solid-js';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import type { Disk } from '@/types/api';
 import { formatBytes } from '@/utils/format';
+import { getFilesystemByteUsagePercent } from '@/utils/filesystemByteUsage';
 import { getMetricColorRgba, getMetricTextColorClass } from '@/utils/metricThresholds';
 
 export interface DrawerDiskListItem {
   key: string;
   label: string;
   device: string;
-  percent: number;
-  used: number;
-  total: number;
+  percent: number | null;
+  usageText: string;
   color: string;
   textClass: string;
 }
-
-const getDiskUsagePercent = (disk: Disk): number => {
-  const total = disk.total ?? 0;
-  const used = disk.used ?? 0;
-  if (total > 0 && Number.isFinite(used)) {
-    return (used / total) * 100;
-  }
-  const usage = disk.usage;
-  if (typeof usage === 'number' && Number.isFinite(usage)) {
-    return usage <= 1 ? usage * 100 : usage;
-  }
-  return 0;
-};
 
 const getDiskLabel = (disk: Disk, index: number): string =>
   disk.mountpoint || disk.device || `Disk ${index + 1}`;
 
 export const buildDrawerDiskListItems = (disks: Disk[]): DrawerDiskListItem[] =>
   disks.map((disk, index) => {
-    const percent = getDiskUsagePercent(disk);
+    const percent = getFilesystemByteUsagePercent(disk);
     return {
       key: `${disk.device ?? ''}|${disk.mountpoint ?? ''}|${index}`,
       label: getDiskLabel(disk, index),
       device: disk.device ?? '',
       percent,
-      used: disk.used ?? 0,
-      total: disk.total ?? 0,
-      color: getMetricColorRgba(percent, 'disk'),
-      textClass: getMetricTextColorClass(percent, 'disk'),
+      usageText:
+        percent !== null
+          ? `${Math.round(percent)}% · ${formatBytes(disk.used ?? 0)} / ${formatBytes(disk.total!)}`
+          : typeof disk.total === 'number' && Number.isFinite(disk.total) && disk.total > 0
+            ? `Usage unavailable · ${formatBytes(disk.total)} total`
+            : 'Usage unavailable',
+      color: percent === null ? '' : getMetricColorRgba(percent, 'disk'),
+      textClass: percent === null ? 'text-muted' : getMetricTextColorClass(percent, 'disk'),
     };
   });
 
@@ -70,23 +61,19 @@ export function DrawerDiskListCard(props: DrawerDiskListCardProps) {
                 >
                   {disk.label}
                 </span>
-                <span class={`shrink-0 tabular-nums ${disk.textClass}`}>
-                  {`${Math.round(disk.percent)}%`}
-                  <span class="ml-1 text-muted">
-                    ({formatBytes(disk.used)}
-                    <Show when={disk.total > 0}> / {formatBytes(disk.total)}</Show>)
-                  </span>
-                </span>
+                <span class={`text-right tabular-nums ${disk.textClass}`}>{disk.usageText}</span>
               </div>
-              <div class="relative h-1.5 w-full overflow-hidden rounded-sm bg-surface-hover">
-                <div
-                  class="absolute inset-y-0 left-0 rounded-sm"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, disk.percent))}%`,
-                    background: disk.color,
-                  }}
-                />
-              </div>
+              <Show when={disk.percent !== null}>
+                <div class="relative h-1.5 w-full overflow-hidden rounded-sm bg-surface-hover">
+                  <div
+                    class="absolute inset-y-0 left-0 rounded-sm"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, disk.percent!))}%`,
+                      background: disk.color,
+                    }}
+                  />
+                </div>
+              </Show>
             </div>
           )}
         </For>
