@@ -4,6 +4,7 @@ package installtests
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,7 +15,60 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func nativeInstallerFixtureSteps(t *testing.T) (nativeGuidanceStep, nativeGuidanceStep) {
+func nativeInstallerPhaseRun(phase string) string {
+	return `set -euo pipefail
+if [[ -n "${PULSE_INSTALLER_FIXTURE_BIN:-}" ]]; then
+  export PATH="$PULSE_INSTALLER_FIXTURE_BIN:$PATH"
+fi
+python3 scripts/installtests/run_unix_contracts.py --phase ` + phase
+}
+
+func validateNativeInstallerPhaseOrder(steps []nativeGuidanceStep) error {
+	indices := map[string]int{}
+	names := []string{
+		"Set up Go",
+		"Supply GNU timeout for macOS guidance checks",
+		"Verify native Unix timeout prerequisite",
+		"Supply Linux server installer fixture tools on macOS",
+		"Test NAS removal contracts before frontend preparation",
+		"Set up Node.js for native runtime test assets",
+		"Test native agent runtime",
+		"Test native Unix installer contracts",
+	}
+	for i, step := range steps {
+		for _, name := range names {
+			if step.Name == name {
+				if _, exists := indices[name]; exists {
+					return fmt.Errorf("native installer phase step must run once: %s", name)
+				}
+				indices[name] = i
+			}
+		}
+	}
+	previous := -1
+	for _, name := range names {
+		index, exists := indices[name]
+		if !exists || index <= previous {
+			return fmt.Errorf("native installer preparation and both phases must stay in order: %s", name)
+		}
+		previous = index
+	}
+	supply := steps[indices[names[3]]]
+	if supply.If != "runner.os == 'macOS'" || supply.Shell != "bash" || supply.ContinueOnError ||
+		supply.WorkingDirectory != "" || strings.Contains(supply.Run, "GITHUB_PATH") {
+		return fmt.Errorf("Linux fixture tools must not replace the native runtime tools or hide a failure")
+	}
+	for name, phase := range map[string]string{names[4]: "preflight", names[7]: "remaining"} {
+		step := steps[indices[name]]
+		if step.If != "matrix.unix" || step.Shell != "bash" || step.ContinueOnError || step.WorkingDirectory != "" ||
+			strings.TrimSpace(step.Run) != nativeInstallerPhaseRun(phase) {
+			return fmt.Errorf("both native installer phases must execute the exact fail-closed runner with step-local tools: %s", name)
+		}
+	}
+	return nil
+}
+
+func nativeInstallerFixtureSteps(t *testing.T) (nativeGuidanceStep, nativeGuidanceStep, nativeGuidanceStep) {
 	t.Helper()
 	content, err := os.ReadFile(repoFile(".github", "workflows", "unified-agent-native.yml"))
 	if err != nil {
@@ -27,31 +81,85 @@ func nativeInstallerFixtureSteps(t *testing.T) (nativeGuidanceStep, nativeGuidan
 		t.Fatal(err)
 	}
 	steps := workflow.Jobs["native-agent"].Steps
-	runtimeAt, supplyAt, installerAt := -1, -1, -1
-	for i, step := range steps {
+	if err := validateNativeInstallerPhaseOrder(steps); err != nil {
+		t.Fatal(err)
+	}
+	var supply, preflight, installer nativeGuidanceStep
+	for _, step := range steps {
 		switch step.Name {
-		case "Test native agent runtime":
-			runtimeAt = i
 		case "Supply Linux server installer fixture tools on macOS":
-			supplyAt = i
+			supply = step
+		case "Test NAS removal contracts before frontend preparation":
+			preflight = step
 		case "Test native Unix installer contracts":
-			installerAt = i
+			installer = step
 		}
 	}
-	if runtimeAt < 0 || supplyAt <= runtimeAt || installerAt <= supplyAt {
-		t.Fatal("Linux fixture tool supply must follow native runtime testing and precede Unix installer checks")
+	return supply, preflight, installer
+}
+
+func TestNativeInstallerPhasesKeepNASBeforeFrontendAndAllChecksGating(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "unified-agent-native.yml"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	supply, installer := steps[supplyAt], steps[installerAt]
-	if supply.If != "runner.os == 'macOS'" || supply.Shell != "bash" || installer.If != "matrix.unix" || installer.Shell != "bash" ||
-		strings.Contains(supply.Run, "GITHUB_PATH") || !strings.Contains(installer.Run, `export PATH="$PULSE_INSTALLER_FIXTURE_BIN:$PATH"`) ||
-		!strings.Contains(installer.Run, "python3 scripts/installtests/run_unix_contracts.py") {
-		t.Fatal("Linux tools must stay local to complete Unix installer qualification")
+	var workflow struct {
+		Jobs map[string]struct{ Steps []nativeGuidanceStep }
 	}
-	return supply, installer
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	steps := workflow.Jobs["native-agent"].Steps
+	if err := validateNativeInstallerPhaseOrder(steps); err != nil {
+		t.Fatal(err)
+	}
+	indices := map[string]int{}
+	for i, step := range steps {
+		indices[step.Name] = i
+	}
+	early := indices["Test NAS removal contracts before frontend preparation"]
+	remaining := indices["Test native Unix installer contracts"]
+	for _, scenario := range []string{"missing preflight", "missing remaining", "duplicate preflight", "after Node", "before tools", "Linux only", "hidden early failure", "hidden remaining failure", "all checks repeated", "no remaining checks", "nonlocal tools", "wrong directory"} {
+		t.Run(scenario, func(t *testing.T) {
+			changed := append([]nativeGuidanceStep(nil), steps...)
+			switch scenario {
+			case "missing preflight":
+				changed = append(changed[:early], changed[early+1:]...)
+			case "missing remaining":
+				changed = append(changed[:remaining], changed[remaining+1:]...)
+			case "duplicate preflight":
+				changed = append(changed, changed[early])
+			case "after Node":
+				i := indices["Set up Node.js for native runtime test assets"]
+				changed[early], changed[i] = changed[i], changed[early]
+			case "before tools":
+				i := indices["Supply Linux server installer fixture tools on macOS"]
+				changed[early], changed[i] = changed[i], changed[early]
+			case "Linux only":
+				changed[early].If = "runner.os == 'Linux'"
+			case "hidden early failure":
+				changed[early].ContinueOnError = true
+			case "hidden remaining failure":
+				changed[remaining].ContinueOnError = true
+			case "all checks repeated":
+				changed[remaining].Run = nativeInstallerPhaseRun("all")
+			case "no remaining checks":
+				changed[remaining].Run = nativeInstallerPhaseRun("preflight")
+			case "nonlocal tools":
+				i := indices["Supply Linux server installer fixture tools on macOS"]
+				changed[i].Run += "\nprintf '%s\\n' \"$fixture_bin\" >> \"$GITHUB_PATH\"\n"
+			case "wrong directory":
+				changed[early].WorkingDirectory = "frontend-modern"
+			}
+			if err := validateNativeInstallerPhaseOrder(changed); err == nil {
+				t.Fatalf("accepted %s native installer phase", scenario)
+			}
+		})
+	}
 }
 
 func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
-	supply, installer := nativeInstallerFixtureSteps(t)
+	supply, preflight, installer := nativeInstallerFixtureSteps(t)
 	for _, scenario := range []string{"real tools", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing mv", "non-GNU mv", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
@@ -175,7 +283,7 @@ esac
 			// only Python's containing suite to avoid recursively starting Go.
 			probe := `#!/bin/sh
 set -eu
-test "$*" = 'scripts/installtests/run_unix_contracts.py' || exit 91
+test "$*" = "scripts/installtests/run_unix_contracts.py --phase $EXPECTED_PHASE" || exit 91
 test "$(command -v bash)" = "$PULSE_INSTALLER_FIXTURE_BIN/bash" || exit 92
 for tool in stat chmod chown mv tar awk; do
   test "$(command -v "$tool")" = "$PULSE_INSTALLER_FIXTURE_BIN/$tool" || exit 93
@@ -208,15 +316,17 @@ exit "${SUITE_EXIT:-0}"
 			if err := os.WriteFile(filepath.Join(bin, "python3"), []byte(probe), 0700); err != nil {
 				t.Fatal(err)
 			}
-			for _, code := range []string{"0", "23"} {
-				cmd := exec.CommandContext(ctx, "bash", "-c", installer.Run)
-				cmd.Env = append(env, "PULSE_INSTALLER_FIXTURE_BIN="+fixtureBin, "PROBE_ROOT="+root, "SUITE_EXIT="+code)
-				output, err := cmd.CombinedOutput()
-				if code == "0" && err != nil {
-					t.Fatalf("fixture-local path did not reach the suite: %v: %s", err, output)
-				} else if code == "23" {
-					if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 23 {
-						t.Fatalf("containing suite failure hidden: %v: %s", err, output)
+			for phase, step := range map[string]nativeGuidanceStep{"preflight": preflight, "remaining": installer} {
+				for _, code := range []string{"0", "23"} {
+					cmd := exec.CommandContext(ctx, "bash", "-c", step.Run)
+					cmd.Env = append(env, "PULSE_INSTALLER_FIXTURE_BIN="+fixtureBin, "PROBE_ROOT="+root, "SUITE_EXIT="+code, "EXPECTED_PHASE="+phase)
+					output, err := cmd.CombinedOutput()
+					if code == "0" && err != nil {
+						t.Fatalf("fixture-local path did not reach the suite: %v: %s", err, output)
+					} else if code == "23" {
+						if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 23 {
+							t.Fatalf("containing suite failure hidden: %v: %s", err, output)
+						}
 					}
 				}
 			}
