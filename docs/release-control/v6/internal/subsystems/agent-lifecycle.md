@@ -7647,6 +7647,28 @@ that waits for the persistent data volume before launching the stored wrapper,
 and `internal/agentupdate/update.go` keeps the persisted QNAP binary copy in
 sync on self-update so reboot does not roll the runtime back to an older
 binary.
+The persistent replacement must also remain executable. If the verified runtime
+and persistent path identify the same file (including directory or executable
+symlink aliases), the updater must not copy over its already-installed binary.
+Separate QNAP/Unraid copies use an exclusively created temporary in the
+destination directory, closed and explicitly made `0755` before atomic rename.
+They must not reuse or follow a pre-existing fixed `.tmp` path. Read, creation,
+write, close, chmod or rename failure leaves the previous persistent binary
+unchanged, closes/removes the owned temporary and logs the persistence failure.
+Persistence remains best-effort after live replacement; a runnable new runtime
+does not establish that the boot copy was updated. Saved identity, credentials,
+transport trust, mandatory checksum/signature, downloaded-binary self-test and
+main replacement/backup recovery remain unchanged.
+
+`TestNASAuthenticatedUpdateKeepsExecutableCopies` exercises the real trusted
+HTTPS/checksum/test-signature/self-test path with inert changed executables in
+unified, aliased and split QNAP layouts, split Unraid and an ordinary Linux
+control. Actual child execution checks both runtime and boot copies, preserved
+saved state and temporary cleanup. `TestPersistentBinaryCopyFailuresRetainExecutable`
+requires every persistence fault phase to retain an executable old copy and
+clean its own temporary; unowned legacy temporaries and other hardlinks survive.
+These Linux source controls do not establish native appliance, flash mount,
+boot/watchdog, old-installed-updater recovery or release availability.
 That appliance lifecycle must remain bounded by available storage. Before
 downloading or replacing an agent, `scripts/install.sh` checks the effective
 temporary and installation filesystems for enough free space, coalesces the

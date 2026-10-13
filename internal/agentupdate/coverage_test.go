@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	"github.com/rs/zerolog"
 )
 
 type roundTripperFunc func(*http.Request) (*http.Response, error)
@@ -1418,6 +1419,7 @@ func TestPerformUpdateUnraidPaths(t *testing.T) {
 	origWrite := writeFileFn
 	origRename := renameFn
 	origRestart := restartProcessFn
+	origCreateTemp := createTempFn
 	t.Cleanup(func() {
 		unraidVersionPath = origUnraid
 		unraidPersistentPathFn = origPersist
@@ -1425,6 +1427,7 @@ func TestPerformUpdateUnraidPaths(t *testing.T) {
 		writeFileFn = origWrite
 		renameFn = origRename
 		restartProcessFn = origRestart
+		createTempFn = origCreateTemp
 	})
 
 	tmpDir := t.TempDir()
@@ -1453,10 +1456,17 @@ func TestPerformUpdateUnraidPaths(t *testing.T) {
 
 	t.Run("WriteError", func(t *testing.T) {
 		readFileFn = func(string) ([]byte, error) { return []byte("new"), nil }
-		writeFileFn = func(string, []byte, os.FileMode) error { return errors.New("write fail") }
+		createTempFn = func(dir, pattern string) (*os.File, error) {
+			file, err := os.CreateTemp(dir, pattern)
+			if err == nil && strings.Contains(pattern, "-persist-") {
+				err = file.Close() // Make the real persistent write fail.
+			}
+			return file, err
+		}
 		if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
 			t.Fatalf("expected update success, got %v", err)
 		}
+		createTempFn = origCreateTemp
 	})
 
 	t.Run("RenameError", func(t *testing.T) {
@@ -1504,6 +1514,7 @@ func TestPerformUpdateQNAPPaths(t *testing.T) {
 	origWrite := writeFileFn
 	origRename := renameFn
 	origRestart := restartProcessFn
+	origCreateTemp := createTempFn
 	t.Cleanup(func() {
 		qnapGetcfgPath = origQnapGetcfg
 		qnapQpkgConfPath = origQnapQpkgConf
@@ -1512,6 +1523,7 @@ func TestPerformUpdateQNAPPaths(t *testing.T) {
 		writeFileFn = origWrite
 		renameFn = origRename
 		restartProcessFn = origRestart
+		createTempFn = origCreateTemp
 	})
 
 	tmpDir := t.TempDir()
@@ -1532,11 +1544,18 @@ func TestPerformUpdateQNAPPaths(t *testing.T) {
 
 	t.Run("WriteError", func(t *testing.T) {
 		readFileFn = func(string) ([]byte, error) { return []byte("new"), nil }
-		writeFileFn = func(string, []byte, os.FileMode) error { return errors.New("write fail") }
+		createTempFn = func(dir, pattern string) (*os.File, error) {
+			file, err := os.CreateTemp(dir, pattern)
+			if err == nil && strings.Contains(pattern, "-persist-") {
+				err = file.Close()
+			}
+			return file, err
+		}
 		renameFn = os.Rename
 		if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
 			t.Fatalf("expected update success, got %v", err)
 		}
+		createTempFn = origCreateTemp
 	})
 
 	t.Run("RenameError", func(t *testing.T) {
@@ -1568,6 +1587,126 @@ func TestPerformUpdateQNAPPaths(t *testing.T) {
 			t.Fatalf("qnap persistent binary = %q, want %q", string(got), "new")
 		}
 	})
+}
+
+func TestPersistentBinaryCopyFailuresRetainExecutable(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("NAS executable persistence controls require Linux")
+	}
+	oldBinary := buildNASUpdateExecutable(t, "6.4.5")
+	newBinary := buildNASUpdateExecutable(t, "6.5.0")
+	for _, phase := range []string{"read", "create", "write", "close", "chmod", "rename", "success", "legacy-temp-file", "legacy-temp-symlink", "same-file", "hardlink"} {
+		t.Run(phase, func(t *testing.T) {
+			dir := t.TempDir()
+			execPath := filepath.Join(dir, "runtime")
+			persistPath := filepath.Join(dir, "pulse-agent")
+			if err := os.WriteFile(execPath, newBinary, 0755); err != nil {
+				t.Fatal(err)
+			}
+			if phase == "same-file" {
+				persistPath = execPath
+			} else if err := os.WriteFile(persistPath, oldBinary, 0755); err != nil {
+				t.Fatal(err)
+			}
+			if phase == "hardlink" {
+				if err := os.Link(persistPath, persistPath+".old-link"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			const foreign = "unrelated recovery bytes"
+			if phase == "legacy-temp-file" {
+				if err := os.WriteFile(persistPath+".tmp", []byte(foreign), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if phase == "legacy-temp-symlink" {
+				if err := os.WriteFile(filepath.Join(dir, "foreign"), []byte(foreign), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(filepath.Join(dir, "foreign"), persistPath+".tmp"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			origRead, origCreate, origClose, origChmod, origRename := readFileFn, createTempFn, closeFileFn, chmodFn, renameFn
+			t.Cleanup(func() {
+				readFileFn, createTempFn, closeFileFn, chmodFn, renameFn = origRead, origCreate, origClose, origChmod, origRename
+			})
+			var temp *os.File
+			createTempFn = func(dir, pattern string) (*os.File, error) {
+				if phase == "create" {
+					return nil, errors.New("fixture create refused")
+				}
+				file, err := os.CreateTemp(dir, pattern)
+				temp = file
+				if err == nil && phase == "write" {
+					err = file.Close()
+				}
+				return file, err
+			}
+			if phase == "read" {
+				readFileFn = func(string) ([]byte, error) { return nil, errors.New("fixture read refused") }
+			}
+			if phase == "close" {
+				closeFileFn = func(file *os.File) error {
+					if err := file.Close(); err != nil {
+						t.Fatal(err)
+					}
+					return errors.New("fixture close refused")
+				}
+			}
+			if phase == "chmod" {
+				chmodFn = func(string, os.FileMode) error { return errors.New("fixture chmod refused") }
+			}
+			if phase == "rename" {
+				renameFn = func(string, string) error { return errors.New("fixture rename refused") }
+			}
+			var logs bytes.Buffer
+			logger := zerolog.New(&logs)
+			u := New(Config{Logger: &logger})
+			u.syncPersistentBinaryCopy(execPath, persistPath, "qnap")
+			failure := phase == "read" || phase == "create" || phase == "write" || phase == "close" || phase == "chmod" || phase == "rename"
+			wantBytes, wantVersion := newBinary, "6.5.0"
+			if failure {
+				wantBytes, wantVersion = oldBinary, "6.4.5"
+				if !strings.Contains(logs.String(), "failed to ") || !strings.Contains(logs.String(), "persistent") {
+					t.Fatalf("persistence failure was not logged: %s", logs.String())
+				}
+			}
+			got, err := os.ReadFile(persistPath)
+			if err != nil || checksum(got) != checksum(wantBytes) {
+				t.Fatalf("persistent recovery bytes changed: %v", err)
+			}
+			info, err := os.Stat(persistPath)
+			if err != nil || info.Mode().Perm() != 0755 {
+				t.Fatalf("persistent binary lost execute mode: %v", err)
+			}
+			runNASUpdateExecutable(t, persistPath, wantVersion)
+			runNASUpdateExecutable(t, execPath, "6.5.0")
+			if temp != nil {
+				if _, err := temp.Stat(); err == nil {
+					t.Fatal("persistent temporary descriptor was not closed")
+				}
+				if _, err := os.Stat(temp.Name()); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("owned persistent temporary was not cleaned: %v", err)
+				}
+			} else if phase == "same-file" && strings.Contains(logs.String(), "updated persistent binary") {
+				t.Fatal("already replaced executable was copied again")
+			}
+			if phase == "legacy-temp-file" || phase == "legacy-temp-symlink" {
+				got, err := os.ReadFile(persistPath + ".tmp")
+				if err != nil || string(got) != foreign {
+					t.Fatalf("unowned legacy temporary was changed: %v", err)
+				}
+			}
+			if phase == "hardlink" {
+				got, err := os.ReadFile(persistPath + ".old-link")
+				if err != nil || checksum(got) != checksum(oldBinary) {
+					t.Fatalf("atomic replace mutated another hardlink: %v", err)
+				}
+				runNASUpdateExecutable(t, persistPath+".old-link", "6.4.5")
+			}
+		})
+	}
 }
 
 type errorReader struct {

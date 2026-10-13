@@ -6,11 +6,14 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -18,6 +21,206 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/updatesignature"
 )
+
+// These executables are inert, not Pulse agents. They let the actual signed
+// HTTPS updater, self-test and child exec paths check Unix execute permissions
+// without replacing the test process or touching an appliance/service.
+func buildNASUpdateExecutable(t *testing.T, version string) []byte {
+	t.Helper()
+	dir := t.TempDir()
+	source := filepath.Join(dir, "main.go")
+	const program = `package main
+import ("fmt"; "os")
+var version string
+func main() {
+ if len(os.Args) > 1 && os.Args[1] == "--self-test" {
+  if len(os.Args) != 4 || os.Args[2] != "--token-file" { os.Exit(10) }
+  info, err := os.Stat(os.Args[3]); if err != nil || info.Mode().Perm() != 0600 { os.Exit(11) }
+  token, err := os.ReadFile(os.Args[3]); if err != nil || string(token) != "fixture-token" { os.Exit(12) }
+ }
+ fmt.Println(version)
+}
+`
+	if err := os.WriteFile(source, []byte(program), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	binary := filepath.Join(dir, "fixture-agent")
+	cmd := exec.CommandContext(ctx, "go", "build", "-trimpath", "-ldflags=-X main.version="+version, "-o", binary, source)
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOPROXY=off", "GOWORK=off")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build inert executable: %v\n%s", err, output)
+	}
+	data, err := os.ReadFile(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+func runNASUpdateExecutable(t *testing.T, path, wantVersion string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, path).CombinedOutput()
+	if err != nil || strings.TrimSpace(string(output)) != wantVersion {
+		t.Fatalf("execute inert binary: error=%v, output=%q, want %q", err, output, wantVersion)
+	}
+}
+
+func TestNASAuthenticatedUpdateKeepsExecutableCopies(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("QNAP/Unraid executable-layout controls require Linux")
+	}
+	oldBinary := buildNASUpdateExecutable(t, "6.4.5")
+	newBinary := buildNASUpdateExecutable(t, "6.5.0")
+	key := configureTrustedUpdateSigningKey(t)
+	signature := signedUpdateHeader(t, newBinary, key)
+
+	for _, layout := range []string{"qnap-unified", "qnap-directory-alias", "qnap-executable-alias", "qnap-persistent-alias", "qnap-split", "unraid-split", "ordinary"} {
+		t.Run(layout, func(t *testing.T) {
+			dir := t.TempDir()
+			stateDir := filepath.Join(dir, "state")
+			runtimeDir := filepath.Join(dir, "runtime")
+			for _, path := range []string{stateDir, runtimeDir} {
+				if err := os.Mkdir(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			execPath := filepath.Join(runtimeDir, "pulse-agent")
+			persistPath := filepath.Join(stateDir, "pulse-agent")
+			if layout == "qnap-unified" || layout == "qnap-directory-alias" || layout == "qnap-executable-alias" {
+				execPath = persistPath
+			}
+			for _, path := range []string{execPath, persistPath} {
+				if err := os.WriteFile(path, oldBinary, 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if layout == "qnap-directory-alias" {
+				alias := filepath.Join(dir, "state-alias")
+				if err := os.Symlink(stateDir, alias); err != nil {
+					t.Fatal(err)
+				}
+				persistPath = filepath.Join(alias, "pulse-agent")
+			}
+			if layout == "qnap-executable-alias" {
+				alias := filepath.Join(runtimeDir, "pulse-agent-link")
+				if err := os.Symlink(execPath, alias); err != nil {
+					t.Fatal(err)
+				}
+				execPath = alias
+			}
+			if layout == "qnap-persistent-alias" {
+				if err := os.Remove(persistPath); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(execPath, persistPath); err != nil {
+					t.Fatal(err)
+				}
+			}
+			state := map[string]string{"agent-id": "fixture-identity\n", "token": "saved-fixture-token\n", "agent.env": "PULSE_URL=https://fixture.invalid\n"}
+			for name, value := range state {
+				if err := os.WriteFile(filepath.Join(stateDir, name), []byte(value), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			origUnraid, origGetcfg, origQpkg := unraidVersionPath, qnapGetcfgPath, qnapQpkgConfPath
+			origUnraidPersist, origQnapPersist, origRestart := unraidPersistentPathFn, qnapPersistentPathFn, restartProcessFn
+			t.Cleanup(func() {
+				unraidVersionPath, qnapGetcfgPath, qnapQpkgConfPath = origUnraid, origGetcfg, origQpkg
+				unraidPersistentPathFn, qnapPersistentPathFn, restartProcessFn = origUnraidPersist, origQnapPersist, origRestart
+			})
+			unraidVersionPath, qnapGetcfgPath, qnapQpkgConfPath = filepath.Join(dir, "unraid-version"), filepath.Join(dir, "getcfg"), filepath.Join(dir, "qpkg.conf")
+			marker := ""
+			if strings.HasPrefix(layout, "qnap-") {
+				marker = qnapGetcfgPath
+			} else if layout == "unraid-split" {
+				marker = unraidVersionPath
+			}
+			if marker != "" {
+				if err := os.WriteFile(marker, []byte("fixture"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			unraidPersistentPathFn = func(string) string { return persistPath }
+			qnapPersistentPathFn = func(string, string) string { return persistPath }
+			restarts := 0
+			restartProcessFn = func(path string) error {
+				restarts++
+				if path != execPath {
+					t.Errorf("restart changed executable path")
+				}
+				runNASUpdateExecutable(t, path, "6.5.0")
+				return nil
+			}
+
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/download/pulse-agent" || r.URL.Query().Get("serverVersion") != "6.5.0" || r.Header.Get(apiTokenHeader) != "fixture-token" {
+					t.Error("missing download identity or authentication")
+					http.Error(w, "fixture refused", http.StatusForbidden)
+					return
+				}
+				w.Header().Set(checksumSHA256Header, checksum(newBinary))
+				w.Header().Set(signatureHeader, signature)
+				_, _ = w.Write(newBinary)
+			}))
+			defer server.Close()
+			caPath := filepath.Join(dir, "fixture-ca.pem")
+			if err := os.WriteFile(caPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0600); err != nil {
+				t.Fatal(err)
+			}
+			u := New(Config{PulseURL: server.URL, CACertPath: caPath, APIToken: "fixture-token", AgentName: "pulse-agent", CurrentVersion: "6.4.5", StateDir: stateDir})
+			// Keep the real downloaded-binary self-test, checksum, signature and TLS.
+			if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.5.0"); err != nil {
+				t.Fatal(err)
+			}
+			if restarts != 1 {
+				t.Fatalf("restart calls = %d, want 1", restarts)
+			}
+			for _, path := range []string{execPath, persistPath} {
+				wantBytes, wantVersion := newBinary, "6.5.0"
+				if layout == "ordinary" && path == persistPath {
+					wantBytes, wantVersion = oldBinary, "6.4.5"
+				}
+				data, err := os.ReadFile(path)
+				if err != nil || checksum(data) != checksum(wantBytes) {
+					t.Fatalf("binary bytes changed unexpectedly: %v", err)
+				}
+				info, err := os.Stat(path)
+				if err != nil || info.Mode().Perm() != 0755 {
+					t.Fatalf("binary is not 0755: %v", err)
+				}
+				runNASUpdateExecutable(t, path, wantVersion)
+			}
+			for name, value := range state {
+				path := filepath.Join(stateDir, name)
+				data, err := os.ReadFile(path)
+				if err != nil || string(data) != value {
+					t.Fatalf("saved %s changed: %v", name, err)
+				}
+				info, err := os.Stat(path)
+				if err != nil || info.Mode().Perm() != 0600 {
+					t.Fatalf("saved %s permissions changed: %v", name, err)
+				}
+			}
+			for _, path := range []string{stateDir, runtimeDir} {
+				entries, err := os.ReadDir(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, entry := range entries {
+					if strings.HasSuffix(entry.Name(), ".tmp") || strings.HasSuffix(entry.Name(), ".backup") {
+						t.Fatalf("update left a temporary/backup: %s", entry.Name())
+					}
+				}
+			}
+			t.Logf("%s: authenticated replacement, real self-test, runtime/persistent exec and saved-state checks passed", layout)
+		})
+	}
+}
 
 const testPEMCertificate = `-----BEGIN CERTIFICATE-----
 MIICuDCCAaACCQDptFpSdDdFNjANBgkqhkiG9w0BAQsFADAeMRwwGgYDVQQDDBNw
