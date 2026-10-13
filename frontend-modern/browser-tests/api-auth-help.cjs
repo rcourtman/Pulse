@@ -45,7 +45,11 @@ const { chromium } = require('playwright');
           return route.abort();
         }
         if (url.pathname.startsWith('/api/')) {
-          apiRequests.push(url.pathname);
+          const method = route.request().method();
+          apiRequests.push({ method, path: url.pathname });
+          // The existing Docs fixture's security context can read this one
+          // status. No product API server or administrative action is used.
+          if (method !== 'GET' || url.pathname !== '/api/security/status') return route.abort();
           return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
         }
         return route.continue();
@@ -101,7 +105,8 @@ const { chromium } = require('playwright');
       assert.equal((await page.locator('pre').filter({ hasText: 'pulse_api() (' })
         .locator('code').textContent()).trim(), helper);
       assert.deepEqual(errors, []);
-      assert.deepEqual(apiRequests, []);
+      assert.ok(apiRequests.every(request => request.method === 'GET'
+        && request.path === '/api/security/status'));
       assert.deepEqual(offOriginRequests, []);
       results.push({ engine, browserVersion: browser.version(), width, height: 1000, tone,
         entry: narrow ? 'touch' : 'keyboard', exactRenderedShell: true,
