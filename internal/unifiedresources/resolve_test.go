@@ -149,9 +149,8 @@ func TestResolveResource_DockerContainerTargetHostRewrite(t *testing.T) {
 
 	// Docker HOST lookup must NOT rewrite TargetHost.
 	locHost := ResolveResource(rr, "docker-host-lxc")
-	if !locHost.Found || locHost.ResourceType != "system-container" {
-		// Should match as system-container first (earlier in resolution order)
-		t.Fatalf("expected system-container, got found=%v type=%q", locHost.Found, locHost.ResourceType)
+	if !locHost.Found || locHost.ResourceType != "docker-host" || locHost.DockerHostType != "system-container" || locHost.DockerHostVMID != 100 {
+		t.Fatalf("expected the registered Docker host source reference to keep its current guest parent, got %+v", locHost)
 	}
 }
 
@@ -229,11 +228,10 @@ func TestResolveResource_VMwareStorage(t *testing.T) {
 	}
 }
 
-func TestLookupResolvedResource_TrueNASAppUsesCanonicalAppContainerSet(t *testing.T) {
+func TestResolveResourceContext_TrueNASAppUsesCanonicalAppContainerSet(t *testing.T) {
 	rr := newTrueNASAppRegistryFixture()
 
-	loc := ResolveResource(rr, "Nextcloud")
-	resource := lookupResolvedResource(rr, loc)
+	resource := ResolveResourceContext(rr, "Nextcloud").Resource
 	if resource == nil {
 		t.Fatal("expected resolved resource for TrueNAS app")
 	}

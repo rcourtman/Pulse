@@ -221,10 +221,9 @@ func TestRegistryMaterializedMetadataViewsKeepFreshness(t *testing.T) {
 	// No batch epilogue has run here; source mapping and typed view must already
 	// reflect the resource visible to List and point reads.
 	current := rr.VMs()[0]
-	// Proxmox naming does not displace an existing non-empty name under the
-	// established source-priority rule. Pin the actual fresh status and CPU,
-	// not an invented rename guarantee.
-	if current.ID() != before.ID() || current.Status() != StatusOnline || current.CPUPercent() != 73.25 || current.Name() != before.Name() {
+	// The standalone provider owns its current name, status and CPU sample.
+	// Detached older views stay unchanged while fresh readers see the rename.
+	if current.ID() != before.ID() || current.Status() != StatusOnline || current.CPUPercent() != 73.25 || current.Name() != "renamed-vm" {
 		t.Fatalf("mid-batch view: id=%q status=%s cpu=%v name=%q", current.ID(), current.Status(), current.CPUPercent(), current.Name())
 	}
 	assertRegistryMetadataOracle(t, rr)

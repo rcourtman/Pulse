@@ -1328,3 +1328,29 @@ func TestMonitorRebuildJudgesLinkChainsOverTheAssembledEstate(t *testing.T) {
 		t.Fatalf("staged ingest kept the TrueNAS VM, so this fixture no longer separates the rebuild from per-call passes")
 	}
 }
+
+func TestMonitorAdapterReferenceTracksPublishedRegistry(t *testing.T) {
+	adapter := NewMonitorAdapter(NewRegistry(NewMemoryStore()))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{VMs: []models.VM{
+		{ID: "site-a:node1:101", Instance: "site-a", Node: "node1", VMID: 101, Name: "before", Type: "qemu"},
+	}})
+	ownerID := adapter.VMs()[0].ID()
+	previous := adapter.currentRegistry()
+	adapter.PopulateFromSnapshot(models.StateSnapshot{VMs: []models.VM{
+		{ID: "site-a:node2:101", Instance: "site-a", Node: "node2", VMID: 101, Name: "shared-name", Type: "qemu"},
+		{ID: "site-b:node2:101", Instance: "site-b", Node: "node2", VMID: 101, Name: "shared-name", Type: "qemu"},
+	}})
+	if adapter.currentRegistry() == previous {
+		t.Fatal("snapshot did not publish a new registry generation")
+	}
+	resource, resolvedID, ok := adapter.GetByReference(ownerID)
+	if !ok || resource == nil || resolvedID != ownerID {
+		t.Fatalf("selected owner lost after publication: resource=%+v id=%q ok=%v", resource, resolvedID, ok)
+	}
+	if resource.Name != "shared-name" || resource.Proxmox == nil || resource.Proxmox.Instance != "site-a" || resource.Proxmox.NodeName != "node2" {
+		t.Fatalf("selected owner has stale or cross-site facts: %+v", resource)
+	}
+	if _, _, ok := adapter.GetByReference("missing-owner"); ok {
+		t.Fatal("unknown selection acquired an owner")
+	}
+}

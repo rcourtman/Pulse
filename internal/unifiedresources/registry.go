@@ -4227,9 +4227,16 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus, rr.ingestStaleThresholds)
 	existing.Metrics = clearUnavailableSourceMemoryMetric(existing.Metrics, &incoming, source)
 
-	// Prefer agent naming when available
+	// The current highest-priority source owns the name. Agent naming wins
+	// when an agent is present, while standalone provider names keep refreshing.
 	if incoming.Name != "" {
-		if existing.Name == "" || sourcePriority(source) >= sourcePriority(SourceAgent) {
+		namingPriority := 0
+		for _, existingSource := range existing.Sources {
+			if priority := sourcePriority(existingSource); priority > namingPriority {
+				namingPriority = priority
+			}
+		}
+		if existing.Name == "" || sourcePriority(source) >= namingPriority {
 			existing.Name = incoming.Name
 		}
 	}

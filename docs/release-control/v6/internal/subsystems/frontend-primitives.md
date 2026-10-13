@@ -846,6 +846,14 @@ on component mount. Closing clears the registered input so later keyboard
 commands cannot target a detached composer. A handoff must leave Escape and
 keyboard input in Assistant, not the underlying alert search.
 
+Assistant mention suggestions preserve each resource.id. Provider scope and
+current node identify same-label guests where policy permits them, and search
+can use those visible fields. Selected chips retain independent canonical
+IDs, allow removal without discarding prompt text, and show current owned
+labels after inventory refresh. Governed labels never expose node or site
+metadata through either suggestions or chips. Prompt history keeps the same
+identity, including older bounded payloads interpreted by the runtime.
+
 Mobile incident drawers transfer their exact context to Assistant and close
 through the shared explicit handoff callback. Keeping the source drawer above
 Assistant, or dropping its occurrence identity to make navigation work, fails

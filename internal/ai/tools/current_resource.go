@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 const currentResourceHandle = agentcapabilities.CurrentResourceHandle
@@ -86,8 +87,8 @@ func canonicalQueryIDForResolvedResource(resource ResolvedResourceInfo) string {
 		return ""
 	}
 	for _, candidate := range []string{
-		resource.GetProviderUID(),
 		resource.GetResourceID(),
+		resource.GetProviderUID(),
 	} {
 		if candidate = strings.TrimSpace(candidate); candidate != "" {
 			return candidate
@@ -126,38 +127,24 @@ func (e *PulseToolExecutor) commandTargetForResolvedResource(resource ResolvedRe
 		return "", fmt.Errorf("%s is unavailable because no Pulse resource context is attached to this chat turn", currentResourceHandle)
 	}
 
-	candidates := append([]string(nil), resource.GetAliases()...)
-	candidates = append(candidates,
-		resource.GetProviderUID(),
-		resource.GetResourceID(),
-		resource.GetTargetHost(),
-	)
-	seen := make(map[string]struct{}, len(candidates))
-	for _, candidate := range candidates {
-		candidate = strings.TrimSpace(candidate)
-		if candidate == "" {
-			continue
+	if id := strings.TrimSpace(resource.GetResourceID()); id != "" {
+		rs, err := e.readStateForControl()
+		if err != nil {
+			return "", err
 		}
-		key := strings.ToLower(candidate)
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		loc := e.resolveResourceLocation(candidate)
+		loc := unifiedresources.ResolveResourceReferenceContext(rs, id).Location
 		if loc.Found && resolvedResourceKindMatchesLocation(resource, loc.ResourceType) {
+			return id, nil
+		}
+		return "", fmt.Errorf("%s no longer resolves to its registered resource", currentResourceHandle)
+	}
+	for _, candidate := range resource.GetAliases() {
+		loc := e.resolveResourceLocation(candidate)
+		if loc.Found && !loc.Ambiguous && resolvedResourceKindMatchesLocation(resource, loc.ResourceType) {
 			return candidate, nil
 		}
 	}
 
-	switch canonicalQueryTypeForResolvedResource(resource) {
-	case "vm", "system-container":
-		if providerUID := strings.TrimSpace(resource.GetProviderUID()); providerUID != "" {
-			return providerUID, nil
-		}
-	}
-	if targetHost := strings.TrimSpace(resource.GetTargetHost()); targetHost != "" {
-		return targetHost, nil
-	}
 	return "", fmt.Errorf("%s does not expose a command-capable target", currentResourceHandle)
 }
 

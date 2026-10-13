@@ -395,6 +395,7 @@ type ResolvedResourceInfo interface {
 // This structured approach replaces the long parameter list for clarity.
 type ResourceRegistration struct {
 	// Identity
+	ResourceID  string   // Canonical registry ID, independent of names and native executor coordinates
 	Kind        string   // Technology/transport kind: "node", "vm", "system-container", "app-container", etc. (drives routing)
 	ProviderUID string   // Stable provider ID (container ID, VMID, pod UID)
 	Name        string   // Primary display name
@@ -415,6 +416,26 @@ type ResourceRegistration struct {
 
 	// Executor paths
 	Executors []ExecutorRegistration
+}
+
+// ResolvedID preserves the registry identity. The scoped format is retained only
+// for legacy discovery providers that do not supply a canonical registry record.
+func (reg ResourceRegistration) ResolvedID() string {
+	if id := strings.TrimSpace(reg.ResourceID); id != "" {
+		return id
+	}
+	uid := strings.TrimSpace(reg.ProviderUID)
+	if uid == "" {
+		uid = strings.TrimSpace(reg.Name)
+	}
+	host := strings.TrimSpace(reg.HostUID)
+	if host == "" {
+		host = strings.TrimSpace(reg.HostName)
+	}
+	if host != "" {
+		return reg.Kind + ":" + host + ":" + uid
+	}
+	return reg.Kind + ":" + uid
 }
 
 // ExecutorRegistration describes how an executor can reach a resource.

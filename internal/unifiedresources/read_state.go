@@ -4,8 +4,8 @@ package unifiedresources
 //
 // This is the interface that internal consumers (AI, Patrol, API handlers)
 // should depend on instead of models.StateSnapshot. It exposes only typed
-// view accessors — generic methods (ListByType, List, Get) remain on
-// ResourceRegistry only.
+// view accessors. Explicit selection uses the ReferenceReadState capability;
+// raw enumeration methods (ListByType, List, Get) remain on ResourceRegistry.
 //
 // All accessor methods return cached, pre-sorted slices that are O(1) to
 // read. The cache is invalidated and lazily rebuilt after each
@@ -40,3 +40,14 @@ type ReadState interface {
 	Workloads() []*WorkloadView            // Canonical runtime workloads (VMs, system containers, app containers)
 	Infrastructure() []*InfrastructureView // All infrastructure parent resources
 }
+
+// ReferenceReadState resolves explicit resource references through the registry.
+// It preserves declared successions and refuses ambiguous aliases. Production
+// read-state providers implement this capability without exposing a raw list.
+type ReferenceReadState interface {
+	ReadState
+	GetByReference(string) (*Resource, string, bool)
+}
+
+var _ ReferenceReadState = (*ResourceRegistry)(nil)
+var _ ReferenceReadState = (*MonitorAdapter)(nil)
