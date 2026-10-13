@@ -862,12 +862,23 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			vmSpecificErr := err != nil && isVMSpecificError(err.Error())
 
 			if err == nil || vmSpecificErr {
-				recoveredEndpoints <- ep
-
 				// Store the client with original timeout
 				cfg.Timeout = cc.config.Timeout
 				cfg.Fingerprint = cc.getEndpointFingerprint(ep)
-				fullClient, _ := NewClient(cfg)
+				fullClient, clientErr := NewClient(cfg)
+				if clientErr != nil {
+					// A short probe is not a usable polling session. Password
+					// authentication may fail when constructing the actual client;
+					// retain the existing client and failure instead of publishing
+					// a healthy endpoint with a nil client.
+					recordFailure(ep, clientErr)
+					log.Debug().
+						Str("cluster", cc.name).
+						Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
+						Err(clientErr).
+						Msg("Failed to create full client after successful recovery probe")
+					return
+				}
 
 				cc.mu.Lock()
 				cc.nodeHealth[ep] = true
@@ -875,6 +886,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 				cc.lastHealthCheck[ep] = time.Now()
 				cc.clients[ep] = fullClient
 				cc.mu.Unlock()
+				recoveredEndpoints <- ep
 
 				if vmSpecificErr {
 					log.Info().

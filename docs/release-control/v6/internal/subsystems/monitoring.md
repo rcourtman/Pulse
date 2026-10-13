@@ -17,6 +17,27 @@
 
 ## Purpose
 
+### Cluster recovery requires a usable polling session
+
+A short endpoint probe cannot establish successful recovery until the client
+retained for ordinary polling has been constructed successfully. A refused or
+malformed password login for that second client preserves the existing client
+(or its absence), records the failure and does not count or publish recovery.
+An endpoint must never become healthy with a nil polling client. A later
+ordinary eligible recovery can install an accepted full-timeout session and
+clear its own error; usable siblings continue to serve polling throughout.
+
+`TestClusterRecoveryRequiresUsableSession` covers pinned HTTPS 401/403,
+malformed success and JSON-to-form refusal, with and without a retained client,
+then accepted recovery and ordinary reads. `TestClusterRecoverySessionEndpointProjection`
+drives public cluster reads and background recovery through the monitor's
+per-endpoint projection: native Online state, identity and saved pins survive,
+while PulseReachable and PulseError reflect the actual polling session. The
+existing recovery interval, authentication encodings, TLS trust/first-use
+policy, failover order and guest-command safety state are unchanged. These
+synthetic controls establish neither installed trust recovery nor a reported
+incident's cause.
+
 ### Rejected infrastructure URLs stay out of diagnostics
 
 PVE/PBS constructors validate a host before logging it. URL syntax errors omit
