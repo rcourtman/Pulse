@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "23409e4f7fd32b71d6e13973dcaf06db03f226b1",
+  "verified_at": "2026-10-13T05:21:07Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts",
+    "frontend-modern/src/utils/format.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "ae07a90f163a6a9f6ddf870fe865299746b4fb7779093524aefc8bae5489468e",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "9c370f674e0982a46029442539758faa58f980f8b7771b3294f6176da29cf7bd",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "54c0cb2988ad6befc171ac3f6042f52b33d6d5654977027968531ee87cb4ff7d",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "71a2d2e62411c70c0eb609e68cd4963dac483be59a5be6afcf96c1ce2191436f",
+    "frontend-modern/src/utils/format.ts": "3239389ca80fcda409753972e96d4db17693e484b54310e7137a766ba2688111"
+  },
+  "routes": [
+    "/browser-tests/backup-completion-time.html (production policy, Workloads row, backup status dialog and guest drawer)",
+    "/browser-tests/guest-reading-help.html (production Workloads row and GuestDrawerOverview)",
+    "/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis (actual shipped Docs renderer)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Final drawer model consumes supplied QEMU/LXC completion observations in desktop America/Los_Angeles and touch Asia/Tokyo contexts; row dialog, fine-pointer hover and drawer preserve the same UTC instant.",
+    "Running/ended activity, unknown, absent, invalid/future timestamps and same-ID replacement remain distinct; passive age and activity do not manufacture another completed backup.",
+    "Windows absent readings and Android retained filesystems disclose uncertainty and backup/incident precautions. Unknown private reason text is not rendered; known-disabled setup advice stays distinct.",
+    "Current same-guest filesystem observations restore the utilization bar and withdraw uncertain-read help without a new guest request.",
+    "Fourteen fresh captures inspected with native view_image: desktop/light and phone/dark backup dialogs, hover, running indicator and four drawer states have readable, wrapping text. DOM checks also exercise the existing guidance renderer and anchor. No native thaw, writes, restart, installed or release acceptance."
+  ],
+  "interactions": [
+    "Keyboard Enter and touch open the existing backup disclosures without a row action; Escape/dismissal returns focus. Hidden Backup-column indicator preserves the same state.",
+    "Open the same guest drawer through name disclosure; update supplied observations without reloading the row; follow the existing filesystem guidance link with keyboard and touch to its current context heading.",
+    "Both browser engines and static fixture listeners close; unexpected page errors and mutating requests are absent."
+  ]
+}
