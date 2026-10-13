@@ -28,11 +28,8 @@ occurrence instead of the nil one-shot fields and inherits descendant-scoped
 ancestor maintenance. It reads existing operator-state rows only; it adds no
 recovery endpoint, execution route or recovery-point access.
 
-A legacy client echoing the projected `controlled` mode into an unrelated AI
-settings PUT must retain a stored `autonomous` preference and its existing
-legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
-uses actual encrypted GET/PUT persistence with and without the entitlement,
-then checks explicit read-only opt-out and later opt-in remain possible.
+Legacy Assistant mode echo and stored-preference compatibility follow the
+[API settings contract](api-contracts.md#assistant-control_level-is-an-interactive-projection).
 
 ### Pro Patrol default adds no recovery execution
 
@@ -6522,18 +6519,9 @@ results. A running guest alone cannot prove a reboot.
 
 ### Quick security setup preserves unrelated settings
 
-Authenticated force setup in `internal/api/security_setup_fix.go` retains the
-existing authentication and settings-write authorization checks. Rotating local
-credentials does not reset non-auth system preferences.
-`ConfigPersistence.InitializeSystemSettings` in `internal/config/persistence.go`
-creates defaults only when system settings are absent, under the same instance
-mutex as ordinary saves; existing bytes (including unknown fields and malformed
-data requiring recovery) are not rewritten. A read error prevents initialization,
-while authentication setup retains its existing nonfatal settings-error behavior.
-This does not change token scopes, agent admission, or existing agent cleanup.
-Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
-`TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
-`TestInitializeSystemSettingsReadError`.
+Quick security setup follows the [API settings-preservation contract](api-contracts.md#quick-security-setup-preserves-unrelated-settings),
+including byte-preserving first-run initialization and read-error handling.
+It grants no additional agent or recovery authority.
 
 ### Storage pool rows do not retain their whole group
 

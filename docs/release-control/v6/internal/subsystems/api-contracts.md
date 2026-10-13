@@ -67,12 +67,6 @@ returns it, `PUT /api/settings/ai/update` ignores it from older clients, and a
 stored value is dropped the next time the settings are written. Scope and
 approval authority do not change.
 
-A legacy client echoing the projected `controlled` mode into an unrelated AI
-settings PUT must retain a stored `autonomous` preference and its existing
-legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
-uses actual encrypted GET/PUT persistence with and without the entitlement,
-then checks explicit read-only opt-out and later opt-in remain possible.
-
 ### Assistant control_level is an interactive projection
 
 AI settings GET/PUT responses expose `read_only` or `controlled`: an entitled
@@ -82,6 +76,12 @@ remain; an entitled old client can retain the stored preference, an unentitled
 request is refused. Unrelated saves do not rewrite it. Shared external-agent
 vocabulary, Patrol settings and authenticated authority remain unchanged. `TestContract_AssistantSettingsAdvertisePlanningNotExecution`
 and the actual persistence/handler tests pin responses and compatibility.
+
+A legacy client echoing the projected `controlled` mode into an unrelated AI
+settings PUT must retain a stored `autonomous` preference and its existing
+legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
+uses actual encrypted GET/PUT persistence with and without the entitlement,
+then checks explicit read-only opt-out and later opt-in remain possible.
 
 ### Optional held-alert breach date consumer
 
