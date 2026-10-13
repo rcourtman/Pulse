@@ -9543,7 +9543,7 @@ cross-compiled with `GOOS=windows go build ./internal/hostagent/`.
 The shared frontend Unix installer preserves single-line paste grammar,
 quoted destinations, explicit custom CA/insecure continuity and profile flags.
 Issued credentials are separate from copied commands. A privileged Bash child
-owns the Core-aligned silent bounded reader and temporary 0700/0600 handoff;
+owns the silent bounded reader and temporary 0700/0600 handoff;
 maximum-size input must survive unchanged, overflow must not reach the caller's
 history, and every exit must restore terminal modes and remove temporary files.
 Download/preflight failures never reach credential entry or installation.
@@ -9551,8 +9551,22 @@ Sudo validation occurs before download; download and unprivileged preflight
 still precede privileged installation. Token-optional and saved-state update
 paths need no terminal or replacement credential.
 
-For non-terminal FreeBSD command fields, the existing page offers an absolute
-local private-token-file variant, with ownership/regular-file/symlink/mode
+Root/sudo dispatch emits the quoted private reader only once via an isolated
+POSIX positional-argument prefix. Normal quoted URL/profile/identity variants
+remain below the common 4096-byte terminal line boundary. Actual interactive
+PTY controls wait for the caller prompt before pasting and before exiting, so
+startup truncation or a queued exit is not mistaken for a reader failure.
+
+The frontend reader selects standalone `stty`, or `busybox stty` when standalone
+`stty` is absent, and uses the same selected utility to restore terminal modes.
+Missing terminal, missing/unsupported utility, unreadable settings, echo-disable
+failure and restoration failure stop before installation with distinct errors;
+no echoed, inline-token or broader-privilege fallback is permitted. A mode-save
+failure never requests input. Interrupted/oversized input remains private.
+The backend bootstrap mirror remains separately owned by Core until composed.
+
+For Linux/NAS and non-terminal FreeBSD command fields, the existing page offers
+an absolute local private-token-file variant, with ownership/regular-file/symlink/mode
 checks and the installer's bounded trusted reader. The operator provisions and
 removes that file through a trusted file path; the command neither contains its
 contents nor deletes it. A GUI without private file provisioning requires a
