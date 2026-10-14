@@ -170,7 +170,8 @@ const { chromium, webkit } = require('playwright');
       );
       mode = 'wrong-range';
       value = 97;
-      await service.getByRole('button', { name: 'Refresh history' }).click();
+      // No manual refresh: the next 30-second poll reads the new body.
+      await page.clock.runFor(30_000);
       await service
         .getByText('History refresh failed. Showing previously loaded history.', { exact: true })
         .waitFor();
@@ -212,7 +213,8 @@ const { chromium, webkit } = require('playwright');
         );
       }
       mode = 'denied';
-      await service.getByRole('button', { name: 'Refresh history' }).click();
+      // No manual refresh: the next 30-second poll reads the new body.
+      await page.clock.runFor(30_000);
       await service
         .getByText('Access denied. Check your permissions and license plan.', { exact: true })
         .waitFor();
@@ -240,7 +242,8 @@ const { chromium, webkit } = require('playwright');
       });
       await capture('zero-recovered');
       mode = 'empty';
-      await service.getByRole('button', { name: 'Refresh history' }).click();
+      // No manual refresh: the next 30-second poll reads the new body.
+      await page.clock.runFor(30_000);
       await service.getByText('No stored history in this range', { exact: true }).first().waitFor();
       await page.clock.runFor(30_000);
       await check('valid empty success is distinct from the initial invalid body', async () => {
