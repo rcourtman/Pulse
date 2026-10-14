@@ -146,6 +146,7 @@ describe('useWorkloads', () => {
         fromAgent: boolean,
       ) => {
         const guest = result.workloads()[0];
+        expect(guest.networkInterfaces).toEqual(interfaces);
         expect(guest).toMatchObject({
           id: resource.id,
           canonicalResourceId: resource.id,
@@ -154,10 +155,10 @@ describe('useWorkloads', () => {
           node: 'node-a',
           instance: 'site-a',
           ipAddresses: ['192.0.2.80', '10.88.0.1'],
-          lastSeen: sampleResource.lastSeen,
+          lastSeen: new Date(resource.lastSeen).toISOString(),
           networkInterfacesFromAgent: fromAgent,
         });
-        expect(guest.networkInterfaces).toEqual(interfaces);
+        expect(Date.parse(guest.lastSeen)).toBe(resource.lastSeen);
       };
       try {
         await waitForWorkloadCount(() => result.workloads().length);
