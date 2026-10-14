@@ -156,10 +156,10 @@ func testClusterFirstUseSessionAdmission(t *testing.T) {
 				client := cc.clients[f.server.URL]
 				healthy := cc.nodeHealth[f.server.URL]
 				cc.mu.RUnlock()
-				if !healthy || client == nil || cc.getEndpointFingerprint(f.server.URL) != clusterTrustPin(f.cert.Load()) {
+				if !healthy || client == nil || checkedClusterFingerprint(t, cc, f.server.URL) != clusterTrustPin(f.cert.Load()) {
 					t.Fatalf("declared new member has no usable pinned session: healthy=%t client=%t logins=%d nodes=%d", healthy, client != nil, f.logins.Load(), f.nodes.Load())
 				}
-				if len(saved) != 0 || cc.config.VerifySSL != true || cc.config.Fingerprint == cc.getEndpointFingerprint(f.server.URL) {
+				if len(saved) != 0 || cc.config.VerifySSL != true || cc.config.Fingerprint == checkedClusterFingerprint(t, cc, f.server.URL) {
 					t.Fatal("first use changed saved trust or primary policy")
 				}
 				if client.config.Timeout != cfg.Timeout {
@@ -215,7 +215,7 @@ func TestClusterFirstUseSessionRefusalKeepsTrust(t *testing.T) {
 			if cc.GetHealthStatus()[f.server.URL] || cc.clients[f.server.URL] != nil || f.logins.Load() != 1 || f.nodes.Load() != 0 {
 				t.Fatalf("refused first-use session became healthy or replayed: login=%d nodes=%d", f.logins.Load(), f.nodes.Load())
 			}
-			pin := cc.getEndpointFingerprint(f.server.URL)
+			pin := checkedClusterFingerprint(t, cc, f.server.URL)
 			if pin != clusterTrustPin(f.cert.Load()) || cc.lastError[f.server.URL] == "" {
 				t.Fatal("refusal lost its fixed pin or diagnostic")
 			}
@@ -224,7 +224,7 @@ func TestClusterFirstUseSessionRefusalKeepsTrust(t *testing.T) {
 			delete(cc.lastHealthCheck, f.server.URL)
 			before := f.handshakes.Load()
 			cc.recoverUnhealthyNodes(context.Background())
-			if !cc.GetHealthStatus()[f.server.URL] || cc.clients[f.server.URL] == nil || cc.getEndpointFingerprint(f.server.URL) != pin || f.handshakes.Load() != before+2 || f.logins.Load() != 3 || f.nodes.Load() != 1 {
+			if !cc.GetHealthStatus()[f.server.URL] || cc.clients[f.server.URL] == nil || checkedClusterFingerprint(t, cc, f.server.URL) != pin || f.handshakes.Load() != before+2 || f.logins.Load() != 3 || f.nodes.Load() != 1 {
 				t.Fatal("separate ordinary recovery failed, recaptured trust or replayed the refusal")
 			}
 		})
@@ -257,13 +257,13 @@ func TestClusterPasswordEstablishedPinsAreNotFirstUse(t *testing.T) {
 				case "selection":
 					_, _ = cc.GetNodes(context.Background())
 				}
-				if f.logins.Load() != 0 || f.nodes.Load() != 0 || f.handshakes.Load() != 1 || cc.getEndpointFingerprint(f.server.URL) != pin || cc.GetHealthStatus()[f.server.URL] {
+				if f.logins.Load() != 0 || f.nodes.Load() != 0 || f.handshakes.Load() != 1 || checkedClusterFingerprint(t, cc, f.server.URL) != pin || cc.GetHealthStatus()[f.server.URL] {
 					t.Fatal("known leaf change captured new trust or sent a password")
 				}
 				f.cert.Store(trusted)
 				delete(cc.lastHealthCheck, f.server.URL)
 				cc.recoverUnhealthyNodes(context.Background())
-				if !cc.GetHealthStatus()[f.server.URL] || cc.getEndpointFingerprint(f.server.URL) != pin || f.logins.Load() != 2 || f.nodes.Load() != 1 {
+				if !cc.GetHealthStatus()[f.server.URL] || checkedClusterFingerprint(t, cc, f.server.URL) != pin || f.logins.Load() != 2 || f.nodes.Load() != 1 {
 					t.Fatal("re-presenting trusted leaf did not recover")
 				}
 			})

@@ -51,10 +51,10 @@ func testClusterClientEndpointOwnershipRoutingAndTrust(t *testing.T) {
 	cc.mu.RLock()
 	_, captured := cc.endpointFingerprints[other.server.URL]
 	cc.mu.RUnlock()
-	if captured || cc.getEndpointFingerprint(declared.server.URL) != declaredPin {
+	if captured || checkedClusterFingerprint(t, cc, declared.server.URL) != declaredPin {
 		t.Error("caller-owned endpoint edit changed the client's trust state")
 	}
-	t.Logf("observed injected endpoint authenticated requests=%d; original pin unchanged=%t", other.requests.Load(), cc.getEndpointFingerprint(declared.server.URL) == declaredPin)
+	t.Logf("observed injected endpoint authenticated requests=%d; original pin unchanged=%t", other.requests.Load(), checkedClusterFingerprint(t, cc, declared.server.URL) == declaredPin)
 }
 
 func testClusterClientEndpointOwnershipGuestAdmission(t *testing.T) {

@@ -17,6 +17,36 @@
 
 ## Purpose
 
+### Conflicting saved endpoint pins cannot select certificate trust
+
+For equivalent Proxmox endpoint URL spellings, all nonempty saved member pins
+must agree under the TLS verifier's existing case/colon normalization. Exact
+spelling and map iteration can no longer select one of contradictory pins.
+Resolution returns a fixed, credential-free trust-conflict error before a TLS
+probe, password login, token read, first-use capture or polling-client creation.
+The member stays unreachable to Pulse; an independently trusted sibling can
+continue ordinary monitoring. No saved pin is removed or overwritten, and the
+error cannot become an empty pin/CA or opt-out fallback. Agreeing pin formats,
+nonempty invalid pins, primary-pin fallback, declared-member first-use and the
+existing scheme/port/base-path/IPv4-mapped trust boundaries remain unchanged.
+
+`TestClusterConflictingSavedPinsNeverAuthenticate` covers startup, recovery and
+lazy selection in token/JSON/form modes, three URL spellings and both VerifySSL
+settings with real TLS sockets. It checks zero TLS/login/read work for conflicts,
+no installed client or trust mutation, sibling use, and accepted monitoring
+following a normal reload with reconciled fixture pins. Existing established-pin,
+first-use, cancellation, ownership and guest-admission controls still apply.
+`TestClusterSavedPinResolutionRejectsConflicts` and
+`TestClusterFirstUseCaptureDoesNotReconcileConflictingPins` retain the conflict
+through normalized authorities, invalid nonempty pins and a capture race.
+`TestClusterConflictingPinsEndpointProjection` uses the production endpoint
+builder, real clients and monitor projection in all three auth modes: native
+Online, identity and saved trust are not changed by failed Pulse reachability.
+This establishes source/consumer behaviour, not native recovery or attribution
+of a guest, PBS or certificate report. Exact duplicate saved rows collapsed by
+the builder's map are outside this URL-alias resolver contract.
+
+
 ### Cluster recovery requires success of the operation actually probed
 
 Startup and unhealthy-member recovery read `/nodes`; lazy construction uses the

@@ -53,6 +53,8 @@ var transientRateLimitStatusCodes = map[int]struct{}{
 	504: {},
 }
 
+var errConflictingEndpointFingerprints = errors.New("TLS trust conflict - equivalent endpoint URLs have different saved fingerprints; independently verify and reconcile saved trust")
+
 // isEndpointConnectivityError reports whether an error indicates the endpoint
 // itself is unreachable (TCP, DNS, TLS failures). Application-level errors
 // (HTTP responses, parsing errors) mean the endpoint IS reachable.
@@ -96,6 +98,9 @@ func isEndpointConnectivityError(err error) bool {
 func sanitizeEndpointError(errMsg string) string {
 	if errMsg == "" {
 		return errMsg
+	}
+	if strings.Contains(errMsg, errConflictingEndpointFingerprints.Error()) {
+		return errConflictingEndpointFingerprints.Error()
 	}
 
 	lower := strings.ToLower(errMsg)
@@ -209,17 +214,17 @@ func NewClusterClientWithContext(ctx context.Context, name string, config Client
 
 // getEndpointFingerprint returns the TLS fingerprint to use for a specific endpoint.
 // It prefers the per-endpoint fingerprint (TOFU) over the base config fingerprint.
-func (cc *ClusterClient) getEndpointFingerprint(endpoint string) string {
+func (cc *ClusterClient) getEndpointFingerprint(endpoint string) (string, error) {
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
 	return cc.getEndpointFingerprintLocked(endpoint)
 }
 
-func (cc *ClusterClient) getEndpointFingerprintLocked(endpoint string) string {
-	if fp, ok := cc.knownEndpointFingerprintLocked(endpoint); ok {
-		return fp
+func (cc *ClusterClient) getEndpointFingerprintLocked(endpoint string) (string, error) {
+	if fp, known, err := cc.knownEndpointFingerprintLocked(endpoint); known || err != nil {
+		return fp, err
 	}
-	return cc.config.Fingerprint
+	return cc.config.Fingerprint, nil
 }
 
 func clusterEndpointKey(endpoint string) (string, bool) {
@@ -233,20 +238,34 @@ func clusterEndpointKey(endpoint string) (string, bool) {
 	return proxmoxEndpointKey(u.String(), false)
 }
 
-func (cc *ClusterClient) knownEndpointFingerprintLocked(endpoint string) (string, bool) {
-	if fp := cc.endpointFingerprints[endpoint]; fp != "" {
-		return fp, true
-	}
+func (cc *ClusterClient) knownEndpointFingerprintLocked(endpoint string) (string, bool, error) {
 	key, valid := clusterEndpointKey(endpoint)
-	if !valid {
-		return "", false
-	}
+	var fingerprint string
+	known := false
 	for storedEndpoint, fp := range cc.endpointFingerprints {
-		if storedKey, ok := clusterEndpointKey(storedEndpoint); ok && storedKey == key && fp != "" {
-			return fp, true
+		if fp == "" {
+			continue
 		}
+		storedKey, storedValid := clusterEndpointKey(storedEndpoint)
+		if storedEndpoint != endpoint && (!valid || !storedValid || storedKey != key) {
+			continue
+		}
+		// Compare the same colon/case normalization used by the TLS verifier.
+		// Exact URL spelling must not choose a winner over another saved pin
+		// for this authority, nor may Go map order decide which leaf is trusted.
+		normalized := strings.ToLower(strings.ReplaceAll(fp, ":", ""))
+		if known && strings.ToLower(strings.ReplaceAll(fingerprint, ":", "")) != normalized {
+			return "", true, errConflictingEndpointFingerprints
+		}
+		// Keep a nonempty, malformed saved pin nonempty: returning its empty
+		// normalized form would accidentally select CA or explicit opt-out mode.
+		// Agreeing representations use a deterministic original spelling.
+		if !known || fp < fingerprint {
+			fingerprint = fp
+		}
+		known = true
 	}
-	return "", false
+	return fingerprint, known, nil
 }
 
 // Only a declared, previously untrusted member may use the primary pin as a
@@ -258,7 +277,7 @@ func (cc *ClusterClient) canTrustMemberOnFirstUseLocked(endpoint string) bool {
 	if !valid || !primaryValid || key == primary || cc.config.Fingerprint == "" {
 		return false
 	}
-	if _, known := cc.knownEndpointFingerprintLocked(endpoint); known {
+	if _, known, err := cc.knownEndpointFingerprintLocked(endpoint); known || err != nil {
 		return false
 	}
 	for _, member := range cc.endpoints {
@@ -311,7 +330,10 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 	captured := false
 	// A concurrent first-use capture may have established trust while the TLS
 	// probe was in flight. Use that winner's pin, not our later certificate.
-	if existing, known := cc.knownEndpointFingerprintLocked(endpoint); known {
+	if existing, known, trustErr := cc.knownEndpointFingerprintLocked(endpoint); trustErr != nil {
+		cc.mu.Unlock()
+		return nil, trustErr, false
+	} else if known {
 		newFingerprint = existing
 	} else {
 		if !cc.canTrustMemberOnFirstUseLocked(endpoint) {
@@ -352,6 +374,11 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 // member can establish a pin; a saved/primary pin is never replaced.
 // The returned client is a disposable probe, not an accepted polling session.
 func (cc *ClusterClient) probeEndpoint(ctx context.Context, cfg ClientConfig) (*Client, []Node, error) {
+	fingerprint, err := cc.getEndpointFingerprint(cfg.Host)
+	if err != nil {
+		return nil, nil, err
+	}
+	cfg.Fingerprint = fingerprint
 	client, err := NewClientWithContext(ctx, cfg)
 	var nodes []Node
 	if err == nil {
@@ -368,6 +395,17 @@ func (cc *ClusterClient) probeEndpoint(ctx context.Context, cfg ClientConfig) (*
 		return retryClient, nil, retryErr
 	}
 	return client, nodes, err
+}
+
+// Resolve saved trust again before constructing the full polling session.
+// Never turn a resolution failure into an empty pin (CA or opt-out mode).
+func (cc *ClusterClient) newEndpointClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
+	fingerprint, err := cc.getEndpointFingerprint(cfg.Host)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Fingerprint = fingerprint
+	return NewClientWithContext(ctx, cfg)
 }
 
 // initialHealthCheck performs a quick parallel health check on all endpoints
@@ -394,7 +432,6 @@ func (cc *ClusterClient) initialHealthCheck(ctx context.Context) {
 			// Try a quick connection test with slightly longer timeout for initial check
 			cfg := cc.config
 			cfg.Host = ep
-			cfg.Fingerprint = cc.getEndpointFingerprint(ep)
 			cfg.Timeout = 5 * time.Second
 
 			testClient, _, err := cc.probeEndpoint(ctx, cfg)
@@ -408,8 +445,7 @@ func (cc *ClusterClient) initialHealthCheck(ctx context.Context) {
 				// Node is healthy - create a proper client with full timeout for actual use
 				fullCfg := cc.config
 				fullCfg.Host = ep
-				fullCfg.Fingerprint = cc.getEndpointFingerprint(ep)
-				fullClient, clientErr := NewClientWithContext(ctx, fullCfg)
+				fullClient, clientErr := cc.newEndpointClient(ctx, fullCfg)
 
 				cc.mu.Lock()
 				if clientErr != nil {
@@ -662,7 +698,6 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		// Create new client with shorter timeout for initial test
 		cfg := cc.config
 		cfg.Host = selectedEndpoint
-		cfg.Fingerprint = cc.getEndpointFingerprintLocked(selectedEndpoint)
 
 		// First try with a short timeout to quickly detect offline nodes
 		testCfg := cfg
@@ -721,7 +756,14 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		}
 
 		// Use the first-use winner's pin for the full polling session too.
-		cfg.Fingerprint = cc.getEndpointFingerprintLocked(selectedEndpoint)
+		fingerprint, trustErr := cc.getEndpointFingerprintLocked(selectedEndpoint)
+		if trustErr != nil {
+			cc.nodeHealth[selectedEndpoint] = false
+			cc.lastError[selectedEndpoint] = sanitizeEndpointError(trustErr.Error())
+			cc.lastHealthCheck[selectedEndpoint] = time.Now()
+			return nil, trustErr
+		}
+		cfg.Fingerprint = fingerprint
 		// Create the actual client with full timeout
 		newClient, err := NewClientWithContext(ctx, cfg)
 		if err != nil {
@@ -858,7 +900,6 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			// typically takes ~3 seconds on local networks
 			cfg := cc.config
 			cfg.Host = ep
-			cfg.Fingerprint = cc.getEndpointFingerprint(ep)
 			cfg.Timeout = 5 * time.Second
 
 			testClient, _, err := cc.probeEndpoint(ctx, cfg)
@@ -874,8 +915,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			if err == nil {
 				// Store the client with original timeout
 				cfg.Timeout = cc.config.Timeout
-				cfg.Fingerprint = cc.getEndpointFingerprint(ep)
-				fullClient, clientErr := NewClientWithContext(ctx, cfg)
+				fullClient, clientErr := cc.newEndpointClient(ctx, cfg)
 				if clientErr != nil {
 					// A short probe is not a usable polling session. Password
 					// authentication may fail when constructing the actual client;

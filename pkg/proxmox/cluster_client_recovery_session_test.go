@@ -96,7 +96,7 @@ func testClusterRecoveryRequiresUsableSession(t *testing.T) {
 				if refusal == "form-refused" {
 					wantLogins = 3
 				}
-				if logins.Load() != wantLogins || nodeReads.Load() != 1 || cc.getEndpointFingerprint(server.URL) != cfg.Fingerprint {
+				if logins.Load() != wantLogins || nodeReads.Load() != 1 || checkedClusterFingerprint(t, cc, server.URL) != cfg.Fingerprint {
 					t.Fatalf("refusal replayed, changed trust or lost its probe: logins=%d nodes=%d", logins.Load(), nodeReads.Load())
 				}
 
