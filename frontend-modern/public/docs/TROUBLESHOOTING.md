@@ -43,6 +43,10 @@ establish safe recovery.
   [server, backup inventory and History](PBS.md#pbs-is-active-but-missing-from-monitoring).
   An Active API connection does not establish a visible PBS resource; installing
   an agent does not prove API recovery.
+- **RAID is reported degraded despite a spare:** compare
+  [required members, active members and spares](TROUBLESHOOTING.md#raid-array-is-degraded-with-a-spare).
+  A spare-inclusive total is not the required member count; do not change the
+  array just to clear a Pulse alert.
 - **Pulse itself uses more memory, CPU or disk writes:** use
   [memory baseline and growth checks](TROUBLESHOOTING.md#memory-use-keeps-growing)
   or [CPU and write-rate checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).
@@ -337,6 +341,39 @@ restore, not by overwriting today's history. Follow
 [safe audit recovery](AUDIT_LOGGING.md#verification-failures-and-safe-recovery).
 
 ### Monitoring Data
+
+#### RAID array is degraded with a spare
+
+For a Linux MD RAID alert, compare the same array's **existing** native status
+with Pulse's reading and observation time. In `mdadm` output, **Raid Devices**
+is the required member count; **Total Devices** can include a spare. A spare
+does not replace an active member until it has joined the array.
+
+| Existing observation | Meaning |
+| --- | --- |
+| `clean`; Raid Devices **4**, Active **4**, Total **5**, Working **5**, Spare **1**, Failed **0** | Four required members are active, with one spare. The total of five does not by itself mean a member is missing. |
+| Raid Devices **4**, Active **3**, with a spare still present | A required member is missing. Do not subtract the spare from the required count or treat it as restored redundancy. |
+| Failed devices, a degraded/unavailable state, or recovery/reshape in progress | These are separate health or recovery observations. A spare or the word `clean` alone does not establish that recovery finished. |
+| Missing counts, an old reading or different array identities | The comparison is unavailable or unlike-for-like, not a healthy result. |
+
+Pulse **v6.5.0** includes the [spare-count correction reported in #2369](https://github.com/rcourtman/Pulse/issues/2369)
+for the clean four-member-plus-spare case, including reports from older
+collectors. That does not establish that every RAID alert has this cause or
+that an affected installation has recovered. A healthy count also does not
+verify data integrity, backup completeness or restore readiness.
+
+For genuine member loss or recovery, use the storage platform's established
+recovery procedure and independent monitoring. Keep RAID alerts enabled; do
+not remove a spare, fail a member, assemble/rebuild an array, start a scrub,
+reboot or change collection settings just to test or silence Pulse. No new
+`mdadm` command, Diagnostics run or induced failure is required to file a report.
+
+For help, retain the original alert/time, running Pulse and collector versions
+where known, collection path, and the already available state and counts for
+one matching array. A missing collector version or native observation can be
+reported as unknown. Use consistent private aliases for the host and array;
+keep UUIDs, serial numbers, private paths and full command output out of public
+reports. Do not repeat an array operation to obtain evidence.
 
 #### Primary IP shows a Podman or Docker bridge address
 
