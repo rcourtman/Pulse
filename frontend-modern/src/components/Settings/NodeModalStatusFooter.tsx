@@ -1,7 +1,8 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, createUniqueId, For, Show } from 'solid-js';
 import type { NodeModalProps } from '@/components/Settings/nodeModalModel';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
 import { logger } from '@/utils/logger';
+import { getNodeModalConnectionTestCopy } from '@/utils/nodeModalPresentation';
 
 interface NodeModalStatusFooterProps {
   modalProps: NodeModalProps;
@@ -19,6 +20,8 @@ interface NodeModalStatusFooterProps {
 
 export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (props) => {
   const { modalProps, state } = props;
+  const testDescriptionId = createUniqueId();
+  const testCopy = () => getNodeModalConnectionTestCopy(state.connectionTestScope());
   const guidedSetupOnlyMode = () =>
     !state.isEditingExistingNode() &&
     modalProps.nodeType !== 'pmg' &&
@@ -40,7 +43,13 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
           });
           return null;
         })()}
-        <div class={state.testResultPresentation().panelClass}>
+        <div
+          role="status"
+          aria-label="Connection test result"
+          aria-live="polite"
+          aria-atomic="true"
+          class={state.testResultPresentation().panelClass}
+        >
           <div class="flex items-start gap-2">
             <Show when={state.testResultPresentation().icon === 'success'}>
               <svg
@@ -85,7 +94,13 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
               </svg>
             </Show>
             <div class={`flex-1 ${state.testResultPresentation().textClass}`}>
+              <p class="font-medium">
+                {getNodeModalConnectionTestCopy(state.testResult()!.scope).result}
+              </p>
               <p>{state.testResult()?.message}</p>
+              <p class="mt-1 text-xs">
+                {getNodeModalConnectionTestCopy(state.testResult()!.scope).description}
+              </p>
               <Show when={state.testResult()?.isCluster}>
                 <p class="mt-1 text-xs opacity-80">
                   ✨ Cluster detected! All cluster nodes will be automatically added.
@@ -124,8 +139,14 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
         )}
       </Show>
 
-      <div class="flex items-center justify-between px-6 py-4 border-t border-border">
-        <div class="flex items-center gap-3">
+      <Show when={!guidedSetupOnlyMode()}>
+        <p id={testDescriptionId} class="mx-6 mt-3 text-xs text-muted">
+          {testCopy().description} A successful check does not prove ongoing collection or guest
+          recovery.
+        </p>
+      </Show>
+      <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-border">
+        <div class="flex flex-wrap items-center gap-3">
           <Show when={state.isEditingExistingNode() && props.onDelete}>
             <button
               type="button"
@@ -153,15 +174,16 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
             <button
               type="button"
               onClick={state.handleTestConnection}
+              aria-describedby={testDescriptionId}
               disabled={state.isTesting() || props.togglePending || props.deletePending}
-              class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="min-h-11 px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {state.isTesting() ? 'Testing…' : 'Test connection'}
+              {state.isTesting() ? 'Testing…' : testCopy().button}
             </button>
           </Show>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
           <Show when={state.isEditingExistingNode() && props.onToggleEnabled}>
             <button
               type="button"

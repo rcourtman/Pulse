@@ -11,6 +11,7 @@ import {
   buildNodeModalMonitoringPayload,
   getNodeModalDefaultFormData,
   getNodeModalTestResultPresentation,
+  type NodeModalConnectionTestScope,
   type NodeModalFormData,
 } from '@/utils/nodeModalPresentation';
 
@@ -24,6 +25,7 @@ import {
 type NodeModalTestResult = {
   status: string;
   message: string;
+  scope: NodeModalConnectionTestScope;
   isCluster?: boolean;
   warnings?: string[];
 };
@@ -33,6 +35,13 @@ const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';
 export const useNodeModalState = (props: NodeModalProps) => {
   const [testResult, setTestResult] = createSignal<NodeModalTestResult | null>(null);
   const [isTesting, setIsTesting] = createSignal(false);
+  let connectionTestGeneration = 0;
+  const invalidateConnectionTest = () => {
+    connectionTestGeneration++;
+    setTestResult(null);
+    // Invalidating UI evidence does not cancel a live request. Keep the test
+    // button disabled until it settles; edits must not start overlapping probes.
+  };
   const [formData, setFormData] = createSignal<NodeModalFormData>(
     getNodeModalDefaultFormData(props.nodeType),
   );
@@ -52,6 +61,11 @@ export const useNodeModalState = (props: NodeModalProps) => {
     typeof props.temperatureMonitoringEnabled === 'boolean';
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
   const isEditingExistingNode = () => Boolean(props.editingNode?.id);
+  const connectionTestScope = (): NodeModalConnectionTestScope => {
+    const data = formData();
+    const hasNewSecret = data.authType === 'password' ? data.password : data.tokenValue;
+    return isEditingExistingNode() && !hasNewSecret ? 'saved' : 'form';
+  };
   const quickSetupCommandReady = () => quickSetupBootstrap() !== null;
 
   const quickSetupExpiryLabel = () => {
@@ -77,6 +91,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     generation === bootstrapGeneration && props.isOpen !== false;
   onCleanup(() => {
     bootstrapGeneration++;
+    connectionTestGeneration++;
     clearQuickSetupState();
   });
 
@@ -417,6 +432,45 @@ export const useNodeModalState = (props: NodeModalProps) => {
     setFormData(formSource);
   });
 
+  let previousTestContext: unknown[] | undefined;
+  createEffect(() => {
+    const data = formData();
+    const saved = props.editingNode;
+    // Ignore health-only polls and presentation/coverage edits. Bind evidence
+    // to connection inputs, the editing target and its available saved config,
+    // not object identity. A → B → A still retires the original request.
+    // These values stay in memory; never log or serialize credential inputs.
+    const context = [
+      props.isOpen,
+      props.resetKey,
+      props.nodeType,
+      data.host,
+      data.authType,
+      data.user,
+      data.password,
+      data.tokenName,
+      data.tokenValue,
+      data.verifySSL,
+      data.fingerprint,
+      saved?.id,
+      saved?.type,
+      saved?.host,
+      saved?.user,
+      saved?.tokenName,
+      saved?.hasPassword,
+      saved?.hasToken,
+      saved?.verifySSL,
+      saved && 'fingerprint' in saved ? saved.fingerprint : undefined,
+    ];
+    if (
+      previousTestContext &&
+      context.some((value, index) => value !== previousTestContext![index])
+    ) {
+      invalidateConnectionTest();
+    }
+    previousTestContext = context;
+  });
+
   const handleSubmit = (event: Event) => {
     event.preventDefault();
     const data = formData();
@@ -537,56 +591,29 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   const handleTestConnection = async () => {
+    if (isTesting() || props.isOpen === false) return;
     const data = formData();
+    const scope = connectionTestScope();
+    const generation = ++connectionTestGeneration;
+    const isCurrent = () => generation === connectionTestGeneration && props.isOpen !== false;
     const normalizedName = data.name.trim() || deriveNameFromHost(data.host);
 
     if (!data.name.trim() && normalizedName) {
       setFormData((prev) => ({ ...prev, name: normalizedName }));
     }
 
-    if (isEditingExistingNode()) {
-      const hasNewPassword = data.authType === 'password' && data.password;
-      const hasNewToken = data.authType === 'token' && data.tokenValue;
-
-      if (!hasNewPassword && !hasNewToken) {
-        setIsTesting(true);
-        setTestResult(null);
-
-        try {
-          const result = await NodesAPI.testExistingNode(props.editingNode!.id);
-          setTestResult({
-            status: 'success',
-            message: result.message || 'Connection successful',
-          });
-        } catch (error) {
-          logger.error('Test existing node error:', error);
-          let errorMessage = 'Connection failed';
-          if (error instanceof Error) {
-            errorMessage = error.message.replace(/^API request failed: \d{3}\s*/, '');
-          }
-          setTestResult({
-            status: 'error',
-            message: errorMessage,
-          });
-        } finally {
-          setIsTesting(false);
-        }
-        return;
-      }
-    }
-
-    if (!data.host) {
-      setTestResult({ status: 'error', message: 'Endpoint URL is required' });
+    if (scope === 'form' && !data.host) {
+      setTestResult({ status: 'error', message: 'Endpoint URL is required', scope });
       return;
     }
 
-    if (data.authType === 'password' && (!data.user || !data.password)) {
-      setTestResult({ status: 'error', message: 'Username and password are required' });
+    if (scope === 'form' && data.authType === 'password' && (!data.user || !data.password)) {
+      setTestResult({ status: 'error', message: 'Username and password are required', scope });
       return;
     }
 
-    if (data.authType === 'token' && (!data.tokenName || !data.tokenValue)) {
-      setTestResult({ status: 'error', message: 'Token ID and token value are required' });
+    if (scope === 'form' && data.authType === 'token' && (!data.tokenName || !data.tokenValue)) {
+      setTestResult({ status: 'error', message: 'Token ID and token value are required', scope });
       return;
     }
 
@@ -610,14 +637,34 @@ export const useNodeModalState = (props: NodeModalProps) => {
     setTestResult(null);
 
     try {
-      const result = await NodesAPI.testConnection(testData as NodeConfig);
+      // Saved credentials stay on the saved record. Never combine them with
+      // an unsaved endpoint, account or trust policy in the browser.
+      const result: {
+        status: string;
+        message?: string;
+        isCluster?: boolean;
+        warnings?: string[];
+      } =
+        scope === 'saved'
+          ? await NodesAPI.testExistingNode(props.editingNode!.id)
+          : await NodesAPI.testConnection(testData as NodeConfig);
+      if (!isCurrent()) return;
       setTestResult({
-        status: result.warnings && result.warnings.length > 0 ? 'warning' : 'success',
-        message: result.message || 'Connection successful',
+        status:
+          result.status !== 'success'
+            ? 'error'
+            : result.warnings && result.warnings.length > 0
+              ? 'warning'
+              : 'success',
+        message:
+          result.message ||
+          (result.status === 'success' ? 'Connection successful' : 'Connection failed'),
+        scope,
         isCluster: result.isCluster,
         warnings: result.warnings,
       });
     } catch (error) {
+      if (!isCurrent()) return;
       logger.error('Test connection error:', error);
       let errorMessage = 'Connection failed';
       if (error instanceof Error) {
@@ -626,6 +673,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       setTestResult({
         status: 'error',
         message: errorMessage,
+        scope,
       });
     } finally {
       setIsTesting(false);
@@ -639,6 +687,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     copyCommand,
     copyProxmoxAgentInstallCommand,
     copyQuickSetupCommand,
+    connectionTestScope,
     downloadProxmoxSetupScript,
     formData,
     handleSubmit,

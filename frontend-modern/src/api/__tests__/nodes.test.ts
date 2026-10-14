@@ -260,6 +260,15 @@ describe('NodesAPI', () => {
   });
 
   describe('testExistingNode', () => {
+    it('sends only the saved record identity, never a form payload, and preserves warnings', async () => {
+      const response = { status: 'success', warnings: ['Fixture restricted inventory'] };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(response);
+      expect(await NodesAPI.testExistingNode('pbs fixture/1')).toEqual(response);
+      expect(apiFetchJSON).toHaveBeenCalledExactlyOnceWith(
+        '/api/config/nodes/pbs%20fixture%2F1/test',
+        { method: 'POST' },
+      );
+    });
     it('tests connection to existing node', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce({ status: 'ok', latency: 10 });
 

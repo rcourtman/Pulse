@@ -207,6 +207,24 @@ export function buildNodeModalMonitoringPayload(
   }
 }
 
+export type NodeModalConnectionTestScope = 'saved' | 'form';
+
+export function getNodeModalConnectionTestCopy(scope: NodeModalConnectionTestScope) {
+  return scope === 'saved'
+    ? {
+        button: 'Test saved connection',
+        result: 'Saved connection test',
+        description:
+          'Uses the saved endpoint, credentials and TLS settings. Unsaved changes are not tested.',
+      }
+    : {
+        button: 'Test entered settings',
+        result: 'Entered settings test',
+        description:
+          'Uses the endpoint, credentials and TLS settings entered in this form. No settings are saved.',
+      };
+}
+
 export function getNodeModalTestResultPresentation(
   status?: string | null,
 ): NodeModalTestResultPresentation {

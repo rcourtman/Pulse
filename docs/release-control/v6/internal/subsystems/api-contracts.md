@@ -5000,6 +5000,21 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Saved and entered node connection tests are distinct evidence (2026-10-14)
+
+`NodesAPI.testExistingNode` sends only the encoded saved record identity to
+`POST /api/config/nodes/{nodeId}/test`; it has no form body. It must never combine
+saved credentials with an edited endpoint, identity or TLS policy. The existing
+`testConnection` endpoint uses only the explicitly entered configuration and
+new credential. The node editor labels the scope of both the action and result,
+retires obsolete responses on connection/target/lifecycle changes (even an
+A-to-B-to-A edit), and admits no overlapping tests. A recognised success with
+warnings stays a warning; unrecognised/error outcomes do not become success.
+The available public saved config is not a revision of hidden credentials:
+this UI binding cannot detect a remote secret replacement absent from that
+config. No API/backend, credential lookup, collection or save semantics change.
+
+
 ### AI Discovery removed (2026-10-11)
 
 The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)
