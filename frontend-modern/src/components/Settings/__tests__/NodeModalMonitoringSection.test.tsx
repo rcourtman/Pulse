@@ -5,7 +5,10 @@ import type { NodeModalProps } from '../nodeModalModel';
 import { useNodeModalState } from '../useNodeModalState';
 import { NodeModalMonitoringSection } from '../NodeModalMonitoringSection';
 
-function renderMonitoring(nodeType: NodeModalProps['nodeType'] = 'pve') {
+function renderMonitoring(
+  nodeType: NodeModalProps['nodeType'] = 'pve',
+  trust: { verifySSL?: boolean; fingerprint?: string } = {},
+) {
   const onSave = vi.fn();
   const fetch = vi.fn();
   vi.stubGlobal('fetch', fetch);
@@ -17,6 +20,7 @@ function renderMonitoring(nodeType: NodeModalProps['nodeType'] = 'pve') {
     tokenName: 'monitoring@pam!fixture',
     hasToken: true,
     verifySSL: true,
+    ...trust,
   };
   const editingNode: NodeConfig =
     nodeType === 'pve'
@@ -186,5 +190,118 @@ describe('NodeModalMonitoringSection collection safety', () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/Guest details depend on guest-agent/)).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(['pve', 'pbs', 'pmg'] as const)(
+    'explains all four %s trust combinations without changing them or testing the endpoint',
+    (nodeType) => {
+      const pin = 'ab:'.repeat(31) + 'ab';
+      for (const verifySSL of [true, false]) {
+        for (const fingerprint of ['', pin]) {
+          const { fetch, onSave } = renderMonitoring(nodeType, { verifySSL, fingerprint });
+          const region = within(screen.getByRole('region', { name: 'TLS trust' }));
+          const policy = region.getByRole('status', { name: 'Form TLS policy' });
+          expect(policy).toHaveAttribute('aria-live', 'polite');
+          expect(policy).toHaveAttribute('aria-atomic', 'true');
+          expect(policy).toHaveTextContent(
+            fingerprint
+              ? 'Certificate fingerprint required'
+              : verifySSL
+                ? 'Trusted certificate chain required'
+                : 'Certificate identity not verified',
+          );
+          if (fingerprint) {
+            expect(policy).toHaveTextContent('The fingerprint takes precedence over the checkbox');
+            expect(policy).toHaveTextContent('even if its certificate chain is trusted');
+          } else if (verifySSL) {
+            expect(policy).toHaveTextContent('a chain trusted by the Pulse runtime');
+          } else {
+            expect(policy).toHaveTextContent('do not authenticate the server');
+            expect(policy).toHaveTextContent('impersonated endpoint');
+          }
+          expect(region.getByText(/Form settings only/)).toHaveTextContent(
+            'not a connection-test result',
+          );
+          if (nodeType === 'pve') {
+            expect(region.getByText(/Cluster members may have/)).toBeInTheDocument();
+          } else {
+            expect(region.queryByText(/Cluster members may have/)).not.toBeInTheDocument();
+          }
+          const verification = region.getByRole('checkbox', { name: 'Verify SSL certificate' });
+          expect(verification).toHaveAccessibleDescription(
+            policy.querySelector('[id]')!.textContent!,
+          );
+          expect(verification).toHaveProperty('checked', verifySSL);
+          expect(region.getByRole('textbox', { name: 'SSL Fingerprint (optional)' })).toHaveValue(
+            fingerprint,
+          );
+          fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+          expect(onSave).toHaveBeenCalledOnce();
+          expect(onSave.mock.calls[0][0]).toMatchObject({
+            type: nodeType,
+            verifySSL,
+            fingerprint,
+          });
+          expect(onSave.mock.calls[0][0]).not.toHaveProperty('password');
+          expect(onSave.mock.calls[0][0]).not.toHaveProperty('tokenValue');
+          expect(fetch).not.toHaveBeenCalled();
+          cleanup();
+        }
+      }
+    },
+  );
+
+  it('keeps a supplied pin authoritative when the checkbox changes, including an invalid pin', () => {
+    const { fetch, onSave } = renderMonitoring('pve', { fingerprint: 'not-a-valid-pin' });
+    const verification = screen.getByRole('checkbox', { name: 'Verify SSL certificate' });
+    fireEvent.click(verification);
+    expect(verification).not.toBeChecked();
+    expect(screen.getByRole('status', { name: 'Form TLS policy' })).toHaveTextContent(
+      'Certificate fingerprint required',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+    expect(onSave.mock.calls[0][0]).toMatchObject({
+      verifySSL: false,
+      fingerprint: 'not-a-valid-pin',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('updates the policy and descriptions as the operator edits, without silently changing trust', () => {
+    const { fetch } = renderMonitoring();
+    const policy = screen.getByRole('status', { name: 'Form TLS policy' });
+    const verification = screen.getByRole('checkbox', { name: 'Verify SSL certificate' });
+    const fingerprint = screen.getByRole('textbox', { name: 'SSL Fingerprint (optional)' });
+    const safeHelp = /Independently verify the replacement through an already-trusted/;
+    expect(screen.getByText(safeHelp)).toHaveTextContent(
+      'Do not disable verification or clear a pin to bypass an error',
+    );
+    expect(fingerprint).toHaveAccessibleDescription(/ACME or Let's Encrypt/);
+    fireEvent.click(verification);
+    expect(policy).toHaveTextContent('Certificate identity not verified');
+    fireEvent.input(fingerprint, { target: { value: 'ab'.repeat(32) } });
+    expect(policy).toHaveTextContent('Certificate fingerprint required');
+    expect(verification).not.toBeChecked();
+    fireEvent.input(fingerprint, { target: { value: '' } });
+    expect(policy).toHaveTextContent('Certificate identity not verified');
+    fireEvent.click(verification);
+    expect(policy).toHaveTextContent('Trusted certificate chain required');
+    expect(fingerprint).toHaveValue('');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps TLS labels and descriptions local to each editor', () => {
+    renderMonitoring('pve', { fingerprint: 'ab'.repeat(32) });
+    renderMonitoring('pbs', { verifySSL: false });
+    const ids = screen.getAllByRole('region', { name: 'TLS trust' }).map((region) => {
+      const editor = within(region);
+      const pin = editor.getByRole('textbox', { name: 'SSL Fingerprint (optional)' });
+      const checkbox = editor.getByRole('checkbox', { name: 'Verify SSL certificate' });
+      const descriptionId = checkbox.getAttribute('aria-describedby')!;
+      expect(region.querySelector(`[id="${descriptionId}"]`)).toBeInTheDocument();
+      expect(pin).toHaveAccessibleDescription(/Independently verify/);
+      return pin.id;
+    });
+    expect(new Set(ids).size).toBe(2);
   });
 });

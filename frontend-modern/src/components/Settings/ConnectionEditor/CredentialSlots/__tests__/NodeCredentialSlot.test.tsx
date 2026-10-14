@@ -53,6 +53,9 @@ describe('NodeCredentialSlot', () => {
 
     expect(screen.getByLabelText(/^Endpoint URL/)).toHaveValue('https://pve1.local:8006');
     expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).not.toBeChecked();
+    expect(screen.getByRole('status', { name: 'Form TLS policy' })).toHaveTextContent(
+      'Certificate identity not verified',
+    );
 
     setEditingNode({
       ...initialNode,
@@ -65,6 +68,9 @@ describe('NodeCredentialSlot', () => {
         'https://pve1-refreshed.local:8006',
       );
       expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).toBeChecked();
+      expect(screen.getByRole('status', { name: 'Form TLS policy' })).toHaveTextContent(
+        'Trusted certificate chain required',
+      );
     });
   });
 
@@ -80,6 +86,7 @@ describe('NodeCredentialSlot', () => {
       tokenName: 'root@pam!pulse',
       hasToken: true,
       verifySSL: true,
+      fingerprint: 'ab'.repeat(32),
       status: 'connected',
     } as unknown as NodeConfigWithStatus;
     const [editingNode, setEditingNode] = createSignal(initialNode);
@@ -98,16 +105,24 @@ describe('NodeCredentialSlot', () => {
     const verifySSL = screen.getByRole('checkbox', { name: 'Verify SSL certificate' });
     fireEvent.input(endpoint, { target: { value: 'https://operator-edit.local:8006' } });
     fireEvent.click(verifySSL);
+    expect(screen.getByRole('status', { name: 'Form TLS policy' })).toHaveTextContent(
+      'Certificate fingerprint required',
+    );
 
     for (let poll = 1; poll <= 2; poll += 1) {
       setEditingNode({
         ...initialNode,
         host: `https://server-poll-${poll}.local:8006`,
+        fingerprint: 'cd'.repeat(32),
       });
       await waitFor(() => {
         expect(screen.getByLabelText(/^Endpoint URL/)).toBe(endpoint);
         expect(endpoint).toHaveValue('https://operator-edit.local:8006');
         expect(verifySSL).not.toBeChecked();
+        expect(screen.getByLabelText('SSL Fingerprint (optional)')).toHaveValue('ab'.repeat(32));
+        expect(screen.getByRole('status', { name: 'Form TLS policy' })).toHaveTextContent(
+          'Certificate fingerprint required',
+        );
       });
     }
 
@@ -115,7 +130,11 @@ describe('NodeCredentialSlot', () => {
     fireEvent.submit(endpoint.closest('form')!);
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     expect(settings.saveNode).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ host: 'https://operator-edit.local:8006', verifySSL: false }),
+      expect.objectContaining({
+        host: 'https://operator-edit.local:8006',
+        verifySSL: false,
+        fingerprint: 'ab'.repeat(32),
+      }),
       editingNode(),
     );
   });
