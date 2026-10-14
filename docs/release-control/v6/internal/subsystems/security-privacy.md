@@ -70,6 +70,12 @@ criterion. It records elapsed time and both targets' request counts; unchanged
 pin, admission and routing assertions remain required. Runtime timeouts and
 separate timeout/cancellation controls are unchanged. This is not a diagnosis
 or dismissal of the retained earlier one-second timeout.
+Lock-evidence fixture cases use independent base-path namespaces while each
+case's clients share the same guard key. A recycled loopback port cannot inherit
+an earlier synthetic guest's cooldown. `TestGuestAgentLockEvidenceFixtureIsolation`
+shares one listener and retains an earlier uncertainty fence unchanged while an
+independent fixture completes its lock/command checks. No runtime fence is
+cleared, expired or weakened; native guest recovery is not established.
 This establishes source/consumer behaviour, not native recovery or attribution
 of a guest, PBS or certificate report.
 
