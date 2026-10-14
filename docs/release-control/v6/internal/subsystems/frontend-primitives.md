@@ -5561,8 +5561,8 @@ amber or red count. Docker State words read in their row dot's colour through
 `dockerStateTextToneClass` (`DockerNativeTableShared.tsx`) with no second dot,
 which now delegates to the platform helper `getPlatformStatusTextToneClass`
 (`features/platformPage/platformStatusTone.ts`): every platform table colours
-the cell behind a dot's verdict through it, and `PlatformIssueReason` takes its
-tones from it too;
+the cell behind a dot's verdict through it, and `PlatformIssueReason` and the
+TrueNAS Services and VMs state notes take their tones from it too;
 the Docker Networks row's single name-cell dot carries its attached-container
 verdict the same way, and each attached-container card's state words take its
 dot's tone through the same helper. The Swarm tables follow it too: the cell
