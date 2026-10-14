@@ -209,7 +209,9 @@ jobs:
       # npm overrides can install an older serializer than a new Solid asks
       # for without npm ci failing. The old security exception is source-bound.
       - name: Check Solid serialization dependency edges
-        run: node scripts/check-frontend-serialization.mjs
+        run: |
+          node --test scripts/tests/check-frontend-serialization.test.mjs
+          node scripts/check-frontend-serialization.mjs
 
       - name: Install frontend dependencies
         working-directory: frontend-modern

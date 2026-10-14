@@ -126,7 +126,8 @@ test('CI fails the graph check before installation without relaxing the audit', 
   const check = frontend.indexOf('- name: Check Solid serialization dependency edges');
   const install = frontend.indexOf('- name: Install frontend dependencies');
   assert.ok(check >= 0 && check < install);
-  assert.match(frontend.slice(check, install), /run: node scripts\/check-frontend-serialization\.mjs/);
+  assert.match(frontend.slice(check, install), /node --test scripts\/tests\/check-frontend-serialization\.test\.mjs/);
+  assert.match(frontend.slice(check, install), /node scripts\/check-frontend-serialization\.mjs/);
   assert.doesNotMatch(frontend.slice(check, install), /continue-on-error/);
   assert.match(frontend, /NPM_AUDIT_REQUIRE_RESULT: \$\{\{ needs\.changes\.outputs\.frontend_deps \}\}/);
   assert.match(frontend, /npm-audit-retry\.sh" all/);
