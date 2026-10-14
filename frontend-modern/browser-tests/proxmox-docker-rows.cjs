@@ -535,6 +535,15 @@ const observations = (mode) => [
         const state = networkRow.getByText('3 need attention', { exact: true });
         const fit = await state.evaluate((e) => ({ scroll: e.scrollWidth, client: e.clientWidth }));
         assert.ok(fit.scroll <= fit.client, JSON.stringify(fit));
+        // One dot per row, in the name cell: amber, the network degraded by what
+        // is on it (old: a green "Online" dot beside a red one). Each container
+        // keeps its own severity in the expansion.
+        const dots = networkRow.locator('[title="3 need attention"]');
+        assert.equal(await dots.count(), 2); // the dot and the State words' hover
+        const dotColour = await dots.first().evaluate((el) => getComputedStyle(el).backgroundColor);
+        const [r, g, b] = dotColour.match(/\d+/g).map(Number);
+        assert.ok(r > 200 && g > 120 && b < 80, dotColour);
+        assert.equal(await networkRow.locator('[title="Online"]').count(), 0);
         await networkRow.click();
         const detail = table.locator('[data-docker-network-detail-row="edge-net"]');
         await detail.getByText('edge-loop', { exact: true }).waitFor();
