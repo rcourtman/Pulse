@@ -105,6 +105,20 @@ const observations = (mode) => [
       image: 'rabbitmq:3',
     },
   }),
+  // Running, but restarted past the attention threshold: its dot reads amber.
+  base('edge-loop', 'app-container', {
+    status: 'running',
+    metrics: { cpu: { percent: 5 }, memory: { percent: 10 } },
+    docker: {
+      agentId: 'agent-edge',
+      hostname: 'edge-long-hostname',
+      runtime: 'docker',
+      runtimeVersion: '27.5.1',
+      image: 'worker:2',
+      containerState: 'running',
+      restartCount: 12,
+    },
+  }),
   base('nginx:latest', 'docker-image', {
     docker: {
       hostname: 'edge-long-hostname',
@@ -280,7 +294,7 @@ const observations = (mode) => [
         timeout: 120000,
       });
       if (width === 390) await page.evaluate(() => document.documentElement.classList.add('dark'));
-      await page.getByText('9 REST-mapped rows', { exact: true }).waitFor();
+      await page.getByText('10 REST-mapped rows', { exact: true }).waitFor();
       await check(
         'REST-first PMG counters and facets are present before any websocket hydration',
         async () => {
@@ -447,6 +461,38 @@ const observations = (mode) => [
         assert.ok(r > 200 && g > 120 && b < 80, JSON.stringify(colours));
       });
       await capture('container-degraded');
+      await check(
+        'A crash-looping running container reads amber in its dot and drawer',
+        async () => {
+          const row = page.locator('[data-docker-container-row="edge-loop"]');
+          const rowDot = row.locator('[title="12 restarts"]').first();
+          await rowDot.waitFor();
+          const amber = (colour) => {
+            const [r, g, b] = colour.match(/\d+/g).map(Number);
+            return r > 200 && g > 120 && b < 80;
+          };
+          const dotColour = await rowDot.evaluate((el) => getComputedStyle(el).backgroundColor);
+          assert.ok(amber(dotColour), dotColour);
+          if (width === 390) {
+            // No Restarts column on a phone: the words under the name say why.
+            const words = row.locator('[data-docker-container-state]');
+            assert.equal(await words.innerText(), '12 restarts');
+            assert.equal(await words.getAttribute('data-docker-container-state'), 'warning');
+            await row.locator('td').first().tap();
+          } else {
+            await row.getByRole('button', { name: /details/i }).click();
+          }
+          const headerDot = page.getByRole('img', { name: '12 restarts' }).first();
+          await headerDot.waitFor();
+          assert.equal(
+            await headerDot.evaluate((el) => getComputedStyle(el).backgroundColor),
+            dotColour,
+          );
+          const detail = page.getByTestId('resource-drawer-exceptions');
+          await detail.getByText('Restarts', { exact: true }).waitFor();
+        },
+      );
+      await capture('container-restarts');
       await select('Images');
       await check('Image verdict fits; phone hidden headers and cells are symmetric', async () => {
         const table = page.getByRole('region', { name: 'Image table' });

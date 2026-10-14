@@ -115,6 +115,27 @@ export const dockerContainerRunState = (resource: Resource): string => {
   return state === 'online' ? 'running' : state;
 };
 
+// v5 flagged crash-loopers in the restarts column; a container that restarted
+// more than this many times needs an operator's eye even while "running".
+// Docker's restart count covers the container's life, not a recent window:
+// the alert engine owns the windowed restart-loop alert.
+export const DOCKER_RESTART_ATTENTION_THRESHOLD = 5;
+
+// "7 restarts" for a running container past the restart threshold, the one
+// restart verdict the row dot, the State words, the sort and the drawer share.
+export const dockerContainerRestartAttentionLabel = (resource: Resource): string | undefined => {
+  const restarts = resource.docker?.restartCount;
+  if (dockerContainerRunState(resource) !== 'running') return undefined;
+  if (typeof restarts !== 'number' || restarts <= DOCKER_RESTART_ATTENTION_THRESHOLD) {
+    return undefined;
+  }
+  return `${restarts} restarts`;
+};
+
+// Docker's restart count is a total, not a rate, which the hover says.
+export const dockerContainerRestartCountTitle = (restarts: number): string =>
+  `Docker has restarted it ${restarts} times in total, not necessarily recently`;
+
 export function mapDockerContainerStatus(resource: Resource): StatusIndicator {
   const state = dockerContainerRunState(resource);
   const health = normalizeDockerToken(resource.docker?.health);
@@ -136,6 +157,8 @@ export function mapDockerContainerStatus(resource: Resource): StatusIndicator {
   if (state === 'running' && health === 'starting') {
     return { variant: 'warning', label: 'Starting' };
   }
+  const restartLabel = dockerContainerRestartAttentionLabel(resource);
+  if (restartLabel) return { variant: 'warning', label: restartLabel };
   if (state === 'running') {
     return { variant: 'success', label: health === 'healthy' ? 'Healthy' : 'Running' };
   }

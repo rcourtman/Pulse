@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "3c9d36172af91e7a448d813fca1b6d1f6a4e21ab",
+  "verified_at": "2026-10-14T15:29:47Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/dockerContainerStatePresentation.ts",
+    "frontend-modern/src/features/docker/dockerPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "616e68f379c94329fd24f7bf663abe605b6ca7d46f82cb8724bcfa10c1d25e0e",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "686531b273fc74682dc9bdfdccc820d5b219da339d30c91b33fe00f2a2a93950",
+    "frontend-modern/src/features/docker/dockerContainerStatePresentation.ts": "9eac65db3b59112b7ff907dab36eb485c6032eb9645fa04ac9f74050a47cbc00",
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "e86356afe7f3979fc36b69b88ac93f053d1c1b6dbff40fc9cafac40fa9c3bd79"
+  },
+  "routes": [
+    "browser-tests/proxmox-docker-rows.html (production DockerContainersTable and ResourceDetailDrawer, Chromium and WebKit via Playwright 1.56.1 on pulse-dev)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "running container with 12 restarts: row dot amber (old: green), sorted after the unhealthy row and ahead of healthy ones",
+    "desktop: State keeps \"Running\", Restarts count 12 amber (old: red)",
+    "phone: \"12 restarts\" amber under the name beside an amber dot",
+    "drawer: header dot amber matching the row; Worth checking lifts Restarts once, amber (old: red)",
+    "unhealthy, degraded and exited containers unchanged",
+    "reviewed by Sol from desktop and phone screenshots; its lifetime-count wording point is fixed here"
+  ],
+  "interactions": [
+    "row expand by pointer (desktop) and tap (phone)"
+  ]
+}
