@@ -5,6 +5,7 @@ import {
   findHistoryChartClosestPoint,
   formatHistoryChartTimeLabel,
   formatHistoryChartTooltipValue,
+  formatHistoryRangeOptionLabel,
   getHistoryChartAccessibleDescription,
   getHistoryChartAccessibleLabel,
   getHistoryChartDataMax,
@@ -593,5 +594,23 @@ describe('getHistoryChartTooltipLayout', () => {
     });
 
     expect(layout.y + layout.height).toBe(172);
+  });
+});
+
+describe('formatHistoryRangeOptionLabel', () => {
+  it('names every range one way across drawer, disk and pool pickers', async () => {
+    const { DISK_DETAIL_HISTORY_RANGE_OPTIONS } =
+      await import('@/features/storageBackups/diskDetailPresentation');
+    const { STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS } =
+      await import('@/features/storageBackups/storagePoolDetailPresentation');
+    expect(formatHistoryRangeOptionLabel('1h')).toBe('1 hour');
+    expect(formatHistoryRangeOptionLabel('24h')).toBe('24 hours');
+    expect(formatHistoryRangeOptionLabel('7d')).toBe('7 days');
+    for (const option of [
+      ...DISK_DETAIL_HISTORY_RANGE_OPTIONS,
+      ...STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS,
+    ]) {
+      expect(option.label).toBe(formatHistoryRangeOptionLabel(option.value));
+    }
   });
 });

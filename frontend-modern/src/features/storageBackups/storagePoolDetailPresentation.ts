@@ -16,6 +16,7 @@ import {
 import { resolveStorageRecordMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import type { Resource } from '@/types/resource';
 import { formatBytes, formatPercent } from '@/utils/format';
+import { formatHistoryRangeOptionLabel } from '@/components/shared/historyChartModel';
 
 export type StoragePoolDetailConfigRow = {
   label: string;
@@ -77,13 +78,10 @@ export type StoragePoolDetailZfsSummary = {
 export const STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS: readonly {
   value: HistoryTimeRange;
   label: string;
-}[] = [
-  { value: '24h', label: '24h' },
-  { value: '7d', label: '7d' },
-  { value: '14d', label: '14d' },
-  { value: '30d', label: '30d' },
-  { value: '90d', label: '90d' },
-] as const;
+}[] = (['24h', '7d', '14d', '30d', '90d'] as const).map((value) => ({
+  value,
+  label: formatHistoryRangeOptionLabel(value),
+}));
 
 export function getZfsScanTextClass(): string {
   return 'text-yellow-600 dark:text-yellow-400 italic';

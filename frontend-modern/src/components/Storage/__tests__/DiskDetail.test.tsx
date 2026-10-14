@@ -68,6 +68,14 @@ describe('DiskDetail', () => {
       '24h',
       '7d',
     ]);
+    // The same option names as every other history range picker.
+    expect(Array.from(rangeSelector.options).map((option) => option.textContent)).toEqual([
+      '1 hour',
+      '6 hours',
+      '12 hours',
+      '24 hours',
+      '7 days',
+    ]);
     expect(Array.from(rangeSelector.options).map((option) => option.value)).not.toContain('14d');
     expect(Array.from(rangeSelector.options).map((option) => option.value)).not.toContain('90d');
     expect(screen.getAllByTestId('history-chart-hover-group')).toHaveLength(2);

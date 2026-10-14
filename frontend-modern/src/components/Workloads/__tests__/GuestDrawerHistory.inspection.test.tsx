@@ -390,3 +390,21 @@ describe('buildGuestDrawerHistoryBandPath', () => {
     expect(path).toBe('M34.00,8.00 L352.00,8.00 L352.00,74.00 L34.00,74.00 Z');
   });
 });
+
+describe('drawer History range picker', () => {
+  it('names its options the same way as every history range picker', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    render(() => <GuestDrawerHistory target={target} range="24h" onRangeChange={() => {}} />);
+    const picker = (await screen.findByTestId('guest-history-range-control')) as HTMLSelectElement;
+    expect(Array.from(picker.options).map((option) => option.textContent)).toEqual([
+      '1 hour',
+      '6 hours',
+      '12 hours',
+      '24 hours',
+      '7 days',
+      '14 days',
+      '30 days',
+      '90 days',
+    ]);
+  });
+});
