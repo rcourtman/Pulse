@@ -568,6 +568,24 @@ const observations = (mode) => [
         await chooseStatus(/^Running, 2$/);
         assert.deepEqual(await visibleNames(), ['edge-web', 'edge-loop']);
         await detail.getByText('Needs operator review', { exact: true }).waitFor();
+        // Each card's state words take its dot's colour: red, then amber.
+        const cardTones = await detail
+          .locator('[data-docker-attachment-state]')
+          .evaluateAll((spans) =>
+            spans.map((s) => [
+              s.textContent,
+              getComputedStyle(s).color,
+              s.dataset.dockerAttachmentState,
+            ]),
+          );
+        assert.deepEqual(
+          cardTones.map(([text, , variant]) => [text, variant]),
+          [
+            ['Unhealthy', 'danger'],
+            ['12 restarts', 'warning'],
+          ],
+        );
+        assert.notEqual(cardTones[0][1], cardTones[1][1], JSON.stringify(cardTones));
         await chooseStatus(/^Other, 2$/);
         assert.deepEqual(await visibleNames(), ['edge-queue', 'edge-cache']);
         await chooseStatus(/^Attention, 3$/);

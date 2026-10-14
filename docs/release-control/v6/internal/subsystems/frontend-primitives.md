@@ -5560,7 +5560,8 @@ column and the drawer's lifted Restarts row alike, never a green dot beside an
 amber or red count. Docker State words read in their row dot's colour through
 `dockerStateTextToneClass` (`DockerNativeTableShared.tsx`) with no second dot;
 the Docker Networks row's single name-cell dot carries its attached-container
-verdict the same way. "Worth checking" renders through
+verdict the same way, and each attached-container card's state words take its
+dot's tone through the same helper. "Worth checking" renders through
 `DrawerExceptionList.tsx` directly under the alerts line, above the charts:
 one compact label/value line per lifted row with the shared
 `detailValueToneClass` tone, not a card per section. A guest memory reading
