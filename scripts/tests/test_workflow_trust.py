@@ -149,9 +149,8 @@ jobs:
       - uses: actions/download-artifact@{pin}
 """
                 )
-                self.assertTrue(
-                    any("Node 24 runtime baseline" in finding for finding in findings)
-                )
+                reason = "full commit SHA" if pin == "v8.0.2" else "Node 24 runtime baseline"
+                self.assertTrue(any(reason in finding for finding in findings))
 
     def test_requires_bounded_literal_runner_job_timeout(self) -> None:
         missing = self.audit(
