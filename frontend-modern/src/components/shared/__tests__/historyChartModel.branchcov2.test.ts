@@ -18,6 +18,8 @@ import {
   getHistoryChartTooltipLayout,
   getHistoryChartYAxisLabels,
 } from '@/components/shared/historyChartModel';
+import { DISK_DETAIL_HISTORY_RANGE_OPTIONS } from '@/features/storageBackups/diskDetailPresentation';
+import { STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS } from '@/features/storageBackups/storagePoolDetailPresentation';
 
 const pt = (timestamp: number, value: number, min: number, max: number): AggregatedMetricPoint => ({
   timestamp,
@@ -598,11 +600,7 @@ describe('getHistoryChartTooltipLayout', () => {
 });
 
 describe('formatHistoryRangeOptionLabel', () => {
-  it('names every range one way across drawer, disk and pool pickers', async () => {
-    const { DISK_DETAIL_HISTORY_RANGE_OPTIONS } =
-      await import('@/features/storageBackups/diskDetailPresentation');
-    const { STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS } =
-      await import('@/features/storageBackups/storagePoolDetailPresentation');
+  it('names every range one way across drawer, disk and pool pickers', () => {
     expect(formatHistoryRangeOptionLabel('1h')).toBe('1 hour');
     expect(formatHistoryRangeOptionLabel('24h')).toBe('24 hours');
     expect(formatHistoryRangeOptionLabel('7d')).toBe('7 days');
