@@ -205,6 +205,21 @@ func TestPrivateBootstrapRealBusyBoxInput(t *testing.T) {
 				root, env := portableBootstrapFixture(t, "busybox")
 				command := caller.build("issued-separately")
 				out, err := runPortableBootstrap(t, command, tc.input, env, "", tc.signalName)
+				if tc.signalName != "" {
+					body, readErr := os.ReadFile(filepath.Join(root, "signal-observation"))
+					if readErr != nil {
+						t.Fatal("signal execution observation missing")
+					}
+					var observation struct {
+						Sent bool `json:"sent"`
+					}
+					if json.Unmarshal(body, &observation) != nil || !observation.Sent {
+						t.Fatal("requested reader signal was not actually sent")
+					}
+					// This fixed-field record contains no command, input or environment.
+					// Keep delivery separate from a successful cleanup assertion.
+					t.Logf("reader signal observation: %s", body)
+				}
 				if (err != nil) != tc.failure {
 					t.Fatalf("BusyBox bootstrap result=%v, expected failure=%t\n%s", err, tc.failure, out)
 				}
