@@ -173,23 +173,133 @@ class GitTreeScopeTest(unittest.TestCase):
         proof = self.commit()
         self.assertEqual(self.classify(self.base, proof), {
             "code": "false", "frontend_deps": "false", "go_compile": "false",
+            "triage_helper": "false",
         })
         self.write("frontend-modern/package-lock.json", "{}\n")
         graph = self.commit()
         self.assertEqual(self.classify(self.base, graph), {
             "code": "true", "frontend_deps": "true", "go_compile": "false",
+            "triage_helper": "false",
         })
         self.assertEqual(self.classify("0" * 40, graph), {
             "code": "true", "frontend_deps": "true", "go_compile": "true",
+            "triage_helper": "true",
         })
         self.write("internal/api/fixture.go", "package fixture\nvar Updated = true\n")
         source = self.commit()
         self.assertEqual(self.classify(graph, source), {
             "code": "true", "frontend_deps": "false", "go_compile": "true",
+            "triage_helper": "false",
         })
+
+    def test_actual_classifier_selects_every_triage_input_and_policy_consumer(self):
+        for path in (
+            ".github/scripts/issue-version-triage.cjs",
+            ".github/scripts/issue-version-triage.test.cjs",
+            ".github/scripts/triage-comment-policy.test.cjs",
+            ".github/scripts/package.json", ".github/scripts/package-lock.json",
+            ".github/ISSUE_TEMPLATE/bug_report.yml", ".github/ISSUE_TEMPLATE/config.yml",
+            ".github/workflows/issue-version-label-sync.yml",
+            ".github/workflows/build-and-test.yml", ".github/workflows/policy-consumer.yaml",
+            "docs/ISSUE_TRIAGE.md", "scripts/tests/test_ci_browser_proof_only.py",
+        ):
+            with self.subTest(path=path):
+                before = self.git("rev-parse", "HEAD")
+                self.write(path, "triage input fixture\n")
+                head = self.commit()
+                self.assertEqual(self.classify(before, head)["triage_helper"], "true")
+
+    def test_triage_admission_uses_complete_range_and_does_not_expand_runtime_skip(self):
+        self.write("docs/ISSUE_TRIAGE.md", "Changed operator guidance\n")
+        guidance = self.commit()
+        self.assertEqual(self.classify(self.base, guidance), {
+            "code": "false", "frontend_deps": "false", "go_compile": "false",
+            "triage_helper": "true",
+        })
+        self.write(RECEIPT, "{}\n")
+        proof = self.commit()
+        self.assertEqual(self.classify(guidance, proof)["triage_helper"], "false")
+        self.assertEqual(self.classify(self.base, proof)["triage_helper"], "true")
+        self.write(".github/scripts/issue-version-triage.cjs", "// changed parser\n")
+        parser = self.commit()
+        self.assertEqual(self.classify(proof, parser), {
+            "code": "true", "frontend_deps": "false", "go_compile": "false",
+            "triage_helper": "true",
+        })
+        self.write("frontend-modern/package-lock.json", "{}\n")
+        graph = self.commit()
+        combined = self.classify(proof, graph)
+        self.assertEqual(combined["frontend_deps"], "true")
+        self.assertEqual(combined["code"], "true")
+        self.assertEqual(combined["triage_helper"], "true")
+
+    def test_triage_path_lookalikes_and_unrelated_code_do_not_select_it(self):
+        for path in (
+            ".github/scripts/issue-version-triage.cjs.extra",
+            "other/.github/scripts/package-lock.json", "docs/ISSUE_TRIAGE.md.extra",
+            ".github/scripts/select-go-package-shard.py", "internal/api/other.go",
+            ".github/scripts/issue-version-triage.cjs\nother.txt",
+        ):
+            with self.subTest(path=path):
+                before = self.git("rev-parse", "HEAD")
+                self.write(path, "unrelated fixture\n")
+                head = self.commit()
+                self.assertEqual(self.classify(before, head)["triage_helper"], "false")
 
 
 class WorkflowScopeTest(unittest.TestCase):
+    def test_triage_check_runs_locked_real_tests_without_mutation_or_tolerant_exit(self):
+        workflow = BUILD.read_text()
+        self.assertIn("triage_helper: ${{ steps.filter.outputs.triage_helper }}",
+                      job_block(workflow, "changes"))
+        job = job_block(workflow, "triage-helper")
+        for required in (
+            "needs: changes", "if: needs.changes.outputs.triage_helper == 'true'",
+            "runs-on: ubuntu-24.04", "timeout-minutes: 5", "contents: read",
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "persist-credentials: false",
+            "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+            "node-version: '24'", "package-manager-cache: false",
+            "npm ci --ignore-scripts --no-audit --no-fund --prefix .github/scripts",
+            "npm run test:triage --prefix .github/scripts",
+        ):
+            self.assertIn(required, job)
+        for forbidden in ("secrets.", "write", "create-github-app-token", "github-script@",
+                          "continue-on-error", "|| true", "issue-version-triage.cjs",
+                          "workflow_call", "self-hosted"):
+            self.assertNotIn(forbidden, job)
+        self.assertLess(job.index("npm ci "), job.index("npm run test:triage"))
+        # Hosted test admission adds coverage; it never replaces the separate
+        # issue-event tests that must still precede credential acquisition.
+        live = (ROOT / ".github/workflows/issue-version-label-sync.yml").read_text()
+        self.assertLess(live.index("npm run test:triage"), live.index("Mint triage bot token"))
+
+    def test_actual_triage_recipes_preserve_install_and_test_failures(self):
+        job = job_block(BUILD.read_text(), "triage-helper")
+        recipes = [part.split("        run: ", 1)[1].strip()
+                   for part in re.split(r"(?m)^      - name: ", job)[1:]
+                   if "        run: " in part]
+        self.assertEqual(len(recipes), 2)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            npm = root / "npm"
+            npm.write_text('#!/bin/sh\nprintf "%s\\n" "$*" > "$CALLS"\nexit "$RESULT"\n')
+            npm.chmod(0o700)
+            calls = root / "calls"
+            env = {**os.environ, "PATH": str(root) + ":" + os.environ["PATH"],
+                   "CALLS": str(calls)}
+            for recipe, expected in zip(recipes, (
+                "ci --ignore-scripts --no-audit --no-fund --prefix .github/scripts",
+                "run test:triage --prefix .github/scripts",
+            )):
+                for status in (0, 42, 127):
+                    with self.subTest(recipe=recipe, exit=status):
+                        result = subprocess.run(["bash", "-c", recipe], cwd=root,
+                                                capture_output=True, text=True, timeout=5,
+                                                env={**env, "RESULT": str(status)})
+                        self.assertEqual(result.returncode, status, result.stdout + result.stderr)
+                        self.assertEqual(calls.read_text().strip(), expected)
+
     def test_scope_is_checked_before_runtime_and_preserves_required_governance(self):
         e2e = E2E.read_text()
         scope = job_block(e2e, "scope")
