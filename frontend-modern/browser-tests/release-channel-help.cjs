@@ -107,6 +107,9 @@ const result = { result: 'incomplete', source_sha: binding.source_sha,
       await atFragment('cadence-and-stable-promotion'); await capture('promotion');
       await page.goto(`${origin}/docs/RELEASE_PROCESS#taking-part-in-preview-testing`, { waitUntil: 'domcontentloaded' });
       await atFragment('taking-part-in-preview-testing'); await capture('safe-testing');
+      // Direct fragment loads above start new documents. Check subsequent
+      // cross-guide routing against this document, not an earlier page load.
+      await page.evaluate(() => window.__releaseHelpShell = 'same-shell');
       for (const [href, heading] of [
         ['/docs/MIGRATION#full-state-recovery', 'full-state-recovery'],
         ['/docs/DEPLOYMENT_MODELS#updates-by-model', 'updates-by-model'],
