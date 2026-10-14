@@ -1,0 +1,77 @@
+{
+  "original_goal": "Safe, truthful release help through the existing Docs surface; distinguish merged fixes, containing betas and published stable availability.",
+  "source_sha": "e016a3e6a82ec897a556357f59af3b8903af4807",
+  "verified_parent": "e016a3e6a82ec897a556357f59af3b8903af4807",
+  "result": "passed",
+  "verified_at": "2026-10-14T14:41:44Z",
+  "source_files": {
+    "frontend-modern/public/docs/RELEASE_PROCESS.md": "8e6c2e72bb8833007a756d0fafcdf3186c568f0c80f96aedabdd47c6f1909fbf",
+    "docs/RELEASE_PROCESS.md": "8e6c2e72bb8833007a756d0fafcdf3186c568f0c80f96aedabdd47c6f1909fbf"
+  },
+  "containing_preview_receipt": {
+    "receipt_id": "source-3hwcao7c",
+    "source_sha": "e016a3e6a82ec897a556357f59af3b8903af4807",
+    "output_sha256": "726329352296c8a768bfbadbc0fe165f6d4f1b18e1a991b4344d80fdb38a258a",
+    "bytes": 451048,
+    "exitcode": 0,
+    "collection_complete": true,
+    "guest_stop_completed": true
+  },
+  "browser": {
+    "playwright": "1.56.1",
+    "cases": [
+      {
+        "name": "desktop-chromium",
+        "width": 1360,
+        "height": 900,
+        "dark": false,
+        "browser": "141.0.7390.37",
+        "checks": [
+          "shipped update-guide entry; daily-beta scope, cut/inclusion, stable separation, unchanged candidate checks and safe retest",
+          "keyboard/touch backup, deployment-limits and safe-evidence links; focused destinations; browser back",
+          "documentation index entry remains reachable"
+        ]
+      },
+      {
+        "name": "phone-webkit",
+        "width": 390,
+        "height": 900,
+        "dark": true,
+        "browser": "26.0",
+        "checks": [
+          "shipped update-guide entry; daily-beta scope, cut/inclusion, stable separation, unchanged candidate checks and safe retest",
+          "keyboard/touch backup, deployment-limits and safe-evidence links; focused destinations; browser back",
+          "documentation index entry remains reachable"
+        ]
+      }
+    ],
+    "capture_sha256": {
+      "desktop-chromium-betas.png": "8b3821bc28ff794f8e036d3361500b9da398038188ad793e3433d249eb9a558c",
+      "desktop-chromium-promotion.png": "9670ba34f0d6db69e969021bcf344632a7327bd09f6902602e69bc21ac37848d",
+      "desktop-chromium-safe-testing.png": "4f67799c756c96b32b3766e1c802229bd7b15212b056e4b5953b7432e8e4614f",
+      "phone-webkit-betas.png": "299a3702942b546da29d2e2b2c8ea149d70aaa6fa12637667a3ab44f10fe8693",
+      "phone-webkit-promotion.png": "3a45b1e87eacb5098c0145c2d1fba7bd695df576af36219594259c35eb90f5fe",
+      "phone-webkit-safe-testing.png": "ab5c72f3b2f14e93eac000a64616247d2466770b41220dac3a8024cd71499833"
+    },
+    "errors": [],
+    "cleanup": {
+      "browser_closed": true,
+      "server_closed": true
+    }
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "captured_paths": "Current worker-owned output captures; all six images presented to the model.",
+    "observations": [
+      "Desktop light: daily-beta cut/inclusion and stable separation are readable; focused headings and underlined links remain visible.",
+      "Phone dark: 24-hour/no-soak distinction, promotion limits and safe retest paragraphs wrap inside 390px; no page overflow, clipped words or overlapping controls.",
+      "Both sizes: original-issue and safe-evidence guidance is readable; backup/deployment/evidence links navigate by keyboard or touch and focus the destination heading."
+    ],
+    "inspection_count": 6
+  },
+  "unresolved_dependency": {
+    "owner": "Independent reviewer, coordinator and protected publisher; release train delivers main. PI retains reporter follow-through.",
+    "needed": "Normal reviewed source publication and later containing published release; no native/installed/update/recovery claim."
+  },
+  "limits": "Documentation guidance and real consuming navigation only; no update, probe, notification, native recovery or release operation. Browser guard excludes static Markdown, so its skip is not the proof."
+}
