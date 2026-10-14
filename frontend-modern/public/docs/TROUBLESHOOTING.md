@@ -24,6 +24,10 @@ establish safe recovery.
   [agent authentication and reporting evidence](UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403)
   before replacing a token or reinstalling. Installer success is not an accepted
   report.
+- **Proxmox or PBS reports a certificate error:** distinguish
+  [certificate trust, renewal and saved-pin conflicts](TROUBLESHOOTING.md#proxmox-or-pbs-certificate-validation-failed).
+  Keep verification enabled; a new certificate or a working browser is not
+  permission to replace saved trust.
 - **Copied agent install or removal command failed:** distinguish its
   [preparation, private prompt and lifecycle action](UNIFIED_AGENT.md#copied-agent-command-fails-before-installation).
   A stopped new command does not diagnose the existing agent. Keep state and
@@ -210,6 +214,75 @@ certificate-validation error. Keep the original time and redacted error;
 do not replace credentials or disable TLS verification on a refusal alone.
 For a page that opens but has missing readings, use the
 [missing-data checks](FAQ.md#no-data-showing) instead of resetting the connection.
+
+### Proxmox or PBS certificate validation failed
+
+A TLS error is not an invalid API token or a missing permission. Keep the
+original error and time, and inspect the **existing** connection in
+**Settings → Infrastructure → Manage → SSL settings**. Check its saved
+**Endpoint URL**, **Verify SSL certificate** and **SSL Fingerprint (optional)**
+without changing them just to diagnose the failure. PVE normally uses HTTPS
+port **8006**; PBS uses **8007**. A browser reaching the platform is a different
+client and trust store from the Pulse server or container.
+
+**Keep certificate verification enabled.** Do not switch to HTTP, disable
+verification, clear a saved pin, rotate API tokens or delete and re-add the
+connection merely to get past an error.
+
+- **Unknown authority or self-signed certificate:** the Pulse runtime needs
+  the intended trusted certificate chain, or an independently verified SHA-256
+  leaf fingerprint. Obtain trust through an already-trusted platform console
+  or administration channel, not solely from the failing connection or its
+  suggested fingerprint. See the [PBS certificate check](PBS.md#connection-failed-error).
+- **Expired, not-yet-valid or hostname error:** reconcile the platform's
+  certificate, its validity period, the clocks and the saved endpoint's
+  hostname. An IP address is not interchangeable with a certificate's DNS
+  name. Do not bypass the error or pin an unsuitable certificate to hide it.
+- **Fingerprint mismatch:** the presented leaf differs from the saved pin.
+  Renewal is one possible reason, not proof that this is the same server.
+  Verify the replacement independently before making a trust change.
+- **TLS trust conflict:** different saved fingerprints refer to equivalent
+  endpoint URLs. This is contradictory saved trust, not a reason to choose
+  whichever pin connects. Preserve the entries and verify which endpoint and
+  certificate each belongs to before reconciliation.
+
+#### Certificate renewal and saved fingerprints
+
+A saved fingerprint selects leaf-certificate pinning instead of normal CA
+chain and hostname validation, even with **Verify SSL certificate** enabled.
+Renewing an ACME certificate can therefore invalidate a saved pin while the
+new certificate's chain is valid. Leaving verification enabled with no saved
+fingerprint uses the Pulse runtime's CA trust; disabling it with no pin removes
+chain and hostname checks.
+
+Choose the intended trust method, not an error-suppression workaround. Only
+after independently verifying the replacement certificate and server identity,
+update the affected connection's pin. If deliberately moving from leaf pinning
+to CA validation, first establish the runtime's trusted chain and matching
+endpoint hostname, then remove only that connection's pin while keeping
+verification enabled. Preserve unrelated credentials, collection scope and
+saved connections. If you cannot establish trust, stop rather than accept the
+new certificate.
+
+#### Cluster members and conflicting saved trust
+
+Cluster members can have different certificates. A reachable primary or one
+healthy member does not prove trust or polling recovery for every peer; do not
+copy the primary's fingerprint to all members. In **Cluster members**, retain
+the affected node and existing failure reason. If **Unreachable — details**
+is available, open it with touch or keyboard rather than relying on a hover.
+A display-name edit does not reconcile certificate trust.
+
+If the affected member pin or conflicting entry cannot be safely reconciled
+through the existing controls, leave it intact and use [Getting Help](#-getting-help).
+Share only the running Pulse version, PVE/PBS version, original time, redacted
+error class, which primary or peers are affected, and whether a certificate
+renewal was already observed. Use consistent aliases; keep literal endpoints,
+fingerprints, credentials and full configuration private. Unknown is valid.
+Do not edit encrypted files, run Diagnostics, force rediscovery, reinstall or
+restart just to fill a report. During a freeze/thaw or unresponsive-guest
+incident, follow [Backup safety](VM_DISK_MONITORING.md#backup-safety) first;
+certificate help does not establish workload recovery.
 
 ### CORS errors
 
