@@ -139,7 +139,7 @@ func testClusterSessionConstructionHonoursCallerBudget(t *testing.T) {
 					case <-time.After(time.Second):
 						t.Error("ended caller left its fixture request active")
 					}
-					if len(cc.clients) != 0 || cc.nodeHealth[server.URL] != (path == "selection") || cc.lastError[server.URL] != "previous fixture outage" || cc.getEndpointFingerprint(server.URL) != cfg.Fingerprint {
+					if len(cc.clients) != 0 || cc.nodeHealth[server.URL] != (path == "selection") || cc.lastError[server.URL] != "previous fixture outage" || checkedClusterFingerprint(t, cc, server.URL) != cfg.Fingerprint {
 						t.Errorf("cancelled construction published a session/recovery or changed prior trust/error: clients=%d healthy=%t error=%q", len(cc.clients), cc.nodeHealth[server.URL], cc.lastError[server.URL])
 					}
 					wantLogins, wantReads := int32(1), int32(0)

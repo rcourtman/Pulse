@@ -29,7 +29,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 
 		// Check if this is a cluster
 		if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
-			endpoints, endpointFingerprints := m.buildClusterEndpointsForInit(pve)
+			endpoints, endpointFingerprints, conflictingEndpoints := m.buildClusterEndpointsForInit(pve)
 
 			log.Info().
 				Str("cluster", pve.ClusterName).
@@ -44,6 +44,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 				clientConfig,
 				endpoints,
 				endpointFingerprints,
+				conflictingEndpoints...,
 			)
 			m.replacePVEClient(pve.Name, clusterClient)
 			log.Info().

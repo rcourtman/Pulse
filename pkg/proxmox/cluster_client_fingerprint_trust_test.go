@@ -131,7 +131,10 @@ func testClusterClientFingerprintTrust(t *testing.T) {
 					cc.recoverUnhealthyNodes(context.Background())
 				}
 				cc.mu.RLock()
-				stored := cc.getEndpointFingerprintLocked(f.server.URL)
+				stored, trustErr := cc.getEndpointFingerprintLocked(f.server.URL)
+				if trustErr != nil {
+					t.Fatal(trustErr)
+				}
 				healthy, diagnostic := cc.nodeHealth[f.server.URL], cc.lastError[f.server.URL]
 				cc.mu.RUnlock()
 				if f.requests.Load() != 0 || stored != pin || healthy || !strings.Contains(diagnostic, "independently verify") {
@@ -146,7 +149,7 @@ func testClusterClientFingerprintTrust(t *testing.T) {
 				cc.mu.Unlock()
 				before := f.requests.Load()
 				cc.recoverUnhealthyNodes(context.Background())
-				if !cc.GetHealthStatus()[f.server.URL] || f.requests.Load() != before+1 || cc.getEndpointFingerprint(f.server.URL) != pin {
+				if !cc.GetHealthStatus()[f.server.URL] || f.requests.Load() != before+1 || checkedClusterFingerprint(t, cc, f.server.URL) != pin {
 					t.Error("restored original certificate did not resume ordinary monitoring under the same pin")
 				}
 				t.Logf("changed leaf: no authenticated requests; original leaf: one authenticated recovery, retained %s pin", role)
@@ -218,7 +221,7 @@ func testClusterClientFingerprintTrust(t *testing.T) {
 		if err := <-done; err != nil {
 			t.Errorf("retry did not use concurrently established trust: %v", err)
 		}
-		if cc.getEndpointFingerprint(f.server.URL) != winnerPin || f.requests.Load() != 1 {
+		if checkedClusterFingerprint(t, cc, f.server.URL) != winnerPin || f.requests.Load() != 1 {
 			t.Error("older first-use capture replaced the winner or failed its authenticated acceptance")
 		}
 	})
@@ -234,7 +237,7 @@ func testClusterClientFingerprintTrust(t *testing.T) {
 		if client != nil {
 			defer client.httpClient.CloseIdleConnections()
 		}
-		if err != nil || !retried || client == nil || f.requests.Load() != 1 || cc.getEndpointFingerprint(f.server.URL) != clusterTrustPin(f.active.Load()) {
+		if err != nil || !retried || client == nil || f.requests.Load() != 1 || checkedClusterFingerprint(t, cc, f.server.URL) != clusterTrustPin(f.active.Load()) {
 			t.Fatalf("declared new member cannot establish first-use trust: %v", err)
 		}
 		if len(input) != 0 {
@@ -260,11 +263,11 @@ func testClusterClientFingerprintTrust(t *testing.T) {
 	t.Run("equivalent-known-endpoint", func(t *testing.T) {
 		cc := NewClusterClient("trust", clusterTrustConfig("https://primary.trust.invalid", "primary-pin"), nil,
 			map[string]string{"https://MEMBER.trust.invalid:443/tenant/": "member-pin"})
-		if cc.getEndpointFingerprint("https://member.trust.invalid/tenant") != "member-pin" {
+		if checkedClusterFingerprint(t, cc, "https://member.trust.invalid/tenant") != "member-pin" {
 			t.Error("equivalent URL spelling forgot established member trust")
 		}
 		for _, endpoint := range []string{"http://member.trust.invalid/tenant", "https://member.trust.invalid:8006/tenant", "https://member.trust.invalid/Tenant"} {
-			if cc.getEndpointFingerprint(endpoint) != "primary-pin" {
+			if checkedClusterFingerprint(t, cc, endpoint) != "primary-pin" {
 				t.Errorf("independent authority/path inherited another endpoint's pin: %s", endpoint)
 			}
 		}

@@ -108,11 +108,11 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 			}
 			if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
 				// Create cluster client
-				endpoints, endpointFingerprints := m.buildClusterEndpointsForReconnect(pve)
+				endpoints, endpointFingerprints, conflictingEndpoints := m.buildClusterEndpointsForReconnect(pve)
 
 				clientConfig := config.CreateProxmoxConfig(&pve)
 				clientConfig.Timeout = connectionTimeout
-				clusterClient, err := proxmox.NewClusterClientWithContext(ctx, pve.Name, clientConfig, endpoints, endpointFingerprints)
+				clusterClient, err := proxmox.NewClusterClientWithContext(ctx, pve.Name, clientConfig, endpoints, endpointFingerprints, conflictingEndpoints...)
 				if ctx.Err() != nil {
 					return
 				}

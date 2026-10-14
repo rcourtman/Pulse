@@ -105,7 +105,7 @@ func TestClusterNodeInventoryRequiresCompleteResponse(t *testing.T) {
 					if f.nodes.Load() != 1 || f.logins.Load() != f.loginAttempts() {
 						t.Fatalf("invalid probe replayed or advanced: nodes=%d logins=%d", f.nodes.Load(), f.logins.Load())
 					}
-					if cc.getEndpointFingerprint(f.server.URL) != cfg.Fingerprint || saved[f.server.URL] != cfg.Fingerprint || !cc.config.VerifySSL {
+					if checkedClusterFingerprint(t, cc, f.server.URL) != cfg.Fingerprint || saved[f.server.URL] != cfg.Fingerprint || !cc.config.VerifySSL {
 						t.Fatal("invalid inventory changed saved trust")
 					}
 					// Advance only this synthetic endpoint's eligibility for a distinct accepted

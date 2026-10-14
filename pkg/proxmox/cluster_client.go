@@ -20,18 +20,19 @@ import (
 
 // ClusterClient wraps multiple Proxmox clients for cluster-aware operations
 type ClusterClient struct {
-	mu                   sync.RWMutex
-	clientInitMu         sync.Mutex // Serialize lazy construction while a trust probe releases mu.
-	name                 string
-	clients              map[string]*Client   // Key is node name
-	endpoints            []string             // All available endpoints
-	endpointFingerprints map[string]string    // Per-endpoint TLS fingerprints (TOFU)
-	nodeHealth           map[string]bool      // Track node health
-	lastHealthCheck      map[string]time.Time // Track last health check time
-	lastError            map[string]string    // Track last error per endpoint
-	config               ClientConfig         // Base config (auth info)
-	rateLimitUntil       map[string]time.Time // Cooldown window for rate-limited endpoints
-	recoveryInProgress   bool                 // Prevent overlapping background recovery sweeps
+	mu                              sync.RWMutex
+	clientInitMu                    sync.Mutex // Serialize lazy construction while a trust probe releases mu.
+	name                            string
+	clients                         map[string]*Client   // Key is node name
+	endpoints                       []string             // All available endpoints
+	endpointFingerprints            map[string]string    // Per-endpoint TLS fingerprints (TOFU)
+	conflictingEndpointFingerprints map[string]bool      // Exact duplicate saved rows refused by the producer.
+	nodeHealth                      map[string]bool      // Track node health
+	lastHealthCheck                 map[string]time.Time // Track last health check time
+	lastError                       map[string]string    // Track last error per endpoint
+	config                          ClientConfig         // Base config (auth info)
+	rateLimitUntil                  map[string]time.Time // Cooldown window for rate-limited endpoints
+	recoveryInProgress              bool                 // Prevent overlapping background recovery sweeps
 }
 
 const (
@@ -52,6 +53,8 @@ var transientRateLimitStatusCodes = map[int]struct{}{
 	503: {},
 	504: {},
 }
+
+var errConflictingEndpointFingerprints = errors.New("TLS trust conflict - equivalent endpoint URLs have different saved fingerprints; independently verify and reconcile saved trust")
 
 // isEndpointConnectivityError reports whether an error indicates the endpoint
 // itself is unreachable (TCP, DNS, TLS failures). Application-level errors
@@ -96,6 +99,9 @@ func isEndpointConnectivityError(err error) bool {
 func sanitizeEndpointError(errMsg string) string {
 	if errMsg == "" {
 		return errMsg
+	}
+	if strings.Contains(errMsg, errConflictingEndpointFingerprints.Error()) {
+		return errConflictingEndpointFingerprints.Error()
 	}
 
 	lower := strings.ToLower(errMsg)
@@ -152,15 +158,17 @@ func sanitizeEndpointError(errMsg string) string {
 // NewClusterClient creates a new cluster-aware client.
 // endpointFingerprints is an optional map of endpoint URL -> TLS fingerprint for per-node certificate verification.
 // This enables TOFU (Trust On First Use) for clusters with unique self-signed certs per node.
-func NewClusterClient(name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string) *ClusterClient {
-	cc, _ := NewClusterClientWithContext(context.Background(), name, config, endpoints, endpointFingerprints)
+// Optional conflictingEndpoints retain contradictory exact duplicate saved rows
+// which a map cannot represent. They refuse only those endpoint trust origins.
+func NewClusterClient(name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string, conflictingEndpoints ...string) *ClusterClient {
+	cc, _ := NewClusterClientWithContext(context.Background(), name, config, endpoints, endpointFingerprints, conflictingEndpoints...)
 	return cc
 }
 
 // NewClusterClientWithContext keeps synchronous startup checks and password
 // session construction within the caller's lifetime. Endpoint failures still
 // produce a recoverable cluster; cancellation does not publish a partial one.
-func NewClusterClientWithContext(ctx context.Context, name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string) (*ClusterClient, error) {
+func NewClusterClientWithContext(ctx context.Context, name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string, conflictingEndpoints ...string) (*ClusterClient, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -175,16 +183,21 @@ func NewClusterClientWithContext(ctx context.Context, name string, config Client
 	for endpoint, fingerprint := range endpointFingerprints {
 		ownedFingerprints[endpoint] = fingerprint
 	}
+	ownedConflicts := make(map[string]bool, len(conflictingEndpoints))
+	for _, endpoint := range conflictingEndpoints {
+		ownedConflicts[endpoint] = true
+	}
 	cc := &ClusterClient{
-		name:                 name,
-		clients:              make(map[string]*Client),
-		endpoints:            endpoints,
-		endpointFingerprints: ownedFingerprints,
-		nodeHealth:           make(map[string]bool),
-		lastHealthCheck:      make(map[string]time.Time),
-		lastError:            make(map[string]string),
-		config:               config,
-		rateLimitUntil:       make(map[string]time.Time),
+		name:                            name,
+		clients:                         make(map[string]*Client),
+		endpoints:                       endpoints,
+		endpointFingerprints:            ownedFingerprints,
+		conflictingEndpointFingerprints: ownedConflicts,
+		nodeHealth:                      make(map[string]bool),
+		lastHealthCheck:                 make(map[string]time.Time),
+		lastError:                       make(map[string]string),
+		config:                          config,
+		rateLimitUntil:                  make(map[string]time.Time),
 	}
 
 	// Initialize all endpoints as unknown (will be tested on first use)
@@ -209,17 +222,17 @@ func NewClusterClientWithContext(ctx context.Context, name string, config Client
 
 // getEndpointFingerprint returns the TLS fingerprint to use for a specific endpoint.
 // It prefers the per-endpoint fingerprint (TOFU) over the base config fingerprint.
-func (cc *ClusterClient) getEndpointFingerprint(endpoint string) string {
+func (cc *ClusterClient) getEndpointFingerprint(endpoint string) (string, error) {
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
 	return cc.getEndpointFingerprintLocked(endpoint)
 }
 
-func (cc *ClusterClient) getEndpointFingerprintLocked(endpoint string) string {
-	if fp, ok := cc.knownEndpointFingerprintLocked(endpoint); ok {
-		return fp
+func (cc *ClusterClient) getEndpointFingerprintLocked(endpoint string) (string, error) {
+	if fp, known, err := cc.knownEndpointFingerprintLocked(endpoint); known || err != nil {
+		return fp, err
 	}
-	return cc.config.Fingerprint
+	return cc.config.Fingerprint, nil
 }
 
 func clusterEndpointKey(endpoint string) (string, bool) {
@@ -233,20 +246,58 @@ func clusterEndpointKey(endpoint string) (string, bool) {
 	return proxmoxEndpointKey(u.String(), false)
 }
 
-func (cc *ClusterClient) knownEndpointFingerprintLocked(endpoint string) (string, bool) {
-	if fp := cc.endpointFingerprints[endpoint]; fp != "" {
-		return fp, true
-	}
+func (cc *ClusterClient) knownEndpointFingerprintLocked(endpoint string) (string, bool, error) {
 	key, valid := clusterEndpointKey(endpoint)
-	if !valid {
-		return "", false
-	}
-	for storedEndpoint, fp := range cc.endpointFingerprints {
-		if storedKey, ok := clusterEndpointKey(storedEndpoint); ok && storedKey == key && fp != "" {
-			return fp, true
+	for conflict := range cc.conflictingEndpointFingerprints {
+		conflictKey, conflictValid := clusterEndpointKey(conflict)
+		if conflict == endpoint || (valid && conflictValid && conflictKey == key) {
+			return "", true, errConflictingEndpointFingerprints
 		}
 	}
-	return "", false
+	var fingerprint string
+	known := false
+	for storedEndpoint, fp := range cc.endpointFingerprints {
+		if fp == "" {
+			continue
+		}
+		storedKey, storedValid := clusterEndpointKey(storedEndpoint)
+		if storedEndpoint != endpoint && (!valid || !storedValid || storedKey != key) {
+			continue
+		}
+		// Compare the same colon/case normalization used by the TLS verifier.
+		// Exact URL spelling must not choose a winner over another saved pin
+		// for this authority, nor may Go map order decide which leaf is trusted.
+		normalized := strings.ToLower(strings.ReplaceAll(fp, ":", ""))
+		if known && strings.ToLower(strings.ReplaceAll(fingerprint, ":", "")) != normalized {
+			return "", true, errConflictingEndpointFingerprints
+		}
+		// Keep a nonempty, malformed saved pin nonempty: returning its empty
+		// normalized form would accidentally select CA or explicit opt-out mode.
+		// Agreeing representations use a deterministic original spelling.
+		if !known || fp < fingerprint {
+			fingerprint = fp
+		}
+		known = true
+	}
+	return fingerprint, known, nil
+}
+
+// CheckEndpointFingerprintConflicts checks saved trust without constructing a
+// client, probing TLS or changing any pin. Discovery must not discard ambiguity
+// by collapsing saved rows or replacing their addresses during a refresh.
+// This checks agreement only; malformed nonempty pins remain the TLS verifier's
+// responsibility and are never treated as absent trust here.
+func CheckEndpointFingerprintConflicts(fingerprints map[string]string, conflictingEndpoints ...string) error {
+	if len(conflictingEndpoints) > 0 {
+		return errConflictingEndpointFingerprints
+	}
+	cc := ClusterClient{endpointFingerprints: fingerprints}
+	for endpoint := range fingerprints {
+		if _, _, err := cc.knownEndpointFingerprintLocked(endpoint); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Only a declared, previously untrusted member may use the primary pin as a
@@ -258,7 +309,7 @@ func (cc *ClusterClient) canTrustMemberOnFirstUseLocked(endpoint string) bool {
 	if !valid || !primaryValid || key == primary || cc.config.Fingerprint == "" {
 		return false
 	}
-	if _, known := cc.knownEndpointFingerprintLocked(endpoint); known {
+	if _, known, err := cc.knownEndpointFingerprintLocked(endpoint); known || err != nil {
 		return false
 	}
 	for _, member := range cc.endpoints {
@@ -311,7 +362,10 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 	captured := false
 	// A concurrent first-use capture may have established trust while the TLS
 	// probe was in flight. Use that winner's pin, not our later certificate.
-	if existing, known := cc.knownEndpointFingerprintLocked(endpoint); known {
+	if existing, known, trustErr := cc.knownEndpointFingerprintLocked(endpoint); trustErr != nil {
+		cc.mu.Unlock()
+		return nil, trustErr, false
+	} else if known {
 		newFingerprint = existing
 	} else {
 		if !cc.canTrustMemberOnFirstUseLocked(endpoint) {
@@ -352,6 +406,11 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 // member can establish a pin; a saved/primary pin is never replaced.
 // The returned client is a disposable probe, not an accepted polling session.
 func (cc *ClusterClient) probeEndpoint(ctx context.Context, cfg ClientConfig) (*Client, []Node, error) {
+	fingerprint, err := cc.getEndpointFingerprint(cfg.Host)
+	if err != nil {
+		return nil, nil, err
+	}
+	cfg.Fingerprint = fingerprint
 	client, err := NewClientWithContext(ctx, cfg)
 	var nodes []Node
 	if err == nil {
@@ -368,6 +427,17 @@ func (cc *ClusterClient) probeEndpoint(ctx context.Context, cfg ClientConfig) (*
 		return retryClient, nil, retryErr
 	}
 	return client, nodes, err
+}
+
+// Resolve saved trust again before constructing the full polling session.
+// Never turn a resolution failure into an empty pin (CA or opt-out mode).
+func (cc *ClusterClient) newEndpointClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
+	fingerprint, err := cc.getEndpointFingerprint(cfg.Host)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Fingerprint = fingerprint
+	return NewClientWithContext(ctx, cfg)
 }
 
 // initialHealthCheck performs a quick parallel health check on all endpoints
@@ -394,7 +464,6 @@ func (cc *ClusterClient) initialHealthCheck(ctx context.Context) {
 			// Try a quick connection test with slightly longer timeout for initial check
 			cfg := cc.config
 			cfg.Host = ep
-			cfg.Fingerprint = cc.getEndpointFingerprint(ep)
 			cfg.Timeout = 5 * time.Second
 
 			testClient, _, err := cc.probeEndpoint(ctx, cfg)
@@ -408,8 +477,7 @@ func (cc *ClusterClient) initialHealthCheck(ctx context.Context) {
 				// Node is healthy - create a proper client with full timeout for actual use
 				fullCfg := cc.config
 				fullCfg.Host = ep
-				fullCfg.Fingerprint = cc.getEndpointFingerprint(ep)
-				fullClient, clientErr := NewClientWithContext(ctx, fullCfg)
+				fullClient, clientErr := cc.newEndpointClient(ctx, fullCfg)
 
 				cc.mu.Lock()
 				if clientErr != nil {
@@ -662,7 +730,6 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		// Create new client with shorter timeout for initial test
 		cfg := cc.config
 		cfg.Host = selectedEndpoint
-		cfg.Fingerprint = cc.getEndpointFingerprintLocked(selectedEndpoint)
 
 		// First try with a short timeout to quickly detect offline nodes
 		testCfg := cfg
@@ -721,7 +788,14 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		}
 
 		// Use the first-use winner's pin for the full polling session too.
-		cfg.Fingerprint = cc.getEndpointFingerprintLocked(selectedEndpoint)
+		fingerprint, trustErr := cc.getEndpointFingerprintLocked(selectedEndpoint)
+		if trustErr != nil {
+			cc.nodeHealth[selectedEndpoint] = false
+			cc.lastError[selectedEndpoint] = sanitizeEndpointError(trustErr.Error())
+			cc.lastHealthCheck[selectedEndpoint] = time.Now()
+			return nil, trustErr
+		}
+		cfg.Fingerprint = fingerprint
 		// Create the actual client with full timeout
 		newClient, err := NewClientWithContext(ctx, cfg)
 		if err != nil {
@@ -858,7 +932,6 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			// typically takes ~3 seconds on local networks
 			cfg := cc.config
 			cfg.Host = ep
-			cfg.Fingerprint = cc.getEndpointFingerprint(ep)
 			cfg.Timeout = 5 * time.Second
 
 			testClient, _, err := cc.probeEndpoint(ctx, cfg)
@@ -874,8 +947,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			if err == nil {
 				// Store the client with original timeout
 				cfg.Timeout = cc.config.Timeout
-				cfg.Fingerprint = cc.getEndpointFingerprint(ep)
-				fullClient, clientErr := NewClientWithContext(ctx, cfg)
+				fullClient, clientErr := cc.newEndpointClient(ctx, cfg)
 				if clientErr != nil {
 					// A short probe is not a usable polling session. Password
 					// authentication may fail when constructing the actual client;

@@ -17,6 +17,71 @@
 
 ## Purpose
 
+### Conflicting saved endpoint pins cannot select certificate trust
+
+For equivalent Proxmox endpoint URL spellings, all nonempty saved member pins
+must agree under the TLS verifier's existing case/colon normalization. Exact
+spelling and map iteration can no longer select one of contradictory pins.
+Resolution returns a fixed, credential-free trust-conflict error before a TLS
+probe, password login, token read, first-use capture or polling-client creation.
+The member stays unreachable to Pulse; an independently trusted sibling can
+continue ordinary monitoring. No saved pin is removed or overwritten, and the
+error cannot become an empty pin/CA or opt-out fallback. Agreeing pin formats,
+nonempty invalid pins, primary-pin fallback, declared-member first-use and the
+existing scheme/port/base-path/IPv4-mapped trust boundaries remain unchanged.
+
+`TestClusterConflictingSavedPinsNeverAuthenticate` covers startup, recovery and
+lazy selection in token/JSON/form modes, three URL spellings and both VerifySSL
+settings with real TLS sockets. It checks zero TLS/login/read work for conflicts,
+no installed client or trust mutation, sibling use, and accepted monitoring
+following a normal reload with reconciled fixture pins. Existing established-pin,
+first-use, cancellation, ownership and guest-admission controls still apply.
+`TestClusterSavedPinResolutionRejectsConflicts` and
+`TestClusterFirstUseCaptureDoesNotReconcileConflictingPins` retain the conflict
+through normalized authorities, invalid nonempty pins and a capture race.
+`TestClusterConflictingPinsEndpointProjection` uses the production endpoint
+builder, real clients and monitor projection in all three auth modes: native
+Online, identity and saved trust are not changed by failed Pulse reachability.
+The producer also records contradictory exact duplicate saved rows before
+its map/deduplication can overwrite them, and carries those endpoint conflicts
+through initialisation, missing-client reconnect and cluster refresh. The
+cluster owns a copy of that conflict set; aliases cannot escape it, and a
+later repeated row cannot clear it. Normal configuration reload with agreeing
+pins is required to resume that endpoint. A non-conflicting sibling is not
+refused. The public constructor's optional conflict inputs preserve existing
+callers and do not introduce a new trust mode. Producer tests cover both
+routes, pin formatting, repeated contradictions and configuration ownership.
+The projection cases include exact duplicates as well as URL aliases.
+A credential-free agreement check also holds automatic topology refresh while
+saved trust is contradictory: discovery cannot collapse the rows, move an
+alias or substitute a pin to clear that refusal. Current trusted sibling
+clients keep monitoring; topology changes wait for independently reconciled
+configuration. `TestClusterPinConflictsSurviveMonitorLifecycle` exercises the
+actual initialisation, missing-client retry and refresh/rebuild paths in all
+three auth modes and both layouts, including normal refresh after reconciliation.
+Saved-view consolidation also refuses a view with internal pin contradictions,
+so map indexing cannot hide an earlier contradictory row before monitoring
+starts. `TestConsolidatePVEInstancesRetainsInternallyConflictingPins` covers
+both merge orders, repeated rows, same-node/address evidence and agreeing formats.
+Internal agreement uses the TLS verifier's case/colon comparison even when
+legacy identity formatting would erase or simplify a malformed nonempty pin;
+colon-only, whitespace and prefixed pins cannot hide a contradiction.
+The endpoint-ownership routing control uses a five-second fixture client and
+a ten-second enclosing caller lifetime, rather than a one-second latency
+criterion. It records elapsed time and both targets' request counts; unchanged
+pin, admission and routing assertions remain required. Runtime timeouts and
+separate timeout/cancellation controls are unchanged. This is not a diagnosis
+or dismissal of the retained earlier one-second timeout.
+Lock-evidence fixture cases use independent base-path namespaces while each
+case's clients share the same guard key. A recycled loopback port cannot inherit
+an earlier synthetic guest's cooldown. `TestGuestAgentLockEvidenceFixtureIsolation`
+shares one listener and retains an earlier uncertainty fence unchanged while an
+independent fixture completes its lock/command checks. No runtime fence is
+cleared, expired or weakened; native guest recovery is not established.
+This establishes source/consumer behaviour, not native recovery or attribution
+of a guest, PBS or certificate report.
+
+
 ### Cluster recovery requires success of the operation actually probed
 
 Startup and unhealthy-member recovery read `/nodes`; lazy construction uses the
