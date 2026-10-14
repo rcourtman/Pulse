@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestClusterClient_InitialHealthCheck_VMErrorTreatedHealthy(t *testing.T) {
+func TestClusterClient_InitialHealthCheck_FailedNodesProbeStaysUnhealthy(t *testing.T) {
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api2/json/nodes" {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -32,11 +32,14 @@ func TestClusterClient_InitialHealthCheck_VMErrorTreatedHealthy(t *testing.T) {
 	cc := NewClusterClient("test", cfg, []string{server1.URL, server2.URL}, nil)
 
 	health := cc.GetHealthStatusWithErrors()
-	if !health[server1.URL].Healthy {
-		t.Fatalf("expected vm-specific error endpoint to be healthy, got %+v", health[server1.URL])
+	if health[server1.URL].Healthy {
+		t.Fatalf("failed nodes probe must stay unhealthy, got %+v", health[server1.URL])
 	}
-	if health[server1.URL].LastError != "" {
-		t.Fatalf("expected no last error, got %q", health[server1.URL].LastError)
+	if health[server1.URL].LastError == "" {
+		t.Fatalf("expected failed nodes reason, got %q", health[server1.URL].LastError)
+	}
+	if cc.clients[server1.URL] != nil {
+		t.Fatal("failed nodes probe installed a full client")
 	}
 	if !health[server2.URL].Healthy {
 		t.Fatalf("expected second endpoint healthy, got %+v", health[server2.URL])

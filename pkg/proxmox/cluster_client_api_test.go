@@ -754,3 +754,160 @@ func TestClusterClientFirstUseCaptureCancellation(t *testing.T) {
 func TestClusterFirstUseSessionAdmission(t *testing.T) {
 	testClusterFirstUseSessionAdmission(t)
 }
+
+// A nodes/login failure is not a per-guest failure, even when the provider's
+// body mentions QGA. Exercise the real constructors/probes in all three phases;
+// none of these handlers can enqueue a guest command or perform a backup.
+func TestClusterNodeProbeRequiresSuccess(t *testing.T) {
+	for _, phase := range []string{"startup", "recovery", "selection"} {
+		for _, mode := range []string{"token", "json", "form"} {
+			for _, stage := range []string{"nodes", "login"} {
+				if stage == "login" && mode == "token" {
+					continue
+				}
+				for i, message := range []string{"QEMU guest agent is not running", "VM 105 qmp command 'guest-get-fsinfo' failed", "proxy: guest-get-osinfo unavailable"} {
+					t.Run(fmt.Sprintf("%s/%s/%s/body-%d", phase, mode, stage, i), func(t *testing.T) {
+						f := newNodeProbeFixture(t, mode, stage, message)
+						cfg := f.config()
+						saved := map[string]string{f.server.URL: cfg.Fingerprint}
+						f.reject.Store(true)
+						var cc *ClusterClient
+						if phase == "startup" {
+							sibling := newNodeProbeFixture(t, mode, "nodes", "")
+							saved[sibling.server.URL] = sibling.config().Fingerprint
+							cc = NewClusterClient("node-probe", cfg, []string{f.server.URL, sibling.server.URL}, saved)
+							if !cc.GetHealthStatus()[sibling.server.URL] {
+								t.Fatal("failed peer blocked accepted sibling")
+							}
+						} else {
+							cc = NewClusterClient("node-probe", cfg, []string{f.server.URL}, saved)
+							if phase == "recovery" {
+								cc.nodeHealth[f.server.URL] = false
+								cc.lastError[f.server.URL] = "previous failed observation"
+								cc.recoverUnhealthyNodes(context.Background())
+							} else {
+								c, err := cc.getHealthyClient(context.Background())
+								if c != nil || err == nil {
+									t.Error("failed nodes probe installed a polling client")
+								}
+							}
+						}
+						t.Cleanup(func() {
+							cc.mu.RLock()
+							defer cc.mu.RUnlock()
+							for _, c := range cc.clients {
+								if c != nil {
+									c.httpClient.CloseIdleConnections()
+								}
+							}
+						})
+						health := cc.GetHealthStatusWithErrors()[f.server.URL]
+						if health.Healthy || health.LastError == "" || health.LastCheck.IsZero() {
+							t.Errorf("failed probe published healthy or lost its reason/time: %+v", health)
+						}
+						if cc.clients[f.server.URL] != nil {
+							t.Error("failed probe installed a full polling client")
+						}
+						wantNodes := int32(1)
+						if stage == "login" {
+							wantNodes = 0
+						}
+						if f.logins.Load() != f.loginAttempts() || f.nodes.Load() != wantNodes {
+							t.Errorf("failed probe was retried/advanced: logins=%d want=%d nodes=%d want=%d", f.logins.Load(), f.loginAttempts(), f.nodes.Load(), wantNodes)
+						}
+						if cc.getEndpointFingerprint(f.server.URL) != cfg.Fingerprint || saved[f.server.URL] != cfg.Fingerprint || cc.config.VerifySSL != true {
+							t.Error("failed probe changed saved trust")
+						}
+						// A distinct later recovery uses this fixture's normal accepted reply.
+						// Only endpoint recovery eligibility advances, never a guest fence.
+						f.reject.Store(false)
+						cc.mu.Lock()
+						delete(cc.lastHealthCheck, f.server.URL)
+						cc.mu.Unlock()
+						cc.recoverUnhealthyNodes(context.Background())
+						if c := cc.clients[f.server.URL]; c == nil || c.config.Timeout != cfg.Timeout {
+							t.Fatal("accepted later recovery has no full-timeout polling client")
+						}
+						cc.mu.Lock()
+						for ep := range cc.nodeHealth {
+							if ep != f.server.URL {
+								cc.nodeHealth[ep] = false
+								cc.lastHealthCheck[ep] = time.Now()
+							}
+						}
+						cc.mu.Unlock()
+						nodes, err := cc.GetNodes(context.Background())
+						health = cc.GetHealthStatusWithErrors()[f.server.URL]
+						if err != nil || len(nodes) != 1 || nodes[0].CPU != 0.25 || !health.Healthy || health.LastError != "" || f.nodes.Load() != wantNodes+2 || f.logins.Load() != 3*f.loginAttempts() {
+							t.Errorf("separate ordinary recovery did not restore coherent readings: err=%v health=%+v logins=%d nodes=%d", err, health, f.logins.Load(), f.nodes.Load())
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
+// Keep the existing single-endpoint last-resort read, but do not publish
+// recovery simply for selecting its cached client. A failed read is still a
+// failure; only a later successful ordinary read clears the observed error.
+func TestClusterSingleEndpointFallbackKeepsFailedHealth(t *testing.T) {
+	f := newNodeProbeFixture(t, "token", "nodes", "QEMU guest agent is not running")
+	cc := NewClusterClient("single-probe", f.config(), []string{f.server.URL}, nil)
+	if _, err := cc.GetNodes(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	original := cc.clients[f.server.URL]
+	defer original.httpClient.CloseIdleConnections()
+	f.reject.Store(true)
+	cc.markUnhealthyWithError(f.server.URL, "previous connection failure")
+	c, err := cc.getHealthyClient(context.Background())
+	if err != nil || c != original {
+		t.Fatal("last-resort selection lost the existing client")
+	}
+	if h := cc.GetHealthStatusWithErrors()[f.server.URL]; h.Healthy || h.LastError == "" {
+		t.Errorf("selection invented endpoint recovery: %+v", h)
+	}
+	before := f.nodes.Load()
+	if _, err := cc.GetNodes(context.Background()); err == nil || !strings.Contains(err.Error(), "API error 500") {
+		t.Errorf("failed ordinary read was hidden: %v", err)
+	}
+	if h := cc.GetHealthStatusWithErrors()[f.server.URL]; h.Healthy || h.LastError == "" || f.nodes.Load() != before+1 {
+		t.Errorf("failed fallback read published recovery or replayed: %+v reads=%d", h, f.nodes.Load())
+	}
+	f.reject.Store(false)
+	if nodes, err := cc.GetNodes(context.Background()); err != nil || len(nodes) != 1 {
+		t.Fatalf("accepted later read did not recover: %+v %v", nodes, err)
+	}
+	if h := cc.GetHealthStatusWithErrors()[f.server.URL]; !h.Healthy || h.LastError != "" || f.nodes.Load() != before+2 || cc.clients[f.server.URL] != original {
+		t.Errorf("accepted fallback did not restore health with the same client: %+v", h)
+	}
+}
+
+// A genuine temporary nodes rate limit retains the established lazy-selection
+// route: the actual ordinary read, not the failed probe, supplies its readings.
+func TestClusterNodeProbeRateLimitKeepsOrdinaryRead(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/nodes" {
+			t.Errorf("unexpected request: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			fmt.Fprint(w, "fixture busy")
+			return
+		}
+		fmt.Fprint(w, `{"data":[{"node":"member","status":"online","cpu":0.25}]}`)
+	}))
+	defer server.Close()
+	cc := NewClusterClient("probe-rate-limit", ClientConfig{Host: server.URL, TokenName: "fixture@pam!pulse", TokenValue: "fixture-token"}, []string{server.URL}, nil)
+	nodes, err := cc.GetNodes(context.Background())
+	if c := cc.clients[server.URL]; c != nil {
+		defer c.httpClient.CloseIdleConnections()
+	}
+	if err != nil || len(nodes) != 1 || nodes[0].CPU != 0.25 || calls.Load() != 2 || !cc.GetHealthStatus()[server.URL] {
+		t.Fatalf("temporary probe rate limit blocked ordinary read: %+v err=%v calls=%d", nodes, err, calls.Load())
+	}
+}

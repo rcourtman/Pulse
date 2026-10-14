@@ -7,15 +7,15 @@ import (
 	"time"
 )
 
-func TestGetHealthyClientSingleEndpointFallback(t *testing.T) {
+func TestGetHealthyClientSingleEndpointFallbackKeepsObservedFailure(t *testing.T) {
 	endpoint := "http://example.invalid"
 	cc := &ClusterClient{
 		name:            "single",
 		endpoints:       []string{endpoint},
 		clients:         map[string]*Client{endpoint: {}},
 		nodeHealth:      map[string]bool{endpoint: false},
-		lastError:       make(map[string]string),
-		lastHealthCheck: make(map[string]time.Time),
+		lastError:       map[string]string{endpoint: "previous failed observation"},
+		lastHealthCheck: map[string]time.Time{endpoint: time.Now()},
 		rateLimitUntil:  make(map[string]time.Time),
 	}
 
@@ -26,8 +26,19 @@ func TestGetHealthyClientSingleEndpointFallback(t *testing.T) {
 	if client == nil {
 		t.Fatal("expected client, got nil")
 	}
-	if !cc.nodeHealth[endpoint] {
-		t.Fatal("expected endpoint to be marked healthy after fallback")
+	if cc.nodeHealth[endpoint] || cc.lastError[endpoint] != "previous failed observation" {
+		t.Fatal("cached fallback selection must not erase an observed failure")
+	}
+	if err := cc.executeWithFailover(context.Background(), func(*Client) error {
+		return fmt.Errorf("API error 500: fixture unavailable")
+	}); err == nil || cc.nodeHealth[endpoint] {
+		t.Fatal("failed last-resort request must not establish recovery")
+	}
+	if err := cc.executeWithFailover(context.Background(), func(*Client) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if !cc.nodeHealth[endpoint] || cc.lastError[endpoint] != "" {
+		t.Fatal("accepted ordinary request must clear its own recorded failure")
 	}
 }
 
