@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "c7a0e8dea45fdcb4f787926e035c78cd7ceb4d79",
+  "verified_at": "2026-10-14T12:43:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/workloads.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "ac530d7b0b90f82f6efdd53490bb0fe0525c3de1413e7e84358355839f7a68ec",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "bdb1394fb0ce80e062e9e9b7636b98825d72739d09dd55fbc6aaaf9843b75d80",
+    "frontend-modern/src/hooks/useWorkloads.ts": "0156476e7f74721e54643a064014d753aeb0aaa3e982e6cfd9e6ece7c7ee6ac6",
+    "frontend-modern/src/types/workloads.ts": "b8c03787386fb1bef387b9999f71128e958b5e1f3d45d79dbef6bd23a98b1231"
+  },
+  "routes": [
+    "/?transport=broadcast",
+    "/?transport=api",
+    "/?transport=rest-snapshot"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual source-produced LXC collector/HTTP/broadcast JSON enters real Workloads and unified-resource hooks, GuestRow/NetworkInfoCell, GuestDrawer and ResourceDetailDrawer. 18 status/config/runtime by transport/viewport states preserve primary/secondary order, names, addresses and canonical/history identities. Safe synthetic observations, not installed/native/reporter acceptance.",
+    "30 explicit synthetic agent-facet transitions on the same mounted drawer retain reported-agent precedence, silent-agent copy only for the selected agent list, platform fallback when no agent list exists, authoritative empty lists and both ordered IPs.",
+    "16 desktop light/dark tooltip colour checks for platform names/addresses, live-agent MAC/traffic and address-only fallback. All tested normal text exceeds 4.5:1; minimum 5.7053:1. All ten final retained screenshots opened with native view_image; names and addresses readable in both themes and narrow details.",
+    "Playwright 1.56.1 matches integration lock; Chromium 141.0.7390.37 and WebKit 26.0. No page, console or failed-request error; no horizontal overflow. Global offline runtime and physical-disk supplements are explicit fixtures, not live socket or host use."
+  ],
+  "interactions": [
+    "Hovered the production network cell and changed existing CSS theme to light/dark; inspected actual tooltip text, colours and pixels.",
+    "Desktop clicked the actual row and native Details disclosure; 390px WebKit tapped row, Details and fixture source controls. Opened the canonical Resource details and verified its Primary IP stayed first.",
+    "Changed source/agent facets through fixture controls without replacing the open drawer; checked names/MAC/traffic and source-specific stale copy.",
+    "All intercepted requests were local GETs. The owning Workloads query runs 16 times across two direct-REST contexts and zero times for broadcast/REST-owned snapshots. Existing separate physical-disk reads use explicit empty synthetic responses. Browser and server close calls completed."
+  ]
+}
