@@ -69,7 +69,11 @@ const DOCKER_CONTAINER_COLUMN_MIN_LAYOUT: Record<
   WorkloadTableLayoutMode
 > = {
   container: 'narrow',
-  state: 'narrow',
+  // A narrow table (most phones) cannot give State's words their own column
+  // beside the 40% name, both metric pills and the Update control without
+  // cutting "Unhealthy" to "Unhe…"; the name cell shows them on a second line
+  // there instead (isDockerContainerStateUnderName).
+  state: 'phone',
   cpu: 'narrow',
   memory: 'narrow',
   // Below a 720px table the Restarts header cannot fit beside State, the
@@ -142,12 +146,13 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
   Exclude<WorkloadTableLayoutMode, 'wide'>,
   Partial<Record<DockerContainerTableColumnId, number>>
 > = {
+  // With State under the name, the metric pills ("100%" is about 53px) and
+  // the Update control (about 46px) share what the 40% name leaves.
   narrow: {
     container: 40,
-    state: 15,
-    cpu: 15,
-    memory: 17,
-    updates: 13,
+    cpu: 20,
+    memory: 20,
+    updates: 20,
   },
   phone: {
     container: 32,
@@ -202,6 +207,11 @@ export const isDockerContainerColumnInLayout = (
   DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[DOCKER_CONTAINER_COLUMN_MIN_LAYOUT[columnId]] <=
   DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[layoutMode];
 
+// Where the layout has no State column, the name cell carries the state words
+// on its own second line, for every row, so the rows keep one height.
+export const isDockerContainerStateUnderName = (layoutMode: WorkloadTableLayoutMode): boolean =>
+  !isDockerContainerColumnInLayout('state', layoutMode);
+
 export const getDockerContainerVisibleColumnsForLayout = (
   layoutMode: WorkloadTableLayoutMode,
   includeRuntime: boolean,
@@ -219,10 +229,9 @@ export const getDockerContainerVisibleColumnsForLayout = (
     if (column.id === 'runtime' && !includeRuntime) return false;
     if (column.id === 'restarts' && !includeRestarts) return false;
     if (column.id === 'uptime' && options.includeUptime === false) return false;
-    // Ultra-narrow rows still need five stable scan fields. Keep the explicit
-    // state label there even when every current row is running; wider layouts
-    // may continue to remove the otherwise repetitive column.
-    if (column.id === 'state' && !includeState && layoutMode !== 'narrow') return false;
+    // Wider layouts remove the otherwise repetitive column while every
+    // current row is running.
+    if (column.id === 'state' && !includeState) return false;
     return (
       DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[DOCKER_CONTAINER_COLUMN_MIN_LAYOUT[column.id]] <=
       layoutRank

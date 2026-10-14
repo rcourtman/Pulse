@@ -372,7 +372,19 @@ const observations = (mode) => [
           const headers = await table.locator('th:visible').allTextContents();
           if (width === 390) {
             assert.ok(!headers.some((h) => h.includes('Restarts')));
-            assert.ok(headers.some((h) => h.includes('State')));
+            // A phone row reads the state words under the name, whole: as a
+            // column beside the name they were cut to "Unhe…".
+            assert.ok(!headers.some((h) => h.includes('State')));
+            const words = table
+              .locator('[data-docker-container-row="edge-web"]')
+              .locator('[data-docker-container-state]');
+            assert.equal(await words.innerText(), 'Unhealthy');
+            const fit = await words.evaluate((e) => ({
+              scroll: e.scrollWidth,
+              client: e.clientWidth,
+              name: e.closest('td') === e.closest('tr').querySelector('td'),
+            }));
+            assert.ok(fit.name && fit.scroll <= fit.client, JSON.stringify(fit));
           }
         },
       );
