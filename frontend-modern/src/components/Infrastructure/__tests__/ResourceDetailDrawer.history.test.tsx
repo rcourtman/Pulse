@@ -1763,3 +1763,14 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(actions).not.toHaveTextContent('Actions temporarily unavailable');
   });
 });
+
+describe('ResourceDetailDrawer Overview alert sources', () => {
+  it('charts only the resource own alerts and explains latched ones with the shared copy', () => {
+    // Needs attention lists every alert for the resource and what nests under
+    // it; a chart trigger must be the resource's own (a host's container
+    // memory alert is not the host's memory trigger).
+    expect(resourceDetailDrawerOverviewSource).toContain('getOwnAlertsForUnifiedResource(');
+    expect(resourceDetailDrawerOverviewSource).toContain('...getAlertAttentionCopy(alert, now)');
+    expect(resourceDetailDrawerOverviewSource).not.toContain('message: alert.message,');
+  });
+});

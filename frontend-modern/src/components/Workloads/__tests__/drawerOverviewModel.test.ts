@@ -74,6 +74,25 @@ describe('getDrawerChartAlerts', () => {
     });
   });
 
+  it('maps disk temperature and storage capacity alerts onto the charts that show them', () => {
+    expect(
+      getDrawerChartAlerts(
+        [
+          alert({ type: 'diskTemperature', threshold: 55 }),
+          alert({ type: 'usage', threshold: 90 }),
+        ],
+        ['smart_temp', 'usage'],
+      ),
+    ).toEqual({
+      smart_temp: { severity: 'warning', value: 55 },
+      usage: { severity: 'warning', value: 90 },
+    });
+    // A Proxmox disk's temperature alert reaches the same disk chart.
+    expect(
+      getDrawerChartAlerts([alert({ type: 'temperature', threshold: 60 })], ['smart_temp']),
+    ).toEqual({ smart_temp: { severity: 'warning', value: 60 } });
+  });
+
   it('ignores alerts on metrics the drawer does not chart', () => {
     expect(getDrawerChartAlerts([alert({ type: 'diskWrite' })], ['cpu', 'memory'])).toEqual({});
   });

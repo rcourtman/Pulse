@@ -42,6 +42,12 @@ const DRAWER_CHART_ALERT_TYPES: ReadonlyArray<{ type: string; metric: string; sc
   { type: 'memory', metric: 'memory', scale: 1 },
   { type: 'disk', metric: 'disk', scale: 1 },
   { type: 'temperature', metric: 'temperature', scale: 1 },
+  // A physical disk charts its temperature as smart_temp; Proxmox disks alert
+  // as temperature and agent disks as diskTemperature.
+  { type: 'temperature', metric: 'smart_temp', scale: 1 },
+  { type: 'disktemperature', metric: 'smart_temp', scale: 1 },
+  // Storage pools chart their capacity as usage, the alert's own metric.
+  { type: 'usage', metric: 'usage', scale: 1 },
   { type: 'diskread', metric: 'diskread', scale: 1024 * 1024 },
   { type: 'diskwrite', metric: 'diskwrite', scale: 1024 * 1024 },
   { type: 'networkin', metric: 'netin', scale: 1024 * 1024 },

@@ -452,3 +452,37 @@ describe('drawer History on a phone', () => {
     expect(screen.getByTestId('history-phone-toggle')).toHaveTextContent('Show Network I/O');
   });
 });
+
+describe('drawer History alert triggers', () => {
+  it('labels the trigger in the legend and draws no line before any history exists', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({ ...response(), metrics: {} });
+    render(() => (
+      <GuestDrawerHistory
+        target={target}
+        range="24h"
+        alerts={{ diskread: { severity: 'critical', value: 100 * 1024 * 1024 } }}
+      />
+    ));
+    await screen.findAllByText('No stored history in this range');
+    expect(document.querySelector('[data-history-threshold]')).toBeNull();
+    expect(document.querySelector('[data-history-alert-label="diskread"]')).toHaveTextContent(
+      /^alert at 100(\.0)? MB\/s$/,
+    );
+  });
+
+  it('keeps a phone panel shown after the alert that revealed it clears', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    const [alerts, setAlerts] = createSignal<
+      Record<string, { severity: 'warning' | 'critical'; value?: number } | undefined>
+    >({ netin: { severity: 'warning', value: 1024 } });
+    render(() => <GuestDrawerHistory target={target} range="24h" alerts={alerts()} />);
+    const network = () =>
+      screen
+        .getAllByTestId('guest-history-group-chart')
+        .find((chart) => chart.dataset.historyGroup === 'network')!;
+    await screen.findAllByTestId('guest-history-group-chart');
+    expect(network()).not.toHaveClass('max-sm:hidden');
+    setAlerts({});
+    expect(network()).not.toHaveClass('max-sm:hidden');
+  });
+});

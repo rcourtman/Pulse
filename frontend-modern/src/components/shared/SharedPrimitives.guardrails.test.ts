@@ -330,6 +330,7 @@ import vsphereActivityTableSource from '@/features/vmware/VsphereActivityTable.t
 import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?raw';
 import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereNetworksTableSource from '@/features/vmware/VsphereNetworksTable.tsx?raw';
+import dockerHostDrawerOverviewSource from '@/features/docker/DockerHostDrawerOverview.tsx?raw';
 
 const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsive/*.tsx'], {
   query: '?raw',
@@ -1319,6 +1320,12 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain("value: 'history', label: 'History'");
     }
     expect(resourceDetailDrawerSource).not.toContain("activeTab() === 'history'");
+    // Drawer charts draw triggers from the resource's own alerts; Needs
+    // attention may list nested resources, the charts never do.
+    expect(resourceDetailDrawerOverviewTabSource).toContain('getOwnAlertsForUnifiedResource(');
+    expect(dockerHostDrawerOverviewSource).toContain('getOwnAlertsForUnifiedResource(');
+    expect(dockerHostDrawerOverviewSource).toContain('getAlertAttentionCopy(alert, now)');
+    expect(resourceDetailDrawerOverviewTabSource).toContain('getAlertAttentionCopy(alert, now)');
     // Range pickers name their options from one table, never a local list.
     expect(guestDrawerHistorySource).toContain('formatHistoryRangeOptionLabel(option)');
     expect(guestDrawerHistorySource).not.toContain('const formatRangeLabel');

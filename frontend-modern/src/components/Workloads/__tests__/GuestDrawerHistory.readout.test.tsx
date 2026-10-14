@@ -1,16 +1,21 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI, type AllMetricsHistoryResponse } from '@/api/charts';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { GuestDrawerHistory } from '../GuestDrawerHistory';
+import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
   maxHistoryDays: () => 90,
   isRangeLocked: () => false,
 }));
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+});
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   resetCreateNonSuspendingQueryCacheForTest();
   vi.restoreAllMocks();
@@ -41,7 +46,7 @@ const group = (id = 'utilization') =>
   screen.getAllByTestId('guest-history-group-chart').find((el) => el.dataset.historyGroup === id)!;
 const readoutTime = (id = 'utilization') =>
   within(group(id)).getByTestId('guest-history-hover-time');
-const refresh = () => fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+const refresh = () => vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
 const ready = () => screen.findByRole('slider', { name: 'Inspect Utilization history' });
 
 describe('drawer History default readout belongs to one stored time', () => {
@@ -110,7 +115,7 @@ describe('drawer History default readout belongs to one stored time', () => {
     );
     expect(within(group()).queryByTestId('guest-history-hover-time')).toBeNull();
     fetch.mockResolvedValue(response({ cpu: [point(2, 22)] }));
-    refresh();
+    await refresh();
     await waitFor(() => expect(group()).toHaveTextContent('CPU22.0%'));
     expect(group()).toHaveTextContent('Memoryno reading');
     expect(group()).toHaveTextContent('Diskno reading');
@@ -137,7 +142,7 @@ describe('drawer History default readout belongs to one stored time', () => {
     expect(group()).not.toHaveTextContent('77.0%');
     expect(fetch).toHaveBeenCalledTimes(1);
     fetch.mockResolvedValue(response({ cpu: [point(2, 22)], memory: [point(3, 25)] }));
-    refresh();
+    await refresh();
     await waitFor(() => expect(group()).toHaveTextContent('Memory25.0%'));
     expect(group()).toHaveTextContent('CPUno reading');
     expect(readoutTime()).toHaveAttribute('datetime', new Date(start + 180_000).toISOString());
@@ -176,7 +181,7 @@ describe('drawer History default readout belongs to one stored time', () => {
       .mockRejectedValueOnce(Object.assign(new Error('private access detail'), { status: 403 }));
     render(() => <GuestDrawerHistory target={target} range="1h" />);
     await ready();
-    refresh();
+    await refresh();
     await screen.findByRole('button', { name: 'Retry history' });
     expect(readoutTime()).toHaveAttribute('datetime', new Date(start + 120_000).toISOString());
     expect(group()).toHaveTextContent('Memoryno reading');

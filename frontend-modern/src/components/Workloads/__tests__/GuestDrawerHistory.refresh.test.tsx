@@ -69,8 +69,8 @@ describe('GuestDrawerHistory refresh recovery', () => {
     expect(fetch.mock.calls[1][0]).toMatchObject({ ...target, range: '24h' });
     pending.resolve(response());
     await waitFor(() => expect(paths(container)).toHaveLength(1));
-    expect(retry).toHaveAttribute('aria-disabled', 'false');
-    expect(retry).toHaveAccessibleName('Refresh history');
+    // The charts poll on their own; once recovered there is nothing to retry.
+    expect(screen.queryByRole('button', { name: /history/i })).not.toBeInTheDocument();
   });
 
   it('retains only the current history on a failed poll and updates its already-mounted status region', async () => {
@@ -92,7 +92,7 @@ describe('GuestDrawerHistory refresh recovery', () => {
     expect(screen.queryByText('Loading history')).not.toBeInTheDocument();
   });
 
-  it('keeps retry keyboard focus through successful recovery without losing retained points', async () => {
+  it('moves keyboard focus into the history region when a successful retry removes its button', async () => {
     vi.useFakeTimers();
     const pending = deferred<AllMetricsHistoryResponse>();
     vi.spyOn(ChartsAPI, 'getMetricsHistory')
@@ -110,33 +110,42 @@ describe('GuestDrawerHistory refresh recovery', () => {
     pending.resolve(response(12));
     await vi.advanceTimersByTimeAsync(0);
     expect(paths(container)[0]).not.toHaveAttribute('d', original);
-    expect(screen.getByRole('button', { name: 'Refresh history' })).toBe(retry);
-    expect(retry).toHaveFocus();
+    expect(screen.queryByRole('button', { name: /history/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('guest-history-region')).toHaveFocus();
     expect(screen.getByRole('status', { name: 'History refresh status' })).toBeEmptyDOMElement();
   });
 
-  it('settles retry loading when a background poll supersedes a slow manual refresh', async () => {
+  it('settles a slow retry when a background poll supersedes it', async () => {
     vi.useFakeTimers();
     const pending = deferred<AllMetricsHistoryResponse>();
     const fetch = vi
       .spyOn(ChartsAPI, 'getMetricsHistory')
-      .mockResolvedValueOnce(response())
+      .mockRejectedValueOnce(new Error('Unavailable'))
       .mockReturnValueOnce(pending.promise)
       .mockResolvedValueOnce(response(12));
     const { container } = render(() => <GuestDrawerHistory target={target} range="24h" />);
     await vi.advanceTimersByTimeAsync(0);
-    const refresh = screen.getByRole('button', { name: 'Refresh history' });
-    fireEvent.click(refresh);
-    expect(refresh).toHaveAttribute('aria-disabled', 'true');
+    const retry = screen.getByRole('button', { name: 'Retry history' });
+    fireEvent.click(retry);
+    expect(retry).toHaveAttribute('aria-disabled', 'true');
     await vi.advanceTimersByTimeAsync(30_000);
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(fetch.mock.calls[1][0].signal!.aborted).toBe(true);
-    expect(refresh).toHaveAttribute('aria-disabled', 'false');
-    expect(refresh).toHaveAttribute('aria-busy', 'false');
+    // The poll recovered, so the retry control is gone rather than stuck busy.
+    expect(screen.queryByRole('button', { name: /history/i })).not.toBeInTheDocument();
     const latest = paths(container)[0].getAttribute('d');
     pending.resolve(response(99));
     await vi.advanceTimersByTimeAsync(0);
     expect(paths(container)[0]).toHaveAttribute('d', latest);
+  });
+
+  it('offers no manual refresh while history loads normally', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    const { container } = render(() => <GuestDrawerHistory target={target} range="24h" />);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(paths(container)).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /history/i })).not.toBeInTheDocument();
   });
 
   it('retains the failure after a failed retry and allows another attempt', async () => {
@@ -297,7 +306,9 @@ describe('drawer History access failures', () => {
       await settleAccess();
       expect(accessPaths(view.container)).toHaveLength(1);
       expect(region).toBeEmptyDOMElement();
-      expect(retry).toHaveFocus();
+      // Recovered: the Retry button goes, and keyboard focus stays in the charts.
+      expect(screen.queryByRole('button', { name: 'Retry history' })).not.toBeInTheDocument();
+      expect(screen.getByTestId('guest-history-region')).toHaveFocus();
     },
   );
 

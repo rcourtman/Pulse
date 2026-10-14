@@ -419,8 +419,14 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         point !== undefined &&
         activeTimestamp() !== null &&
         (point.max ?? point.value) - point.value >= 0.1 * (scale().maxValue - scale().minValue);
+      const alert = props.alerts?.[item.metric];
       return {
         ...item,
+        // Names the dashed line: its metric's reading carries the trigger.
+        alertLabel:
+          alert && typeof alert.value === 'number' && Number.isFinite(alert.value)
+            ? `alert at ${formatHistoryChartTooltipValue(alert.value, item.unit)}`
+            : null,
         peakLabel:
           point && peakVisible
             ? `peak ${formatHistoryChartTooltipValue(point.max ?? point.value, item.unit)}`
@@ -519,6 +525,16 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                 <Show when={item.peakLabel}>
                   {(label) => <span data-history-peak={item.metric}>{label()}</span>}
                 </Show>
+                <Show when={item.alertLabel}>
+                  {(label) => (
+                    <span
+                      data-history-alert-label={item.metric}
+                      class={alertToneClass(props.alerts?.[item.metric]?.severity)}
+                    >
+                      {label()}
+                    </span>
+                  )}
+                </Show>
                 <Show when={item.isCurrent}>
                   <span>current</span>
                 </Show>
@@ -586,7 +602,9 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
               />
             )}
           </For>
-          <For each={thresholds()}>
+          {/* Before any history the scale is a placeholder, so a trigger line
+              would sit at an arbitrary height (an I/O trigger clamps to the top). */}
+          <For each={hasStoredData() ? thresholds() : []}>
             {(threshold) => (
               <line
                 data-history-threshold={threshold.metric}
@@ -826,6 +844,21 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     () => !locked() && props.enabled !== false,
   );
   const historyQuery = createGuestDrawerHistoryQuery(historySource);
+  // A successful retry removes the focused Retry button with the error. Keep
+  // keyboard focus in the history region instead of dropping it to the page.
+  let regionRef: HTMLDivElement | undefined;
+  let retryHasFocus = false;
+  createEffect(
+    on(
+      () => historyQuery.error(),
+      (error, previous) => {
+        if (previous && !error && retryHasFocus) {
+          retryHasFocus = false;
+          regionRef?.focus();
+        }
+      },
+    ),
+  );
 
   const metrics = createMemo(() => historyQuery.value().metrics ?? {});
   const groups = createMemo(() => props.groups ?? GUEST_DRAWER_HISTORY_GROUPS);
@@ -839,8 +872,18 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
       historyQuery.value(),
     ),
   );
-  const groupHasAlert = (group: GuestDrawerHistoryGroupConfig) =>
-    group.series.some((series) => Boolean(props.alerts?.[series.metric]));
+  // A panel shown on a phone because of an alert stays shown after the alert
+  // clears, so a reader mid-inspection does not lose the chart under them.
+  const alertedGroupIds = new Set<string>();
+  const alertedGroups = createMemo(() => {
+    for (const group of groups()) {
+      if (group.series.some((series) => Boolean(props.alerts?.[series.metric]))) {
+        alertedGroupIds.add(group.id);
+      }
+    }
+    return new Set(alertedGroupIds);
+  });
+  const groupHasAlert = (group: GuestDrawerHistoryGroupConfig) => alertedGroups().has(group.id);
   const isPhoneCollapsed = (group: GuestDrawerHistoryGroupConfig, index: number) =>
     !showAllOnPhone() && index > 0 && !groupHasAlert(group);
   const phoneCollapsedGroups = createMemo(() =>
@@ -861,7 +904,10 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
       fallback={<div class="py-6 text-center text-sm text-muted">History unavailable</div>}
     >
       <div
-        class="space-y-3"
+        ref={regionRef}
+        tabIndex={-1}
+        data-testid="guest-history-region"
+        class="space-y-3 outline-none"
         onPointerDown={(event) => setTouchInspection(event.pointerType === 'touch')}
         onPointerMove={(event) => {
           if (event.pointerType === 'mouse') setTouchInspection(false);
@@ -889,12 +935,16 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
               <GuestDrawerHistoryRangeSelect range={props.range} onRangeChange={onRangeChange()} />
             )}
           </Show>
-          <Show when={!locked()}>
+          {/* The charts poll every 30 seconds, so a manual refresh is offered
+              only to recover from a failed read. */}
+          <Show when={!locked() && historyQuery.error()}>
             <Button
               size="sm"
               class="min-h-11 shrink-0 aria-disabled:opacity-50 sm:min-h-8"
               aria-busy={historyQuery.loading()}
               aria-disabled={historyQuery.loading()}
+              onFocus={() => (retryHasFocus = true)}
+              onBlur={() => (retryHasFocus = false)}
               onClick={() => {
                 // Keep the control focusable through a retry, but reject repeat
                 // activation until the current read settles.
@@ -904,7 +954,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
               <Show when={historyQuery.loading()}>
                 <LoadingSpinner size="sm" tone="current" class="mr-2" />
               </Show>
-              {historyQuery.error() ? 'Retry history' : 'Refresh history'}
+              Retry history
             </Button>
           </Show>
         </div>

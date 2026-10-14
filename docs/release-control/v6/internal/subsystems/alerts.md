@@ -4671,7 +4671,18 @@ canonical lookup from one unified resource to its open alerts in the websocket
 resource (unified id, canonical primary and superseded ids, Proxmox source id,
 metrics target, and for agent and Docker hosts `agent:<id>` and
 `docker:<host source id>` plus the component alerts nested under them) and
-orders them most severe first. The Machines/Infrastructure and Docker host
+orders them most severe first. A Docker container answers to the key the
+engine writes for it, `docker:<host source id>/<container id>` (or
+`docker:<host source id>/name:<name>` without an ID, per
+`DockerContainerResourceID`), so its drawer lists its own alerts; until
+2026-10-14 the container drawer matched none of them.
+`getOwnAlertsForUnifiedResource` returns only the exact-key alerts, without
+the nested component alerts, and is what drawer charts use for dashed
+triggers: a host's Needs attention lists its containers, but a container's
+memory trigger is not the host's. Those rows use `getAlertAttentionCopy`, so a
+latched or recovering alert, whose message keeps its breach-time value, reads
+as "Memory 70% now, recovering" beside a chart showing 70%. The
+Machines/Infrastructure and Docker host
 drawers build their "Needs attention" rows from it; resources no longer embed
 an alert list, so no drawer can silently read an always-empty copy.
 `getUnifiedResourceAlertStyles` computes row highlighting from that same set,

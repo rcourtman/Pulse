@@ -1,12 +1,13 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI, type AllMetricsHistoryResponse } from '@/api/charts';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import type { WorkloadGuest } from '@/types/workloads';
 import { GuestDrawerHistory } from '../GuestDrawerHistory';
 import { getGuestDrawerCurrentMetrics, getGuestDrawerDeferredMetrics } from '../guestDrawerModel';
 import { guestDiskDeferrals } from '../__fixtures__/guestDiskDeferrals';
+import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
@@ -14,11 +15,23 @@ vi.mock('@/stores/license', () => ({
   isRangeLocked: () => false,
 }));
 
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+});
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   resetCreateNonSuspendingQueryCacheForTest();
   vi.restoreAllMocks();
 });
+
+// The charts have no manual refresh while reads succeed; tests drive the
+// 30-second poll on a fake interval clock (timeouts stay real for waitFor).
+const settledHistory = () =>
+  waitFor(() => {
+    expect(ChartsAPI.getMetricsHistory).toHaveBeenCalled();
+    expect(screen.queryByText('Loading history')).not.toBeInTheDocument();
+  });
 
 const guest = (reason: string, usage = 50): WorkloadGuest => ({
   id: 'fixture:pve-a:101',
@@ -292,13 +305,8 @@ describe('GuestDrawerHistory filesystem provenance', () => {
       .mockRejectedValueOnce(Object.assign(new Error('private refusal'), { status: 403 }))
       .mockResolvedValueOnce(response());
     mount(() => guest('prev-vm-locked'));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Refresh history' })).toHaveAttribute(
-        'aria-busy',
-        'false',
-      ),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+    await settledHistory();
+    await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Retry history' })).toBeInTheDocument(),
     );

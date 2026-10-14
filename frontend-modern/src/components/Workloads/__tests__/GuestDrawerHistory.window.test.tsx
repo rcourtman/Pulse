@@ -9,6 +9,7 @@ import {
   getGuestDrawerHistoryRangeBounds,
   normalizeGuestDrawerHistoryPoints,
 } from '../guestDrawerModel';
+import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
@@ -107,6 +108,7 @@ describe('GuestDrawerHistory shared time window', () => {
   });
 
   it('retains the last fulfilled window with its data after a failed refresh', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     vi.spyOn(ChartsAPI, 'getMetricsHistory')
       .mockResolvedValueOnce(response())
       .mockRejectedValueOnce(new Error('Private fixture detail'));
@@ -115,7 +117,7 @@ describe('GuestDrawerHistory shared time window', () => {
     const before = group('utilization')
       .querySelector('path[data-history-series]')!
       .getAttribute('d');
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+    await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
     await screen.findByText('History refresh failed. Showing previously loaded history.');
     expect(group('utilization').querySelector('path[data-history-series]')).toHaveAttribute(
       'd',
