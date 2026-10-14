@@ -114,3 +114,14 @@ test('every existing auth golden attaches facts before the unchanged strict asse
   assert.match(spec, /getByText\('Organization', \{ exact: true \}\)/);
   assert.match(spec, /getByText\('Overview', \{ exact: true \}\)/);
 });
+
+test('normal E2E admission gates on these controls before installs or shard fan-out', () => {
+  const workflow = readFileSync(new URL('../../../.github/workflows/test-e2e.yml', import.meta.url), 'utf8');
+  const admission = workflow.split('\n  tier-selection:\n')[1].split('\n  offline-org-provisioning:\n')[0];
+  const step = admission.split('- name: Validate read-only auth renderer diagnostics\n')[1].split('\n      - name:')[0];
+  assert.match(step, /working-directory: tests\/integration/);
+  assert.match(step, /run: node --test scripts\/capture-auth-renderer\.test\.mjs/);
+  assert.doesNotMatch(step, /continue-on-error|\|\||\bif:/);
+  assert.ok(admission.indexOf('Set up Node.js') < admission.indexOf('Validate read-only auth renderer diagnostics'));
+  assert.ok(admission.indexOf('Validate read-only auth renderer diagnostics') < admission.indexOf('Install integration dependencies'));
+});

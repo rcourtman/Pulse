@@ -61,18 +61,22 @@ if pathlib.Path(sys.argv[0]).name == "mktemp":
     if args and args[-1].startswith("/tmp/pulse-"):
         args[-1] = str(root / "tmp" / pathlib.Path(args[-1]).name)
     os.execv("/usr/bin/mktemp", ["mktemp", *args])
-out = None
-url = None
-while args:
-    arg = args.pop(0)
-    if arg == "-o" and args:
-        out = pathlib.Path(args.pop(0))
-    elif arg == "-fsSL":
-        pass
-    elif arg.startswith("https://") and url is None:
-        url = arg
-    else:
-        sys.exit(97)
+# Admit the production downloader's exact bounded HTTPS envelope, not an
+# arbitrary curl option parser. The short form is used by isolated controls.
+flags = ["--disable", "-fsSL", "--connect-timeout", "5", "--max-time", "60",
+         "--proto", "=https", "--proto-redir", "=https"]
+if args[:len(flags)] == flags:
+    args = args[len(flags):]
+elif args[:1] == ["-fsSL"]:
+    args = args[1:]
+else:
+    sys.exit(97)
+if len(args) == 1:
+    url, out = args[0], None
+elif len(args) == 3 and args[1] == "-o":
+    url, out = args[0], pathlib.Path(args[2])
+else:
+    sys.exit(97)
 allowed = {"https://github.com/rcourtman/Pulse/releases/latest/download/install.sh": "installer"}
 for tag in ("v0.0.1", "v0.0.2"):
     allowed["https://github.com/rcourtman/Pulse/releases/download/" + tag + "/install.sh"] = "installer"

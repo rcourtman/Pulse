@@ -8576,7 +8576,7 @@ func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
 		"test_recovered_ordinary_linux_state_is_not_qnap_platform_authority",
 		"test_live_unraid_boot_shell_is_unknown_not_a_signal_target",
 		"test_actual_generated_watchdogs_and_children_become_quiescent",
-		"test_private_process_reader_requests_full_width_without_changing_fields",
+		"test_private_process_reader_requests_native_basename_and_full_argv",
 		"test_generated_collector_observation_keeps_exact_identity_on_both_unix_formats",
 		"test_caller_has_no_blanket_nas_or_legacy_tree_deletion",
 	} {

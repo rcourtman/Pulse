@@ -4906,8 +4906,6 @@ func TestReleaseRollbackGuidanceUsesServerUpdateHelper(t *testing.T) {
 		repoFile("scripts", "trigger-release.sh"),
 		repoFile("scripts", "release_control", "resolve_release_promotion.py"),
 		repoFile("scripts", "release_control", "render_release_body.py"),
-		repoFile("docs", "UPGRADE_v6.md"),
-		repoFile("frontend-modern", "public", "docs", "UPGRADE_v6.md"),
 		repoFile("docs", "releases", "RELEASE_NOTES_v6.4.0.md"),
 		repoFile("docs", "releases", "V6_CHANGELOG_v6.4.0.md"),
 	} {
@@ -4921,6 +4919,29 @@ func TestReleaseRollbackGuidanceUsesServerUpdateHelper(t *testing.T) {
 		}
 		if strings.Contains(text, "./scripts/install.sh --version") {
 			t.Fatalf("%s routes server rollback through the Unified Agent installer", path)
+		}
+	}
+
+	// The current migration guide deliberately does not offer a generic
+	// exact-version command for an unverified helper or migrated data. Keep
+	// its deployment-owned update/recovery routes, not the historical shortcut.
+	for _, path := range []string{
+		repoFile("docs", "UPGRADE_v6.md"),
+		repoFile("frontend-modern", "public", "docs", "UPGRADE_v6.md"),
+	} {
+		assertFileContainsAll(t, path,
+			"INSTALL.md#manual-update", "helper's ownership",
+			"Do not execute an absent or unknown helper",
+			"AUTO_UPDATE.md#manual-rollback", "not a generic `/bin/update` downgrade",
+		)
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		for _, shortcut := range []string{"/bin/update --version", "./scripts/install.sh --version"} {
+			if strings.Contains(string(content), shortcut) {
+				t.Fatalf("%s must not restore an unqualified migration shortcut %q", path, shortcut)
+			}
 		}
 	}
 
