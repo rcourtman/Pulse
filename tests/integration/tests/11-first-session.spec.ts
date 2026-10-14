@@ -270,8 +270,7 @@ test.describe.serial("First-session experience", () => {
     );
 
     // Gated routes with their required feature. Gating is feature-based, not
-    // tier-based — e.g. a "relay" tier has the relay feature but not
-    // advanced_reporting or audit_logging.
+    // tier-based. Pulse Mobile retirement is an all-tier notice, not a sales gate.
     const gatedRoutes = [
       {
         route: "/settings/support/reporting",
@@ -284,12 +283,6 @@ test.describe.serial("First-session experience", () => {
         expectedURL: /\/settings\/security-webhooks/,
         feature: "audit_logging",
         paywallIndicator: /Audit (Logging|Webhooks)/i,
-      },
-      {
-        route: "/settings/system-relay",
-        expectedURL: /\/settings\/system-relay/,
-        feature: "relay",
-        paywallIndicator: /Remote Access \(Relay\)/i,
       },
     ] as const;
 
@@ -388,6 +381,68 @@ test.describe.serial("First-session experience", () => {
     }
   });
 
+  test("Pulse Mobile explains retirement without selling access or exposing unlicensed pairing", async ({
+    page,
+  }) => {
+    await ensureAuthenticated(page);
+    const runtimeRes = await apiRequest(
+      page,
+      "/api/license/runtime-capabilities",
+    );
+    expect(runtimeRes.ok()).toBeTruthy();
+    const runtime = (await runtimeRes.json()) as RuntimeCapabilitiesPayload;
+    const entitlementReads = trackBrowserRequests(
+      page,
+      "/api/license/entitlements",
+    );
+    try {
+      await page.goto("/settings/system-relay", {
+        waitUntil: "domcontentloaded",
+      });
+      await expect(
+        page.getByRole("heading", { name: "Pulse Mobile" }).last(),
+      ).toBeVisible();
+      const main = page.getByRole("main");
+      await expect(main.getByText(/31 March 2027/).first()).toBeVisible();
+      await expect(
+        main.getByRole("link", { name: /Upgrade|Try Pro|Buy Relay/i }),
+      ).toHaveCount(0);
+      if (runtime.capabilities?.includes("relay")) {
+        // The paired-phone service remains usable until retirement. Do not
+        // turn it off or replace its entitlement with an unlicensed notice.
+        await expect(
+          main.getByText("Allow Pulse Mobile connections", { exact: true }),
+        ).toBeVisible();
+        await expect(
+          main.getByText("Pair Pulse Mobile", { exact: true }).first(),
+        ).toBeVisible();
+      } else {
+        await expect(
+          main.getByText(/no longer part of new plans/),
+        ).toBeVisible();
+        await expect(main.getByText(/ntfy, Gotify, or Pushover/)).toBeVisible();
+        await expect(
+          main.getByText("Allow Pulse Mobile connections", { exact: true }),
+        ).toHaveCount(0);
+        await expect(
+          main.getByRole("button", { name: /Pair|Generate.*QR/i }),
+        ).toHaveCount(0);
+        await expect(
+          main.locator(
+            'form input:not([type="search"]), form textarea, form select',
+          ),
+        ).toHaveCount(0);
+      }
+    } finally {
+      const urls = entitlementReads.urls();
+      entitlementReads.stop();
+      expect(
+        urls,
+        "Mobile retirement must use runtime capabilities, not billing reads",
+      ).toEqual([]);
+    }
+  });
+
   test("Pro license panel is discoverable from settings", async ({
     page,
   }, testInfo) => {
@@ -406,7 +461,9 @@ test.describe.serial("First-session experience", () => {
     // content. Scope assertions to main content, not the settings sidebar.
     const licenseContent = page
       .getByRole("main")
-      .getByText(/Current plan|Existing purchases|Use existing key|activation key/i)
+      .getByText(
+        /Current plan|Existing purchases|Use existing key|activation key/i,
+      )
       .first();
     await expect(
       licenseContent,

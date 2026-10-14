@@ -289,7 +289,7 @@ test.describe('Self-hosted plans entitlement summary', () => {
       'Users',
       'Audit Log',
       'Audit Webhooks',
-      'Remote Access',
+      'Pulse Mobile',
     ]) {
       await expect(settingsNav.getByText(label, { exact: true })).toBeVisible();
     }
@@ -299,5 +299,14 @@ test.describe('Self-hosted plans entitlement summary', () => {
 
     await page.goto('/settings/infrastructure?add=agent', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Manage agent profiles' })).toBeVisible();
+
+    // Existing paid phones keep their controls until retirement. This is not
+    // a renewed Relay offer, and the test must not change pairing/configuration.
+    await page.goto('/settings/system-relay', { waitUntil: 'domcontentloaded' });
+    const mobilePanel = page.getByRole('main');
+    await expect(mobilePanel.getByText(/31 March 2027/).first()).toBeVisible();
+    await expect(mobilePanel.getByText('Allow Pulse Mobile connections', { exact: true })).toBeVisible();
+    await expect(mobilePanel.getByText('Pair Pulse Mobile', { exact: true }).first()).toBeVisible();
+    await expect(mobilePanel.getByRole('link', { name: /Buy Relay|Upgrade|Try Pro/i })).toHaveCount(0);
   });
 });

@@ -684,7 +684,7 @@ test("starts from the normal monitor shell and reaches the canonical attention q
     page.getByRole("region", { name: "Patrol decision inbox" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Open CPU pressure on pve-main" }),
+    page.getByRole("button", { name: "Open pve-main · CPU pressure" }),
   ).toBeVisible();
   await expect(
     page.getByRole("tab", { name: "Inbox", exact: true }),
@@ -752,13 +752,13 @@ test("makes active operational work primary and preserves the evidence boundary"
   ).toHaveCount(0);
 
   const itemButton = queue.getByRole("button", {
-    name: "Open CPU pressure on pve-main",
+    name: "Open pve-main · CPU pressure",
   });
   await itemButton.focus();
   await page.keyboard.press("Enter");
 
   const detailPanel = page.getByRole("complementary", {
-    name: "CPU pressure on pve-main",
+    name: "pve-main · CPU pressure",
   });
   await expect(detailPanel).toBeVisible();
   await expect(
@@ -799,7 +799,7 @@ test("makes active operational work primary and preserves the evidence boundary"
   ).toBeVisible();
   await expect(
     attentionList.getByRole("button", {
-      name: "Open CPU pressure on pve-main",
+      name: "Open pve-main · CPU pressure",
     }),
   ).toHaveCount(0);
 
@@ -828,12 +828,12 @@ test("puts the selected detail in view on a phone without page overflow", async 
   await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
   const itemButton = page.getByRole("button", {
-    name: "Open CPU pressure on pve-main",
+    name: "Open pve-main · CPU pressure",
   });
   await itemButton.click();
 
   const detailPanel = page.getByRole("complementary", {
-    name: "CPU pressure on pve-main",
+    name: "pve-main · CPU pressure",
   });
   await expect(detailPanel).toBeInViewport();
   await expect(itemButton).toBeHidden();
