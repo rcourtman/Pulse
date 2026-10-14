@@ -114,6 +114,10 @@ jobs:
           cache: 'npm'
           cache-dependency-path: tests/integration/package-lock.json
 
+      - name: Validate read-only auth renderer diagnostics
+        working-directory: tests/integration
+        run: node --test scripts/capture-auth-renderer.test.mjs
+
       - name: Validate telemetry schema version parity
         working-directory: tests/integration
         run: |
