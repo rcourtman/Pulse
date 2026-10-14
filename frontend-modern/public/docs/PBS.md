@@ -251,6 +251,12 @@ another machine does not prove that Pulse can reach PBS.
   openssl x509 -in /etc/proxmox-backup/proxy.pem -noout -fingerprint -sha256
   ```
 
+  For renewal, a fingerprint mismatch or contradictory saved pins, use the
+  [certificate-trust checks](TROUBLESHOOTING.md#proxmox-or-pbs-certificate-validation-failed)
+  before changing this connection. A saved leaf pin is a different trust
+  method from CA validation; do not disable verification or clear it simply
+  because a new certificate connects.
+
 - **Authentication/permissions:** test a datastore request, not just `/version`.
   Prepare a private header file on the machine running curl. Stop if preparation
   fails; an existing file is preserved, and symlinked or non-regular credential
