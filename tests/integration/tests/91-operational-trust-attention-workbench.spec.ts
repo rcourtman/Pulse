@@ -102,6 +102,9 @@ test.beforeEach(async ({ page }) => {
       }),
     });
   });
+  await page.route("**/api/alerts/active", async (route) => {
+    await route.fulfill({ json: [] });
+  });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(100);
   expect(pageErrors, "The Patrol shell raised a browser error").toEqual([]);
@@ -775,7 +778,7 @@ test("starts from the normal monitor shell and reaches the canonical attention q
 
 test("makes active operational work primary and preserves the evidence boundary", async ({
   page,
-}) => {
+}, testInfo) => {
   await mockAttention(page, "active");
   await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
@@ -821,6 +824,15 @@ test("makes active operational work primary and preserves the evidence boundary"
       "Open the node and verify which workload is consuming CPU before making changes.",
     ),
   ).toBeVisible();
+  const evidenceToggle = detailPanel
+    .locator("summary")
+    .filter({ hasText: "Evidence and history" });
+  await expect(evidenceToggle).toBeVisible();
+  await expect(
+    detailPanel.getByText("Two consecutive samples were above 90%."),
+  ).toBeHidden();
+  await evidenceToggle.focus();
+  await page.keyboard.press("Enter");
   await expect(
     detailPanel.getByText("Two consecutive samples were above 90%."),
   ).toBeVisible();
@@ -835,6 +847,10 @@ test("makes active operational work primary and preserves the evidence boundary"
   await expect(detailPanel.getByText("Job: Success")).toBeVisible();
   await expect(detailPanel.getByText("History: Complete")).toBeVisible();
   await expect(detailPanel.getByText("Observing to Open")).toBeVisible();
+  await testInfo.attach("Patrol evidence after keyboard disclosure", {
+    body: await detailPanel.screenshot(),
+    contentType: "image/png",
+  });
   await expect(page).toHaveURL(
     new RegExp(`attention=${encodeURIComponent(attentionID)}`),
   );
