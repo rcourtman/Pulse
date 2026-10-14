@@ -1,4 +1,4 @@
-import { For, type Component, type JSX } from 'solid-js';
+import { For, Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
@@ -73,10 +73,22 @@ export const DockerResourceNameCell: Component<{
   // Image rows name the resource by its reference, so a narrow cell keeps the
   // repository and tag visible instead of the shared registry prefix.
   imageReference?: boolean;
+  // A second line under the name, for a field the layout has no column for.
+  detail?: JSX.Element;
 }> = (props) => {
   const resolvedIndicator = (): StatusIndicator =>
     props.indicator ?? getSimpleStatusIndicator(props.resource.status);
   const name = () => dockerResourceName(props.resource);
+  const nameLink = () => (
+    <ResourceNameWithWebInterfaceLink
+      name={name()}
+      url={props.resource.customUrl}
+      class="min-w-0 max-[359px]:[&>a]:hidden"
+      nameClass={`${props.imageReference ? 'flex min-w-0' : 'truncate'} font-semibold text-base-content`}
+    >
+      {props.imageReference ? <DockerImageReferenceText reference={name()} /> : undefined}
+    </ResourceNameWithWebInterfaceLink>
+  );
 
   return (
     <TableCell class={getPlatformTableCellClassForKind('name')}>
@@ -88,14 +100,14 @@ export const DockerResourceNameCell: Component<{
           title={resolvedIndicator().label}
           ariaHidden
         />
-        <ResourceNameWithWebInterfaceLink
-          name={name()}
-          url={props.resource.customUrl}
-          class="min-w-0 max-[359px]:[&>a]:hidden"
-          nameClass={`${props.imageReference ? 'flex min-w-0' : 'truncate'} font-semibold text-base-content`}
-        >
-          {props.imageReference ? <DockerImageReferenceText reference={name()} /> : undefined}
-        </ResourceNameWithWebInterfaceLink>
+        <Show when={props.detail} fallback={nameLink()}>
+          {(detail) => (
+            <div class="flex min-w-0 flex-col">
+              {nameLink()}
+              {detail()}
+            </div>
+          )}
+        </Show>
       </div>
     </TableCell>
   );

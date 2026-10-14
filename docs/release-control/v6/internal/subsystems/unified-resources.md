@@ -7035,7 +7035,11 @@ health check, Exited (139) for a crash, Restarting, and muted Exited or Paused
 for a container stopped on purpose, with the full sentence on hover. A health
 status only counts for a running container, because Docker keeps the last one
 on a stopped container (#1724). The State column appears when any row in view
-has one of those states, including an unhealthy running container. From the
+has one of those states, including an unhealthy running container. A narrow
+table (under 360 pixels, most phones) has no State column: beside the shared
+40 percent name it cut "Unhealthy" to "Unhe…", so the same words read under
+the container name on every row, and a saved State sort waits for a layout
+that shows its header. From the
 compact layout up an Uptime column shows the current run (none for a stopped
 container, whose leftover uptime is not time spent running), which marks a
 container that just restarted; narrower rows keep it in the drawer. The Ports

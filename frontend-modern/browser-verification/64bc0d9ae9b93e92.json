@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "db80bddd77aafb3b5a54cd06259cab3035f6cf21",
+  "verified_at": "2026-10-14T15:02:51Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "d47e314de5289bf9c8442f1e27eef27de5af973b4cbed20739f0eeb2f2319ead",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx": "1de22fb2d6b0d07b8d6f03fd3b8b87e94a6e40728ddd382feae581bffea3f4c0",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "ca72cad76c73637c39e084276f75c3ece87eb0fec859819fbc716148a4725f6d"
+  },
+  "routes": [
+    "browser-tests/proxmox-docker-rows.html (production DockerContainersTable and ResourceDetailDrawer, Chromium and WebKit via Playwright 1.56.1 on pulse-dev)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 430,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 360,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "narrow phone table (320/360/390): no State column; Exited (139), Unhealthy and 999 restarts read whole under the container name, nothing clipped (old: Unhe..., Exite..., 999 r...)",
+    "narrow phone table: 100% CPU and memory pills and the Update control whole at 320 (old: 10..., Upda te)",
+    "phone layout (430): State column unchanged and whole",
+    "dark-mode WebKit 390 proof: state line tone colours readable",
+    "desktop 1440: State column unchanged",
+    "reviewed by Sol from before/after screenshots at 320/390/430; its shared-name-cell wrapper and hidden saved-sort points are fixed here"
+  ],
+  "interactions": [
+    "row expand by pointer (desktop) and tap (phone)",
+    "Containers fixture view selection at each width"
+  ]
+}

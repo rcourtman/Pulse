@@ -930,6 +930,94 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Healthy')).toHaveAttribute('data-docker-container-state', 'ok');
   });
 
+  it('puts the state words under the name where a phone row has no State column', () => {
+    // A narrow table cannot give "Unhealthy" its own column beside the 40%
+    // name, both metric pills and the Update control without cutting it.
+    setViewportWidth(320);
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', containerState: 'running' },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-api',
+            status: 'running',
+            docker: { hostname: 'edge-01', containerState: 'running', health: 'unhealthy' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.queryByRole('columnheader', { name: /State/ })).not.toBeInTheDocument();
+    const unhealthy = screen.getByText('Unhealthy');
+    expect(unhealthy).toHaveAttribute('data-docker-container-state', 'danger');
+    expect(unhealthy.closest('td')).toBe(screen.getByText('edge-api').closest('td'));
+    // Every row carries the line, so the rows keep one height.
+    expect(screen.getByText('Running').closest('td')).toBe(
+      screen.getByText('edge-web').closest('td'),
+    );
+  });
+
+  it('keeps a saved State sort only where the State column shows', () => {
+    window.localStorage.setItem('dockerContainersSortKey', 'state');
+    window.localStorage.setItem('dockerContainersSortDirection', 'asc');
+    const resources = [
+      makeResource({
+        id: 'container-1',
+        type: 'app-container',
+        name: 'edge-web',
+        status: 'running',
+        docker: { hostname: 'edge-01', containerState: 'running' },
+      }),
+      makeResource({
+        id: 'container-2',
+        type: 'app-container',
+        name: 'edge-api',
+        status: 'running',
+        docker: { hostname: 'edge-01', containerState: 'running', health: 'unhealthy' },
+      }),
+    ];
+    const rowOrder = () =>
+      [...document.querySelectorAll('[data-docker-container-row]')].map((row) =>
+        row.getAttribute('data-docker-container-row'),
+      );
+    const renderTable = () =>
+      renderInRouter(() => (
+        <DockerContainersTable
+          resources={resources}
+          emptyIcon={<span />}
+          emptyTitle="No containers"
+          emptyDescription="No containers"
+          showToolbar={false}
+        />
+      ));
+
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
+    renderTable();
+    // "Running" sorts before "Unhealthy" while the header shows the sort.
+    expect(rowOrder()).toEqual(['container-1', 'container-2']);
+    cleanup();
+
+    // A phone row has no State header to show the sort, so the rows keep the
+    // attention-first order and the failing container leads.
+    setViewportWidth(320);
+    renderTable();
+    expect(rowOrder()).toEqual(['container-2', 'container-1']);
+    expect(window.localStorage.getItem('dockerContainersSortKey')).toBe('state');
+  });
+
   it("shows each running container's uptime and none for a stopped one", () => {
     setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
 
