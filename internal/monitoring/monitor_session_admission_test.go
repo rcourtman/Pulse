@@ -78,7 +78,9 @@ func TestPBSInvalidSessionKeepsFirstPollBoundary(t *testing.T) {
 	project("invalid-session")
 
 	originalDelays := connRetryDelays
-	connRetryDelays = []time.Duration{time.Millisecond}
+	// Include the next missing-client check: otherwise the fixture falls
+	// into the production 60-second cap and ends the poll caller first.
+	connRetryDelays = []time.Duration{time.Millisecond, time.Millisecond}
 	defer func() { connRetryDelays = originalDelays }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -88,6 +90,9 @@ func TestPBSInvalidSessionKeepsFirstPollBoundary(t *testing.T) {
 	}
 	assertPBSConnectionProjection(t, monitor, instance.Name, false, "offline")
 	project("awaiting-poll")
+	if err := ctx.Err(); err != nil {
+		t.Fatalf("fixture ended its poll caller before first-poll proof: %v", err)
+	}
 	task, err := newPBSPollProvider().BuildPollTask(monitor, instance.Name)
 	if err != nil {
 		t.Fatal(err)
