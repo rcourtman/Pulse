@@ -16,7 +16,7 @@ func metadataStateFixture() *State {
 	rate := 64.0
 	s.PVEBackups = PVEBackups{
 		BackupTasks:    []BackupTask{{ID: "task", Instance: "pve", VMID: 100, Status: "OK"}},
-		StorageBackups: []StorageBackup{{ID: "archive", Instance: "pve", VMID: "100"}},
+		StorageBackups: []StorageBackup{{ID: "archive", Instance: "pve", VMID: 100}},
 		GuestSnapshots: []GuestSnapshot{{ID: "snapshot", Instance: "pve", VMID: 100}},
 	}
 	s.PBSBackups = []PBSBackup{{ID: "pbs", Instance: "pbs", Namespace: "team", VMID: "100", BackupTime: now,
