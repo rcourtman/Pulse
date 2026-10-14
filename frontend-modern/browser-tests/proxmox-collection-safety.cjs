@@ -34,7 +34,6 @@ const { chromium, webkit } = require('playwright');
   });
   const cases = [];
   const result = {
-    parent: 'd549d1b5d2c66bad4dab8973f5e9c0efa0b9b8e2',
     inputHashes,
     playwright: require('playwright/package.json').version,
     graph: {

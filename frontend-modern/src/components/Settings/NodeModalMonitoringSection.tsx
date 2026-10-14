@@ -86,7 +86,8 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
           <p class="text-sm text-muted">
             Choose which resources Pulse collects from this Proxmox VE connection. Guest details
             depend on guest-agent availability and permissions. Some readings can be unavailable or
-            temporarily deferred.
+            temporarily deferred. Disable collectors you do not need to reduce API load or trim
+            workload noise.
           </p>
           <InlineNotice tone="warning" role="note" aria-label="Guest-agent backup precaution">
             Guest-agent reads share the channel used by freeze-enabled backups. If a guest becomes
