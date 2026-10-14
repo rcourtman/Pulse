@@ -5478,7 +5478,10 @@ accessible value states each reading's average and range. Every history range
 picker (these drawers, storage disk and pool details) names its options through
 `formatHistoryRangeOptionLabel` in `historyChartModel.ts` ("1 hour", "24 hours",
 "7 days"), so one range is never shown as "24h", "24 hours" and "Last 24 hours"
-in three places. Any
+in three places. Below the `sm` breakpoint the chart panels stack, so a phone
+shows the first panel (Utilization) plus any panel carrying an active alert,
+and one full-width "Show <panel names>" button (`aria-expanded`, hidden from
+`sm` up) reveals the rest; wider layouts always show every panel. Any
 warning- or danger-toned detail row
 is lifted into a "Worth checking" section in front, whichever section owns it,
 so demotion never hides a reason a reading cannot be trusted. Guest
