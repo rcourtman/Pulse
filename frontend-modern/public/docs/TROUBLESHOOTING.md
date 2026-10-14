@@ -11,6 +11,9 @@ first.** Do not run Diagnostics, force guest-agent probes or repeat a backup to
 fill a report. A successful backup task or responsive console alone does not
 establish safe recovery.
 
+- **Not sure which version is affected:** distinguish the
+  [running server, reported agent and update target](TROUBLESHOOTING.md#find-the-running-server-and-agent-versions).
+  A helper's selected release or an agent's target is not its running version.
 - **Cannot sign in:** use [local password recovery](TROUBLESHOOTING.md#i-forgot-my-password)
   or [401 and login failures](TROUBLESHOOTING.md#cannot-login--401-unauthorized),
   according to the existing authentication method. Do not delete configuration
@@ -71,6 +74,46 @@ Review evidence locally before sharing it; unknown or unavailable details are
 valid, and a full configuration, journal or network export is not required.
 
 ## ⚡ Quick Fixes
+
+### Find the running server and agent versions
+
+Use the existing display on the affected Pulse installation; no update, restart
+or new diagnostic run is needed just to identify a version.
+
+- **Pulse server:** open **Settings → System → Updates** and read **Server
+  version**, not the available update. Keep any beta/RC suffix or development
+  build identity exactly as displayed. A newer server does not establish that
+  a separate agent has updated.
+- **Pulse Agent:** under **Settings → Infrastructure**, open the affected
+  connection and read **Pulse Agent version** alongside **Last seen**. An
+  **Update available** value such as `6.4.5 → 6.5.0` distinguishes the reported
+  version on the left from the target on the right. **Version target** alone
+  is not a reported agent version. If the connection is stale or offline, its
+  last report does not prove what is running now; keep that time and uncertainty.
+  For an API-only connection with no Pulse Agent, report the agent as **none**,
+  not the server's version. See [agent update behaviour](UNIFIED_AGENT.md#auto-update)
+  for the separate update path.
+- **Container image:** include the image tag or digest already available in
+  your deployment manager, separately from **Server version**. A tag such as
+  `latest` is mutable; a Compose file or selected image is not proof that a
+  running container was replaced. Keep the exact reference, including the
+  registry and preview suffix; do not substitute a GitHub release tag. A
+  `helm-chart-…` release identifies a chart, not a Pulse server archive or the
+  application version running in Kubernetes.
+
+Keep the **version at the failure**, an interrupted update's **intended version**
+and the **version observed after recovery** separate. Today's display does not
+reconstruct the failing run. If the helper selected a release but Pulse never
+started, give that attempted release and the public helper name or URL instead;
+installer output or a verified download signature does not prove completion.
+
+If a view is unavailable or you cannot access it with your existing permissions,
+write **unknown**; do not widen access, reinstall or re-enrol an agent, rerun an
+update or enable Debug to fill the gap. Do not share full container inspections,
+resolved Compose configuration, service environments or command lines: they can
+contain credentials. Existing version text or a locally reviewed, redacted
+excerpt is enough. Add it to the [existing report](#-getting-help); information
+already supplied does not need to be collected again.
 
 ### I forgot my password
 
@@ -1882,8 +1925,9 @@ If you're still stuck:
    exact error. Do not repeat an update, outage or notification storm merely to
    reproduce it. A failed update banner does not prove the action left the
    target unchanged; check its current state before another attempt.
-2. **Identify the affected version**: give the running Pulse and relevant agent
-   versions, not just the version before an upgrade. For Docker, include the
+2. **Identify the affected version**: distinguish the
+   [running server, reported agent and update target](#find-the-running-server-and-agent-versions),
+   not just the version before an upgrade. For Docker, include the
    running image tag or digest. If installation never started Pulse, give the
    attempted release and public installer/helper source, or say "unknown".
 3. **Choose relevant, safe evidence**: use existing logs, errors or observations
