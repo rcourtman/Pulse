@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "f49cbaec62762516a54c8a71d6c67dc112151315",
+  "verified_at": "2026-10-14T09:24:51.433Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/GitHubStarBanner.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/GitHubStarBanner.tsx": "e8c7b043bacdadcdf9d5353f0f71d4c692efa381c01804a15ec0957c5d266e99"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 800,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 740
+    }
+  ],
+  "states": [
+    "First return on a later connected day, light and dark themes",
+    "First connected day and same-day reload without a prompt",
+    "Previously shown and permanently dismissed prompts",
+    "Competing release notice owns the session",
+    "Scripted empty, loading and unavailable infrastructure states",
+    "Command palette open and closed after a visible prompt"
+  ],
+  "interactions": [
+    "Inspect actual card pixels, copy, colour, wrapping, focus outlines and navigation clearance at every width in both themes",
+    "Hover and focus both actions, traverse with Tab and verify 44px phone touch targets",
+    "Outside click and Escape retain the non-modal prompt",
+    "Activate permanent dismissal with the keyboard and reload",
+    "Activate the star action using desktop keyboard and phone touch, verify the exact repository URL in a tab without an opener, then reload and confirm permanent dismissal",
+    "Open the command palette with Control+K from a persistent shell control, inspect the settled panel on desktop and phone, close with Escape and verify focus return while the prompt remains suppressed"
+  ],
+  "command": "Playwright Chromium against the production frontend preview on pulse-dev, proxying a task-owned mock backend compiled from the matching source.",
+  "notes": "Twenty source-bound browser scenarios passed. The settled command-palette pixels and dismissal were separately repeated at 1440px and 390px. Default prompt pixels were inspected at all four widths in light and dark themes. Transport and engagement fixtures do not change backend settings. The frontend content digest matches the final working tree."
+}
