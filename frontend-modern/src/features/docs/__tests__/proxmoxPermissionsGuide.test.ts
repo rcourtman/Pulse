@@ -121,4 +121,49 @@ describe('shipped Proxmox permission diagnosis', () => {
       );
     }
   });
+
+  it('keeps Linux memory-file privileges separate from Windows filesystem access', () => {
+    const article = renderGuide('VM_DISK_MONITORING');
+    const row = [...article.querySelectorAll('tr')].find((element) =>
+      prose(element as HTMLElement).startsWith('Reading Linux guest memory'),
+    );
+    expect(prose(row as HTMLElement)).toContain('/proc/meminfo');
+    expect(prose(row as HTMLElement)).toContain('VM.GuestAgent.FileRead');
+    expect(prose(article)).toContain('Windows has no /proc/meminfo');
+    expect(prose(article)).toContain(
+      'not evidence that Windows filesystem collection needs VM.GuestAgent.FileRead',
+    );
+    expect(
+      article.querySelector('a[href="/docs/VM_DISK_MONITORING#windows-readings-after-a-pulse-restart"]'),
+    ).not.toBeNull();
+    expect(article.querySelector('#windows-readings-after-a-pulse-restart')).not.toBeNull();
+  });
+
+  it('explains the Windows restart state without diagnosing agent failure or recovery', () => {
+    const content = section(renderGuide('VM_DISK_MONITORING'), 'windows-readings-after-a-pulse-restart');
+    const text = prose(content);
+    expect(text).toContain('agent-cooldown');
+    expect(text).toContain("describes Pulse's deferred collection");
+    expect(text).toContain('not a stopped Windows service or proof that the guest is frozen');
+    expect(text).toContain('An existing HTTP 500 for that file alone does not establish why');
+    expect(text).toContain('not confirmation that QEMU Guest Agent reads recovered');
+    expect(text).toContain('not proof that every volume or History recovered');
+    expect(content.querySelector('pre')).toBeNull();
+  });
+
+  it('offers existing Windows or agent readings without new probes, privilege or state churn', () => {
+    const content = section(renderGuide('VM_DISK_MONITORING'), 'windows-readings-after-a-pulse-restart');
+    const text = prose(content);
+    expect(text).toContain("Windows' own filesystem view");
+    expect(text).toContain('same guest identity, filesystem and observation time');
+    expect(text).toContain('do not grant more privileges');
+    expect(text).toContain('Do not repeat the restart, run Diagnostics or guest-agent probes');
+    expect(text).toContain('clear a cooldown, or install, remove or restart either agent');
+    expect(text).toContain('do not collect them again');
+    expect(text).toContain('these interim views do not prove thaw or successful writes');
+    for (const fragment of ['use-existing-machines-readings-without-changing-the-guest', 'backup-safety']) {
+      expect(content.querySelector(`a[href="/docs/VM_DISK_MONITORING#${fragment}"]`)).not.toBeNull();
+      expect(renderGuide('VM_DISK_MONITORING').querySelector(`#${fragment}`)).not.toBeNull();
+    }
+  });
 });

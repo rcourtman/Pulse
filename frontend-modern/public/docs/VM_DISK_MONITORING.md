@@ -303,7 +303,13 @@ guest incidents. Table filters and alert suppression do not stop API polling.
 | Collection | Proxmox VE 9+ | Proxmox VE 8 |
 | --- | --- | --- |
 | Filesystem usage and guest information | `VM.GuestAgent.Audit` | `VM.Monitor` |
-| Reading guest memory via `/proc/meminfo` | Also `VM.GuestAgent.FileRead` | `VM.Monitor` |
+| Reading Linux guest memory via `/proc/meminfo` | Also `VM.GuestAgent.FileRead` | `VM.Monitor` |
+
+Windows has no `/proc/meminfo`. A failure reading that Linux path is not evidence
+that Windows filesystem collection needs `VM.GuestAgent.FileRead` or that the
+guest agent is stopped. Keep memory-file access separate from filesystem access;
+see [Windows readings after a Pulse restart](#windows-readings-after-a-pulse-restart)
+before changing permissions or services.
 
 Do not grant Administrator or guest execution/write permissions to diagnose a
 missing disk value. The built-in `PVEAuditor` role cannot be modified; use a
@@ -376,6 +382,31 @@ agent configuration and guest-local service through your normal console. Use
 supported QEMU Guest Agent. The Linux package name is not a Windows or Android
 installation instruction. If no supported agent is available, use the guest's
 own filesystem tools; missing Pulse usage is unknown, not zero.
+
+### Windows readings after a Pulse restart
+
+If Windows disks become **Unavailable** after Pulse restarts, a
+**guest reads paused** or `agent-cooldown` explanation describes Pulse's deferred
+collection, not a stopped Windows service or proof that the guest is frozen.
+Windows does not provide the Linux `/proc/meminfo` file. An existing HTTP 500
+for that file alone does not establish why filesystem reads are missing; do not
+grant more privileges or change the guest's file-read policy to make it succeed.
+
+Keep the original sequence: which readings worked before the Pulse restart,
+the existing error and times, and whether normal Windows use remained responsive.
+A later working reading from a Pulse Agent is a different collection path, not
+confirmation that QEMU Guest Agent reads recovered. For capacity decisions, use
+Windows' own filesystem view or
+[current readings from an already installed Pulse Agent](#use-existing-machines-readings-without-changing-the-guest).
+Keep the same guest identity, filesystem and observation time with the comparison.
+
+Do not repeat the restart, run Diagnostics or guest-agent probes, clear a
+cooldown, or install, remove or restart either agent just to diagnose this state.
+If those observations are already in your report, do not collect them again.
+An expired cooldown or a number returning is not proof that every volume or
+History recovered. If the workload is unresponsive or a backup is involved,
+[Backup safety](#backup-safety) takes precedence; these interim views do not
+prove thaw or successful writes.
 
 ### Use existing Machines readings without changing the guest
 
