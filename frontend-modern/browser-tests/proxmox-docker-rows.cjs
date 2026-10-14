@@ -622,10 +622,41 @@ const observations = (mode) => [
           const started = page.locator('[title="2026-10-03T11:30:00.123456Z"]');
           await started.waitFor({ state: 'attached' });
           assert.match(await started.innerText(), /ago/);
-          await page
+          const taskState = page
             .getByRole('region', { name: 'Swarm tasks' })
-            .getByTitle('running', { exact: true })
-            .waitFor();
+            .locator('[data-docker-task-state]');
+          await taskState.waitFor({ state: 'attached' });
+          // Current reads the task dot's own word; Docker's token stays on hover.
+          assert.equal(await taskState.textContent(), 'Running');
+          assert.equal(await taskState.getAttribute('title'), 'running');
+          // The service dot names the rollout, and the cells behind its verdict
+          // read in its amber: the Update words and the short Running count.
+          const serviceRow = page.locator('[data-docker-service-row="web-service"]');
+          const amber = (colour) => {
+            const [r, g, b] = colour.match(/\d+/g).map(Number);
+            return r > 150 && g > 70 && b < 80;
+          };
+          const colourOf = (locator) =>
+            locator.evaluate((el) =>
+              getComputedStyle(el).backgroundColor === 'rgba(0, 0, 0, 0)'
+                ? getComputedStyle(el).color
+                : getComputedStyle(el).backgroundColor,
+            );
+          const dot = serviceRow.locator('[title="Rolling back"]').first();
+          await dot.waitFor();
+          const running = serviceRow.locator('[data-docker-service-running="warning"]');
+          // A phone hides Desired, so the count reads out of what.
+          assert.equal(
+            (await running.innerText()).replace(/\s+/g, ''),
+            width === 390 ? '2/4' : '2',
+          );
+          for (const colour of [
+            await colourOf(dot),
+            await colourOf(state),
+            await colourOf(serviceRow.locator('[data-docker-service-running="warning"]')),
+          ]) {
+            assert.ok(amber(colour), colour);
+          }
         },
       );
       await capture('swarm');

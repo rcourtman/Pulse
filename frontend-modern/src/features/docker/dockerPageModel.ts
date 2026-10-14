@@ -178,17 +178,37 @@ export function mapDockerContainerStatus(resource: Resource): StatusIndicator {
   return { variant: 'muted', label: titleCase(state) };
 }
 
-export function mapDockerServiceStatus(resource: Resource): StatusIndicator {
+// Docker's update states that leave a service mid-change: an update paused on
+// a failure, a rollback under way, or a rollback that itself paused.
+const DOCKER_SERVICE_UPDATE_ATTENTION: Record<string, string> = {
+  paused: 'Update paused',
+  rollbackstarted: 'Rolling back',
+  rollbackpaused: 'Rollback paused',
+};
+
+// The service's update verdict, when its update state needs a look.
+export const dockerServiceUpdateAttention = (resource: Resource): StatusIndicator | undefined => {
+  const label =
+    DOCKER_SERVICE_UPDATE_ATTENTION[normalizeDockerToken(resource.docker?.serviceUpdate?.state)];
+  return label ? { variant: 'warning', label } : undefined;
+};
+
+// The service's replica verdict alone: what its Running count says.
+export const dockerServiceReplicaStatus = (resource: Resource): StatusIndicator => {
   const desired = resource.docker?.desiredTasks ?? 0;
   const running = resource.docker?.runningTasks ?? 0;
-  const updateState = normalizeDockerToken(resource.docker?.serviceUpdate?.state);
-  if (updateState === 'paused' || updateState === 'rollbackstarted') {
-    return { variant: 'warning', label: 'Rollback paused' };
-  }
   if (desired <= 0) return { variant: 'muted', label: 'Scaled to 0' };
   if (running >= desired) return { variant: 'success', label: 'Healthy' };
   if (running <= 0) return { variant: 'danger', label: `0 / ${desired} running` };
   return { variant: 'warning', label: `${running} / ${desired} running` };
+};
+
+// The row dot: no replicas running outranks a rollout in progress, which
+// outranks a partial count.
+export function mapDockerServiceStatus(resource: Resource): StatusIndicator {
+  const replicas = dockerServiceReplicaStatus(resource);
+  if (replicas.variant === 'danger') return replicas;
+  return dockerServiceUpdateAttention(resource) ?? replicas;
 }
 
 export function mapDockerTaskStatus(resource: Resource): StatusIndicator {
