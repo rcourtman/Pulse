@@ -740,6 +740,15 @@ and hide the resource identity. Backup, snapshot and offline controls keep their
 separate configuration contracts. Global default cells never route backup or
 snapshot into numeric thresholds. Host cards preserve the canonical cluster
 context shown by table rows, so identically named hosts remain distinguishable.
+Every threshold control names itself for assistive tech, because moving
+between form controls reads a control's own name, not its column header:
+the editor's input is "<column> default" or "<column> for <resource>" and its
+On/Off badge "... alerts: On"; offline, backup and snapshot toggles and the
+three-state Warn / Crit / Off control are "Offline alerts for <resource>: Warn";
+display-mode value buttons are "Edit <column> threshold for <resource>: <value>";
+and the alert switches are "Alerts for <resource>". Each name ends with the
+control's visible word or value so voice control can say what is on screen
+(WCAG 2.5.3). `ResourceTable.test.tsx` pins the names in both layouts.
 
 A per-metric threshold is off whenever its trigger is `<= 0`. That boundary is
 engine truth (`internal/alerts/canonical_metric.go`,

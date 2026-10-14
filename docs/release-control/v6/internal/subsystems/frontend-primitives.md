@@ -5702,6 +5702,10 @@ gating and click runtime, and
 label/title fallback policy, and status-badge class selection. Future status
 badge work should extend those owners instead of pushing label/title policy or
 disabled click handling back into the shell.
+A badge given `ariaLabel` is named "<ariaLabel>: <visible label>" through
+`getStatusBadgeAriaLabel`, so pages of alike On/Off badges say what each
+switches while keeping the visible word in the name (WCAG 2.5.3); without it
+the visible label remains the name.
 Read-only health/state badges are a separate shared primitive.
 `frontend-modern/src/components/shared/StatusIndicatorBadge.tsx` owns
 status-to-tone mapping, optional dot wiring, sizing, shape, and label
