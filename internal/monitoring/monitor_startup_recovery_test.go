@@ -136,10 +136,11 @@ func TestPBSStartupRecoveryKeepsTrustAndFirstPollBoundary(t *testing.T) {
 	instance := config.PBSInstance{Name: "startup-pbs", Host: server.URL, User: "fixture@pbs", Password: "fixture-password", VerifySSL: true, Fingerprint: hex.EncodeToString(pin[:]), MonitorDatastores: true}
 	m := newPBSHealthAuthorityMonitor([]config.PBSInstance{instance})
 	project := func(phase string) {
+		snapshot, scope := m.currentStateWithScope()
 		wire, err := json.Marshal(struct {
 			Phase string               `json:"phase"`
 			State models.StateFrontend `json:"state"`
-		}{phase, m.buildBroadcastFrontendStateFromSnapshot(m.state.GetSnapshot(), mockModeScope{})})
+		}{phase, m.buildBroadcastFrontendStateFromSnapshot(snapshot, scope)})
 		if err != nil {
 			t.Fatal(err)
 		}
