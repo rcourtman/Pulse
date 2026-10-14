@@ -93,7 +93,7 @@ func pveClusterInstancesHaveFingerprintConflict(a, b PVEInstance) bool {
 	if ProxmoxFingerprintsConflict(a.Fingerprint, b.Fingerprint) {
 		return true
 	}
-	indexEndpoints := func(instance PVEInstance) (byNode, byKey map[string]string) {
+	indexEndpoints := func(instance PVEInstance) (byNode, byKey map[string]string, ambiguous bool) {
 		byNode = make(map[string]string)
 		byKey = make(map[string]string)
 		for _, endpoint := range instance.ClusterEndpoints {
@@ -102,16 +102,28 @@ func pveClusterInstancesHaveFingerprintConflict(a, b PVEInstance) bool {
 				continue
 			}
 			if node := strings.TrimSpace(strings.ToLower(endpoint.NodeName)); node != "" {
+				if previous, ok := byNode[node]; ok && previous != fp {
+					ambiguous = true
+				}
 				byNode[node] = fp
 			}
 			for _, key := range clusterEndpointIdentityKeys(endpoint) {
+				if previous, ok := byKey[key]; ok && previous != fp {
+					ambiguous = true
+				}
 				byKey[key] = fp
 			}
 		}
-		return byNode, byKey
+		return byNode, byKey, ambiguous
 	}
-	aByNode, aByKey := indexEndpoints(a)
-	bByNode, bByKey := indexEndpoints(b)
+	aByNode, aByKey, aAmbiguous := indexEndpoints(a)
+	bByNode, bByKey, bAmbiguous := indexEndpoints(b)
+	// Consolidation must not erase a contradiction within either saved view
+	// before the runtime trust resolver can refuse it. A later repeated row
+	// matching the other view is not independent reconciliation of saved trust.
+	if aAmbiguous || bAmbiguous {
+		return true
+	}
 	for node, fp := range bByNode {
 		if existing, ok := aByNode[node]; ok && existing != fp {
 			return true

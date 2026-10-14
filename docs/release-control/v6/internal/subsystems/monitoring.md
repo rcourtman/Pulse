@@ -59,6 +59,10 @@ clients keep monitoring; topology changes wait for independently reconciled
 configuration. `TestClusterPinConflictsSurviveMonitorLifecycle` exercises the
 actual initialisation, missing-client retry and refresh/rebuild paths in all
 three auth modes and both layouts, including normal refresh after reconciliation.
+Saved-view consolidation also refuses a view with internal pin contradictions,
+so map indexing cannot hide an earlier contradictory row before monitoring
+starts. `TestConsolidatePVEInstancesRetainsInternallyConflictingPins` covers
+both merge orders, repeated rows, same-node/address evidence and agreeing formats.
 This establishes source/consumer behaviour, not native recovery or attribution
 of a guest, PBS or certificate report.
 

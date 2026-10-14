@@ -202,7 +202,7 @@ func TestClusterPinConflictsSurviveMonitorLifecycle(t *testing.T) {
 					} else {
 						inst.User, inst.Password = "fixture@pam", "fixture-password"
 					}
-					m := &Monitor{config: &config.Config{PVEInstances: []config.PVEInstance{inst}, ConnectionTimeout: 2 * time.Second}, pveClients: make(map[string]PVEClientInterface)}
+					m := &Monitor{config: &config.Config{PVEInstances: []config.PVEInstance{inst.DeepCopy()}, ConnectionTimeout: 2 * time.Second}, pveClients: make(map[string]PVEClientInterface)}
 					switch route {
 					case "init":
 						m.initPVEClients(m.config)
