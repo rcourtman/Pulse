@@ -1124,7 +1124,12 @@ its dot's colour through `getPlatformStatusTextToneClass`: a Pod's Status
 count while replicas are short, a controller's Exceptions. The Pods Status
 column takes 12 percent so a failure reason such as CrashLoopBackOff reads
 whole, and a phone, which hides that column, reads the same words under the
-Pod name. StatefulSet, DaemonSet, Job, and CronJob rows
+Pod name. The TrueNAS and vSphere tables follow the same rule: a TrueNAS app,
+which has no State column, reads its state under its name at every width
+("Crashed" amber, Running plain); a share's State ("Disabled" red, "Attention"
+amber) and a vSphere activity's State ("Error" red) take the dot's tone; and
+where a phone hides a State column (shares, services, VMs, vSphere activity)
+the state, with any note such as "should be running", reads under the name. StatefulSet, DaemonSet, Job, and CronJob rows
 render through
 `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx` and must
 preserve the Kubernetes API status semantics for desired replica/node/job

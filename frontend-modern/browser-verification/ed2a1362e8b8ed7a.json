@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "477a81e603792a131474e7c2f6b82ef197a99c11",
+  "verified_at": "2026-10-14T20:30:40Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx": "9440c10b1dcefe09d77d78d2dfbcbddfd07fcfd95c13053eb8c553607429f71d",
+    "frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx": "9efe5c1931c60f4c0a634ddf55e75fa50c7d9fa8a3e4cfdaae0178d6da4857ee",
+    "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx": "371903d7b9fe96c51284398efffe9f54735c749b6d7fe0fa88318995e8dee226",
+    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx": "3884cbef89eabec3fec2d8fd936bc6c2ba34815d995f9400320aafc7b04ccf59",
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx": "95de736ff751cc8c00125196f7681ac47776989b020a9c0308f836a88bab0fc0"
+  },
+  "routes": [
+    "browser-tests/truenas-vsphere-status-rows.html (production TrueNASAppsTable, TrueNASNetworkSharesTable, TrueNASServicesTable and VsphereActivityTable, Chromium and WebKit via Playwright 1.56.1 on pulse-dev, tree built on origin/main)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "TrueNAS app CRASHED: \"Crashed\" amber under the name beside its amber dot (old: no state words, hover only); running app \"Running\" plain",
+    "TrueNAS share disabled: State \"Disabled\" red; locked: \"Attention\" amber (old: plain)",
+    "TrueNAS service stopped while set to start at boot: red \"should be running\" note on desktop; on the phone \"Stopped \u00b7 should be running\" under the name (old: dot only)",
+    "vSphere task error: State \"Error\" red; phone reads it under the resource name",
+    "phone (dark WebKit) state lines for apps, shares, services and activity",
+    "reviewed by Sol from desktop and phone screenshots; its Apps fallback and Services/VMs phone-line points applied"
+  ],
+  "interactions": [
+    "page load at both widths"
+  ]
+}

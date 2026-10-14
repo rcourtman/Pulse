@@ -104,7 +104,15 @@ describe('VsphereActivityTable', () => {
     expect(
       screen.getByTitle('Reconfigure virtual machine · Permission denied while reconfiguring VM'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Error')).toBeInTheDocument();
+    // The State column and the phone line under the name both read "Error",
+    // in the red its dot shows.
+    const state = document.querySelector('[data-vsphere-activity-state="danger"]');
+    expect(state).toHaveTextContent('Error');
+    expect(state).toHaveClass('text-red-600');
+    expect(document.querySelector('[data-vsphere-activity-state-phone="danger"]')).toHaveClass(
+      'platform-table-phone-only-inline',
+      'text-red-600',
+    );
     expect(screen.getByText('Virtual machine warehouse-api-01 was powered on')).toBeInTheDocument();
     expect(screen.queryByText('VmPoweredOnEvent')).not.toBeInTheDocument();
     expect(screen.getByText('administrator@vsphere.local')).toBeInTheDocument();
