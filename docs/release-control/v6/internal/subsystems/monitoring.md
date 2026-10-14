@@ -4263,6 +4263,23 @@ and read-state preservation.
 
 ### PBS health is one completed-poll outcome
 
+Configured, active PVE/PBS connections whose initial client could not be
+constructed remain eligible for startup recovery for the monitor's lifetime.
+The existing 5/10/20/40/60-second backoff stays capped at sixty seconds; a
+five-minute startup window must not permanently strand a missing client
+outside the providers' ordinary polling lists. Cancellation interrupts the
+wait, paused instances are excluded, and constructor retries preserve the
+configured authority, authentication and TLS trust. This does not add a PMG
+retry route or change existing clients' request/renewal policies.
+`TestConnectionRetrySurvivesLongStartupOutage` advances the real timers with
+Go's virtual clock through a six-minute outage and checks every attempt's
+cadence and unchanged connection inputs. The cancellation and pause controls
+pin lifecycle/exclusion behaviour. `TestPBSStartupRecoveryKeepsTrustAndFirstPollBoundary`
+exercises the real pinned-TLS PBS constructor, ordinary scheduler task and
+broadcast producer: a recreated client still has no successful poll evidence,
+an accepted first poll restores measured host/datastore values, and a wrong
+saved pin remains refused without password-bearing HTTP or pin replacement.
+
 PBS client construction is transport setup, not connectivity evidence. Initial
 client creation and retry recreation therefore remain pending until a poll
 completes; client-construction failures publish a failed scheduler result

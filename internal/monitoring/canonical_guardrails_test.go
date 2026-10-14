@@ -118,6 +118,15 @@ func TestPBSClientConstructionCannotPublishConnectedHealth(t *testing.T) {
 	}
 }
 
+// Keep the registered monitoring proof connected to executable lifecycle,
+// trust and actual producer controls, not a source-text expiry assertion.
+func TestStartupConnectionRecoveryCanonicalContract(t *testing.T) {
+	t.Run("late-recovery", TestConnectionRetrySurvivesLongStartupOutage)
+	t.Run("cancel-capped-wait", TestConnectionRetryLongOutageStopsOnCancellation)
+	t.Run("paused-exclusions", TestConnectionRetryDoesNotResumePausedConnections)
+	t.Run("pbs-trust-and-first-poll", TestPBSStartupRecoveryKeepsTrustAndFirstPollBoundary)
+}
+
 func TestMultiTenantMonitorListOrganizationIDsFallsBackToDefault(t *testing.T) {
 	got, err := (&MultiTenantMonitor{}).ListOrganizationIDs()
 	if err != nil {
