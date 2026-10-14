@@ -1,7 +1,7 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "62fc9f4c18c2818f546e63b9af39bea6ce646abb",
+  "base_sha": "5155622e065a5924c101d20a78a9b3b37803293d",
   "content_sha256": {
     "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "819d1d83a27f259a9444f041312996c5b09af889843ff656c040df768b375d4e",
     "frontend-modern/src/components/Workloads/GuestRow.tsx": "48019a6304c7e9da3c51f90521aa704e62c47b97b657b7072be28ec776f2b8e9",
@@ -53,6 +53,6 @@
     "Playwright 1.56.1 / desktop 141.0.7390.37",
     "Playwright 1.56.1 / phone 26.0"
   ],
-  "verified_at": "2026-10-14T19:48:48.898825+00:00",
+  "verified_at": "2026-10-14T19:48:48.898825Z",
   "scope": "Synthetic Resources REST metrics through production useWorkloads, selection, GuestRow/GuestDrawer/History/CSS. Fixture selection controls, local empty History and supporting APIs, not full-app authentication, native measurements or recovery. Source-owned deferrals, stored History gaps, native guest/thaw/write recovery, strict authentication, installed use and release availability are not established."
 }
