@@ -416,6 +416,58 @@ async function mockAttention(
       body: "[]",
     });
   });
+  // Activity consumes the weekly digest before rendering its other panels.
+  // The catch-all {} response is not a valid successful digest: keep this
+  // attention fixture's empty history explicit without inventing verified work.
+  await page.route("**/api/ai/patrol/digest?*", async (route) => {
+    await route.fulfill({
+      json: {
+        generated_at: evaluatedAt,
+        window: {
+          start: firstObservedAt,
+          end: evaluatedAt,
+          days: 7,
+          history_complete: true,
+        },
+        mode: "monitor",
+        runs: {
+          total: 0,
+          scheduled: 0,
+          event_triggered: 0,
+          manual: 0,
+          failed: 0,
+          checks: 0,
+          resources_covered: 0,
+        },
+        findings: {
+          new: 0,
+          open_by_severity: { critical: 0, warning: 0, watch: 0, info: 0 },
+          resolved: 0,
+          auto_resolved: 0,
+          dismissed: 0,
+          suppressed: 0,
+        },
+        investigations: { total: 0, by_outcome: {} },
+        actions: {
+          proposed: 0,
+          approved: 0,
+          rejected: 0,
+          executed: 0,
+          verified: 0,
+          failed: 0,
+          pending: 0,
+        },
+        alerts: { reviewed: 0 },
+        spend: {
+          estimated_usd: 0,
+          pricing_known: true,
+          input_tokens: 0,
+          output_tokens: 0,
+          calls: 0,
+        },
+      },
+    });
+  });
   await page.route("**/api/ai/patrol/autonomy", async (route) => {
     await route.fulfill({
       status: 200,
