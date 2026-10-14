@@ -7688,8 +7688,22 @@ publication ownership or grace-period rules.
 `guest_inventory_response_test.go` covers complete-body and all-or-nothing
 admission on all three real HTTP readers; `io_counters_test.go` covers
 scoped-empty, extended fields, counter presence and receipt-time controls.
-`guest_inventory_admission_test.go` covers actual efficient/fallback collection,
+`diagnostic_snapshots_test.go` covers actual efficient/fallback collection,
 owned publication, retained observation times, breach/History/template
 continuity, independent-connection preservation and normal recovery/removal.
 These controlled source proofs do not establish native thaw/restart recovery,
 installed trust, report attribution or release availability.
+
+Failed-node retention selects canonical guest membership but takes the unchanged
+complete tuple from that connection's last accepted producer state. Enrichment's
+partial previous-state projection is not an observation: it must not turn an
+unavailable/retained memory reading into zero, lose CPU/disk usage or change the
+original in-guest collection state. A node-scoped detached snapshot copies only
+selected guests, not unrelated host disks or Kubernetes state. The existing
+canonical/enrichment path remains the fallback when no accepted source tuple
+exists; linked-agent evidence is never promoted to Proxmox ownership. The
+same publication owner still admits or withdraws the eventual generation.
+`proxmox_guest_observations_test.go` checks scope, original memory provenance,
+CPU/disk/read time and nested detachment, alongside the end-to-end admission
+controls above. The first complete admission proof exposed the former partial
+retention and is retained as failed evidence, not weakened into acceptance.

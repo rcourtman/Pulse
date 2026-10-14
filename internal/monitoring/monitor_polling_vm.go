@@ -105,12 +105,9 @@ func (m *Monitor) collectVMsWithNodes(ctx context.Context, instanceName string, 
 
 	preservedVMs := 0
 	if len(failedNodeNames) > 0 {
-		for _, vm := range prevGuests.vms {
-			if _, failed := failedNodeNames[vm.Node]; failed {
-				allVMs = append(allVMs, vm)
-				preservedVMs++
-			}
-		}
+		retained, _ := m.retainedGuestsForFailedNodes(instanceName, failedNodeNames, prevGuests)
+		allVMs = append(allVMs, retained...)
+		preservedVMs = len(retained)
 	}
 	if preservedVMs > 0 {
 		log.Warn().
