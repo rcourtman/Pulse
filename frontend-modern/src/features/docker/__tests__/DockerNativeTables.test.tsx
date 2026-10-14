@@ -1776,6 +1776,10 @@ describe('Docker native tables', () => {
       ),
     ).toBeInTheDocument();
 
+    // The network's state counts every container the Attention filter holds,
+    // the restarting warning as well as the unhealthy one.
+    expect(screen.getAllByText('2 need attention').length).toBeGreaterThan(0);
+
     fireEvent.click(document.querySelector('[data-docker-network-row="network-dense"]')!);
 
     const detail = within(
@@ -1792,17 +1796,31 @@ describe('Docker native tables', () => {
     expect(detail.getByText('Show first 24')).toBeInTheDocument();
 
     fireEvent.click(detail.getByRole('button', { name: /^Attention, \d+$/ }));
-    expect(detail.getByText('2 containers of 30 containers')).toBeInTheDocument();
+    expect(detail.getAllByText('2 of 30 containers').length).toBeGreaterThan(0);
     expect(detail.getByText('api-unhealthy')).toBeInTheDocument();
     expect(detail.getByText('api-restarting')).toBeInTheDocument();
     expect(detail.queryByText('worker-29')).toBeNull();
+
+    // Running is Docker's run state: the unhealthy container still runs, so it
+    // matches Running too, listed under its Attention section.
+    fireEvent.click(detail.getByRole('button', { name: /^Running, 28$/ }));
+    expect(detail.getAllByText('28 of 30 containers').length).toBeGreaterThan(0);
+    expect(detail.getByText('api-unhealthy')).toBeInTheDocument();
+    expect(detail.getByText('Needs operator review')).toBeInTheDocument();
+    expect(detail.queryByText('api-restarting')).toBeNull();
+    expect(detail.queryByText('worker-stopped')).toBeNull();
+
+    fireEvent.click(detail.getByRole('button', { name: /^Other, 2$/ }));
+    expect(detail.getByText('api-restarting')).toBeInTheDocument();
+    expect(detail.getByText('worker-stopped')).toBeInTheDocument();
+    expect(detail.queryByText('api-unhealthy')).toBeNull();
 
     fireEvent.click(detail.getByRole('button', { name: /^All, \d+$/ }));
     fireEvent.input(detail.getByPlaceholderText('Search attached containers'), {
       target: { value: 'worker-29' },
     });
 
-    expect(detail.getByText('1 container of 30 containers')).toBeInTheDocument();
+    expect(detail.getAllByText('1 of 30 containers').length).toBeGreaterThan(0);
     expect(detail.getByText('worker-29')).toBeInTheDocument();
     expect(detail.getByText('0.0.0.0:8029->80/tcp')).toBeInTheDocument();
   });
