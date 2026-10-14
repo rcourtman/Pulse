@@ -74,14 +74,17 @@ describe('readable guest System evidence', () => {
     const [value, setValue] = createSignal(guest());
     render(() => <GuestDrawer guest={value()} onClose={() => {}} />);
     const drawer = screen.getByTestId('guest-technical-details');
-    expect(screen.queryByTestId('guest-drawer-facts')).not.toBeInTheDocument();
+    const facts = systemFacts();
+    expect(within(facts).getByText('2 vCPU')).toBeVisible();
     setValue({ ...value(), osName: 'Debian GNU/Linux', osVersion: '13.7 (trixie)' });
     expect(within(systemFacts()).getByText('Debian GNU/Linux • 13.7 (trixie)')).toBeVisible();
     setValue({ ...value(), osName: 'Ubuntu', osVersion: '24.04.3 LTS' });
     expect(within(systemFacts()).getByText('Ubuntu • 24.04.3 LTS')).toBeVisible();
     expect(screen.queryByText('Debian GNU/Linux • 13.7 (trixie)')).not.toBeInTheDocument();
     setValue({ ...value(), osName: '', osVersion: '' });
-    expect(screen.queryByTestId('guest-drawer-facts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ubuntu • 24.04.3 LTS')).not.toBeInTheDocument();
+    expect(within(systemFacts()).getByText('2 vCPU')).toBeVisible();
+    expect(systemFacts()).toBe(facts);
     expect(screen.getByTestId('guest-technical-details')).toBe(drawer);
   });
 

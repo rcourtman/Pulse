@@ -21,8 +21,7 @@ function section(): HTMLElement {
   return element;
 }
 
-const prose = (element: HTMLElement) =>
-  (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+const prose = (element: HTMLElement) => (element.textContent ?? '').replace(/\s+/g, ' ').trim();
 
 describe('missing API-only PBS help', () => {
   it('does not mistake connection polling health or an agent view for API recovery', () => {
@@ -37,7 +36,9 @@ describe('missing API-only PBS help', () => {
     const element = section();
     const rows = element.querySelectorAll('tbody tr');
     expect(rows).toHaveLength(3);
-    expect(prose(rows[0] as HTMLElement)).toContain('The PBS VM/LXC in Overview is a different resource');
+    expect(prose(rows[0] as HTMLElement)).toContain(
+      'The PBS VM/LXC in Overview is a different resource',
+    );
     expect(prose(rows[0] as HTMLElement)).toContain('If Proxmox navigation is absent too');
     expect(prose(rows[1] as HTMLElement)).toContain('PVE passthrough backups do not establish');
     expect(prose(rows[2] as HTMLElement)).toContain('not the same as a missing server');
@@ -51,14 +52,18 @@ describe('missing API-only PBS help', () => {
     expect(text).toContain('Use consistent aliases for private server names');
     expect(text).toContain('Existing error text or screenshots are enough to start');
     expect(text).toContain('do not run Diagnostics, enable Debug or collect a full response');
-    expect(text).toContain('Do not delete and re-add the connection, replace tokens, install an agent');
+    expect(text).toContain(
+      'Do not delete and re-add the connection, replace tokens, install an agent',
+    );
     expect(text).toContain('Keep certificate verification and existing access restrictions intact');
   });
 
   it('links the existing troubleshooting entry and safety/history guides to real headings', () => {
     const entry = render('TROUBLESHOOTING').querySelector(`a[href="/docs/PBS#${fragment}"]`);
     expect(entry).not.toBeNull();
-    expect(prose(entry!.closest('li')!)).toContain('installing an agent does not prove API recovery');
+    expect(prose(entry!.closest('li')!)).toContain(
+      'installing an agent does not prove API recovery',
+    );
     for (const link of section().querySelectorAll('a[href]')) {
       const href = link.getAttribute('href')!;
       const target = /^#(.+)$/.exec(href);

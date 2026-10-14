@@ -16,6 +16,7 @@ import {
   compactDetailSections,
   makeDetailRow,
   type DetailRow,
+  type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import type { Alert, Disk, HostGPUSensor, Node, Temperature } from '@/types/api';
@@ -411,42 +412,41 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     </Show>
   );
 
-  // Inventory may move into Details, but denied-update guidance stays visible
-  // and owned by the drawer so readings do not recreate an open help dialog.
-  const overviewSections = () => {
-    const primaryTemperature = props.node.cpuTemperature;
-    const updates = updateEvidence();
-    const temperatureClass =
-      typeof primaryTemperature === 'number'
-        ? getTemperatureTextClass(primaryTemperature, props.temperatureThresholds)
-        : '';
-    return compactDetailSections([
-      {
-        label: 'Summary',
-        rows: compactDetailRows([
-          makeDetailRow('Platform', versionLabel() ? `PVE ${versionLabel()}` : null),
-          makeDetailRow(
-            'Pulse coverage',
-            linkedAgentId() ? `Agent ${stripAgentPrefix(linkedAgentId())}` : 'PVE API only',
-            { wrap: true },
-          ),
-          updates
-            ? makeDetailRow('Updates', updates.value, {
-                tone: updates.tone,
-                title: updates.title,
-                wrap: true,
-              })
-            : null,
-          typeof primaryTemperature === 'number' &&
-          (temperatureClass.includes('yellow') || temperatureClass.includes('red'))
-            ? makeDetailRow('Temperature', formatTemperature(primaryTemperature), {
-                tone: temperatureClass.includes('red') ? 'danger' : 'warning',
-              })
-            : null,
-        ]),
-      },
-    ]);
+  // The drawer owns the interactive help across reading and age updates.
+  const summarySection: DetailSection = {
+    label: 'Summary',
+    get rows() {
+      const primaryTemperature = props.node.cpuTemperature;
+      const updates = updateEvidence();
+      const temperatureClass =
+        typeof primaryTemperature === 'number'
+          ? getTemperatureTextClass(primaryTemperature, props.temperatureThresholds)
+          : '';
+      return compactDetailRows([
+        makeDetailRow('Platform', versionLabel() ? `PVE ${versionLabel()}` : null),
+        makeDetailRow(
+          'Pulse coverage',
+          linkedAgentId() ? `Agent ${stripAgentPrefix(linkedAgentId())}` : 'PVE API only',
+          { wrap: true },
+        ),
+        updates
+          ? makeDetailRow('Updates', updates.value, {
+              tone: updates.tone,
+              title: updates.title,
+              wrap: true,
+            })
+          : null,
+        typeof primaryTemperature === 'number' &&
+        (temperatureClass.includes('yellow') || temperatureClass.includes('red'))
+          ? makeDetailRow('Temperature', formatTemperature(primaryTemperature), {
+              tone: temperatureClass.includes('red') ? 'danger' : 'warning',
+            })
+          : null,
+      ]);
+    },
   };
+
+  const overviewSections = () => [summarySection];
 
   const exceptionRows = createMemo(() =>
     collectDrawerExceptionRows([...overviewSections(), ...technicalSections()]),
