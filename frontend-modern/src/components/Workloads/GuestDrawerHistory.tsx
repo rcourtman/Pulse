@@ -22,6 +22,7 @@ import {
   formatHistoryChartTooltipValue,
   formatHistoryRangeOptionLabel,
   formatHistoryChartTimeLabel,
+  withoutRepeatedHistoryAxisLabels,
 } from '@/components/shared/historyChartModel';
 import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
@@ -382,6 +383,12 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       props.group.unit,
     ),
   );
+  // Top, middle and bottom gridline labels; a repeated middle one is blank.
+  const axisLabels = createMemo(() =>
+    withoutRepeatedHistoryAxisLabels(
+      [0, 0.5, 1].map((tick) => getAxisLabel(props.group.unit, tick, scale())),
+    ),
+  );
   const bounds = () => props.timeBounds;
   const hasStoredData = createMemo(() => observationTimes().length > 0 && bounds() !== null);
   const hoveredSeries = createMemo(() => {
@@ -567,13 +574,14 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         <For each={[0, 0.5, 1]}>
           {(tick) => (
             <span
+              data-history-axis-label
               // Centred on the SVG gridlines at y = 8, 41 and 74 of the 92-unit
               // viewBox (8.7%, 44.6%, 80.4%), so each label sits on its line.
               class={`pointer-events-none absolute left-0 w-8 -translate-y-1/2 text-right text-[10px] tabular-nums text-muted ${
                 tick === 0 ? 'top-[8.7%]' : tick === 0.5 ? 'top-[44.6%]' : 'top-[80.4%]'
               }`}
             >
-              {getAxisLabel(props.group.unit, tick, scale())}
+              {axisLabels()[tick === 0 ? 0 : tick === 0.5 ? 1 : 2]}
             </span>
           )}
         </For>

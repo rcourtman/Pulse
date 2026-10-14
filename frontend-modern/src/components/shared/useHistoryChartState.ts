@@ -18,6 +18,7 @@ import {
   getHistoryChartRefreshIntervalMs,
   getHistoryChartRightInset,
   getHistoryChartScale,
+  getHistoryChartTimeTickCount,
   getHistoryChartYAxisLabels,
   type HistoryChartProps,
   type HistoryChartHoverPoint,
@@ -244,8 +245,19 @@ export function useHistoryChartState(
     const mainColor = getHistoryChartDefaultColor(props.metric, props.color);
     const scale = getHistoryChartScale(points, props.unit);
     const yAxisTicks = getHistoryChartYAxisLabels(scale, props.unit);
-    const labelCount = 4;
-    const timeAxisTicks =
+    const timeTicks = (count: number) =>
+      Array.from({ length: count }, (_, index) => {
+        const timestamp =
+          points[0].timestamp +
+          ((points[points.length - 1].timestamp - points[0].timestamp) * index) / (count - 1);
+        return { timestamp, label: formatHistoryChartTimeLabel(timestamp, range()) };
+      });
+
+    ctx.font = '10px sans-serif';
+    chartLeftInset = getHistoryChartLeftInset(
+      yAxisTicks.map((tick) => ctx.measureText(tick.label).width),
+    );
+    let timeAxisTicks =
       points.length === 1
         ? [
             {
@@ -254,24 +266,23 @@ export function useHistoryChartState(
             },
           ]
         : points.length > 0
-          ? Array.from({ length: labelCount }, (_, index) => {
-              const timestamp =
-                points[0].timestamp +
-                ((points[points.length - 1].timestamp - points[0].timestamp) * index) /
-                  (labelCount - 1);
-              return { timestamp, label: formatHistoryChartTimeLabel(timestamp, range()) };
-            })
+          ? timeTicks(4)
           : [];
-
-    ctx.font = '10px sans-serif';
-    chartLeftInset = getHistoryChartLeftInset(
-      yAxisTicks.map((tick) => ctx.measureText(tick.label).width),
-    );
     chartRightInset = getHistoryChartRightInset(
       timeAxisTicks.length > 0
         ? ctx.measureText(timeAxisTicks[timeAxisTicks.length - 1].label).width
         : 0,
     );
+    // A narrow card fits fewer time labels: as many as fit without touching,
+    // down to the first and last time.
+    if (timeAxisTicks.length > 2) {
+      const count = getHistoryChartTimeTickCount(
+        width - chartLeftInset - chartRightInset,
+        Math.max(...timeAxisTicks.map((tick) => ctx.measureText(tick.label).width)),
+        timeAxisTicks.length,
+      );
+      if (count < timeAxisTicks.length) timeAxisTicks = timeTicks(count);
+    }
 
     ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;

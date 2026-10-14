@@ -116,6 +116,26 @@ const { chromium } = require('playwright');
       });
       // Disk charts poll every 10-30 seconds; the clock drives that here.
       await page.clock.install();
+      // Canvas text is not in the DOM: record each chart's drawn labels since
+      // its last clear, so the time axis can be checked for overlap.
+      await page.addInitScript(() => {
+        const proto = CanvasRenderingContext2D.prototype;
+        const clear = proto.clearRect;
+        const fill = proto.fillText;
+        proto.clearRect = function (...args) {
+          this.canvas.__labels = [];
+          return clear.apply(this, args);
+        };
+        proto.fillText = function (text, x, y, ...rest) {
+          (this.canvas.__labels ||= []).push({
+            text: String(text),
+            x,
+            width: this.measureText(String(text)).width,
+            time: this.textAlign === 'center' && this.textBaseline === 'bottom',
+          });
+          return fill.call(this, text, x, y, ...rest);
+        };
+      });
       await page.goto('http://127.0.0.1:5199/browser-tests/guest-storage-2263.html', {
         waitUntil: 'domcontentloaded',
         timeout: 120_000,
@@ -176,6 +196,28 @@ const { chromium } = require('playwright');
       // with no Overview/History tabs to switch between.
       assert.equal(await page.getByRole('tab').count(), 0);
       assert.equal(await page.getByTestId('disk-detail-history').isVisible(), true);
+      // Each chart's time labels stand apart, however narrow its card.
+      const timeLabels = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('canvas'), (canvas) => ({
+          chart: canvas.getAttribute('aria-label'),
+          width: canvas.clientWidth,
+          labels: (canvas.__labels || []).filter((label) => label.time),
+        })),
+      );
+      for (const chart of timeLabels) {
+        assert.ok(chart.labels.length >= 2, `${chart.chart} has its first and last time`);
+        const sorted = [...chart.labels].sort((a, b) => a.x - b.x);
+        for (let i = 1; i < sorted.length; i++) {
+          const gap = sorted[i].x - sorted[i - 1].x - (sorted[i].width + sorted[i - 1].width) / 2;
+          assert.ok(gap >= 4, `${chart.chart} time labels touch: ${JSON.stringify(sorted)}`);
+        }
+      }
+      console.log(
+        JSON.stringify({
+          width,
+          timeLabels: timeLabels.map((chart) => [chart.chart, chart.width, chart.labels.length]),
+        }),
+      );
       await page.locator('[data-testid="guest-physical-disk"] summary').click();
       await page.getByText('Reallocated Sectors').first().waitFor({ state: 'hidden' });
       assert.equal(

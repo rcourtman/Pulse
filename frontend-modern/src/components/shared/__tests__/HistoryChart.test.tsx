@@ -15,8 +15,11 @@ import type { HistoryChartState } from '@/components/shared/useHistoryChartState
 import { HistoryChart, HistoryChartHoverGroup } from '@/components/shared/HistoryChart';
 import {
   formatHistoryChartTooltipValue,
+  getHistoryChartTimeTickCount,
   getHistoryChartTooltipLayout,
+  getHistoryChartYAxisLabels,
   HISTORY_CHART_RANGES,
+  withoutRepeatedHistoryAxisLabels,
 } from '@/components/shared/historyChartModel';
 
 it('distinguishes tiny positive percentage observations from zero in History labels', () => {
@@ -125,6 +128,33 @@ vi.mock('@/api/charts', () => ({
     getMetricsHistory: vi.fn().mockResolvedValue({ points: [], source: 'store' }),
   },
 }));
+
+describe('History chart axis labels', () => {
+  it('fits as many time labels as the plot holds without touching', () => {
+    // "11:30 AM" is about 45px at 10px sans-serif; neighbours need 57px apart.
+    expect(getHistoryChartTimeTickCount(600, 45)).toBe(4);
+    expect(getHistoryChartTimeTickCount(171, 45)).toBe(4);
+    expect(getHistoryChartTimeTickCount(170, 45)).toBe(3);
+    expect(getHistoryChartTimeTickCount(150, 45)).toBe(3);
+    expect(getHistoryChartTimeTickCount(100, 45)).toBe(2);
+    expect(getHistoryChartTimeTickCount(30, 45)).toBe(2);
+    expect(getHistoryChartTimeTickCount(0, 45)).toBe(4);
+  });
+
+  it('blanks a middle gridline label that repeats a neighbour', () => {
+    expect(withoutRepeatedHistoryAxisLabels(['<1K/s', '<1K/s', '0'])).toEqual(['<1K/s', '', '0']);
+    expect(withoutRepeatedHistoryAxisLabels(['1', '1', '0'])).toEqual(['1', '', '0']);
+    expect(withoutRepeatedHistoryAxisLabels(['0', '0', '0'])).toEqual(['0', '', '0']);
+    expect(withoutRepeatedHistoryAxisLabels(['0', '50', '100'])).toEqual(['0', '50', '100']);
+    // A rounded range of 0-1 would read 0, 1, 1 bottom to top.
+    expect(
+      getHistoryChartYAxisLabels(
+        { minValue: 0, maxValue: 1, isPercentLike: false, isByteLike: false },
+        'sectors',
+      ).map((tick) => tick.label),
+    ).toEqual(['0', '', '1']);
+  });
+});
 
 describe('HistoryChart', () => {
   it('keeps the history chart on shell, runtime, and model owners', () => {

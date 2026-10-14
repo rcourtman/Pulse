@@ -9195,6 +9195,16 @@ shows: a resize (or a full-page capture) re-reads the same series at the new
 cap while keeping its readings on screen with no loading state, and only
 pointer inspection resets, since its pixel positions moved. A changed target,
 metric, range, organisation or lock still starts from nothing.
+History axis labels must not crowd. The canvas chart draws as many evenly
+spaced time labels as its plot fits at the measured label width, from four
+down to the first and last time (`getHistoryChartTimeTickCount`), so a narrow
+live I/O card no longer runs "12:04 PM12:07 PM..." together. Both the canvas
+chart and the drawer charts blank a middle gridline label that repeats a
+neighbour (`withoutRepeatedHistoryAxisLabels`): a quiet link reads "<1K/s"
+once, not on two gridlines, and the gridline itself stays. The end labels
+always remain. `guest-storage-2263.cjs` records each chart's drawn time
+labels and checks they stand apart; `pbs-history-refresh.cjs` checks the
+drawer's network axis.
 
 ### Shared History single observations
 
