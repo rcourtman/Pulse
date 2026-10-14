@@ -199,13 +199,27 @@ const resource = (read) => {
             }),
           dark,
         );
+        // Charts poll every 30 seconds; the proof drives that poll with the clock.
+        await page.clock.install();
         await page.goto(
           origin + '/browser-tests/guest-memory-provenance.html?transport=' + transport,
         );
         const drawer = page.getByRole('region', { name: 'Guest details' });
+        // The memory reading row sits under the Overview's Details disclosure.
+        const openDetails = async () => {
+          const details = drawer.getByTestId('guest-technical-details');
+          await details.waitFor({ state: 'attached' });
+          if (!(await details.evaluate((el) => el.open))) await details.locator('summary').click();
+        };
+        await openDetails();
         await drawer.getByText('Memory reading', { exact: true }).waitFor();
         const overview = drawer.getByRole('tab', { name: 'Overview', exact: true });
-        const history = drawer.getByRole('tab', { name: 'History', exact: true });
+        // History charts sit on Overview; there is no History tab.
+        const pollRead = async () => {
+          const read = page.waitForResponse((r) => r.url().includes('/api/metrics-store/history'));
+          await page.clock.runFor(30_000);
+          await read;
+        };
         const activate = async (control) => {
           if (width < 768) await control.tap();
           else {
@@ -274,7 +288,6 @@ const resource = (read) => {
         );
         await checkReadingLayout('retained-overview');
         await capture('retained-overview');
-        await activate(history);
         const chart = drawer.locator('[data-history-group="utilization"]');
         await chart.locator('[data-history-last-known="memory"]').waitFor();
         assert.equal(await chart.locator('[data-history-current="memory"]').count(), 0);
@@ -286,7 +299,7 @@ const resource = (read) => {
           await chart.locator('[data-history-deferred="memory"]').innerText(),
           /14:00:00 UTC/,
         );
-        assert.equal(await chart.locator('path').count(), 0);
+        assert.equal(await chart.locator('path[data-history-series]').count(), 0);
         const historyCalls = record.requests.filter(
           (r) => r.path === '/api/metrics-store/history',
         ).length;
@@ -340,11 +353,11 @@ const resource = (read) => {
           historyCalls,
         );
         await activate(overview);
+        await openDetails();
         assert.match(await drawer.innerText(), /Freshness unknown · Unknown source · time unknown/);
         await checkReadingLayout('unknown-overview');
         await capture('unknown-overview');
         await note('legacy-unknown');
-        await activate(history);
         await update({ state: 'last-known', source: 'private provider detail', usage: 0 });
         await chart.locator('[data-history-last-known="memory"]').waitFor();
         assert.match(
@@ -358,9 +371,12 @@ const resource = (read) => {
         assert.doesNotMatch(await drawer.innerText(), /private provider detail/);
         await note('retained-zero-unknown-age');
         mode = 'stored';
-        await activate(drawer.getByRole('button', { name: 'Refresh history', exact: true }));
+        await pollRead();
         await page.waitForFunction(
-          () => document.querySelectorAll('[data-history-group="utilization"] path').length === 2,
+          () =>
+            document.querySelectorAll(
+              '[data-history-group="utilization"] path[data-history-series]',
+            ).length === 2,
         );
         assert.equal(await chart.locator('[data-history-current="memory"]').count(), 0);
         assert.equal(await chart.locator('[data-history-last-known="memory"]').count(), 0);
@@ -371,7 +387,7 @@ const resource = (read) => {
         assert.match(await slider.getAttribute('aria-valuetext'), /Memory 20\.0%/);
         await note('stored-keyboard-inspection');
         mode = 'denied';
-        await activate(drawer.getByRole('button', { name: 'Refresh history', exact: true }));
+        await pollRead();
         await drawer.getByRole('button', { name: 'Retry history', exact: true }).waitFor();
         assert.equal(await drawer.locator('[data-history-deferred]').count(), 0);
         assert.equal(await drawer.locator('[data-history-group]').count(), 0);
@@ -389,6 +405,8 @@ const resource = (read) => {
         });
         await drawer.getByText('peer-guest', { exact: true }).waitFor();
         assert.equal(await overview.getAttribute('aria-selected'), 'true');
+        // A different guest is a new Overview, with Details closed again.
+        await openDetails();
         assert.match(await drawer.innerText(), /Current · Pulse Agent · 2026-10-04 16:00:00 UTC/);
         assert.doesNotMatch(await drawer.innerText(), /14:00:00 UTC/);
         await note('peer-identity-replacement');

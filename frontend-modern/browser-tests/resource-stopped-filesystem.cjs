@@ -147,6 +147,8 @@ async function verify(original = false) {
             true,
           );
       }, dark);
+      // Charts poll every 30 seconds; the proof drives that poll with the clock.
+      await page.clock.install();
       await page.goto(origin + '/browser-tests/resource-stopped-filesystem.html', {
         waitUntil: 'domcontentloaded',
         timeout: 60000,
@@ -154,12 +156,7 @@ async function verify(original = false) {
       await page.waitForFunction(() => window.__resourceStoppedFilesystem, null, {
         timeout: 45000,
       });
-      const tab = page.getByRole('tab', { name: 'History', exact: true });
-      if (width < 768) await tab.tap();
-      else {
-        await tab.focus();
-        await page.keyboard.press('Enter');
-      }
+      // History charts sit on Overview, which the drawer opens on.
       const chart = page.locator('[data-history-group="utilization"]');
       await chart.waitFor();
       await settle(page);
@@ -312,12 +309,12 @@ async function verify(original = false) {
         await apply({ type: 'vm', power: 'stopped', status: 'online', reason: '', usage: 90 });
         await unavailable();
         mode = 'stored';
-        const refresh = page.getByRole('button', { name: 'Refresh history', exact: true });
-        if (width < 768) await refresh.tap();
-        else await refresh.click();
+        const read = page.waitForResponse((r) => r.url().includes('/api/metrics-store/history'));
+        await page.clock.runFor(30_000);
+        await read;
         const slider = chart.getByRole('slider', { name: 'Inspect Utilization history' });
         await slider.waitFor();
-        assert.equal(await chart.locator('path').count(), 1);
+        assert.equal(await chart.locator('path[data-history-series]').count(), 1);
         await unavailable();
         await slider.focus();
         await page.keyboard.press('Home');

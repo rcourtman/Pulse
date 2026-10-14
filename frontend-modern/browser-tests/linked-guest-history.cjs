@@ -156,6 +156,8 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
               ...(guest ? { guest: '1' } : {}),
               ...(lxc ? { lxc: '1' } : {}),
             }).toString();
+          // Charts poll every 30 seconds; the proof drives that poll with the clock.
+          await page.clock.install();
           await page.goto(origin + '/browser-tests/linked-guest-history.html' + suffix);
           const activate = async (locator) => {
             if (width < 768) await locator.tap();
@@ -164,7 +166,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
               await locator.press('Enter');
             }
           };
-          await activate(page.getByRole('tab', { name: 'History', exact: true }));
+          // History charts sit on Overview, which the drawer opens on.
           const chart = page.locator('[data-history-group="utilization"]');
           const current = () => chart.locator('[data-history-current="disk"]');
           const prior = () => chart.locator('[data-history-last-known="disk"]');
@@ -265,23 +267,33 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
             async () => {
               await set('Live agent');
               stored = true;
-              await activate(page.getByRole('button', { name: 'Refresh history', exact: true }));
-              await chart.locator('path').waitFor();
-              const before = await chart.locator('path').getAttribute('d');
+              const read = page.waitForResponse((r) =>
+                r.url().includes('/api/metrics-store/history'),
+              );
+              await page.clock.runFor(30_000);
+              await read;
+              await chart.locator('path[data-history-series]').waitFor();
+              const before = await chart.locator('path[data-history-series]').getAttribute('d');
               assert.ok(before);
               await set('Silent agent');
               await text(deferred(), /Pulse Agent/);
-              assert.equal(await chart.locator('path').getAttribute('d'), before);
+              assert.equal(
+                await chart.locator('path[data-history-series]').getAttribute('d'),
+                before,
+              );
               await missing(prior());
               await set('Stopped guest');
               await text(deferred(), /unavailable/);
-              assert.equal(await chart.locator('path').getAttribute('d'), before);
+              assert.equal(
+                await chart.locator('path[data-history-series]').getAttribute('d'),
+                before,
+              );
               await missing(current());
               assert.match(await chart.innerText(), /30.0%/);
             },
           );
           await check(
-            'Same mounted chart, usable independent metrics and no fabricated samples',
+            'Same mounted chart; series without stored points read no reading, no fabricated samples',
             async () => {
               assert.equal(
                 await page.evaluate(
@@ -290,9 +302,12 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
                 ),
                 true,
               );
-              await text(chart.locator('[data-history-current="cpu"]'), /10.0%\s*current/);
-              await text(chart.locator('[data-history-current="memory"]'), /0.0%\s*current/);
-              assert.equal(await chart.locator('path').count(), 1);
+              // With stored history shown, the legend reads the latest stored
+              // time: series without a stored point say so, never a live value.
+              assert.equal(await chart.locator('[data-history-current]').count(), 0);
+              assert.match(await chart.innerText(), /CPU\s*no reading/);
+              assert.match(await chart.innerText(), /Memory\s*no reading/);
+              assert.equal(await chart.locator('path[data-history-series]').count(), 1);
               assert.deepEqual(record.errors, []);
               assert.ok(record.requests.every((r) => !r.blocked));
             },
