@@ -339,20 +339,18 @@ func (c *Client) handleAuthResponse(resp *http.Response) error {
 		return err
 	}
 
-	var result struct {
-		Data struct {
-			Ticket              string `json:"ticket"`
-			CSRFPreventionToken string `json:"CSRFPreventionToken"`
-		} `json:"data"`
+	body, err := readResponseBodyLimited(resp.Body)
+	if err != nil {
+		return err
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	ticket, csrf, err := securityutil.ParseProxmoxSession(body)
+	if err != nil {
 		return err
 	}
 
 	c.authMu.Lock()
-	c.auth.ticket = result.Data.Ticket
-	c.auth.csrfToken = result.Data.CSRFPreventionToken
+	c.auth.ticket = ticket
+	c.auth.csrfToken = csrf
 	c.auth.expiresAt = time.Now().Add(2 * time.Hour) // PBS tickets expire after 2 hours
 	c.authMu.Unlock()
 

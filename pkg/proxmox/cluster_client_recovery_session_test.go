@@ -18,7 +18,7 @@ import (
 // establish that the second was accepted. All credentials and TLS peers here
 // are guest-local fixtures, not an installed authentication/recovery attempt.
 func testClusterRecoveryRequiresUsableSession(t *testing.T) {
-	for _, refusal := range []string{"unauthorised", "forbidden", "malformed", "form-refused"} {
+	for _, refusal := range []string{"unauthorised", "forbidden", "malformed", "empty-session", "partial-session", "form-refused"} {
 		for _, retained := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/retained-%t", refusal, retained), func(t *testing.T) {
 				var failing atomic.Bool
@@ -38,6 +38,10 @@ func testClusterRecoveryRequiresUsableSession(t *testing.T) {
 								fmt.Fprint(w, `{"message":"fixture session refused"}`)
 							case "malformed":
 								fmt.Fprint(w, `{"data":`)
+							case "empty-session":
+								fmt.Fprint(w, `{"data":{}}`)
+							case "partial-session":
+								fmt.Fprint(w, `{"data":{"ticket":"fixture-ticket"}}`)
 							case "form-refused":
 								if r.Header.Get("Content-Type") == "application/json" {
 									w.WriteHeader(http.StatusUnsupportedMediaType)

@@ -55,14 +55,19 @@ func TestGuestAgentInvalidSuccessDefersEveryRead(t *testing.T) {
 						}
 					}))
 					defer server.Close()
-					c := backupTestClient(t, server.URL)
+					// A closed httptest listener's ephemeral port can be reused by
+					// another case while its real uncertainty fence is still live.
+					// Give independent synthetic guests distinct base paths, while
+					// every client within this case keeps exactly the same key.
+					host := invalidSuccessFixtureEndpoint(server.URL, name, reader)
+					c := backupTestClient(t, host)
 					if err := first(context.Background(), c, 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
 						t.Errorf("unverified success released admission: %v", err)
 					}
 					before := configs.Load()
 					// The next complete reply would be healthy; it must not be
 					// requested while the earlier command remains uncertain.
-					diagnostic := backupTestClient(t, server.URL)
+					diagnostic := backupTestClient(t, host)
 					for later, read := range backupAgentReads() {
 						if err := read(context.Background(), diagnostic, 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
 							t.Errorf("next %s escaped cooldown: %v", later, err)
@@ -78,6 +83,49 @@ func TestGuestAgentInvalidSuccessDefersEveryRead(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func invalidSuccessFixtureEndpoint(serverURL, caseName, reader string) string {
+	return serverURL + "/invalid-success-fixture/" + caseName + "/" + reader
+}
+
+// Deliberately share one listener across two independent fixtures, rather than
+// waiting for the OS to recycle an ephemeral port. No guard entry is cleared,
+// expired or weakened: each new fixture admits its own first command, and its
+// second client sees the same live uncertainty fence.
+func TestGuestAgentInvalidSuccessFixtureIsolation(t *testing.T) {
+	var commands, configs atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			configs.Add(1)
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
+		commands.Add(1)
+		fmt.Fprint(w, `{"Data":null,"data":{"result":[]}}`)
+	}))
+	defer server.Close()
+	for _, name := range []string{"first", "second"} {
+		host := invalidSuccessFixtureEndpoint(server.URL, name, "network")
+		if _, err := backupTestClient(t, host).GetVMNetworkInterfaces(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
+			t.Fatalf("independent fixture did not admit its first uncertain reply: %v", err)
+		}
+		if _, err := backupTestClient(t, host).GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+			t.Fatalf("same-fixture second client lost its uncertainty fence: %v", err)
+		}
+	}
+	if commands.Load() != 2 || configs.Load() != 2 {
+		t.Fatalf("independent fixture command/config counts=%d/%d, want 2/2", commands.Load(), configs.Load())
+	}
+	// Both original fences must survive admission of the other fixture.
+	for _, name := range []string{"first", "second"} {
+		if _, err := backupTestClient(t, invalidSuccessFixtureEndpoint(server.URL, name, "network")).GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+			t.Fatalf("another fixture erased the original fence: %v", err)
+		}
+	}
+	if commands.Load() != 2 || configs.Load() != 2 {
+		t.Fatal("checking retained fences sent follow-up guest commands or lock reads")
 	}
 }
 

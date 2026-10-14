@@ -17,6 +17,43 @@
 
 ## Purpose
 
+### Proxmox password success admits a complete session, not just HTTP 200
+
+PVE and PBS consume the entire existing byte-bounded login body before
+publishing ticket, CSRF token and the normal two-hour expiry together. The
+shared `internal/securityutil/proxmox_session.go` parser requires canonical,
+unambiguous envelope/session keys, complete UTF-8 JSON, a nonempty cookie-safe
+ticket and a nonempty header-safe CSRF token. Unknown unique metadata such as
+username and capabilities remains supported. Partial/null, duplicate or
+case-conflicting credentials, extra JSON values, incomplete reads and oversized
+tails fail without replacing the retained tuple or advancing PVE generation.
+Validation errors contain no response credentials. A malformed success is not
+a provider credential refusal and does not trigger JSON-to-form fallback.
+
+`session_response_admission_test.go` in both client packages exercises these
+controls and eight joined expired readers, zero subsequent API/form requests
+on invalid success, retained state and distinct later ordinary recovery with
+coherent cookie/CSRF pairs. Cluster recovery additionally checks empty and
+partial success for the retained polling client, with and without a previous
+client. `TestPBSInvalidSessionKeepsFirstPollBoundary` exercises the real pinned
+constructor, normal startup retry, poll executor and production broadcast:
+invalid success installs no client, valid construction is not healthy telemetry,
+and only the accepted first poll publishes recovered node/datastore readings.
+
+TLS trust, credentials, auth encodings and 400/415 fallback, API-token paths,
+renewal ownership, retries/cadence, guest/backup fences and History are unchanged.
+The parser establishes response integrity, not cryptographic ticket validation
+or native/installed acceptance. It neither attributes nor resolves a reported
+PBS, Windows guest, restart or workload-safety incident.
+
+
+The invalid-QGA-success matrix uses a distinct synthetic base path for each
+case/reader, so OS reuse of a closed ephemeral listener cannot borrow a previous
+fixture's live cooldown. `TestGuestAgentInvalidSuccessFixtureIsolation` shares
+one listener deliberately and checks two independent first admissions and both
+retained second-client fences. No production key, alias, TTL or guard state is
+changed or cleared to qualify these tests.
+
 ### Proxmox recovery sessions honour the owning caller
 
 PVE/PBS context-aware constructors bind initial password login, including the
