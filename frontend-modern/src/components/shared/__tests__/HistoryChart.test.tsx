@@ -18,6 +18,8 @@ import {
   getHistoryChartTimeTickCount,
   getHistoryChartTooltipLayout,
   getHistoryChartYAxisLabels,
+  getHistoryReadoutLabel,
+  getHistorySourceNotice,
   hasHistoryChartSpread,
   HISTORY_CHART_RANGES,
   withoutRepeatedHistoryAxisLabels,
@@ -130,6 +132,22 @@ vi.mock('@/api/charts', () => ({
     getMetricsHistory: vi.fn().mockResolvedValue({ points: [], source: 'store' }),
   },
 }));
+
+describe('History source wording', () => {
+  it('names the readout and badge by where the readings came from', () => {
+    expect(getHistoryReadoutLabel('store', false)).toBe('Latest stored');
+    expect(getHistoryReadoutLabel('store', true)).toBe('Stored');
+    expect(getHistoryReadoutLabel('mock_synthetic', false)).toBe('Latest stored');
+    expect(getHistoryReadoutLabel(undefined, false)).toBe('Latest stored');
+    expect(getHistoryReadoutLabel('memory', false)).toBe('Latest recorded');
+    expect(getHistoryReadoutLabel('memory', true)).toBe('Recorded');
+    expect(getHistoryReadoutLabel('live', false)).toBe('Current');
+    expect(getHistorySourceNotice('store')).toBeNull();
+    expect(getHistorySourceNotice('mock_synthetic')).toBeNull();
+    expect(getHistorySourceNotice('memory')?.badge).toBe('Recent only');
+    expect(getHistorySourceNotice('live')?.badge).toBe('Current only');
+  });
+});
 
 describe('History chart min-max band', () => {
   const at = (timestamp: number, value: number, min = value, max = value) => ({
@@ -845,11 +863,13 @@ describe('History organisation boundary rendering', () => {
         touchPointer(canvas, 'pointerup');
       }
       expect(container.querySelector('[data-history-chart-tooltip]')).toHaveTextContent('42°C');
+      // Readings from memory say so in words a reader knows, not "Buffer".
+      expect(container).toHaveTextContent('Recent only');
       eventBus.emit('org_switched', 'org-b');
       expect(container.querySelector('[data-history-chart-tooltip]')).toBeNull();
       expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('');
       expect(container).not.toHaveTextContent('42°C');
-      expect(container).not.toHaveTextContent('Buffer');
+      expect(container).not.toHaveTextContent('Recent only');
       expect(canvas).toHaveAccessibleDescription(/Loading 1-hour history data/);
       complete({
         points: [{ timestamp: 1000, value: 80, min: 80, max: 80 }],

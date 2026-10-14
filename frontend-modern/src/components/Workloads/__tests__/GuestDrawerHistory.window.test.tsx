@@ -71,6 +71,30 @@ const selectSharedTime = (chart: HTMLElement) => {
   return chart.querySelector('[data-history-hover-marker]')!;
 };
 
+describe('GuestDrawerHistory reading source', () => {
+  const readout = () => within(group('utilization')).getByTestId('guest-history-hover-time');
+
+  it.each([
+    ['store', 'Latest stored', 'Stored', null],
+    ['memory', 'Latest recorded', 'Recorded', 'Recent readings only.'],
+    ['live', 'Current', 'Current', 'No history for this range yet.'],
+  ] as const)('names %s readings as such', async (source, latest, inspected, notice) => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response({ source }));
+    mount();
+    const slider = await screen.findByRole('slider', { name: 'Inspect Utilization history' });
+    expect(readout().textContent).toMatch(new RegExp(`^${latest} · `));
+    if (notice) expect(screen.getByTestId('history-source-notice')).toHaveTextContent(notice);
+    else expect(screen.queryByTestId('history-source-notice')).toBeNull();
+    slider.focus();
+    fireEvent.input(slider, { target: { value: '0' } });
+    expect(readout().textContent).toMatch(new RegExp(`^${inspected} · `));
+    expect(readout()).toHaveAttribute(
+      'aria-label',
+      expect.stringMatching(new RegExp(`^${inspected} observation: `)),
+    );
+  });
+});
+
 describe('GuestDrawerHistory value axis', () => {
   it('labels a quiet link\'s rate axis once, not "<1K/s" on two gridlines', async () => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(
