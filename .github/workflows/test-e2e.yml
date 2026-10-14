@@ -108,7 +108,7 @@ jobs:
         run: python3 scripts/tests/test_playwright_acquisition.py
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -157,7 +157,7 @@ jobs:
         run: python3 scripts/check_docs_mirror.py
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -201,7 +201,7 @@ jobs:
           --grep 'Scenario 1:|create, update, member manage' --workers=1 --retries=0
       - name: Upload offline provisioning failure report
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: offline-org-provisioning-report
           path: tests/integration/playwright-report/multi-tenant-diagnostic/
@@ -229,7 +229,7 @@ jobs:
 
       - name: Upload this run's exact test images
         id: images
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-test-images-${{ github.sha }}-${{ github.run_attempt }}
           path: |
@@ -259,7 +259,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -287,7 +287,7 @@ jobs:
         run: npm ci
 
       - name: Download this run's exact test images
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.test-images.outputs.artifact-id }}
           path: ${{ runner.temp }}/pulse-e2e-images
@@ -321,7 +321,7 @@ jobs:
 
       - name: Upload failed fixture admission
         if: ${{ !cancelled() && steps.fixture.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fixture-readiness-shard-${{ matrix.shard }}
           path: |
@@ -360,7 +360,7 @@ jobs:
       # reach the job deadline. Probation must not take its receipts with it.
       - name: Upload Playwright report
         if: ${{ !cancelled() && steps.stable.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-shard-${{ matrix.shard }}
           path: tests/integration/playwright-report/
@@ -370,7 +370,7 @@ jobs:
       # Keep only the separate machine-readable result here.
       - name: Upload JUnit results
         if: ${{ !cancelled() && steps.stable.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-results-shard-${{ matrix.shard }}
           path: tests/integration/test-results/junit.xml
@@ -425,7 +425,7 @@ jobs:
       # the combined Actions log stays small enough to inspect its verdicts.
       - name: Upload complete container diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-container-logs-shard-${{ matrix.shard }}-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pulse-e2e-container-logs/
@@ -436,7 +436,7 @@ jobs:
       # failure() never fires for these; key off the step outcome instead.
       - name: Upload probation Playwright report
         if: ${{ !cancelled() && steps.probation.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-probation-shard-${{ matrix.shard }}
           path: tests/integration/playwright-report-probation/
@@ -444,7 +444,7 @@ jobs:
 
       - name: Upload probation JUnit results
         if: ${{ !cancelled() && steps.probation.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-results-probation-shard-${{ matrix.shard }}
           path: tests/integration/test-results-probation/junit.xml
@@ -469,7 +469,7 @@ jobs:
         run: python3 scripts/check_docs_mirror.py
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           package-manager-cache: false
@@ -491,7 +491,7 @@ jobs:
         run: npm ci
 
       - name: Download this run's exact test images
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.test-images.outputs.artifact-id }}
           path: ${{ runner.temp }}/pulse-e2e-images
@@ -531,7 +531,7 @@ jobs:
 
       - name: Upload complete container diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-container-logs-agent-registration-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pulse-e2e-container-logs/
@@ -540,7 +540,7 @@ jobs:
 
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-agent-registration
           path: tests/integration/playwright-report/
@@ -548,7 +548,7 @@ jobs:
 
       - name: Upload test videos and screenshots
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-failures-agent-registration
           path: tests/integration/test-results/

@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### Native CI tooling refresh (14 October 2026)
+
+The native agent matrix uses the exact setup-node v7.1.0 and upload-artifact
+v7.0.2 pins in the [deployment tooling contract](deployment-installability.md#node-setup-and-artifact-action-refresh-14-october-2026).
+The Node 24 application toolchain, locked frontend cache, real asset build before
+all-platform runtime tests, generated Windows command execution and retained
+Linux removal receipt are unchanged. `TestNativeAgentWorkflowBuildsRealFrontendBeforeRuntime`,
+`TestNativeAgentRejectsBrokenImagesBeforeFrontendPreparation` and
+`TestNativeWindowsExecutesGeneratedInstallCommand` bind those actual consumers
+to the refreshed pin without relaxing ordering or platform controls. Local
+source proof is not native Windows, appliance or installed lifecycle acceptance.
+
 ### Optional configuration-signing guidance fits narrow installers (13 October 2026)
 
 The three existing signing environment names wrap within their advice card.

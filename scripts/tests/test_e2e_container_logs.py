@@ -49,7 +49,7 @@ def assert_workflow_policy(test, workflow):
         test.assertNotIn("docker logs", collector)
         test.assertNotIn("||", collector)
         test.assertIn("if: always()", upload)
-        test.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", upload)
+        test.assertIn("actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", upload)
         test.assertIn("e2e-container-logs-" + suffix + "-${{ github.sha }}-${{ github.run_attempt }}", upload)
         test.assertIn("path: ${{ runner.temp }}/pulse-e2e-container-logs/", upload)
         test.assertIn("retention-days: 3", upload)

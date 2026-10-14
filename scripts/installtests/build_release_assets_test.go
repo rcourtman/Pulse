@@ -5145,7 +5145,7 @@ func TestReleaseNodeSetupKeepsExplicitCacheIsolation(t *testing.T) {
 				blocks = blocks[4:]
 			}
 			for _, block := range blocks {
-				for _, want := range []string{"actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", "node-version: '24'", "package-manager-cache: false"} {
+				for _, want := range []string{"actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1", "node-version: '24'", "package-manager-cache: false"} {
 					if !strings.Contains(block, want) {
 						t.Fatalf("Node setup lost %s: %s", want, block)
 					}

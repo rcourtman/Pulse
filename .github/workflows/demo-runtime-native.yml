@@ -35,7 +35,7 @@ jobs:
         run: sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,GITHUB_SHA,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT python3 .github/scripts/tests/demo_runtime_native.py
       - name: Retain sanitised terminal receipts and cleanup
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: demo-native-${{ github.run_id }}
           path: demo-native-result.json
