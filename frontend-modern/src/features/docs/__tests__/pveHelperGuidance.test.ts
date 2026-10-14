@@ -9,7 +9,8 @@ const anchor = 'proxmox-lxc-filesystem-readings-with-the-typed-helper';
 const article = (name: string): HTMLElement => {
   const element = document.createElement('article');
   element.innerHTML = renderDocMarkdown(
-    readFileSync(path.join(root, 'frontend-modern/public/docs', `${name}.md`), 'utf8'), name,
+    readFileSync(path.join(root, 'frontend-modern/public/docs', `${name}.md`), 'utf8'),
+    name,
   );
   return element;
 };
@@ -21,8 +22,9 @@ describe('confined PVE helper reading guidance', () => {
       'Proxmox LXC filesystem readings with the typed helper',
     );
     expect(guide.querySelectorAll(`a[href="#${anchor}"]`).length).toBeGreaterThanOrEqual(3);
-    const row = [...guide.querySelectorAll('tr')].find(element =>
-      element.textContent?.includes('Proxmox node-local LXC filesystem telemetry'))!;
+    const row = [...guide.querySelectorAll('tr')].find((element) =>
+      element.textContent?.includes('Proxmox node-local LXC filesystem telemetry'),
+    )!;
     expect(row.textContent).toContain('command fallback works only outside the helper');
     expect(row.querySelector(`a[href="#${anchor}"]`)).not.toBeNull();
   });
