@@ -15,6 +15,19 @@
 
 ## Purpose
 
+### Existing Workloads snapshots retain guest interface names
+
+The Workloads mapper selects the existing agent interface list, otherwise the
+existing Proxmox list, on both REST and owning-snapshot paths. It adds no fetch,
+sort, cross-producer merge or retained cache. Explicitly empty agent lists keep
+precedence. Source provenance travels with the selected list so a source change
+on the same canonical row updates only its owning last-known presentation.
+`useWorkloads.test.ts` checks VM/LXC transitions, unchanged ordered IPs and
+identities, eight normal REST reads versus zero Workloads requests for the
+owning-snapshot path. This is consumer proof, not native collection recovery.
+Network tooltip text follows the existing semantic palette; this changes no
+geometry, source selection, polling, hover ownership or portal mechanism.
+
 ### Guest filesystem guidance remains reachable by touch and keyboard (13 October 2026)
 
 The existing Filesystems footer link in the guest drawer has a 44px minimum

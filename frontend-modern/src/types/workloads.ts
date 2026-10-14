@@ -71,6 +71,12 @@ export type WorkloadGuest = (VM | Container) & {
    * reported no guest filesystems, so the rows follow that agent's freshness.
    */
   disksFromAgent?: boolean;
+  /**
+   * Producer of the selected interface list. False means Proxmox, so a
+   * silent linked agent cannot mark those platform details last known.
+   * Legacy callers without this field keep the agent freshness behaviour.
+   */
+  networkInterfacesFromAgent?: boolean;
   updateStatus?: DockerContainerUpdateStatus;
   // Server-evaluated capability refusals from the unified resource. The
   // update button reads this to disable itself with the refusal reason

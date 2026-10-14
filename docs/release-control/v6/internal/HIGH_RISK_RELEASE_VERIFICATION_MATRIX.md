@@ -8,6 +8,25 @@ A gate is only `passed` when its automated proof still passes and the manual
 scenario has been exercised in a staging-like environment with the expected
 result.
 
+## Workloads guest interface source selection — issue #2757
+
+Automated: `useWorkloads.test.ts` (both REST and owning-snapshot VM/LXC
+projections) and `GuestDrawer.test.tsx` (independent platform/agent freshness).
+Consume actual collector/HTTP/broadcast JSON through the production hook,
+GuestRow network tooltip and GuestDrawer details on desktop and narrow touch.
+The primary IP stays first; secondary addresses stay beside their producer's
+interface names. Live and silent linked-agent lists retain precedence, and
+explicitly empty lists are not replaced by the other source. Change producers
+on the same mounted guest: only selected agent interfaces inherit agent-stale
+copy/tone, while the agent's other last-known readings remain last known.
+Check the tooltip's labels, addresses and supporting text against its actual
+surface in light and dark themes: normal-sized text needs at least 4.5:1
+contrast. Inspect the actual pixels as well as computed colours.
+
+Synthetic browser fixtures are not installed Proxmox routing or reporter
+acceptance. No guest query, networking change, agent installation or native
+recovery action is required to validate this consumer repair.
+
 ## Workloads locked-guest identity on phones
 
 Automated: `GuestRow.test.tsx` lock-label cases and
