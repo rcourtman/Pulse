@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "base_sha": "cc6eb37ae96ed35fbfd3b3f3e02e813043ce5b81",
+  "verified_at": "2026-10-14T09:21:12.832829Z",
+  "result": "passed",
+  "changed_paths": ["frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx"],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx": "1baaa980d9f07a5d5eb11f9d5bc93f3069b2f47563177af491fcfdce3afd7ef6"
+  },
+  "routes": [
+    "/browser-tests/proxmox-collection-safety.html?type=pve",
+    "/browser-tests/proxmox-collection-safety.html?type=pbs",
+    "/browser-tests/proxmox-collection-safety.html?type=pmg"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "PVE VM collector has concise accessible name and full guest-read/backup precaution as its description both on and off. Containers, Storage and Backups have separate concise names and descriptions; no false QGA association.",
+    "SMART off/on/off retains drive-standby warning; enabling still reveals the original polling interval. Default and final saved SMART state is off.",
+    "PBS/PMG retain original collection behaviour and do not acquire QGA advice. Saved edit target/TLS/credential omission and other choices are unchanged."
+  ],
+  "interactions": [
+    "Chromium keyboard Space switches all four PVE collectors, round-trips the independent three, leaves VM off and saves through the actual NodeCredentialSlot/useNodeModalState producer to a safe fixture.",
+    "390px WebKit genuine taps exercise checkbox labels, VM off, SMART off/on/off, and Save changes. No live API request, page error, console error or horizontal overflow in any of the six editor journeys.",
+    "Actual Chromium CDP Accessibility.getPartialAXTree verifies full text, not merely the warning heading, before and after VM/SMART changes. WebKit checks resolved description IDs and actual accessible-name selectors; this is not a physical assistive-technology/device test."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "solid": "1.9.16",
+    "seroval": "1.6.8"
+  },
+  "input_hashes": {
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx": "1baaa980d9f07a5d5eb11f9d5bc93f3069b2f47563177af491fcfdce3afd7ef6",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "9372c3a4b346a0e31733a7042c0a65b5ebe3518b12595c6c6a68b1cadd667dcd",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx": "a3de7bfa65511aba00a16ef40424be988f8f72931568031882c93455b7945c03",
+    "frontend-modern/src/utils/nodeModalPresentation.ts": "c2dbc6ab6b7588c6d01a102ffec18105d1cd589e908c6e4f70465fd6f1751d1e",
+    "frontend-modern/src/components/shared/InlineNotice.tsx": "919f343c34b1477c1c8e611ab0dda99b9ec3fc68335dfbf9a04032f9051c63ef",
+    "frontend-modern/src/components/shared/Toggle.tsx": "4a641b60698082de7d74bbdb52ca4107b7386b689973ea7888b1b8bd0cf00e6a",
+    "frontend-modern/src/components/shared/useToggleState.ts": "dd944a6e6a975c8fc2c69e819e9992114ebb2d3ee9070aa7b9b1551889c55452",
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c",
+    "frontend-modern/package.json": "8d8da916d45b0aaf90d256787ea294b45c4aec89ee9fa3cab773bb8368c8da97",
+    "frontend-modern/package-lock.json": "927b6fd356ececa0de2d44bd68a62a7733a6bf2a93314bb24cc66d1c120e3915",
+    "frontend-modern/browser-tests/proxmox-collection-safety.tsx": "57f130466826ed4cb579439d21790f4311e3fa9af710728375e8d20b5364a4b8",
+    "frontend-modern/browser-tests/proxmox-collection-safety.html": "614cf826fe534d4c98f0fda596035a7595e1dc98bf5065e47c755a5c73906293",
+    "frontend-modern/browser-tests/proxmox-collection-safety.cjs": "f27bfaf11ca80ac80e72d52a1c6928bda454e7b9e52f952bccb865baa90748bc"
+  },
+  "pixel_review": {
+    "tool": "native view_image; all eight retained PNG image contents presented to the model in this turn",
+    "observations": [
+      "PVE backup precaution remains complete and readable above the controls at 1280px light and 390px dark. VM is visibly unchecked and the other collectors checked. Keyboard focus is visible on the desktop VM checkbox. No clipped warning or horizontal overflow.",
+      "The SMART warning and off-state control are legible at both widths. Phone text wraps within the card.",
+      "PBS and PMG have intact, readable independent collection choices and no inappropriate guest-agent safety note. Phone text wraps without clipped controls."
+    ],
+    "captures": [
+      {
+        "file": "browser/chromium-pbs-collection.png",
+        "bytes": 35945,
+        "sha256": "60c8730000103ae27b38d9eaaa8839f6b54edbf4da812ee59979d6b9e78b537c"
+      },
+      {
+        "file": "browser/chromium-pmg-collection.png",
+        "bytes": 36528,
+        "sha256": "32288ed7b7c94a0236a46e89805d66199fe00d40d054bc39d4af657a7fb5b077"
+      },
+      {
+        "file": "browser/chromium-pve-collection.png",
+        "bytes": 71410,
+        "sha256": "be277d3a2ad350849340acf446251dea91eaef8551e3b0ac2fbf1e82851ebabf"
+      },
+      {
+        "file": "browser/chromium-pve-smart.png",
+        "bytes": 9375,
+        "sha256": "a1826b1fe68a1756f64f09c1ac965d9b10adcb46914f85ca85ff29596254fa7f"
+      },
+      {
+        "file": "browser/webkit-pbs-collection.png",
+        "bytes": 34757,
+        "sha256": "ee7454beff8203976ac08d52ac2761f9a9f94134055f6837bfbebaaa9ca0761e"
+      },
+      {
+        "file": "browser/webkit-pmg-collection.png",
+        "bytes": 36659,
+        "sha256": "eb807003a19a3f48827ba90008c80be75cf5b7dbe82538a99c78163afcc07cc4"
+      },
+      {
+        "file": "browser/webkit-pve-collection.png",
+        "bytes": 64456,
+        "sha256": "0980ca628db76a6ce4d995ed8aec938661fa96d98999000110905fdf85281a65"
+      },
+      {
+        "file": "browser/webkit-pve-smart.png",
+        "bytes": 9772,
+        "sha256": "2b19c8d4f3eb1d4016322eca4f47355fd46f13b35fe0cbe264606b21ba3cef6d"
+      }
+    ]
+  },
+  "proof_scope": "Existing collection editor accessibility and safe fixture saves only. No live collector/guest/native thaw, installed recovery, release availability, complete dependency security audit or passing authentication golden is claimed."
+}

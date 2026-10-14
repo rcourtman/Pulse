@@ -1,4 +1,4 @@
-import { Component, Show } from 'solid-js';
+import { Component, createUniqueId, Show } from 'solid-js';
 import type { NodeModalProps } from '@/components/Settings/nodeModalModel';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -24,6 +24,7 @@ interface NodeModalMonitoringSectionProps {
 
 export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionProps> = (props) => {
   const { modalProps, state } = props;
+  const descriptionId = createUniqueId();
 
   return (
     <>
@@ -90,23 +91,27 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             workload noise.
           </p>
           <InlineNotice tone="warning" role="note" aria-label="Guest-agent backup precaution">
-            Guest-agent reads share the channel used by freeze-enabled backups. If a guest becomes
-            unresponsive around a backup, stop Pulse monitoring and leave it stopped until
-            independent checks confirm thaw and writes to every filesystem covered by the backup. Do
-            not run live diagnostics or restart the guest agent during the incident. An OK backup or
-            a running VM does not prove recovery.
+            <span id={`${descriptionId}-backup-precaution`}>
+              Guest-agent reads share the channel used by freeze-enabled backups. If a guest becomes
+              unresponsive around a backup, stop Pulse monitoring and leave it stopped until
+              independent checks confirm thaw and writes to every filesystem covered by the backup.
+              Do not run live diagnostics or restart the guest agent during the incident. An OK
+              backup or a running VM does not prove recovery.
+            </span>
           </InlineNotice>
 
           <label class="flex items-start gap-2 text-sm text-base-content">
             <input
               type="checkbox"
+              aria-labelledby={`${descriptionId}-vms-label`}
+              aria-describedby={`${descriptionId}-vms-help ${descriptionId}-backup-precaution`}
               checked={state.formData().monitorVMs}
               onChange={(event) => state.updateField('monitorVMs', event.currentTarget.checked)}
               class={formCheckbox + ' mt-0.5'}
             />
             <div>
-              <div>Virtual machines</div>
-              <p class="text-xs text-muted mt-1">
+              <div id={`${descriptionId}-vms-label`}>Virtual machines</div>
+              <p id={`${descriptionId}-vms-help`} class="text-xs text-muted mt-1">
                 VM state and resource usage. Guest memory and filesystem details depend on available
                 guest-agent readings.
               </p>
@@ -116,6 +121,8 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
           <label class="flex items-start gap-2 text-sm text-base-content">
             <input
               type="checkbox"
+              aria-labelledby={`${descriptionId}-containers-label`}
+              aria-describedby={`${descriptionId}-containers-help`}
               checked={state.formData().monitorContainers}
               onChange={(event) =>
                 state.updateField('monitorContainers', event.currentTarget.checked)
@@ -123,21 +130,25 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
               class={formCheckbox + ' mt-0.5'}
             />
             <div>
-              <div>Containers</div>
-              <p class="text-xs text-muted mt-1">LXC container state and resource usage.</p>
+              <div id={`${descriptionId}-containers-label`}>Containers</div>
+              <p id={`${descriptionId}-containers-help`} class="text-xs text-muted mt-1">
+                LXC container state and resource usage.
+              </p>
             </div>
           </label>
 
           <label class="flex items-start gap-2 text-sm text-base-content">
             <input
               type="checkbox"
+              aria-labelledby={`${descriptionId}-storage-label`}
+              aria-describedby={`${descriptionId}-storage-help`}
               checked={state.formData().monitorStorage}
               onChange={(event) => state.updateField('monitorStorage', event.currentTarget.checked)}
               class={formCheckbox + ' mt-0.5'}
             />
             <div>
-              <div>Storage</div>
-              <p class="text-xs text-muted mt-1">
+              <div id={`${descriptionId}-storage-label`}>Storage</div>
+              <p id={`${descriptionId}-storage-help`} class="text-xs text-muted mt-1">
                 Per-storage capacity, status, and content type breakdown.
               </p>
             </div>
@@ -146,13 +157,17 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
           <label class="flex items-start gap-2 text-sm text-base-content">
             <input
               type="checkbox"
+              aria-labelledby={`${descriptionId}-backups-label`}
+              aria-describedby={`${descriptionId}-backups-help`}
               checked={state.formData().monitorBackups}
               onChange={(event) => state.updateField('monitorBackups', event.currentTarget.checked)}
               class={formCheckbox + ' mt-0.5'}
             />
             <div>
-              <div>Backups</div>
-              <p class="text-xs text-muted mt-1">vzdump schedules and recent backup activity.</p>
+              <div id={`${descriptionId}-backups-label`}>Backups</div>
+              <p id={`${descriptionId}-backups-help`} class="text-xs text-muted mt-1">
+                vzdump schedules and recent backup activity.
+              </p>
             </div>
           </label>
         </section>
@@ -168,11 +183,12 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             <div class="flex items-start justify-between gap-3">
               <div>
                 <p class="font-medium text-base-content">Monitor physical disk health (SMART)</p>
-                <p class="mt-1 text-xs text-muted">
+                <p id={`${descriptionId}-physical-disks-help`} class="mt-1 text-xs text-muted">
                   This will spin up idle HDDs. Leave disabled if you rely on drive standby.
                 </p>
               </div>
               <TogglePrimitive
+                ariaDescribedBy={`${descriptionId}-physical-disks-help`}
                 checked={state.formData().monitorPhysicalDisks}
                 onChange={(event) =>
                   state.updateField('monitorPhysicalDisks', event.currentTarget.checked)
