@@ -1544,6 +1544,20 @@ presentation and sort below warnings, while the history facet exposes a real
 Info option whose count and filtered rows use the same predicate as every
 other severity.
 
+The alert history frequency chart in `AlertHistoryFrequencyCard.tsx` stacks
+each period by severity, critical at the base, from the `severityBuckets` that
+`buildAlertTrends` counts in the same pass as its totals. Those counts use
+`alertSeverityCountKey`, the closed vocabulary above: `error` is critical and
+an empty or unknown value is a warning, never information. Segment fills and
+legend dots share `getAlertSeverityFillClass`, each at least 3:1 against the
+chart surface in both themes (light-theme warnings use amber-700). A bar's
+height is the square root of its share of the busiest period (4px floor, 40px
+ceiling), so a burst stands well clear while ordinary periods stay tall
+enough to read their mix; each bar's tooltip and accessible name carry the
+exact counts. The legend counts critical, warnings and info (info only when
+present) over the current window and bar selection
+(`AlertHistoryFrequencyCard.test.tsx`, `alertHistoryModel.test.ts`).
+
 The desktop alert history table sizes each column for its content instead of
 giving all visible columns an equal share. Each density is sized for the
 narrowest card it serves (600px, 800px, 1024px and 1280px): Time (the column

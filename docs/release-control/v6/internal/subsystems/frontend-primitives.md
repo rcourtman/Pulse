@@ -221,6 +221,14 @@ in alert helpers and the production held-breach browser fixture bind this
 shared presentation boundary to the alerts/API contracts.
 
 
+### Alert severity fills are one primitive
+
+`getAlertSeverityFillClass` in `frontend-modern/src/utils/alertSeverityPresentation.ts`
+is the one fill per alert severity, and `getAlertSeverityDotClass` composes
+it, so a legend dot and the chart segment it names cannot drift apart. Each
+fill holds at least 3:1 against the chart surface in both themes; yellow on
+the light surface is under 2:1, so light-theme warnings use amber-700.
+
 ### Systemd backup-pause help separates shutdown from remote completion
 
 The existing systemd precaution reads the stop result as well as the inactive
@@ -5634,8 +5642,8 @@ amber or red count. Docker State words read in their row dot's colour through
 `dockerStateTextToneClass` (`DockerNativeTableShared.tsx`) with no second dot,
 which now delegates to the platform helper `getPlatformStatusTextToneClass`
 (`features/platformPage/platformStatusTone.ts`): every platform table colours
-the cell behind a dot's verdict through it, and `PlatformIssueReason` takes its
-tones from it too;
+the cell behind a dot's verdict through it, and `PlatformIssueReason` and the
+TrueNAS Services and VMs state notes take their tones from it too;
 the Docker Networks row's single name-cell dot carries its attached-container
 verdict the same way, and each attached-container card's state words take its
 dot's tone through the same helper. The Swarm tables follow it too: the cell
