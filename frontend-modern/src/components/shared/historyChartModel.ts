@@ -44,6 +44,23 @@ export const HISTORY_CHART_RANGES: HistoryTimeRange[] = [
 
 export const HISTORY_CHART_MIN_LEFT_INSET = 40;
 
+// The one label every history range picker shows for an option, so a drawer,
+// a disk and a pool never name the same range three ways.
+const HISTORY_RANGE_OPTION_LABELS: Record<HistoryTimeRange, string> = {
+  '30m': '30 minutes',
+  '1h': '1 hour',
+  '6h': '6 hours',
+  '12h': '12 hours',
+  '24h': '24 hours',
+  '7d': '7 days',
+  '14d': '14 days',
+  '30d': '30 days',
+  '90d': '90 days',
+};
+
+export const formatHistoryRangeOptionLabel = (range: HistoryTimeRange): string =>
+  HISTORY_RANGE_OPTION_LABELS[range] ?? range;
+
 const HISTORY_CHART_RANGE_LABELS: Record<HistoryTimeRange, string> = {
   '30m': '30-minute',
   '1h': '1-hour',

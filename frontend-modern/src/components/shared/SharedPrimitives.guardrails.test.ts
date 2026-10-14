@@ -1319,6 +1319,9 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain("value: 'history', label: 'History'");
     }
     expect(resourceDetailDrawerSource).not.toContain("activeTab() === 'history'");
+    // Range pickers name their options from one table, never a local list.
+    expect(guestDrawerHistorySource).toContain('formatHistoryRangeOptionLabel(option)');
+    expect(guestDrawerHistorySource).not.toContain('const formatRangeLabel');
 
     expect(resourceDetailDrawerSource).toContain('@/components/shared/Subtabs');
     expect(resourceDetailDrawerSource).toContain('tabs={drawer.tabs().map');
