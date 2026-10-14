@@ -207,7 +207,7 @@ func validateNativeAgentFrontendPreparation(steps []nativeAgentFrontendStep) err
 		previous = i
 	}
 	node, dependencies, build := steps[indices[names[0]]], steps[indices[names[1]]], steps[indices[names[2]]]
-	if node.Uses != "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020" ||
+	if node.Uses != "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1" ||
 		node.With["node-version"] != "24" || node.With["cache"] != "npm" ||
 		node.With["cache-dependency-path"] != "frontend-modern/package-lock.json" {
 		return fmt.Errorf("native frontend preparation must use the pinned Node tool and locked cache")

@@ -7418,22 +7418,31 @@ The test transport remains in-memory and does not contact a cluster. Version
 0.37 compatibility is not installed-cluster acceptance or qualification of other
 libraries in a grouped dependency proposal.
 
-### Node setup action v7 compatibility
+### Node setup and artifact action refresh (14 October 2026)
 
 Workflow consumers pin `actions/setup-node` to
-`820762786026740c76f36085b0efc47a31fe5020` (v7.0.0). The action manifest
-retains the Node 24 execution runtime, setup/cache-save entry points and existing
-inputs. Its internal ESM/toolkit upgrade does not change the requested Node 24
-application toolchain. Consumers do not supply `registry-url` or depend on the
+`949feb2413d6458794dcd2491c4babbbce0c15c1` (v7.1.0), `actions/upload-artifact`
+to `cf430e030ddbb5b0abf93d22962f4752f3646cd9` (v7.0.2), and
+`actions/download-artifact` to `9000827ccba6bdab643e8b6fd33ac0654aef8333`
+(v8.0.2). The download action remains an exact reviewed trust baseline, not
+an arbitrary full-SHA or mutable-version admission. The refresh does not change
+the requested Node 24 application toolchain. Consumers do not supply
+`registry-url` or depend on the
 removed dummy `NODE_AUTH_TOKEN` export. Explicit npm lockfile caching for test
 jobs and disabled automatic package-manager caching for privileged release jobs
-remain unchanged; no permission, dispatch input or signing backend changes.
+remain unchanged, including the newer pre-token issue-label job. No permission,
+dispatch input, artifact name/path/retention, checksum, signing backend or
+recovery transaction changes.
 
 `test_setup_node_upgrade_preserves_consumer_contract` in the existing workflow
 trust suite verifies every consumer pin, absence of the affected auth assumptions,
 workflow trust controls and the retained native Windows command/lifecycle proof
 steps. Native Windows execution remains a hosted check, not a local Linux claim.
-This upgrade is independent of the grouped signing/Docker/Tailscale updates.
+`test_artifact_refresh_does_not_admit_a_previous_or_mutable_pin` preserves
+fail-closed download admission. Container-log and signing-policy tests retain
+always-run evidence upload, bounded retention and no-publication controls.
+Source checks do not establish hosted action execution or installed recovery.
+This refresh is independent of the grouped signing/Docker/Tailscale updates.
 
 ### Native agent API-linked test assets
 
