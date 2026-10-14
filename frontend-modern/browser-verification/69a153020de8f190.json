@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "c94aec835faa62ce5f1fd912913c623b446d022e",
+  "verified_at": "2026-10-14T10:58:40Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "2ce76a6d4fbfa149d2fda0500f87334e244abbed9ad3f27b65e718e41b998bf4"
+  },
+  "routes": [
+    "/browser-tests/guest-storage-2263.html (production GuestDrawerOverview, GuestPhysicalDisks, DiskDetail and HistoryChart, Chromium via Playwright 1.56.1 on pulse-dev)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1240,
+      "height": 900
+    },
+    {
+      "width": 190,
+      "height": 844
+    }
+  ],
+  "states": [
+    "disk expanded with 24h History and Live I/O charts loaded",
+    "viewport narrowed by 200px: each chart re-reads at its new point cap with readings kept and no Loading history spinner",
+    "viewport restored and a full-page capture taken: no spinner left behind",
+    "Overview hidden and shown again (pause path from the previous change still passes)"
+  ],
+  "interactions": [
+    "Enter on the disk summary expands it; pointer closes and reopens it",
+    "Hide overview / Show overview",
+    "page.setViewportSize narrow then restore",
+    "full-page screenshot"
+  ]
+}

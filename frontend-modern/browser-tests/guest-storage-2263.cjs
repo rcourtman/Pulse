@@ -214,11 +214,26 @@ const { chromium } = require('playwright');
         await page.locator('[data-testid="disk-detail-history"] canvas').first().isVisible(),
         'charts return with their readings',
       );
-      // An element capture: a full-page capture resizes the page, which
-      // re-reads charts at a new point cap and would show their spinners.
-      await page.locator('[data-testid="guest-physical-disks"]').screenshot({
+      // A resize asks for the same series at a new point cap: the charts keep
+      // their readings and show no loading state while it is read.
+      const spinners = () => page.getByLabel('Loading history').count();
+      const resizedReads = reads();
+      const resizedRead = page.waitForRequest((request) =>
+        request.url().includes('/api/metrics-store/history'),
+      );
+      await page.setViewportSize({ width: width - 200, height: width === 390 ? 844 : 900 });
+      await resizedRead;
+      assert.equal(await spinners(), 0, 'a resize keeps the charts on screen');
+      await page.waitForTimeout(300);
+      assert.ok(reads() > resizedReads, 'the resized charts read at their new cap');
+      assert.equal(await spinners(), 0, 'no spinner after the resized read');
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.waitForTimeout(300);
+      await page.screenshot({
         path: path.join(artifacts, `guest-storage-2263-resumed-${width}.png`),
+        fullPage: true,
       });
+      assert.equal(await spinners(), 0, 'a full-page capture leaves no spinner behind');
       const beforeNoAgent = requests.length;
       await page.getByRole('button', { name: 'No agent' }).click();
       assert.equal(await page.locator('[data-testid="guest-physical-disks"]').count(), 0);

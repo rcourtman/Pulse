@@ -9190,6 +9190,11 @@ hidden drawer tab: false aborts its read and stops polling but keeps the
 readings it shows, and resuming the same selection reads at once without a
 loading state before polling again. A selection changed while paused still
 starts from nothing. The hook and mounted chart tests pin both paths.
+The point cap follows the chart's width but is not part of what the chart
+shows: a resize (or a full-page capture) re-reads the same series at the new
+cap while keeping its readings on screen with no loading state, and only
+pointer inspection resets, since its pixel positions moved. A changed target,
+metric, range, organisation or lock still starts from nothing.
 
 ### Shared History single observations
 

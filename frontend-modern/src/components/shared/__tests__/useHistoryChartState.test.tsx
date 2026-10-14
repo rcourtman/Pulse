@@ -242,6 +242,50 @@ describe('History request ownership', () => {
     expect(state.data()).toEqual(points(40));
   });
 
+  it('keeps its readings without a loading state when a resize changes the point cap', async () => {
+    let width = 800;
+    let resized: (() => void) | undefined;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          resized = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { get: () => width });
+    request.mockResolvedValue({ points: points(10), source: 'store' } as never);
+    let state!: HistoryChartState;
+    render(() => {
+      state = useHistoryChartState(
+        { resourceId: 'a', resourceType: 'agent', metric: 'cpu', range: '24h' },
+        { getCanvas: () => undefined, getContainer: () => container },
+      );
+      return <div />;
+    });
+    await settle();
+    await settle();
+    expect(state.data()).toEqual(points(10));
+    const caps = () => request.mock.calls.map((call) => call[0].maxPoints);
+    const before = request.mock.calls.length;
+    const resizedRead = deferred();
+    request.mockReturnValueOnce(resizedRead.promise);
+    width = 400;
+    resized?.();
+    expect(request.mock.calls.length).toBe(before + 1);
+    expect(caps().at(-1)).not.toBe(caps().at(-2));
+    // The same series at a new resolution: readings stay, no spinner.
+    expect(state.data()).toEqual(points(10));
+    expect(state.loading()).toBe(false);
+    resizedRead.resolve({ points: points(20), source: 'store' } as never);
+    await settle();
+    expect(state.data()).toEqual(points(20));
+    vi.unstubAllGlobals();
+  });
+
   it('starts a selection changed while paused from nothing, without reading', async () => {
     request.mockResolvedValueOnce({ points: points(10), source: 'store' } as never);
     const { state, change } = mount();

@@ -473,6 +473,50 @@ describe('HistoryChart', () => {
     }
   });
 
+  it('keeps its readings on screen while a resize re-reads at a new point cap', async () => {
+    const request = vi.mocked(ChartsAPI.getMetricsHistory);
+    const observers: Array<() => void> = [];
+    const original = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      constructor(callback: () => void) {
+        observers.push(callback);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    let width = 800;
+    const widthSpy = vi
+      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(() => width);
+    try {
+      // The first measured width replaces the unmeasured read, so every read
+      // until the resize answers with the same reading.
+      request.mockResolvedValue({
+        points: [{ timestamp: 1000, value: 10, min: 10, max: 10 }],
+        source: 'store',
+      } as never);
+      render(() => <HistoryChart resourceType="disk" resourceId="d" metric="smart_temp" />);
+      const chart = screen.getByRole('img', { name: 'History chart' });
+      const description = document.getElementById(chart.getAttribute('aria-describedby')!)!;
+      await waitFor(() => expect(description).toHaveTextContent('10'));
+      const calls = request.mock.calls.length;
+      request.mockImplementationOnce(() => new Promise(() => {}));
+      width = 400;
+      observers.forEach((resized) => resized());
+      expect(request.mock.calls.length).toBe(calls + 1);
+      expect(request.mock.calls.at(-1)![0].maxPoints).not.toBe(
+        request.mock.calls.at(-2)![0].maxPoints,
+      );
+      expect(description).toHaveTextContent('10');
+      expect(screen.queryByLabelText('Loading history')).not.toBeInTheDocument();
+    } finally {
+      widthSpy.mockRestore();
+      globalThis.ResizeObserver = original;
+      request.mockReset().mockResolvedValue({ points: [], source: 'store' } as never);
+    }
+  });
+
   it('exposes a stored singleton to pointer inspection without treating a later empty response as zero', async () => {
     const request = vi.mocked(ChartsAPI.getMetricsHistory);
     request.mockResolvedValueOnce({

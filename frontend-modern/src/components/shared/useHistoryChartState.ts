@@ -106,8 +106,9 @@ export function useHistoryChartState(
   const dataMax = createMemo(() => getHistoryChartDataMax(data()));
 
   let previousSelection: string | undefined;
-  // The selection whose stored reply is on screen, so a pause keeps it.
-  let loadedSelection: string | undefined;
+  let previousSeries: string | undefined;
+  // The series whose stored reply is on screen, so a pause or resize keeps it.
+  let loadedSeries: string | undefined;
 
   // One effect owns a selection, its request and its polling timer. Cleanup
   // invalidates completions even when a transport ignores cancellation.
@@ -133,25 +134,29 @@ export function useHistoryChartState(
       if (timer !== undefined) window.clearInterval(timer);
     });
 
-    const selection = JSON.stringify([
+    // The series is what the chart shows. The point cap follows the chart's
+    // width, so a resize asks for the same series at a new resolution: it
+    // keeps the readings on screen while the new request is in flight.
+    const series = JSON.stringify([
       orgSelection,
       resourceType,
       resourceId,
       metric,
       chartRange,
-      pointsCap,
       locked,
       suppliedData !== undefined,
     ]);
-    // Pausing and resuming the same selection keeps its readings on screen;
-    // any other change starts from nothing.
-    if (suppliedData !== undefined || selection !== previousSelection) {
+    const selection = JSON.stringify([series, pointsCap]);
+    // Pausing, resuming or resizing the same series keeps its readings on
+    // screen; any other change starts from nothing.
+    if (suppliedData !== undefined || series !== previousSeries) {
       setData(suppliedData ?? []);
       setSource(suppliedData !== undefined ? 'live' : null);
       setError(null);
       setRefreshFailed(false);
-      loadedSelection = undefined;
+      loadedSeries = undefined;
     }
+    previousSeries = series;
     setLoading(false);
     if (selection !== previousSelection) {
       pendingTouch = undefined;
@@ -164,7 +169,7 @@ export function useHistoryChartState(
     if (suppliedData !== undefined || locked || !resourceId || !resourceType) return;
     // A paused chart (inside a hidden drawer tab) reads nothing until resumed.
     if (!enabled) return;
-    let hasLoaded = loadedSelection === selection;
+    let hasLoaded = loadedSeries === series;
 
     const loadData = async () => {
       if (!active || pending) return;
@@ -186,14 +191,14 @@ export function useHistoryChartState(
         setError(null);
         setRefreshFailed(false);
         hasLoaded = true;
-        loadedSelection = selection;
+        loadedSeries = series;
       } catch (err) {
         if (!active) return;
         console.error('Failed to fetch metrics history:', err);
         const accessError = getAPIReadAccessErrorMessage(err);
         if (accessError) {
           hasLoaded = false;
-          loadedSelection = undefined;
+          loadedSeries = undefined;
           pendingTouch = undefined;
           touchTimestamp = null;
           batch(() => {
