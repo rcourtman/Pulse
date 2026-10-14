@@ -5638,7 +5638,9 @@ the cell behind a dot's verdict through it, and `PlatformIssueReason` takes its
 tones from it too;
 the Docker Networks row's single name-cell dot carries its attached-container
 verdict the same way, and each attached-container card's state words take its
-dot's tone through the same helper. "Worth checking" renders through
+dot's tone through the same helper. The Swarm tables follow it too: the cell
+behind a service, task or node dot's verdict (Running count and Update words,
+Current state, Reachability or Availability) reads in that dot's tone. "Worth checking" renders through
 `DrawerExceptionList.tsx` directly under the alerts line, above the charts:
 one compact label/value line per lifted row with the shared
 `detailValueToneClass` tone, not a card per section. A guest memory reading

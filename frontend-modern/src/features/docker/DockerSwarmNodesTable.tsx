@@ -27,6 +27,7 @@ import {
   dockerByteValue,
   dockerCpuValue,
   dockerResourceName,
+  dockerStateTextToneClass,
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
@@ -226,6 +227,18 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                       dockerTextValue(
                         resource.docker?.leader ? 'leader' : resource.docker?.managerReachability,
                       );
+                    // The cell behind the dot's verdict reads in its colour: an
+                    // unreachable manager in Reachability, a drained or paused
+                    // node in Availability.
+                    const verdict = () => mapDockerSwarmNodeStatus(resource);
+                    const reachabilityTone = () =>
+                      verdict().label === 'Manager unreachable'
+                        ? dockerStateTextToneClass(verdict().variant)
+                        : '';
+                    const availabilityTone = () =>
+                      verdict().label === 'Drained' || verdict().label === 'Paused'
+                        ? dockerStateTextToneClass(verdict().variant)
+                        : '';
 
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
@@ -238,7 +251,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                         >
                           <DockerResourceNameCell
                             resource={resource}
-                            indicator={mapDockerSwarmNodeStatus(resource)}
+                            indicator={verdict()}
                             detailToggle={
                               <PlatformResourceDetailToggleButton
                                 expanded={isExpanded()}
@@ -254,12 +267,15 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                             {dockerTextValue(resource.docker?.nodeRole)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden ${availabilityTone() || 'text-base-content'}`}
                           >
                             {dockerTextValue(resource.docker?.availability)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} ${reachabilityTone() || 'text-base-content'}`}
+                            data-docker-node-reachability-tone={
+                              reachabilityTone() ? 'danger' : 'none'
+                            }
                           >
                             {managerReachability()}
                           </TableCell>

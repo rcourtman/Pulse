@@ -597,7 +597,25 @@ describe('dockerPageModel', () => {
             },
           }),
         ),
-      ).toEqual({ variant: 'warning', label: 'Rollback paused' });
+      ).toEqual({ variant: 'warning', label: 'Update paused' });
+    });
+
+    it("names each of Docker's mid-change update states as itself", () => {
+      const service = (state: string, runningTasks = 3) =>
+        mapDockerServiceStatus(
+          makeResource({
+            id: `svc-${state}`,
+            type: 'docker-service',
+            docker: { desiredTasks: 3, runningTasks, serviceUpdate: { state } },
+          }),
+        );
+      // Docker reports rollback_started and rollback_paused as snake_case.
+      expect(service('rollback_started')).toEqual({ variant: 'warning', label: 'Rolling back' });
+      expect(service('rollback_paused')).toEqual({ variant: 'warning', label: 'Rollback paused' });
+      expect(service('updating')).toEqual({ variant: 'success', label: 'Healthy' });
+      expect(service('rollback_completed')).toEqual({ variant: 'success', label: 'Healthy' });
+      // No replicas running is down, whatever the rollout says.
+      expect(service('rollback_started', 0)).toEqual({ variant: 'danger', label: '0 / 3 running' });
     });
   });
 
