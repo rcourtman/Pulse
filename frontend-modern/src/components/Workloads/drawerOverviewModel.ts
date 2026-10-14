@@ -79,7 +79,8 @@ export const getDrawerChartAlerts = (
   return result;
 };
 
-const isExceptionRow = (row: DetailRow): boolean => row.tone === 'warning' || row.tone === 'danger';
+const isExceptionRow = (row: DetailRow): boolean =>
+  row.tone === 'warning' || row.tone === 'danger' || row.lift === true;
 
 // The drawer demotes inventory to a collapsed Details section, but a fact that
 // says something is wrong or untrustworthy must stay in front whichever section
@@ -107,6 +108,40 @@ export const withoutDrawerExceptionRows = (sections: readonly DetailSection[]): 
       rows: section.rows.filter((row) => !isExceptionRow(row)),
     })),
   );
+
+// An active alert states these rows' condition already, at its own severity.
+// The row then stays in Details rather than repeating the alert in front.
+const ALERT_STATED_ROW_LABELS: Record<string, string> = {
+  'docker-container-health': 'Health check',
+  'docker-container-state': 'Observed state',
+  'docker-container-exit': 'Observed state',
+  'docker-container-restart-loop': 'Restarts',
+  'docker-container-update': 'Image update',
+  'docker-host-offline': 'Observed state',
+  'host-offline': 'Observed state',
+  offline: 'Observed state',
+};
+
+export const getAlertStatedRowLabels = (alerts: readonly { type: string }[]): Set<string> =>
+  new Set(alerts.map((alert) => ALERT_STATED_ROW_LABELS[alert.type]).filter(Boolean));
+
+/**
+ * Splits inventory into rows lifted in front and the sections left for
+ * Details. A warning, danger or actionable row is lifted unless one of the
+ * resource's own alerts already states it, in which case it stays in Details.
+ */
+export const partitionDrawerExceptionRows = (
+  sections: readonly DetailSection[],
+  statedByAlerts: ReadonlySet<string> = new Set(),
+): { lifted: DetailRow[]; details: DetailSection[] } => {
+  const lifts = (row: DetailRow) => isExceptionRow(row) && !statedByAlerts.has(row.label);
+  return {
+    lifted: collectDrawerExceptionRows(sections).filter(lifts),
+    details: compactDetailSections(
+      sections.map((section) => ({ ...section, rows: section.rows.filter((row) => !lifts(row)) })),
+    ),
+  };
+};
 
 // "Passing" needs a healthy result that is still fresh. A success whose
 // evidence has expired, or whose freshness is unknown, is not summarised away:

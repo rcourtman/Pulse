@@ -43,7 +43,9 @@ describe('resource drawer runtime context for an offline resource', () => {
     ));
 
     const section = screen.getByTestId('resource-runtime-context-section');
-    expect(within(section).getByText('offline')).toBeInTheDocument();
+    // Offline says when it was last seen and is danger-toned, so drawers lift it.
+    const state = within(section).getByText('Offline · last seen 14 mins ago');
+    expect(state.closest('td')).toHaveClass('text-rose-700');
     expect(within(section).queryByText('Uptime')).toBeNull();
     expect(within(section).getByText('Last seen')).toBeInTheDocument();
     expect(within(section).getByText('14 mins ago')).toBeInTheDocument();

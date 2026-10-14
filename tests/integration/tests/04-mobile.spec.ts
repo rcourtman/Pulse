@@ -554,6 +554,11 @@ test.describe("Mobile viewport flows", () => {
       await expect(
         row.getByRole("button", { name: /^Collapse details for / }),
       ).toHaveAttribute("aria-expanded", "true");
+      // Identity and container inventory sit under the drawer's Details.
+      await page
+        .locator('[data-testid="resource-technical-details"] > summary')
+        .first()
+        .click();
       if (requireRows) {
         // The default mock's first container and pod carry these long rows.
         await expect(

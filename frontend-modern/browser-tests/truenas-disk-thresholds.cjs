@@ -152,7 +152,7 @@ const config = (patch = {}) => ({
       const toggle = page.getByRole('button', { name: /Expand details for nvme-raised/i });
       await toggle.focus();
       await toggle.press('Enter');
-      await page.getByTestId('resource-platform-details').locator('summary').click();
+      await page.getByTestId('resource-technical-details').locator('summary').first().click();
       await page.getByRole('button', { name: 'Show TrueNAS', exact: true }).click();
       const temperatureRow = page
         .getByTestId('resource-truenas-details-section')
