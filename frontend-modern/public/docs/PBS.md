@@ -441,7 +441,12 @@ same series. Current CPU and memory values, a green connection badge, and an
 
 Use the chart's selected stored range, not a current summary card or table
 sparkline. For observation times, missing samples and aggregated low–high bands,
-see [reading a History panel](METRICS_HISTORY.md#read-a-history-panel).
+see [reading a History panel](METRICS_HISTORY.md#read-a-history-panel). On a
+phone, secondary panels may be collapsed behind **Show …** below the charts;
+reveal them before treating a panel as missing. This changes the layout, not
+the selected range or collection. CPU and memory are in **Utilization**, which
+is already visible when the charts are shown; the button is not a fix for an
+empty CPU or memory chart.
 
 Start with one affected PBS and a recent, unlocked time range:
 

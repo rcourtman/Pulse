@@ -11,6 +11,21 @@ tab. If your installed version still has a **History** tab, use that tab; do not
 upgrade or restart just to follow this guide. A resource without a supported
 history target may have no chart.
 
+**On a phone**, drawers can show only **Utilization** and panels with active
+alerts. Use the **Show …** button below the charts to reveal the others, for
+example **Show Network I/O, Disk I/O, Thermals**. Its labels name the currently
+collapsed panels, so they vary by resource and alert. **Show fewer charts**
+collapses them again. Wider layouts show all panels and may have no button;
+older installed layouts may differ.
+
+This button changes only the layout, preserving **History range**; it does not
+refresh history or collect new measurements. A collapsed panel is not missing
+data or measured zero. After revealing it, **No stored history in this range**
+means that panel has no plotted stored samples for the selected range, not zero
+usage or proof that collection stopped. Loading, an access error, a locked range
+and **History unavailable** are different states: retain the existing message
+and range. Do not refresh, run Diagnostics or restart just to reveal a chart.
+
 These charts are separate from **Alerts → History**, table sparklines and
 current summary cards. A current card or a short trend preview does not
 establish the observations in the selected stored range. For a PBS host, use

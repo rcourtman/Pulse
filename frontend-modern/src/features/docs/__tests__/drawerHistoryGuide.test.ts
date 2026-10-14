@@ -66,6 +66,31 @@ describe('stored-chart navigation and interpretation help', () => {
     expect(panel).toContain('average, ${low} to ${high}');
   });
 
+  it('makes collapsed phone charts discoverable without another collection request', () => {
+    const text = prose(history());
+    expect(text).toContain('On a phone');
+    expect(text).toContain('Utilization and panels with active alerts');
+    expect(text).toContain('Show Network I/O, Disk I/O, Thermals');
+    expect(text).toContain('Show fewer charts collapses them again');
+    expect(text).toContain('labels name the currently collapsed panels');
+    expect(text).toContain('Wider layouts show all panels and may have no button');
+    expect(text).toContain('preserving History range');
+    expect(text).toContain('does not refresh history or collect new measurements');
+    expect(text).toContain('Do not refresh, run Diagnostics or restart just to reveal a chart');
+  });
+
+  it('does not mistake collapsed layout or an empty panel for measured zero', () => {
+    const text = prose(history());
+    expect(text).toContain('A collapsed panel is not missing data or measured zero');
+    expect(text).toContain('No stored history in this range');
+    expect(text).toContain('no plotted stored samples for the selected range');
+    expect(text).toContain('not zero usage or proof that collection stopped');
+    expect(text).toContain('Loading, an access error, a locked range and History unavailable');
+    expect(prose(pbs())).toContain('secondary panels may be collapsed behind Show …');
+    expect(prose(pbs())).toContain('CPU and memory are in Utilization');
+    expect(prose(pbs())).toContain('button is not a fix for an empty CPU or memory chart');
+  });
+
   it('explains stored buckets and peaks without inventing coverage or an incident time', () => {
     const text = prose(history());
     expect(text).toContain('22% average, 10% to 95%');
