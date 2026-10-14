@@ -20,6 +20,7 @@ import {
   getGuestDrawerGuestReadPresentation,
   getGuestDrawerGuestReadPrecaution,
 } from '../guestDrawerModel';
+import { guestDiskDeferrals } from '../__fixtures__/guestDiskDeferrals';
 
 vi.mock('../GuestPhysicalDisks', () => ({ GuestPhysicalDisks: () => null }));
 
@@ -220,27 +221,39 @@ describe('guest agent coverage requires current state, not cached metadata', () 
 });
 
 describe('fixed guest read state and precaution evidence', () => {
-  it.each([
-    'vm-locked',
-    'lock-unverified',
-    'agent-busy',
-    'agent-cooldown',
-    'agent-response-incomplete',
-    'agent-capacity',
-    'invalid-guest-key',
-    'agent-timeout',
-  ])('uses %s without a probe or installation diagnosis', (reason) => {
-    for (const prefix of ['', 'prev-']) {
-      const value = guest({ diskStatusReason: prefix + reason });
-      expect(getGuestDrawerGuestReadPresentation(value)).toMatchObject({
-        label: 'Deferred',
-        precaution: true,
-      });
-      const message = getGuestDrawerGuestReadPrecaution(value)!;
-      expect(message).not.toMatch(/Using last known|may not be installed|may need to be restarted/);
-      expect(message).not.toContain('prev-');
-    }
-  });
+  it.each(guestDiskDeferrals)(
+    'uses %s without a probe or installation diagnosis',
+    (reason, detail) => {
+      for (const prefix of ['', 'prev-']) {
+        const value = guest({ diskStatusReason: prefix + reason });
+        expect(getGuestDrawerGuestReadPresentation(value)).toMatchObject({
+          label: 'Deferred',
+          precaution: true,
+          detail,
+        });
+        const message = getGuestDrawerGuestReadPrecaution(value)!;
+        expect(message).toBe(detail);
+        expect(message).not.toMatch(
+          /Using last known|may not be installed|may need to be restarted/,
+        );
+        expect(message).not.toContain('prev-');
+      }
+    },
+  );
+
+  it.each(['agent-completion-unverified', 'agent-redirect', 'agent-transport-unverified'])(
+    'keeps %s caution independent of a reported available flag and live metrics',
+    (reason) => {
+      const value = guest({ guestAgentStatus: 'available', diskStatusReason: `prev-${reason}` });
+      const original = structuredClone(value);
+      expect(getGuestDrawerGuestReadPresentation(value)?.label).toBe('Reported available');
+      expect(getGuestDrawerGuestReadPresentation(value)?.precaution).toBe(true);
+      expect(getGuestDrawerGuestReadPrecaution(value)).toBe(
+        guestDiskDeferrals.find(([key]) => key === reason)![1],
+      );
+      expect(value).toEqual(original);
+    },
+  );
 
   it('does not turn a reported available flag into completed read or thaw evidence', () => {
     const value = guest({ guestAgentStatus: 'available', diskStatusReason: 'agent-timeout' });
