@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Discriminating controls for the native CI recipe; no host manager/root use."""
+import contextlib
 import importlib.util
 import io
 import json
@@ -299,6 +300,7 @@ class NativeContracts(unittest.TestCase):
                 else:
                     lab.phase("forward", "v0.0.2", active="inactive")
                     self.assertTrue(lab.receipt["phases"][0]["passed"])
+                self.assertEqual(lab.operation, "forward")
 
     def test_managed_process_identity_follows_served_readiness_and_rejects_residuals(self):
         for mutation in ("", "process-bytes", "stopped-after-readiness", "inactive-pid"):
@@ -664,6 +666,93 @@ else: sys.exit(97)
                         source.replace("EXPECTED_SOURCE_SHA: ${{ github.sha }}", "EXPECTED_SOURCE_SHA: main"),
                         source.replace("runs-on: ubuntu-24.04", "runs-on: self-hosted")):
             with self.assertRaises(AssertionError): recipe(changed)
+
+    def run_receipt(self, primary, cleanup_fails):
+        # Execute the actual receipt producer, with real unprivileged failing
+        # children. Substitute only native admission and service/account work.
+        # These controls cannot provide a native transaction or cleanup proof.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            receipt = root / "receipt.json"
+            lab = native.NativeLab(root, ROOT, root / "a", root / "b", "a" * 40)
+            owned_cleanup = lab.cleanup
+            def prepare():
+                lab.operation = "baseline-install"
+                if primary == "command":
+                    lab.run("/bin/bash", "-c", "printf 'private-transaction-fixture'; exit 23")
+                if primary == "timeout":
+                    lab.run(sys.executable, "-c", "import time; time.sleep(60)", timeout=0.05)
+                if primary == "assertion":
+                    raise RuntimeError("confined persistence assertion")
+            def exercise():
+                lab.receipt["phases"] = [{"name": "confined-control"}] * 7
+            def cleanup():
+                lab.operation = "cleanup"
+                if cleanup_fails:
+                    lab.run(sys.executable, "-c", "print('private-cleanup-fixture'); raise SystemExit(31)")
+                owned_cleanup()  # Owns nothing; touches no manager.
+            argv = ["native-receipt-control", "--before", "unused-before", "--after", "unused-after",
+                    "--receipt", str(receipt)]
+            with patch.dict(os.environ, {"EXPECTED_SOURCE_SHA": "a" * 40, "RUNNER_TEMP": str(root)}), \
+                 patch.object(sys, "argv", argv), patch.object(native, "hosted_admission"), \
+                 patch.object(native, "NativeLab", return_value=lab), \
+                 patch.object(lab, "prepare", side_effect=prepare), \
+                 patch.object(lab, "exercise", side_effect=exercise), \
+                 patch.object(lab, "cleanup", side_effect=cleanup), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                if primary or cleanup_fails:
+                    with self.assertRaises(SystemExit): native.main()
+                else:
+                    native.main()
+            result = json.loads(receipt.read_text())
+            for private in ("private-transaction-fixture", "private-cleanup-fixture", str(root)):
+                self.assertNotIn(private, json.dumps(result))
+            return result
+
+    def test_primary_command_survives_successful_or_failed_cleanup(self):
+        for cleanup_fails in (False, True):
+            with self.subTest(cleanup_fails=cleanup_fails):
+                result = self.run_receipt("command", cleanup_fails)
+                self.assertEqual(result["command_failure"]["observed_exit"], 23)
+                self.assertEqual(result["command_failure"]["command"], "bash")
+                self.assertEqual(result["command_failure"]["operation"], "baseline-install")
+                self.assertEqual(result["failure"]["operation"], "baseline-install")
+                self.assertEqual(result["phases"], [])
+                self.assertEqual(result["cleanup"]["complete"], not cleanup_fails)
+                if cleanup_fails:
+                    self.assertEqual(result["cleanup"]["command_failure"]["observed_exit"], 31)
+                    self.assertEqual(result["cleanup"]["command_failure"]["operation"], "cleanup")
+                else:
+                    self.assertNotIn("command_failure", result["cleanup"])
+
+    def test_primary_timeout_is_not_replaced_by_cleanup_exit(self):
+        result = self.run_receipt("timeout", True)
+        self.assertTrue(result["command_failure"]["deadline_exceeded"])
+        self.assertLess(result["command_failure"]["observed_exit"], 0)
+        self.assertEqual(result["command_failure"]["operation"], "baseline-install")
+        self.assertNotIn("output_sha256", result["command_failure"])
+        self.assertEqual(result["cleanup"]["command_failure"]["observed_exit"], 31)
+        self.assertEqual(result["phases"], [])
+
+    def test_assertion_and_cleanup_only_errors_do_not_invent_primary_command(self):
+        for primary in ("assertion", ""):
+            with self.subTest(primary=primary):
+                result = self.run_receipt(primary, True)
+                self.assertNotIn("command_failure", result)
+                self.assertEqual(result["cleanup"]["command_failure"]["observed_exit"], 31)
+                self.assertFalse(result["cleanup"]["complete"])
+                if primary:
+                    self.assertEqual(result["failure"]["operation"], "baseline-install")
+                    self.assertEqual(result["phases"], [])
+                else:
+                    self.assertNotIn("failure", result)
+
+    def test_successful_receipt_retains_no_failure_record(self):
+        result = self.run_receipt("", False)
+        self.assertNotIn("failure", result)
+        self.assertNotIn("command_failure", result)
+        self.assertNotIn("command_failure", result["cleanup"])
+        self.assertTrue(result["cleanup"]["complete"])
 
 
 if __name__ == "__main__":

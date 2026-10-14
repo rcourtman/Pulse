@@ -37,6 +37,10 @@ func TestAutoUpdateNativeSystemdHarnessContracts(t *testing.T) {
 		"test_phase_cannot_accept_wrong_bytes_state_mask_persistence_or_backup",
 		"test_managed_process_identity_follows_served_readiness_and_rejects_residuals",
 		"test_runtime_readback_rejects_post_comparison_drift",
+		"test_primary_command_survives_successful_or_failed_cleanup",
+		"test_primary_timeout_is_not_replaced_by_cleanup_exit",
+		"test_assertion_and_cleanup_only_errors_do_not_invent_primary_command",
+		"test_successful_receipt_retains_no_failure_record",
 		"test_connected_linux_control_is_required_without_macho_or_validator_bypass",
 	} {
 		if results[name] != "ok" {

@@ -146,6 +146,7 @@ class NativeLab:
         self.owned_unit = False
         self.owned_root = False
         self.owned_user = False
+        self.operation = "prepare-admission"
 
     def run(self, *args, timeout=120, ok=(0,)):
         process = subprocess.Popen(args, env=self.env, stdin=subprocess.DEVNULL,
@@ -162,7 +163,8 @@ class NativeLab:
                 process.communicate(timeout=2)
             self.receipt["command_failure"] = {"command": Path(args[0]).name,
                                                 "deadline_exceeded": True,
-                                                "observed_exit": process.returncode}
+                                                "observed_exit": process.returncode,
+                                                "operation": self.operation}
             raise RuntimeError("native command deadline exceeded") from None
         # Private in-memory diagnostic for confined controls, never a receipt field.
         self._last_output = output
@@ -170,6 +172,7 @@ class NativeLab:
         if result.returncode not in ok:
             self.receipt["command_failure"] = {"command": Path(args[0]).name,
                                                 "observed_exit": result.returncode,
+                                                "operation": self.operation,
                                                 "output_bytes": len(output),
                                                 "output_sha256": hashlib.sha256(output).hexdigest()}
             raise RuntimeError(f"native command failed ({result.returncode}): {Path(args[0]).name}")
@@ -193,6 +196,7 @@ class NativeLab:
         return pairs
 
     def prepare(self):
+        self.operation = "prepare-admission"
         for path in (self.unit, Path("/run/systemd/system") / self.unit.name):
             if path.exists() or path.is_symlink():
                 raise ValueError("native fixture unit already exists")
@@ -205,6 +209,7 @@ class NativeLab:
             raise ValueError("native fixture unit is already known to systemd")
         for name in ("tools", "tmp", "archives", "signer"):
             (self.root / name).mkdir(mode=0o700 if name == "signer" else 0o755)
+        self.operation = "prepare-source"
         source = (self.repo / "install.sh").read_text()
         (self.root / "installer-definitions").write_text(installer_definitions(source))
         self.receipt["sources"] = {p: digest(self.repo / p) for p in
@@ -214,10 +219,12 @@ class NativeLab:
         if len(set(self.receipt["binaries"].values())) != 2:
             raise ValueError("same executable bytes prove no replacement")
         for tag, binary in self.binaries.items():
+            self.operation = "verify-binary-" + tag
             if self.run(str(binary), "--version").stdout.decode().splitlines()[0] != "Pulse " + tag:
                 raise ValueError("synthetic binary identity mismatch")
         self.create_signer()
         for tag, binary in self.binaries.items():
+            self.operation = "prepare-archive-" + tag
             version = self.root / "VERSION"
             version.write_text(tag + "\n")
             archive = self.root / "archives" / f"pulse-{tag}-linux-amd64.tar.gz"
@@ -225,27 +232,35 @@ class NativeLab:
                 tar.add(binary, arcname="bin/pulse")
                 tar.add(version, arcname="VERSION")
             self.sign(archive)
+        self.operation = "prepare-installer"
         (self.root / "installer").write_text(INSTALLER)
         self.sign(self.root / "installer")
+        self.operation = "prepare-transport"
         for name in ("curl", "mktemp"):
             path = self.root / "tools" / name
             path.write_text(TRANSPORT)
             path.chmod(0o755)
         # Establish the baseline using real source staging and unit/helper writers.
+        self.operation = "baseline-account-admission"
         self.owned_user = self.run("id", "-u", "pulse", ok=(0, 1)).returncode == 1
         self.owned_unit = True  # Any partial writer output is ours to clean up.
+        self.operation = "baseline-install"
         self.shell('source "$PULSE_NATIVE_ROOT/installer-definitions"; '
                    'PINNED_RELEASE_SSH_PUBLIC_KEY=$(cat "$PULSE_NATIVE_ROOT/signer/key.pub"); '
                    'create_user; setup_directories; '
                    'install_pulse_archive "$PULSE_NATIVE_ROOT/archives/pulse-v0.0.1-linux-amd64.tar.gz" v0.0.1; '
                    'install_systemd_service; setup_update_command')
+        self.operation = "baseline-configure"
         data = self.root / "data"
         (data / ".env").write_text("PULSE_TELEMETRY=false\nBIND_ADDRESS=127.0.0.1\n")
         (data / "system.json").write_text('{"autoUpdateEnabled":false,"updateChannel":"stable"}\n')
         (data / "native-persistence-sentinel").write_text("original persistent data\n")
+        self.operation = "baseline-start"
         self.run("systemctl", "start", self.unit.name)
+        self.operation = "baseline-readback"
         self.assert_runtime(TAGS[0], "active")
         time.sleep(2)  # Let asynchronous initial persistence settle once.
+        self.operation = "baseline-persistence"
         files = (".env", "system.json", ".encryption.key", "native-persistence-sentinel")
         self.baseline_data = {p: digest(data / p) for p in files}
         self.baseline_mode = (self.root / "install/bin/pulse").stat().st_mode & 0o777
@@ -274,6 +289,7 @@ class NativeLab:
         why a hosted OpenSSH invocation failed before the first native phase.
         Diagnostic labels below mean observed text, not a causal diagnosis.
         """
+        self.operation = operation
         try:
             return self.run("ssh-keygen", *arguments)
         except RuntimeError:
@@ -373,6 +389,7 @@ class NativeLab:
         return state
 
     def phase(self, name, tag, expected_exit=0, active="active", fault="", retain=False, manual=False):
+        self.operation = name
         before_state = self.state()
         self.env.update(PULSE_NATIVE_TARGET=tag, PULSE_NATIVE_FAULT=fault)
         result = self.run("/bin/bash", "-c", '"$PULSE_UPDATE_HELPER_PATH" --version "$PULSE_NATIVE_TARGET"'
@@ -404,18 +421,22 @@ class NativeLab:
         self.phase("forward", TAGS[1])
         self.phase("manual-reverse", TAGS[0], manual=True)
         self.phase("failed-active", TAGS[1], 1, fault="installer")
+        self.operation = "prepare-inactive"
         self.run("systemctl", "stop", self.unit.name)
         self.phase("failed-inactive", TAGS[1], 1, active="inactive", fault="installer")
         # A real /dev/null mask, not a manager double returning 'masked'.
+        self.operation = "prepare-masked"
         saved_unit = self.unit.read_bytes()
         self.unit.unlink()
         self.run("systemctl", "mask", self.unit.name)
         self.run("systemctl", "daemon-reload")
         self.phase("failed-masked", TAGS[1], 1, active="inactive", fault="installer")
+        self.operation = "restore-unmasked"
         self.run("systemctl", "unmask", self.unit.name)
         self.unit.write_bytes(saved_unit)
         self.run("systemctl", "daemon-reload")
         self.run("systemctl", "start", self.unit.name)
+        self.operation = "prepare-bad-signature"
         installer = self.root / "installer"
         original = installer.read_bytes()
         calls = (self.root / "installer-calls").read_bytes()
@@ -430,6 +451,7 @@ class NativeLab:
         self.phase("incomplete-restore", TAGS[1], 1, active="inactive", fault="restore", retain=True)
 
     def cleanup(self):
+        self.operation = "cleanup"
         if self.owned_unit:
             state = self.state()
             if state["LoadState"] != "not-found":
@@ -479,13 +501,23 @@ def main():
         lab.exercise()
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         failed = True
-        lab.receipt["failure"] = {"type": type(error).__name__, "message": str(error)}
+        lab.receipt["failure"] = {"type": type(error).__name__, "message": str(error),
+                                  "operation": lab.operation}
     finally:
+        # Cleanup runs its own commands. Preserve the original transaction
+        # observation before any later failure can replace it or be mistaken
+        # for that transaction. A logical assertion has no command observation.
+        transaction_failure = lab.receipt.pop("command_failure", None)
         try:
             lab.cleanup()
         except (OSError, RuntimeError, subprocess.SubprocessError) as error:
             failed = True
             lab.receipt["cleanup"] = {"complete": False, "error_type": type(error).__name__}
+        cleanup_failure = lab.receipt.pop("command_failure", None)
+        if cleanup_failure is not None:
+            lab.receipt["cleanup"]["command_failure"] = cleanup_failure
+        if transaction_failure is not None:
+            lab.receipt["command_failure"] = transaction_failure
         receipt.write_text(json.dumps(lab.receipt, indent=2) + "\n")
     if failed or len(lab.receipt["phases"]) != 7:
         raise SystemExit("Native updater proof incomplete; inspect the bounded receipt.")
