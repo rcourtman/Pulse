@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "8ae88cb6d1845d690d534084aaf374b55c91c5ed",
+  "verified_at": "2026-10-14T12:04:15Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/shared/HistoryChartHeader.tsx",
+    "frontend-modern/src/components/shared/historyChartModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "0ec0c06291cce526988749094bceafcb78a947f896968570b3001e3ed8eb0ab2",
+    "frontend-modern/src/components/shared/HistoryChartHeader.tsx": "46a353942d31d318125a0ee7bc41232cfecadb7c1bb16e6733ba5c04291df367",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "a8b8894cfa937ce26299d72eae9d1cbebd17b977e0f8f2d12943cf7324d22a1e"
+  },
+  "routes": [
+    "/browser-tests/pbs-history-refresh.html (production GuestDrawerHistory renderer, Chromium via Playwright 1.56.1 on pulse-dev)",
+    "/browser-tests/history-org.html (production HistoryChart canvas with a memory-sourced reply)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "drawer target answered from memory: readout \"Latest recorded \u00b7 <time>\", one line \"Recent readings only. The history store has none for this range yet.\" above the charts, light and dark",
+    "drawer target answered from the store: \"Latest stored\", no notice",
+    "canvas chart answered from memory: \"Recent only\" badge (was \"Buffer\"), withdrawn on an organisation switch"
+  ],
+  "interactions": [
+    "drawer poll, failure, retry and target switch",
+    "organisation switch mid-read on the canvas chart"
+  ]
+}

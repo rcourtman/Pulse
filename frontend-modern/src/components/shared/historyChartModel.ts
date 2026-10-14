@@ -181,6 +181,42 @@ export function getHistoryChartDataMax(points: AggregatedMetricPoint[]) {
   return max;
 }
 
+export type HistorySource = 'store' | 'memory' | 'live' | 'mock_synthetic';
+
+/**
+ * Names where a History reply's readings came from. `store` is the history
+ * store; `memory` means the store had nothing for the range, so the readings
+ * are the recent ones Pulse holds in memory; `live` is one current reading
+ * because no history exists yet. Demo data reads like stored history.
+ */
+export function getHistoryReadoutLabel(
+  source: HistorySource | null | undefined,
+  inspected: boolean,
+): string {
+  if (source === 'live') return 'Current';
+  if (source === 'memory') return inspected ? 'Recorded' : 'Latest recorded';
+  return inspected ? 'Stored' : 'Latest stored';
+}
+
+/** A short badge and its explanation for a reply that is not stored history. */
+export function getHistorySourceNotice(
+  source: HistorySource | null | undefined,
+): { badge: string; detail: string } | null {
+  if (source === 'memory') {
+    return {
+      badge: 'Recent only',
+      detail: 'Recent readings only. The history store has none for this range yet.',
+    };
+  }
+  if (source === 'live') {
+    return {
+      badge: 'Current only',
+      detail: 'No history for this range yet. Showing the current reading.',
+    };
+  }
+  return null;
+}
+
 /** True when any stored bucket's lowest and highest readings differ. */
 export function hasHistoryChartSpread(points: readonly AggregatedMetricPoint[]): boolean {
   return (

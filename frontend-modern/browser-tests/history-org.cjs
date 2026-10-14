@@ -213,7 +213,7 @@ const parent = false;
         async () => {
           assert.match(await description(), /42°C/);
           assert.equal(await disk.locator('[data-history-chart-tooltip]').count(), 1);
-          assert.match(await disk.innerText(), /Buffer/i);
+          assert.match(await disk.innerText(), /Recent only/i);
           assert(requests.some((r) => r.org === 'org-a' && r.resourceType === 'disk'));
         },
       );
@@ -243,7 +243,7 @@ const parent = false;
         'Pending org-b removes org-a values, min/max, provenance and grouped inspection',
         async () => {
           assert.doesNotMatch(await description(), /42°C/);
-          assert.doesNotMatch(await disk.innerText(), /Buffer|42°C/i);
+          assert.doesNotMatch(await disk.innerText(), /Recent only|42°C/i);
           assert.equal(await disk.locator('[data-history-chart-tooltip]').count(), 0);
           assert.equal(await pool.locator('[data-history-chart-tooltip]').count(), 0);
           assert.equal(await service.getByRole('slider').count(), 0);
@@ -257,7 +257,7 @@ const parent = false;
         'Late pre-switch completion cannot resurrect readings or settle the new org',
         async () => {
           assert.doesNotMatch(await description(), /42°C|99°C/);
-          assert.doesNotMatch(await disk.innerText(), /Buffer|99°C/i);
+          assert.doesNotMatch(await disk.innerText(), /Recent only|99°C/i);
           assert.equal(await service.getByRole('slider').count(), 0);
         },
       );
