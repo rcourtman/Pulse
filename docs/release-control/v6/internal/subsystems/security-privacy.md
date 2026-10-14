@@ -35,7 +35,8 @@ CA/redirect policy, login encodings, cadence and guest/backup fences do not chan
 `TestClusterFirstUseSessionAdmission` covers JSON password, existing form
 fallback and token modes in all three phases, then ordinary member reads.
 The adjacent refusal, established-pin and cancellation controls exercise actual
-TLS sockets. `TestClusterFirstUsePasswordEndpointProjection` carries first-use
+TLS sockets. Concurrent lazy selection retains serialized construction while
+health/trust inspection stays usable during capture. `TestClusterFirstUsePasswordEndpointProjection` carries first-use
 probe/full-session refusal and later public-read recovery into the monitor's
 cluster-member projection without changing native Online state, identity or
 saved fingerprints. This is source/consumer qualification, not installed

@@ -297,3 +297,42 @@ func TestClusterFirstUsePasswordCaptureCancellation(t *testing.T) {
 		t.Fatal("cancelled capture installed trust, changed failure or sent authentication")
 	}
 }
+
+func TestClusterFirstUseConcurrentSelectionSharesConstruction(t *testing.T) {
+	f := newFirstUseSessionFixture(t, false, false)
+	f.gateAt.Store(2)
+	cfg := firstUseSessionConfig("https://primary.session.invalid", clusterTrustPin(clusterTrustCertificate(t)), false)
+	cc := NewClusterClient("joined-first-use", cfg, []string{f.server.URL}, nil)
+	closeFirstUseClusterClients(t, cc)
+	done := make(chan error, 8)
+	read := func() {
+		nodes, err := cc.GetNodes(context.Background())
+		if err == nil && (len(nodes) != 1 || nodes[0].CPU != 0.25) {
+			err = fmt.Errorf("lost ordinary member reading")
+		}
+		done <- err
+	}
+	go read()
+	select {
+	case <-f.entered:
+	case <-time.After(5 * time.Second):
+		close(f.resume)
+		<-done
+		t.Fatal("first selection did not reach capture")
+	}
+	for i := 0; i < 7; i++ {
+		go read()
+	}
+	// Health inspection remains usable while the credential-free capture is
+	// held. Closing this synthetic handshake does not cancel any native work.
+	_ = cc.GetHealthStatusWithErrors()
+	close(f.resume)
+	for i := 0; i < 8; i++ {
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+	}
+	if f.logins.Load() != 2 || f.nodes.Load() != 9 || f.handshakes.Load() != 4 {
+		t.Fatalf("concurrent selection duplicated capture/login: logins=%d nodes=%d handshakes=%d", f.logins.Load(), f.nodes.Load(), f.handshakes.Load())
+	}
+}

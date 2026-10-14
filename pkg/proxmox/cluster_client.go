@@ -21,6 +21,7 @@ import (
 // ClusterClient wraps multiple Proxmox clients for cluster-aware operations
 type ClusterClient struct {
 	mu                   sync.RWMutex
+	clientInitMu         sync.Mutex // Serialize lazy construction while a trust probe releases mu.
 	name                 string
 	clients              map[string]*Client   // Key is node name
 	endpoints            []string             // All available endpoints
@@ -680,6 +681,19 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 	// Get or create client for this endpoint
 	client, exists := cc.clients[selectedEndpoint]
 	if !exists {
+		// Selection previously serialized construction under mu. Keep that
+		// property without holding the trust/health mutex during capture:
+		// concurrent first readers must not create a password-login storm.
+		cc.mu.Unlock()
+		cc.clientInitMu.Lock()
+		cc.mu.Lock()
+		defer cc.clientInitMu.Unlock()
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if accepted := cc.clients[selectedEndpoint]; accepted != nil {
+			return accepted, nil
+		}
 		// Create new client with shorter timeout for initial test
 		cfg := cc.config
 		cfg.Host = selectedEndpoint

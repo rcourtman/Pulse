@@ -1300,3 +1300,5 @@ as verification progresses:
 - `TestClusterFirstUseSessionRefusalKeepsTrust`, `TestClusterPasswordEstablishedPinsAreNotFirstUse`, `TestClusterFirstUsePasswordCaptureCancellation`: rejected/malformed login does not become healthy or replay; primary/saved pins and ending callers cannot gain first-use authority.
 - `TestClusterFirstUsePasswordEndpointProjection`: real first-use password construction, failed retained session and separate normal public-read recovery feed the existing cluster-member consuming surface; native Online and saved identities/trust stay unchanged.
 - Exact-source race/vet/build and desktop/narrow consuming pixels are source qualification, not installed/native acceptance or release availability.
+
+`TestClusterFirstUseConcurrentSelectionSharesConstruction` holds a real first-use TLS capture while eight ordinary readers join: one captured pin, one short/full login pair, independent returned readings and usable concurrent health inspection.
