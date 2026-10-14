@@ -1272,18 +1272,13 @@ func (c *Client) GetVMs(ctx context.Context, node string) ([]VM, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []VM `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	values, err := readGuestInventory(resp, func(vm VM) (string, bool) { return guestInventoryID(vm.VMID) })
+	if err != nil {
 		return nil, err
 	}
 
-	stampVMObservation(result.Data, time.Now().UTC())
-	return result.Data, nil
+	stampVMObservation(values, time.Now().UTC())
+	return values, nil
 }
 
 // GetContainers returns all LXC containers on a specific node
@@ -1292,18 +1287,13 @@ func (c *Client) GetContainers(ctx context.Context, node string) ([]Container, e
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Container `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	values, err := readGuestInventory(resp, func(container Container) (string, bool) { return guestInventoryID(int(container.VMID)) })
+	if err != nil {
 		return nil, err
 	}
 
-	stampContainerObservation(result.Data, time.Now().UTC())
-	return result.Data, nil
+	stampContainerObservation(values, time.Now().UTC())
+	return values, nil
 }
 
 // GetStorage returns storage information for a specific node
@@ -2580,18 +2570,18 @@ func (c *Client) GetClusterResources(ctx context.Context, resourceType string) (
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []ClusterResource `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	values, err := readGuestInventory(resp, func(resource ClusterResource) (string, bool) {
+		if resourceType == "vm" && resource.Type != "qemu" && resource.Type != "lxc" {
+			return "", false
+		}
+		return clusterInventoryID(resource)
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	stampClusterResourceObservation(result.Data, time.Now().UTC())
-	return result.Data, nil
+	stampClusterResourceObservation(values, time.Now().UTC())
+	return values, nil
 }
 
 // ClusterOptions holds selected Proxmox datacenter configuration options.

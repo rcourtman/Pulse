@@ -7661,3 +7661,49 @@ The canonical Docker-ingest source guard follows both guest enumeration routes
 through `publishPVEGuests` to the canonical state update. Publication reconciliation
 updates its former direct-call assertions without changing Docker ingestion or
 the runtime ownership gate; the behavioral withdrawal controls remain required.
+
+### Complete guest enumeration before publication (14 October 2026)
+
+PVE `cluster/resources`, node `qemu` and node `lxc` enumeration consume and
+close the whole existing 8 MiB-bounded HTTP response before admission. Only
+HTTP 200 containing a complete UTF-8 JSON object with an explicit canonical
+`data` array is authoritative inventory. Missing/null data, duplicate or
+case-variant supported fields, conflicting errors, trailing values, incomplete
+bodies, invalid rows and duplicate guest identities fail the whole enumeration;
+no partial inventory or provider body is returned as a successful reading.
+Cluster guest identities require a node and positive cluster-wide unique VMID.
+Node lists require positive unique VMIDs; existing LXC string integers remain.
+Scoped empty arrays, optional names/status/metrics, null counter presence,
+templates, unique provider metadata and unfiltered non-guest resources remain
+supported. Observation timestamps are assigned only to an admitted inventory.
+
+A refused efficient enumeration can use the existing ordinary node fallback.
+Failed node enumerations retain their earlier guest observations, History and
+backup-template eligibility; a complete fallback can still remove deleted
+guests and restore ordinary sampling. Complete cluster recovery returns to
+its efficient route. This changes no TLS/pin, credentials, permissions,
+polling cadence, guest-command/backup-lock checks, completion uncertainty,
+publication ownership or grace-period rules.
+
+`guest_inventory_response_test.go` covers complete-body and all-or-nothing
+admission on all three real HTTP readers; `io_counters_test.go` covers
+scoped-empty, extended fields, counter presence and receipt-time controls.
+`diagnostic_snapshots_test.go` covers actual efficient/fallback collection,
+owned publication, retained observation times, breach/History/template
+continuity, independent-connection preservation and normal recovery/removal.
+These controlled source proofs do not establish native thaw/restart recovery,
+installed trust, report attribution or release availability.
+
+Failed-node retention selects canonical guest membership but takes the unchanged
+complete tuple from that connection's last accepted producer state. Enrichment's
+partial previous-state projection is not an observation: it must not turn an
+unavailable/retained memory reading into zero, lose CPU/disk usage or change the
+original in-guest collection state. A node-scoped detached snapshot copies only
+selected guests, not unrelated host disks or Kubernetes state. The existing
+canonical/enrichment path remains the fallback when no accepted source tuple
+exists; linked-agent evidence is never promoted to Proxmox ownership. The
+same publication owner still admits or withdraws the eventual generation.
+`proxmox_guest_observations_test.go` checks scope, original memory provenance,
+CPU/disk/read time and nested detachment, alongside the end-to-end admission
+controls above. The first complete admission proof exposed the former partial
+retention and is retained as failed evidence, not weakened into acceptance.

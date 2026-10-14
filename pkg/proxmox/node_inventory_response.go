@@ -16,7 +16,7 @@ func decodeNodeInventory(body []byte) ([]Node, error) {
 	if !utf8.Valid(body) {
 		return nil, errInvalidNodeInventoryResponse
 	}
-	envelope, valid := nodeInventoryObject(body, "data", "errors")
+	envelope, valid := inventoryResponseObject(body, "data", "errors")
 	if !valid {
 		return nil, errInvalidNodeInventoryResponse
 	}
@@ -36,7 +36,7 @@ func decodeNodeInventory(body []byte) ([]Node, error) {
 	nodes := make([]Node, 0, len(rows))
 	seen := make(map[string]bool, len(rows))
 	for _, row := range rows {
-		fields, valid := nodeInventoryObject(row, "node", "status", "cpu", "maxcpu", "mem", "maxmem", "disk", "maxdisk", "uptime", "level")
+		fields, valid := inventoryResponseObject(row, "node", "status", "cpu", "maxcpu", "mem", "maxmem", "disk", "maxdisk", "uptime", "level")
 		if !valid {
 			return nil, errInvalidNodeInventoryResponse
 		}
@@ -57,7 +57,7 @@ func decodeNodeInventory(body []byte) ([]Node, error) {
 // The existing object reader rejects duplicates and extra JSON values. Keep
 // unique provider metadata, but never let encoding/json's case-insensitive
 // struct matching replace canonical inventory fields with another spelling.
-func nodeInventoryObject(body []byte, canonical ...string) (map[string]json.RawMessage, bool) {
+func inventoryResponseObject(body []byte, canonical ...string) (map[string]json.RawMessage, bool) {
 	fields, valid := guestAgentResponseFields(body)
 	if !valid {
 		return nil, false

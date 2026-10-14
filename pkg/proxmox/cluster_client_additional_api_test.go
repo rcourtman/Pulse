@@ -275,7 +275,7 @@ func TestClusterClient_GetClusterResources(t *testing.T) {
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/api2/json/cluster/resources") {
-			fmt.Fprint(w, `{"data":[{"id":"qemu/100","type":"qemu","node":"node1"}]}`)
+			fmt.Fprint(w, `{"data":[{"id":"qemu/100","type":"qemu","node":"node1","vmid":100}]}`)
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -302,7 +302,7 @@ func TestClusterClient_GetClusterResources_AllTypes(t *testing.T) {
 			return
 		}
 		if r.URL.Path == "/api2/json/cluster/resources" {
-			fmt.Fprint(w, `{"data":[{"id":"lxc/200","type":"lxc","node":"node1"}]}`)
+			fmt.Fprint(w, `{"data":[{"id":"lxc/200","type":"lxc","node":"node1","vmid":200}]}`)
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
