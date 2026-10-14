@@ -123,6 +123,12 @@ describe('KubernetesDeploymentsTable', () => {
     expect(screen.getByTitle('0 / 3 ready')).toHaveClass('bg-red-500');
     expect(screen.getByTitle('1 / 3 ready')).toHaveClass('bg-amber-500');
     expect(screen.getByTitle('Ready')).toHaveClass('bg-emerald-500');
+    // The Ready count behind each verdict reads in its dot's colour.
+    const readyCell = (variant: string) =>
+      document.querySelector(`[data-kubernetes-deployment-ready="${variant}"]`);
+    expect(readyCell('danger')).toHaveClass('text-red-600');
+    expect(readyCell('warning')).toHaveClass('text-amber-700');
+    expect(readyCell('success')).toHaveClass('text-base-content');
   });
 
   it('sizes the tablet band for a long name and keeps Desired for wide tables', () => {

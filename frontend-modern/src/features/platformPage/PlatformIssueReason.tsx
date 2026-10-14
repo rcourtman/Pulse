@@ -1,4 +1,5 @@
 import { Show, splitProps, type Component, type JSX } from 'solid-js';
+import { getPlatformStatusTextToneClass } from './platformStatusTone';
 
 // warning: needs attention (amber). danger: down or unreachable (red).
 // muted: no verdict, such as an unknown state.
@@ -10,12 +11,6 @@ export type PlatformIssue = {
   // reasons because sighted users get it from the colour.
   label: string;
   reasons: readonly string[];
-};
-
-const ISSUE_TONE_CLASS: Record<PlatformIssueTone, string> = {
-  warning: 'text-amber-700 dark:text-amber-300',
-  danger: 'text-red-600 dark:text-red-300',
-  muted: 'text-muted',
 };
 
 // The visible reason is truncated and abbreviates the rest to a count, so
@@ -42,7 +37,7 @@ export const PlatformIssueReason: Component<
       {(issue) => (
         <div
           {...rest}
-          class={`flex min-w-0 items-center gap-1 text-[11px] font-medium ${ISSUE_TONE_CLASS[issue().tone]}`}
+          class={`flex min-w-0 items-center gap-1 text-[11px] font-medium ${getPlatformStatusTextToneClass(issue().tone)}`}
           title={issue().reasons.join('\n')}
         >
           <span aria-hidden="true" class="min-w-0 truncate">

@@ -21,6 +21,7 @@ import {
   type PlatformTableSortValue,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
@@ -315,8 +316,10 @@ export const KubernetesDeploymentsTable: Component<{
                               value={deployment.kubernetes?.updatedReplicas ?? 0}
                             />
                           </TableCell>
+                          {/* Ready is the count behind the dot's replica verdict. */}
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} ${getPlatformStatusTextToneClass(indicator().variant) || 'text-base-content'}`}
+                            data-kubernetes-deployment-ready={indicator().variant}
                           >
                             <PlatformTableNumberValue
                               value={deployment.kubernetes?.readyReplicas ?? 0}

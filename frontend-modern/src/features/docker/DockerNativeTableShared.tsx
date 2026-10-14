@@ -14,6 +14,7 @@ import {
   getPlatformTableCellClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
+import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import type { DockerResourceStatusFilter } from './dockerPageModel';
 import { DockerImageReferenceText } from './DockerImageReferenceText';
 
@@ -67,14 +68,10 @@ export const dockerHostName = (resource: Resource): string =>
 export const dockerResourceName = (resource: Resource): string =>
   asTrimmedString(resource.name) || asTrimmedString(resource.displayName) || resource.id;
 
-// State words read in their row dot's colour, without a second dot: red for
-// a problem, amber for a warning, muted for stopped or unused.
-export const dockerStateTextToneClass = (variant: StatusIndicatorVariant | null): string => {
-  if (variant === 'danger') return 'font-medium text-red-600 dark:text-red-300';
-  if (variant === 'warning') return 'font-medium text-amber-700 dark:text-amber-300';
-  if (variant === 'muted') return 'text-muted';
-  return '';
-};
+// State words read in their row dot's colour, without a second dot; the
+// platform helper owns the tones every platform table shares.
+export const dockerStateTextToneClass = (variant: StatusIndicatorVariant | null): string =>
+  getPlatformStatusTextToneClass(variant);
 
 export const DockerResourceNameCell: Component<{
   resource: Resource;
