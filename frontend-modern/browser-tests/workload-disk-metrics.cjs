@@ -23,6 +23,7 @@ const result = {
   errors: [],
   cleanup: {},
 };
+const GB = 1024 ** 3;
 const baseMetrics = [
   ['empty', { percent: 0, used: 0, total: 100 }],
   ['half-percent', { percent: 0.5, used: 0.5, total: 100 }],
@@ -40,7 +41,16 @@ const resource = (name, metric, extras = {}) => ({
   platformType: 'proxmox-pve',
   lastSeen: '2026-10-14T19:00:00Z',
   metricsTarget: { resourceType: 'vm', resourceId: `fixture-${name}` },
-  metrics: { cpu: { percent: 10 }, memory: { percent: 25, used: 25, total: 100 }, disk: metric },
+  metrics: {
+    cpu: { percent: 10 },
+    memory: { percent: 25, used: GB, total: 4 * GB },
+    disk: Object.fromEntries(
+      Object.entries(metric).map(([key, value]) => [
+        key,
+        key === 'used' || key === 'total' ? value * GB : value,
+      ]),
+    ),
+  },
   proxmox: {
     vmid: 101,
     instance: 'lab',
@@ -260,6 +270,17 @@ let browser;
       assert.match(await current().innerText(), /1.0%/);
       assert.equal(await drawer.locator('path[data-history-series]').count(), 0);
       await capture('recovered');
+      await observe(
+        'filesystem-omitted-zero',
+        { percent: 0, used: 0, total: 100 },
+        { disks: [{ mountpoint: '/empty', total: 100 * GB, free: 100 * GB }] },
+        0,
+      );
+      assert.match(
+        await drawer.locator('tr').filter({ hasText: '/empty' }).innerText(),
+        /0 B.*100 GB/,
+      );
+      await capture('filesystem-zero');
       await drawer.getByRole('button', { name: 'Collapse capacity-only details' }).click();
       assert.equal(await drawer.count(), 0);
       assert.deepEqual(result.errors, []);
