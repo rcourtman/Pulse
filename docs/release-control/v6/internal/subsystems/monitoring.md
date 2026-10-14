@@ -17,6 +17,36 @@
 
 ## Purpose
 
+### Cluster recovery requires success of the operation actually probed
+
+Startup and unhealthy-member recovery read `/nodes`; lazy construction uses the
+same probe. A failed nodes or login request cannot count as successful recovery
+because its response text mentions a guest agent, QMP or `guest-get-*`. The old
+per-guest substring exception is removed from these non-guest operations.
+Failed selection retains its actual sanitised reason and observation time, and
+installs no polling client. Successful probe plus accepted full-timeout session
+is still required. The existing temporary-rate-limit path may admit an ordinary
+request, but does not report the failed probe as passed or clear a known failure.
+
+The single-endpoint last-resort path remains available with its cached client;
+selecting it no longer marks that endpoint healthy before a request succeeds.
+A later accepted ordinary read still clears the failure. Actual per-guest
+errors remain request-level errors, without marking an otherwise working node
+unhealthy. Certificate pins, first-use trust, credential encodings, request and
+recovery cadence, rate-limit backoff and guest/backup fences are unchanged.
+
+`TestClusterNodeProbeRequiresSuccess` covers startup/recovery/selection in token,
+JSON password and form password modes, three guest-like failure bodies at the
+nodes or login stage, no extra login/full client and distinct later recovery.
+`TestClusterSingleEndpointFallbackKeepsFailedHealth` checks cached selection,
+failed ordinary read and later success. `TestClusterNodeProbeRateLimitKeepsOrdinaryRead`
+preserves genuine rate-limit handling. `TestClusterNodeProbeEndpointProjection`
+carries the actual failed and later recovered member through the production
+monitor projection while independent native Online, saved trust and identity
+remain unchanged. These are source/consumer controls, not attribution or
+installed acceptance for a reported PBS/QGA/backup incident.
+
+
 ### First-use cluster trust includes password construction
 
 Declared, previously untrusted Proxmox members use the existing credential-free

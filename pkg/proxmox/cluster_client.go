@@ -53,33 +53,6 @@ var transientRateLimitStatusCodes = map[int]struct{}{
 	504: {},
 }
 
-// isVMSpecificError reports whether an error string is scoped to a single VM/guest agent
-// and should not be treated as a node connectivity failure.
-func isVMSpecificError(errStr string) bool {
-	if errStr == "" {
-		return false
-	}
-	lower := strings.ToLower(errStr)
-
-	if strings.Contains(lower, "no qemu guest agent") ||
-		strings.Contains(lower, "qemu guest agent is not running") ||
-		strings.Contains(lower, "guest agent") {
-		return true
-	}
-
-	// QMP guest agent operations can time out or fail per-VM (e.g. guest-get-fsinfo).
-	// These aren't node connectivity issues and should not mark endpoints unhealthy.
-	if strings.Contains(lower, "qmp command") {
-		return true
-	}
-
-	if strings.Contains(lower, "guest-get-") {
-		return true
-	}
-
-	return false
-}
-
 // isEndpointConnectivityError reports whether an error indicates the endpoint
 // itself is unreachable (TCP, DNS, TLS failures). Application-level errors
 // (HTTP responses, parsing errors) mean the endpoint IS reachable.
@@ -429,10 +402,9 @@ func (cc *ClusterClient) initialHealthCheck(ctx context.Context) {
 				defer testClient.httpClient.CloseIdleConnections()
 			}
 
-			// Check if error is VM-specific (shouldn't affect health)
-			vmSpecificErr := err != nil && isVMSpecificError(err.Error())
-
-			if err == nil || vmSpecificErr {
+			// The probe reads /nodes, not a guest endpoint. Provider text about
+			// QGA cannot turn a failed nodes/login request into usable polling.
+			if err == nil {
 				// Node is healthy - create a proper client with full timeout for actual use
 				fullCfg := cc.config
 				fullCfg.Host = ep
@@ -456,17 +428,10 @@ func (cc *ClusterClient) initialHealthCheck(ctx context.Context) {
 					cc.lastHealthCheck[ep] = time.Now()
 					cc.clients[ep] = fullClient // Store the full client, not test client
 					cc.mu.Unlock()
-					if vmSpecificErr {
-						log.Debug().
-							Str("cluster", cc.name).
-							Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
-							Msg("Cluster endpoint healthy despite VM-specific errors")
-					} else {
-						log.Info().
-							Str("cluster", cc.name).
-							Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
-							Msg("Cluster endpoint passed initial health check")
-					}
+					log.Info().
+						Str("cluster", cc.name).
+						Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
+						Msg("Cluster endpoint passed initial health check")
 				}
 			} else {
 				// Real connectivity issue
@@ -646,8 +611,8 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 				Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(cc.endpoints[0])).
 				Msg("Single endpoint appears unhealthy but attempting to use it anyway")
 			healthyEndpoints = cc.endpoints
-			// Mark it as healthy optimistically
-			cc.nodeHealth[cc.endpoints[0]] = true
+			// Selection is not recovery evidence. Keep the failure until a
+			// successful ordinary request clears it, even with a cached client.
 		} else {
 			// Provide detailed error with endpoint status. Surfacing the
 			// per-endpoint reason (already sanitized) preserves the original
@@ -731,41 +696,29 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 					Msg("Ignoring transient rate limit error during connectivity test")
 				// Continue with client creation since the node is accessible, just rate limited
 			} else {
-				// Check if this is a VM-specific error that shouldn't mark the node unhealthy
-				testErrStr := testErr.Error()
-				if strings.Contains(testErrStr, "No QEMU guest agent") ||
-					strings.Contains(testErrStr, "QEMU guest agent is not running") ||
-					strings.Contains(testErrStr, "guest agent") {
-					// This is a VM-specific issue, not a connectivity problem
-					// The node is actually healthy, so don't mark it unhealthy
-					log.Debug().
-						Str("cluster", cc.name).
-						Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint)).
-						Err(testErr).
-						Msg("Ignoring VM-specific error during connectivity test")
-					// Continue with client creation since the node is actually accessible
-				} else {
-					// Mark as unhealthy for real connectivity issues
-					cc.nodeHealth[selectedEndpoint] = false
-					log.Warn().
-						Str("cluster", cc.name).
-						Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint)).
-						Err(testErr).
-						Msg("Failed to connect to Proxmox endpoint; endpoint removed from rotation until next refresh")
-					return nil, fmt.Errorf("endpoint %s failed connectivity test: %w", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint), testErr)
-				}
+				cc.nodeHealth[selectedEndpoint] = false
+				cc.lastError[selectedEndpoint] = sanitizeEndpointError(testErr.Error())
+				cc.lastHealthCheck[selectedEndpoint] = time.Now()
+				log.Warn().
+					Str("cluster", cc.name).
+					Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint)).
+					Err(testErr).
+					Msg("Failed to read Proxmox nodes; endpoint removed from rotation until next refresh")
+				return nil, fmt.Errorf("endpoint %s failed connectivity test: %w", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint), testErr)
 			}
 		}
 
-		log.Debug().
-			Str("cluster", cc.name).
-			Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint)).
-			Func(func(event *zerolog.Event) {
-				if testNodes != nil {
-					event.Int("nodes", len(testNodes))
-				}
-			}).
-			Msg("Cluster endpoint passed connectivity test")
+		if testErr == nil {
+			log.Debug().
+				Str("cluster", cc.name).
+				Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint)).
+				Func(func(event *zerolog.Event) {
+					if testNodes != nil {
+						event.Int("nodes", len(testNodes))
+					}
+				}).
+				Msg("Cluster endpoint passed connectivity test")
+		}
 
 		// Use the first-use winner's pin for the full polling session too.
 		cfg.Fingerprint = cc.getEndpointFingerprintLocked(selectedEndpoint)
@@ -777,12 +730,19 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			}
 			// This shouldn't happen since we just tested it
 			cc.nodeHealth[selectedEndpoint] = false
+			cc.lastError[selectedEndpoint] = sanitizeEndpointError(err.Error())
+			cc.lastHealthCheck[selectedEndpoint] = time.Now()
 			return nil, fmt.Errorf("failed to create client for %s: %w", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint), err)
 		}
 
-		// A completed probe cannot clear an error until the polling session is
-		// accepted. Ending a caller is not endpoint failure or recovery evidence.
-		delete(cc.lastError, selectedEndpoint)
+		// A successful nodes probe and accepted polling session establish
+		// recovery. The existing rate-limit exception only admits an ordinary
+		// request; it cannot clear a recorded failure before that request succeeds.
+		if testErr == nil {
+			cc.nodeHealth[selectedEndpoint] = true
+			cc.lastHealthCheck[selectedEndpoint] = time.Now()
+			delete(cc.lastError, selectedEndpoint)
+		}
 		cc.clients[selectedEndpoint] = newClient
 		client = newClient
 	}
@@ -909,10 +869,9 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 				return
 			}
 
-			// Check if error is VM-specific (shouldn't prevent recovery)
-			vmSpecificErr := err != nil && isVMSpecificError(err.Error())
-
-			if err == nil || vmSpecificErr {
+			// Recovery requires the actual nodes probe to succeed; a guest-like
+			// error body is not evidence about this endpoint's nodes inventory.
+			if err == nil {
 				// Store the client with original timeout
 				cfg.Timeout = cc.config.Timeout
 				cfg.Fingerprint = cc.getEndpointFingerprint(ep)
@@ -944,17 +903,10 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 				cc.mu.Unlock()
 				recoveredEndpoints <- ep
 
-				if vmSpecificErr {
-					log.Info().
-						Str("cluster", cc.name).
-						Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
-						Msg("Recovered unhealthy cluster node (ignoring VM-specific errors)")
-				} else {
-					log.Info().
-						Str("cluster", cc.name).
-						Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
-						Msg("Recovered unhealthy cluster node")
-				}
+				log.Info().
+					Str("cluster", cc.name).
+					Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(ep)).
+					Msg("Recovered unhealthy cluster node")
 			} else {
 				recordFailure(ep, err)
 				log.Debug().
