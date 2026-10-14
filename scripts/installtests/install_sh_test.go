@@ -8576,6 +8576,9 @@ func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
 		"test_recovered_ordinary_linux_state_is_not_qnap_platform_authority",
 		"test_live_unraid_boot_shell_is_unknown_not_a_signal_target",
 		"test_actual_generated_watchdogs_and_children_become_quiescent",
+		"test_private_model_uses_selected_isolated_interpreter",
+		"test_timeout_child_absence_requires_observed_exit",
+		"test_control_timing_reports_cumulative_and_per_control_time",
 		"test_private_process_reader_requests_native_basename_and_full_argv",
 		"test_generated_collector_observation_keeps_exact_identity_on_both_unix_formats",
 		"test_caller_has_no_blanket_nas_or_legacy_tree_deletion",
@@ -8584,7 +8587,7 @@ func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
 			t.Fatalf("NAS removal control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 20 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 23 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete NAS removal verdict:\n%s", output)
 	}
 	t.Logf("%s", output)
