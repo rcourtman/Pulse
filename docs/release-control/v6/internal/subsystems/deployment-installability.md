@@ -369,6 +369,23 @@ cleanup removes only objects created by this attempt. Compiler and root-command
 failures stay gating under the existing job's deadline; a seven-day closed receipt
 contains source/binary/output hashes, all phases and cleanup, never signer keys,
 persistent contents or raw application/installer logs.
+
+Failed commands and assertions name their fixed preparation or transaction
+operation. The original transaction's `command_failure` is preserved before
+cleanup runs, and a cleanup command failure is retained separately under
+`cleanup.command_failure`. A successful cleanup must not label the earlier
+transaction failure as its own; an assertion or cleanup-only failure must not
+invent an executed transaction command. Timeout facts remain distinct from a
+later numeric cleanup exit, with no stale output hash attached. Neither these
+labels nor completed owned cleanup diagnose why an update failed or accept a
+native phase. `test_primary_command_survives_successful_or_failed_cleanup`,
+`test_primary_timeout_is_not_replaced_by_cleanup_exit`,
+`test_assertion_and_cleanup_only_errors_do_not_invent_primary_command` and
+`test_successful_receipt_retains_no_failure_record` drive the actual receipt
+producer with real confined failing/timeout children and no native manager;
+the registered Go harness requires every portable verdict. Raw command output,
+private fixture contents, argv and paths remain outside these observations.
+
 The private fixture disables telemetry and binds the existing service to loopback;
 it exposes no test server on the hosted VM's external interface.
 Before compiling the native pair, CI requires the exact checkout head and no
