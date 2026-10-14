@@ -748,3 +748,9 @@ func TestClusterClientFirstUseCaptureCancellation(t *testing.T) {
 		})
 	}
 }
+
+// Startup, ordinary recovery and first selection share the same declared-member
+// boundary for password and token authentication, not just post-construction I/O.
+func TestClusterFirstUseSessionAdmission(t *testing.T) {
+	testClusterFirstUseSessionAdmission(t)
+}

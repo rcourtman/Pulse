@@ -1293,3 +1293,10 @@ as verification progresses:
 1. `pending` means not yet confirmed end to end.
 2. `blocked` means the gate is actively failing or cannot yet be exercised.
 3. `passed` means both automated proof and the manual scenario are clear.
+
+### Proxmox declared-member first-use session admission
+
+- `TestClusterFirstUseSessionAdmission`: actual TLS, password JSON/form and token startup/recovery/selection; credential-free capture, pinned retry, full polling client and ordinary member read.
+- `TestClusterFirstUseSessionRefusalKeepsTrust`, `TestClusterPasswordEstablishedPinsAreNotFirstUse`, `TestClusterFirstUsePasswordCaptureCancellation`: rejected/malformed login does not become healthy or replay; primary/saved pins and ending callers cannot gain first-use authority.
+- `TestClusterFirstUsePasswordEndpointProjection`: real first-use password construction, failed retained session and separate normal public-read recovery feed the existing cluster-member consuming surface; native Online and saved identities/trust stay unchanged.
+- Exact-source race/vet/build and desktop/narrow consuming pixels are source qualification, not installed/native acceptance or release availability.
