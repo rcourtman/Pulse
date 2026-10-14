@@ -64,6 +64,8 @@ const { chromium, webkit } = require('playwright');
       if (dark) await page.evaluate(() => document.documentElement.classList.add('dark'));
       const disk = page.getByRole('region', { name: 'Disk fixture' });
       const pool = page.getByRole('region', { name: 'Pool fixture' });
+      // A phone folds the disk's charts after the first behind one button.
+      if (touch) await disk.getByTestId('disk-detail-phone-toggle').click();
       const busy = disk.getByRole('img', { name: 'Busy chart', exact: true });
       const description = chart => chart.evaluate(el => document.getElementById(el.getAttribute('aria-describedby')).textContent);
       await page.waitForFunction(() => [...document.querySelectorAll('canvas')].some(el => el.getAttribute('aria-label') === 'Busy chart' && document.getElementById(el.getAttribute('aria-describedby')).textContent.includes('3 data points')));
