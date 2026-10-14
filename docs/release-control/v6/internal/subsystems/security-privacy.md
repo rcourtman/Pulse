@@ -64,6 +64,9 @@ Saved-view consolidation also refuses a view with internal pin contradictions,
 so map indexing cannot hide an earlier contradictory row before monitoring
 starts. `TestConsolidatePVEInstancesRetainsInternallyConflictingPins` covers
 both merge orders, repeated rows, same-node/address evidence and agreeing formats.
+Internal agreement uses the TLS verifier's case/colon comparison even when
+legacy identity formatting would erase or simplify a malformed nonempty pin;
+colon-only, whitespace and prefixed pins cannot hide a contradiction.
 The endpoint-ownership routing control uses a five-second fixture client and
 a ten-second enclosing caller lifetime, rather than a one-second latency
 criterion. It records elapsed time and both targets' request counts; unchanged
