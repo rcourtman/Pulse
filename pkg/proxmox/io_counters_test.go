@@ -12,6 +12,37 @@ import (
 	"time"
 )
 
+func TestGetNodeStatusPermissionRefusalDoesNotInventMemory(t *testing.T) {
+	var requests atomic.Int32
+	var allowed atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.Method != http.MethodGet || r.URL.Path != "/api2/json/nodes/fixture/status" || r.Header.Get("Authorization") != "PVEAPIToken=fixture@pve!reader=fixture-token" {
+			t.Error("ordinary read changed target, credential or method")
+		}
+		if !allowed.Load() {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, "private-fixture-response")
+			return
+		}
+		fmt.Fprint(w, `{"data":{"cpu":0.25,"memory":{"total":256,"used":64,"free":192}}}`)
+	}))
+	defer server.Close()
+	client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "fixture@pve!reader", TokenValue: "fixture-token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reading, err := client.GetNodeStatus(context.Background(), "fixture")
+	if status, ok := APIErrorStatus(err); reading != nil || !ok || status != http.StatusForbidden || GuestAgentErrorReason(err) != "permission-denied" || requests.Load() != 1 {
+		t.Fatalf("403 became a reading/retry or lost permission classification: reading=%+v err=%v requests=%d", reading, err, requests.Load())
+	}
+	allowed.Store(true) // Only this synthetic peer's ACL outcome changes.
+	reading, err = client.GetNodeStatus(context.Background(), "fixture")
+	if err != nil || reading == nil || reading.Memory == nil || reading.Memory.Total != 256 || reading.Memory.Used != 64 || reading.CPU != 0.25 || requests.Load() != 2 {
+		t.Fatalf("same-credential ordinary recovery lost memory/CPU: reading=%+v err=%v requests=%d", reading, err, requests.Load())
+	}
+}
+
 func TestClusterResourceCounterPresenceDistinguishesZeroNullAndMissing(t *testing.T) {
 	var resource ClusterResource
 	if err := json.Unmarshal([]byte(`{

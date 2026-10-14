@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/user"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"sort"
@@ -939,6 +940,54 @@ func missingStoredSecretDiagnosticsFailure() diagnosticsConnectionFailure {
 	}
 }
 
+// The scheduler's retained LastError is text, unlike a live probe's typed
+// error. Recognise the existing producer's explicit status markers there,
+// not arbitrary numbers in a host, token ID or quoted response body. The
+// first marker wins; a gateway's body cannot replace its outer status.
+var diagnosticsAPIStatusPattern = regexp.MustCompile(`(?i)(?:^|:\s+)(?:API error\s+|authentication failed \(status\s+)([1-5][0-9]{2})\b`)
+
+func diagnosticsAPIStatus(err error) (int, bool) {
+	if status, ok := proxmox.APIErrorStatus(err); ok {
+		return status, true
+	}
+	if status, ok := pbs.HTTPStatus(err); ok {
+		return status, true
+	}
+	if err == nil {
+		return 0, false
+	}
+	match := diagnosticsAPIStatusPattern.FindStringSubmatch(strings.TrimSpace(err.Error()))
+	if len(match) != 2 {
+		return 0, false
+	}
+	status, err := strconv.Atoi(match[1])
+	return status, err == nil
+}
+
+func diagnosticsAuthenticationFailure() diagnosticsConnectionFailure {
+	return diagnosticsConnectionFailure{
+		kind:            "proxmox_auth_rejected",
+		message:         "Proxmox rejected the stored API token or credentials",
+		troubleshooting: "Check the configured user, realm and token ID and whether the credential has expired or been revoked. Keep secrets private; replace a credential only when its invalidity is confirmed, not as a permissions test.",
+	}
+}
+
+func diagnosticsPermissionFailure() diagnosticsConnectionFailure {
+	return diagnosticsConnectionFailure{
+		kind:            "proxmox_permission_denied",
+		message:         "Proxmox denied access to the requested resource",
+		troubleshooting: "Check the owning user's and token's ACLs, including inheritance, for the required read privilege on the intended resource path. A privilege-separated token is limited by both. Keep intentional access boundaries; do not rotate the token, disable privilege separation or grant Administrator to silence a denial.",
+	}
+}
+
+func diagnosticsTimeoutFailure() diagnosticsConnectionFailure {
+	return diagnosticsConnectionFailure{
+		kind:            "connection_timeout",
+		message:         "Connection timed out",
+		troubleshooting: "Check network latency, API responsiveness, and slow or unreachable backend storage from the Pulse server.",
+	}
+}
+
 func classifyDiagnosticsConnectionFailure(err error, fallbackMessage string) diagnosticsConnectionFailure {
 	raw := ""
 	if err != nil {
@@ -958,19 +1007,35 @@ func classifyDiagnosticsConnectionFailure(err error, fallbackMessage string) dia
 	}
 	var networkError net.Error
 	if errors.Is(err, context.DeadlineExceeded) ||
-		(errors.As(err, &networkError) && networkError.Timeout()) ||
-		strings.Contains(lower, "context deadline exceeded") ||
+		(errors.As(err, &networkError) && networkError.Timeout()) {
+		return diagnosticsTimeoutFailure()
+	}
+
+	// Observe wire status before inspecting text: an HTTP error body can quote
+	// a different status, certificate failure, timeout or credential diagnosis.
+	if status, ok := diagnosticsAPIStatus(err); ok {
+		switch status {
+		case http.StatusUnauthorized:
+			return diagnosticsAuthenticationFailure()
+		case http.StatusForbidden:
+			return diagnosticsPermissionFailure()
+		default:
+			return diagnosticsConnectionFailure{
+				kind:            "proxmox_api_error",
+				message:         fmt.Sprintf("Proxmox API returned HTTP %d", status),
+				troubleshooting: "Review the platform or proxy logs privately for the failed request. This response alone does not establish invalid credentials or a missing permission. Keep saved credentials, access boundaries and TLS verification.",
+			}
+		}
+	}
+
+	if strings.Contains(lower, "context deadline exceeded") ||
 		strings.Contains(lower, "client.timeout exceeded") ||
 		strings.Contains(lower, "i/o timeout") ||
 		strings.Contains(lower, "tls handshake timeout") ||
 		strings.Contains(lower, "tls: handshake timeout") ||
 		strings.Contains(lower, "timeout awaiting response headers") ||
 		strings.Contains(lower, "connection timed out") {
-		return diagnosticsConnectionFailure{
-			kind:            "connection_timeout",
-			message:         "Connection timed out",
-			troubleshooting: "Check network latency, API responsiveness, and slow or unreachable backend storage from the Pulse server.",
-		}
+		return diagnosticsTimeoutFailure()
 	}
 
 	if strings.Contains(lower, "invalid") && strings.Contains(lower, "host") {
@@ -1015,19 +1080,14 @@ func classifyDiagnosticsConnectionFailure(err error, fallbackMessage string) dia
 			troubleshooting: "Check the configured endpoint's certificate hostname, expiry and trusted chain. If a fingerprint is needed or has changed, independently verify the certificate's identity and add or update the saved fingerprint only after that verification. Do not disable verification or switch to HTTP to diagnose the failure.",
 		}
 	}
+	if strings.Contains(lower, "forbidden") || strings.Contains(lower, "permission denied") {
+		return diagnosticsPermissionFailure()
+	}
 	if strings.Contains(lower, "authentication") ||
 		strings.Contains(lower, "unauthorized") ||
-		strings.Contains(lower, "forbidden") ||
 		strings.Contains(lower, "invalid credentials") ||
-		strings.Contains(lower, "invalid token") ||
-		strings.Contains(lower, "permission denied") ||
-		strings.Contains(lower, "401") ||
-		strings.Contains(lower, "403") {
-		return diagnosticsConnectionFailure{
-			kind:            "proxmox_auth_rejected",
-			message:         "Proxmox rejected the stored API token or credentials",
-			troubleshooting: "Rotate the node credentials in Settings, then verify the user or token has the required Proxmox permissions.",
-		}
+		strings.Contains(lower, "invalid token") {
+		return diagnosticsAuthenticationFailure()
 	}
 	if fallbackMessage == "" {
 		fallbackMessage = "Connection check failed"
@@ -1072,6 +1132,26 @@ func applyPBSConnectionDiagnostic(diag *PBSDiagnostic, connection Connection) {
 		diag.Error = failure.message
 		diag.ErrorKind = failure.kind
 		diag.Troubleshooting = failure.troubleshooting
+	}
+}
+
+// Carry bounded API-rejection guidance into the existing Errors Detected
+// consumer, not only the downloadable record. Use positional references so
+// the shareable error summary introduces no host, username or token identity.
+// PBS monitor and live-check evidence stay separate, even when they disagree.
+func appendDiagnosticsAPIRejections(diag *DiagnosticsInfo) {
+	appendFailure := func(label, kind, message, guidance string) {
+		switch kind {
+		case "proxmox_auth_rejected", "proxmox_permission_denied", "proxmox_api_error":
+			diag.Errors = append(diag.Errors, label+": "+message+". "+guidance)
+		}
+	}
+	for i, node := range diag.Nodes {
+		appendFailure(fmt.Sprintf("PVE connection %d check", i+1), node.ErrorKind, node.Error, node.Troubleshooting)
+	}
+	for i, node := range diag.PBS {
+		appendFailure(fmt.Sprintf("PBS connection %d monitor", i+1), node.ErrorKind, node.Error, node.Troubleshooting)
+		appendFailure(fmt.Sprintf("PBS connection %d live check", i+1), node.Probe.ErrorKind, node.Probe.Error, node.Probe.Troubleshooting)
 	}
 }
 
@@ -1255,6 +1335,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 		diag.MemorySources, diag.MemorySourceBreakdown = buildMemorySourceDiagnostics(snapshots)
 	}
 
+	appendDiagnosticsAPIRejections(&diag)
 	return diag.NormalizeCollections()
 }
 

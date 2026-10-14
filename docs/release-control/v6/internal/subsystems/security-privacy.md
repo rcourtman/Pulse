@@ -3429,3 +3429,17 @@ command ceilings are unchanged. The host and observer auth-guidance recovery
 controls in `send_report_test.go` and `observer_delivery_test.go` verify observed
 status/endpoint, non-disclosure and resumed ordinary reporting with the same
 credential. They are not a credential inventory probe or native recovery proof.
+
+### Diagnostics does not prescribe credential or ACL churn (14 October 2026)
+
+Proxmox 403 is an access denial, not evidence that a saved token must be
+rotated or privileges broadened. Diagnostic recovery keeps intentional target
+boundaries, both user/token ACLs and privilege separation; 401 replacement is
+conditional on confirmed invalidity. Typed HTTP status precedes untrusted
+provider text. The existing displayed error summary uses connection positions
+and fixed diagnoses/guidance, not host, token, username or provider-body text.
+No credential, TLS, authorization, caller-filtering or endpoint contract is
+weakened. The diagnostic wire/identity and ordinary same-credential recovery
+controls in `diagnostics_access_test.go`, `diagnostics_additional_test.go`,
+`contract_test.go` and `client_request_test.go` cover these properties; they do
+not establish provider or installed acceptance.

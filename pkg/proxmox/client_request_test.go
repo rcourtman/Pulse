@@ -36,11 +36,18 @@ func TestClientRequest_403TokenPermissionHint(t *testing.T) {
 	if !strings.Contains(msg, "authentication error") {
 		t.Fatalf("expected authentication error, got %q", msg)
 	}
-	if !strings.Contains(msg, "does not have sufficient permissions") {
-		t.Fatalf("expected permission hint, got %q", msg)
+	for _, want := range []string{"intersection", "owning user's and token's permissions", "both ACLs", "intended resource path", "do not widen", "disable privilege separation"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("permission guidance omits %q: %s", want, msg)
+		}
 	}
-	if !strings.Contains(msg, "user@pve") {
-		t.Fatalf("expected user in error message, got %q", msg)
+	for _, unwanted := range []string{"not just the token", "user@pve", "secret", "forbidden"} {
+		if strings.Contains(msg, unwanted) {
+			t.Errorf("permission guidance retained private/provider or misleading text %q: %s", unwanted, msg)
+		}
+	}
+	if status, ok := APIErrorStatus(err); !ok || status != http.StatusForbidden {
+		t.Fatalf("permission guidance lost the observed status: %d, %v", status, ok)
 	}
 }
 

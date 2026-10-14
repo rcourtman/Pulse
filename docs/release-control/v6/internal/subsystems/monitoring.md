@@ -7772,3 +7772,19 @@ same publication owner still admits or withdraws the eventual generation.
 CPU/disk/read time and nested detachment, alongside the end-to-end admission
 controls above. The first complete admission proof exposed the former partial
 retention and is retained as failed evidence, not weakened into acceptance.
+
+### Permission-denial diagnostics retain scoped access (14 October 2026)
+
+A PVE token's 403 error explains that privilege-separated access is the
+intersection of user and token ACLs on the intended resource. It no longer
+says to inspect only the user or includes the configured username/provider
+body. The actual HTTP status, authentication-error wrapping and guest permission
+classification remain; there is no retry, token rotation, access widening or
+TLS change. Diagnostics distinguishes rejected authentication from permission
+and other wire failures without promoting a denied resource to a reading.
+`TestClientRequest_403TokenPermissionHint` and
+`TestGetNodeStatusPermissionRefusalDoesNotInventMemory` cover the ordinary
+HTTP boundary, unknown-not-zero memory and resumed CPU/memory with the same
+credential. `TestComputeDiagnosticsAPIRejectionsPreserveCredentials` covers
+pinned PVE/PBS fixture use and preserves the separate PBS scheduler state.
+Native scoped-fleet recovery, QGA/thaw and installed trust remain separate.

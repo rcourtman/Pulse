@@ -6860,3 +6860,17 @@ The accepted upstream `diagnostics_token_visibility_test.go` controls and API
 reference route checks cover caller filtering and the documented authority.
 Final-source checks must retain this upstream behavior beside the reviewed
 reporting/help repairs; source proof is not installed credential recovery.
+
+### PBS denial guidance preserves independent poll evidence (14 October 2026)
+
+The shared diagnostics classifier uses observed PVE/PBS HTTP status before
+provider text, distinguishing 403 access denial from 401 authentication and
+other failures. Its existing error summary labels PBS monitor and live-check
+results separately, without treating a successful probe as scheduler recovery.
+Guidance preserves intended resource access and both scoped user/token ACLs;
+it does not rotate credentials, broaden roles or disable privilege separation
+as a permissions test. Backup data, History, retention and all storage/guest
+commands are unchanged. `TestComputeDiagnosticsAPIRejectionsPreserveCredentials`
+and `TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization` cover
+source/wire attribution and same-credential fixture recovery, not native PBS
+jobs, installed permission recovery or safe thaw.

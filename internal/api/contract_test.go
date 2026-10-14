@@ -27076,6 +27076,38 @@ func TestContract_AssistantSettingsAdvertisePlanningNotExecution(t *testing.T) {
 	}
 }
 
+func TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization(t *testing.T) {
+	diag := EmptyDiagnosticsInfo()
+	diag.Nodes = []NodeDiagnostic{{ID: "private-pve-id", Name: "private-pve-name"}}
+	applyNodeDiagnosticFailure(&diag.Nodes[0], classifyDiagnosticsConnectionFailure(errors.New("API error 403: forbidden"), "probe failed"))
+	diag.Nodes[0].Connected, diag.Nodes[0].Error = mergeDiagnosticsConnection(false, diag.Nodes[0].Error, true, true)
+	diag.PBS = []PBSDiagnostic{{ID: "private-pbs-id", Name: "private-pbs-name"}}
+	applyPBSConnectionDiagnostic(&diag.PBS[0], Connection{State: ConnectionStateUnauthorized,
+		StateReason: "poll failed", LastError: &ConnectionError{Message: "authentication error: API error 403: forbidden"}})
+	applyPBSDiagnosticFailure(&diag.PBS[0], classifyDiagnosticsConnectionFailure(errors.New("API error 401: unauthorized"), "probe failed"))
+	appendDiagnosticsAPIRejections(&diag)
+	if len(diag.Errors) != 3 || !strings.Contains(diag.Errors[0], "monitor still reports this instance connected") ||
+		!strings.Contains(diag.Errors[1], "PBS connection 1 monitor:") || !strings.Contains(diag.Errors[2], "PBS connection 1 live check:") {
+		t.Fatalf("summary collapsed or misattributed probe/monitor evidence: %+v", diag.Errors)
+	}
+	for _, summary := range diag.Errors {
+		if strings.Contains(summary, "private-") || strings.Contains(summary, "Rotate the node credentials") {
+			t.Fatalf("summary introduced identities or credential churn: %s", summary)
+		}
+	}
+	rec := httptest.NewRecorder()
+	writeDiagnosticsResponse(rec, diag, time.Time{})
+	var wire DiagnosticsInfo
+	if err := json.Unmarshal(rec.Body.Bytes(), &wire); err != nil {
+		t.Fatal(err)
+	}
+	if !wire.Nodes[0].Connected || wire.PBS[0].Connected || wire.PBS[0].Probe.Connected ||
+		wire.PBS[0].ErrorKind != "proxmox_permission_denied" || wire.PBS[0].Probe.ErrorKind != "proxmox_auth_rejected" ||
+		!reflect.DeepEqual(wire.Errors, diag.Errors) {
+		t.Fatalf("wire changed authoritative connectivity or rejection guidance: %+v", wire)
+	}
+}
+
 // A failed support probe must not direct an operator to remove the trust
 // boundary which rejected it. These are diagnostic errors, not native faults.
 func TestContract_DiagnosticsTLSRecoveryPreservesTrust(t *testing.T) {

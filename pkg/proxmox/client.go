@@ -670,8 +670,10 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 		// Create base error with helpful guidance for common issues
 		var apiErr error
 		if resp.StatusCode == 403 && c.config.TokenName != "" {
-			// Special case for 403 with API token - this is usually a permission issue
-			apiErr = fmt.Errorf("API error 403 (Forbidden): The API token does not have sufficient permissions. Note: In Proxmox GUI, permissions must be set on the USER (not just the token). Please verify the user '%s@%s' has the required permissions", auth.user, auth.realm)
+			// Privilege-separated tokens are limited by both ACLs. A denied
+			// target may be deliberately outside the token's intended scope;
+			// neither credential rotation nor a wider grant follows from 403.
+			apiErr = errors.New("API error 403 (Forbidden): Proxmox denied access to this resource. With privilege separation enabled, effective access is the intersection of the owning user's and token's permissions. Check both ACLs on the intended resource path; do not widen the token's scope or disable privilege separation to silence a denial")
 		} else if resp.StatusCode == 595 {
 			// 595 can mean authentication failed OR trying to access an offline node in a cluster
 			// Check if this is a node-specific endpoint
