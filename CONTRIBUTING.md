@@ -62,8 +62,9 @@ and installer tooling.
 - Include only evidence relevant to the symptom: a screenshot or exact redacted
   error may be enough for a visual problem; existing logs or observations may
   explain a connection or data failure. Diagnostics are optional, not a condition
-  of reporting. If a result is already displayed in **Settings → Diagnostics**,
-  its download buttons reuse that result without running checks again.
+  of reporting. If a result is already displayed in **Settings → Support →
+  Diagnostics & Health**, its download buttons reuse that result without running
+  checks again.
 - **Run Diagnostics** can make live API and guest-agent requests. Do not run it
   during a backup, freeze/thaw or an unresponsive-host incident just to file a
   report. Keep the original evidence instead; a successful one-off check does

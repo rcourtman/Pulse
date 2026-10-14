@@ -325,8 +325,8 @@ excerpt. Remove credentials, cookies, secret URLs, private hostnames,
 addresses and personal information, including anything echoed in an error.
 Do not upload configuration or credential files.
 
-In **Settings → Diagnostics**, an existing result's download buttons reuse it
-without running the checks again; nothing is uploaded. Use **GitHub (review first)**
+In **Settings → Support → Diagnostics & Health**, an existing result's download
+buttons reuse it without running the checks again; nothing is uploaded. Use **GitHub (review first)**
 for an export intended for sharing, but sanitisation does not guarantee that
 every error is safe to share. Open the downloaded file locally and review it
 before sharing; keep **Full (private)** private. **Run Diagnostics** makes live
