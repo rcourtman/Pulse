@@ -6836,3 +6836,11 @@ The accepted upstream `diagnostics_token_visibility_test.go` controls and API
 reference route checks cover caller filtering and the documented authority.
 Final-source checks must retain this upstream behavior beside the reviewed
 reporting/help repairs; source proof is not installed credential recovery.
+
+### Pulse Pro runtime switch opens no storage or recovery path (14 October 2026)
+
+The Pulse Pro runtime switch routes added under `internal/api/` reuse the
+update pipeline's existing backup of the installed binary before replacing it
+and its existing history-entry rollback. The data directory, metrics and
+configuration stores, backups, snapshots and recovery points are untouched,
+and no new backup, retention or restore path is added.

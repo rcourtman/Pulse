@@ -166,6 +166,18 @@ type proBrokerErrorResponse struct {
 	} `json:"error"`
 }
 
+// proBrokerStatusError is a non-200 broker reply. It keeps the broker's error
+// code so callers can tell a licence the broker refuses (403) from an outage.
+type proBrokerStatusError struct {
+	StatusCode int
+	Code       string
+	detail     string
+}
+
+func (e *proBrokerStatusError) Error() string {
+	return fmt.Sprintf("Pulse Pro download broker returned status %d: %s", e.StatusCode, e.detail)
+}
+
 // proUpdateTarget maps the running architecture to the broker's artifact
 // target naming (same mapping the community release assets use).
 func proUpdateTarget() string {
@@ -274,7 +286,8 @@ func (m *Manager) fetchProDownloadManifest(ctx context.Context, creds ProUpdateC
 	if resp.StatusCode != http.StatusOK {
 		detail := ""
 		var brokerErr proBrokerErrorResponse
-		if json.Unmarshal(body, &brokerErr) == nil && brokerErr.Error.Message != "" {
+		decoded := json.Unmarshal(body, &brokerErr) == nil
+		if decoded && brokerErr.Error.Message != "" {
 			detail = brokerErr.Error.Message
 			if brokerErr.Error.Code != "" {
 				detail = brokerErr.Error.Code + ": " + detail
@@ -286,7 +299,11 @@ func (m *Manager) fetchProDownloadManifest(ctx context.Context, creds ProUpdateC
 		if detail == "" {
 			detail = resp.Status
 		}
-		return nil, fmt.Errorf("Pulse Pro download broker returned status %d: %s", resp.StatusCode, detail)
+		statusErr := &proBrokerStatusError{StatusCode: resp.StatusCode, detail: detail}
+		if decoded {
+			statusErr.Code = brokerErr.Error.Code
+		}
+		return nil, statusErr
 	}
 
 	var manifest proBrokerResponse
