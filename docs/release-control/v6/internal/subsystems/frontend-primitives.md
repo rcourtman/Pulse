@@ -9205,6 +9205,16 @@ once, not on two gridlines, and the gridline itself stays. The end labels
 always remain. `guest-storage-2263.cjs` records each chart's drawn time
 labels and checks they stand apart; `pbs-history-refresh.cjs` checks the
 drawer's network axis.
+The canvas `HistoryChart` draws the same min-max band the drawer charts do:
+when any bucket's lowest and highest readings differ
+(`hasHistoryChartSpread`), a 20% band spans them behind the line, so a short
+spike survives downsampling. It no longer fills the area under the line, so a
+storage chart reads like a drawer chart; a flat series is a line alone. A
+time label that repeats the one before it (a short window at a coarse label)
+is dropped (`withoutRepeatedHistoryTimeTicks`). Phone chart folds share one
+button, `PhoneChartsToggle` ("Show <names>" / "Show fewer charts",
+`aria-controls` naming the folded group, hidden from `sm` up); the drawer
+History and the disk detail both use it.
 
 ### Shared History single observations
 

@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "dc92693a2b7771a033ace97ff5512b7f34742a43",
+  "verified_at": "2026-10-14T11:52:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/shared/PhoneChartsToggle.tsx",
+    "frontend-modern/src/components/shared/historyChartModel.ts",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "03b1d6f65d32aac6bc5f55886fde0bf06fe94953db3eccbd738d7d4760000428",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "c48d4a7e5415ffe1d0f15607540c4588c985b06c0c32be83d67c86e29d13a0ea",
+    "frontend-modern/src/components/shared/PhoneChartsToggle.tsx": "95e68032c8b3e1b849f4334706ce3ef1f4a9dc6a2b8bccc9cf9582e7b6972923",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "a53a10b572139188cca59efc326861da19795d33f3564d44490d29f69d856d62",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "1a8760b01b853000a3ee22f333ad35bb5aa44b8dbdaceaed8b6104ab5803d723",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "e72d7faa6e8c014c3e530a0c3b4c5c7f34572b78412b46cead334b261690731b"
+  },
+  "routes": [
+    "/browser-tests/guest-storage-2263.html (production GuestDrawerOverview disk detail, Chromium via Playwright 1.56.1 on pulse-dev)",
+    "/browser-tests/history-touch.html (production DiskDetail and StoragePoolDetail, Chromium and WebKit phones)",
+    "/browser-tests/disk-history-collection.html",
+    "/browser-tests/pool-ownership.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "desktop disk detail: spiky disk reads draw a min-max band behind the line; flat Temperature, Write and Busy draw a line only, no area fill",
+    "phone disk detail: only Temperature shows and reads; \"Show Reallocated Sectors, Read, Write, Busy\" folds the rest, which read nothing",
+    "phone fold opened: all five charts read and show; button reads \"Show fewer charts\"",
+    "short windows state each time label once (11:00 AM, 11:01 AM, 11:02 AM; Oct 2 once)",
+    "pool capacity trend as a line; touch inspection, zero singleton and empty states",
+    "disk History collection states with the fold opened on a phone"
+  ],
+  "interactions": [
+    "phone fold toggle open",
+    "touch and pointer inspection on disk and pool charts",
+    "disk expand, Hide/Show overview, viewport resize",
+    "range changes on disk and pool pickers"
+  ]
+}

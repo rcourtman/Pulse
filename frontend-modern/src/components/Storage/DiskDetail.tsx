@@ -1,8 +1,18 @@
-import { Component, For, Show, createEffect, createMemo } from 'solid-js';
+import {
+  Component,
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+} from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { filterSelectClass } from '@/components/shared/FilterToolbar';
 import { HistoryChart, HistoryChartHoverGroup } from '@/components/shared/HistoryChart';
+import { PhoneChartsToggle } from '@/components/shared/PhoneChartsToggle';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import type { HistoryTimeRange } from '@/api/charts';
 import { maxHistoryDays } from '@/stores/license';
 import {
@@ -19,6 +29,7 @@ import {
   getDiskAttributeCardValueTextClass,
   getDiskDetailHistoryFallbackMessage,
   getDiskDetailLiveBadgeLabel,
+  getDiskDetailPhonePinnedChartLabels,
 } from '@/features/storageBackups/diskDetailPresentation';
 import {
   STORAGE_DETAIL_BADGE_CLASS,
@@ -75,6 +86,31 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
     () => collectionMessages().length > 0 || attributeCards().length > 0,
   );
 
+  // On a phone five stacked charts push everything after them off screen: show
+  // the first chart and any whose SMART card is out of bounds, fold the rest
+  // behind one button. A pinned chart stays pinned after its card recovers, so
+  // a reader mid-inspection does not lose it. Folded charts read nothing.
+  const { isBelow } = useBreakpoint();
+  const chartsId = createUniqueId();
+  const [showAllOnPhone, setShowAllOnPhone] = createSignal(false);
+  const pinnedLabels = new Set<string>();
+  const phonePinned = createMemo(() => {
+    for (const label of getDiskDetailPhonePinnedChartLabels(historyCharts(), attributeCards())) {
+      pinnedLabels.add(label);
+    }
+    return new Set(pinnedLabels);
+  });
+  const foldedOnPhone = (label: string) => !showAllOnPhone() && !phonePinned().has(label);
+  const showLiveIO = () => Boolean(metricResourceId() && liveIOAvailable());
+  const phoneFoldedLabels = createMemo(() =>
+    [
+      ...historyCharts().map((chart) => chart.label),
+      ...(showLiveIO() ? DISK_DETAIL_LIVE_CHARTS.map((chart) => chart.label) : []),
+    ].filter(foldedOnPhone),
+  );
+  const chartReads = (label: string) =>
+    props.historyEnabled !== false && !(isBelow('sm') && foldedOnPhone(label));
+
   createEffect(() => {
     const nextRange = resolveHistoryRangeWithinLimit(
       chartRange(),
@@ -120,7 +156,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
 
       {/* One view: the SMART evidence behind the health verdict, then its
           trend and live I/O. There is no separate History tab. */}
-      <div class="space-y-3">
+      <div id={chartsId} class="space-y-3">
         <Show when={collectionMessages().length > 0}>
           <div class={STORAGE_DETAIL_EMPTY_CLASS} role="status">
             <For each={collectionMessages()}>{(message) => <p>{message}</p>}</For>
@@ -173,7 +209,10 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
               <div class={STORAGE_DISK_DETAIL_HISTORY_GRID_CLASS}>
                 <For each={historyCharts()}>
                   {(chart) => (
-                    <div class={STORAGE_DETAIL_CARD_CLASS}>
+                    <div
+                      class={`${STORAGE_DETAIL_CARD_CLASS} ${foldedOnPhone(chart.label) ? 'max-sm:hidden' : ''}`}
+                      data-phone-collapsed={foldedOnPhone(chart.label) ? 'true' : undefined}
+                    >
                       <HistoryChart
                         resourceType="disk"
                         resourceId={historyResourceId()!}
@@ -186,7 +225,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
                         hideSelector={true}
                         compact={true}
                         hideLock={true}
-                        enabled={props.historyEnabled}
+                        enabled={chartReads(chart.label)}
                       />
                     </div>
                   )}
@@ -196,8 +235,11 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
           </div>
         </Show>
 
-        <Show when={metricResourceId() && liveIOAvailable()}>
-          <div class={STORAGE_DISK_DETAIL_SECTION_CLASS}>
+        <Show when={showLiveIO()}>
+          <div
+            class={`${STORAGE_DISK_DETAIL_SECTION_CLASS} ${showAllOnPhone() ? '' : 'max-sm:hidden'}`}
+            data-phone-collapsed={showAllOnPhone() ? undefined : 'true'}
+          >
             <h4
               class={`${STORAGE_DETAIL_SECTION_TITLE_CLASS} ${STORAGE_DISK_DETAIL_SECTION_HEADING_CLASS}`}
             >
@@ -226,7 +268,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
                         hideLock
                         height={120}
                         compact={true}
-                        enabled={props.historyEnabled}
+                        enabled={chartReads(chart.label)}
                       />
                     </div>
                   )}
@@ -234,6 +276,15 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
               </div>
             </HistoryChartHoverGroup>
           </div>
+        </Show>
+        <Show when={historyResourceId()}>
+          <PhoneChartsToggle
+            hiddenLabels={phoneFoldedLabels()}
+            expanded={showAllOnPhone()}
+            onToggle={() => setShowAllOnPhone((open) => !open)}
+            controls={chartsId}
+            testId="disk-detail-phone-toggle"
+          />
         </Show>
       </div>
     </div>

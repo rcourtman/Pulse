@@ -181,6 +181,14 @@ export function getHistoryChartDataMax(points: AggregatedMetricPoint[]) {
   return max;
 }
 
+/** True when any stored bucket's lowest and highest readings differ. */
+export function hasHistoryChartSpread(points: readonly AggregatedMetricPoint[]): boolean {
+  return (
+    points.length > 1 &&
+    points.some((point) => (point.max ?? point.value) > (point.min ?? point.value))
+  );
+}
+
 export function getHistoryChartScale(points: AggregatedMetricPoint[], unit?: string) {
   const minValue = 0;
   const isPercentLike = unit === '%';
@@ -243,6 +251,17 @@ export function withoutRepeatedHistoryAxisLabels(labels: string[]): string[] {
       ? ''
       : label,
   );
+}
+
+/**
+ * Time ticks left to right without one that reads the same as the tick
+ * before it: a short window at a coarse label ("Oct 2" four times, or
+ * "11:00 AM" twice) states its time once.
+ */
+export function withoutRepeatedHistoryTimeTicks<T extends { label: string }>(
+  ticks: readonly T[],
+): T[] {
+  return ticks.filter((tick, index) => index === 0 || tick.label !== ticks[index - 1].label);
 }
 
 const HISTORY_CHART_TIME_LABEL_GAP = 12;

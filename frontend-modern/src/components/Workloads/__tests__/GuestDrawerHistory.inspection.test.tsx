@@ -427,6 +427,9 @@ describe('drawer History on a phone', () => {
     const toggle = screen.getByTestId('history-phone-toggle');
     expect(toggle).toHaveClass('sm:hidden');
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // The shared phone toggle controls the grid that holds the folded panels.
+    const grid = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    expect(grid.querySelectorAll('[data-testid="guest-history-group-chart"]')).toHaveLength(3);
     expect(toggle).toHaveTextContent('Show Network I/O, Disk I/O');
 
     fireEvent.click(toggle);

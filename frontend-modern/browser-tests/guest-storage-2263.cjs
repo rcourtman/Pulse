@@ -95,11 +95,12 @@ const { chromium } = require('playwright');
               start: end - 600_000,
               end,
               source: 'store',
+              // Disk reads spike inside their buckets; every other series is flat.
               points: [0, 1, 2].map((i) => ({
                 timestamp: end - (2 - i) * 300_000,
                 value: 40 + i,
-                min: 40 + i,
-                max: 40 + i,
+                min: q.get('metric') === 'diskread' ? 10 + i : 40 + i,
+                max: q.get('metric') === 'diskread' ? 90 + i : 40 + i,
               })),
             },
           });
@@ -122,9 +123,15 @@ const { chromium } = require('playwright');
         const proto = CanvasRenderingContext2D.prototype;
         const clear = proto.clearRect;
         const fill = proto.fillText;
+        const fillShape = proto.fill;
         proto.clearRect = function (...args) {
           this.canvas.__labels = [];
+          this.canvas.__fills = [];
           return clear.apply(this, args);
+        };
+        proto.fill = function (...args) {
+          (this.canvas.__fills ||= []).push(String(this.fillStyle));
+          return fillShape.apply(this, args);
         };
         proto.fillText = function (text, x, y, ...rest) {
           (this.canvas.__labels ||= []).push({
@@ -196,6 +203,62 @@ const { chromium } = require('playwright');
       // with no Overview/History tabs to switch between.
       assert.equal(await page.getByRole('tab').count(), 0);
       assert.equal(await page.getByTestId('disk-detail-history').isVisible(), true);
+      const visibleCharts = () =>
+        page.evaluate(() =>
+          Array.from(document.querySelectorAll('canvas'))
+            .filter((canvas) => canvas.clientWidth > 0)
+            .map((canvas) => canvas.getAttribute('aria-label')),
+        );
+      const phoneToggle = page.getByTestId('disk-detail-phone-toggle');
+      if (width === 390) {
+        // A phone shows the first chart; the rest fold behind one button and
+        // read nothing until it is pressed.
+        assert.deepEqual(await visibleCharts(), ['Temperature chart']);
+        assert.equal(
+          await phoneToggle.innerText(),
+          'Show Reallocated Sectors, Read, Write, Busy',
+        );
+        assert.deepEqual(
+          [...new Set(historyReads.filter((r) => r.width === width).map((r) => r.metric))],
+          ['smart_temp'],
+        );
+        await page.screenshot({
+          path: path.join(artifacts, `guest-storage-2263-phone-folded-${width}.png`),
+          fullPage: true,
+        });
+        const unfolded = page.waitForRequest((request) =>
+          request.url().includes('metric=diskread'),
+        );
+        await phoneToggle.click();
+        await unfolded;
+        assert.equal(await phoneToggle.getAttribute('aria-expanded'), 'true');
+        assert.equal(await phoneToggle.innerText(), 'Show fewer charts');
+        await page.getByRole('img', { name: 'Read chart' }).waitFor();
+        await page.waitForTimeout(300);
+      } else {
+        assert.equal(await phoneToggle.isVisible(), false, 'no fold above the phone breakpoint');
+      }
+      assert.equal((await visibleCharts()).length, 5);
+      // Spiky disk reads draw a min-max band behind their line; flat series do not.
+      // The canvas reports the band's 20%-alpha fill back as rgba(..., 0.2).
+      const fills = await page.evaluate(() =>
+        Object.fromEntries(
+          Array.from(document.querySelectorAll('canvas'), (canvas) => [
+            canvas.getAttribute('aria-label'),
+            canvas.__fills || [],
+          ]),
+        ),
+      );
+      assert.ok(
+        fills['Read chart'].some((fill) => /, 0\.2\)$/.test(fill)),
+        `Read chart band: ${JSON.stringify(fills['Read chart'])}`,
+      );
+      for (const flat of ['Temperature chart', 'Write chart', 'Busy chart']) {
+        assert.ok(
+          !fills[flat].some((fill) => /, 0\.2\)$/.test(fill)),
+          `${flat} must not draw a band: ${JSON.stringify(fills[flat])}`,
+        );
+      }
       // Each chart's time labels stand apart, however narrow its card.
       const timeLabels = await page.evaluate(() =>
         Array.from(document.querySelectorAll('canvas'), (canvas) => ({

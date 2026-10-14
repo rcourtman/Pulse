@@ -18,8 +18,10 @@ import {
   getHistoryChartTimeTickCount,
   getHistoryChartTooltipLayout,
   getHistoryChartYAxisLabels,
+  hasHistoryChartSpread,
   HISTORY_CHART_RANGES,
   withoutRepeatedHistoryAxisLabels,
+  withoutRepeatedHistoryTimeTicks,
 } from '@/components/shared/historyChartModel';
 
 it('distinguishes tiny positive percentage observations from zero in History labels', () => {
@@ -129,6 +131,85 @@ vi.mock('@/api/charts', () => ({
   },
 }));
 
+describe('History chart min-max band', () => {
+  const at = (timestamp: number, value: number, min = value, max = value) => ({
+    timestamp,
+    value,
+    min,
+    max,
+  });
+
+  it("spreads only when a bucket's lowest and highest readings differ", () => {
+    expect(hasHistoryChartSpread([at(1, 5), at(2, 6)])).toBe(false);
+    expect(hasHistoryChartSpread([at(1, 5), at(2, 6, 2, 30)])).toBe(true);
+    expect(hasHistoryChartSpread([at(1, 5, 2, 30)])).toBe(false);
+  });
+
+  let restoreContext = () => {};
+  // Records what the chart fills, with the fill colour in force at the time.
+  const recordFills = () => {
+    const fills: string[] = [];
+    const getContext = vi.mocked(HTMLCanvasElement.prototype.getContext);
+    const original = getContext.getMockImplementation()!;
+    restoreContext = () => getContext.mockImplementation(original);
+    getContext.mockImplementation(function () {
+      const ctx: Record<string, unknown> = {
+        fillStyle: '',
+        clearRect: vi.fn(() => fills.splice(0)),
+        setTransform: vi.fn(),
+        beginPath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        stroke: vi.fn(),
+        fillText: vi.fn(),
+        closePath: vi.fn(),
+        fill: vi.fn(() => fills.push(String(ctx.fillStyle))),
+        arc: vi.fn(),
+        save: vi.fn(),
+        restore: vi.fn(),
+        setLineDash: vi.fn(),
+        measureText: vi.fn(() => ({ width: 40 })),
+      };
+      return ctx as never;
+    });
+    return fills;
+  };
+
+  it('draws a band behind the line for spiky buckets and no area fill for flat ones', async () => {
+    const request = vi.mocked(ChartsAPI.getMetricsHistory);
+    const fills = recordFills();
+    try {
+      request.mockResolvedValueOnce({
+        points: [at(1000, 10, 4, 60), at(2000, 12, 8, 14)],
+        source: 'store',
+      } as never);
+      const spiky = render(() => (
+        <HistoryChart resourceType="disk" resourceId="d" metric="diskread" color="#3b82f6" />
+      ));
+      await waitFor(() => expect(fills).toContain('#3b82f633'));
+      spiky.unmount();
+      fills.splice(0);
+      request.mockResolvedValueOnce({
+        points: [at(1000, 10), at(2000, 12)],
+        source: 'store',
+      } as never);
+      render(() => (
+        <HistoryChart resourceType="disk" resourceId="e" metric="diskread" color="#3b82f6" />
+      ));
+      await waitFor(() =>
+        expect(
+          document.getElementById(
+            screen.getByRole('img', { name: 'History chart' }).getAttribute('aria-describedby')!,
+          )!.textContent,
+        ).toContain('2 data points'),
+      );
+      expect(fills.filter((fill) => fill.startsWith('#3b82f6'))).toEqual([]);
+    } finally {
+      restoreContext();
+    }
+  });
+});
+
 describe('History chart axis labels', () => {
   it('fits as many time labels as the plot holds without touching', () => {
     // "11:30 AM" is about 45px at 10px sans-serif; neighbours need 57px apart.
@@ -139,6 +220,23 @@ describe('History chart axis labels', () => {
     expect(getHistoryChartTimeTickCount(100, 45)).toBe(2);
     expect(getHistoryChartTimeTickCount(30, 45)).toBe(2);
     expect(getHistoryChartTimeTickCount(0, 45)).toBe(4);
+  });
+
+  it('states a time label once when a short window repeats it', () => {
+    const tick = (label: string) => ({ timestamp: 0, label });
+    expect(
+      withoutRepeatedHistoryTimeTicks([tick('Oct 2'), tick('Oct 2'), tick('Oct 2')]).map(
+        (t) => t.label,
+      ),
+    ).toEqual(['Oct 2']);
+    expect(
+      withoutRepeatedHistoryTimeTicks([
+        tick('11:00 AM'),
+        tick('11:00 AM'),
+        tick('11:01 AM'),
+        tick('11:02 AM'),
+      ]).map((t) => t.label),
+    ).toEqual(['11:00 AM', '11:01 AM', '11:02 AM']);
   });
 
   it('blanks a middle gridline label that repeats a neighbour', () => {

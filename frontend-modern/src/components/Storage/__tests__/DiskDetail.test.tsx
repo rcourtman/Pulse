@@ -1,4 +1,4 @@
-import { render, screen, within } from '@solidjs/testing-library';
+import { fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { DiskDetail } from '@/components/Storage/DiskDetail';
@@ -51,7 +51,77 @@ const buildDisk = (): Resource =>
     },
   }) as unknown as Resource;
 
+const atPhoneWidth = (run: () => void) => {
+  const width = window.innerWidth;
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 390 });
+  try {
+    run();
+  } finally {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: width,
+    });
+  }
+};
+// metric -> [reads, folded on a phone]
+const chartStates = (): Record<string, [string | undefined, string]> =>
+  Object.fromEntries(
+    screen
+      .getAllByTestId('history-chart')
+      .map((chart) => [
+        chart.textContent!.split(':').at(-2),
+        [
+          chart.dataset.enabled,
+          chart.closest('[data-phone-collapsed="true"]') ? 'folded' : 'shown',
+        ],
+      ]),
+  );
+
 describe('DiskDetail', () => {
+  it('shows the first chart on a phone and folds the rest behind one button that stops their reads', () => {
+    atPhoneWidth(() => {
+      render(() => <DiskDetail disk={buildDisk()} nodes={[]} />);
+      expect(chartStates()).toEqual({
+        smart_temp: ['true', 'shown'],
+        smart_reallocated_sectors: ['false', 'folded'],
+        diskread: ['false', 'folded'],
+        diskwrite: ['false', 'folded'],
+        disk: ['false', 'folded'],
+      });
+      const toggle = screen.getByTestId('disk-detail-phone-toggle');
+      expect(toggle).toHaveTextContent('Show Reallocated Sectors, Read, Write, Busy');
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(document.getElementById(toggle.getAttribute('aria-controls')!)).not.toBeNull();
+      fireEvent.click(toggle);
+      expect(new Set(Object.values(chartStates()).map(([reads]) => reads))).toEqual(
+        new Set(['true']),
+      );
+      expect(document.querySelectorAll('[data-phone-collapsed="true"]')).toHaveLength(0);
+      expect(toggle).toHaveTextContent('Show fewer charts');
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    });
+  });
+
+  it('keeps a chart whose SMART card is out of bounds on a phone', () => {
+    const disk = buildDisk();
+    (disk.physicalDisk as { smart: { reallocatedSectors: number } }).smart.reallocatedSectors = 8;
+    atPhoneWidth(() => {
+      render(() => <DiskDetail disk={disk} nodes={[]} />);
+      expect(chartStates().smart_reallocated_sectors).toEqual(['true', 'shown']);
+      expect(screen.getByTestId('disk-detail-phone-toggle')).toHaveTextContent(
+        'Show Read, Write, Busy',
+      );
+    });
+  });
+
+  it('reads every chart on a wider screen, where the fold does not apply', () => {
+    render(() => <DiskDetail disk={buildDisk()} nodes={[]} />);
+    expect(new Set(Object.values(chartStates()).map(([reads]) => reads))).toEqual(
+      new Set(['true']),
+    );
+  });
+
   it('pauses every disk chart when its holder is hidden', () => {
     const [shown, setShown] = createSignal(true);
     render(() => <DiskDetail disk={buildDisk()} nodes={[]} historyEnabled={shown()} />);

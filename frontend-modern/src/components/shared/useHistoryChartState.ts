@@ -19,6 +19,8 @@ import {
   getHistoryChartRightInset,
   getHistoryChartScale,
   getHistoryChartTimeTickCount,
+  hasHistoryChartSpread,
+  withoutRepeatedHistoryTimeTicks,
   getHistoryChartYAxisLabels,
   type HistoryChartProps,
   type HistoryChartHoverPoint,
@@ -283,6 +285,7 @@ export function useHistoryChartState(
       );
       if (count < timeAxisTicks.length) timeAxisTicks = timeTicks(count);
     }
+    timeAxisTicks = withoutRepeatedHistoryTimeTicks(timeAxisTicks);
 
     ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;
@@ -329,15 +332,32 @@ export function useHistoryChartState(
       ctx.fillStyle = mainColor;
       ctx.fill();
     } else {
-      ctx.beginPath();
-      points.forEach((point, index) => {
-        if (index === 0) ctx.moveTo(geometry.getX(point.timestamp), height - 20);
-        ctx.lineTo(geometry.getX(point.timestamp), geometry.getY(point.value));
-      });
-      ctx.lineTo(geometry.getX(points[points.length - 1].timestamp), height - 20);
-      ctx.closePath();
-      ctx.fillStyle = `${mainColor}66`;
-      ctx.fill();
+      // Each stored point is a bucket average with its lowest and highest
+      // reading. A band spans those extremes behind the line, so a short
+      // spike stays visible after downsampling; flat buckets draw no band.
+      // The drawer charts draw the same band.
+      if (hasHistoryChartSpread(points)) {
+        ctx.beginPath();
+        points.forEach((point, index) => {
+          const x = geometry.getX(point.timestamp);
+          const y = geometry.getY(Math.max(point.max ?? point.value, point.value));
+          if (index === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        for (let index = points.length - 1; index >= 0; index--) {
+          const point = points[index];
+          ctx.lineTo(
+            geometry.getX(point.timestamp),
+            geometry.getY(Math.min(point.min ?? point.value, point.value)),
+          );
+        }
+        ctx.closePath();
+        ctx.fillStyle = `${mainColor}33`;
+        ctx.fill();
+        ctx.strokeStyle = `${mainColor}73`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
 
       ctx.beginPath();
       ctx.strokeStyle = mainColor;

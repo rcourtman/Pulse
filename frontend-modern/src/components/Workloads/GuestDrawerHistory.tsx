@@ -17,6 +17,7 @@ import { filterSelectClass } from '@/components/shared/FilterToolbar';
 import { Button } from '@/components/shared/Button';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { PhoneChartsToggle } from '@/components/shared/PhoneChartsToggle';
 import {
   HISTORY_CHART_RANGES,
   formatHistoryChartTooltipValue,
@@ -1007,22 +1008,12 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                 )}
               </For>
             </div>
-            <Show when={phoneCollapsedGroups().length > 0 || showAllOnPhone()}>
-              <button
-                type="button"
-                class="flex min-h-11 w-full items-center justify-center gap-1 rounded-xs border border-border bg-surface px-3 text-xs font-medium text-base-content sm:hidden"
-                aria-controls={gridId}
-                aria-expanded={showAllOnPhone()}
-                data-testid="history-phone-toggle"
-                onClick={() => setShowAllOnPhone((open) => !open)}
-              >
-                {showAllOnPhone()
-                  ? 'Show fewer charts'
-                  : `Show ${phoneCollapsedGroups()
-                      .map((group) => group.label)
-                      .join(', ')}`}
-              </button>
-            </Show>
+            <PhoneChartsToggle
+              hiddenLabels={phoneCollapsedGroups().map((group) => group.label)}
+              expanded={showAllOnPhone()}
+              onToggle={() => setShowAllOnPhone((open) => !open)}
+              controls={gridId}
+            />
           </Show>
         </Show>
       </div>
