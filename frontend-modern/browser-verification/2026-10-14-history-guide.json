@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "c670f6b6666e6f91241e6ba2e20f77b768c3bc1e",
+  "changed_paths": [
+    "frontend-modern/public/docs/PBS.md",
+    "frontend-modern/public/docs/METRICS_HISTORY.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/PBS.md": "a4e7aa00bf32f8269a20f8f1c3609214d8dadb1da79a3ed0e7b4b980789741cf",
+    "frontend-modern/public/docs/METRICS_HISTORY.md": "24d00753afb3bc8a15f079958d6fcb964cecfbfcf14f2f9e42e8916be5fd8250"
+  },
+  "routes": [
+    "/docs/PBS#pbs-is-connected-but-history-stays-empty",
+    "/docs/METRICS_HISTORY#read-a-history-panel"
+  ],
+  "states": [
+    "Actual canonical/shipped Markdown through production Docs and sanitised renderer in a Vite source preview; only local security/API GET fixtures.",
+    "PBS host Overview chart/range versus old installed History tab, VM/datastore and Alerts History.",
+    "Stored observation/window semantics and aggregated averages/minimum/maximum/local peaks without continuous-coverage or incident-time claims."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and390px WebKit touch follow both cross-guide links to existing bookmarks.",
+    "Scroll to bounds/peak rows and worked example in the real article. Actual served Markdown hashes match their committed producers."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-14T00:23:19.647Z",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "opened": [
+      "chromium-pbs-navigation.jpg",
+      "chromium-history-navigation.jpg",
+      "chromium-bucket-bounds.jpg",
+      "chromium-peak-example.jpg",
+      "webkit-pbs-navigation.jpg",
+      "webkit-history-navigation.jpg",
+      "webkit-bucket-bounds.jpg",
+      "webkit-peak-example.jpg"
+    ],
+    "observations": [
+      "Desktop: revised PBS host route, old-tab compatibility, Overview/range guidance and both cross-guide links are readable; the complete bounds/peak table fits the page.",
+      "390 px WebKit: new navigation and no-upgrade/no-restart caveat wrap within the page. All three columns of the bounds/peak rows remain readable without page overflow, and the22% average/95% peak example and its duration/constant-usage limits are visible.",
+      "Desktop bucket-bounds capture is byte-identical to the already presented history-navigation image; that same presented pixel content covers both cases.",
+      "Keyboard Enter and phone touch followed both preserved bookmarks in both directions. No API, guest, backup, credential or installed monitoring operation was performed."
+    ],
+    "remaining": null
+  },
+  "browser_cleanup": {
+    "closed": true,
+    "preview_exit": 143,
+    "preview_signal": null
+  },
+  "evidence": "PI OUTCOME.md/RECEIPTS.md/BROWSER.json and eight retained native-inspected captures bind ten consuming cases to c670f6b6. Does not establish native guest/PBS recovery, installed acceptance, protected delivery or release availability."
+}
