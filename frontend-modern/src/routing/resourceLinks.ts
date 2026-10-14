@@ -48,6 +48,8 @@ export const VMWARE_PATH = '/vmware';
 export const VMWARE_DEFAULT_TAB = 'overview';
 export const ALERT_THRESHOLDS_PATH = '/alerts/thresholds';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
+// The Recovery section, whose fresh and stale hours colour every backup shield.
+export const ALERT_BACKUP_THRESHOLDS_PATH = `${ALERT_THRESHOLDS_PATH}/proxmox#backups`;
 export const PATROL_PATH = '/patrol';
 export const PATROL_ATTENTION_QUERY_PARAM = 'attention';
 export const ACTIONS_PATH = '/actions';

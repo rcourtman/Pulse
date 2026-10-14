@@ -10,6 +10,7 @@ import {
   KUBERNETES_PATH,
   KUBERNETES_QUERY_PARAMS,
   PMG_THRESHOLDS_PATH,
+  ALERT_BACKUP_THRESHOLDS_PATH,
   PATROL_AUTONOMY_OPERATIONS_LOOP_PATH,
   PATROL_CONTROL_ANCHOR,
   PATROL_CONTROL_PATH,
@@ -340,6 +341,10 @@ describe('resource link routing contract', () => {
 
   it('exposes the mail gateway thresholds path', () => {
     expect(PMG_THRESHOLDS_PATH).toBe('/alerts/thresholds/mail-gateway');
+  });
+
+  it('opens the Recovery thresholds that set when a backup counts as old', () => {
+    expect(ALERT_BACKUP_THRESHOLDS_PATH).toBe('/alerts/thresholds/proxmox#backups');
   });
 
   it('deep-links one stable Patrol attention item without changing the route owner', () => {

@@ -2605,6 +2605,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/stores/__tests__/alertsActivation.test.ts",
               "frontend-modern/src/utils/__tests__/metricThresholds.test.ts"
             ]
           },

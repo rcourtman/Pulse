@@ -374,7 +374,8 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   );
   const vmwareVMsWithOverrides = createMemo(() => filterResources(rawVmwareVMsWithOverrides()));
 
-  // Deep-links to a Proxmox sub-section (PBS / PMG) arrive as `#pbs` / `#pmg`.
+  // Deep-links to a Proxmox sub-section (PBS / PMG / Recovery) arrive as
+  // `#pbs` / `#pmg` / `#backups`.
   // Expand the target section and scroll it into view. The section's anchor only
   // mounts once its table rows resolve, so the effect keys off the registered
   // section element (set by the section's `ref`): it re-runs the moment the
@@ -384,7 +385,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   const [sectionElements, setSectionElements] = createSignal<Record<string, HTMLElement | null>>(
     {},
   );
-  const SECTION_HASH_IDS = new Set(['pbs', 'pmg']);
+  const SECTION_HASH_IDS = new Set(['pbs', 'pmg', 'backups']);
   const [lastSectionHashScrolled, setLastSectionHashScrolled] = createSignal<string | null>(null);
 
   createEffect(() => {

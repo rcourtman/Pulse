@@ -608,6 +608,12 @@ zero, pre-sample status, dated inspection, access denial and resumption.
 and History API client at desktop and touch widths with synthetic responses.
 These checks do not establish native guest thaw, collection or release availability.
 
+Backup age rules read through one resolver: `resolveBackupThresholds` in
+`frontend-modern/src/utils/format.ts` fills the fresh and stale defaults for
+both `getBackupInfo` and `getWorkloadsGuestBackupAgeRule`, so the copy that
+explains a shield (#2858) cannot disagree with the colour it explains.
+`workloadGuestPresentation.test.ts` pins the wording.
+
 ### Completed guest backup evidence versus current activity
 
 The guest Overview keeps the last completed backup age and its existing
