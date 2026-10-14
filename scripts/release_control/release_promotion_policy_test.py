@@ -837,7 +837,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertLess(readback, integrity)
 
         helm_pages = read(".github/workflows/helm-pages.yml")
-        self.assertIn("Require activated GitHub release", helm_pages)
+        self.assertIn("Require authenticated activated release packet", helm_pages)
+        self.assertLess(
+            helm_pages.index("./scripts/verify-github-release-integrity.sh"),
+            helm_pages.index("      - name: Recover immutable qualified chart"),
+        )
         self.assertIn("release-activation.json", helm_pages)
         self.assertIn("source_release_run_id", helm_pages)
         self.assertIn("Helm Pages refuses to advertise inactive", helm_pages)
@@ -3142,7 +3146,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("go build", preview_deploy)
         self.assertNotIn("scp ", preview_deploy)
         self.assertIn("validate_artifact_release_line.py", helm)
-        self.assertIn(".github/workflows/create-release.yml", helm_pages)
+        self.assertIn("./scripts/verify-github-release-integrity.sh", helm_pages)
         self.assertIn("release-activation.json", helm_pages)
         self.assertNotIn('gh run download "${SOURCE_RELEASE_RUN_ID}"', helm_pages)
         self.assertIn('"${GITHUB_REPOSITORY}" "${CHART_DIGEST}" "${CHART_PATH}"', helm_pages)
@@ -3164,7 +3168,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn('gh run download "${SOURCE_RELEASE_RUN_ID}"', helm_pages)
         self.assertIn('"${GITHUB_REPOSITORY}" "${CHART_DIGEST}" "${CHART_PATH}"', helm_pages)
         self.assertIn("release-activation.json", helm_pages)
-        self.assertIn(".github/workflows/create-release.yml", helm_pages)
+        self.assertIn('"${release_tag}" "${GITHUB_REPOSITORY}" "${release_id}"', helm_pages)
+        self.assertIn('"${TARGET_COMMITISH}" "${marker}"', helm_pages)
+        self.assertNotIn('actions/runs/${SOURCE_RELEASE_RUN_ID}', helm_pages)
         self.assertNotIn('git pull --rebase origin "$REQUIRED_BRANCH"', helm_pages)
         self.assertNotIn('git push origin HEAD:"$REQUIRED_BRANCH"', helm_pages)
         self.assertNotIn("HELM_DOCS_VERSION", helm_pages)

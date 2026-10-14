@@ -1213,6 +1213,27 @@ the selection and budget cases run in `scripts/tests/test-ci-benchmarks.sh`.
 
 ### Public Helm exact-package receipt
 
+Helm Pages admission uses the immutable published packet, not the continued
+availability of its old Actions source-run record. The identity step authenticates
+the exact downloaded activation marker with `verify-github-release-integrity.sh`,
+bound to the observed release ID, tag and expected source SHA, before parsing it
+or writing outputs. It then requires that marker's release ID, source-run ID and
+chart digest to match the requested identity. The existing verifier still requires
+signed release/asset evidence and canonical hosted checksum provenance; subsequent
+OCI recovery still requires exact chart digest, canonical chart-publisher provenance
+and source SHA. No unverifiable packet may fall back to an Actions lookup, another
+credential, or unchecked chart metadata.
+
+The workflow previously depended on the source Actions record even though chart
+recovery already used durable OCI provenance. A current read of the stable source
+run returns 404; that establishes unavailability, not deletion or its cause.
+`HelmPagesIdentityTests` executes the identity shell and real packet verifier with
+offline CLI fixtures for unavailable source runs, legacy/portable provenance,
+tampered consumed marker bytes, verification refusals and mismatched identities.
+This is source repair proof, not a claim that the historical Helm HTTP404 has been
+attributed or that public Pages, reconciliation, demo credentials or a release
+have recovered.
+
 The post-activation public Pages verification in `.github/workflows/helm-pages.yml`
 must pull the requested chart version through the consumer repository and compare
 its archive bytes with the package already recovered through OCI qualification.

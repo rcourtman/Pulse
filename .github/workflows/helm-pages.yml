@@ -42,7 +42,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Require activated GitHub release and source run
+      - name: Require authenticated activated release packet
         id: identity
         env:
           GH_TOKEN: ${{ github.token }}
@@ -63,46 +63,41 @@ jobs:
           release_tag="v${VERSION}"
           release_state="$(
             gh api "repos/${{ github.repository }}/releases/tags/${release_tag}" \
-              --jq '[.tag_name, .target_commitish, (.draft | tostring), (.published_at // "")] | @tsv'
+              --jq '[.tag_name, .target_commitish, (.draft | tostring), (.published_at // ""), .id] | @tsv'
           )"
           actual_tag="$(awk -F '\t' '{print $1}' <<<"${release_state}")"
           actual_commit="$(awk -F '\t' '{print $2}' <<<"${release_state}")"
           is_draft="$(awk -F '\t' '{print $3}' <<<"${release_state}")"
           published_at="$(awk -F '\t' '{print $4}' <<<"${release_state}")"
+          release_id="$(awk -F '\t' '{print $5}' <<<"${release_state}")"
           if [[ "${actual_tag}" != "${release_tag}" ]] || \
              [[ "${actual_commit}" != "${TARGET_COMMITISH}" ]] || \
              [[ "${is_draft}" != "false" ]] || \
-             [[ -z "${published_at}" ]]; then
+             [[ -z "${published_at}" ]] || \
+             [[ ! "${release_id}" =~ ^[1-9][0-9]*$ ]]; then
             echo "::error::Helm Pages refuses to advertise inactive or mismatched release ${release_tag}."
             exit 1
           fi
 
           marker="$(mktemp)"
+          trap 'rm -f "${marker}"' EXIT
           curl -fsSL --retry 4 --retry-delay 2 --retry-all-errors \
             -o "${marker}" \
             "https://github.com/${{ github.repository }}/releases/download/${release_tag}/release-activation.json"
+          # Authenticate these exact bytes, the immutable packet and its
+          # hosted source provenance before consuming the marker. A live
+          # Actions source-run record is not a durable recovery boundary.
+          ./scripts/verify-github-release-integrity.sh \
+            "${release_tag}" "${GITHUB_REPOSITORY}" "${release_id}" \
+            "${TARGET_COMMITISH}" "${marker}"
           jq -e \
             --arg tag "${release_tag}" \
+            --arg release_id "${release_id}" \
             --arg target_commitish "${TARGET_COMMITISH}" \
             --arg source_release_run_id "${SOURCE_RELEASE_RUN_ID}" \
             --arg helm_chart_digest "${CHART_DIGEST}" \
-            '.schema_version == 1 and .tag == $tag and .target_commitish == $target_commitish and .source_release_run_id == $source_release_run_id and .helm_chart_digest == $helm_chart_digest' \
+            '.schema_version == 1 and .tag == $tag and .release_id == $release_id and .target_commitish == $target_commitish and .source_release_run_id == $source_release_run_id and .helm_chart_digest == $helm_chart_digest' \
             "${marker}" >/dev/null
-          rm -f "${marker}"
-
-          source_run="$(
-            gh api "repos/${{ github.repository }}/actions/runs/${SOURCE_RELEASE_RUN_ID}" \
-              --jq '[.path, .event, .head_sha] | @tsv'
-          )"
-          run_path="$(awk -F '\t' '{print $1}' <<<"${source_run}")"
-          run_event="$(awk -F '\t' '{print $2}' <<<"${source_run}")"
-          run_sha="$(awk -F '\t' '{print $3}' <<<"${source_run}")"
-          if [[ "${run_path}" != ".github/workflows/create-release.yml" ]] || \
-             [[ "${run_event}" != "workflow_dispatch" ]] || \
-             [[ "${run_sha}" != "${TARGET_COMMITISH}" ]]; then
-            echo "::error::Source release run ${SOURCE_RELEASE_RUN_ID} does not own the activated ${release_tag} chart."
-            exit 1
-          fi
 
           validated_version="${VERSION}"
           python3 scripts/write_github_output.py version "${validated_version}"
