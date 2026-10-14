@@ -1913,7 +1913,9 @@ own status when that is worse, otherwise amber while anything attached needs
 attention (degraded, not down; each container keeps its own severity in the
 expansion), otherwise green. The State words take that tone without a second
 dot, and the table's Healthy / Degraded / Offline chips filter by the same
-verdict. A phone row leaves Subnets and Driver, header and cell together, to
+verdict. Inside the expansion each attached-container card's state words read
+in its own dot's colour ("Unhealthy" red, "12 restarts" amber), as the
+containers table's State words do. A phone row leaves Subnets and Driver, header and cell together, to
 the expansion's Network details.
 
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.

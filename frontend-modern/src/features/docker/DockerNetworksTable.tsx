@@ -276,7 +276,12 @@ const AttachmentRowCard: Component<{ row: DockerNetworkAttachmentRow }> = (props
           {props.row.name}
         </span>
       </div>
-      <span class="text-base-content">{props.row.status.label}</span>
+      <span
+        class={dockerStateTextToneClass(props.row.status.variant) || 'text-base-content'}
+        data-docker-attachment-state={props.row.status.variant}
+      >
+        {props.row.status.label}
+      </span>
       <span class="font-mono text-base-content" title={props.row.address}>
         {props.row.address}
       </span>

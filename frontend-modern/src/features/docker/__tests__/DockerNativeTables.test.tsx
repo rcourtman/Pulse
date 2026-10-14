@@ -1819,6 +1819,11 @@ describe('Docker native tables', () => {
     expect(detail.getAllByText('28 of 30 containers').length).toBeGreaterThan(0);
     expect(detail.getByText('api-unhealthy')).toBeInTheDocument();
     expect(detail.getByText('Needs operator review')).toBeInTheDocument();
+    // A card's state words read in its dot's colour; a plain running one does not.
+    expect(detail.getByText('Unhealthy')).toHaveClass('text-red-600');
+    expect(document.querySelector('[data-docker-attachment-state="success"]')).toHaveClass(
+      'text-base-content',
+    );
     expect(detail.queryByText('api-restarting')).toBeNull();
     expect(detail.queryByText('worker-stopped')).toBeNull();
 
