@@ -9,8 +9,9 @@ import type {
 } from '@/types/resource';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
+import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
 import { useAlertsActivation } from '@/stores/alertsActivation';
-import { getAlertsForUnifiedResource } from '@/utils/alerts';
+import { getAlertsForUnifiedResource, getOwnAlertsForUnifiedResource } from '@/utils/alerts';
 import { GuestDrawerHistory } from '@/components/Workloads/GuestDrawerHistory';
 import { getDrawerChartAlerts } from '@/components/Workloads/drawerOverviewModel';
 import { formatUptime, formatRelativeTime } from '@/utils/format';
@@ -332,16 +333,20 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
   const alertsActivation = useAlertsActivation();
   const resourceAlerts = () =>
     getAlertsForUnifiedResource(resource(), activeAlerts, alertsActivation.detectionEnabled());
+  // The charts describe this resource itself, so a nested resource's alert
+  // (a machine's disk, a host's container) draws no trigger on them.
   const chartAlerts = () =>
     getDrawerChartAlerts(
-      resourceAlerts(),
+      getOwnAlertsForUnifiedResource(resource(), activeAlerts, alertsActivation.detectionEnabled()),
       drawer.metricsHistoryGroups().flatMap((group) => group.series.map((series) => series.metric)),
     );
   const attentionItems = () => {
     const alerts = resourceAlerts();
+    // The shared copy explains a latched or recovering alert, whose message
+    // keeps its breach-time value while the chart below shows the current one.
     const items: DrawerAttentionItem[] = alerts.map((alert) => ({
       id: alert.id,
-      message: alert.message,
+      ...getAlertAttentionCopy(alert, now),
       subject: alert.resourceName?.trim() || resource().displayName || resource().name,
       metric: alertTypeDisplayLabel(alert.type),
       severity: alert.level,

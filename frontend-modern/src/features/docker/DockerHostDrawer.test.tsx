@@ -18,9 +18,11 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
     range: string;
     enabled?: boolean;
     onRangeChange?: (range: string) => void;
+    alerts?: Record<string, unknown>;
   }) => (
     <div
       data-testid="docker-host-history"
+      data-alert-metrics={Object.keys(props.alerts ?? {}).join(',')}
       data-target={props.target.resourceId}
       data-range={props.range}
       data-enabled={String(props.enabled)}
@@ -110,6 +112,24 @@ describe('DockerHostDrawer open alerts', () => {
 });
 
 describe('DockerHostDrawer history', () => {
+  it("lists a container's memory alert but draws no trigger for it on the host's charts", () => {
+    wsActiveAlerts.container = {
+      ...openAlert(
+        'container',
+        'docker:docker-source-1/abc123',
+        'Container memory at 97%',
+        'critical',
+      ),
+      type: 'memory',
+      threshold: 85,
+    };
+    render(() => <DockerHostDrawer host={host()} />);
+    expect(screen.getByTestId('drawer-attention-section')).toHaveTextContent(
+      'Container memory at 97%',
+    );
+    expect(screen.getByTestId('docker-host-history')).toHaveAttribute('data-alert-metrics', '');
+  });
+
   it('charts history on Overview with its range picker, and pauses it behind Manage', () => {
     render(() => <DockerHostDrawer host={host()} />);
     expect(screen.queryByRole('tab', { name: 'History' })).toBeNull();

@@ -498,6 +498,25 @@ describe('NodeDrawer Overview charts', () => {
     expect(chart.querySelector('[data-history-threshold="memory"]')).toHaveClass('text-red-500');
   });
 
+  it('states only the RAM size in the facts strip for retained node memory', () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          memory: {
+            total: 8000,
+            used: 3200,
+            free: 4800,
+            usage: 40,
+            observation: { state: 'last-known', source: 'node-meminfo' },
+          },
+        })}
+      />
+    ));
+    const facts = screen.getByTestId('node-drawer-facts');
+    expect(facts).toHaveTextContent('RAM');
+    expect(facts.textContent).not.toMatch(/ of .*RAM/);
+  });
+
   it('labels retained node memory as last known instead of live', async () => {
     chartsApiMocks.getMetricsHistory.mockResolvedValue(EMPTY_HISTORY);
     render(() => (

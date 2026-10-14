@@ -194,6 +194,16 @@ const getUnifiedResourceAlertKeys = (
   resource.canonicalIdentity?.supersededIds?.forEach(add);
   add(resource.proxmox?.sourceId);
   add(resource.metricsTarget?.resourceId);
+  // The alert engine keys a Docker container's alerts on its host and
+  // container ID ("docker:<host>/<container ID>"), or on its name when it has
+  // no ID (internal/alerts DockerContainerResourceID).
+  if (resource.type === 'app-container') {
+    const dockerHostId = resource.docker?.hostSourceId?.trim();
+    const containerId = resource.docker?.containerId?.trim();
+    const containerName = resource.name?.trim().replace(/^\/+/, '');
+    if (dockerHostId && containerId) add(`docker:${dockerHostId}/${containerId}`);
+    else if (dockerHostId && containerName) add(`docker:${dockerHostId}/name:${containerName}`);
+  }
 
   const machine = new Set<string>();
   if (resource.type === 'agent' || resource.type === 'docker-host') {
@@ -241,6 +251,21 @@ export function getAlertsForUnifiedResource(
         (ALERT_LEVEL_RANK[a.level] ?? 3) - (ALERT_LEVEL_RANK[b.level] ?? 3) ||
         Date.parse(a.startTime) - Date.parse(b.startTime),
     );
+}
+
+/**
+ * Alerts raised on the resource itself, not on anything nested under it (a
+ * Docker host's containers and services, a machine's disks). A drawer chart
+ * draws only these: a container's memory trigger is not its host's.
+ */
+export function getOwnAlertsForUnifiedResource(
+  resource: Resource,
+  activeAlerts: Record<string, Alert>,
+  alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
+): Alert[] {
+  if (!alertsEnabled) return [];
+  const { exact } = getUnifiedResourceAlertKeys(resource);
+  return Object.values(activeAlerts).filter((alert) => exact.has(alert.resourceId));
 }
 
 // Alert types representing binary or enumerated state conditions rather

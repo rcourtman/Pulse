@@ -7,6 +7,7 @@ import { useHistoryChartState } from '@/components/shared/useHistoryChartState';
 import type { WorkloadGuest } from '@/types/workloads';
 import { GuestDrawerHistory } from '../GuestDrawerHistory';
 import { useWorkloadTableMetricHistory } from '../useWorkloadTableMetricHistory';
+import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 // Mock the transport, not ChartsAPI: every production consumer uses the real
 // response-admission boundary and its existing retention/error policy.
@@ -78,7 +79,7 @@ describe('production History consumers reject unbound response evidence', () => 
       expect(plots(view.container)).toHaveLength(1);
       expect(view.container).toHaveTextContent('0.0%');
       transport.mockResolvedValueOnce({ ...body(), metrics: {} });
-      fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+      await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
       await settle();
       expect(plots(view.container)).toHaveLength(0);
       expect(view.container).toHaveTextContent('No stored history in this range');
@@ -91,7 +92,7 @@ describe('production History consumers reject unbound response evidence', () => 
     const view = render(() => <GuestDrawerHistory target={target} range="24h" />);
     await settle();
     transport.mockResolvedValueOnce({ ...body(97), resourceId: 'wrong-pbs' });
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+    await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
     await settle();
     expect(plots(view.container)).toHaveLength(1);
     expect(view.container).toHaveTextContent('42.0%');
@@ -129,7 +130,7 @@ describe('production History consumers reject unbound response evidence', () => 
     const view = render(() => <GuestDrawerHistory target={target} range="24h" />);
     await settle();
     transport.mockResolvedValueOnce({ ...body(97), resourceId: 'wrong', status: 403 });
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+    await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
     await settle();
     expect(view.container).toHaveTextContent('previously loaded history');
     transport.mockRejectedValueOnce(Object.assign(new Error('private denial'), { status: 403 }));

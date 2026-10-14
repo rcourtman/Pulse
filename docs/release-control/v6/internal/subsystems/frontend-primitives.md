@@ -5481,7 +5481,14 @@ picker (these drawers, storage disk and pool details) names its options through
 in three places. Below the `sm` breakpoint the chart panels stack, so a phone
 shows the first panel (Utilization) plus any panel carrying an active alert,
 and one full-width "Show <panel names>" button (`aria-expanded`, hidden from
-`sm` up) reveals the rest; wider layouts always show every panel. Any
+`sm` up) reveals the rest; wider layouts always show every panel. The charts
+poll every 30 seconds and offer no manual refresh; a "Retry history" button
+appears only while a read has failed, and when a successful retry removes it
+keyboard focus moves to the history region rather than the page. A chart
+draws alert triggers only from the resource's own alerts
+(`getOwnAlertsForUnifiedResource`): a Docker host's Needs attention lists its
+containers' alerts, but a container's memory trigger never lands on the host's
+memory chart. Any
 warning- or danger-toned detail row
 is lifted into a "Worth checking" section in front, whichever section owns it,
 so demotion never hides a reason a reading cannot be trusted. Guest
