@@ -26,7 +26,6 @@ import {
 } from '@/utils/workloadGuestPresentation';
 import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
 import { getWorkloadMetricHistoryTarget } from '@/utils/workloadMetricHistoryTarget';
-import { getWorkloadDiskUsagePercent } from '@/utils/workloadDiskUsage';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
 
@@ -124,9 +123,8 @@ export const getGuestDrawerAlertAttention = (
 };
 
 const getGuestDrawerDiskUsage = (guest: Guest): number | undefined => {
-  return guest.telemetryAvailability?.disk === false
-    ? undefined
-    : (getWorkloadDiskUsagePercent(guest.disk) ?? undefined);
+  const usage = guest.telemetryAvailability?.disk === false ? undefined : guest.disk?.usage;
+  return typeof usage === 'number' && Number.isFinite(usage) && usage >= 0 ? usage : undefined;
 };
 
 export type GuestDrawerMemoryReading = MemoryObservationPresentation;

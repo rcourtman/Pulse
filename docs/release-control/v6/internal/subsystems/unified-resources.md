@@ -23,28 +23,6 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
-### Workload aggregate disk presence survives projection (14 October 2026)
-
-`useWorkloads` does not default an absent aggregate disk usage/used byte field
-to zero merely because capacity was supplied. Both REST and owning snapshots
-preserve the difference between capacity-only inventory and finite measured
-usage. Explicit zero percentages, percentage-only metrics and valid byte-only
-metrics remain available. This aggregate metric contract is distinct from
-DiskInfo filesystem records whose zero byte fields may be omitted. Identity,
-producer selection, collection, retention and History transport are unchanged.
-
-Raw byte metrics always serialize a generic `value`, even its default zero.
-That scalar cannot confer a current percentage: an explicit `percent` or a
-valid used/total byte pair is required when `unit` names bytes. Legacy untyped
-value-only percentages and explicit percent-unit values remain usable.
-
-Verification: `useWorkloads.test.ts` exercises mounted REST and owning-snapshot
-refreshes and `workloadDiskUsage.test.ts` covers numeric admission. The
-`workload-disk-metrics` browser fixture consumes the REST mapper into production
-rows/drawer with synthetic evidence; browser proof is retained separately and
-establishes no installed/native recovery.
-
-
 ### Workloads preserve platform guest interfaces — issue #2757
 
 Both the `/api/resources` and owning canonical-snapshot Workloads projections

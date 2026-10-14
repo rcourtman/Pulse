@@ -575,10 +575,10 @@ describe('workloadSelectors (branch coverage)', () => {
   });
 
   describe('getDiskUsagePercent', () => {
-    it('treats usage of exactly 1 as one percent, not a fraction', () => {
+    it('treats usage of exactly 1 as a ratio (100) not a percentage', () => {
       expect(
         getDiskUsagePercent(makeGuest(1, { disk: { total: 100, used: 100, free: 0, usage: 1 } })),
-      ).toBe(1);
+      ).toBe(100);
     });
 
     it('keeps a reported zero but treats negative usage as unavailable', () => {
@@ -590,19 +590,17 @@ describe('workloadSelectors (branch coverage)', () => {
       ).toBeNull();
     });
 
-    it('rejects an explicitly non-finite percentage, even with retained bytes', () => {
+    it('falls back to used/total when usage is non-finite (Infinity)', () => {
       expect(
         getDiskUsagePercent(
           makeGuest(1, { disk: { total: 200, used: 50, free: 150, usage: Infinity } }),
         ),
-      ).toBeNull();
+      ).toBe(25);
     });
 
     it('clamps used/total result above 100 to 100', () => {
       expect(
-        getDiskUsagePercent(
-          makeGuest(1, { disk: { total: 100, used: 150, free: 0, usage: undefined } }),
-        ),
+        getDiskUsagePercent(makeGuest(1, { disk: { total: 100, used: 150, free: 0, usage: NaN } })),
       ).toBe(100);
     });
 

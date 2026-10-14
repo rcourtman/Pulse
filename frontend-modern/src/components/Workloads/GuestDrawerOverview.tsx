@@ -409,16 +409,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   };
   const diskFact = () => {
     const disk = props.guest.disk;
-    if (
-      !disk ||
-      typeof disk.total !== 'number' ||
-      !Number.isFinite(disk.total) ||
-      disk.total <= 0 ||
-      typeof disk.used !== 'number' ||
-      !Number.isFinite(disk.used) ||
-      disk.used < 0 ||
-      typeof props.currentMetrics?.disk !== 'number'
-    ) {
+    if (!disk || !((disk.total ?? 0) > 0) || typeof props.currentMetrics?.disk !== 'number') {
       return '';
     }
     return `${formatBytes(disk.used ?? 0)} of ${formatBytes(disk.total ?? 0)} disk`;

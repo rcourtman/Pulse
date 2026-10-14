@@ -21,7 +21,7 @@ import {
   workloadMatchesViewMode,
 } from '@/utils/workloads';
 import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
-import { getCurrentWorkloadDiskUsage } from '@/utils/workloadDiskUsage';
+import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
 import { getCurrentWorkloadMemoryUsage } from '@/utils/memoryObservation';
 import {
   getKubernetesContextKey,
@@ -287,9 +287,36 @@ export const filterWorkloads = ({
 };
 
 export const getDiskUsagePercent = (guest: WorkloadGuest): number | null => {
+  const disk = guest?.disk;
   // The row may retain a clearly labelled last-known number. It must not
   // compete with current readings when sorting capacity, in either direction.
-  return getCurrentWorkloadDiskUsage(guest);
+  if (
+    !disk ||
+    guest.telemetryAvailability?.disk === false ||
+    getWorkloadGuestDiskRead(guest, resolveWorkloadType(guest) === 'vm').state !== 'current' ||
+    (typeof disk.usage === 'number' && disk.usage < 0)
+  ) {
+    return null;
+  }
+
+  const clamp = (value: number) => Math.min(100, Math.max(0, value));
+
+  if (typeof disk.usage === 'number' && Number.isFinite(disk.usage)) {
+    const usageValue = disk.usage > 1 ? disk.usage : disk.usage * 100;
+    return clamp(usageValue);
+  }
+
+  if (
+    typeof disk.used === 'number' &&
+    Number.isFinite(disk.used) &&
+    typeof disk.total === 'number' &&
+    Number.isFinite(disk.total) &&
+    disk.total > 0
+  ) {
+    return clamp((disk.used / disk.total) * 100);
+  }
+
+  return null;
 };
 
 export const createWorkloadSortComparator = (

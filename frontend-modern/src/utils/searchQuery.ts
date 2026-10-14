@@ -1,6 +1,6 @@
 import type { WorkloadGuest } from '@/types/workloads';
-import { getWorkloadCPUPercent } from '@/utils/workloads';
-import { getCurrentWorkloadDiskUsage } from '@/utils/workloadDiskUsage';
+import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
+import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
 import { getCurrentWorkloadMemoryUsage } from '@/utils/memoryObservation';
 
 // Exclusion-aware split of a free-text search. Terms prefixed with `-` hide
@@ -166,8 +166,14 @@ function evaluateMetricCondition(guest: FilterableItem, condition: MetricConditi
     case 'disk': {
       // Missing and retained reads are not zero (or current capacity).
       // Preserve the same provider/linked-agent freshness rule as the row.
-      const usage = getCurrentWorkloadDiskUsage(guest);
-      if (usage === null) return false;
+      if (
+        guest.telemetryAvailability?.disk === false ||
+        getWorkloadGuestDiskRead(guest, resolveWorkloadType(guest) === 'vm').state !== 'current'
+      ) {
+        return false;
+      }
+      const usage = guest.disk?.usage;
+      if (typeof usage !== 'number' || !Number.isFinite(usage) || usage < 0) return false;
       value = usage;
       break;
     }

@@ -19,13 +19,11 @@ import { StackedDiskBar } from '../StackedDiskBar';
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeDisk(overrides: Partial<Disk> = {}): Disk {
-  const total = overrides.total ?? 107374182400;
-  const used = overrides.used ?? 53687091200;
   return {
     total: 107374182400, // 100 GiB
     used: 53687091200, // ~50 GiB
     free: 53687091200,
-    usage: total > 0 ? (used / total) * 100 : 0,
+    usage: 50,
     mountpoint: '/',
     type: 'ext4',
     device: '/dev/sda1',

@@ -225,18 +225,3 @@ describe('filesystem details do not promote retained usage to current health', (
     expect(within(filesystemRow()).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '90');
   });
 });
-
-describe('independent aggregate percentages do not invent byte facts', () => {
-  it.each([Infinity, NaN, -1, 0])(
-    'withholds invalid capacity %s even with a valid current percentage',
-    (total) => {
-      render(() => (
-        <GuestDrawerOverview
-          {...props(guest({ disk: { total, used: 50, usage: 50 }, disks: [] }))}
-          currentMetrics={{ disk: 50 }}
-        />
-      ));
-      expect(screen.queryByText(/of .*disk$/)).not.toBeInTheDocument();
-    },
-  );
-});

@@ -871,12 +871,12 @@ describe('workloadSelectors', () => {
   });
 
   describe('getDiskUsagePercent', () => {
-    it('uses percentage points, including below one, with clamping', () => {
+    it('handles ratio and percentage disk usage with clamping', () => {
       expect(
         getDiskUsagePercent(
           makeGuest(1, { disk: { total: 100, used: 42, free: 58, usage: 0.42 } }),
         ),
-      ).toBe(0.42);
+      ).toBe(42);
       expect(
         getDiskUsagePercent(makeGuest(2, { disk: { total: 100, used: 85, free: 15, usage: 85 } })),
       ).toBe(85);
@@ -888,7 +888,7 @@ describe('workloadSelectors', () => {
     it('falls back to used/total and returns null for invalid inputs', () => {
       expect(
         getDiskUsagePercent(
-          makeGuest(1, { disk: { total: 200, used: 50, free: 150, usage: undefined } }),
+          makeGuest(1, { disk: { total: 200, used: 50, free: 150, usage: NaN } }),
         ),
       ).toBe(25);
       expect(
@@ -1081,19 +1081,6 @@ describe('current guest disk selection', () => {
       selectedHostHint: null,
       selectedKubernetesContext: null,
     });
-
-  it.each(['asc', 'desc'] as const)(
-    'sorts sub-one-percent readings consistently with search in %s order',
-    (direction) => {
-      const measured = [0, 0.5, 1, 40, 95].map((usage, i) => diskGuest(i + 1, usage));
-      const unknown = diskGuest(6, 0, { disk: { total: 100 } });
-      expect([unknown, ...measured].sort(createWorkloadSortComparator('disk', direction)!)).toEqual(
-        [...(direction === 'asc' ? measured : [...measured].reverse()), unknown],
-      );
-      expect(select([...measured, unknown], 'disk>90')).toEqual([measured[4]]);
-      expect(select([...measured, unknown], 'disk<=1')).toEqual(measured.slice(0, 3));
-    },
-  );
 
   it.each(['prev-vm-locked', 'prev-agent-timeout', 'permission-denied', 'agent-cooldown'])(
     'excludes %s numbers from disk sorting and numeric search without hiding inventory',

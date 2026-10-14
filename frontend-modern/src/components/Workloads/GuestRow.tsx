@@ -80,7 +80,6 @@ export function GuestRow(props: GuestRowProps) {
     customUrl,
     diskAnomaly,
     diskIOEmphasis,
-    diskPercent,
     diskRead,
     diskThresholds,
     diskUsageRead,
@@ -345,7 +344,7 @@ export function GuestRow(props: GuestRowProps) {
     });
   const renderDiskSparkline = () =>
     renderMetricSparkline('disk', {
-      valueLabel: () => (hasDiskUsage() ? formatMetricPercent(diskPercent()) : '—'),
+      valueLabel: () => (hasDiskUsage() ? formatMetricPercent(props.guest.disk?.usage) : '—'),
       title: () => `${props.guest.name} disk usage history`,
       tooltip: () => diskReadStatus()?.message,
       formatValue: formatMetricPercent,
