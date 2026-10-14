@@ -34,6 +34,7 @@ import {
 } from '@/components/shared/groupedTableRowPresentation';
 import {
   connectionAgentVersionPresentation,
+  infrastructureRowMonitoringPath,
   infrastructureSourcePresentation,
   surfaceLabel,
   type InfrastructureSourcePresentation,
@@ -68,6 +69,12 @@ interface InfrastructureSourceManagerProps {
   onOpenAgentDoctor?: (agentIds?: string[]) => void;
   onReviewDiscoveredSource?: (server: DiscoveredServer) => void;
 }
+
+// A connected system's name opens the page that shows its data (#2905).
+// Underlined at rest: touch users get no hover hint, and the user in #2905 was
+// not looking for something to click.
+const MONITORING_LINK_CLASS =
+  'text-blue-700 underline decoration-blue-700/40 underline-offset-2 hover:decoration-current focus-visible:decoration-current dark:text-blue-300 dark:decoration-blue-300/40';
 
 // Per-section 'Add' shortcuts are demoted to ghost text buttons so the
 // primary '+ Add infrastructure' CTA at the top of the page stays visually
@@ -956,14 +963,33 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                     >
                                       <TableCell class="py-1.5 pl-3 pr-3 align-middle">
                                         <div class="flex min-w-0 flex-wrap items-center gap-1.5">
-                                          <div
-                                            class={`min-w-0 truncate text-[13px] ${
-                                              row.isCluster ? 'font-medium text-base-content' : ''
-                                            }`}
-                                            title={rowSystemTitle(row)}
+                                          <Show
+                                            when={infrastructureRowMonitoringPath(row)}
+                                            fallback={
+                                              <div
+                                                class={`min-w-0 truncate text-[13px] ${
+                                                  row.isCluster
+                                                    ? 'font-medium text-base-content'
+                                                    : ''
+                                                }`}
+                                                title={rowSystemTitle(row)}
+                                              >
+                                                {row.name}
+                                              </div>
+                                            }
                                           >
-                                            {row.name}
-                                          </div>
+                                            {(path) => (
+                                              <a
+                                                href={path()}
+                                                class={`${MONITORING_LINK_CLASS} min-w-0 truncate text-[13px] ${
+                                                  row.isCluster ? 'font-medium' : ''
+                                                }`}
+                                                title={rowSystemTitle(row)}
+                                              >
+                                                {row.name}
+                                              </a>
+                                            )}
+                                          </Show>
                                           {(() => {
                                             const presentation = infrastructureSourcePresentation(
                                               row.source,
@@ -1459,12 +1485,27 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                               <article class="rounded-md border border-border-subtle bg-surface p-3 shadow-xs">
                                 <header class="flex items-start justify-between gap-2">
                                   <div class="min-w-0 flex-1">
-                                    <div
-                                      class="wrap-break-word text-[13px] font-medium text-base-content"
-                                      title={row.name}
+                                    <Show
+                                      when={infrastructureRowMonitoringPath(row)}
+                                      fallback={
+                                        <div
+                                          class="wrap-break-word text-[13px] font-medium text-base-content"
+                                          title={row.name}
+                                        >
+                                          {row.name}
+                                        </div>
+                                      }
                                     >
-                                      {row.name}
-                                    </div>
+                                      {(path) => (
+                                        <a
+                                          href={path()}
+                                          class={`${MONITORING_LINK_CLASS} block wrap-break-word text-[13px] font-medium`}
+                                          title={row.name}
+                                        >
+                                          {row.name}
+                                        </a>
+                                      )}
+                                    </Show>
                                     <Show when={row.isCluster && row.subtitle}>
                                       <div class="mt-0.5 text-[11px] text-muted">
                                         {row.subtitle}

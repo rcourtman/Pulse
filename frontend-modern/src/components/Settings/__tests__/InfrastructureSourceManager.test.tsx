@@ -910,4 +910,46 @@ describe('InfrastructureSourceManager setup summary', () => {
     expect(screen.getByTitle('esxi-01.lab.local · vSphere host')).toBeInTheDocument();
     expect(screen.getByTitle('esxi-02.lab.local · vSphere host')).toBeInTheDocument();
   });
+
+  it('links each connected API system to the page that shows its data', () => {
+    // A PBS read as Active here while its servers sat under Proxmox > Backups,
+    // and its user could not find it (#2905).
+    const apiRow = (type: Connection['type'], id: string, name: string) =>
+      row({
+        id,
+        ownerType: type,
+        name,
+        source: 'api',
+        connection: connectionFixture({
+          id,
+          type,
+          name,
+          address: `https://${name}`,
+          source: 'manual',
+        }),
+      });
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          apiRow('pbs', 'pbs:vault', 'backup-vault'),
+          apiRow('pmg', 'pmg:mail', 'mail-gateway'),
+          apiRow('vmware', 'vmware:vc-1', 'Lab vCenter'),
+          row(),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly
+      />
+    ));
+
+    const hrefs = (name: string) =>
+      screen.getAllByRole('link', { name }).map((link) => link.getAttribute('href'));
+    expect(new Set(hrefs('backup-vault'))).toEqual(new Set(['/proxmox/backups']));
+    expect(new Set(hrefs('mail-gateway'))).toEqual(new Set(['/proxmox/mail']));
+    expect(new Set(hrefs('Lab vCenter'))).toEqual(new Set(['/vmware/overview']));
+    // An agent host shows on a different page depending on what it runs.
+    expect(screen.queryByRole('link', { name: 'host-1' })).toBeNull();
+    expect(screen.getAllByText('host-1').length).toBeGreaterThan(0);
+  });
 });
