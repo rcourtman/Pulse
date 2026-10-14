@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -61,8 +62,13 @@ func TestGuestNonemptyWhitespaceLockObservation(t *testing.T) {
 				}))
 				defer server.Close()
 				client := windowsBootstrapClient(t, server.URL, kind)
+				// The node fallback also runs the accepted guest's alert check.
+				// Give that production effect its normal, fixture-owned manager.
+				alertManager := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+				t.Cleanup(alertManager.Stop)
 				m := &Monitor{
 					config: &config.Config{}, state: models.NewState(), rateTracker: NewRateTracker(),
+					alertManager:            alertManager,
 					metricsHistory:          NewMetricsHistory(16, time.Hour),
 					resourceStore:           unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
 					guestAgentFSInfoTimeout: windowsPollingHangGuard, guestAgentNetworkTimeout: windowsPollingHangGuard,
