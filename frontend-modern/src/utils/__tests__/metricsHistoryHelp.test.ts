@@ -33,12 +33,20 @@ describe('History interpretation help', () => {
 
   it('explains real drawer labels without treating older or fallback readings as current', () => {
     const rows = [...interpretation().querySelectorAll('tbody tr')].map((row) => text(row));
-    expect(rows).toHaveLength(5);
+    expect(rows).toHaveLength(7);
     expect(rows[0]).toContain("Not necessarily now, every metric's newest value");
     expect(rows[1]).toContain('Not a live reading or an interpolated observation');
     expect(rows[2]).toContain('Not proof that the value was persisted');
     expect(rows[3]).toContain('Not a flat trend or sustained recovery');
     expect(rows[4]).toContain('Not the cause or duration of a monitoring outage');
+    expect(rows[5]).toContain('Shaded low–high band');
+    expect(rows[5]).toContain(
+      'Not continuous coverage, every original sample, or the duration of a spike',
+    );
+    expect(rows[6]).toContain('peak while inspecting');
+    expect(rows[6]).toContain(
+      "Not necessarily the highest value in the whole selected range or the value at an alert's exact time",
+    );
     const renderer = read('frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx');
     for (const label of [
       'Latest stored',
