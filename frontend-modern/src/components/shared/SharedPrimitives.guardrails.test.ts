@@ -8735,7 +8735,9 @@ describe('shared primitive guardrails', () => {
     for (const consumerPath of overviewConsumers) {
       const source = readFrontendSource(consumerPath);
       expect(source).toContain('DrawerAttentionSection');
-      expect(source).toContain('TechnicalDetailsSection');
+      // Warning rows lift in front; the rest waits under one Details disclosure.
+      expect(source).toContain('DrawerExceptionList');
+      expect(source).toContain('<TechnicalDetailsDisclosure');
       expect(source).not.toContain('ResourceOperatorStateSection');
     }
 
@@ -8802,7 +8804,7 @@ describe('shared primitive guardrails', () => {
       'src/features/docker/DockerHostDrawerOverview.tsx',
     ]) {
       const source = readFrontendSource(overviewPath);
-      expect(source).toContain('<TechnicalDetailsSection');
+      expect(source).toMatch(/<TechnicalDetails(Section|Disclosure)\b/);
       expect(source).toContain('...technicalSections()');
       expect(source).not.toContain('const DetailCard');
     }
@@ -8810,7 +8812,7 @@ describe('shared primitive guardrails', () => {
     const resourceOverviewSource = readFrontendSource(
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
     );
-    expect(resourceOverviewSource).toContain('content="all"');
+    expect(resourceOverviewSource).toContain("content: 'all'");
 
     const registry = JSON.parse(readFrontendSource('scripts/shared-template-registry.json')) as {
       rules?: Array<{ id: string; requiredConsumers?: Array<{ path: string }> }>;

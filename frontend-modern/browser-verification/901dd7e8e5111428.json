@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "86a244bc04dbddf4ce8c648702d96338528077e3",
+  "verified_at": "2026-10-14T13:00:12Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/Workloads/drawerOverviewModel.ts",
+    "frontend-modern/src/components/shared/detailSectionModel.ts",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "be7885cb33f33171b3310081b331346853943a8c8e756231385a4c9499a7c2a6",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "c4407e3ca6f6a357bfb4f35a93249f167a7c7d522fdfe6677b2689e75dcc62f8",
+    "frontend-modern/src/components/Workloads/drawerOverviewModel.ts": "2c45344a61e9f6b3523e8660f291cb68bd48edba65b4f2476a4494797ffe8cb2",
+    "frontend-modern/src/components/shared/detailSectionModel.ts": "2e2ded8ebb760693cdb7cb510b58174c4127df742e6471f0a37dc92f5bcdbc62",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "6edec9d5f1377116bcd420a7fc88acb2304232a323d53c1475bad780e8dd501e"
+  },
+  "routes": [
+    "/docker (container and Docker host drawers), /standalone/machines (agent host drawer), /proxmox (reference node drawer): private mock preview on pulse-dev, sidecar Vite + mock backend, Chromium via Playwright 1.56.1",
+    "browser-tests: drawer-snapshot, pbs-identity-boundary, pbs-history-source-isolation, resource-history-provenance, resource-stopped-filesystem, table-row-touch, truenas-disk-thresholds, proxmox-docker-rows, linked-guest-history, scripts/check-backup-app-refresh.mjs"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "container drawer: No active alerts, charts, facts line (image, Compose project/service), closed Details (runtime context, container, identity)",
+    "container with an available image update: Worth checking \"Image update: Available\"",
+    "unhealthy container with its alert (round 2) and healthy after the mock rotated (final)",
+    "agent host drawer: facts line (logical CPUs, RAM and disk used of total, address), one Details including platform context",
+    "Docker host drawer: Worth checking \"Updates: 1 available\", facts without the engine version, closed Details (operator context, runtime, memory, storage, telemetry)",
+    "phone 390px: Details entrance above the bottom navigation when scrolled; Worth checking and facts wrap",
+    "availability endpoint drawer keeps its check cards in front (drawer-snapshot)",
+    "reviewed twice by Sol from full-resolution before/after screenshots"
+  ],
+  "interactions": [
+    "row expand by keyboard; Details summary open/close; Docker tabs; range picker unchanged",
+    "proof flows: target replacement, availability failure, platform details expansion inside Details, container restart count lifted"
+  ]
+}

@@ -3,6 +3,8 @@ import type { DetailSection } from '@/components/shared/detailSectionModel';
 import type { Alert } from '@/types/api';
 import {
   collectDrawerExceptionRows,
+  getAlertStatedRowLabels,
+  partitionDrawerExceptionRows,
   getDrawerChartAlerts,
   getDrawerMetricAlert,
   isDrawerAvailabilityHealthy,
@@ -119,6 +121,43 @@ describe('drawer exception rows', () => {
       'Updates',
       'CPU record',
       'Status',
+    ]);
+  });
+
+  it('lifts a row flagged as actionable whatever its tone', () => {
+    const update: DetailSection[] = [
+      {
+        label: 'Container',
+        rows: [
+          { label: 'Image', value: 'nginx:1.27' },
+          { label: 'Image update', value: 'Available', tone: 'accent', lift: true },
+        ],
+      },
+    ];
+    expect(collectDrawerExceptionRows(update).map((row) => row.label)).toEqual(['Image update']);
+    expect(withoutDrawerExceptionRows(update)[0].rows.map((row) => row.label)).toEqual(['Image']);
+  });
+
+  it("keeps a row in Details when the resource's own alert already states it", () => {
+    const container: DetailSection[] = [
+      {
+        label: 'Runtime context',
+        rows: [
+          { label: 'Observed state', value: 'Running' },
+          { label: 'Health check', value: 'Failing', tone: 'danger' },
+          { label: 'Restarts', value: '7', tone: 'danger' },
+        ],
+      },
+    ];
+    const stated = getAlertStatedRowLabels([{ type: 'docker-container-health' }, { type: 'cpu' }]);
+    expect([...stated]).toEqual(['Health check']);
+    const { lifted, details } = partitionDrawerExceptionRows(container, stated);
+    expect(lifted.map((row) => row.label)).toEqual(['Restarts']);
+    expect(details[0].rows.map((row) => row.label)).toEqual(['Observed state', 'Health check']);
+    // Without a stating alert both rows lift, as before.
+    expect(partitionDrawerExceptionRows(container).lifted.map((row) => row.label)).toEqual([
+      'Health check',
+      'Restarts',
     ]);
   });
 

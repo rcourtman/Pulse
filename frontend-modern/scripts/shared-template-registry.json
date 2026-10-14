@@ -52,10 +52,10 @@
     {
       "id": "operator-first-technical-section",
       "category": "drawer-information-hierarchy",
-      "summary": "Object drawers keep curated deeper inventory visible through the same compact section rows as Overview; only genuinely large or interactive provider-support material stays behind a disclosure.",
+      "summary": "Object drawers lift any warning or actionable inventory row in front (DrawerExceptionList), then keep the rest of their inventory, provider-support material included, under one shared collapsed Details disclosure (maintainer decision 2026-10-13, carried to every object drawer 2026-10-14).",
       "canonical": {
         "path": "src/components/shared/TechnicalDetailsDisclosure.tsx",
-        "export": "TechnicalDetailsSection"
+        "export": "TechnicalDetailsDisclosure"
       },
       "requiredConsumers": [
         {

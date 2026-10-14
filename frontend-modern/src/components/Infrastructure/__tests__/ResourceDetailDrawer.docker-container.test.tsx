@@ -260,18 +260,28 @@ describe('ResourceDetailDrawer for Docker containers', () => {
       />
     ));
 
+    // The facts line names the image and Compose service in front.
+    const facts = screen.getByTestId('resource-drawer-facts');
+    expect(facts).toHaveTextContent('ghcr.io/example/edge-web:2026.05');
+    expect(facts).toHaveTextContent(/Compose orion/);
     const section = screen.getByTestId('resource-docker-container-section');
     expect(within(section).getByText('Image')).toBeInTheDocument();
     expect(within(section).getByText('ghcr.io/example/edge-web:2026.05')).toBeInTheDocument();
-    expect(within(section).getByText('Image update')).toBeInTheDocument();
-    expect(within(section).getByText('Available').closest('td')).toHaveClass('text-cyan-700');
+    // An available update is something to act on, so it is lifted in front.
+    const updateRow = screen.getByTestId('resource-drawer-exceptions');
+    expect(within(updateRow).getByText('Image update')).toBeInTheDocument();
+    expect(within(updateRow).getByText('Available').closest('td')).toHaveClass('text-cyan-700');
+    expect(within(section).queryByText('Image update')).not.toBeInTheDocument();
     expect(within(section).getByText('Current digest')).toBeInTheDocument();
     expect(within(section).getByText('sha256:current-digest')).toBeInTheDocument();
     expect(within(section).getByText('Target digest')).toBeInTheDocument();
     expect(within(section).getByText('sha256:target-digest')).toBeInTheDocument();
     expect(within(section).queryByText('Release information')).not.toBeInTheDocument();
-    expect(within(section).getByText('Restarts')).toBeInTheDocument();
-    expect(within(section).getByText('7').closest('td')).toHaveClass('text-rose-700');
+    // A worrying restart count moves in front of the charts, not repeated below.
+    const lifted = screen.getByTestId('resource-drawer-exceptions');
+    expect(within(lifted).getByText('Restarts')).toBeInTheDocument();
+    expect(within(lifted).getByText('7').closest('td')).toHaveClass('text-rose-700');
+    expect(within(section).queryByText('Restarts')).not.toBeInTheDocument();
     expect(within(section).getByText('Created')).toBeInTheDocument();
     expect(within(section).getByText('Started')).toBeInTheDocument();
     expect(within(section).getByText('Finished')).toBeInTheDocument();
@@ -318,8 +328,12 @@ describe('ResourceDetailDrawer for Docker containers', () => {
 
     const runtime = screen.getByTestId('resource-runtime-context-section');
     expect(within(runtime).getByText('Running')).toBeInTheDocument();
-    const health = within(runtime).getByText('Failing');
+    // The failing check is lifted into Worth checking, in front of the charts.
+    const lifted = screen.getByTestId('resource-drawer-exceptions');
+    expect(within(lifted).getByText('Health check')).toBeInTheDocument();
+    const health = within(lifted).getByText('Failing');
     expect(health.closest('td')).toHaveClass('text-rose-700');
+    expect(within(runtime).queryByText('Failing')).not.toBeInTheDocument();
     expect(health.closest('td')).toHaveAttribute('title', 'Its health check is failing');
     expect(within(runtime).getByText('Uptime')).toBeInTheDocument();
   });
@@ -344,7 +358,8 @@ describe('ResourceDetailDrawer for Docker containers', () => {
     ));
 
     const runtime = screen.getByTestId('resource-runtime-context-section');
-    expect(within(runtime).getByText('Exited (1)').closest('td')).toHaveClass('text-rose-700');
+    const lifted = screen.getByTestId('resource-drawer-exceptions');
+    expect(within(lifted).getByText('Exited (1)').closest('td')).toHaveClass('text-rose-700');
     expect(within(runtime).queryByText('Health check')).not.toBeInTheDocument();
     expect(within(runtime).queryByText('Uptime')).not.toBeInTheDocument();
   });

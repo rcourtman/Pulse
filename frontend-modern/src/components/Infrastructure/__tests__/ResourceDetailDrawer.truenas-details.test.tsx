@@ -62,7 +62,8 @@ const baseResource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 const expandPlatformDetails = (getByTestId: (id: string) => HTMLElement): void => {
-  const details = getByTestId('resource-platform-details') as HTMLDetailsElement;
+  // Platform context sits inside the Overview's one Details disclosure.
+  const details = getByTestId('resource-technical-details') as HTMLDetailsElement;
   details.open = true;
   fireEvent(details, new Event('toggle'));
 };
