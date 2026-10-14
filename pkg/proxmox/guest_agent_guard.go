@@ -261,7 +261,7 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 	// A completed HTTP body is not a completed QGA reply if it is malformed,
 	// ambiguous, or only a JSON prefix. Validate before releasing admission,
 	// not in the method decoder after another guest command can be queued.
-	if resp.StatusCode != http.StatusOK || !guestAgentSuccessResponse(body) {
+	if resp.StatusCode != http.StatusOK || !guestAgentCommandResponse(path, body) {
 		uncertain = true
 		return nil, &guestAgentDeferredError{reason: "agent-completion-unverified"}
 	}

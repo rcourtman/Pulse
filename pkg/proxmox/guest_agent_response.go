@@ -119,21 +119,26 @@ func guestAgentErrorMessage(body []byte) (string, bool) {
 // envelope or case-insensitive overwrite as a completed reply. This is not
 // payload-to-command provenance or proof of native QGA completion/thaw.
 func guestAgentSuccessResponse(body []byte) bool {
+	_, valid := guestAgentSuccessData(body)
+	return valid
+}
+
+func guestAgentSuccessData(body []byte) (map[string]json.RawMessage, bool) {
 	if !utf8.Valid(body) {
-		return false
+		return nil, false
 	}
 	envelope, ok := guestAgentResponseFields(body, "data")
 	if !ok {
-		return false
+		return nil, false
 	}
 	data, ok := guestAgentResponseFields(envelope["data"])
 	if !ok {
-		return false
+		return nil, false
 	}
 	for name, value := range data {
 		for _, canonical := range []string{"result", "content", "truncated"} {
 			if name != canonical && strings.EqualFold(name, canonical) {
-				return false
+				return nil, false
 			}
 		}
 		// A well-formed envelope can still contain an impossible guest reply.
@@ -146,16 +151,103 @@ func guestAgentSuccessResponse(body []byte) bool {
 		switch name {
 		case "result":
 			if !bytes.Equal(value, []byte("null")) && value[0] != '{' && value[0] != '[' {
-				return false
+				return nil, false
 			}
 		case "content":
 			if !bytes.Equal(value, []byte("null")) && value[0] != '"' {
-				return false
+				return nil, false
 			}
 		case "truncated":
 			if !bytes.Equal(value, []byte("null")) && !bytes.Equal(value, []byte("true")) && !bytes.Equal(value, []byte("false")) {
-				return false
+				return nil, false
 			}
+		}
+	}
+	return data, true
+}
+
+// Valid field types alone do not make a reply compatible with the command
+// sent. For example, a file-read body is valid JSON but cannot complete an
+// outstanding filesystem request. Refuse known foreign reply fields before
+// releasing shared admission. This detects contradictory shapes, not native
+// payload provenance: shared fields (name/version), empty/null results and
+// unknown metadata cannot identify the originating command and remain valid.
+func guestAgentCommandResponse(path string, body []byte) bool {
+	data, valid := guestAgentSuccessData(body)
+	if !valid {
+		return false
+	}
+	if _, _, valid := guestAgentPath(path); !valid {
+		return false
+	}
+	command := strings.SplitN(path, "?", 2)[0]
+	command = command[strings.LastIndex(command, "/")+1:]
+	switch command {
+	case "get-osinfo", "info", "get-fsinfo", "network-get-interfaces", "file-read":
+	default:
+		return false
+	}
+	if !guestAgentReplyFieldsCompatible(data, command) {
+		return false
+	}
+	result := bytes.TrimSpace(data["result"])
+	if len(result) == 0 || bytes.Equal(result, []byte("null")) {
+		return true
+	}
+	if command == "file-read" {
+		return false // file-read returns content/truncated, not a result payload.
+	}
+	if result[0] == '{' {
+		fields, valid := guestAgentResponseFields(result)
+		return valid && guestAgentReplyFieldsCompatible(fields, command)
+	}
+	if command == "get-osinfo" || command == "info" {
+		return false // Both information commands return dictionaries, not lists.
+	}
+	decoder := json.NewDecoder(bytes.NewReader(result))
+	if start, err := decoder.Token(); err != nil || start != json.Delim('[') {
+		return false
+	}
+	for decoder.More() {
+		var row json.RawMessage
+		if decoder.Decode(&row) != nil {
+			return false
+		}
+		// Existing inventory decoders own malformed/partial rows. Only a
+		// recognizable foreign dictionary contradicts the command here.
+		fields, valid := guestAgentResponseFields(row)
+		if valid && !guestAgentReplyFieldsCompatible(fields, command) {
+			return false
+		}
+	}
+	end, err := decoder.Token()
+	return err == nil && end == json.Delim(']')
+}
+
+func guestAgentReplyFieldsCompatible(fields map[string]json.RawMessage, command string) bool {
+	for name, value := range fields {
+		// Null foreign fields carry no affirmative payload identity; keep
+		// the established null-field and completed-empty semantics.
+		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			continue
+		}
+		var owner string
+		switch strings.ToLower(name) {
+		case "content", "truncated":
+			owner = "file-read"
+		case "id", "kernel-release", "kernel-version", "machine", "pretty-name", "version-id":
+			owner = "get-osinfo"
+		case "qemu-ga", "supported-commands", "supported_commands":
+			owner = "info"
+		case "mountpoint", "total-bytes", "total-bytes-privileged", "used-bytes", "disk":
+			owner = "get-fsinfo"
+		case "hardware-address", "ip-addresses", "statistics", "has-ipv4-synth-gateway", "has-ipv6-synth-gateway":
+			owner = "network-get-interfaces"
+		case "error", "errors":
+			return false
+		}
+		if owner != "" && owner != command {
+			return false
 		}
 	}
 	return true
