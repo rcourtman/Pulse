@@ -105,6 +105,60 @@ class TransientReadTests(unittest.TestCase):
                 sleep.assert_not_called()
 
 
+class FailedReadIdentityTests(unittest.TestCase):
+    def test_header_bearing_api_failure_names_the_resource_without_retry(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        endpoint = "repos/rcourtman/Pulse/actions/runs/37395942598"
+        for status in (401, 403, 404):
+            with self.subTest(status=status):
+                result = subprocess.CompletedProcess([], 1, stdout="", stderr=f"HTTP {status}")
+                with patch.object(subject.subprocess, "run", return_value=result) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError) as failure:
+                        github.api(endpoint)
+                self.assertIn(f"GET {endpoint}", str(failure.exception))
+                self.assertNotIn("Accept:", str(failure.exception))
+                if status == 404:
+                    self.assertIsInstance(failure.exception, subject.GitHubNotFound)
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+    def test_paginated_failure_omits_read_filters(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        resource = "repos/rcourtman/Pulse/actions/workflows/release-convergence.yml/runs"
+        result = subprocess.CompletedProcess([], 1, stdout="partial", stderr="HTTP 403")
+        with patch.object(subject.subprocess, "run", return_value=result) as command, patch("time.sleep") as sleep:
+            with self.assertRaises(subject.ReconciliationError) as failure:
+                github.pages(resource + "?event=workflow_dispatch&private_filter=fixture-only")
+        self.assertIn(f"GET {resource}", str(failure.exception))
+        self.assertNotIn("private_filter", str(failure.exception))
+        self.assertNotIn("fixture-only", str(failure.exception))
+        self.assertEqual(1, command.call_count)
+        sleep.assert_not_called()
+
+    def test_unrecognised_resource_has_no_endpoint_disclosure(self):
+        for endpoint in (
+            "repos/another/private-repository/customer-fixture",
+            "repos/rcourtman/Pulse/../customer-fixture",
+            "repos/rcourtman/Pulse/" + "x" * 257,
+            "repos/rcourtman/Pulse/customer-fixture\nforged diagnostic",
+        ):
+            with self.subTest(endpoint=endpoint):
+                self.assertEqual("GitHub API read", subject.api_read_subject(endpoint))
+
+    def test_discovery_stops_at_the_identified_failed_read_without_mutation(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        results = [
+            subprocess.CompletedProcess([], 0, stdout='{"default_branch": "main"}', stderr=""),
+            subprocess.CompletedProcess([], 1, stdout="", stderr="HTTP 404"),
+        ]
+        with patch.object(subject.subprocess, "run", side_effect=results) as command, patch("time.sleep") as sleep:
+            with self.assertRaisesRegex(subject.GitHubNotFound, "GET repos/rcourtman/Pulse/actions/workflows/release-convergence.yml"):
+                subject.discover(github)
+        self.assertEqual(2, command.call_count)
+        self.assertTrue(all("POST" not in call.args[0] for call in command.call_args_list))
+        sleep.assert_not_called()
+
+
 class LatestFailedRunsTests(unittest.TestCase):
     def select(self, releases, runs):
         return subject.latest_failed_runs(
