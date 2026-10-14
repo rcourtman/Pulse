@@ -367,7 +367,8 @@ const observations = (mode) => [
           const row = page.locator('[data-docker-container-row="edge-web"]');
           if (width === 390) await row.locator('td').first().tap();
           else await row.getByRole('button', { name: /details/i }).click();
-          const detail = page.getByTestId('resource-docker-container-section');
+          // A worrying restart count is lifted in front of the drawer's charts.
+          const detail = page.getByTestId('resource-drawer-exceptions');
           await detail.getByText('Restarts', { exact: true }).waitFor();
           await detail.getByText('7', { exact: true }).waitFor();
         },

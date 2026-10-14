@@ -111,7 +111,7 @@ describe('resource drawer identity values', () => {
 
     // Descriptive rows keep the single-line default.
     const runtime = screen.getByTestId('resource-runtime-context-section');
-    expect(valueSpan(runtime, 'online').className).toContain('truncate');
+    expect(valueSpan(runtime, 'Online').className).toContain('truncate');
   });
 
   it('wraps container image references, pod and compose names, and label chips', () => {

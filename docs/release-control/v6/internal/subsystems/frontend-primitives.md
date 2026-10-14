@@ -5446,12 +5446,10 @@ Pulse observation or action coverage, primary reachability, protection gaps,
 pending updates, or an identified service. Routine health, placement, and
 metric values already visible in the row must not be restated merely to fill
 the drawer. Curated raw IDs, kernel/build strings, interface and disk facts, and
-provider metadata stay visible through `TechnicalDetailsSection` and the same
-compact `DetailSectionTable` rows as Overview; those facts must not switch to a
-provider-local card mosaic or require another tap. Only genuinely large or
-interactive provider-support content belongs behind
-`TechnicalDetailsDisclosure`, which owns its collapsed, lazily mounted
-boundary.
+provider metadata use the same compact `DetailSectionTable` rows as Overview;
+those facts must not switch to a provider-local card mosaic. Since 2026-10-14
+every object drawer keeps them under its one closed Details disclosure
+(below).
 The Proxmox guest and node drawers (`GuestDrawerOverview.tsx`,
 `NodeDrawerOverview.tsx`) are the exception, by maintainer decision on
 2026-10-13 (demand ledger "Drawer Overview leads with attention and trends",
@@ -5509,8 +5507,25 @@ one-line facts strip carries OS, the amounts the charts' percentages are of
 and root disk, capacity only while its readings are withheld), address, a
 healthy last completed backup and tags. The complete inventory sits in a closed "Details"
 `TechnicalDetailsDisclosure` with `keepMounted`, so its rows stay in the
-document for find-in-page and tests while hidden. Other drawers keep the rule
-above until that bet is graded. "Worth checking" renders through
+document for find-in-page and tests while hidden. On 2026-10-14 the maintainer
+carried this layout to every object drawer: the shared resource-detail drawer
+(agents, containers, Kubernetes, TrueNAS, vSphere and other platform rows) and
+the Docker host drawer now open with the same alerts line, "Worth checking",
+charts, a facts line (container: image, Compose project and service, address;
+host: logical CPUs, used-of-total RAM and disk, address; Docker host: named OS,
+RAM and disk, the engine version being in its row) and one closed "Details"
+holding every inventory section, healthy availability checks and, for the
+resource drawer, the provider "Platform details" that had their own disclosure.
+Facts state used amounts only while the resource is online or running and its
+memory observation, if any, is current. A row is lifted when it is warning- or
+danger-toned or carries `lift` (an available container image update), unless
+one of the resource's own alerts already states it
+(`getAlertStatedRowLabels`, `partitionDrawerExceptionRows`): a container's
+health alert leaves "Health check: Failing" in Details rather than repeating
+it. An offline resource's "Observed state" is danger-toned with when it was
+last seen, so it is lifted without an alert. A passing availability check moves into
+Details, except on an endpoint that is itself a check (`network-endpoint`,
+platform `availability`), whose cards are its whole reading and stay in front. "Worth checking" renders through
 `DrawerExceptionList.tsx` directly under the alerts line, above the charts:
 one compact label/value line per lifted row with the shared
 `detailValueToneClass` tone, not a card per section. A guest memory reading

@@ -11,7 +11,8 @@ vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
 }));
 
 const expandPlatformDetails = (): void => {
-  const details = screen.getByTestId('resource-platform-details') as HTMLDetailsElement;
+  // Platform context sits inside the Overview's one Details disclosure.
+  const details = screen.getByTestId('resource-technical-details') as HTMLDetailsElement;
   details.open = true;
   fireEvent(details, new Event('toggle'));
 };
@@ -75,6 +76,101 @@ afterEach(() => {
   cleanup();
   resetAIRuntimeState();
   vi.clearAllMocks();
+});
+
+describe('ResourceDetailDrawer machine inventory', () => {
+  const gib = 1024 ** 3;
+  it('states one facts line and keeps the inventory under a closed Details', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'agent-facts',
+          memory: { current: 50, total: 16 * gib, used: 8 * gib },
+          disk: { current: 25, total: 200 * gib, used: 50 * gib },
+          agent: { agentId: 'agent-facts', cpuCount: 8 } as Resource['agent'],
+        })}
+      />
+    ));
+    expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent('No active alerts');
+    expect(screen.queryByTestId('resource-drawer-exceptions')).toBeNull();
+    const facts = screen.getByTestId('resource-drawer-facts');
+    expect(facts).toHaveTextContent('8 logical CPUs');
+    expect(facts).toHaveTextContent('8.00 GB of 16.0 GB RAM');
+    expect(facts).toHaveTextContent('50.0 GB of 200 GB disk');
+    const details = screen.getByTestId('resource-technical-details') as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(within(details).getByTestId('resource-runtime-context-section')).toBeInTheDocument();
+  });
+
+  it('lifts an offline machine in front and states its sizes, not stale used amounts', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'agent-offline',
+          status: 'offline',
+          lastSeen: Date.now() - 14 * 60_000,
+          memory: { current: 50, total: 16 * gib, used: 8 * gib },
+        })}
+      />
+    ));
+    const lifted = screen.getByTestId('resource-drawer-exceptions');
+    expect(within(lifted).getByText('Observed state')).toBeInTheDocument();
+    expect(within(lifted).getByText(/^Offline · last seen/)).toBeInTheDocument();
+    const facts = screen.getByTestId('resource-drawer-facts');
+    expect(facts).toHaveTextContent('16.0 GB RAM');
+    expect(facts).not.toHaveTextContent('of 16.0 GB');
+  });
+
+  it('keeps a passing check under Details for a machine but in front for an endpoint', () => {
+    const passing = {
+      available: true,
+      aggregateState: 'healthy',
+      pollIntervalSeconds: 30,
+      lastChecked: new Date(Date.now() - 10_000).toISOString(),
+    } as Resource['availability'];
+    const machine = render(() => (
+      <ResourceDetailDrawer resource={resource({ id: 'agent-checked', availability: passing })} />
+    ));
+    expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent(
+      'availability checks passing',
+    );
+    const details = screen.getByTestId('resource-technical-details');
+    expect(details.contains(screen.getByTestId('availability-probe-status'))).toBe(true);
+    machine.unmount();
+
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'endpoint-a',
+          type: 'network-endpoint',
+          platformType: 'availability',
+          availability: passing,
+        })}
+      />
+    ));
+    // The check is the endpoint's whole reading, so it never folds away.
+    const card = screen.getByTestId('availability-probe-status');
+    expect(card.closest('details')).toBeNull();
+  });
+
+  it('states sizes only while the memory reading is retained rather than current', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'agent-retained',
+          memory: {
+            current: 50,
+            total: 16 * gib,
+            used: 8 * gib,
+            observation: { state: 'last-known', source: 'agent' },
+          },
+        })}
+      />
+    ));
+    const facts = screen.getByTestId('resource-drawer-facts');
+    expect(facts).toHaveTextContent('16.0 GB RAM');
+    expect(facts).not.toHaveTextContent('of 16.0 GB');
+  });
 });
 
 describe('ResourceDetailDrawer machine metrics history', () => {
@@ -215,7 +311,10 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
-    expect(screen.queryByTestId('resource-host-details-section')).toBeNull();
+    // Provider host facts wait inside the closed Overview Details disclosure.
+    expect(
+      screen.getByTestId('resource-host-details-section').closest('details'),
+    ).not.toHaveAttribute('open');
     expandPlatformDetails();
     const machineSection = screen.getByTestId('resource-host-details-section');
     expect(within(machineSection).getByText('Machine')).toBeInTheDocument();
@@ -255,7 +354,10 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
-    expect(screen.queryByTestId('resource-host-details-section')).toBeNull();
+    // Provider host facts wait inside the closed Overview Details disclosure.
+    expect(
+      screen.getByTestId('resource-host-details-section').closest('details'),
+    ).not.toHaveAttribute('open');
     expandPlatformDetails();
     const hostSection = screen.getByTestId('resource-host-details-section');
     expect(within(hostSection).getByText('Host')).toBeInTheDocument();

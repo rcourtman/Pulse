@@ -805,7 +805,8 @@ describe('ResourceDetailDrawer change history section', () => {
       screen.queryByText('Supporting metadata only. The web interface path above stays primary.'),
     ).toBeNull();
     expect(screen.queryByRole('button', { name: 'Show access' })).toBeNull();
-    expect(screen.queryByText('Details')).toBeNull();
+    // One Details disclosure holds the inventory; no per-card "Show details".
+    expect(screen.getAllByText('Details')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(screen.queryByText('Platform ID')).toBeNull();
     expect(within(identitySection).getByText('Tags')).toBeInTheDocument();
@@ -837,10 +838,8 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('Correlations')).toBeInTheDocument();
     expect(screen.getByText('Storage 1 alias')).toBeInTheDocument();
     expect(screen.getByText('VM Child')).toBeInTheDocument();
+    // Platform context sits inside the Overview's Details, opened by render().
     await screen.findByText('Platform details');
-    const platformDetails = screen.getByTestId('resource-platform-details') as HTMLDetailsElement;
-    platformDetails.open = true;
-    fireEvent(platformDetails, new Event('toggle'));
     expect(screen.getByText('Context')).toBeInTheDocument();
     expect(screen.queryByText('Capabilities 1')).toBeNull();
     expect(screen.queryByText('Relationships 1')).toBeNull();

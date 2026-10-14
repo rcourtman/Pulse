@@ -276,7 +276,10 @@ describe('KubernetesControllersTable', () => {
     expect(within(job).getByText('5m')).toBeInTheDocument();
     expect(within(job).getByText('Target')).toBeInTheDocument();
     expect(within(job).getByText('10 completions')).toBeInTheDocument();
-    expect(within(job).getByText('Failed').closest('tr')).toHaveTextContent('2');
+    // Failed pods are worth checking, so the drawer lifts that row in front.
+    const lifted = screen.getByTestId('resource-drawer-exceptions');
+    expect(within(lifted).getByText('Failed').closest('tr')).toHaveTextContent('2');
+    expect(within(job).queryByText('Failed')).toBeNull();
 
     fireEvent.click(screen.getByText(kubernetesName('billing-rollup')));
     const cron = screen.getByTestId('resource-kubernetes-controller-section');

@@ -13,7 +13,14 @@ import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { getAlertsForUnifiedResource, getOwnAlertsForUnifiedResource } from '@/utils/alerts';
 import { GuestDrawerHistory } from '@/components/Workloads/GuestDrawerHistory';
-import { getDrawerChartAlerts } from '@/components/Workloads/drawerOverviewModel';
+import {
+  getAlertStatedRowLabels,
+  getDrawerChartAlerts,
+  isDrawerAvailabilityHealthy,
+  partitionDrawerExceptionRows,
+} from '@/components/Workloads/drawerOverviewModel';
+import { DrawerExceptionList } from '@/components/Workloads/DrawerExceptionList';
+import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import { formatUptime, formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
@@ -34,13 +41,10 @@ import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresent
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 import { ResourceCorrelationSummary } from './ResourceCorrelationSummary';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
-import { InlineResourceSummaryTables } from './ResourceDetailSummary';
+import { getResourceDrawerFacts, useResourceSummarySections } from './ResourceDetailSummary';
 import { ResourceInvestigationContextTables } from './ResourceInvestigationContextTables';
 import { DetailSectionTable } from '@/components/shared/DetailSectionTable';
-import {
-  TechnicalDetailsDisclosure,
-  TechnicalDetailsSection,
-} from '@/components/shared/TechnicalDetailsDisclosure';
+import { TechnicalDetailsDisclosure } from '@/components/shared/TechnicalDetailsDisclosure';
 import {
   DrawerAttentionSection,
   type DrawerAttentionItem,
@@ -386,9 +390,70 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     return items;
   };
 
+  // Inventory follows the Proxmox drawers: anything wrong is lifted in front,
+  // one facts line adds what the row does not say, and the rest waits under a
+  // closed Details section rather than as a grid of equal-weight cards.
+  const summarySections = useResourceSummarySections({
+    get resource() {
+      return resource();
+    },
+    drawer,
+    get showPlatformId() {
+      return showPlatformId();
+    },
+    content: 'all',
+  });
+  const inventory = () =>
+    partitionDrawerExceptionRows(
+      summarySections(),
+      getAlertStatedRowLabels(
+        getOwnAlertsForUnifiedResource(
+          resource(),
+          activeAlerts,
+          alertsActivation.detectionEnabled(),
+        ),
+      ),
+    );
+  const exceptionRows = () => inventory().lifted;
+  const detailSections = () => inventory().details;
+  const detailsSubtitle = () =>
+    detailSections()
+      .map((section) => section.label.toLowerCase())
+      .join(', ');
+  const facts = () => getResourceDrawerFacts(resource(), drawer.identityIpValues()[0]);
+  const hasPlatformDetails = () =>
+    drawer.hasServiceDetails() ||
+    drawer.hasVMwareDetails() ||
+    drawer.hasTrueNASDetails() ||
+    drawer.hasKubernetesDetails() ||
+    drawer.hasHostDetails() ||
+    drawer.hasInvestigationContext();
+  const availabilityChecks = () => [
+    ...(resource().availability ? [resource().availability!] : []),
+    ...(resource().availabilityChecks ?? []),
+  ];
+  // A failing or unknown check stays in front; a passing one is summarised in
+  // the alerts line and kept under Details. An endpoint that is itself an
+  // availability check keeps its cards in front: they are its whole reading.
+  const isAvailabilityResource = () =>
+    resource().type === 'network-endpoint' || resource().platformType === 'availability';
+  const availabilityHealthy = () =>
+    !isAvailabilityResource() &&
+    availabilityChecks().length > 0 &&
+    availabilityChecks().every((check) => isDrawerAvailabilityHealthy(check, now()));
+
   return (
     <div class="space-y-3">
       <DrawerAttentionSection items={attentionItems()} />
+      <Show when={attentionItems().length === 0}>
+        <p data-testid="drawer-no-attention" class="text-xs text-muted">
+          <span class="font-medium text-base-content">{ALERTS_EMPTY_STATE}</span>
+          <Show when={availabilityHealthy()}>
+            <span> · availability checks passing</span>
+          </Show>
+        </p>
+      </Show>
+      <DrawerExceptionList testId="resource-drawer-exceptions" rows={exceptionRows()} />
       {/* Stored history leads the reading path: the charts answer "is this
           normal or getting worse?" before the inventory below. */}
       <Show when={drawer.metricsHistoryTarget()}>
@@ -407,23 +472,648 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
           </div>
         )}
       </Show>
-      <TechnicalDetailsSection dataTestId="resource-technical-details">
-        <InlineResourceSummaryTables
-          resource={resource()}
-          drawer={drawer}
-          showPlatformId={showPlatformId()}
-          content="all"
-          dataTestId="resource-technical-summary-section"
-        />
-      </TechnicalDetailsSection>
-
-      <Show when={resource().availability || (resource().availabilityChecks?.length ?? 0) > 0}>
+      <Show when={availabilityChecks().length > 0 && !availabilityHealthy()}>
         <div class="flex flex-wrap gap-3 *:min-w-[240px] *:flex-1">
           <AvailabilityProbeStatusCards
             availability={resource().availability}
             checks={resource().availabilityChecks}
           />
         </div>
+      </Show>
+
+      <Show when={facts().length > 0}>
+        <div
+          data-testid="resource-drawer-facts"
+          class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
+        >
+          <For each={facts()}>{(fact) => <span class="wrap-break-word">{fact}</span>}</For>
+        </div>
+      </Show>
+
+      <Show when={detailSections().length > 0 || availabilityHealthy() || hasPlatformDetails()}>
+        <TechnicalDetailsDisclosure
+          dataTestId="resource-technical-details"
+          title="Details"
+          keepMounted
+          subtitle={[
+            detailsSubtitle(),
+            availabilityHealthy() ? 'availability checks' : '',
+            hasPlatformDetails() ? 'platform' : '',
+          ]
+            .filter(Boolean)
+            .join(', ')}
+          class="border-t border-border pt-2"
+          contentClass="mt-2 space-y-3"
+        >
+          <DetailSectionTable
+            sections={detailSections()}
+            dataTestId="resource-technical-summary-section"
+          />
+          <Show when={availabilityHealthy()}>
+            <div class="flex flex-wrap gap-3 *:min-w-[240px] *:flex-1">
+              <AvailabilityProbeStatusCards
+                availability={resource().availability}
+                checks={resource().availabilityChecks}
+              />
+            </div>
+          </Show>
+          {/* Provider, service and host context share the one Details
+              entrance rather than a second disclosure beside it. */}
+          <Show when={hasPlatformDetails()}>
+            <section data-testid="resource-platform-details" class="space-y-2">
+              <h4 class="text-[11px] font-medium uppercase tracking-wide text-muted">
+                Platform details
+              </h4>
+              <div
+                data-testid="resource-support-sections"
+                class="flex flex-wrap gap-3 *:flex-1 *:basis-[calc(50%-0.375rem)] *:min-w-[260px] *:max-w-full *:overflow-hidden"
+              >
+                <Show when={drawer.hasTrueNASDetails()}>
+                  <TrueNASDetailsDisclosure drawer={drawer} class="h-full" />
+                </Show>
+
+                <Show when={drawer.hasKubernetesDetails()}>
+                  <KubernetesDetailsDisclosure drawer={drawer} class="h-full" />
+                </Show>
+
+                <Show when={drawer.hasInvestigationContext()}>
+                  <SupportDisclosure
+                    title="Context"
+                    summary={drawer.investigationContextSummary()}
+                    expanded={drawer.showInvestigationContext()}
+                    onToggle={() => drawer.setShowInvestigationContext((value) => !value)}
+                    showLabel="Show context"
+                    hideLabel="Hide context"
+                    class="h-full"
+                    contentClass="mt-3 space-y-3"
+                    dataTestId="resource-investigation-context"
+                  >
+                    <ResourceInvestigationContextTables resource={resource()} drawer={drawer} />
+                  </SupportDisclosure>
+                </Show>
+
+                <Show when={drawer.hasServiceDetails()}>
+                  <SupportDisclosure
+                    title="Service"
+                    summary={drawer.serviceDetailsSummary()}
+                    expanded={drawer.showServiceDetails()}
+                    onToggle={() => drawer.setShowServiceDetails((value) => !value)}
+                    showLabel="Show service"
+                    hideLabel="Hide service"
+                    class="h-full"
+                    contentClass="mt-3 space-y-3"
+                    dataTestId="resource-service-details-section"
+                  >
+                    <Show when={resource().type === 'docker-host'}>
+                      <div class="rounded-sm border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900/25">
+                        <div class="mb-2 flex items-center justify-between gap-2">
+                          <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                            Docker runtime
+                          </div>
+                          <Show when={drawer.dockerHostData()?.runtime}>
+                            <span
+                              class="max-w-[55%] truncate text-[10px] text-sky-700 dark:text-sky-300"
+                              title={drawer.dockerHostData()?.runtime}
+                            >
+                              {drawer.dockerHostData()?.runtime}
+                            </span>
+                          </Show>
+                        </div>
+
+                        <div class="space-y-1.5 text-[11px]">
+                          <InfoCardKeyValueRow
+                            label="Containers"
+                            value={formatInteger(drawer.dockerContainerCount())}
+                          />
+                          <InfoCardKeyValueRow
+                            label="Updates"
+                            value={formatInteger(drawer.dockerUpdatesAvailable())}
+                            valueClass={
+                              drawer.dockerUpdatesAvailable() > 0
+                                ? 'text-sky-700 dark:text-sky-300'
+                                : ''
+                            }
+                          />
+                          <Show when={drawer.dockerUpdatesCheckedRelative()}>
+                            <InfoCardKeyValueRow
+                              label="Checked"
+                              value={drawer.dockerUpdatesCheckedRelative()}
+                            />
+                          </Show>
+
+                          <Show when={drawer.showDockerUpdateControls()}>
+                            <div class="space-y-1.5 border-t border-sky-200 pt-2 dark:border-sky-700">
+                              <Show
+                                when={
+                                  drawer.dockerHostCommand()?.type ||
+                                  drawer.dockerHostCommand()?.status
+                                }
+                              >
+                                <div class="rounded-sm border border-sky-200 bg-surface px-2 py-1.5 text-[10px] dark:border-sky-700">
+                                  <InfoCardKeyValueRow
+                                    label="Action"
+                                    value={formatIdentifierLabel(drawer.dockerHostCommand()?.type, {
+                                      fallback: 'command',
+                                    })}
+                                  />
+                                  <InfoCardKeyValueRow
+                                    class="mt-1"
+                                    label="State"
+                                    value={formatIdentifierLabel(
+                                      drawer.dockerHostCommand()?.status,
+                                      {
+                                        fallback: 'unknown',
+                                      },
+                                    )}
+                                    valueClass={
+                                      drawer.dockerHostCommandActive()
+                                        ? 'text-sky-700 dark:text-sky-300'
+                                        : ''
+                                    }
+                                  />
+                                  <Show when={drawer.dockerHostCommand()?.message}>
+                                    <div
+                                      class="mt-1 text-muted truncate"
+                                      title={drawer.dockerHostCommand()?.message}
+                                    >
+                                      {drawer.dockerHostCommand()?.message}
+                                    </div>
+                                  </Show>
+                                  <Show when={drawer.dockerHostCommand()?.failureReason}>
+                                    <div
+                                      class="mt-1 text-red-700 dark:text-red-300 truncate"
+                                      title={drawer.dockerHostCommand()?.failureReason}
+                                    >
+                                      {drawer.dockerHostCommand()?.failureReason}
+                                    </div>
+                                  </Show>
+                                </div>
+                              </Show>
+
+                              <Show when={drawer.dockerActionError()}>
+                                <div class="rounded-sm border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900/25 dark:text-red-200">
+                                  {drawer.dockerActionError()}
+                                </div>
+                              </Show>
+                              <Show when={drawer.dockerActionNote()}>
+                                <div class="rounded-sm border border-sky-200 bg-surface px-2 py-1.5 text-[10px] text-base-content dark:border-sky-700">
+                                  {drawer.dockerActionNote()}
+                                </div>
+                              </Show>
+
+                              <div class="flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  disabled={
+                                    drawer.dockerActionBusy() ||
+                                    drawer.dockerUpdateActionsLoading() ||
+                                    drawer.dockerHostCommandActive() ||
+                                    drawer.dockerHostSourceId() === null
+                                  }
+                                  onClick={drawer.queueDockerUpdateCheck}
+                                  class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60"
+                                  title={
+                                    drawer.dockerUpdateActionsLoading()
+                                      ? 'Loading settings...'
+                                      : undefined
+                                  }
+                                >
+                                  Check now
+                                </button>
+
+                                <button
+                                  type="button"
+                                  disabled={
+                                    drawer.dockerActionBusy() ||
+                                    drawer.dockerUpdateActionsLoading() ||
+                                    drawer.dockerUpdateActionsDisabled() ||
+                                    drawer.dockerHostCommandActive() ||
+                                    drawer.dockerHostSourceId() === null ||
+                                    drawer.dockerUpdatesAvailable() <= 0
+                                  }
+                                  onClick={drawer.queueDockerUpdateAll}
+                                  class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
+                                  title={
+                                    drawer.dockerUpdateActionsDisabled()
+                                      ? 'Updates disabled by server settings.'
+                                      : undefined
+                                  }
+                                >
+                                  {drawer.confirmUpdateAll()
+                                    ? 'Confirm update'
+                                    : `Update all${drawer.dockerUpdatesAvailable() > 0 ? ` (${drawer.dockerUpdatesAvailable()})` : ''}`}
+                                </button>
+                              </div>
+                            </div>
+                          </Show>
+
+                          <button
+                            type="button"
+                            onClick={drawer.toggleDockerUpdateControls}
+                            class="inline-flex items-center rounded-md border border-sky-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-sky-700 transition-colors hover:bg-surface-hover dark:border-sky-700 dark:text-sky-300"
+                          >
+                            {drawer.showDockerUpdateControls() ? 'Hide actions' : 'Show actions'}
+                          </button>
+                        </div>
+                      </div>
+                    </Show>
+
+                    <Show when={drawer.pbsData()}>
+                      {(pbs) => {
+                        const connection = getServiceHealthPresentation(
+                          resource().status,
+                          pbs().connectionHealth,
+                        );
+                        return (
+                          <div class="rounded-sm border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900/25">
+                            <div class="mb-2 flex items-center justify-between gap-2">
+                              <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                                PBS
+                              </div>
+                              <Show when={pbs().hostname}>
+                                <span
+                                  class="max-w-[55%] truncate text-[10px] text-indigo-700 dark:text-indigo-300"
+                                  title={pbs().hostname}
+                                >
+                                  {pbs().hostname}
+                                </span>
+                              </Show>
+                            </div>
+                            <div class="space-y-1.5 text-[11px]">
+                              <InfoCardKeyValueRow
+                                label="State"
+                                value={connection.label}
+                                valueClass={connection.text}
+                              />
+                              <Show when={pbs().version}>
+                                <InfoCardKeyValueRow label="Version" value={pbs().version} />
+                              </Show>
+                              <Show when={pbs().uptimeSeconds || resource().uptime}>
+                                <InfoCardKeyValueRow
+                                  label="Uptime"
+                                  value={formatUptime(
+                                    pbs().uptimeSeconds ?? resource().uptime ?? 0,
+                                  )}
+                                />
+                              </Show>
+                              <Show when={drawer.pbsActiveTaskCount() > 0}>
+                                <InfoCardKeyValueRow
+                                  label="Active tasks"
+                                  value={formatInteger(drawer.pbsActiveTaskCount())}
+                                  valueClass="text-emerald-700 dark:text-emerald-300"
+                                />
+                              </Show>
+                              <Show when={drawer.showPbsJobDetail()}>
+                                <div class="space-y-1.5 border-t border-indigo-200 pt-2 dark:border-indigo-700">
+                                  <div class="grid grid-cols-2 gap-2 md:grid-cols-3">
+                                    <div class="rounded-sm border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                                      <div class="text-[10px] text-muted">Datastores</div>
+                                      <div class="text-sm font-semibold text-base-content">
+                                        {formatInteger(pbs().datastoreCount)}
+                                      </div>
+                                    </div>
+                                    <div class="rounded-sm border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                                      <div class="text-[10px] text-muted">Jobs</div>
+                                      <div class="text-sm font-semibold text-base-content">
+                                        {formatInteger(drawer.pbsJobTotal())}
+                                      </div>
+                                    </div>
+                                    <Show when={drawer.pbsActiveTaskCount() > 0}>
+                                      <div class="rounded-sm border border-emerald-200 bg-emerald-50 px-2 py-1.5 dark:border-emerald-700 dark:bg-emerald-950/40">
+                                        <div class="text-[10px] text-muted">Active</div>
+                                        <div class="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                                          {formatInteger(drawer.pbsActiveTaskCount())}
+                                        </div>
+                                      </div>
+                                    </Show>
+                                  </div>
+                                  <Show when={drawer.pbsActiveTaskCount() > 0}>
+                                    <div
+                                      data-testid="pbs-active-tasks"
+                                      class="rounded-sm border border-emerald-200 bg-surface px-2 py-1.5 dark:border-emerald-700"
+                                    >
+                                      <div class="flex items-center justify-between gap-2">
+                                        <span class="text-[10px] font-medium uppercase tracking-wide text-muted">
+                                          Active tasks
+                                        </span>
+                                        <span class="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                                          {formatInteger(drawer.pbsActiveTaskCount())}
+                                        </span>
+                                      </div>
+                                      <div class="mt-2 space-y-2 border-t border-emerald-200 pt-2 dark:border-emerald-700">
+                                        <For each={drawer.pbsActiveTasks()}>
+                                          {(task) => (
+                                            <div class="flex items-start justify-between gap-2 text-[10px]">
+                                              <div class="min-w-0">
+                                                <div
+                                                  class="truncate font-medium text-base-content"
+                                                  title={task.label}
+                                                >
+                                                  {task.label}
+                                                </div>
+                                                <Show when={task.context}>
+                                                  <div
+                                                    class="truncate text-muted"
+                                                    title={task.context ?? undefined}
+                                                  >
+                                                    {task.context}
+                                                  </div>
+                                                </Show>
+                                                <Show when={task.error}>
+                                                  <div
+                                                    class="truncate text-rose-700 dark:text-rose-300"
+                                                    title={task.error}
+                                                  >
+                                                    {task.error}
+                                                  </div>
+                                                </Show>
+                                              </div>
+                                              <span class="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                                {task.statusLabel}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </For>
+                                      </div>
+                                    </div>
+                                  </Show>
+                                  <Show when={pbsJobHealthEvidence().evidenceCount > 0}>
+                                    <div
+                                      data-testid="pbs-job-health-evidence"
+                                      class="rounded-sm border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700"
+                                    >
+                                      <div class="flex flex-wrap items-center justify-between gap-2">
+                                        <span class="text-[10px] font-medium uppercase tracking-wide text-muted">
+                                          Job health evidence
+                                        </span>
+                                        <span class="text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
+                                          {pbsJobHealthEvidence().countLabel}
+                                        </span>
+                                      </div>
+                                      <div class="mt-2 space-y-2 border-t border-indigo-200 pt-2 dark:border-indigo-700">
+                                        <For each={pbsJobHealthEvidence().entries}>
+                                          {(entry) => (
+                                            <div class="min-w-0 rounded-sm border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
+                                              <div class="flex flex-wrap items-start justify-between gap-2">
+                                                <div class="min-w-0">
+                                                  <div
+                                                    class="truncate font-medium text-base-content"
+                                                    title={entry.label}
+                                                  >
+                                                    {entry.label}
+                                                  </div>
+                                                  <div
+                                                    class="truncate text-muted"
+                                                    title={entry.sourceLabel}
+                                                  >
+                                                    {entry.sourceLabel}
+                                                  </div>
+                                                </div>
+                                                <div class="flex max-w-full flex-wrap justify-end gap-1">
+                                                  <For each={entry.badges}>
+                                                    {(badge) => (
+                                                      <span
+                                                        class={`shrink-0 rounded-full border px-2 py-0.5 font-medium ${pbsEvidenceBadgeClass(
+                                                          badge.tone,
+                                                        )}`}
+                                                      >
+                                                        {badge.label}
+                                                      </span>
+                                                    )}
+                                                  </For>
+                                                </div>
+                                              </div>
+                                              <div class="mt-1 grid gap-1 text-muted sm:grid-cols-2">
+                                                <Show when={entry.context}>
+                                                  <span
+                                                    class="truncate"
+                                                    title={entry.context ?? undefined}
+                                                  >
+                                                    {entry.context}
+                                                  </span>
+                                                </Show>
+                                                <Show when={entry.stateLabel}>
+                                                  <span
+                                                    class="truncate"
+                                                    title={entry.stateLabel ?? undefined}
+                                                  >
+                                                    State:{' '}
+                                                    <span class="font-medium text-base-content">
+                                                      {entry.stateLabel}
+                                                    </span>
+                                                  </span>
+                                                </Show>
+                                                <Show when={entry.freshnessLabel}>
+                                                  <span
+                                                    class="truncate"
+                                                    title={entry.freshnessLabel ?? undefined}
+                                                  >
+                                                    {entry.freshnessLabel}
+                                                  </span>
+                                                </Show>
+                                                <Show when={entry.postureReason}>
+                                                  <span
+                                                    class="truncate text-amber-700 dark:text-amber-300"
+                                                    title={entry.postureReason ?? undefined}
+                                                  >
+                                                    {entry.postureReason}
+                                                  </span>
+                                                </Show>
+                                                <Show when={entry.error}>
+                                                  <span
+                                                    class="truncate text-rose-700 dark:text-rose-300"
+                                                    title={entry.error ?? undefined}
+                                                  >
+                                                    {entry.error}
+                                                  </span>
+                                                </Show>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </For>
+                                      </div>
+                                    </div>
+                                  </Show>
+                                  <details class="rounded-sm border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                                      <span>Types</span>
+                                      <span class="text-muted">
+                                        {drawer.pbsVisibleJobBreakdown().length}
+                                      </span>
+                                    </summary>
+                                    <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200 pt-2 text-[10px] dark:border-indigo-700">
+                                      <For each={drawer.pbsVisibleJobBreakdown()}>
+                                        {(entry) => (
+                                          <span class="text-muted">
+                                            {entry.label}:{' '}
+                                            <span class="font-medium text-base-content">
+                                              {formatInteger(entry.value)}
+                                            </span>
+                                          </span>
+                                        )}
+                                      </For>
+                                    </div>
+                                  </details>
+                                </div>
+                              </Show>
+                              <button
+                                type="button"
+                                onClick={() => drawer.setShowPbsJobDetail((value) => !value)}
+                                class="inline-flex items-center rounded-md border border-indigo-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-indigo-700 transition-colors hover:bg-surface-hover dark:border-indigo-700 dark:text-indigo-300"
+                              >
+                                {drawer.showPbsJobDetail() ? 'Hide jobs' : 'Show jobs'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }}
+                    </Show>
+
+                    <Show when={drawer.pmgData()}>
+                      {(pmg) => {
+                        const connection = getServiceHealthPresentation(
+                          resource().status,
+                          pmg().connectionHealth,
+                        );
+                        return (
+                          <div class="rounded-sm border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900/25">
+                            <div class="mb-2 flex items-center justify-between gap-2">
+                              <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
+                                PMG
+                              </div>
+                              <Show when={pmg().hostname}>
+                                <span
+                                  class="max-w-[55%] truncate text-[10px] text-rose-700 dark:text-rose-300"
+                                  title={pmg().hostname}
+                                >
+                                  {pmg().hostname}
+                                </span>
+                              </Show>
+                            </div>
+                            <div class="space-y-1.5 text-[11px]">
+                              <InfoCardKeyValueRow
+                                label="State"
+                                value={connection.label}
+                                valueClass={connection.text}
+                              />
+                              <Show when={pmg().version}>
+                                <InfoCardKeyValueRow label="Version" value={pmg().version} />
+                              </Show>
+                              <Show when={pmg().uptimeSeconds || resource().uptime}>
+                                <InfoCardKeyValueRow
+                                  label="Uptime"
+                                  value={formatUptime(
+                                    pmg().uptimeSeconds ?? resource().uptime ?? 0,
+                                  )}
+                                />
+                              </Show>
+                              <Show when={drawer.showPmgMailFlowDetail()}>
+                                <div class="space-y-1.5 border-t border-rose-200 pt-2 dark:border-rose-700">
+                                  <div class="grid grid-cols-2 gap-2">
+                                    <div class="rounded-sm border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                      <div class="text-[10px] text-muted">Queue</div>
+                                      <div
+                                        class={`text-sm font-semibold ${drawer.pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                                      >
+                                        {formatInteger(pmg().queueTotal)}
+                                      </div>
+                                    </div>
+                                    <div class="rounded-sm border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                      <div class="text-[10px] text-muted">Backlog</div>
+                                      <div
+                                        class={`text-sm font-semibold ${drawer.pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                                      >
+                                        {formatInteger(drawer.pmgQueueBacklog())}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <Show when={pmg().nodeCount || drawer.pmgUpdatedRelative()}>
+                                    <div
+                                      data-testid="pmg-support-context"
+                                      class="space-y-1.5 rounded-sm border border-dashed border-rose-200 bg-surface px-2 py-1.5 text-[10px] dark:border-rose-700"
+                                    >
+                                      <Show when={pmg().nodeCount}>
+                                        <InfoCardKeyValueRow
+                                          label="Nodes"
+                                          value={formatInteger(pmg().nodeCount)}
+                                        />
+                                      </Show>
+                                      <Show when={drawer.pmgUpdatedRelative()}>
+                                        <InfoCardKeyValueRow
+                                          class={
+                                            pmg().nodeCount
+                                              ? 'border-t border-rose-200 pt-1.5 dark:border-rose-700'
+                                              : ''
+                                          }
+                                          label="Updated"
+                                          value={drawer.pmgUpdatedRelative()}
+                                        />
+                                      </Show>
+                                    </div>
+                                  </Show>
+                                  <details class="rounded-sm border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                    <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
+                                      Queue detail
+                                    </summary>
+                                    <div class="mt-2 space-y-1.5 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
+                                      <For each={drawer.pmgVisibleQueueBreakdown()}>
+                                        {(entry) => (
+                                          <InfoCardKeyValueRow
+                                            label={entry.label}
+                                            value={formatInteger(entry.value)}
+                                            valueClass={
+                                              entry.warn ? 'text-amber-600 dark:text-amber-400' : ''
+                                            }
+                                          />
+                                        )}
+                                      </For>
+                                    </div>
+                                  </details>
+                                  <details class="rounded-sm border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                    <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
+                                      Mail detail
+                                    </summary>
+                                    <div class="mt-2 space-y-1.5 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
+                                      <For each={drawer.pmgVisibleMailBreakdown()}>
+                                        {(entry) => (
+                                          <InfoCardKeyValueRow
+                                            label={entry.label}
+                                            value={formatInteger(entry.value)}
+                                          />
+                                        )}
+                                      </For>
+                                    </div>
+                                  </details>
+                                </div>
+                              </Show>
+                              <button
+                                type="button"
+                                onClick={() => drawer.setShowPmgMailFlowDetail((value) => !value)}
+                                class="inline-flex items-center rounded-md border border-rose-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-rose-700 transition-colors hover:bg-surface-hover dark:border-rose-700 dark:text-rose-300"
+                              >
+                                {drawer.showPmgMailFlowDetail()
+                                  ? 'Hide mail flow'
+                                  : 'Show mail flow'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }}
+                    </Show>
+                  </SupportDisclosure>
+                </Show>
+
+                <Show when={drawer.hasVMwareDetails()}>
+                  <VMwareDetailsDisclosure drawer={drawer} class="h-full" />
+                </Show>
+
+                <Show when={drawer.hasHostDetails()}>
+                  <HostDetailsDisclosure resource={resource()} drawer={drawer} class="h-full" />
+                </Show>
+              </div>
+            </section>
+          </Show>
+        </TechnicalDetailsDisclosure>
       </Show>
 
       <div data-testid="resource-secondary-sections" class="space-y-3">
@@ -677,602 +1367,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             resolveResourceLabel={drawer.resolveResourceLabel}
             showLastSeen
           />
-        </Show>
-
-        <Show
-          when={
-            drawer.hasServiceDetails() ||
-            drawer.hasVMwareDetails() ||
-            drawer.hasTrueNASDetails() ||
-            drawer.hasKubernetesDetails() ||
-            drawer.hasHostDetails() ||
-            drawer.hasInvestigationContext()
-          }
-        >
-          <TechnicalDetailsDisclosure
-            title="Platform details"
-            subtitle="Provider, service, and host context"
-            dataTestId="resource-platform-details"
-          >
-            <div
-              data-testid="resource-support-sections"
-              class="flex flex-wrap gap-3 *:flex-1 *:basis-[calc(50%-0.375rem)] *:min-w-[260px] *:max-w-full *:overflow-hidden"
-            >
-              <Show when={drawer.hasTrueNASDetails()}>
-                <TrueNASDetailsDisclosure drawer={drawer} class="h-full" />
-              </Show>
-
-              <Show when={drawer.hasKubernetesDetails()}>
-                <KubernetesDetailsDisclosure drawer={drawer} class="h-full" />
-              </Show>
-
-              <Show when={drawer.hasInvestigationContext()}>
-                <SupportDisclosure
-                  title="Context"
-                  summary={drawer.investigationContextSummary()}
-                  expanded={drawer.showInvestigationContext()}
-                  onToggle={() => drawer.setShowInvestigationContext((value) => !value)}
-                  showLabel="Show context"
-                  hideLabel="Hide context"
-                  class="h-full"
-                  contentClass="mt-3 space-y-3"
-                  dataTestId="resource-investigation-context"
-                >
-                  <ResourceInvestigationContextTables resource={resource()} drawer={drawer} />
-                </SupportDisclosure>
-              </Show>
-
-              <Show when={drawer.hasServiceDetails()}>
-                <SupportDisclosure
-                  title="Service"
-                  summary={drawer.serviceDetailsSummary()}
-                  expanded={drawer.showServiceDetails()}
-                  onToggle={() => drawer.setShowServiceDetails((value) => !value)}
-                  showLabel="Show service"
-                  hideLabel="Hide service"
-                  class="h-full"
-                  contentClass="mt-3 space-y-3"
-                  dataTestId="resource-service-details-section"
-                >
-                  <Show when={resource().type === 'docker-host'}>
-                    <div class="rounded-sm border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900/25">
-                      <div class="mb-2 flex items-center justify-between gap-2">
-                        <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
-                          Docker runtime
-                        </div>
-                        <Show when={drawer.dockerHostData()?.runtime}>
-                          <span
-                            class="max-w-[55%] truncate text-[10px] text-sky-700 dark:text-sky-300"
-                            title={drawer.dockerHostData()?.runtime}
-                          >
-                            {drawer.dockerHostData()?.runtime}
-                          </span>
-                        </Show>
-                      </div>
-
-                      <div class="space-y-1.5 text-[11px]">
-                        <InfoCardKeyValueRow
-                          label="Containers"
-                          value={formatInteger(drawer.dockerContainerCount())}
-                        />
-                        <InfoCardKeyValueRow
-                          label="Updates"
-                          value={formatInteger(drawer.dockerUpdatesAvailable())}
-                          valueClass={
-                            drawer.dockerUpdatesAvailable() > 0
-                              ? 'text-sky-700 dark:text-sky-300'
-                              : ''
-                          }
-                        />
-                        <Show when={drawer.dockerUpdatesCheckedRelative()}>
-                          <InfoCardKeyValueRow
-                            label="Checked"
-                            value={drawer.dockerUpdatesCheckedRelative()}
-                          />
-                        </Show>
-
-                        <Show when={drawer.showDockerUpdateControls()}>
-                          <div class="space-y-1.5 border-t border-sky-200 pt-2 dark:border-sky-700">
-                            <Show
-                              when={
-                                drawer.dockerHostCommand()?.type ||
-                                drawer.dockerHostCommand()?.status
-                              }
-                            >
-                              <div class="rounded-sm border border-sky-200 bg-surface px-2 py-1.5 text-[10px] dark:border-sky-700">
-                                <InfoCardKeyValueRow
-                                  label="Action"
-                                  value={formatIdentifierLabel(drawer.dockerHostCommand()?.type, {
-                                    fallback: 'command',
-                                  })}
-                                />
-                                <InfoCardKeyValueRow
-                                  class="mt-1"
-                                  label="State"
-                                  value={formatIdentifierLabel(drawer.dockerHostCommand()?.status, {
-                                    fallback: 'unknown',
-                                  })}
-                                  valueClass={
-                                    drawer.dockerHostCommandActive()
-                                      ? 'text-sky-700 dark:text-sky-300'
-                                      : ''
-                                  }
-                                />
-                                <Show when={drawer.dockerHostCommand()?.message}>
-                                  <div
-                                    class="mt-1 text-muted truncate"
-                                    title={drawer.dockerHostCommand()?.message}
-                                  >
-                                    {drawer.dockerHostCommand()?.message}
-                                  </div>
-                                </Show>
-                                <Show when={drawer.dockerHostCommand()?.failureReason}>
-                                  <div
-                                    class="mt-1 text-red-700 dark:text-red-300 truncate"
-                                    title={drawer.dockerHostCommand()?.failureReason}
-                                  >
-                                    {drawer.dockerHostCommand()?.failureReason}
-                                  </div>
-                                </Show>
-                              </div>
-                            </Show>
-
-                            <Show when={drawer.dockerActionError()}>
-                              <div class="rounded-sm border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900/25 dark:text-red-200">
-                                {drawer.dockerActionError()}
-                              </div>
-                            </Show>
-                            <Show when={drawer.dockerActionNote()}>
-                              <div class="rounded-sm border border-sky-200 bg-surface px-2 py-1.5 text-[10px] text-base-content dark:border-sky-700">
-                                {drawer.dockerActionNote()}
-                              </div>
-                            </Show>
-
-                            <div class="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                disabled={
-                                  drawer.dockerActionBusy() ||
-                                  drawer.dockerUpdateActionsLoading() ||
-                                  drawer.dockerHostCommandActive() ||
-                                  drawer.dockerHostSourceId() === null
-                                }
-                                onClick={drawer.queueDockerUpdateCheck}
-                                class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60"
-                                title={
-                                  drawer.dockerUpdateActionsLoading()
-                                    ? 'Loading settings...'
-                                    : undefined
-                                }
-                              >
-                                Check now
-                              </button>
-
-                              <button
-                                type="button"
-                                disabled={
-                                  drawer.dockerActionBusy() ||
-                                  drawer.dockerUpdateActionsLoading() ||
-                                  drawer.dockerUpdateActionsDisabled() ||
-                                  drawer.dockerHostCommandActive() ||
-                                  drawer.dockerHostSourceId() === null ||
-                                  drawer.dockerUpdatesAvailable() <= 0
-                                }
-                                onClick={drawer.queueDockerUpdateAll}
-                                class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
-                                title={
-                                  drawer.dockerUpdateActionsDisabled()
-                                    ? 'Updates disabled by server settings.'
-                                    : undefined
-                                }
-                              >
-                                {drawer.confirmUpdateAll()
-                                  ? 'Confirm update'
-                                  : `Update all${drawer.dockerUpdatesAvailable() > 0 ? ` (${drawer.dockerUpdatesAvailable()})` : ''}`}
-                              </button>
-                            </div>
-                          </div>
-                        </Show>
-
-                        <button
-                          type="button"
-                          onClick={drawer.toggleDockerUpdateControls}
-                          class="inline-flex items-center rounded-md border border-sky-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-sky-700 transition-colors hover:bg-surface-hover dark:border-sky-700 dark:text-sky-300"
-                        >
-                          {drawer.showDockerUpdateControls() ? 'Hide actions' : 'Show actions'}
-                        </button>
-                      </div>
-                    </div>
-                  </Show>
-
-                  <Show when={drawer.pbsData()}>
-                    {(pbs) => {
-                      const connection = getServiceHealthPresentation(
-                        resource().status,
-                        pbs().connectionHealth,
-                      );
-                      return (
-                        <div class="rounded-sm border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900/25">
-                          <div class="mb-2 flex items-center justify-between gap-2">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-                              PBS
-                            </div>
-                            <Show when={pbs().hostname}>
-                              <span
-                                class="max-w-[55%] truncate text-[10px] text-indigo-700 dark:text-indigo-300"
-                                title={pbs().hostname}
-                              >
-                                {pbs().hostname}
-                              </span>
-                            </Show>
-                          </div>
-                          <div class="space-y-1.5 text-[11px]">
-                            <InfoCardKeyValueRow
-                              label="State"
-                              value={connection.label}
-                              valueClass={connection.text}
-                            />
-                            <Show when={pbs().version}>
-                              <InfoCardKeyValueRow label="Version" value={pbs().version} />
-                            </Show>
-                            <Show when={pbs().uptimeSeconds || resource().uptime}>
-                              <InfoCardKeyValueRow
-                                label="Uptime"
-                                value={formatUptime(pbs().uptimeSeconds ?? resource().uptime ?? 0)}
-                              />
-                            </Show>
-                            <Show when={drawer.pbsActiveTaskCount() > 0}>
-                              <InfoCardKeyValueRow
-                                label="Active tasks"
-                                value={formatInteger(drawer.pbsActiveTaskCount())}
-                                valueClass="text-emerald-700 dark:text-emerald-300"
-                              />
-                            </Show>
-                            <Show when={drawer.showPbsJobDetail()}>
-                              <div class="space-y-1.5 border-t border-indigo-200 pt-2 dark:border-indigo-700">
-                                <div class="grid grid-cols-2 gap-2 md:grid-cols-3">
-                                  <div class="rounded-sm border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                                    <div class="text-[10px] text-muted">Datastores</div>
-                                    <div class="text-sm font-semibold text-base-content">
-                                      {formatInteger(pbs().datastoreCount)}
-                                    </div>
-                                  </div>
-                                  <div class="rounded-sm border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                                    <div class="text-[10px] text-muted">Jobs</div>
-                                    <div class="text-sm font-semibold text-base-content">
-                                      {formatInteger(drawer.pbsJobTotal())}
-                                    </div>
-                                  </div>
-                                  <Show when={drawer.pbsActiveTaskCount() > 0}>
-                                    <div class="rounded-sm border border-emerald-200 bg-emerald-50 px-2 py-1.5 dark:border-emerald-700 dark:bg-emerald-950/40">
-                                      <div class="text-[10px] text-muted">Active</div>
-                                      <div class="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                                        {formatInteger(drawer.pbsActiveTaskCount())}
-                                      </div>
-                                    </div>
-                                  </Show>
-                                </div>
-                                <Show when={drawer.pbsActiveTaskCount() > 0}>
-                                  <div
-                                    data-testid="pbs-active-tasks"
-                                    class="rounded-sm border border-emerald-200 bg-surface px-2 py-1.5 dark:border-emerald-700"
-                                  >
-                                    <div class="flex items-center justify-between gap-2">
-                                      <span class="text-[10px] font-medium uppercase tracking-wide text-muted">
-                                        Active tasks
-                                      </span>
-                                      <span class="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
-                                        {formatInteger(drawer.pbsActiveTaskCount())}
-                                      </span>
-                                    </div>
-                                    <div class="mt-2 space-y-2 border-t border-emerald-200 pt-2 dark:border-emerald-700">
-                                      <For each={drawer.pbsActiveTasks()}>
-                                        {(task) => (
-                                          <div class="flex items-start justify-between gap-2 text-[10px]">
-                                            <div class="min-w-0">
-                                              <div
-                                                class="truncate font-medium text-base-content"
-                                                title={task.label}
-                                              >
-                                                {task.label}
-                                              </div>
-                                              <Show when={task.context}>
-                                                <div
-                                                  class="truncate text-muted"
-                                                  title={task.context ?? undefined}
-                                                >
-                                                  {task.context}
-                                                </div>
-                                              </Show>
-                                              <Show when={task.error}>
-                                                <div
-                                                  class="truncate text-rose-700 dark:text-rose-300"
-                                                  title={task.error}
-                                                >
-                                                  {task.error}
-                                                </div>
-                                              </Show>
-                                            </div>
-                                            <span class="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                              {task.statusLabel}
-                                            </span>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                  </div>
-                                </Show>
-                                <Show when={pbsJobHealthEvidence().evidenceCount > 0}>
-                                  <div
-                                    data-testid="pbs-job-health-evidence"
-                                    class="rounded-sm border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700"
-                                  >
-                                    <div class="flex flex-wrap items-center justify-between gap-2">
-                                      <span class="text-[10px] font-medium uppercase tracking-wide text-muted">
-                                        Job health evidence
-                                      </span>
-                                      <span class="text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
-                                        {pbsJobHealthEvidence().countLabel}
-                                      </span>
-                                    </div>
-                                    <div class="mt-2 space-y-2 border-t border-indigo-200 pt-2 dark:border-indigo-700">
-                                      <For each={pbsJobHealthEvidence().entries}>
-                                        {(entry) => (
-                                          <div class="min-w-0 rounded-sm border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
-                                            <div class="flex flex-wrap items-start justify-between gap-2">
-                                              <div class="min-w-0">
-                                                <div
-                                                  class="truncate font-medium text-base-content"
-                                                  title={entry.label}
-                                                >
-                                                  {entry.label}
-                                                </div>
-                                                <div
-                                                  class="truncate text-muted"
-                                                  title={entry.sourceLabel}
-                                                >
-                                                  {entry.sourceLabel}
-                                                </div>
-                                              </div>
-                                              <div class="flex max-w-full flex-wrap justify-end gap-1">
-                                                <For each={entry.badges}>
-                                                  {(badge) => (
-                                                    <span
-                                                      class={`shrink-0 rounded-full border px-2 py-0.5 font-medium ${pbsEvidenceBadgeClass(
-                                                        badge.tone,
-                                                      )}`}
-                                                    >
-                                                      {badge.label}
-                                                    </span>
-                                                  )}
-                                                </For>
-                                              </div>
-                                            </div>
-                                            <div class="mt-1 grid gap-1 text-muted sm:grid-cols-2">
-                                              <Show when={entry.context}>
-                                                <span
-                                                  class="truncate"
-                                                  title={entry.context ?? undefined}
-                                                >
-                                                  {entry.context}
-                                                </span>
-                                              </Show>
-                                              <Show when={entry.stateLabel}>
-                                                <span
-                                                  class="truncate"
-                                                  title={entry.stateLabel ?? undefined}
-                                                >
-                                                  State:{' '}
-                                                  <span class="font-medium text-base-content">
-                                                    {entry.stateLabel}
-                                                  </span>
-                                                </span>
-                                              </Show>
-                                              <Show when={entry.freshnessLabel}>
-                                                <span
-                                                  class="truncate"
-                                                  title={entry.freshnessLabel ?? undefined}
-                                                >
-                                                  {entry.freshnessLabel}
-                                                </span>
-                                              </Show>
-                                              <Show when={entry.postureReason}>
-                                                <span
-                                                  class="truncate text-amber-700 dark:text-amber-300"
-                                                  title={entry.postureReason ?? undefined}
-                                                >
-                                                  {entry.postureReason}
-                                                </span>
-                                              </Show>
-                                              <Show when={entry.error}>
-                                                <span
-                                                  class="truncate text-rose-700 dark:text-rose-300"
-                                                  title={entry.error ?? undefined}
-                                                >
-                                                  {entry.error}
-                                                </span>
-                                              </Show>
-                                            </div>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                  </div>
-                                </Show>
-                                <details class="rounded-sm border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                                  <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                                    <span>Types</span>
-                                    <span class="text-muted">
-                                      {drawer.pbsVisibleJobBreakdown().length}
-                                    </span>
-                                  </summary>
-                                  <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200 pt-2 text-[10px] dark:border-indigo-700">
-                                    <For each={drawer.pbsVisibleJobBreakdown()}>
-                                      {(entry) => (
-                                        <span class="text-muted">
-                                          {entry.label}:{' '}
-                                          <span class="font-medium text-base-content">
-                                            {formatInteger(entry.value)}
-                                          </span>
-                                        </span>
-                                      )}
-                                    </For>
-                                  </div>
-                                </details>
-                              </div>
-                            </Show>
-                            <button
-                              type="button"
-                              onClick={() => drawer.setShowPbsJobDetail((value) => !value)}
-                              class="inline-flex items-center rounded-md border border-indigo-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-indigo-700 transition-colors hover:bg-surface-hover dark:border-indigo-700 dark:text-indigo-300"
-                            >
-                              {drawer.showPbsJobDetail() ? 'Hide jobs' : 'Show jobs'}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    }}
-                  </Show>
-
-                  <Show when={drawer.pmgData()}>
-                    {(pmg) => {
-                      const connection = getServiceHealthPresentation(
-                        resource().status,
-                        pmg().connectionHealth,
-                      );
-                      return (
-                        <div class="rounded-sm border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900/25">
-                          <div class="mb-2 flex items-center justify-between gap-2">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
-                              PMG
-                            </div>
-                            <Show when={pmg().hostname}>
-                              <span
-                                class="max-w-[55%] truncate text-[10px] text-rose-700 dark:text-rose-300"
-                                title={pmg().hostname}
-                              >
-                                {pmg().hostname}
-                              </span>
-                            </Show>
-                          </div>
-                          <div class="space-y-1.5 text-[11px]">
-                            <InfoCardKeyValueRow
-                              label="State"
-                              value={connection.label}
-                              valueClass={connection.text}
-                            />
-                            <Show when={pmg().version}>
-                              <InfoCardKeyValueRow label="Version" value={pmg().version} />
-                            </Show>
-                            <Show when={pmg().uptimeSeconds || resource().uptime}>
-                              <InfoCardKeyValueRow
-                                label="Uptime"
-                                value={formatUptime(pmg().uptimeSeconds ?? resource().uptime ?? 0)}
-                              />
-                            </Show>
-                            <Show when={drawer.showPmgMailFlowDetail()}>
-                              <div class="space-y-1.5 border-t border-rose-200 pt-2 dark:border-rose-700">
-                                <div class="grid grid-cols-2 gap-2">
-                                  <div class="rounded-sm border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                                    <div class="text-[10px] text-muted">Queue</div>
-                                    <div
-                                      class={`text-sm font-semibold ${drawer.pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
-                                    >
-                                      {formatInteger(pmg().queueTotal)}
-                                    </div>
-                                  </div>
-                                  <div class="rounded-sm border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                                    <div class="text-[10px] text-muted">Backlog</div>
-                                    <div
-                                      class={`text-sm font-semibold ${drawer.pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
-                                    >
-                                      {formatInteger(drawer.pmgQueueBacklog())}
-                                    </div>
-                                  </div>
-                                </div>
-                                <Show when={pmg().nodeCount || drawer.pmgUpdatedRelative()}>
-                                  <div
-                                    data-testid="pmg-support-context"
-                                    class="space-y-1.5 rounded-sm border border-dashed border-rose-200 bg-surface px-2 py-1.5 text-[10px] dark:border-rose-700"
-                                  >
-                                    <Show when={pmg().nodeCount}>
-                                      <InfoCardKeyValueRow
-                                        label="Nodes"
-                                        value={formatInteger(pmg().nodeCount)}
-                                      />
-                                    </Show>
-                                    <Show when={drawer.pmgUpdatedRelative()}>
-                                      <InfoCardKeyValueRow
-                                        class={
-                                          pmg().nodeCount
-                                            ? 'border-t border-rose-200 pt-1.5 dark:border-rose-700'
-                                            : ''
-                                        }
-                                        label="Updated"
-                                        value={drawer.pmgUpdatedRelative()}
-                                      />
-                                    </Show>
-                                  </div>
-                                </Show>
-                                <details class="rounded-sm border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                                  <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
-                                    Queue detail
-                                  </summary>
-                                  <div class="mt-2 space-y-1.5 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
-                                    <For each={drawer.pmgVisibleQueueBreakdown()}>
-                                      {(entry) => (
-                                        <InfoCardKeyValueRow
-                                          label={entry.label}
-                                          value={formatInteger(entry.value)}
-                                          valueClass={
-                                            entry.warn ? 'text-amber-600 dark:text-amber-400' : ''
-                                          }
-                                        />
-                                      )}
-                                    </For>
-                                  </div>
-                                </details>
-                                <details class="rounded-sm border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                                  <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
-                                    Mail detail
-                                  </summary>
-                                  <div class="mt-2 space-y-1.5 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
-                                    <For each={drawer.pmgVisibleMailBreakdown()}>
-                                      {(entry) => (
-                                        <InfoCardKeyValueRow
-                                          label={entry.label}
-                                          value={formatInteger(entry.value)}
-                                        />
-                                      )}
-                                    </For>
-                                  </div>
-                                </details>
-                              </div>
-                            </Show>
-                            <button
-                              type="button"
-                              onClick={() => drawer.setShowPmgMailFlowDetail((value) => !value)}
-                              class="inline-flex items-center rounded-md border border-rose-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-rose-700 transition-colors hover:bg-surface-hover dark:border-rose-700 dark:text-rose-300"
-                            >
-                              {drawer.showPmgMailFlowDetail() ? 'Hide mail flow' : 'Show mail flow'}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    }}
-                  </Show>
-                </SupportDisclosure>
-              </Show>
-
-              <Show when={drawer.hasVMwareDetails()}>
-                <VMwareDetailsDisclosure drawer={drawer} class="h-full" />
-              </Show>
-
-              <Show when={drawer.hasHostDetails()}>
-                <HostDetailsDisclosure resource={resource()} drawer={drawer} class="h-full" />
-              </Show>
-            </div>
-          </TechnicalDetailsDisclosure>
         </Show>
       </div>
     </div>
