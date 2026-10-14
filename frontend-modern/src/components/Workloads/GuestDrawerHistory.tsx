@@ -23,6 +23,9 @@ import {
   formatHistoryChartTooltipValue,
   formatHistoryRangeOptionLabel,
   formatHistoryChartTimeLabel,
+  getHistoryReadoutLabel,
+  getHistorySourceNotice,
+  type HistorySource,
   withoutRepeatedHistoryAxisLabels,
 } from '@/components/shared/historyChartModel';
 import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
@@ -82,6 +85,8 @@ interface GuestDrawerHistoryGroupChartProps {
   loading: boolean;
   metrics: Record<string, AggregatedMetricPoint[] | undefined>;
   range: HistoryTimeRange;
+  /** Where the reply's readings came from; names the readout's time. */
+  source?: HistorySource;
   sourceKey: string;
   timeBounds: GuestDrawerHistoryTimeBounds | null;
   touchInspection: boolean;
@@ -506,9 +511,10 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                 data-testid="guest-history-hover-time"
                 dateTime={time().dateTime}
                 title={time().fullLabel}
-                aria-label={`Stored observation: ${time().fullLabel}`}
+                aria-label={`${getHistoryReadoutLabel(props.source, true)} observation: ${time().fullLabel}`}
               >
-                {activeTimestamp() === null ? 'Latest stored · ' : 'Stored · '}
+                {getHistoryReadoutLabel(props.source, activeTimestamp() !== null)}
+                {' · '}
                 {time().label}
               </time>
             )}
@@ -986,6 +992,14 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
           }
         >
           <Show when={!historyQuery.error() || hasHistoryPoints()}>
+            {/* A reply that is not stored history says so once, above its charts. */}
+            <Show when={hasHistoryPoints() && getHistorySourceNotice(historyQuery.value().source)}>
+              {(notice) => (
+                <p class="text-xs text-muted" data-testid="history-source-notice">
+                  {notice().detail}
+                </p>
+              )}
+            </Show>
             <div
               id={gridId}
               class={`grid gap-3 md:grid-cols-2 ${groups().length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}
@@ -1001,6 +1015,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                     currentMetrics={props.currentMetrics}
                     deferredMetrics={props.deferredMetrics}
                     range={props.range}
+                    source={historyQuery.value().source}
                     sourceKey={`${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`}
                     timeBounds={timeBounds()}
                     touchInspection={touchInspection()}

@@ -50,7 +50,8 @@ const { chromium } = require('playwright');
           range,
           start: 1_700_000_000_000,
           end: 1_700_000_060_000,
-          source: 'store',
+          // The service target has no stored history yet: Pulse answers from memory.
+          source: id === 'pbs-three' ? 'memory' : 'store',
           metrics: Object.fromEntries(
             (id === 'pbs-three'
               ? ['cpu', 'memory']
@@ -229,6 +230,16 @@ const { chromium } = require('playwright');
         await waitForPaths(2);
         assert.equal(requests.at(-1).id, 'pbs-three');
         assert.equal(requests.at(-1).range, '24h');
+        // Readings from memory are named as recorded, not stored, and say why.
+        assert.match(
+          await detail.getByTestId('guest-history-hover-time').first().innerText(),
+          /^Latest recorded · /,
+        );
+        assert.equal(
+          await detail.getByTestId('history-source-notice').innerText(),
+          'Recent readings only. The history store has none for this range yet.',
+        );
+        await screenshot('replacement-recorded');
         assert.equal(
           await detail.locator('[data-history-group="network"] path[data-history-series]').count(),
           0,

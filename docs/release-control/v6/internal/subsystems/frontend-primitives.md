@@ -9215,6 +9215,15 @@ is dropped (`withoutRepeatedHistoryTimeTicks`). Phone chart folds share one
 button, `PhoneChartsToggle` ("Show <names>" / "Show fewer charts",
 `aria-controls` naming the folded group, hidden from `sm` up); the drawer
 History and the disk detail both use it.
+History names where its readings came from, from the reply's `source`, in
+one shared vocabulary (`getHistoryReadoutLabel`, `getHistorySourceNotice`):
+stored history (and demo data) reads "Latest stored · <time>" / "Stored ·";
+readings Pulse holds in memory because the store has none for the range read
+"Latest recorded" / "Recorded", with one line above the drawer charts ("Recent
+readings only. The history store has none for this range yet.") and a "Recent
+only" badge on a canvas chart (it said "Buffer"); a lone current reading
+reads "Current" with "Current only" (it said "Live"). A drawer readout never
+calls memory or live readings stored.
 
 ### Shared History single observations
 
