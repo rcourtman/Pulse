@@ -429,12 +429,19 @@ the pause. Monitoring and alerts are unavailable while Pulse is stopped.
 
 ### PBS is connected but History stays empty
 
-Open **Proxmox → Backups → Backup Server → History**, not a datastore or the
-PBS virtual machine's row in **Overview**. Record which route fails. A working
-VM chart can use a different metrics target from the PBS host chart; it does
-not establish that the PBS chart can read the same series. Current CPU and
-memory values, a green connection badge, and an **API+Agent** label also do not
-prove that stored host history is available.
+Open **Proxmox → Backups**, choose the **Backup Server** row, then use the
+drawer's **Overview** charts and **History range** selector. If your installed
+version still has a separate **History** tab, use that tab instead; no upgrade
+or restart is needed just to find the chart. This is not a datastore chart,
+**Alerts → History**, or the PBS virtual machine's row in Proxmox **Overview**.
+Record which route fails. A working VM chart can use a different metrics target
+from the PBS host chart; it does not establish that the PBS chart can read the
+same series. Current CPU and memory values, a green connection badge, and an
+**API+Agent** label also do not prove that stored host history is available.
+
+Use the chart's selected stored range, not a current summary card or table
+sparkline. For observation times, missing samples and aggregated low–high bands,
+see [reading a History panel](METRICS_HISTORY.md#read-a-history-panel).
 
 Start with one affected PBS and a recent, unlocked time range:
 
@@ -447,7 +454,8 @@ Start with one affected PBS and a recent, unlocked time range:
 2. If the target is already known, inspect the chart's request instead of
    collecting the identities again. In your signed-in browser, open developer
    tools → **Network**, filter for `metrics-store/history`, then open the
-   affected **History** tab. Do not refresh or restart the server. Inspect one
+   affected drawer's **Overview** charts (or **History** tab on older versions).
+   Do not refresh or restart the server. Inspect one
    completed request for the drawer's `resourceType`, `resourceId` and `range`.
    The drawer normally fetches all chart metrics together: a request **without
    `metric`** is expected, so do not wait for a separate `metric=cpu` request.

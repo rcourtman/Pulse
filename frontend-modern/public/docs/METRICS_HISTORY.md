@@ -4,6 +4,19 @@ Pulse persists metrics history to disk so trend views and sparklines survive res
 
 ## Read a History panel
 
+In current drawers, open the affected resource's **Overview** and use **History
+range** beside its charts. Proxmox guests and nodes, Docker hosts and resource
+drawers (including PBS) show stored charts there instead of a separate History
+tab. If your installed version still has a **History** tab, use that tab; do not
+upgrade or restart just to follow this guide. A resource without a supported
+history target may have no chart.
+
+These charts are separate from **Alerts → History**, table sparklines and
+current summary cards. A current card or a short trend preview does not
+establish the observations in the selected stored range. For a PBS host, use
+the [Backup Server chart](PBS.md#pbs-is-connected-but-history-stays-empty),
+not its datastore or the VM that happens to host it.
+
 Start with the existing chart, not a restart or a storage change. A current
 reading does not prove that it was stored, and a selected time range does not
 prove continuous coverage. **Window start** and **Window end** bound the
@@ -20,11 +33,20 @@ than borrowing one from the current overview.
 | **current**, **last known** or **freshness unknown** with no stored history | A separately qualified fallback reading. Keep its label and explanation. | Not proof that the value was persisted or belongs to a past incident. |
 | **Single observation. No trend yet.** | One stored time in that panel. | Not a flat trend or sustained recovery. |
 | **Missing observations** | Some series lack readings at other stored times in that panel; lines stop across those gaps. | Not the cause or duration of a monitoring outage. Missing is not measured zero. |
+| **Shaded low–high band** | The recorded minimum and maximum within an aggregated bucket, when supplied; the line shows its average. | Not continuous coverage, every original sample, or the duration of a spike. |
+| **peak** while inspecting | That metric's maximum in the inspected bucket, when the panel shows it beside the average. | Not necessarily the highest value in the whole selected range or the value at an alert's exact time. |
 
 For example, CPU **22% at 12:02** and memory **95% at 12:01** are not one
 observation. At **Latest stored · 12:02**, memory is a dash if there is no
 memory point at 12:02; the earlier 95% remains inspectable. Network and disk
 I/O panels have their own times, not a shared snapshot of the guest.
+
+An aggregated CPU bucket can show **22% average, 10% to 95%**. The line at 22%
+does not rule out the recorded 95% peak, and the band does not say how long
+that peak lasted. No visible band may mean a single reading, equal bounds or
+unavailable bounds; it does not prove that usage stayed constant. Older panels
+may not show these bounds. Keep that limitation rather than inferring a peak
+from the line alone.
 
 1. Keep the same resource, metric and range when comparing existing readings.
    **Inspect history**, when offered, steps through stored times: focus the
