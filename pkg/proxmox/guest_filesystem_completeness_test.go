@@ -60,14 +60,19 @@ func TestVMFilesystemIncompleteInventoryKeepsPeersAndSingleAttempt(t *testing.T)
 				a, b := httptest.NewServer(handler), httptest.NewServer(handler)
 				defer a.Close()
 				defer b.Close()
+				// A closed ephemeral port can be reused while an earlier fixture's
+				// uncertainty fence is still live. Keep this independent inventory
+				// on its own synthetic base path, never clear a safety deadline.
+				basePath := "/filesystem-inventory/" + path + "/" + name
+				first, second := a.URL+basePath, b.URL+basePath
 				var client interface {
 					GetVMFSInfo(context.Context, string, int) ([]VMFileSystem, error)
 					GetVMAgentInfo(context.Context, string, int) (map[string]interface{}, error)
 				}
 				if path == "cluster" {
-					client = NewClusterClient("partial-filesystems", ClientConfig{Host: a.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second}, []string{a.URL, b.URL}, nil)
+					client = NewClusterClient("partial-filesystems", ClientConfig{Host: first, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second}, []string{first, second}, nil)
 				} else {
-					client = backupTestClient(t, a.URL)
+					client = backupTestClient(t, first)
 				}
 				peers, err := client.GetVMFSInfo(context.Background(), "node", 105)
 				if err == nil || errors.Is(err, ErrGuestAgentDeferred) || len(peers) != 1 || peers[0].TotalBytes != 1000 || peers[0].UsedBytes != 0 || peers[0].Disk != "root-filesystem" {

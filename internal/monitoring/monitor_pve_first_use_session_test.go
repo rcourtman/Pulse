@@ -72,8 +72,8 @@ func TestClusterFirstUsePasswordEndpointProjection(t *testing.T) {
 		t.Fatalf("first-use probe/full-session admission was not distinguished: member logins=%d", memberLogins.Load())
 	}
 	inst := config.PVEInstance{Name: "first-use-cluster", Host: primary.URL, IsCluster: true, ClusterName: "Fixture cluster", VerifySSL: true, Fingerprint: primaryPin, ClusterEndpoints: []config.ClusterEndpoint{
-		{NodeName: "primary", NodeIdentity: "primary-identity", Host: primary.URL, Fingerprint: primaryPin, DisplayName: "Trusted primary"},
-		{NodeName: "member", NodeIdentity: "member-identity", Host: member.URL, DisplayName: "New member"},
+		{NodeName: "primary", NodeIdentity: "primary-identity", Host: primary.URL, Fingerprint: primaryPin},
+		{NodeName: "member", NodeIdentity: "member-identity", Host: member.URL},
 	}}
 	m := &Monitor{config: &config.Config{PVEInstances: []config.PVEInstance{inst}}}
 	project := func(phase string) {
