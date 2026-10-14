@@ -373,6 +373,21 @@ const observations = (mode) => [
           const detail = page.getByTestId('resource-drawer-exceptions');
           await detail.getByText('Restarts', { exact: true }).waitFor();
           await detail.getByText('7', { exact: true }).waitFor();
+          // The lifted update offers its next steps: the row's update control and
+          // where to see the new image.
+          const updateLine = detail.locator('tr').filter({ hasText: 'Image update' });
+          const drawerUpdate = updateLine.getByRole('button').filter({ hasText: 'Update' });
+          await drawerUpdate.waitFor();
+          assert.equal(await drawerUpdate.isEnabled(), true);
+          if (width === 390) {
+            // Outside the table a phone taps this control: 44px tall at least.
+            const box = await drawerUpdate.boundingBox();
+            assert.ok(box && box.height >= 44, JSON.stringify(box));
+          }
+          assert.match(
+            await updateLine.getByRole('link', { name: 'View image tags' }).getAttribute('href'),
+            /nginx/,
+          );
           // The drawer header dot agrees with the row's: unhealthy is red, not green.
           const headerDot = page.getByRole('img', { name: 'Unhealthy' }).first();
           await headerDot.waitFor();

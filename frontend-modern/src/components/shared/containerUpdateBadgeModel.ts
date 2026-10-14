@@ -24,6 +24,12 @@ export interface UpdateButtonProps {
   // reason, instead of letting the click fail at POST /api/actions/plan.
   actionReadiness?: ResourceActionReadiness[];
   compact?: boolean;
+  /**
+   * A 44px minimum height below the `sm` breakpoint, for a control a phone
+   * user taps outside a dense table (the container drawer). Tables keep the
+   * compact pill.
+   */
+  touchTarget?: boolean;
   onUpdateTriggered?: () => void;
   externalState?: 'updating' | 'queued' | 'error';
 }

@@ -3,6 +3,7 @@ import { For, Show, Suspense, createMemo, lazy, type Component, type JSX } from 
 import { useSearchParams } from '@solidjs/router';
 import { type FilterDef } from '@/components/shared/FilterBar';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
+import { getDockerContainerUpdateAction } from './dockerContainerUpdateAction';
 import { isContainerUpdatePinned } from '@/components/shared/containerUpdateBadgeModel';
 import {
   GroupedTableModeSegmentedControl,
@@ -86,7 +87,6 @@ import {
   type DockerContainerSortKey,
   type DockerContainerTableColumn,
 } from './dockerContainerTableModel';
-import type { DockerContainerUpdateStatus } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { DockerContainerLifecycleControls } from './DockerContainerLifecycleControls';
 import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from './dockerCpuPresentation';
@@ -212,55 +212,6 @@ const updateStatusTitle = (resource: Resource): string => {
     ],
     updateStatusLabel(resource),
   );
-};
-
-const updateLastCheckedMillis = (lastChecked: string | undefined): number => {
-  if (!lastChecked) return 0;
-  const parsed = Date.parse(lastChecked);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const containerUpdateStatus = (resource: Resource): DockerContainerUpdateStatus | undefined => {
-  const update = resource.docker?.updateStatus;
-  if (!update) return undefined;
-
-  const error = asTrimmedString(update.error);
-  if (typeof update.updateAvailable !== 'boolean' && !error) return undefined;
-
-  return {
-    updateAvailable: update.updateAvailable === true,
-    currentDigest: asTrimmedString(update.currentDigest) || undefined,
-    latestDigest: asTrimmedString(update.latestDigest) || undefined,
-    lastChecked: updateLastCheckedMillis(update.lastChecked),
-    error: error || undefined,
-  };
-};
-
-const containerUpdateAction = (
-  resource: Resource,
-):
-  | {
-      agentId: string;
-      containerId: string;
-      containerName: string;
-      updateStatus: DockerContainerUpdateStatus;
-    }
-  | undefined => {
-  const updateStatus = containerUpdateStatus(resource);
-  const agentId = asTrimmedString(resource.docker?.hostSourceId);
-  const containerId = asTrimmedString(resource.docker?.containerId);
-  if (!updateStatus || !agentId || !containerId) return undefined;
-
-  return {
-    agentId,
-    containerId,
-    containerName:
-      asTrimmedString(resource.name) ||
-      asTrimmedString(resource.displayName) ||
-      asTrimmedString(resource.docker?.displayName) ||
-      containerId,
-    updateStatus,
-  };
 };
 
 // Scalar per column that user-controlled sorting orders on. '—' style empty
@@ -574,7 +525,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const mounts = () => mountsSummary(resource);
     const updates = () => updateStatusLabel(resource);
     const updateTitle = () => updateStatusTitle(resource);
-    const action = containerUpdateAction(resource);
+    const action = getDockerContainerUpdateAction(resource);
     const detailRowId = () => drawer.detailRowId(resource);
     const isExpanded = () => drawer.isExpanded(resource);
     const renderColumnCell = (column: DockerContainerTableColumn): JSX.Element => {
@@ -722,16 +673,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                   </span>
                 }
               >
-                {(updateAction) => (
-                  <UpdateButton
-                    agentId={updateAction().agentId}
-                    containerId={updateAction().containerId}
-                    containerName={updateAction().containerName}
-                    updateStatus={updateAction().updateStatus}
-                    resourceId={resource.id}
-                    actionReadiness={resource.actionReadiness}
-                  />
-                )}
+                {(updateAction) => <UpdateButton {...updateAction()} />}
               </Show>
             </TableCell>
           );

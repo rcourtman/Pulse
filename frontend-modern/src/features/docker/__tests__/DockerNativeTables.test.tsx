@@ -1098,6 +1098,8 @@ describe('Docker native tables', () => {
     // The phone reflow boundary must include the governed action, not just read-only badges.
     expect(updateButton.closest('td')).toHaveClass('docker-container-update-cell');
     expect(updateButton).toHaveTextContent('Update');
+    // The table keeps the compact pill; only the drawer asks for a phone target.
+    expect(updateButton).not.toHaveClass('max-sm:min-h-11');
     fireEvent.click(updateButton);
 
     await waitFor(() =>
