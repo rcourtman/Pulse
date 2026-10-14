@@ -1138,3 +1138,24 @@ describe('dockerContainerPortsCompactSummary', () => {
     ).toBe('—');
   });
 });
+
+describe('container status without a reported container state', () => {
+  // The row dot, the State words and the drawer header all read this verdict,
+  // so a degraded or lost container must not fall back to a neutral grey.
+  it('reads the unified status as other resources do', () => {
+    const container = (status: string, containerState?: string) =>
+      mapDockerContainerStatus(
+        makeResource({
+          id: `c-${status}-${containerState ?? 'none'}`,
+          type: 'app-container',
+          status: status as Resource['status'],
+          docker: containerState === undefined ? {} : { containerState },
+        }),
+      );
+    expect(container('degraded')).toEqual({ variant: 'warning', label: 'Degraded' });
+    expect(container('offline')).toEqual({ variant: 'danger', label: 'Offline' });
+    expect(container('unknown')).toEqual({ variant: 'muted', label: 'Unknown' });
+    // A reported state still wins, so a cleanly exited container on a lost host stays muted.
+    expect(container('offline', 'exited')).toEqual({ variant: 'muted', label: 'Exited' });
+  });
+});

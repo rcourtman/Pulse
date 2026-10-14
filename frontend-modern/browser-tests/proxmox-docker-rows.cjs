@@ -91,6 +91,20 @@ const observations = (mode) => [
       restartCount: 0,
     },
   }),
+  // No container state reported: its degraded unified status must read amber.
+  base('edge-queue', 'app-container', {
+    status: 'degraded',
+    metrics: { cpu: { percent: 3 }, memory: { percent: 20 } },
+    docker: {
+      agentId: 'agent-edge',
+      hostSourceId: 'agent-edge',
+      containerId: 'native-edge-queue',
+      hostname: 'edge-long-hostname',
+      runtime: 'docker',
+      runtimeVersion: '27.5.1',
+      image: 'rabbitmq:3',
+    },
+  }),
   base('nginx:latest', 'docker-image', {
     docker: {
       hostname: 'edge-long-hostname',
@@ -266,7 +280,7 @@ const observations = (mode) => [
         timeout: 120000,
       });
       if (width === 390) await page.evaluate(() => document.documentElement.classList.add('dark'));
-      await page.getByText('8 REST-mapped rows', { exact: true }).waitFor();
+      await page.getByText('9 REST-mapped rows', { exact: true }).waitFor();
       await check(
         'REST-first PMG counters and facets are present before any websocket hydration',
         async () => {
@@ -402,6 +416,25 @@ const observations = (mode) => [
         },
       );
       await capture('container-detail');
+      await check('A degraded container reads amber in its row and its drawer', async () => {
+        const row = page.locator('[data-docker-container-row="edge-queue"]');
+        const rowDot = row.locator('[title="Degraded"]').first();
+        await rowDot.waitFor();
+        if (width === 390) await row.locator('td').first().tap();
+        else await row.getByRole('button', { name: /details/i }).click();
+        const headerDot = page.getByRole('img', { name: 'Degraded' }).first();
+        await headerDot.waitFor();
+        const colours = await Promise.all(
+          [rowDot, headerDot].map((dot) =>
+            dot.evaluate((el) => getComputedStyle(el).backgroundColor),
+          ),
+        );
+        assert.equal(colours[0], colours[1], JSON.stringify(colours));
+        // Amber: strong red and green, little blue.
+        const [r, g, b] = colours[0].match(/\d+/g).map(Number);
+        assert.ok(r > 200 && g > 120 && b < 80, JSON.stringify(colours));
+      });
+      await capture('container-degraded');
       await select('Images');
       await check('Image verdict fits; phone hidden headers and cells are symmetric', async () => {
         const table = page.getByRole('region', { name: 'Image table' });
