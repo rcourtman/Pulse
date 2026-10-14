@@ -125,7 +125,13 @@ let browser;
           method === 'GET' || (method === 'POST' && url.pathname === '/api/usage/workload-history'),
         );
         if (url.pathname === '/api/resources')
-          return route.fulfill({ json: { data: resources, meta: { totalPages: 1 } } });
+          return route.fulfill({
+            contentType: 'application/json',
+            body: JSON.stringify({ data: resources, meta: { totalPages: 1 } }).replaceAll(
+              '\"total\":null',
+              '\"total\":1e309',
+            ),
+          });
         if (url.pathname === '/api/metrics-store/history')
           return route.fulfill({
             json: {
@@ -239,12 +245,24 @@ let browser;
           window.__diskMetrics.evidence().find((row) => row.id === 'fixture-capacity-only'),
         );
         assert.equal(evidence.current ?? null, expected);
-        record.states.push({ name, metric, extras, evidence });
+        record.states.push({
+          name,
+          metric,
+          extras,
+          evidence,
+          observedTotalFinite: Number.isFinite(evidence.disk.total),
+        });
       };
       await observe('percentage-only-low', { percent: 0.5 }, {}, 0.5);
       assert.match(await current().innerText(), /0.5%/);
       assert.equal((await drawer.innerText()).includes('0 B of'), false);
       await capture('percentage-only');
+      // Deliberately over-range JSON numeral: a valid independent percent
+      // cannot validate malformed capacity or print an Infinity byte fact.
+      await observe('nonfinite-capacity', { percent: 50, used: 50, total: Infinity }, {}, 50);
+      assert.equal(await drawer.getByText(/of .*disk$/).count(), 0);
+      assert.equal(/Infinity|undefined/.test(await drawer.innerText()), false);
+      await capture('invalid-capacity');
       await observe('explicit-zero', { percent: 0 }, {}, 0);
       assert.match(await current().innerText(), /0.0%/);
       await observe('byte-only', { used: 50, total: 100 }, {}, 50);
