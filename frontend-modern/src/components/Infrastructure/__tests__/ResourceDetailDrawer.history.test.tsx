@@ -1773,3 +1773,26 @@ describe('ResourceDetailDrawer Overview alert sources', () => {
     expect(resourceDetailDrawerOverviewSource).not.toContain('message: alert.message,');
   });
 });
+
+describe('ResourceDetailDrawer header status dot', () => {
+  it("reads a container's run state and health check, as its row does", () => {
+    const { unmount } = render(() => (
+      <ResourceDetailDrawer
+        resource={baseResource({
+          id: 'app-container:edge-web',
+          type: 'app-container',
+          name: 'edge-web',
+          status: 'online',
+          docker: { containerId: 'abc', containerState: 'running', health: 'unhealthy' },
+        })}
+      />
+    ));
+    // Running but failing its check is red with the row's label, not green.
+    expect(screen.getByRole('img', { name: 'Unhealthy' })).toHaveClass('bg-red-500');
+    unmount();
+
+    render(() => <ResourceDetailDrawer resource={baseResource({ status: 'online' })} />);
+    // Other resources keep the shared run-status dot.
+    expect(screen.queryByRole('img', { name: 'Unhealthy' })).toBeNull();
+  });
+});

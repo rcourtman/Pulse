@@ -2390,6 +2390,11 @@ address from the resource itself, state used amounts only for an online or
 running resource whose memory observation (if any) is current, and lift an
 offline resource's state with its `lastSeen`. A row an open alert of the
 resource's own already states (`getAlertStatedRowLabels`) stays in Details.
+The drawer header's status dot for an `app-container` uses the container
+row's mapper (`mapDockerContainerStatus`), so its run state and health check
+decide the colour and label in both places: a running container failing its
+health check is red "Unhealthy" in the row and the header alike. Other
+resources keep `getAgentStatusIndicator` on `status`.
 Those open alerts come from the websocket `activeAlerts` map through
 `getAlertsForUnifiedResource` in `frontend-modern/src/utils/alerts.ts`, which
 the Docker host drawer (`DockerHostDrawerOverview.tsx`) uses the same way.
