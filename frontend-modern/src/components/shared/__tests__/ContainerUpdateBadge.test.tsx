@@ -137,6 +137,31 @@ describe('ContainerUpdateBadge', () => {
     expect(screen.getByRole('button', { name: /update/i })).toBeInTheDocument();
   });
 
+  it('grows to a 44px phone target only where the caller asks for it', () => {
+    const status = {
+      updateAvailable: true,
+      currentDigest: 'sha256:current',
+      latestDigest: 'sha256:latest',
+      lastChecked: 0,
+    };
+    const table = render(() => (
+      <UpdateButton agentId="agent-1" containerId="c-1" containerName="web" updateStatus={status} />
+    ));
+    expect(screen.getByRole('button', { name: /update/i })).not.toHaveClass('max-sm:min-h-11');
+    table.unmount();
+
+    render(() => (
+      <UpdateButton
+        agentId="agent-1"
+        containerId="c-2"
+        containerName="web"
+        updateStatus={status}
+        touchTarget
+      />
+    ));
+    expect(screen.getByRole('button', { name: /update/i })).toHaveClass('max-sm:min-h-11');
+  });
+
   it('shows update availability and host guidance without an action when the server refuses updates', () => {
     render(() => (
       <UpdateButton

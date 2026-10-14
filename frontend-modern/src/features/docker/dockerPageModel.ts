@@ -79,6 +79,18 @@ const FATAL_CONTAINER_STATES = new Set(['dead', 'removing', 'oomkilled']);
 // problem. Pulse should surface these as muted, not as success or danger.
 const STOPPED_CONTAINER_STATES = new Set(['created', 'paused', 'stopped', 'exited']);
 
+// Unified statuses that stand in when a container reports no state of its own.
+const CONTAINER_LOST_STATUSES = new Set([
+  'offline',
+  'error',
+  'failed',
+  'down',
+  'unreachable',
+  'disconnected',
+  'timeout',
+]);
+const CONTAINER_DEGRADED_STATUSES = new Set(['degraded', 'warning', 'partial', 'recovering']);
+
 const normalizeDockerToken = (value: unknown): string =>
   typeof value === 'string'
     ? value
@@ -97,7 +109,9 @@ const dockerDisplayName = (resource: Resource): string =>
 // Docker's own container state, or the unified resource status when an agent
 // did not report one; "online" there means the container is running.
 export const dockerContainerRunState = (resource: Resource): string => {
-  const state = normalizeDockerToken(resource.docker?.containerState || resource.status);
+  // A blank reported state is no report: fall back to the unified status.
+  const state =
+    normalizeDockerToken(resource.docker?.containerState) || normalizeDockerToken(resource.status);
   return state === 'online' ? 'running' : state;
 };
 
@@ -127,6 +141,15 @@ export function mapDockerContainerStatus(resource: Resource): StatusIndicator {
   }
   if (STOPPED_CONTAINER_STATES.has(state)) {
     return { variant: 'muted', label: titleCase(state) };
+  }
+  // With no container state reported, the unified status stands in, read as
+  // every other resource's dot reads it: lost contact is danger, a degraded
+  // or warning status is warning. Unknown stays muted.
+  if (!normalizeDockerToken(resource.docker?.containerState)) {
+    if (CONTAINER_LOST_STATUSES.has(state)) return { variant: 'danger', label: titleCase(state) };
+    if (CONTAINER_DEGRADED_STATUSES.has(state)) {
+      return { variant: 'warning', label: titleCase(state) };
+    }
   }
   if (!state) return { variant: 'muted', label: 'Unknown' };
   return { variant: 'muted', label: titleCase(state) };

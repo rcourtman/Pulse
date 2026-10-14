@@ -2430,6 +2430,15 @@ row's mapper (`mapDockerContainerStatus`), so its run state and health check
 decide the colour and label in both places: a running container failing its
 health check is red "Unhealthy" in the row and the header alike. Other
 resources keep `getAgentStatusIndicator` on `status`.
+When a container reports no state of its own (blank counts as none), that
+mapper reads its unified status as other resources' dots do: lost contact
+(offline, error, failed, down, unreachable, disconnected, timeout) is danger,
+degraded/warning/partial/recovering is warning and unknown stays muted; a
+reported state, such as exited on a lost host, still wins.
+A container's update controls read its `docker.hostSourceId`, `containerId`,
+`updateStatus` and the resource's `actionReadiness` through one helper,
+`getDockerContainerUpdateAction`, shared by the containers table and the
+drawer, so an update the server refuses is refused the same way in both.
 Those open alerts come from the websocket `activeAlerts` map through
 `getAlertsForUnifiedResource` in `frontend-modern/src/utils/alerts.ts`, which
 the Docker host drawer (`DockerHostDrawerOverview.tsx`) uses the same way.
