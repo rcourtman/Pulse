@@ -8745,6 +8745,15 @@ unresolved status would flash the default tab away from an admin on every load.
 `__tests__/useSettingsAccess.test.tsx` pin the complete named-capability,
 fail-closed mount, failed-status, deduplicated-load, and General-fallback rules.
 
+### Infrastructure system names are plain in-app links
+
+`InfrastructureSourceManager` renders a connected system's name as a plain
+`<a href>` to its monitoring page in both the desktop table and the phone
+cards; Solid Router intercepts it as an in-app navigation, so the component
+needs no router context. The name keeps its existing tooltip, carries a
+resting underline, and leaves the Actions column (budgeted for Manage and
+the install button) unchanged.
+
 ### Alert monitoring actions preserve domain ownership
 
 The Alerts overview may offer a compact per-resource Monitoring menu, but the
