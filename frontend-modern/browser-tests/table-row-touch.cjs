@@ -99,13 +99,13 @@ const { chromium, firefox, webkit } = require('playwright');
             source: 'store',
             metrics: {
               cpu: [
-                { timestamp: end - 600000, value: 20 },
-                { timestamp: end - 300000, value: 30 },
+                { timestamp: end - 600000, value: 20, min: 20, max: 20 },
+                { timestamp: end - 300000, value: 30, min: 30, max: 30 },
               ],
-              memory: [{ timestamp: end - 300000, value: 40 }],
+              memory: [{ timestamp: end - 300000, value: 40, min: 40, max: 40 }],
               netin: [
-                { timestamp: end - 600000, value: 1024 },
-                { timestamp: end - 300000, value: 2048 },
+                { timestamp: end - 600000, value: 1024, min: 1024, max: 1024 },
+                { timestamp: end - 300000, value: 2048, min: 2048, max: 2048 },
               ],
             },
           },
@@ -135,8 +135,16 @@ const { chromium, firefox, webkit } = require('playwright');
       observations.push({ suffix, firstActivationOpened: true });
       await noOverflow();
       if (suffix === 'one') await snapshot('pbs-first-activation');
-      await activate(detail.getByRole('tab', { name: 'History', exact: true }));
-      await detail.getByTestId('guest-history-plot').first().locator('path').first().waitFor();
+      // History charts sit on Overview; switching tabs inside the drawer is the
+      // nested input that must not retoggle the row.
+      await activate(detail.getByRole('tab', { name: 'Manage', exact: true }));
+      await activate(detail.getByRole('tab', { name: 'Overview', exact: true }));
+      await detail
+        .getByTestId('guest-history-plot')
+        .first()
+        .locator('path[data-history-series], [data-history-observation]')
+        .first()
+        .waitFor({ state: 'attached' });
       assert.equal(
         await disclosure.getAttribute('aria-expanded'),
         'true',

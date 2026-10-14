@@ -60,7 +60,9 @@ const controls = [
 ] as const;
 render(
   () => (
-    <WebSocketContext.Provider value={{ state: { pmg: [] }, connected: () => true } as any}>
+    <WebSocketContext.Provider
+      value={{ state: { pmg: [] }, activeAlerts: {}, connected: () => true } as any}
+    >
       <DarkModeContext.Provider value={() => document.documentElement.classList.contains('dark')}>
         <main class="min-h-screen space-y-4 bg-surface p-4 text-base-content">
           <h1>Detail snapshot verification</h1>

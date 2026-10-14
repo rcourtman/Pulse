@@ -116,7 +116,7 @@ const { chromium } = require('playwright');
       await page.keyboard.press('Enter');
       await detailRequest;
       assert.equal(
-        await page.getByText('Reallocated Sectors').count(),
+        await page.getByText('Reallocated Sectors').first().count(),
         0,
         'SMART detail must remain suspended while its module is loading',
       );
@@ -137,7 +137,7 @@ const { chromium } = require('playwright');
         fullPage: true,
       });
       releaseDetail();
-      await page.getByText('Reallocated Sectors').waitFor();
+      await page.getByText('Reallocated Sectors').first().waitFor();
       assert.equal(
         detailRequests.filter((request) => request.width === width).length,
         1,
@@ -147,29 +147,19 @@ const { chromium } = require('playwright');
         path: path.join(artifacts, `guest-storage-2263-expanded-${width}.png`),
         fullPage: true,
       });
-      await page.getByRole('tab', { name: 'History' }).click();
-      assert.equal(
-        await page.getByRole('tab', { name: 'History' }).getAttribute('aria-selected'),
-        'true',
-      );
-      await page.screenshot({
-        path: path.join(artifacts, `guest-storage-2263-history-${width}.png`),
-        fullPage: true,
-      });
-      await page.getByRole('tab', { name: 'Overview' }).click();
-      assert.equal(
-        await page.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected'),
-        'true',
-      );
+      // The expanded disk shows its SMART evidence and History in one view,
+      // with no Overview/History tabs to switch between.
+      assert.equal(await page.getByRole('tab').count(), 0);
+      assert.equal(await page.getByTestId('disk-detail-history').isVisible(), true);
       await page.locator('[data-testid="guest-physical-disk"] summary').click();
-      await page.getByText('Reallocated Sectors').waitFor({ state: 'hidden' });
+      await page.getByText('Reallocated Sectors').first().waitFor({ state: 'hidden' });
       assert.equal(
-        await page.getByText('Reallocated Sectors').isVisible(),
+        await page.getByText('Reallocated Sectors').first().isVisible(),
         false,
         'pointer closes the expanded SMART detail',
       );
       await page.locator('[data-testid="guest-physical-disk"] summary').click();
-      await page.getByText('Reallocated Sectors').waitFor();
+      await page.getByText('Reallocated Sectors').first().waitFor();
       assert.equal(
         detailRequests.filter((request) => request.width === width).length,
         1,

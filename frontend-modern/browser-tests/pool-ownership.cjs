@@ -47,8 +47,15 @@ const parent = false;
         if (!url.pathname.startsWith('/api/')) return route.continue();
         if (url.pathname === '/api/metrics-store/history') {
           requests.push(Object.fromEntries(url.searchParams));
+          // The client checks a reply names the series it asked for.
           return route.fulfill({
             json: {
+              resourceType: url.searchParams.get('resourceType'),
+              resourceId: url.searchParams.get('resourceId'),
+              metric: url.searchParams.get('metric'),
+              range: url.searchParams.get('range'),
+              start: 1790935200000,
+              end: 1790935200000,
               points: [{ timestamp: 1790935200000, value: 25, min: 25, max: 25 }],
               source: 'store',
             },
@@ -119,7 +126,6 @@ const parent = false;
       }
       if (!parent) {
         await page.getByRole('button', { name: 'ZFS host A', exact: true }).click();
-        await detail.getByRole('tab', { name: 'History', exact: true }).click();
         await detail.getByRole('img', { name: 'Usage chart', exact: true }).waitFor();
         await page.waitForFunction(() =>
           [...document.querySelectorAll('canvas')].some((el) =>
@@ -152,7 +158,6 @@ const parent = false;
               request.resourceType === 'storage',
           ),
         );
-        await detail.getByRole('tab', { name: 'Overview', exact: true }).click();
         await detail.getByText('Physical Disks (1)', { exact: true }).waitFor();
         assert.equal(await detail.getByText('Host A disk', { exact: true }).count(), 0);
         assert.equal(await detail.getByText('Host B disk', { exact: true }).count(), 1);
