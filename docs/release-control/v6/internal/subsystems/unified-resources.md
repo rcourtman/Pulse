@@ -2671,6 +2671,11 @@ overview must first have its canonical resource adapter project the
 platform's top-level system as a unified resource so the builder
 default still resolves to a populated table.
 
+`ALERT_BACKUP_THRESHOLDS_PATH` (`/alerts/thresholds/proxmox#backups`) names
+the Recovery thresholds whose fresh and stale hours colour every backup
+shield; the backup dialog links there and the thresholds page treats
+`#backups` like `#pbs` and `#pmg` (`resourceLinks.test.ts`).
+
 17. Platform table ordering is a two-layer contract. Each platform table's
     default order is owned by its page model's status-first compare
     (`compareDockerContainers`, `compareKubernetesPods`, and peers), which

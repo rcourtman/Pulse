@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { render, cleanup } from '@solidjs/testing-library';
+import { render, cleanup, fireEvent, screen } from '@solidjs/testing-library';
 
 import { BackupStatusCell } from '../GuestRowCells';
 
@@ -97,5 +97,28 @@ describe('BackupStatusCell', () => {
     // completed backup is.
     expect(badge.textContent?.trim()).toBe('Running');
     expect(badge.getAttribute('aria-label')).toContain('last completed backup');
+  });
+  // #2858: a user on a three-day cycle saw amber after one day and could not
+  // find where that limit lives. The dialog names the limit and links to it.
+  it('says which age limit made a backup amber and links to where it is set', () => {
+    const badge = renderCell(Date.now() - 48 * HOUR_MS);
+    fireEvent.click(badge);
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.querySelector('[data-backup-age-rule]')?.textContent).toBe(
+      'Shown amber: more than 1 day old (Fresh Hours).',
+    );
+    const link = screen.getByRole('link', { name: 'Change when backups count as old' });
+    expect(link.getAttribute('href')).toBe('/alerts/thresholds/proxmox#backups');
+
+    fireEvent.click(link);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('offers no age limit or link when no backup has completed', () => {
+    fireEvent.click(renderCell(null));
+
+    expect(screen.getByRole('dialog').querySelector('[data-backup-age-rule]')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Change when backups count as old' })).toBeNull();
   });
 });

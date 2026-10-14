@@ -294,6 +294,17 @@ export interface BackupThresholds {
   staleHours?: number;
 }
 
+/** The fresh and stale limits a backup is judged by, defaults filled in. */
+export function resolveBackupThresholds(thresholds?: BackupThresholds): {
+  freshHours: number;
+  staleHours: number;
+} {
+  return {
+    freshHours: thresholds?.freshHours ?? DEFAULT_FRESH_HOURS,
+    staleHours: thresholds?.staleHours ?? DEFAULT_STALE_HOURS,
+  };
+}
+
 /**
  * Analyzes backup freshness for a guest.
  * @param lastBackup - ISO timestamp string or Unix timestamp (ms)
@@ -349,9 +360,7 @@ export function getBackupInfo(
   }
   const ageMs = nowMs - timestamp;
 
-  // Use provided thresholds or fall back to defaults
-  const freshHours = thresholds?.freshHours ?? DEFAULT_FRESH_HOURS;
-  const staleHours = thresholds?.staleHours ?? DEFAULT_STALE_HOURS;
+  const { freshHours, staleHours } = resolveBackupThresholds(thresholds);
   const freshThresholdMs = freshHours * 60 * 60 * 1000;
   const staleThresholdMs = staleHours * 60 * 60 * 1000;
 

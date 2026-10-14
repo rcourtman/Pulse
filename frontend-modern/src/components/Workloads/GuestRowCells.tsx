@@ -1,15 +1,21 @@
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 import { Dialog } from '@/components/shared/Dialog';
+import {
+  EXTERNAL_TEXT_LINK_BASE_CLASS,
+  EXTERNAL_TEXT_LINK_VARIANT_CLASSES,
+} from '@/components/shared/ExternalTextLink';
 
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useTooltip } from '@/hooks/useTooltip';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { GuestNetworkInterface } from '@/types/api';
 import { formatBytes, formatRelativeTime, getBackupInfo, type BackupInfo } from '@/utils/format';
+import { ALERT_BACKUP_THRESHOLDS_PATH } from '@/routing/resourceLinks';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { AvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
 import {
+  getWorkloadsGuestBackupAgeRule,
   getWorkloadsGuestBackupStatusPresentation,
   getWorkloadsGuestBackupTooltip,
   getWorkloadsGuestNetworkEmptyState,
@@ -337,6 +343,9 @@ function BackupStatusCell(props: {
       : getBackupAgeBadgeLabel(props.lastBackup, info(), now()),
   );
   const hasCompletedBackup = createMemo(() => info().ageMs !== null);
+  const ageRule = createMemo(() =>
+    getWorkloadsGuestBackupAgeRule(info().status, alertsActivation.getBackupThresholds()),
+  );
   const ariaLabel = createMemo(() => {
     const currentInfo = info();
     if (props.indicator) {
@@ -361,7 +370,7 @@ function BackupStatusCell(props: {
   // Both entry points reveal the same retained completion evidence. Hover
   // stays a shortcut on a fine pointer; the native button opens a read-only
   // dialog for keyboard/touch without stealing the enclosing row action.
-  const Evidence = () => (
+  const Evidence = (evidenceProps: { ruleLink?: boolean }) => (
     <div class="space-y-2 text-xs">
       <Show when={props.guestName}>
         <p class="font-medium text-base-content wrap-break-word">{props.guestName}</p>
@@ -386,6 +395,22 @@ function BackupStatusCell(props: {
             {new Date(props.lastBackup!).toLocaleTimeString()}
           </time>
           <div class="text-base-content">{info().ageFormatted}</div>
+          <Show when={ageRule()}>
+            {(rule) => (
+              <p class="text-muted" data-backup-age-rule>
+                {rule()}
+              </p>
+            )}
+          </Show>
+          <Show when={evidenceProps.ruleLink && ageRule()}>
+            <a
+              href={ALERT_BACKUP_THRESHOLDS_PATH}
+              class={`${EXTERNAL_TEXT_LINK_BASE_CLASS} ${EXTERNAL_TEXT_LINK_VARIANT_CLASSES.compactAction} -mx-1`}
+              onClick={() => setDetailsOpen(false)}
+            >
+              Change when backups count as old
+            </a>
+          </Show>
         </div>
       </Show>
       <Show when={info().status === 'unknown'}>
@@ -464,7 +489,7 @@ function BackupStatusCell(props: {
             </button>
           </div>
           <div class="overflow-y-auto p-4">
-            <Evidence />
+            <Evidence ruleLink />
           </div>
         </Dialog>
       </Show>

@@ -2979,6 +2979,18 @@ log text, and the English Assistant model-context labels must remain
 untranslated; only the user-visible briefing labels and alert controls may use
 the active app locale.
 
+The Recovery section is a thresholds deep link: `/alerts/thresholds/proxmox#backups`
+expands and scrolls to it like `#pbs` and `#pmg` (`useThresholdsTableState.test.tsx`).
+A successful Alerts page save re-reads the shared `alertsActivation` config in
+`useAlertsConfigurationState.ts` (only when the config write landed and the
+save still owns the editor), because backup shields and metric colours on
+every page read that config and otherwise kept the old limits until a reload.
+`refreshConfig` in `frontend-modern/src/stores/alertsActivation.ts` installs a
+read only while it is the latest: each read and each organisation switch takes
+a new generation, so a slow reply for the previous organisation or an older
+read cannot overwrite the current config (`alertsActivation.test.ts`,
+`useAlertsConfigurationState.test.tsx`).
+
 The remaining alert configuration and history presentation helpers now also
 have explicit alerts ownership. `frontend-modern/src/utils/alertActivationPresentation.ts`,
 `frontend-modern/src/utils/alertAdministrationPresentation.ts`,

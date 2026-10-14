@@ -37,20 +37,30 @@ const ensureConfigLoaded = async (): Promise<AlertConfig | null> => {
   return current;
 };
 
+// Each config read and each organisation switch takes a new generation. A
+// read installs its answer only while it is still the latest, so a slow reply
+// for the previous organisation, or an older read overtaken by a newer one,
+// cannot overwrite what the page now shows.
+let configGeneration = 0;
+
 // Refresh config from API
 const refreshConfig = async (): Promise<void> => {
+  const generation = ++configGeneration;
+  const isLatest = () => generation === configGeneration;
   try {
     setIsLoading(true);
     setLastError(null);
     const alertConfig = await AlertsAPI.getConfig();
+    if (!isLatest()) return;
     setConfig(alertConfig);
     setGlobalAlertsDetectionEnabled(alertConfig.enabled);
     applyActivationState(alertConfig.activationState || 'active');
   } catch (error) {
+    if (!isLatest()) return;
     logger.error('Failed to fetch alert config:', error);
     setLastError(error instanceof Error ? error.message : 'Unknown error');
   } finally {
-    setIsLoading(false);
+    if (isLatest()) setIsLoading(false);
   }
 };
 
@@ -173,6 +183,7 @@ const getTrueNASDiskTemperatureThresholds = (disk: Pick<Resource, 'id' | 'physic
 };
 
 eventBus.on('org_switched', () => {
+  configGeneration++;
   setConfig(null);
   setGlobalAlertsDetectionEnabled(null);
   applyActivationState(null);

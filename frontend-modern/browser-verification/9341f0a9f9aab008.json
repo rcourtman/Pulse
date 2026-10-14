@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "62ac128ffd15772c098a97de8790a6226d1f418c",
+  "verified_at": "2026-10-14T23:04:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts",
+    "frontend-modern/src/routing/resourceLinks.ts",
+    "frontend-modern/src/stores/alertsActivation.ts",
+    "frontend-modern/src/utils/format.ts",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "207f3f2031c4bb7338de222dc0a4342603702ccc12f408d45271f0454a003f14",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts": "c17eb297d0e68d2615a365f31542dbf4b569a27b506f68449876dffc474ed311",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts": "66b3739ee3f7f894a15e30b1baa6f05ed3dd7bed2bdeb1cbae4184e818aa0ee9",
+    "frontend-modern/src/routing/resourceLinks.ts": "eb67457eb8537ac6c43192d698c64468f11b7b6f69a59b3824a927fce7f59bb4",
+    "frontend-modern/src/stores/alertsActivation.ts": "ce8af5a1692b2348fe2ceff0350ebd7ee09e79fa36f6409f87dafdbc4826c670",
+    "frontend-modern/src/utils/format.ts": "442f5681f5dd80ddb9899d12da2849f35a13cd61f45f4af0c36ba4c51cd7bb3f",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "46b2f23b3f148922e66a2e96e34e2b491e20c4ab3826286310ffdb29e06b0071"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/alerts/thresholds/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): a stale backup dialog read only \"Last completed backup ... 1 day ago\"; /alerts/thresholds/proxmox#backups left the page at the top",
+    "After: hover card and dialog name the limit: fresh \"Fresh: no more than 1 day old (Fresh Hours).\", stale \"Shown amber: more than 1 day old (Fresh Hours).\", overdue adds \"Also past Stale Hours (3 days).\" as its own sentence",
+    "Dialog link \"Change when backups count as old\" (40px tall on phone) opens the thresholds page with Recovery expanded and Fresh/Stale Hours in view at 1280 and 375",
+    "With Fresh Hours saved at 72 the same 1-day-old backup is fresh and reads \"no more than 3 days old\"",
+    "Phone 375px light theme: dialog fits, no horizontal overflow"
+  ],
+  "interactions": [
+    "Hovered and clicked fresh, stale and overdue shields on the Proxmox overview and read the rule line",
+    "Followed the dialog link; the dialog closed and the Recovery section scrolled into view",
+    "Saved Fresh Hours 24 on the thresholds page and returned in-app without a reload: the 1-day-old backup turned amber immediately (it had stayed stale-coloured until a reload before the config refresh fix)",
+    "Repeated the dialog and link on a 375x812 phone viewport"
+  ]
+}
