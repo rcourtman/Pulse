@@ -44,7 +44,7 @@ describe('troubleshooting workflow entry', () => {
     const section = entry();
     const link = section.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/docs/VM_DISK_MONITORING#backup-safety');
-    expect(section.querySelectorAll('li')).toHaveLength(11);
+    expect(section.querySelectorAll('li')).toHaveLength(12);
     expect(section.querySelector('pre')).toBeNull();
     const beforeList = [...section.children]
       .slice(
@@ -74,6 +74,12 @@ describe('troubleshooting workflow entry', () => {
     const command = row('Copied agent install or removal command failed');
     const reporting = row('Guest readings are missing or disagree');
     const memory = row('Pulse itself uses more memory, CPU or disk writes');
+    const raid = row('RAID is reported degraded despite a spare');
+    expect(raid.querySelector('a')?.getAttribute('href')).toBe(
+      '/docs/TROUBLESHOOTING#raid-array-is-degraded-with-a-spare',
+    );
+    expect(prose(raid)).toContain('A spare-inclusive total is not the required member count');
+    expect(prose(raid)).toContain('do not change the array just to clear a Pulse alert');
     expect(prose(update)).toContain('An update of a monitored container is a different job');
     const updateLinks = [...update.querySelectorAll('a')].map((link) => link.getAttribute('href'));
     expect(updateLinks).toEqual([
@@ -93,7 +99,7 @@ describe('troubleshooting workflow entry', () => {
 
   it('routes every entry to an existing shipped heading in the production viewer', () => {
     const links = [...entry().querySelectorAll('a[href]')];
-    expect(links).toHaveLength(18);
+    expect(links).toHaveLength(19);
     for (const link of links) {
       const href = link.getAttribute('href')!;
       const match = /^\/docs\/([^#]+)#(.+)$/.exec(href);

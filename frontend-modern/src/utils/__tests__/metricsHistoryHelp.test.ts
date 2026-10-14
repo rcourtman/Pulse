@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { renderDocMarkdown } from '@/features/docs/docMarkdown';
+import { getHistoryReadoutLabel } from '@/components/shared/historyChartModel';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
@@ -48,12 +49,15 @@ describe('History interpretation help', () => {
       "Not necessarily the highest value in the whole selected range or the value at an alert's exact time",
     );
     const renderer = read('frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx');
-    for (const label of [
-      'Latest stored',
-      'Stored',
-      'Inspect history',
-      'Single observation. No trend yet.',
-    ]) {
+    expect(renderer).toContain(
+      'getHistoryReadoutLabel(props.source, activeTimestamp() !== null)',
+    );
+    expect(getHistoryReadoutLabel('store', false)).toBe('Latest stored');
+    expect(getHistoryReadoutLabel('store', true)).toBe('Stored');
+    for (const label of ['Latest stored', 'Stored']) {
+      expect(text(interpretation())).toContain(label);
+    }
+    for (const label of ['Inspect history', 'Single observation. No trend yet.']) {
       expect(renderer).toContain(label);
       expect(text(interpretation())).toContain(label);
     }
