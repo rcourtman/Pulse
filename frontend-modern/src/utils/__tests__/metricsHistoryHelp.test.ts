@@ -49,9 +49,7 @@ describe('History interpretation help', () => {
       "Not necessarily the highest value in the whole selected range or the value at an alert's exact time",
     );
     const renderer = read('frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx');
-    expect(renderer).toContain(
-      'getHistoryReadoutLabel(props.source, activeTimestamp() !== null)',
-    );
+    expect(renderer).toContain('getHistoryReadoutLabel(props.source, activeTimestamp() !== null)');
     expect(getHistoryReadoutLabel('store', false)).toBe('Latest stored');
     expect(getHistoryReadoutLabel('store', true)).toBe('Stored');
     for (const label of ['Latest stored', 'Stored']) {
