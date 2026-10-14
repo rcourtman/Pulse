@@ -47,6 +47,13 @@ or native/installed acceptance. It neither attributes nor resolves a reported
 PBS, Windows guest, restart or workload-safety incident.
 
 
+The invalid-QGA-success matrix uses a distinct synthetic base path for each
+case/reader, so OS reuse of a closed ephemeral listener cannot borrow a previous
+fixture's live cooldown. `TestGuestAgentInvalidSuccessFixtureIsolation` shares
+one listener deliberately and checks two independent first admissions and both
+retained second-client fences. No production key, alias, TTL or guard state is
+changed or cleared to qualify these tests.
+
 ### Proxmox recovery sessions honour the owning caller
 
 PVE/PBS context-aware constructors bind initial password login, including the
