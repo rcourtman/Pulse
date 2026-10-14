@@ -109,13 +109,16 @@ const { chromium } = require('playwright');
         );
         console.log(JSON.stringify({ width, theme, stage: 'page loaded' }));
         const detail = page.getByTestId('history-refresh-fixture');
-        const plots = detail.locator('[data-testid="guest-history-plot"] path');
+        const plots = detail.locator(
+          '[data-testid="guest-history-plot"] path[data-history-series]',
+        );
         console.log(JSON.stringify({ width, theme, stage: 'renderer available' }));
         const waitForPaths = async (count) =>
           page.waitForFunction(
             (expected) =>
-              document.querySelectorAll('[data-testid="guest-history-plot"] path').length ===
-              expected,
+              document.querySelectorAll(
+                '[data-testid="guest-history-plot"] path[data-history-series]',
+              ).length === expected,
             count,
           );
         await waitForPaths(7);
@@ -132,17 +135,21 @@ const { chromium } = require('playwright');
             inner: innerWidth,
           }));
           assert.ok(dimensions.scroll <= dimensions.inner + 1, JSON.stringify(dimensions));
-          const button = detail.getByRole('button', { name: /^(Retry|Refresh) history$/ });
-          const bounds = await button.boundingBox();
-          assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= width + 1);
-          if (width === 390) assert.ok(bounds.height >= 44, JSON.stringify(bounds));
+          // Retry exists only while a read has failed; polling replaced manual refresh.
+          const button = detail.getByRole('button', { name: 'Retry history', exact: true });
+          if ((await button.count()) > 0) {
+            const bounds = await button.boundingBox();
+            assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= width + 1);
+            if (width === 390) assert.ok(bounds.height >= 44, JSON.stringify(bounds));
+          }
           return dimensions;
         };
         const screenshot = (state) =>
           detail.screenshot({ path: path.join(artifacts, `${state}-${theme}-${width}.png`) });
         const waitForHeld = async () => {
-          for (let i = 0; !held && i < 100; i++) await page.waitForTimeout(10);
-          assert.ok(held, 'manual refresh was not intercepted');
+          // Background reads arrive on the 30s poll, so allow one full interval.
+          for (let i = 0; !held && i < 400; i++) await page.waitForTimeout(100);
+          assert.ok(held, 'history read was not intercepted');
         };
 
         // A failed background read must keep this source's observations, labelled honestly.
@@ -172,28 +179,29 @@ const { chromium } = require('playwright');
         historyValue = 12;
         await held.fulfill({ json: response('agent-three', '24h') });
         await status.getByText(/History refresh failed/).waitFor({ state: 'hidden' });
-        const refresh = detail.getByRole('button', { name: 'Refresh history', exact: true });
-        assert.equal(await refresh.evaluate((button) => document.activeElement === button), true);
+        // Retry leaves with the failure; focus moves to the history region, not the page body.
+        await retry.waitFor({ state: 'detached' });
+        assert.equal(
+          await detail
+            .getByTestId('guest-history-region')
+            .evaluate((region) => document.activeElement === region),
+          true,
+        );
         assert.notDeepEqual(await paths(), original);
-        assert.equal(await refresh.getAttribute('aria-busy'), 'false');
         await screenshot('retry-recovered');
         console.log(JSON.stringify({ width, theme, stage: 'retry recovered' }));
 
-        // A slow manual refresh replaced by polling must release its loading ownership.
+        // A slow poll still in flight when the target changes must not paint the old host.
         nextAction = 'hold';
         held = undefined;
-        await refresh.click();
         await waitForHeld();
         const obsoleteRoute = held;
-        historyValue = 25;
-        await page.waitForFunction(
-          () => document.querySelector('button[aria-busy="false"]') !== null,
-        );
-        for (let i = 0; (await refresh.getAttribute('aria-busy')) !== 'false' && i < 100; i++)
-          await page.waitForTimeout(10);
-        assert.equal(await refresh.getAttribute('aria-busy'), 'false');
-        assert.equal(await refresh.getAttribute('aria-disabled'), 'false');
-        const latest = await paths();
+        assert.equal(requests.at(-1).id, 'agent-three');
+
+        // A different target has no right to the old host's history, including after a failure.
+        nextAction = 'failure';
+        await page.getByRole('button', { name: 'Switch to service target', exact: true }).click();
+        await status.getByText('Failed to load history data', { exact: true }).waitFor();
         let lateResponse;
         try {
           await obsoleteRoute.fulfill({ json: response('agent-three', '24h', 99) });
@@ -202,12 +210,6 @@ const { chromium } = require('playwright');
           lateResponse = String(error);
         }
         await page.evaluate(() => new Promise(requestAnimationFrame));
-        assert.deepEqual(await paths(), latest);
-
-        // A different target has no right to the old host's history, including after a failure.
-        nextAction = 'failure';
-        await page.getByRole('button', { name: 'Switch to service target', exact: true }).click();
-        await status.getByText('Failed to load history data', { exact: true }).waitFor();
         assert.equal(await plots.count(), 0);
         assert.equal(
           await detail.getByText('No stored history in this range', { exact: true }).count(),
@@ -220,14 +222,20 @@ const { chromium } = require('playwright');
         await waitForPaths(2);
         assert.equal(requests.at(-1).id, 'pbs-three');
         assert.equal(requests.at(-1).range, '24h');
-        assert.equal(await detail.locator('[data-history-group="network"] path').count(), 0);
-        assert.equal(await detail.locator('[data-history-group="disk-io"] path').count(), 0);
+        assert.equal(
+          await detail.locator('[data-history-group="network"] path[data-history-series]').count(),
+          0,
+        );
+        assert.equal(
+          await detail.locator('[data-history-group="disk-io"] path[data-history-series]').count(),
+          0,
+        );
         const dimensions = await checkLayout();
         const beforeLocked = requests.length;
         await detail.getByTestId('guest-history-range-control').selectOption('14d');
         await detail.getByText(/14 days history requires a higher license plan/).waitFor();
         assert.equal(
-          await detail.getByRole('button', { name: /^(Retry|Refresh) history$/ }).count(),
+          await detail.getByRole('button', { name: 'Retry history', exact: true }).count(),
           0,
         );
         assert.equal(requests.length, beforeLocked);

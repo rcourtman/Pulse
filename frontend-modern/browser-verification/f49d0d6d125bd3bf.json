@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "b49e5502f9dcc191d2194d925ee67e2066920683",
+  "verified_at": "2026-10-14T10:09:48Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "211005e227bc233e710724906f310986898aa81faf8f2e0829bb945869445a44"
+  },
+  "routes": [
+    "/browser-tests/pbs-history-refresh.html (production GuestDrawerHistory renderer in the app runtime, Chromium via Playwright 1.56.1 on pulse-dev)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "loaded 24h history (light and dark)",
+    "background poll failed: previous history kept with the \"History refresh failed\" status and Retry history",
+    "retry in flight: Retry aria-busy and aria-disabled, old paths kept",
+    "retry recovered: Retry detached, status empty, new paths drawn",
+    "phone: later panels collapsed behind the Show button",
+    "target switch with a held poll for the old host: late response not painted",
+    "replacement target failed with no previous history",
+    "14d range locked: no Retry"
+  ],
+  "interactions": [
+    "Enter on focused Retry history starts one read; a second Enter is ignored while busy",
+    "successful retry moves keyboard focus to the guest-history-region element (Chromium blurs the removed button)",
+    "waited out the 30s poll to hold a read, switched target, then fulfilled the stale read",
+    "Retry after the replacement failure loads the new target",
+    "range select changed to 14 days"
+  ]
+}

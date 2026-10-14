@@ -6,6 +6,7 @@ import {
   createSignal,
   createUniqueId,
   on,
+  onCleanup,
   onMount,
   type Component,
 } from 'solid-js';
@@ -846,16 +847,18 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   const historyQuery = createGuestDrawerHistoryQuery(historySource);
   // A successful retry removes the focused Retry button with the error. Keep
   // keyboard focus in the history region instead of dropping it to the page.
+  // Focus is read when the button's branch is disposed, before its node leaves
+  // the DOM: Chromium blurs a removed element, so a blur-tracked flag is
+  // already cleared by the time the error effect runs.
   let regionRef: HTMLDivElement | undefined;
-  let retryHasFocus = false;
+  let retryRef: HTMLButtonElement | undefined;
+  let retryHadFocus = false;
   createEffect(
     on(
       () => historyQuery.error(),
       (error, previous) => {
-        if (previous && !error && retryHasFocus) {
-          retryHasFocus = false;
-          regionRef?.focus();
-        }
+        if (previous && !error && retryHadFocus) regionRef?.focus();
+        retryHadFocus = false;
       },
     ),
   );
@@ -938,24 +941,30 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
           {/* The charts poll every 30 seconds, so a manual refresh is offered
               only to recover from a failed read. */}
           <Show when={!locked() && historyQuery.error()}>
-            <Button
-              size="sm"
-              class="min-h-11 shrink-0 aria-disabled:opacity-50 sm:min-h-8"
-              aria-busy={historyQuery.loading()}
-              aria-disabled={historyQuery.loading()}
-              onFocus={() => (retryHasFocus = true)}
-              onBlur={() => (retryHasFocus = false)}
-              onClick={() => {
-                // Keep the control focusable through a retry, but reject repeat
-                // activation until the current read settles.
-                if (!historyQuery.loading()) void historyQuery.refetch();
-              }}
-            >
-              <Show when={historyQuery.loading()}>
-                <LoadingSpinner size="sm" tone="current" class="mr-2" />
-              </Show>
-              Retry history
-            </Button>
+            {(_error) => {
+              onCleanup(() => {
+                retryHadFocus = retryRef !== undefined && document.activeElement === retryRef;
+              });
+              return (
+                <Button
+                  ref={retryRef}
+                  size="sm"
+                  class="min-h-11 shrink-0 aria-disabled:opacity-50 sm:min-h-8"
+                  aria-busy={historyQuery.loading()}
+                  aria-disabled={historyQuery.loading()}
+                  onClick={() => {
+                    // Keep the control focusable through a retry, but reject repeat
+                    // activation until the current read settles.
+                    if (!historyQuery.loading()) void historyQuery.refetch();
+                  }}
+                >
+                  <Show when={historyQuery.loading()}>
+                    <LoadingSpinner size="sm" tone="current" class="mr-2" />
+                  </Show>
+                  Retry history
+                </Button>
+              );
+            }}
           </Show>
         </div>
         <Show
