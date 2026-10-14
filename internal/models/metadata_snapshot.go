@@ -20,6 +20,15 @@ func (s *State) GetPVEBackups() PVEBackups {
 	return clonePVEBackups(s.PVEBackups)
 }
 
+// GetBackupTasks returns the primary PVE tasks in their existing order, without
+// copying backup artifacts or the resource inventory. BackupTask has only value
+// fields; the returned slice is detached, including when it is empty.
+func (s *State) GetBackupTasks() []BackupTask {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]BackupTask{}, s.PVEBackups.BackupTasks...)
+}
+
 func (s *State) GetPBSBackups() []PBSBackup {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
