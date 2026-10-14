@@ -411,7 +411,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
     const disk = props.guest.disk;
     if (
       !disk ||
-      !((disk.total ?? 0) > 0) ||
+      typeof disk.total !== 'number' ||
+      !Number.isFinite(disk.total) ||
+      disk.total <= 0 ||
       typeof disk.used !== 'number' ||
       !Number.isFinite(disk.used) ||
       disk.used < 0 ||
