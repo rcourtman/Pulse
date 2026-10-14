@@ -66,6 +66,7 @@ import {
   dockerHostName,
   dockerJoinValues,
   dockerResourceName,
+  dockerStateTextToneClass,
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
@@ -97,7 +98,6 @@ import { DockerImageReferenceText } from './DockerImageReferenceText';
 import {
   getDockerContainerStatePresentation,
   getDockerContainerUptimeSeconds,
-  type DockerContainerStateTone,
 } from './dockerContainerStatePresentation';
 
 type DockerNetwork = NonNullable<NonNullable<Resource['docker']>['networks']>[number];
@@ -182,15 +182,6 @@ const toContainerWebLinkRows = (resource: Resource): WorkloadWebLinkRow[] => {
 const isContainerRunning = (resource: Resource): boolean =>
   (asTrimmedString(resource.docker?.containerState || resource.status) ?? '').toLowerCase() ===
   'running';
-
-// Problems take the row's danger or warning tone, as the TrueNAS State cells
-// do; a stopped container reads muted and a running one plainly.
-const DOCKER_CONTAINER_STATE_TONE_CLASS: Record<DockerContainerStateTone | 'none', string> = {
-  danger: 'font-medium text-red-600 dark:text-red-300',
-  warning: 'font-medium text-amber-700 dark:text-amber-300',
-  muted: 'text-muted',
-  none: '',
-};
 
 const updateStatusLabel = (resource: Resource): string => {
   const update = resource.docker?.updateStatus;
@@ -505,7 +496,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const state = () => stateFor(resource);
     const stateWords = () => (
       <span
-        class={`block max-w-full truncate ${DOCKER_CONTAINER_STATE_TONE_CLASS[state().tone ?? 'none']}`}
+        class={`block max-w-full truncate ${dockerStateTextToneClass(state().tone)}`}
         title={state().title}
         data-docker-container-state={state().tone ?? 'ok'}
       >
@@ -629,7 +620,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                 <span
                   class={`tabular-nums ${
                     dockerContainerRestartAttentionLabel(resource)
-                      ? DOCKER_CONTAINER_STATE_TONE_CLASS.warning
+                      ? dockerStateTextToneClass('warning')
                       : ''
                   }`}
                   title={dockerContainerRestartCountTitle(resource.docker?.restartCount ?? 0)}

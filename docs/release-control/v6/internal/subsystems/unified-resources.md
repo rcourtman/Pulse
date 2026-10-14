@@ -1871,9 +1871,15 @@ container inventory table. Its Attention filter is the rows' verdict (the
 `mapDockerContainerStatus` dot), while Running and Other are Docker's run
 state, so an unhealthy or crash-looping container that still runs matches
 Running and Attention both; the sections stay one per row, Attention first.
-The network's State counts every Attention row ("3 need attention", the dot
-taking the worst). A phone row leaves Subnets and Driver, header and cell
-together, to the expansion's Network details.
+The network's State counts every Attention row ("3 need attention"). A
+network has no health of its own (the adapter reports it online unless its
+host is lost), so its row carries one dot, in the name cell: the network's
+own status when that is worse, otherwise amber while anything attached needs
+attention (degraded, not down; each container keeps its own severity in the
+expansion), otherwise green. The State words take that tone without a second
+dot, and the table's Healthy / Degraded / Offline chips filter by the same
+verdict. A phone row leaves Subnets and Driver, header and cell together, to
+the expansion's Network details.
 
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 12. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `storage-recovery`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.

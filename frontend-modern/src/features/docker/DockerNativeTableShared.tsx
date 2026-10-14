@@ -2,7 +2,11 @@ import { For, Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
-import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
+import {
+  getSimpleStatusIndicator,
+  type StatusIndicator,
+  type StatusIndicatorVariant,
+} from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformTableNumberValue,
@@ -62,6 +66,15 @@ export const dockerHostName = (resource: Resource): string =>
 
 export const dockerResourceName = (resource: Resource): string =>
   asTrimmedString(resource.name) || asTrimmedString(resource.displayName) || resource.id;
+
+// State words read in their row dot's colour, without a second dot: red for
+// a problem, amber for a warning, muted for stopped or unused.
+export const dockerStateTextToneClass = (variant: StatusIndicatorVariant | null): string => {
+  if (variant === 'danger') return 'font-medium text-red-600 dark:text-red-300';
+  if (variant === 'warning') return 'font-medium text-amber-700 dark:text-amber-300';
+  if (variant === 'muted') return 'text-muted';
+  return '';
+};
 
 export const DockerResourceNameCell: Component<{
   resource: Resource;

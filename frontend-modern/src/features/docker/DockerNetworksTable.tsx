@@ -23,12 +23,13 @@ import {
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
-import type { StatusIndicator } from '@/utils/status';
+import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 import {
   DockerResourceNameCell,
   dockerHostName,
   dockerJoinValues,
   dockerResourceName,
+  dockerStateTextToneClass,
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
@@ -36,7 +37,6 @@ import {
   buildDockerNetworkAttachmentRows,
   dockerContainerRunState,
   dockerResourceSearchHaystack,
-  filterDockerResources,
   type DockerNetworkAttachmentRow,
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
@@ -181,11 +181,13 @@ const attachmentSummary = (rows: readonly DockerNetworkAttachmentRow[]): string 
 
 const attachmentAttention = (rows: readonly DockerNetworkAttachmentRow[]): StatusIndicator => {
   if (rows.length === 0) return { variant: 'muted', label: 'Unused' };
-  // Counts every row the Attention filter holds; the dot takes the worst.
+  // Counts every row the Attention filter holds. The network itself is
+  // degraded, not down, while something on it needs a look, so this reads
+  // amber; each container's own dot in the expansion keeps its severity.
   const attention = rows.filter((row) => attachmentGroupKey(row) === 'attention');
   if (attention.length > 0) {
     return {
-      variant: attention.some((row) => row.status.variant === 'danger') ? 'danger' : 'warning',
+      variant: 'warning',
       label: `${attention.length} ${attention.length === 1 ? 'needs' : 'need'} attention`,
     };
   }
@@ -194,6 +196,33 @@ const attachmentAttention = (rows: readonly DockerNetworkAttachmentRow[]): Statu
     return { variant: 'success', label: `${running} running` };
   }
   return { variant: 'muted', label: attachmentCountLabel(rows.length) };
+};
+
+const NETWORK_DOT_RANK: Record<StatusIndicator['variant'], number> = {
+  danger: 0,
+  warning: 1,
+  info: 2,
+  muted: 3,
+  success: 4,
+};
+
+// A network has no health of its own: Docker reports it or the host is lost.
+// Its row dot says whether anything on it needs a look, unless the network's
+// own status is worse (its host stopped reporting). The health filter reads
+// the same verdict, so an amber row sits under Degraded, never Healthy.
+const networkRowIndicator = (resource: Resource, attention: StatusIndicator): StatusIndicator => {
+  const own = getSimpleStatusIndicator(resource.status);
+  const attachedProblem = attention.variant === 'danger' || attention.variant === 'warning';
+  return attachedProblem && NETWORK_DOT_RANK[attention.variant] < NETWORK_DOT_RANK[own.variant]
+    ? attention
+    : own;
+};
+
+const networkRowHealth = (indicator: StatusIndicator): DockerResourceStatusFilter | 'unknown' => {
+  if (indicator.variant === 'success') return 'online';
+  if (indicator.variant === 'warning') return 'degraded';
+  if (indicator.variant === 'danger') return 'offline';
+  return 'unknown';
 };
 
 const networkDetailRows = (resource: Resource) => [
@@ -416,7 +445,11 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
     status: DockerResourceStatusFilter,
   ): Resource[] => {
     const needle = search.trim().toLowerCase();
-    return filterDockerResources(resources, '', status).filter((resource) => {
+    return resources.filter((resource) => {
+      if (status !== 'all') {
+        const attention = attachmentAttention(networkAttachments(resource));
+        if (networkRowHealth(networkRowIndicator(resource, attention)) !== status) return false;
+      }
       if (!needle) return true;
       if (dockerResourceSearchHaystack(resource).includes(needle)) return true;
       return networkAttachments(resource).some((row) => row.searchText.includes(needle));
@@ -544,6 +577,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                         >
                           <DockerResourceNameCell
                             resource={resource}
+                            indicator={networkRowIndicator(resource, attention())}
                             detailToggle={
                               <PlatformResourceDetailToggleButton
                                 expanded={isExpanded()}
@@ -566,16 +600,13 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-flex max-w-full items-center gap-1.5 truncate">
-                              <StatusDot
-                                size="sm"
-                                variant={attention().variant}
-                                title={attention().label}
-                                ariaHidden
-                              />
-                              <span class="truncate" title={attention().label}>
-                                {attention().label}
-                              </span>
+                            <span
+                              class={`block max-w-full truncate ${dockerStateTextToneClass(
+                                attention().variant,
+                              )}`}
+                              title={attention().label}
+                            >
+                              {attention().label}
                             </span>
                           </TableCell>
                           <Show when={showSubnet()}>

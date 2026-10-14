@@ -5557,7 +5557,10 @@ amber in all three. That mapper also owns the restart verdict
 (`dockerContainerRestartAttentionLabel`): a running container past five
 restarts is warning in its dot, the sort, the phone State words, the Restarts
 column and the drawer's lifted Restarts row alike, never a green dot beside an
-amber or red count. "Worth checking" renders through
+amber or red count. Docker State words read in their row dot's colour through
+`dockerStateTextToneClass` (`DockerNativeTableShared.tsx`) with no second dot;
+the Docker Networks row's single name-cell dot carries its attached-container
+verdict the same way. "Worth checking" renders through
 `DrawerExceptionList.tsx` directly under the alerts line, above the charts:
 one compact label/value line per lifted row with the shared
 `detailValueToneClass` tone, not a card per section. A guest memory reading
