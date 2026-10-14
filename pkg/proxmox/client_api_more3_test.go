@@ -293,11 +293,8 @@ func TestClientVMFSInfoObjectResult(t *testing.T) {
 
 	ctx := context.Background()
 	filesystems, err := client.GetVMFSInfo(ctx, "node1", 100)
-	if err != nil {
-		t.Fatalf("GetVMFSInfo error: %v", err)
-	}
-	if len(filesystems) != 0 {
-		t.Fatalf("expected empty filesystem list, got %d", len(filesystems))
+	if GuestAgentDeferredReason(err) != "agent-completion-unverified" || len(filesystems) != 0 {
+		t.Fatalf("HTTP 200 error payload became a current empty inventory: %+v / %v", filesystems, err)
 	}
 }
 

@@ -1271,6 +1271,31 @@ last-known with their QGA provenance, metadata is not renewed, CPU advances,
 and guest metrics are not renewed. This is synthetic source/consuming-surface proof, not attribution of
 the original freeze or native thaw/restart recovery.
 
+The success boundary also checks compatibility with the command sent, before
+postflight lock reads or release of shared admission. Present, non-null fields
+exclusive to another supported command (file content, OS identity, agent command
+catalogue, filesystem capacity or network interfaces), an explicit error payload,
+and list results for the two dictionary-valued information commands retain
+`agent-completion-unverified`. A recognizable network row must not become a
+current filesystem named `eth0`, nor a file/agent-info reply an empty current
+disk inventory. The original one-minute uncertainty fence, alias coordination,
+no-replay transport, credentials and independent live counters are unchanged.
+Empty/null replies, shared `name`/`version` fields, unknown metadata, supported
+object/array inventories, partial rows and completed unusable file measurements
+keep their existing semantics. This is contradiction detection, not proof of
+payload-to-command correlation: replies without discriminating fields remain
+indistinguishable, and native thaw/restart recovery remains unverified.
+
+`TestGuestAgentForeignReplyDefersEveryReader` covers cross-command/error replies
+through all six HTTP readers, with no postflight/follow-up guest request and
+independent PVE/VM controls. Alias/fresh-client/unchanged-expiry/resumption and
+compatible empty/partial-data tests complete the client boundary.
+`TestGuestAgentCommandReplyMonitoringContract` connects three foreign reply
+families through the actual polling builder, state, broadcast and History:
+original disk/memory remain last-known, metadata and measurement times are not
+renewed, and CPU advances. Source and browser fixture proof do not establish a
+native command-ID collision, incident cause, guest liveness or successful thaw.
+
 The completed-error boundary uses the actual HTTP status retained by the request
 layer, not an `API error` phrase in provider or proxy text. The supported
 explicit request/access/command refusals (HTTP 400, 401, 403, 404, 405, 422 and
