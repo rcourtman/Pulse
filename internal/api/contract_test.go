@@ -10992,6 +10992,67 @@ func TestContract_UpdatePlanManualFallbackJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ProRuntimeSwitchJSONSnapshot(t *testing.T) {
+	inPlace, err := json.Marshal(updates.ProRuntimeSwitch{
+		Available:      true,
+		CurrentVersion: "6.5.0",
+		Version:        "6.5.0",
+		InstallInPlace: true,
+	})
+	if err != nil {
+		t.Fatalf("marshal in-place switch: %v", err)
+	}
+	assertJSONSnapshot(t, inPlace, `{
+		"available":true,
+		"currentVersion":"6.5.0",
+		"version":"6.5.0",
+		"installInPlace":true
+	}`)
+
+	refused, err := json.Marshal(updates.ProRuntimeSwitch{
+		Reason:         updates.ProRuntimeSwitchReasonNotEligible,
+		CurrentVersion: "6.5.0",
+	})
+	if err != nil {
+		t.Fatalf("marshal refused switch: %v", err)
+	}
+	assertJSONSnapshot(t, refused, `{
+		"available":false,
+		"reason":"not_eligible",
+		"currentVersion":"6.5.0",
+		"installInPlace":false
+	}`)
+
+	docker, err := json.Marshal(updates.ProRuntimeSwitch{
+		Available:      true,
+		CurrentVersion: "6.5.0",
+		Version:        "6.5.0",
+		Docker: &updates.DockerUpdateCommands{
+			Version:            "v6.5.0",
+			Image:              "registry.example/pulse-pro",
+			ImageDigest:        "sha256:abc",
+			ComposePullCommand: "PULSE_IMAGE='registry.example/pulse-pro@sha256:abc' docker compose pull",
+			ComposeUpCommand:   "PULSE_IMAGE='registry.example/pulse-pro@sha256:abc' docker compose up -d",
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal docker switch: %v", err)
+	}
+	assertJSONSnapshot(t, docker, `{
+		"available":true,
+		"currentVersion":"6.5.0",
+		"version":"6.5.0",
+		"installInPlace":false,
+		"docker":{
+			"version":"v6.5.0",
+			"image":"registry.example/pulse-pro",
+			"imageDigest":"sha256:abc",
+			"composePullCommand":"PULSE_IMAGE='registry.example/pulse-pro@sha256:abc' docker compose pull",
+			"composeUpCommand":"PULSE_IMAGE='registry.example/pulse-pro@sha256:abc' docker compose up -d"
+		}
+	}`)
+}
+
 func TestContract_EmptyUpdatePlanJSONSnapshot(t *testing.T) {
 	payload := updates.EmptyUpdatePlan()
 

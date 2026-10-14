@@ -1285,6 +1285,15 @@ Returns scheduler health, DLQ, and breaker status. Requires authentication (sess
 - `GET /api/updates/plan?version=X.Y.Z` (optional `channel`, accepts `v` prefix)
 - `GET /api/updates/history`
 - `GET /api/updates/history/entry?id=<event_id>`
+- `GET /api/updates/pro-runtime` (`settings:read`): whether this community build
+  can switch to the Pulse Pro runtime. The license server decides eligibility;
+  `reason` explains a switch that is not offered (`not_activated`,
+  `not_eligible`, `older_release`, `unavailable`, ...). Docker installs get the
+  digest-pinned image commands in `docker`.
+- `POST /api/updates/pro-runtime/apply` (`settings:write`): installs the Pulse
+  Pro runtime in place through the same verified, backed-up apply as an update
+  (systemd and Proxmox LXC installs only). Returns `409` when no in-place switch
+  is offered.
 
 ### Infrastructure Updates
 - `GET /api/infra-updates` (requires `monitoring:read`)

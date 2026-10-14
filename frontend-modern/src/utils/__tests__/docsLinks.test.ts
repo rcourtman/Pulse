@@ -231,6 +231,22 @@ describe('docsLinks', () => {
     expect(handler).toContain('GetAlertManager().ApplyConfigUpdate(body)');
   });
 
+  it('documents the Pulse Pro runtime switch routes and their scopes', () => {
+    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    expect(api).toContain('`GET /api/updates/pro-runtime` (`settings:read`)');
+    expect(api).toContain('`POST /api/updates/pro-runtime/apply` (`settings:write`)');
+    const routes = readFileSync(
+      path.join(repoRoot, 'internal', 'api', 'router_routes_registration.go'),
+      'utf8',
+    );
+    expect(routes).toContain(
+      '"/api/updates/pro-runtime", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead,',
+    );
+    expect(routes).toContain(
+      '"/api/updates/pro-runtime/apply", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite,',
+    );
+  });
+
   it('documents network discovery without the removed AI Discovery routes', () => {
     const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     expect(api).toContain('`POST /api/discover` (admin, `settings:write`)');

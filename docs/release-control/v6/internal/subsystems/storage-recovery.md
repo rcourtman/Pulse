@@ -6874,3 +6874,11 @@ commands are unchanged. `TestComputeDiagnosticsAPIRejectionsPreserveCredentials`
 and `TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization` cover
 source/wire attribution and same-credential fixture recovery, not native PBS
 jobs, installed permission recovery or safe thaw.
+
+### Pulse Pro runtime switch opens no storage or recovery path (14 October 2026)
+
+The Pulse Pro runtime switch routes added under `internal/api/` reuse the
+update pipeline's existing backup of the installed binary before replacing it
+and its existing history-entry rollback. The data directory, metrics and
+configuration stores, backups, snapshots and recovery points are untouched,
+and no new backup, retention or restore path is added.

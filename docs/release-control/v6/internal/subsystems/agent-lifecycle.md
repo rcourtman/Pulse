@@ -9938,3 +9938,11 @@ normal polling behavior are unchanged. The diagnostics source/serializer and
 same-credential fixture controls are in `diagnostics_additional_test.go` and
 `TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization`; they do not
 establish native guest restart, installed-agent or thaw recovery.
+
+### Pulse Pro runtime switch routes (14 October 2026)
+
+`GET /api/updates/pro-runtime` and `POST /api/updates/pro-runtime/apply` in
+`internal/api/updates.go` replace only the Pulse server binary through the
+existing update pipeline. They add no agent enrollment, command, install or
+reporting path, and agent continuity stays judged by the same update readiness
+verdict the apply route already computes for its target version.

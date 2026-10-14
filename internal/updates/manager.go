@@ -269,6 +269,10 @@ type ApplyUpdateRequest struct {
 	// release asset URL cannot silently downgrade; sanctioned rollbacks go
 	// through RollbackToBackup instead.
 	AllowDowngrade bool
+	// SwitchToProRuntime installs the Pulse Pro runtime from the license
+	// server download broker over this community binary (see
+	// ApplyProRuntimeSwitch). DownloadURL is not used.
+	SwitchToProRuntime bool
 }
 
 // RollbackRequest describes a rollback of a recorded update, restoring the
@@ -628,7 +632,11 @@ func updateWarning(available, isMajorUpgrade, isPrerelease bool, currentMajor, l
 
 // ApplyUpdate downloads and applies an update
 func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error {
-	if req.DownloadURL == "" {
+	switchToPro := req.SwitchToProRuntime
+	if switchToPro && edition.IsPro() {
+		return fmt.Errorf("this install already runs the Pulse Pro runtime")
+	}
+	if req.DownloadURL == "" && !switchToPro {
 		return fmt.Errorf("download URL is required")
 	}
 
@@ -636,16 +644,20 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	// community build (it would silently strip Audit, RBAC, Reporting, and
 	// SSO), so it updates through the license server download broker instead.
 	// This keys off the compiled edition, not license state: a community
-	// binary with an active license is still community and updates normally.
-	isPro := edition.IsPro()
+	// binary with an active license is still community and updates normally,
+	// unless the request explicitly switches it to the Pro runtime.
+	useBroker := edition.IsPro() || switchToPro
 	var validatedDownloadURL *url.URL
-	if isPro {
+	if useBroker {
 		creds, ok := m.proUpdateCredentials()
 		if !ok {
 			return errProUpdateNotActivated()
 		}
-		if err := validateProApplyRequestURL(req.DownloadURL, creds.LicenseServerURL); err != nil {
-			return err
+		// A switch carries no download URL: the broker is the only source.
+		if !switchToPro {
+			if err := validateProApplyRequestURL(req.DownloadURL, creds.LicenseServerURL); err != nil {
+				return err
+			}
 		}
 	} else {
 		var validationErr error
@@ -660,6 +672,9 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	currentInfo, _ := GetCurrentVersion()
 	if currentInfo.IsDocker {
 		return fmt.Errorf("updates cannot be applied in Docker environment")
+	}
+	if switchToPro && (currentInfo.IsSourceBuild || proRuntimeSwitchMode(currentInfo) != proRuntimeSwitchModeInPlace) {
+		return fmt.Errorf("the Pulse Pro runtime cannot be installed in place on a %s deployment; use https://pulserelay.pro/download.html", currentInfo.DeploymentType)
 	}
 
 	// Check for pre-v4 installation
@@ -685,7 +700,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 
 	channel := m.resolveChannel(req.Channel, currentInfo)
 	var artifact resolvedUpdateArtifact
-	if isPro {
+	if useBroker {
 		// Resolve fresh signed URLs from the broker at apply time: the URLs it
 		// hands out expire in minutes, so the check-time response is never
 		// reused here.
@@ -707,8 +722,14 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	// A valid release asset URL can still point at an older release than the
 	// running binary; without this guard the "update" would silently install a
 	// downgrade. Sanctioned downgrades either restore a retained backup via
-	// RollbackToBackup or set AllowDowngrade explicitly on the request.
-	if !req.AllowDowngrade {
+	// RollbackToBackup or set AllowDowngrade explicitly on the request. A
+	// runtime switch accepts the same version but never an older one.
+	if switchToPro {
+		if err := ensureSwitchTargetIsNotOlder(currentInfo.Version, artifact.version); err != nil {
+			m.updateStatus("error", 10, "Switch rejected", err)
+			return err
+		}
+	} else if !req.AllowDowngrade {
 		if err := ensureApplyTargetIsNewer(currentInfo.Version, artifact.version); err != nil {
 			m.updateStatus("error", 10, "Update rejected", err)
 			return err

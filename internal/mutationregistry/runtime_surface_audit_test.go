@@ -33,6 +33,8 @@ var infrastructureRouteCatalog = map[string]routeClassification{
 	"/api/updates/status":                  {},
 	"/api/updates/stream":                  {},
 	"/api/updates/plan":                    {},
+	"/api/updates/pro-runtime":             {},
+	"/api/updates/pro-runtime/apply":       {MutationID: "admin.pulse.self-update"},
 	"/api/updates/history":                 {},
 	"/api/updates/history/entry":           {},
 	"/api/updates/release-notes":           {},

@@ -2685,6 +2685,18 @@ payload shape change when the portal presents compact client rows.
     and answers with the same started-acknowledgement shape as apply;
     conflict responses cover pruned or missing backups and Docker
     deployments, and not-found covers unknown history entries.
+    `GET /api/updates/pro-runtime` (admin plus `settings:read`) answers
+    whether a community build can switch to the Pulse Pro runtime as
+    `{available, reason?, currentVersion, version?, installInPlace, docker?}`,
+    where `reason` is the closed set `already_pro`, `not_activated`,
+    `not_eligible`, `source_build`, `unsupported_deployment`, `older_release`
+    and `unavailable`, and `docker` reuses the `DockerUpdateCommands` shape.
+    `POST /api/updates/pro-runtime/apply` (admin plus `settings:write`) takes
+    no body, re-checks that an in-place switch is offered (otherwise a plain
+    conflict response, with the reason logged rather than returned), runs the
+    same readiness gate as apply against the switch target version, and
+    answers with the apply started-acknowledgement shape. Neither route
+    exposes broker credentials.
 87. `pkg/aicontracts/fix_execution.go` shared with `ai-runtime`: the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders.
 88. `pkg/aicontracts/investigation.go` shared with `ai-runtime`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
 89. `pkg/aicontracts/orchestrator_deps.go` shared with `ai-runtime`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.
