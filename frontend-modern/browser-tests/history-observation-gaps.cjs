@@ -151,9 +151,16 @@ const settle = (page) =>
             true,
           );
       }, dark);
+      // Charts poll every 30 seconds; the proof drives that poll with the clock.
+      await page.clock.install();
       await page.goto(origin + '/browser-tests/history-observation-gaps.html');
       const activate = async (locator) => (width < 768 ? locator.tap() : locator.click());
-      await activate(page.getByRole('tab', { name: 'History', exact: true }));
+      // History charts sit on Overview, which the drawer opens on.
+      const pollRead = async () => {
+        const read = page.waitForResponse((r) => r.url().includes('/api/metrics-store/history'));
+        await page.clock.runFor(30_000);
+        await read;
+      };
       const chart = page.locator('[data-history-group="utilization"]');
       const slider = chart.getByRole('slider', { name: 'Inspect Utilization history' });
       await slider.waitFor();
@@ -163,14 +170,16 @@ const settle = (page) =>
           '[data-history-group="utilization"]',
         );
       });
-      const memoryPath = chart.locator('path[stroke="#f59e0b"]');
+      const memoryPath = chart.locator('path[data-history-series][stroke="#f59e0b"]');
       assert.equal(await memoryPath.count(), 1);
       assert.equal((await memoryPath.getAttribute('d')).match(/L/g).length, 1);
       assert.equal(await chart.locator('[data-history-observation="memory"]').count(), 1);
-      assert.equal(await chart.locator('path[stroke="#10b981"]').count(), 0);
+      assert.equal(await chart.locator('path[data-history-series][stroke="#10b981"]').count(), 0);
       assert.equal(await chart.locator('[data-history-observation="disk"]').count(), 2);
       assert.equal(
-        (await chart.locator('path[stroke="#8b5cf6"]').getAttribute('d')).match(/L/g).length,
+        (
+          await chart.locator('path[data-history-series][stroke="#8b5cf6"]').getAttribute('d')
+        ).match(/L/g).length,
         4,
       );
       assert.match(
@@ -188,7 +197,7 @@ const settle = (page) =>
             .join(' '),
         );
       assert.match(description, /Missing observations: Memory, Disk\./);
-      assert.match(description, /does not identify the cause or duration/);
+      assert.match(description, /Lines break where a reading is missing\./);
       const noteGeometry = await chart.locator('[data-history-gaps]').evaluate((el) => ({
         width: el.clientWidth,
         scrollWidth: el.scrollWidth,
@@ -221,8 +230,8 @@ const settle = (page) =>
         await slider.getAttribute('aria-valuetext'),
         /Memory no observation\. Disk no observation\./,
       );
-      assert.match(await chart.innerText(), /Memory\s*-/);
-      assert.equal(await chart.locator('circle[r="3"]').count(), 1);
+      assert.match(await chart.innerText(), /Memory\s*no reading/);
+      assert.equal(await chart.locator('[data-history-hover-marker]').count(), 1);
       record.checks.push(
         'Trusted Home/Arrow keys inspect the missing stored time without borrowing nearby/live memory or disk.',
       );
@@ -240,7 +249,7 @@ const settle = (page) =>
           await chart.locator('[data-testid="guest-history-hover-time"]').innerText(),
           /12:30/,
         );
-        assert.equal(await chart.locator('circle[r="3"]').count(), 1);
+        assert.equal(await chart.locator('[data-history-hover-marker]').count(), 1);
         record.checks.push(
           'Trusted pointer matches the exact stored time, not a synthetic line value.',
         );
@@ -265,10 +274,10 @@ const settle = (page) =>
       );
 
       mode = '503';
-      await activate(page.getByRole('button', { name: 'Refresh history' }));
+      await pollRead();
       await page.getByRole('button', { name: 'Retry history' }).waitFor();
       assert.equal(await chart.locator('[data-history-gaps]').count(), 1);
-      assert.equal(await chart.locator('path[stroke="#10b981"]').count(), 0);
+      assert.equal(await chart.locator('path[data-history-series][stroke="#10b981"]').count(), 0);
       assert.doesNotMatch(await page.locator('body').innerText(), /private-fixture-detail/);
       record.checks.push('Transient read failure retains the gap and does not leak the raw error.');
       mode = 'complete';
@@ -291,7 +300,7 @@ const settle = (page) =>
       );
       await screenshot('complete');
       mode = '403';
-      await activate(page.getByRole('button', { name: 'Refresh history' }));
+      await pollRead();
       await page.waitForFunction(
         () => document.querySelectorAll('[data-testid="guest-history-group-chart"]').length === 0,
       );

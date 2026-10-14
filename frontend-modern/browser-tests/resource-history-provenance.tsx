@@ -1,12 +1,10 @@
 // Synthetic snapshots only; both drawers, History, transport and CSS are production.
 import { createMemo, createSignal } from 'solid-js';
-import { render } from 'solid-js/web';
-import { Router, Route } from '@solidjs/router';
 import { ResourceDetailDrawer } from '../src/components/Infrastructure/ResourceDetailDrawer';
 import { GuestDrawer } from '../src/components/Workloads/GuestDrawer';
-import { DarkModeContext } from '../src/contexts/appRuntime';
 import type { Resource } from '../src/types/resource';
 import type { WorkloadGuest } from '../src/types/workloads';
+import { renderInAppRuntime } from './fixtureRuntime';
 import '../src/index.css';
 function Fixture() {
   const [state, setState] = createSignal('retained');
@@ -116,20 +114,4 @@ function Fixture() {
     </main>
   );
 }
-render(
-  () => (
-    <Router>
-      <Route
-        path="*"
-        component={() => (
-          <DarkModeContext.Provider
-            value={() => document.documentElement.classList.contains('dark')}
-          >
-            <Fixture />
-          </DarkModeContext.Provider>
-        )}
-      />
-    </Router>
-  ),
-  document.getElementById('root')!,
-);
+renderInAppRuntime(Fixture);
