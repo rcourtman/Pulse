@@ -18,6 +18,7 @@ import {
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
@@ -103,11 +104,6 @@ const serviceConditionLabel = (row: TrueNASServiceRow): string | null => {
   if (!note) return null;
   if (!note.short) return note.full;
   return note.short.charAt(0).toUpperCase() + note.short.slice(1);
-};
-
-const SERVICE_STATE_NOTE_CLASS: Record<ServiceStateNote['tone'], string> = {
-  danger: 'text-red-600 dark:text-red-300',
-  warning: 'text-amber-700 dark:text-amber-300',
 };
 
 const serviceStatusVariant = (
@@ -350,8 +346,21 @@ export const TrueNASServicesTable: Component<{
                                 variant={serviceStatusVariant(status())}
                                 title={formatPlatformTableTitleCaseValue(status())}
                               />
-                              <div class="min-w-0 truncate font-medium text-base-content">
-                                {formatServiceName(row.service.service)}
+                              <div class="flex min-w-0 flex-col">
+                                <div class="min-w-0 truncate font-medium text-base-content">
+                                  {formatServiceName(row.service.service)}
+                                </div>
+                                {/* A phone hides State; the state and any note read under the name. */}
+                                <span
+                                  class={`platform-table-phone-only-inline max-w-full text-[11px] ${note() ? getPlatformStatusTextToneClass(note()!.tone) : ''}`}
+                                  data-truenas-service-state-phone={note() ? note()!.tone : 'none'}
+                                >
+                                  <span class="min-w-0 truncate">
+                                    {[formatPlatformTableTitleCaseValue(rawState()), note()?.short]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </span>
+                                </span>
                               </div>
                             </div>
                           </TableCell>
@@ -369,7 +378,7 @@ export const TrueNASServicesTable: Component<{
                               <Show when={note()?.short}>
                                 {(short) => (
                                   <span
-                                    class={`min-w-0 truncate text-[11px] font-medium ${SERVICE_STATE_NOTE_CLASS[note()!.tone]}`}
+                                    class={`min-w-0 truncate text-[11px] font-medium ${getPlatformStatusTextToneClass(note()!.tone)}`}
                                   >
                                     {short()}
                                   </span>

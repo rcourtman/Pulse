@@ -26,6 +26,7 @@ import {
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
@@ -378,6 +379,15 @@ export const TrueNASAppsTable: Component<{
                                     .join(' · ')}
                                 >
                                   {name()}
+                                </div>
+                                {/* The app has no State column: its state reads under the name,
+                                    in its dot's colour, so a crashed app says so without a hover. */}
+                                <div
+                                  class={`truncate text-[11px] ${getPlatformStatusTextToneClass(indicator().variant)}`}
+                                  data-truenas-app-state={indicator().variant}
+                                >
+                                  {formatPlatformTableTitleCaseValue(app()?.state, '') ||
+                                    indicator().label}
                                 </div>
                               </div>
                             </div>
