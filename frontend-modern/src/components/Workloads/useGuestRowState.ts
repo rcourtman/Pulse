@@ -10,6 +10,7 @@ import { getGuestHealthIndicator, isGuestRunning } from '@/utils/status';
 import { formatBytes } from '@/utils/format';
 import { getContainerRuntimeBadgeForRuntime } from '@/utils/resourceBadgePresentation';
 import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
+import { getWorkloadDiskUsagePercent } from '@/utils/workloadDiskUsage';
 import {
   getCanonicalWorkloadId,
   getWorkloadPlatformScopes,
@@ -215,13 +216,7 @@ export function useGuestRowState(props: GuestRowProps) {
     return Math.max(0, Math.min(usage, 100));
   });
 
-  const diskPercent = createMemo(() => {
-    const disk = props.guest.disk;
-    const total = disk?.total ?? 0;
-    if (!disk || total === 0) return 0;
-    if (disk.usage === -1) return -1;
-    return ((disk.used ?? 0) / total) * 100;
-  });
+  const diskPercent = createMemo(() => getWorkloadDiskUsagePercent(props.guest.disk));
 
   // The cell's filesystem bars and aggregate follow the drawer's rule: a
   // linked agent's filesystems follow that agent, Proxmox's its read reason.
@@ -232,14 +227,12 @@ export function useGuestRowState(props: GuestRowProps) {
   const hasDiskUsage = createMemo(() => {
     const guest = props.guest;
     if (!guest.disk || guest.telemetryAvailability?.disk === false) return false;
-    const total = guest.disk.total ?? 0;
-    if (!Number.isFinite(total) || total <= 0) return false;
     // A generic canonical merge can retain the previous numeric metric while
     // its source reports no usable guest reading. Only a last known reading
     // may keep that number visible.
     if (diskUsageRead().state === 'unavailable') return false;
     const percent = diskPercent();
-    return Number.isFinite(percent) && percent >= 0;
+    return percent !== null;
   });
 
   const parentOnline = createMemo(() => props.parentNodeOnline !== false);

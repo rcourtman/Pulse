@@ -20,6 +20,23 @@
 
 ## Purpose
 
+### Aggregate disk bars preserve percentage-only evidence (14 October 2026)
+
+The shared stacked-disk primitive keeps independently supplied aggregate
+percentages in percentage points, including values below 1%. Without a measured
+filesystem, it uses the aggregate metric admission in `workloadDiskUsage.ts`;
+capacity alone cannot draw a healthy zero. Percentage-only tooltips and labels
+withhold missing bytes rather than inventing empty capacity. Measured filesystem
+byte ratios, omitted-zero DiskInfo rows, unknown sentinels, per-filesystem
+thresholds and source-owned last-known/unavailable decoration remain separate.
+
+Verification: the stacked-disk component/model suites retain filesystem and
+host controls; `workloadDiskUsage.test.ts` and the desktop/narrow
+`workload-disk-metrics` browser fixture cover aggregate low/zero/byte/unknown
+readings through the consuming Workloads row and drawer. A fixture is not a
+native measurement or stored History observation.
+
+
 ### Pulse Mobile retirement guidance stays readable (14 October 2026)
 
 The existing Pulse Mobile settings surface exposes its retirement guidance as
@@ -9745,3 +9762,10 @@ retained/unavailable source classifications preserve their existing semantics.
 The connected stacked-model controls retain explicit aggregate fallback tests;
 the browser fixture checks mixed and all-unknown lists in the actual summaries
 as well as both drawers, including live replacement at narrow widths.
+
+The aggregate bar admits byte sublabels only with finite non-negative measured
+used bytes and finite positive capacity. An independently valid percentage
+remains visible beside invalid capacity without formatting NaN/Infinity bytes.
+Model/component controls cover non-finite, absent and non-positive capacity;
+`workload-disk-metrics.cjs` checks both Bars (including the tooltip) and Sparklines
+through the same REST reading at desktop and phone widths.
