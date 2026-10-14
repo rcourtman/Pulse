@@ -760,7 +760,11 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		log.Debug().
 			Str("cluster", cc.name).
 			Str("endpoint", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint)).
-			Int("nodes", len(testNodes)).
+			Func(func(event *zerolog.Event) {
+				if testNodes != nil {
+					event.Int("nodes", len(testNodes))
+				}
+			}).
 			Msg("Cluster endpoint passed connectivity test")
 
 		// Use the first-use winner's pin for the full polling session too.
