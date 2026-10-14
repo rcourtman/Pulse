@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "base_sha": "399618939d3e7d1711b24ecbd43ba9129fed2d56",
+  "verified_at": "2026-10-14T05:40:36Z",
+  "result": "passed",
+  "documentation_paths": [
+    "docs/AGENT_SECURITY.md",
+    "docs/UNIFIED_AGENT.md",
+    "frontend-modern/public/docs/AGENT_SECURITY.md",
+    "frontend-modern/public/docs/UNIFIED_AGENT.md"
+  ],
+  "content_sha256": {
+    "docs/AGENT_SECURITY.md": "ed6179dfb8665f707cdd2e38cb840f91b161729779b009802ad40eb3a4a16f6e",
+    "docs/UNIFIED_AGENT.md": "6ddbd9d5661bccf5c32c08b666d5c55d68844c44beda571fff9b5599d37f7b47",
+    "frontend-modern/public/docs/AGENT_SECURITY.md": "ed6179dfb8665f707cdd2e38cb840f91b161729779b009802ad40eb3a4a16f6e",
+    "frontend-modern/public/docs/UNIFIED_AGENT.md": "6ddbd9d5661bccf5c32c08b666d5c55d68844c44beda571fff9b5599d37f7b47"
+  },
+  "routes": [
+    "/docs/UNIFIED_AGENT#inside-guest-runtime-boundaries",
+    "/docs/AGENT_SECURITY#proxmox-lxc-filesystem-readings-with-the-typed-helper"
+  ],
+  "viewports": [
+    {
+      "engine": "desktop-chromium",
+      "browser_version": "141.0.7390.37",
+      "width": 1360,
+      "height": 900,
+      "theme": "light"
+    },
+    {
+      "engine": "phone-webkit",
+      "browser_version": "26.0",
+      "width": 390,
+      "height": 900,
+      "theme": "dark"
+    }
+  ],
+  "playwright": "1.56.1",
+  "source_inputs": 2827,
+  "binding_sha256": "4e24d7487f8bd99e0ee568ee70d6bc5949bfe28a7c9a0aea5767fe0bd0b4719a",
+  "served_document_sha256": {
+    "frontend-modern/public/docs/AGENT_SECURITY.md": "ed6179dfb8665f707cdd2e38cb840f91b161729779b009802ad40eb3a4a16f6e",
+    "frontend-modern/public/docs/UNIFIED_AGENT.md": "6ddbd9d5661bccf5c32c08b666d5c55d68844c44beda571fff9b5599d37f7b47"
+  },
+  "interactions": [
+    "Actual shipped Unified Agent link: keyboard Enter on desktop, touch on phone; same-router navigation, heading focus, reload deep-link focus.",
+    "Confined discovery/fallback, old-version, partial-v2/strict-v1, not-zero and helper-update distinctions rendered from actual mirrored files; no API requests or host operation."
+  ],
+  "pixel_review": "All six captures opened with native view_image; readable body, wrapped phone heading/code and safety warnings, no page overflow. Existing wide qualification matrix has a separate horizontal viewport; not every column is qualified.",
+  "captures": [
+    {
+      "file": "desktop-chromium-entry.png",
+      "sha256": "0f0adc112d0b0259dfae0dc481fa470e0d1939bf560cf2f5ebd72e7a36116c54"
+    },
+    {
+      "file": "desktop-chromium-helper.png",
+      "sha256": "e89cc59255e039576df50c0682c2f74c993dbdad0e745ba7769b2ceea5cbb89b"
+    },
+    {
+      "file": "desktop-chromium-partial.png",
+      "sha256": "d66fa63d1678f17b237b5ba3c6995e50138cd8d14522d0e4534f5ac847d36ed2"
+    },
+    {
+      "file": "phone-webkit-entry.png",
+      "sha256": "518c801ce3efb2b70920ba4c08a09b24f786ef7195f990daf89a28478495e946"
+    },
+    {
+      "file": "phone-webkit-helper.png",
+      "sha256": "bdab502180e3c4436b616463aadef0bb393a0a785cea1a6356546a61dbb7f281"
+    },
+    {
+      "file": "phone-webkit-partial.png",
+      "sha256": "606087d9992d36a8f9d075babd381e77a76e6ef3153f2e9015fd7847fc892164"
+    }
+  ],
+  "cleanup": {
+    "browser_closed": true,
+    "server_closed": true
+  },
+  "limits": "Static shipped help, not native PVE/helper recovery, every-device, published or installed acceptance. A frontend-file guard skip is not this browser proof."
+}
