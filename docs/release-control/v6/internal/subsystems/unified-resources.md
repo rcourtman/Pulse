@@ -7706,9 +7706,17 @@ manufacturing a target. The
 boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
 drawer at desktop and narrow widths: selecting Manage, dropping the merged
 metrics target, and restoring it must keep the selection and bring the Overview
-charts back. Its fixture page currently fails before the drawer renders
-(no WebSocket provider), so that proof does not run until the fixture is
-repaired.
+charts back. Its fixture, `browser-tests/pbs-host-history-correlation.tsx`,
+supplies an explicit offline WebSocket context like the other drawer fixtures;
+it threw before rendering until 2026-10-14. With the #1723 reset reintroduced
+(dropping the target sends the drawer to Overview) the proof fails at both
+widths, so it detects the regression it guards.
+`scripts/check-pbs-host-history-correlation.cjs` uses the same fixture and
+asserts the Overview tab stays selected with stable chart paths and Identity
+rows across refreshes; it accepts the Metrics Target row's absence when the
+Identity card suppresses a repeated identifier, and still requires the
+intercepted history request to name the host series (forcing the service key
+makes it fail).
 
 ### Canonical reference resolution uses a derived alias index
 
