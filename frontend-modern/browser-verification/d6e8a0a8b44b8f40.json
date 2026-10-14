@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "62fc9f4c18c2818f546e63b9af39bea6ce646abb",
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "819d1d83a27f259a9444f041312996c5b09af889843ff656c040df768b375d4e",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "48019a6304c7e9da3c51f90521aa704e62c47b97b657b7072be28ec776f2b8e9",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "445cf4ad673a538f0f88c7c953dbbdbd96901f489d5193df3f9a48ea6339cf7f",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "5406bcbd9c306c7a9dc1516c16dae8c814a6a0c8e4d7872dd25492ef59002c41",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "b28f35fd9eb0809b26b68d050751f119581f019a34fd849f5eb4ff3fcf5784bb",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "48d6f771f0adc2a948fa887cfca6a56b8622928cfa02c650a79cc791763be6e2",
+    "frontend-modern/src/hooks/useWorkloads.ts": "b0cdb8061cdab964c2a447e8b22f7de97409071edafd8209d216897a76b470d5",
+    "frontend-modern/src/utils/searchQuery.ts": "25d8b14b96527f20d69e1d3051aa6d9bbf014c1da0365a25003d5c445a191267",
+    "frontend-modern/src/utils/workloadDiskUsage.ts": "68ea3ef811d75a9792f34c07d545dcf0ed5a1decca07fd740c3e5e2814240527"
+  },
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/utils/searchQuery.ts",
+    "frontend-modern/src/utils/workloadDiskUsage.ts"
+  ],
+  "routes": [
+    "Existing Workloads mapper, numeric selection, GuestRow bars/sparklines, full GuestDrawer and History in an offline consuming REST fixture; no new product route."
+  ],
+  "states": [
+    "Six synthetic current/unknown workload readings sort in numerical order in both directions; 0.5%/1% never become 50%/100%.",
+    "Capacity-only aggregate metrics stay unavailable in the row and History current-value fallback; reported zero and byte-only metrics are usable.",
+    "Percentage-only current values do not fabricate used/capacity bytes; per-filesystem DiskInfo omitted zero remains a measured empty filesystem.",
+    "Retained 95% is neutral and labelled Last known/Prior, excluded from numeric selection; unavailable read and subsequent current source replacement remain distinct."
+  ],
+  "interactions": [
+    "Fixture search and sort controls invoke production selectors; disk>90 and disk<=1 agree with real mapped readings.",
+    "Desktop keyboard Enter and narrow touch open the production guest disclosure; bars/sparklines switch and same-identity REST refreshes update the row and full drawer.",
+    "Eight mounted refresh transitions per viewport, empty History controls, keyboard/touch disclosure/collapse and no guest operations or page errors.",
+    "All twelve final captures opened using native view_image from worker-local paths: readable, wrapping content and no horizontal clipping at either viewport."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    }
+  ],
+  "engines": [
+    "Playwright 1.56.1 / desktop 141.0.7390.37",
+    "Playwright 1.56.1 / phone 26.0"
+  ],
+  "verified_at": "2026-10-14T19:48:48.898825+00:00",
+  "scope": "Synthetic Resources REST metrics through production useWorkloads, selection, GuestRow/GuestDrawer/History/CSS. Fixture selection controls, local empty History and supporting APIs, not full-app authentication, native measurements or recovery. Source-owned deferrals, stored History gaps, native guest/thaw/write recovery, strict authentication, installed use and release availability are not established."
+}
