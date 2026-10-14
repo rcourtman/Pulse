@@ -797,7 +797,7 @@ describe('GuestRow', () => {
 
     it('shows dash when disk data is unavailable', () => {
       renderGuestRow({
-        guest: makeGuest({ disk: { total: 0, used: 0, free: 0, usage: 0 } }),
+        guest: makeGuest({ disk: { total: 0, used: 0, free: 0 } }),
       });
       expect(screen.queryByTestId('disk-bar')).toBeNull();
       // Fallback is a hyphen "-"

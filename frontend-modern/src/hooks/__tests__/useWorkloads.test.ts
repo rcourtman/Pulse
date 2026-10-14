@@ -131,6 +131,7 @@ describe('useWorkloads', () => {
               {
                 ...raw,
                 lastSeen: Date.parse(raw.lastSeen),
+                memory: { current: 50, used: 2048, total: 4096 },
                 disk: { ...bytes, current: percent ?? value } as Resource['disk'],
               } as unknown as Resource,
             ]);

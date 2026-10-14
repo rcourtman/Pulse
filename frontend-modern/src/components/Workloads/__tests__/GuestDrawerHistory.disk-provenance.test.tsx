@@ -195,16 +195,22 @@ describe('GuestDrawerHistory filesystem provenance', () => {
     },
   );
 
-  it.each([-1, NaN, Infinity, undefined])(
-    'does not display unusable retained disk usage %s',
-    (usage) => {
-      const value = guest('prev-vm-locked');
-      value.disk.usage = usage as number;
-      expect(getGuestDrawerCurrentMetrics(value).disk).toBeUndefined();
-      expect(getGuestDrawerDeferredMetrics(value).disk.lastKnownValue).toBeUndefined();
-      expect(getGuestDrawerDeferredMetrics(value).disk.message).toContain('Guest reads paused');
-    },
-  );
+  it.each([-1, NaN, Infinity])('does not display unusable retained disk usage %s', (usage) => {
+    const value = guest('prev-vm-locked');
+    value.disk.usage = usage as number;
+    expect(getGuestDrawerCurrentMetrics(value).disk).toBeUndefined();
+    expect(getGuestDrawerDeferredMetrics(value).disk.lastKnownValue).toBeUndefined();
+    expect(getGuestDrawerDeferredMetrics(value).disk.message).toContain('Guest reads paused');
+  });
+
+  it('admits retained byte-only disk usage without making it current', () => {
+    const value = guest('prev-vm-locked');
+    value.disk.usage = undefined;
+    expect(getGuestDrawerCurrentMetrics(value).disk).toBeUndefined();
+    expect(getGuestDrawerDeferredMetrics(value).disk.lastKnownValue).toBe(50);
+    value.disk.used = undefined;
+    expect(getGuestDrawerDeferredMetrics(value).disk.lastKnownValue).toBeUndefined();
+  });
 
   it('keeps retained zero valid and honours explicit disk telemetry unavailability', () => {
     const value = guest('prev-agent-busy', 0);

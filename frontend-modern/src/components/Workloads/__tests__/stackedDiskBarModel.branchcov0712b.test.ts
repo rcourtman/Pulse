@@ -460,18 +460,12 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
       ]);
     });
 
-    it('falls back to getDiskUsagePercent(aggregateDisk) for overall percent when aggregate total is 0', () => {
-      // totalCapacity 0 -> overallPercent = aggregateDisk ? getDiskUsagePercent(...) : 0.
-      // getDiskUsagePercent: total <= 0, usage 75 (>1) -> 75. Tooltip total>0 arm
-      // skipped (total 0) -> empty.
-      const p = buildStackedDiskBarPresentation(
-        { aggregateDisk: makeDisk({ total: 0, used: 0, free: 0, usage: 75 }) },
-        400,
-      );
+    it('shows an independently observed aggregate percentage without inventing byte totals', () => {
+      const p = buildStackedDiskBarPresentation({ aggregateDisk: { usage: 75 } }, 400);
       expect(p.displayPercentValue).toBe(75);
       expect(p.barPercent).toBe(75);
-      expect(p.displaySublabel).toBe('0 B/0 B');
-      expect(p.tooltipContent).toEqual([]);
+      expect(p.displaySublabel).toBe('');
+      expect(p.tooltipContent[0]).toMatchObject({ percent: '75%', used: '?', total: '—' });
     });
 
     it('maps anomaly severity to a class and formats each anomaly-ratio tier', () => {
