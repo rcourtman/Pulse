@@ -17,6 +17,31 @@
 
 ## Purpose
 
+### First-use cluster trust includes password construction
+
+Declared, previously untrusted Proxmox members use the existing credential-free
+TLS capture and pinned retry whether the inherited primary pin fails during
+password login or during the token-authenticated nodes probe. Startup, ordinary
+unhealthy recovery and lazy first selection share this path. Capture still
+requires typed local pin-mismatch evidence and cannot replace a primary, saved
+member or concurrent winner pin; it never sends an HTTP request or credentials.
+The pinned retry is not repeated to obtain a nodes count. Failed or cancelled
+authentication installs no polling session; a separately accepted full-timeout
+client is required before recovery becomes healthy. Refusal retains the
+established runtime pin for a distinct later ordinary recovery. Saved trust,
+CA/redirect policy, login encodings, cadence and guest/backup fences do not change.
+
+`TestClusterFirstUseSessionAdmission` covers JSON password, existing form
+fallback and token modes in all three phases, then ordinary member reads.
+The adjacent refusal, established-pin and cancellation controls exercise actual
+TLS sockets. Concurrent lazy selection retains serialized construction while
+health/trust inspection stays usable during capture. `TestClusterFirstUsePasswordEndpointProjection` carries first-use
+probe/full-session refusal and later public-read recovery into the monitor's
+cluster-member projection without changing native Online state, identity or
+saved fingerprints. This is source/consumer qualification, not installed
+cluster recovery or attribution of an existing user report.
+
+
 ### Proxmox password success admits a complete session, not just HTTP 200
 
 PVE and PBS consume the entire existing byte-bounded login body before
