@@ -1,5 +1,6 @@
 import { expect, Page, test } from '@playwright/test';
 import { ensureAuthenticated, maybeCompleteSetupWizard, waitForPulseReady } from './helpers';
+import { captureAuthRenderer } from '../scripts/capture-auth-renderer.mjs';
 
 type ThemePreference = 'light' | 'dark';
 
@@ -218,8 +219,19 @@ test.describe.serial('Theme visual regression (auth surfaces)', () => {
     await page.setViewportSize(VISUAL_VIEWPORT);
   });
 
+  // Preserve actual font selection and complete CSS byte identities on both
+  // passes and failures. A font package install or a short asset name is not
+  // evidence of what this renderer used; keep the pixel thresholds unchanged.
+  async function attachRenderer(page: Page): Promise<void> {
+    await test.info().attach('auth-renderer', {
+      body: Buffer.from(JSON.stringify(await captureAuthRenderer(page), null, 2)),
+      contentType: 'application/json',
+    });
+  }
+
   test('logged-out login surface (light)', async ({ page }) => {
     await openLoggedOutLogin(page, 'light');
+    await attachRenderer(page);
 
     await expect(page).toHaveScreenshot('auth-login-light.png', {
       fullPage: true,
@@ -235,6 +247,7 @@ test.describe.serial('Theme visual regression (auth surfaces)', () => {
 
   test('logged-out login surface (dark)', async ({ page }) => {
     await openLoggedOutLogin(page, 'dark');
+    await attachRenderer(page);
 
     await expect(page).toHaveScreenshot('auth-login-dark.png', {
       fullPage: true,
@@ -250,6 +263,7 @@ test.describe.serial('Theme visual regression (auth surfaces)', () => {
 
   test('authenticated security-auth surface (light)', async ({ page }) => {
     await openAuthenticatedSecurityAuth(page, 'light');
+    await attachRenderer(page);
 
     await expect(page).toHaveScreenshot('auth-settings-light.png', {
       fullPage: true,
@@ -260,6 +274,7 @@ test.describe.serial('Theme visual regression (auth surfaces)', () => {
 
   test('authenticated security-auth surface (dark)', async ({ page }) => {
     await openAuthenticatedSecurityAuth(page, 'dark');
+    await attachRenderer(page);
 
     await expect(page).toHaveScreenshot('auth-settings-dark.png', {
       fullPage: true,
