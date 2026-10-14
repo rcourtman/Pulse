@@ -71,6 +71,29 @@ const selectSharedTime = (chart: HTMLElement) => {
   return chart.querySelector('[data-history-hover-marker]')!;
 };
 
+describe('GuestDrawerHistory value axis', () => {
+  it('labels a quiet link\'s rate axis once, not "<1K/s" on two gridlines', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(
+      response({
+        metrics: {
+          cpu: [point(end - 10 * 60_000, 12), point(end - 5 * 60_000, 25)],
+          netin: [point(end - 10 * 60_000, 200), point(end - 5 * 60_000, 400)],
+          netout: [point(end - 10 * 60_000, 100), point(end - 5 * 60_000, 300)],
+        },
+      }),
+    );
+    mount();
+    await screen.findByRole('slider', { name: 'Inspect Network I/O history' });
+    const labels = (id: string) =>
+      Array.from(
+        group(id).querySelectorAll('[data-history-axis-label]'),
+        (label) => label.textContent,
+      );
+    expect(labels('network')).toEqual(['<1K/s', '', '0']);
+    expect(labels('utilization')).toEqual(['100%', '50%', '0%']);
+  });
+});
+
 describe('GuestDrawerHistory shared time window', () => {
   it('does not stretch five minutes of stored CPU across a 24-hour query', async () => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());

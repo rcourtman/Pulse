@@ -18,6 +18,7 @@ import {
   getHistoryChartRefreshIntervalMs,
   getHistoryChartRightInset,
   getHistoryChartScale,
+  getHistoryChartTimeTickCount,
   getHistoryChartYAxisLabels,
   type HistoryChartProps,
   type HistoryChartHoverPoint,
@@ -106,6 +107,9 @@ export function useHistoryChartState(
   const dataMax = createMemo(() => getHistoryChartDataMax(data()));
 
   let previousSelection: string | undefined;
+  let previousSeries: string | undefined;
+  // The series whose stored reply is on screen, so a pause or resize keeps it.
+  let loadedSeries: string | undefined;
 
   // One effect owns a selection, its request and its polling timer. Cleanup
   // invalidates completions even when a transport ignores cancellation.
@@ -119,9 +123,9 @@ export function useHistoryChartState(
     const locked = isLocked();
     const interval = refreshIntervalMs();
     const orgSelection = orgVersion();
+    const enabled = props.enabled !== false;
     let active = true;
     let pending = false;
-    let hasLoaded = false;
     let controller: AbortController | undefined;
     let timer: number | undefined;
 
@@ -131,21 +135,30 @@ export function useHistoryChartState(
       if (timer !== undefined) window.clearInterval(timer);
     });
 
-    setData(suppliedData ?? []);
-    setSource(suppliedData !== undefined ? 'live' : null);
-    setError(null);
-    setRefreshFailed(false);
-    setLoading(false);
-    const selection = JSON.stringify([
+    // The series is what the chart shows. The point cap follows the chart's
+    // width, so a resize asks for the same series at a new resolution: it
+    // keeps the readings on screen while the new request is in flight.
+    const series = JSON.stringify([
       orgSelection,
       resourceType,
       resourceId,
       metric,
       chartRange,
-      pointsCap,
       locked,
       suppliedData !== undefined,
     ]);
+    const selection = JSON.stringify([series, pointsCap]);
+    // Pausing, resuming or resizing the same series keeps its readings on
+    // screen; any other change starts from nothing.
+    if (suppliedData !== undefined || series !== previousSeries) {
+      setData(suppliedData ?? []);
+      setSource(suppliedData !== undefined ? 'live' : null);
+      setError(null);
+      setRefreshFailed(false);
+      loadedSeries = undefined;
+    }
+    previousSeries = series;
+    setLoading(false);
     if (selection !== previousSelection) {
       pendingTouch = undefined;
       touchTimestamp = null;
@@ -155,6 +168,9 @@ export function useHistoryChartState(
     }
     previousSelection = selection;
     if (suppliedData !== undefined || locked || !resourceId || !resourceType) return;
+    // A paused chart (inside a hidden drawer tab) reads nothing until resumed.
+    if (!enabled) return;
+    let hasLoaded = loadedSeries === series;
 
     const loadData = async () => {
       if (!active || pending) return;
@@ -176,12 +192,14 @@ export function useHistoryChartState(
         setError(null);
         setRefreshFailed(false);
         hasLoaded = true;
+        loadedSeries = series;
       } catch (err) {
         if (!active) return;
         console.error('Failed to fetch metrics history:', err);
         const accessError = getAPIReadAccessErrorMessage(err);
         if (accessError) {
           hasLoaded = false;
+          loadedSeries = undefined;
           pendingTouch = undefined;
           touchTimestamp = null;
           batch(() => {
@@ -227,8 +245,19 @@ export function useHistoryChartState(
     const mainColor = getHistoryChartDefaultColor(props.metric, props.color);
     const scale = getHistoryChartScale(points, props.unit);
     const yAxisTicks = getHistoryChartYAxisLabels(scale, props.unit);
-    const labelCount = 4;
-    const timeAxisTicks =
+    const timeTicks = (count: number) =>
+      Array.from({ length: count }, (_, index) => {
+        const timestamp =
+          points[0].timestamp +
+          ((points[points.length - 1].timestamp - points[0].timestamp) * index) / (count - 1);
+        return { timestamp, label: formatHistoryChartTimeLabel(timestamp, range()) };
+      });
+
+    ctx.font = '10px sans-serif';
+    chartLeftInset = getHistoryChartLeftInset(
+      yAxisTicks.map((tick) => ctx.measureText(tick.label).width),
+    );
+    let timeAxisTicks =
       points.length === 1
         ? [
             {
@@ -237,24 +266,23 @@ export function useHistoryChartState(
             },
           ]
         : points.length > 0
-          ? Array.from({ length: labelCount }, (_, index) => {
-              const timestamp =
-                points[0].timestamp +
-                ((points[points.length - 1].timestamp - points[0].timestamp) * index) /
-                  (labelCount - 1);
-              return { timestamp, label: formatHistoryChartTimeLabel(timestamp, range()) };
-            })
+          ? timeTicks(4)
           : [];
-
-    ctx.font = '10px sans-serif';
-    chartLeftInset = getHistoryChartLeftInset(
-      yAxisTicks.map((tick) => ctx.measureText(tick.label).width),
-    );
     chartRightInset = getHistoryChartRightInset(
       timeAxisTicks.length > 0
         ? ctx.measureText(timeAxisTicks[timeAxisTicks.length - 1].label).width
         : 0,
     );
+    // A narrow card fits fewer time labels: as many as fit without touching,
+    // down to the first and last time.
+    if (timeAxisTicks.length > 2) {
+      const count = getHistoryChartTimeTickCount(
+        width - chartLeftInset - chartRightInset,
+        Math.max(...timeAxisTicks.map((tick) => ctx.measureText(tick.label).width)),
+        timeAxisTicks.length,
+      );
+      if (count < timeAxisTicks.length) timeAxisTicks = timeTicks(count);
+    }
 
     ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;

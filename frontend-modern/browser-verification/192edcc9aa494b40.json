@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "8342a35332f22b6bee5f9821ca0f02d3a895d33f",
+  "verified_at": "2026-10-14T10:46:52Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
+    "frontend-modern/src/components/shared/historyChartModel.ts",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "3f5b207b3610158ad2a604f3d59b064473829529acf9b305e6570a42a46326eb",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "1df9dd5c45a117d2fde84bc6cf7fb3b140b4e190007c496232d55956d696e38c",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "d67cfc7c291018b147ffccebc24a9ebe72b2593145dd53e7d2bd887bb5ccee56",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "2ea62b7b72011e336acc5eb6f2bdda162925bbfda7b5622f7abca4931f8358d0",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "9d88eb4250f3c6b52adafd94d7c8c3484fc2379bae454d6ca5bd4e6c63752bbc"
+  },
+  "routes": [
+    "/browser-tests/guest-storage-2263.html (production GuestDrawerOverview with GuestPhysicalDisks and DiskDetail, Chromium via Playwright 1.56.1 on pulse-dev)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "linked guest Overview with one physical disk collapsed",
+    "disk expanded: SMART facts, 24h History charts and Live I/O charts loaded",
+    "Overview shown: the open disk polls on its 10-30s interval",
+    "Overview hidden (as behind Manage): no disk history reads across 120s of clock time",
+    "Overview shown again: one catch-up read per chart, same chart nodes, readings kept with no loading spinner",
+    "no-agent guest and unavailable disk query states"
+  ],
+  "interactions": [
+    "Enter on the disk summary expands it; pointer closes and reopens it",
+    "Hide overview / Show overview buttons toggle the mounted Overview like a drawer tab switch",
+    "page clock advanced 30s, 30s and 120s to drive polling"
+  ]
+}

@@ -2883,6 +2883,9 @@ canonical pre-handler authorization proof covering both transfer routes.
     same names the resource drawers use. The range picker keeps the shared
     filter-select presentation; storage must not restore the retired
     storage-local range-selector classes and inline SVG select decoration.
+    A disk detail mounted where it can be hidden (a guest drawer's Overview
+    behind Manage) takes `historyEnabled` and passes it to every chart,
+    history and live I/O alike, so a hidden disk reads nothing.
     Storage-page pool growth readouts belong to that same contract: the table
     may derive per-pool used-capacity deltas from the shared
     `/api/storage-charts` summary payload, but it must not fan out row-local

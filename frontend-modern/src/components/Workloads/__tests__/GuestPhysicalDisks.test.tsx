@@ -15,6 +15,7 @@ const queryState = vi.hoisted(() => ({
   error: undefined as unknown,
   query: '',
   enabled: false,
+  realtimeEnabled: undefined as (() => boolean) | undefined,
 }));
 
 // The expanded disk detail now shows its history charts in view; the chart
@@ -22,13 +23,22 @@ const queryState = vi.hoisted(() => ({
 // covered by the HistoryChart and DiskDetail suites.
 vi.mock('@/components/shared/HistoryChart', () => ({
   HistoryChartHoverGroup: (props: { children: JSX.Element }) => <div>{props.children}</div>,
-  HistoryChart: (props: { label: string }) => <div data-testid="history-chart">{props.label}</div>,
+  HistoryChart: (props: { label: string; enabled?: boolean }) => (
+    <div data-testid="history-chart" data-enabled={String(props.enabled !== false)}>
+      {props.label}
+    </div>
+  ),
 }));
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
-  useUnifiedResources: (options: { query: string; enabled: () => boolean }) => {
+  useUnifiedResources: (options: {
+    query: string;
+    enabled: () => boolean;
+    realtimeEnabled?: () => boolean;
+  }) => {
     queryState.query = options.query;
     queryState.enabled = options.enabled();
+    queryState.realtimeEnabled = options.realtimeEnabled;
     return {
       resources: () => (queryState.accessor ? queryState.accessor() : queryState.resources),
       error: () => queryState.error,
@@ -71,6 +81,7 @@ describe('GuestPhysicalDisks', () => {
     queryState.error = undefined;
     queryState.query = '';
     queryState.enabled = false;
+    queryState.realtimeEnabled = undefined;
   });
   afterEach(cleanup);
 
@@ -95,6 +106,28 @@ describe('GuestPhysicalDisks', () => {
     expect(within(card).getByText('Pending Sectors')).toBeInTheDocument();
     expect(within(card).getByText('CRC Errors')).toBeInTheDocument();
     expect(within(card).getAllByTestId('guest-physical-disk')).toHaveLength(1);
+  });
+
+  it('pauses an expanded disk and the live list while its Overview is hidden', async () => {
+    queryState.resources = [disk];
+    const [shown, setShown] = createSignal(true);
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" historyEnabled={shown()} />);
+    const row = screen.getByTestId('guest-physical-disk') as HTMLDetailsElement;
+    row.open = true;
+    fireEvent(row, new Event('toggle'));
+    await waitFor(() => expect(screen.getAllByTestId('history-chart').length).toBeGreaterThan(0));
+    const enabledStates = () =>
+      screen.getAllByTestId('history-chart').map((chart) => chart.dataset.enabled);
+    expect(new Set(enabledStates())).toEqual(new Set(['true']));
+    expect(queryState.realtimeEnabled?.()).toBe(true);
+    setShown(false);
+    expect(new Set(enabledStates())).toEqual(new Set(['false']));
+    expect(queryState.realtimeEnabled?.()).toBe(false);
+    // The initial read is not withheld: only background refresh pauses.
+    expect(queryState.enabled).toBe(true);
+    setShown(true);
+    expect(new Set(enabledStates())).toEqual(new Set(['true']));
+    expect(queryState.realtimeEnabled?.()).toBe(true);
   });
 
   it("judges the guest's disks by its own agent's Disk Temp override", async () => {

@@ -48,6 +48,8 @@ interface DiskDetailProps {
   nodes: Resource[];
   /** Alert override keys of the machine whose agent reports the disk. */
   alertResourceIds?: string[];
+  /** False pauses this disk's chart reads, e.g. while a drawer tab is hidden. */
+  historyEnabled?: boolean;
 }
 
 export const DiskDetail: Component<DiskDetailProps> = (props) => {
@@ -184,6 +186,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
                         hideSelector={true}
                         compact={true}
                         hideLock={true}
+                        enabled={props.historyEnabled}
                       />
                     </div>
                   )}
@@ -223,6 +226,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
                         hideLock
                         height={120}
                         compact={true}
+                        enabled={props.historyEnabled}
                       />
                     </div>
                   )}

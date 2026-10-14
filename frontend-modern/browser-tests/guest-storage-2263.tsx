@@ -7,6 +7,8 @@ import '../src/index.css';
 
 type Mode = 'linked' | 'none' | 'error';
 const [mode, setMode] = createSignal<Mode>('linked');
+// Mirrors a drawer tab switch: the Overview stays mounted but hidden.
+const [shown, setShown] = createSignal(true);
 const baseGuest = {
   id: 'vm-table-101',
   canonicalResourceId: 'vm-resource-101',
@@ -61,9 +63,13 @@ render(() => (
       <button type="button" onClick={() => setMode('linked')}>Linked guest</button>
       <button type="button" onClick={() => setMode('none')}>No agent</button>
       <button type="button" onClick={() => setMode('error')}>Unavailable query</button>
+      <button type="button" onClick={() => setShown(false)}>Hide overview</button>
+      <button type="button" onClick={() => setShown(true)}>Show overview</button>
     </nav>
     <Show when={mode() === 'linked'}>
-      <GuestDrawerOverview {...overviewProps} guest={linkedGuest as any} />
+      <div class={shown() ? '' : 'hidden'}>
+        <GuestDrawerOverview {...overviewProps} guest={linkedGuest as any} historyEnabled={shown()} />
+      </div>
     </Show>
     <Show when={mode() === 'none'}>
       <GuestDrawerOverview {...overviewProps} guest={baseGuest as any} />
