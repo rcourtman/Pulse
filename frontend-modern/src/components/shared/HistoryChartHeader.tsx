@@ -1,5 +1,5 @@
 import { Component, Show } from 'solid-js';
-import { formatHistoryChartTooltipValue } from './historyChartModel';
+import { formatHistoryChartTooltipValue, getHistorySourceNotice } from './historyChartModel';
 import type { HistoryChartState } from './useHistoryChartState';
 
 interface HistoryChartHeaderProps {
@@ -20,21 +20,19 @@ export const HistoryChartHeader: Component<HistoryChartHeaderProps> = (props) =>
         <Show when={props.unit}>
           <span class="text-xs text-slate-400">({props.unit})</span>
         </Show>
-        <Show when={props.chart.source() && props.chart.source() !== 'store'}>
-          <span
-            class={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${
-              props.chart.source() === 'live'
-                ? 'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300'
-                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300'
-            }`}
-            title={
-              props.chart.source() === 'live'
-                ? 'Live sample shown because history is not available yet.'
-                : 'In-memory buffer shown while history is warming up.'
-            }
-          >
-            {props.chart.source() === 'live' ? 'Live' : 'Buffer'}
-          </span>
+        <Show when={getHistorySourceNotice(props.chart.source())}>
+          {(notice) => (
+            <span
+              class={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${
+                props.chart.source() === 'live'
+                  ? 'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300'
+                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300'
+              }`}
+              title={notice().detail}
+            >
+              {notice().badge}
+            </span>
+          )}
         </Show>
       </div>
 
