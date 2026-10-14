@@ -198,8 +198,7 @@ func guestAgentCommandResponse(path string, body []byte) bool {
 		return false // file-read returns content/truncated, not a result payload.
 	}
 	if result[0] == '{' {
-		fields, valid := guestAgentResponseFields(result)
-		return valid && guestAgentReplyFieldsCompatible(fields, command)
+		return guestAgentReplyDictionaryCompatible(result, command)
 	}
 	if command == "get-osinfo" || command == "info" {
 		return false // Both information commands return dictionaries, not lists.
@@ -215,8 +214,8 @@ func guestAgentCommandResponse(path string, body []byte) bool {
 		}
 		// Existing inventory decoders own malformed/partial rows. Only a
 		// recognizable foreign dictionary contradicts the command here.
-		fields, valid := guestAgentResponseFields(row)
-		if valid && !guestAgentReplyFieldsCompatible(fields, command) {
+		row = bytes.TrimSpace(row)
+		if len(row) > 0 && row[0] == '{' && !guestAgentReplyDictionaryCompatible(row, command) {
 			return false
 		}
 	}
@@ -226,31 +225,59 @@ func guestAgentCommandResponse(path string, body []byte) bool {
 
 func guestAgentReplyFieldsCompatible(fields map[string]json.RawMessage, command string) bool {
 	for name, value := range fields {
-		// Null foreign fields carry no affirmative payload identity; keep
-		// the established null-field and completed-empty semantics.
-		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			continue
-		}
-		var owner string
-		switch strings.ToLower(name) {
-		case "content", "truncated":
-			owner = "file-read"
-		case "id", "kernel-release", "kernel-version", "machine", "pretty-name", "version-id":
-			owner = "get-osinfo"
-		case "qemu-ga", "supported-commands", "supported_commands":
-			owner = "info"
-		case "mountpoint", "total-bytes", "total-bytes-privileged", "used-bytes", "disk":
-			owner = "get-fsinfo"
-		case "hardware-address", "ip-addresses", "statistics", "has-ipv4-synth-gateway", "has-ipv6-synth-gateway":
-			owner = "network-get-interfaces"
-		case "error", "errors":
-			return false
-		}
-		if owner != "" && owner != command {
+		if !guestAgentReplyFieldCompatible(name, value, command) {
 			return false
 		}
 	}
 	return true
+}
+
+func guestAgentReplyDictionaryCompatible(body []byte, command string) bool {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	if start, err := decoder.Token(); err != nil || start != json.Delim('{') {
+		return false
+	}
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil {
+			return false
+		}
+		name, valid := key.(string)
+		var value json.RawMessage
+		if !valid || decoder.Decode(&value) != nil || !guestAgentReplyFieldCompatible(name, value, command) {
+			return false
+		}
+	}
+	// Do not add another uniqueness/measurement policy inside a result. The
+	// existing filesystem decoder rejects duplicate counters as unusable
+	// completed readings and preserves valid peers. Inspect every field here
+	// instead of last-key-wins, so a later null cannot erase foreign evidence.
+	end, err := decoder.Token()
+	return err == nil && end == json.Delim('}')
+}
+
+func guestAgentReplyFieldCompatible(name string, value json.RawMessage, command string) bool {
+	// Null foreign fields carry no affirmative payload identity; keep
+	// the established null-field and completed-empty semantics.
+	if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		return true
+	}
+	var owner string
+	switch strings.ToLower(name) {
+	case "content", "truncated":
+		owner = "file-read"
+	case "id", "kernel-release", "kernel-version", "machine", "pretty-name", "version-id":
+		owner = "get-osinfo"
+	case "qemu-ga", "supported-commands", "supported_commands":
+		owner = "info"
+	case "mountpoint", "total-bytes", "total-bytes-privileged", "used-bytes", "disk":
+		owner = "get-fsinfo"
+	case "hardware-address", "ip-addresses", "statistics", "has-ipv4-synth-gateway", "has-ipv6-synth-gateway":
+		owner = "network-get-interfaces"
+	case "error", "errors":
+		return false
+	}
+	return owner == "" || owner == command
 }
 
 // Reject ambiguous envelopes (including duplicate keys and trailing values)

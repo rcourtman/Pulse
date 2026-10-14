@@ -175,6 +175,35 @@ func TestGuestAgentForeignReplySharesUnrenewedFenceAndResumes(t *testing.T) {
 	}
 }
 
+func TestGuestAgentDuplicateForeignEvidenceCannotBeErased(t *testing.T) {
+	for name, result := range map[string]string{
+		"duplicate": `{"name":"eth0","ip-addresses":[],"ip-addresses":null}`,
+		"escaped":   `{"name":"eth0","ip-addresses":[],"\u0069p-addresses":null}`,
+		"case":      `{"name":"eth0","IP-Addresses":[],"ip-addresses":null}`,
+		"array-row": `[{"name":"eth0","ip-addresses":[],"ip-addresses":null}]`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var commands atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/config") {
+					fmt.Fprint(w, `{"data":{}}`)
+					return
+				}
+				commands.Add(1)
+				fmt.Fprintf(w, `{"data":{"result":%s}}`, result)
+			}))
+			defer server.Close()
+			c := commandReplyTestClient(t, server.URL+"/duplicate-foreign/"+name)
+			if _, err := c.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
+				t.Fatalf("later null erased foreign interface evidence: %v", err)
+			}
+			if _, err := c.GetVMAgentInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" || commands.Load() != 1 {
+				t.Fatalf("foreign duplicate permitted another command: %v / %d", err, commands.Load())
+			}
+		})
+	}
+}
+
 func TestGuestAgentCommandReplyPreservesCompatibleEmptyAndPartialData(t *testing.T) {
 	replies := map[string][]string{
 		"os":         {`{"data":{"name":"Linux","version":"fixture","future":{"enabled":true}}}`, `{"data":{"result":{"id":"linux","version-id":"1"}}}`},
