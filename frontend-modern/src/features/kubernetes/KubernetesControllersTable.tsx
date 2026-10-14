@@ -22,6 +22,7 @@ import {
   type PlatformTableSortValue,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
@@ -475,7 +476,18 @@ export const KubernetesControllersTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="block truncate" title={exceptions()}>
+                            {/* The exception is why the dot is not green: its colour. */}
+                            <span
+                              class={`block truncate ${
+                                exceptions() === '—'
+                                  ? ''
+                                  : getPlatformStatusTextToneClass(indicator().variant)
+                              }`}
+                              title={exceptions()}
+                              data-kubernetes-controller-exception={
+                                exceptions() === '—' ? 'none' : indicator().variant
+                              }
+                            >
                               {exceptions()}
                             </span>
                           </TableCell>

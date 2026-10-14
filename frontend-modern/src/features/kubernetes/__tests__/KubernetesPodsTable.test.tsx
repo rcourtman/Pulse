@@ -132,8 +132,15 @@ describe('KubernetesPodsTable', () => {
         .querySelector('[data-kubernetes-name-tail]'),
     ).toHaveTextContent('-02');
     // Raw phase is Running, but the metrics-sidecar container is not ready;
-    // the status column shows the mapped label, not the phase.
-    expect(screen.getByText('Not ready')).toBeInTheDocument();
+    // the status column shows the mapped label, not the phase, in the
+    // amber its row dot shows.
+    const status = document.querySelector('[data-kubernetes-pod-status]');
+    expect(status).toHaveTextContent('Not ready');
+    expect(status).toHaveClass('text-amber-700');
+    // A phone hides Status, so the same words read under the pod name there.
+    const phoneStatus = document.querySelector('[data-kubernetes-pod-status-phone]');
+    expect(phoneStatus).toHaveTextContent('Not ready');
+    expect(phoneStatus).toHaveClass('platform-table-phone-only-inline', 'text-amber-700');
     expect(screen.getByText('1/2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('Deployment/checkout-api')).toBeInTheDocument();
@@ -239,8 +246,9 @@ describe('KubernetesPodsTable', () => {
     );
     expect(rows).toEqual(['crashing-pod', 'not-ready-pod', 'happy-pod']);
     // The failure reason is visible cell text, not just a dot tooltip.
-    expect(screen.getByText('CrashLoopBackOff')).toBeInTheDocument();
-    expect(screen.getByText('Not ready')).toBeInTheDocument();
+    // Each label reads twice: the Status column and the phone line under the name.
+    expect(screen.getAllByText('CrashLoopBackOff')).toHaveLength(2);
+    expect(screen.getAllByText('Not ready')).toHaveLength(2);
     expect(
       screen.getAllByTitle('CrashLoopBackOff').some((el) => el.classList.contains('bg-red-500')),
     ).toBe(true);
