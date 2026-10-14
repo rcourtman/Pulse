@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "8423ed2e2e33b628f2cc7e64fc098da6336ed0dc",
+  "tested_source_sha": "8423ed2e2e33b628f2cc7e64fc098da6336ed0dc",
+  "changed_paths": [
+    "docs/VM_DISK_MONITORING.md",
+    "frontend-modern/public/docs/VM_DISK_MONITORING.md",
+    "frontend-modern/src/features/docs/__tests__/proxmoxPermissionsGuide.test.ts"
+  ],
+  "content_sha256": {
+    "docs/VM_DISK_MONITORING.md": "b14299596c1bfe391ac063b5265ae5cb727895e2abeb8033265348757553a59c",
+    "frontend-modern/public/docs/VM_DISK_MONITORING.md": "b14299596c1bfe391ac063b5265ae5cb727895e2abeb8033265348757553a59c",
+    "frontend-modern/src/features/docs/__tests__/proxmoxPermissionsGuide.test.ts": "4e70c2ef977ed7eb11944b4c762ba27fc2eabbece5e7e5c9a71cfa7557bf6ef5"
+  },
+  "routes": [
+    "/docs/VM_DISK_MONITORING",
+    "/docs/VM_DISK_MONITORING#windows-readings-after-a-pulse-restart",
+    "/docs/VM_DISK_MONITORING#use-existing-machines-readings-without-changing-the-guest",
+    "/docs/VM_DISK_MONITORING#backup-safety"
+  ],
+  "states": [
+    "Actual shipped Markdown fetched and rendered through Docs; two served-producer responses match its committed bytes.",
+    "Linux-specific permissions row and Windows memory-file caveat.",
+    "Deferred Windows reads versus actual agent/service/guest recovery; interim existing readings, identity and freshness.",
+    "No new probes, privileges, restarts, agents or duplicate reporter evidence; backup precautions preserved."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and 390 px WebKit touch follow native fragment links, reach actual visible heading targets and return with browser Back.",
+    "Ten case checks / ten captures (no-replay duplicates restart-context). Whole page stays within 1440/390 px; no external request, API mutation or page exception."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-14T02:50:22.586Z",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "pixel_review": {
+    "source_sha": "8423ed2e2e33b628f2cc7e64fc098da6336ed0dc",
+    "source_parent": "177f664e20d6b74a3a17cdefb29b2c05663c1e84",
+    "tool": "native view_image",
+    "opened": [
+      {
+        "file": "chromium-permissions.jpg",
+        "sha256": "ed25e50e164185545310911a600d84a3136682a288ca41dfb65ee57af809e7bd"
+      },
+      {
+        "file": "chromium-restart-context.jpg",
+        "sha256": "6a7fd536ccaddee34e4afb919226316899cd3f9e06c7775661635af09c7abb00"
+      },
+      {
+        "file": "chromium-no-replay.jpg",
+        "sha256": "6a7fd536ccaddee34e4afb919226316899cd3f9e06c7775661635af09c7abb00"
+      },
+      {
+        "file": "chromium-existing-agent-view.jpg",
+        "sha256": "37a0d9bb920f57c128d5e432b6d436e8b600799e1f7c7fdff73db4cd5e4acb80"
+      },
+      {
+        "file": "chromium-backup-safety.jpg",
+        "sha256": "2752fcd66f636a40c34c861e3b03401996e5fd520387c50bfb7cfb3c4999e94b"
+      },
+      {
+        "file": "webkit-permissions.jpg",
+        "sha256": "f48ac52a3bcce6a35c7a584b725ec7ad73f1c2e207a5e31678eaa272b00b82b6"
+      },
+      {
+        "file": "webkit-restart-context.jpg",
+        "sha256": "47c701d907f8dc4e96257f64c6c8d5f0bc948b0bc5e4f5b456b93c33b0d8c28b"
+      },
+      {
+        "file": "webkit-no-replay.jpg",
+        "sha256": "47c701d907f8dc4e96257f64c6c8d5f0bc948b0bc5e4f5b456b93c33b0d8c28b"
+      },
+      {
+        "file": "webkit-existing-agent-view.jpg",
+        "sha256": "eca3067f50dd3c9b8a4d2bb7c39e656cdb7fda69c147771385c081ca8bbd0d34"
+      },
+      {
+        "file": "webkit-backup-safety.jpg",
+        "sha256": "fb635a1e59d3ac1a0c6caf1f226c764dedad9072d9081f80dedfee4a2dc1706d"
+      }
+    ],
+    "observations": [
+      "Desktop and 390 px phone Permissions table separates filesystem/guest information from Linux /proc/meminfo; the FileRead requirement appears only on the Linux row. The Windows caveat and restart link are legible beside the table; narrow columns wrap without whole-page clipping.",
+      "Both restart frames visibly distinguish Pulse deferred collection from a stopped Windows service or frozen guest, retain the source/identity/observation-time distinction, and show no more privileges, probes, cooldown clearing or agent changes. Desktop keyboard focus is visible at the destination heading. Phone prose and link text remain within the content column.",
+      "The no-replay frames show the same on-screen restart content, including every-volume/History limits and backup precedence. These two captures per viewport are not distinct visual states.",
+      "The existing-agent destination frames show the linked Machines view is an interim reading, not QGA recovery; they retain guest identity, filesystem and freshness, and forbid installation/restart/restoration/forced checks solely to recover a reading. The phone heading wraps on two lines without clipping.",
+      "The backup destination frames prominently show no manual QGA probes, independent thaw/every-covered-filesystem writes/workload liveness and prior-active restoration. Phone wraps these warnings and distinguishes Pause Stream from stopping monitoring. The remaining long backup procedure is below the phone frame; native execution/backup safety is not claimed."
+    ],
+    "remaining": null,
+    "limits": "Documentation and navigation proof against safe read-only shell fixtures, not native guest, runtime restart, filesystem or thaw recovery."
+  },
+  "browser_cleanup": {
+    "browser_close_completed": true,
+    "preview_stop_requested": "SIGTERM",
+    "preview_exit": 143,
+    "preview_signal": null
+  },
+  "adverse_attempts": [
+    "Original pre-execution browser busy remains retained. A first new script used a guessed emoji heading fragment and failed its target assertion with no passing cases. A script syntax error then prevented browser execution. Corrected driver uses literal native document links; no renderer change or product failure is inferred."
+  ],
+  "evidence": "PI RECEIPTS.md, browser.json, PIXEL-REVIEW.json and the ten native-opened captures; exact driver and both failed attempts retained. This is consuming documentation proof, not native Windows restart/thaw qualification. Pending independent review/protected delivery and release inclusion."
+}
