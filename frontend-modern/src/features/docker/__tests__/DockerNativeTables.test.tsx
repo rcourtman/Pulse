@@ -1779,6 +1779,18 @@ describe('Docker native tables', () => {
     // The network's state counts every container the Attention filter holds,
     // the restarting warning as well as the unhealthy one.
     expect(screen.getAllByText('2 need attention').length).toBeGreaterThan(0);
+    // One dot per row: the name's dot carries that verdict, not the network's
+    // always-online status, and the State words have no second dot.
+    const networkCells = document
+      .querySelector('[data-docker-network-row="network-dense"]')!
+      .querySelectorAll('td');
+    expect(networkCells[0].querySelector('[title="2 need attention"]')).not.toBeNull();
+    expect(networkCells[0].querySelector('[title="Online"]')).toBeNull();
+    expect(networkCells[2].querySelectorAll('[title]')).toHaveLength(1);
+    // The health filter reads the same verdict: degraded, not healthy, and not
+    // offline, since the network itself is up.
+    expect(screen.getByRole('button', { name: /^Degraded, 1$/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Healthy, 1$/ })).toBeNull();
 
     fireEvent.click(document.querySelector('[data-docker-network-row="network-dense"]')!);
 
