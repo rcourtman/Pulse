@@ -101,7 +101,7 @@ manual probes during a freeze or thaw.
 |---|---|---|
 | PVE/PBS/PMG inventory, node status, VM/container status, storage usage, and normal Proxmox API metrics | Add the Proxmox connection with a read-only or narrowly scoped API token | No |
 | VM guest disk and memory details through QEMU Guest Agent | Use Proxmox API permissions such as `VM.GuestAgent.Audit` and `VM.GuestAgent.FileRead` where supported | No host agent for the Proxmox node |
-| All mounted LXC filesystem capacities and usage | Install the Unified Agent on the owning PVE node; the safe profile uses the typed helper's bounded fixed-shape `pct` reads | Yes, but the safe profile confines it to the root helper rather than a root collector |
+| All mounted LXC filesystem capacities and usage | Install the Unified Agent on the owning PVE node; the safe profile uses [socket-free discovery and bounded mount probes](#proxmox-lxc-filesystem-readings-with-the-typed-helper) | Yes, but the safe profile confines it to the root helper rather than a root collector |
 | Docker/Podman containers inside a VM or LXC through guest-local reporting | Install the agent inside that VM/LXC with Docker/Podman monitoring enabled, or use another explicit guest access/reporting path | Requires runtime-socket access: root-equivalent for a rootful daemon, or a collector-owned rootless socket |
 | Docker containers inside an LXC from a Proxmox host agent | Turn on **Discover Docker in LXC guests** in Settings → System → General (admin only), or start Pulse with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true` to lock it on; optionally limit guests with `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102` | Requires a root/equivalent Pulse agent on the Proxmox node and explicit server opt-in |
 | Host SMART, temperatures, local ZFS/Ceph/mdadm detail, arbitrary mount reads, and full host telemetry | Install the agent on that host | Varies: the safe typed helper covers SMART; capabilities outside the matrix still require the explicit root/full-telemetry profile |
@@ -114,10 +114,10 @@ LXCs by default. Its automatic LXC filesystem collector is a node-local
 capacity query only. On cgroup v2 PVE hosts it finds running guests from the
 node's container configs and cgroup state, reads each running guest's init
 process ID and status from cgroup and `/proc`, and measures mount capacity with
-statfs through `/proc/<pid>/root`. When that discovery cannot establish a guest's state (for
-example on cgroup v1 hosts) it falls back to `pct list`, with `lxc-info` to
-find each guest's init process, and it runs `pct df <vmid>` for a guest only
-when the statfs probe is unavailable or fails. It reports
+statfs through `/proc/<pid>/root`. Root/full-trust collectors can fall back to
+`pct list`, `lxc-info` and `pct df <vmid>` when discovery or a mount probe fails.
+That command path is not usable inside the isolated typed helper; see
+[helper-backed LXC readings](#proxmox-lxc-filesystem-readings-with-the-typed-helper). It reports
 mount keys, volume labels, mount paths, and capacity/usage numbers. It does not
 run a command inside the guest or read guest file contents, environment, or
 container-runtime metadata. It skips guests reported stopped and bounds command
@@ -198,22 +198,6 @@ block devices. If the helper is missing, incompatible, or rejects a request,
 only the affected telemetry disappears; the collector does not fall back to
 sudo, root, or a broader local command path.
 
-Proxmox's `pct list` uses pmxcfs abstract Unix IPC, which is not reachable from
-the helper's private network namespace. On affected PVE hosts this leaves
-helper-backed LXC filesystem telemetry unavailable, while independent SMART
-and API monitoring can continue. Prefer the existing Proxmox API connection
-for the readings it provides; do not add a unit override or a root/sudo
-fallback. A successful SMART reading does not establish LXC helper health.
-
-When an inventory succeeds only partly, operation v2 preserves the collected
-rows and explicitly names omitted container IDs. The helper module stays
-degraded, and omitted containers cannot refresh old filesystem readings.
-Operation v1 remains complete-only; a newer collector uses it only when an
-older helper explicitly rejects v2. An unavailable inventory is not an empty
-healthy snapshot or zero disk usage. An installer-managed helper upgrade
-restarts the verified helper after checking the effective isolated unit and
-socket identity; a collector-only automatic update cannot replace its helper.
-
 The installer treats the effective systemd configuration as part of the safe
 profile boundary. The collector, helper service, helper socket, and an
 installed action runner must load from the installer-owned `FragmentPath` with
@@ -291,6 +275,41 @@ packet never reaches Docker. The post-run attester re-verifies those same
 snapshot paths against the receipt. No qualifying RC containing this boundary
 has been published yet.
 
+### Proxmox LXC filesystem readings with the typed helper
+
+The current helper can collect LXC filesystem readings **without `pct` or
+`lxc-info` requests**. It reads the owning node's container configuration,
+finds running guests and their init processes through cgroup v2 and `/proc`,
+and measures configured mounts with the bounded filesystem prober. It does not
+execute a command inside a guest, read guest file contents or accept a
+caller-selected VMID or path.
+
+Proxmox's `pct` and `lxc-info` commands use host-network-namespace Unix IPC.
+Their fallback cannot recover a failed discovery or mount probe inside
+`PrivateNetwork=true`. On a cgroup v1 host, or when a running guest's state
+cannot be established, the helper can therefore report degraded or unavailable
+inventory rather than a complete list. Independent SMART and API readings can
+still work; a successful SMART reading does not establish LXC helper health.
+
+Use the existing reading's status, age and collection path before treating
+missing filesystems as missing guests. Keep the Pulse server, collector and
+helper versions separate; a newer guide or collector alone does not establish
+that the installed helper has this path. Older helper versions relying on
+`pct` can fail even when SMART works. Prefer the existing Proxmox API connection
+for the readings it already provides, without claiming it covers every mount.
+Do not remove `PrivateNetwork`, add a unit override, enable a root/sudo
+fallback, reinstall or restart anything merely to diagnose a missing reading.
+Keep credentials and full service/configuration records private.
+
+When an inventory succeeds only partly, operation v2 preserves the collected
+rows and explicitly names omitted container IDs. The helper module stays
+degraded, and omitted containers cannot refresh old filesystem readings.
+Operation v1 remains complete-only; a newer collector uses it only when an
+older helper explicitly rejects v2. An unavailable inventory is not an empty
+healthy snapshot or zero disk usage. An installer-managed helper upgrade
+restarts the verified helper after checking the effective isolated unit and
+socket identity; a collector-only automatic update cannot replace its helper.
+
 ### Safe-profile support and qualification matrix
 
 `Qualified` below means the named evidence exercised the behavior on a real
@@ -305,7 +324,7 @@ or generic command path.
 | Proxmox VE/PBS/PMG inventory, status, storage, and ordinary metrics | API-only connection with a narrowly scoped token; no host agent | No collector, helper, or runner authority is required for this data | Supported independently of the safe host-agent profile; it does not prove host-local SMART, LXC filesystem, or action parity | `agent-lifecycle`: keep API permissions and returned telemetry covered by provider tests |
 | Standard Linux systemd host telemetry and collector update | Unprivileged `pulse-agent` plus the root-owned typed helper | Core `/proc`, filesystem, network, RAID, and hwmon telemetry stays in the collector; signed updates cross the fixed helper protocol and commit only after an authoritative report | **Qualified on disposable Ubuntu 24.04.4 arm64 at committed main `22fd662fb794f63efb9d3ca2158de73c4e07e1b8`** across the schema-v6 twenty-scenario run. It covers install, migration, explicit/automatic rollback, helper protocol and resource boundaries, effective-unit override rejection, reporting continuity, authoritative executable-digest commit, watchdog rollback, helper-restart recovery, and last-known-good restoration. It remains opt-in pending exact-RC reproduction, representative provider/appliance parity, and external review | `deployment-installability` and `security-privacy`: reproduce the same helper transaction from trusted release artifacts on representative hosts and accept the external boundary review |
 | Linux SMART telemetry | `smart.snapshot` through the no-network helper; no caller-selected device or arguments | Implemented, unqualified on representative physical disks. Helper failure omits/degrades SMART only; the collector does not retry as root | Does not yet justify SMART parity or a default change | `agent-lifecycle`: record live SATA, SAS/controller, USB bridge, and NVMe evidence, including standby, permission failure, timeout, and partial-data cases |
-| Proxmox node-local LXC filesystem telemetry | `proxmox.lxc_filesystems` through the no-network helper. Configs are read through the pmxcfs mount, running guests and their init processes come from cgroup v2 and `/proc`, and usage comes from the shared filesystem prober, which pins the guest's init, re-checks its identity, and resolves each mount inside the guest root (openat2, or a symlink-refusing component walk where the helper's seccomp filter blocks openat2); the caller selects no VMID, path, or command. `pct` and `lxc-info` cannot work inside the helper, because pmxcfs and the LXC monitor listen on abstract Unix sockets that belong to the host network namespace (#2511); they remain the fallback whenever discovery cannot establish a guest's state, on cgroup v1 hosts, for root and `--grant-pct` installs, and per container when the prober read fails | Implemented. Exercised on a disposable PVE 9.2.18 node under the helper unit's sandbox properties, with running unprivileged (rootfs plus a mount point) and privileged guests and a stopped one; readings matched `pct df`. This is one PVE version, with no timeout, output-bound, helper-loss, or live nested-namespace evidence. Helper failure omits/degrades this snapshot only | Does not yet justify Proxmox host-agent parity or a default change | `agent-lifecycle`: record timeout, output-bound, and helper-loss behavior across supported PVE versions |
+| Proxmox node-local LXC filesystem telemetry | `proxmox.lxc_filesystems` through the no-network helper's [socket-free discovery and bounded mount probes](#proxmox-lxc-filesystem-readings-with-the-typed-helper). Failed discovery or probes remain degraded/unavailable; command fallback works only outside the helper, in a separately chosen full-trust profile | Implemented. Exercised on a disposable PVE 9.2.18 node under the helper unit's sandbox properties, with running unprivileged (rootfs plus a mount point) and privileged guests and a stopped one; readings matched `pct df`. This is one PVE version, with no timeout, output-bound, helper-loss, or live nested-namespace evidence. Helper failure omits/degrades this snapshot only | Does not yet justify Proxmox host-agent parity or a default change | `agent-lifecycle`: record timeout, output-bound, and helper-loss behavior across supported PVE versions |
 | Rootful Docker or Podman inventory | No direct collector access to a root-equivalent daemon socket | Implemented as a typed-helper summary-only fallback. Migration preserves container ID/name/image/state/status/creation inventory and marks the report `typed-helper-summary`; stats, secondary inventories, update checks, and actions remain unavailable | The standalone rootless packet exercises live same-family rootful Docker and Podman helper fallback plus summary-inventory semantic parity during socket loss. It does not qualify the complete standalone rootful fresh-install, migration, restart, helper-loss/recovery, and bounds matrix. Full rootful parity remains an explicit default blocker; the legacy/root profile is not safe-profile evidence | `agent-lifecycle`: record the remaining standalone lifecycle matrix on representative rootful Docker and Podman and decide explicitly whether reduced telemetry is sufficient |
 | Collector-owned rootless Docker or Podman | Direct access only to one usable runtime socket owned by the `pulse-agent` UID whose daemon also attests rootless mode | Qualified locally for the exact source-bound monitoring path. Discovery is deferred until the collector account exists and accepts exactly one readable/writable, non-symlink socket owned by that UID across Docker and Podman. Cross-user, root-owned, remote, unreadable, non-rootless-daemon, or ambiguous endpoints are rejected. An installer-owned exact pin survives daemon loss and update; the running collector can move between direct rootless monitoring and rootful typed-helper summary without regaining action authority | **Qualified on distinct disposable Ubuntu 24.04/systemd 255 arm64 hosts at commit `60041ad9e60c282c892f944e04f777b874991a5d`.** All eleven canonical scenarios passed for Docker and all eleven for Podman. Receipt SHA-256: `7a116d63ab0cd1560482165055f0a8c9158ce0a8333a27bd9e8256582a52dfb5`; local attestation SHA-256: `566279ecd7d7dfa89c92f24243e9fcd5ae3e295d4284bd559d4be42f1e83b3b5`. This is local opt-in artifact-bound self-attestation, not published-RC provenance, action/update qualification, external review, or authorization for a default change | `deployment-installability`: reproduce the exact packet from published release artifacts; separately qualify any desired rootless image-update/action surface; retain the opt-in default until the remaining provider, appliance, and review conditions pass |
 | Separate runner package update and package-cache cleanup | Root-owned `pulse-agent-runner`, host-bound action credential, typed request, postcondition, and durable receipt | The schema-v6 committed-main systemd receipt records a real verified apt-cache mutation, stale-fingerprint refusal, replay, nonce-bound readiness, effective-unit override rejection, exact credential rotation, bodyless self-revocation, and collector/helper continuity. A separate production Router regression exercises HTTPS issuance, WSS admission, encrypted token persistence, failed-rotation rollback, exact socket invalidation, two server restarts, old-secret rejection, and durable self-revoke | Qualified for the exercised systemd fixture paths and focused production Router lifecycle. Focused installer tests also cover atomic pending cancellation and fail-closed credential retention. The evidence does not cover every runner operation, representative providers, or an exact release candidate | `agent-lifecycle` and `api-contracts`: reproduce the combined systemd and production Router path from trusted RC artifacts with representative package-update success/failure/cancellation evidence |

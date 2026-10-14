@@ -691,11 +691,13 @@ and task inventory on the Docker page.
 
 Pulse does not use a Proxmox node agent to look inside LXCs by default. The
 node agent does automatically collect filesystem capacity for running LXCs
-when the local `pct` tool is available. On cgroup v2 PVE hosts it finds running
-guests from the node's container configs and cgroup state and measures mount
-capacity with statfs through each guest's init process in `/proc`; it falls back
-to bounded `pct list` and `pct df <vmid>` calls when that discovery or a
-per-container probe cannot establish a guest's state. It reports only mount
+when the local `pct` tool is available. The current collector first uses
+socket-free cgroup v2 and `/proc` discovery plus bounded mount probes. A
+root/full-trust collector can fall back to `pct list`, `lxc-info` and
+`pct df <vmid>`; those commands cannot recover readings inside the isolated
+typed helper. See [helper-backed LXC readings](AGENT_SECURITY.md#proxmox-lxc-filesystem-readings-with-the-typed-helper)
+for partial, unavailable and older-helper results. Do not remove `PrivateNetwork`
+or broaden the agent's privileges to clear a missing reading. It reports only mount
 keys, volume labels, mount paths, and capacity/usage values; it does not run
 commands inside a guest or read guest files. Stopped LXCs retain the normal
 API-derived disk view.
