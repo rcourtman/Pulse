@@ -19,7 +19,12 @@ import { groupStorageRecords } from '../src/features/storageBackups/storageModel
 import { EMPTY_STORAGE_ALERT_STATE } from '../src/features/storageBackups/storageAlertState';
 import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
 import type { Resource } from '../src/types/resource';
+import { markSystemSettingsLoadedWithDefaults } from '../src/stores/systemSettings';
 import '../src/index.css';
+
+// The app loads system settings before update controls act; this fixture has
+// no app shell, so it states the defaults instead of leaving them loading.
+markSystemSettingsLoadedWithDefaults();
 
 const [wsState, setWsState] = createStore({
   resources: [] as Resource[],

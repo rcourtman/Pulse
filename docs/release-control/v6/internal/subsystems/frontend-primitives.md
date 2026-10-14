@@ -5525,7 +5525,16 @@ health alert leaves "Health check: Failing" in Details rather than repeating
 it. An offline resource's "Observed state" is danger-toned with when it was
 last seen, so it is lifted without an alert. A passing availability check moves into
 Details, except on an endpoint that is itself a check (`network-endpoint`,
-platform `availability`), whose cards are its whole reading and stay in front. "Worth checking" renders through
+platform `availability`), whose cards are its whole reading and stay in front. A container's lifted
+"Image update: Available" carries its next steps in place: the same shared
+`UpdateButton` as the containers table's Updates column (both built by
+`getDockerContainerUpdateAction` in `features/docker/dockerContainerUpdateAction.ts`,
+so readiness and refusal read the same) and a "View image tags" registry link.
+The drawer passes `touchTarget`, a 44px minimum height below `sm`; tables keep
+the compact pill. The control is one `ContainerUpdateNextSteps` element created
+once under the drawer's owner and reused by every rebuild of the inventory
+rows, so a refresh or clock tick never recreates the button or closes its
+review dialog. "Worth checking" renders through
 `DrawerExceptionList.tsx` directly under the alerts line, above the charts:
 one compact label/value line per lifted row with the shared
 `detailValueToneClass` tone, not a card per section. A guest memory reading

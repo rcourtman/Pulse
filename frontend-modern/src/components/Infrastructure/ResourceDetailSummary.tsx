@@ -1,4 +1,4 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, getOwner, runWithOwner, type Component, type JSX } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { isContainerUpdatePinned } from '@/components/shared/containerUpdateBadgeModel';
 import { DetailSectionTable } from '@/components/shared/DetailSectionTable';
@@ -14,6 +14,8 @@ import { TagBadges } from '@/components/shared/TagBadges';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getDockerImageRegistryLink } from '@/features/docker/dockerImageReference';
+import { getDockerContainerUpdateAction } from '@/features/docker/dockerContainerUpdateAction';
+import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import {
   getDockerContainerHealthCheckPresentation,
   getDockerContainerRunStatePresentation,
@@ -102,7 +104,52 @@ const dockerRuntimeRow = (
       })
     : null;
 
-const dockerSection = (docker: NonNullable<Resource['docker']>, now: number): DetailSection => {
+// An available update's next steps: the containers table's own update control
+// and where to see the new image. The drawer rebuilds its inventory rows on
+// every refresh and clock tick, so this is created once and reused; a
+// recreated button would drop its state, including an open review dialog.
+const ContainerUpdateNextSteps: Component<{ resource: Resource }> = (props) => {
+  const action = () => getDockerContainerUpdateAction(props.resource);
+  const registryLink = () => getDockerImageRegistryLink(props.resource.docker?.image);
+  // One wrapping flex box (overriding the drawer row's inline children), so on
+  // a phone the controls wrap inside the card and keep their own tap sizes.
+  return (
+    <span class="!inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1">
+      <span>Available</span>
+      <Show when={action()}>
+        {(update) => (
+          <UpdateButton
+            agentId={update().agentId}
+            containerId={update().containerId}
+            containerName={update().containerName}
+            updateStatus={update().updateStatus}
+            resourceId={update().resourceId}
+            actionReadiness={update().actionReadiness}
+            touchTarget
+          />
+        )}
+      </Show>
+      <Show when={registryLink()}>
+        {(link) => (
+          <a
+            href={link().href}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center font-normal text-sky-700 hover:underline max-sm:min-h-11 dark:text-sky-300"
+          >
+            {link().label}
+          </a>
+        )}
+      </Show>
+    </span>
+  );
+};
+
+const dockerSection = (
+  docker: NonNullable<Resource['docker']>,
+  now: number,
+  updateNextSteps: () => JSX.Element,
+): DetailSection => {
   const labels = docker.labels ?? {};
   const labelEntries = Object.entries(labels);
   const createdAt = dockerTimestampMillis(docker.createdAt);
@@ -140,6 +187,8 @@ const dockerSection = (docker: NonNullable<Resource['docker']>, now: number): De
       tone: update?.updateAvailable ? 'accent' : update?.error ? 'danger' : 'default',
       // An available update is something to act on: drawers lift it in front.
       lift: update?.updateAvailable === true,
+      // An available update offers its next steps where it is stated.
+      valueContent: update?.updateAvailable ? updateNextSteps() : undefined,
     }),
     makeDetailRow('Current digest', trimmedDockerValue(update?.currentDigest), {
       valueClass: 'break-all font-mono text-[10px]',
@@ -256,6 +305,14 @@ export const useResourceSummarySections = (
   // same, so container and controller ages read the shared clock to keep
   // moving.
   const now = useRelativeTimeNow();
+  // Created on first need under the drawer's owner, then reused by every
+  // rebuild of the rows below.
+  const owner = getOwner();
+  let nextSteps: JSX.Element | undefined;
+  const updateNextSteps = () =>
+    (nextSteps ??= runWithOwner(owner, () => (
+      <ContainerUpdateNextSteps resource={props.resource} />
+    )));
   return (): DetailSection[] => {
     const docker = dockerContainerMeta(props.resource);
     // An offline resource has no current uptime: the retained value is from
@@ -359,7 +416,7 @@ export const useResourceSummarySections = (
             ]),
           }
         : null,
-      props.content !== 'overview' && docker ? dockerSection(docker, now()) : null,
+      props.content !== 'overview' && docker ? dockerSection(docker, now(), updateNextSteps) : null,
       props.content !== 'overview' ? buildKubernetesControllerSection(props.resource, now()) : null,
       props.content !== 'overview'
         ? {

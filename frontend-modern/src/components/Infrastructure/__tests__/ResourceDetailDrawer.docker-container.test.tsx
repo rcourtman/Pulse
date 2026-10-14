@@ -1,8 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
+import { markSystemSettingsLoadedWithDefaults } from '@/stores/systemSettings';
 
 vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
@@ -306,6 +308,136 @@ describe('ResourceDetailDrawer for Docker containers', () => {
     expect(within(section).getByText('2.00 MB')).toBeInTheDocument();
     expect(within(section).getByText('Labels')).toBeInTheDocument();
     expect(within(section).getByText(/traefik\.enable/)).toBeInTheDocument();
+  });
+
+  it('offers the update and the new image beside an available update in Worth checking', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        presentation="table-row"
+        resource={resource({
+          id: 'app-container-proxy',
+          name: 'edge-proxy',
+          docker: {
+            hostSourceId: 'agent-edge',
+            containerId: 'proxy123',
+            containerState: 'running',
+            image: 'nginx:1.27',
+            updateStatus: {
+              updateAvailable: true,
+              currentDigest: 'sha256:current',
+              latestDigest: 'sha256:latest',
+              lastChecked: '2026-10-14T10:00:00Z',
+            },
+          },
+        })}
+      />
+    ));
+    const lifted = screen.getByTestId('resource-drawer-exceptions');
+    expect(within(lifted).getByText('Image update')).toBeInTheDocument();
+    expect(within(lifted).getByText('Available')).toBeInTheDocument();
+    // The same update control the containers table offers, so a phone, whose
+    // row hides the Updates column, can still act.
+    // (System settings never load here, so it shows its loading state.)
+    expect(within(lifted).getByRole('button')).toHaveTextContent('Update');
+    expect(within(lifted).getByRole('link', { name: 'View image tags' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('nginx'),
+    );
+  });
+
+  it('keeps an open update review through resource refreshes and clock ticks', async () => {
+    markSystemSettingsLoadedWithDefaults();
+    vi.useFakeTimers();
+    try {
+      const proxy = (cpu: number) =>
+        resource({
+          id: 'app-container-proxy',
+          name: 'edge-proxy',
+          cpu: { current: cpu },
+          docker: {
+            hostSourceId: 'agent-edge',
+            containerId: 'proxy123',
+            containerState: 'running',
+            image: 'nginx:1.27',
+            createdAt: '2026-10-01T10:00:00Z',
+            updateStatus: { updateAvailable: true, lastChecked: '2026-10-14T10:00:00Z' },
+          },
+        });
+      const [current, setCurrent] = createSignal(proxy(10));
+      render(() => <ResourceDetailDrawer presentation="table-row" resource={current()} />);
+      fireEvent.click(within(screen.getByTestId('resource-drawer-exceptions')).getByRole('button'));
+      await vi.advanceTimersByTimeAsync(0);
+      const dialog = await screen.findByRole('dialog');
+      setCurrent(proxy(20));
+      await vi.advanceTimersByTimeAsync(61_000);
+      expect(screen.getByRole('dialog')).toBe(dialog);
+      expect(dialog.isConnected).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says why Pulse cannot apply an update that is refused, at a tappable size', () => {
+    markSystemSettingsLoadedWithDefaults();
+    render(() => (
+      <ResourceDetailDrawer
+        presentation="table-row"
+        resource={resource({
+          id: 'app-container-proxy',
+          name: 'edge-proxy',
+          actionReadiness: [
+            { name: 'update', available: false, reason: 'Command agent disconnected' },
+          ],
+          docker: {
+            hostSourceId: 'agent-edge',
+            containerId: 'proxy123',
+            containerState: 'running',
+            image: 'nginx:1.27',
+            updateStatus: { updateAvailable: true, lastChecked: '2026-10-14T10:00:00Z' },
+          },
+        })}
+      />
+    ));
+    const lifted = screen.getByTestId('resource-drawer-exceptions');
+    const locked = within(lifted).getByLabelText(
+      /Pulse cannot apply it: Command agent disconnected/,
+    );
+    expect(locked).toHaveTextContent('Update available');
+    expect(locked).toHaveClass('max-sm:min-h-11');
+    expect(within(lifted).queryByRole('button')).toBeNull();
+  });
+
+  it('keeps the same update control through resource refreshes and clock ticks', async () => {
+    vi.useFakeTimers();
+    try {
+      const proxy = (cpu: number) =>
+        resource({
+          id: 'app-container-proxy',
+          name: 'edge-proxy',
+          cpu: { current: cpu },
+          docker: {
+            hostSourceId: 'agent-edge',
+            containerId: 'proxy123',
+            containerState: 'running',
+            image: 'nginx:1.27',
+            createdAt: '2026-10-01T10:00:00Z',
+            updateStatus: { updateAvailable: true, lastChecked: '2026-10-14T10:00:00Z' },
+          },
+        });
+      const [current, setCurrent] = createSignal(proxy(10));
+      render(() => <ResourceDetailDrawer presentation="table-row" resource={current()} />);
+      const button = () =>
+        within(screen.getByTestId('resource-drawer-exceptions')).getByRole('button');
+      const first = button();
+      // A fresh snapshot of the same container, then the shared clock moving
+      // its ages: the rows rebuild, the control (and any open review) stays.
+      setCurrent(proxy(20));
+      await vi.advanceTimersByTimeAsync(61_000);
+      expect(button()).toBe(first);
+      expect(first.isConnected).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('names a failing health check apart from the running state', () => {
