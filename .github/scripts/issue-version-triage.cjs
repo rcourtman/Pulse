@@ -10,36 +10,79 @@ function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function atxHeading(text) {
-  // Edited issue forms still use Markdown: up to three leading spaces and
-  // one to six hashes, separated from the text by whitespace. A closing hash
-  // run is optional, but only closes a heading when preceded by whitespace.
-  const match = text.match(/^ {0,3}#{1,6}(?:[ \t]+(.*)|$)/);
-  if (!match) return null;
-  return (match[1] || "").replace(/(?:^|[ \t]+)#+[ \t]*$/, "").trim();
+// Use the same locked GFM lexer as Pulse's Markdown surfaces, without
+// rendering or executing any issue content. Only top-level declarations count.
+const { lexer } = require("marked");
+
+function inlineProjection(tokens, maskCode = false) {
+  return (tokens || []).map((token) => {
+    const raw = token.raw || "";
+    // Keep line positions when removing hidden comments. A comment inside a
+    // code span is a literal, not an HTML token, and remains evidence.
+    if (token.type === "html" && /^<!--/.test(raw)) {
+      return raw.replace(/[^\r\n]/g, "");
+    }
+    if (maskCode && token.type === "codespan") {
+      return raw.replace(/[^\r\n]/g, " ");
+    }
+    if (token.tokens && typeof token.text === "string") {
+      const offset = raw.indexOf(token.text);
+      if (offset !== -1) {
+        return raw.slice(0, offset) + inlineProjection(token.tokens, maskCode) +
+          raw.slice(offset + token.text.length);
+      }
+    }
+    return raw;
+  }).join("");
 }
 
 function declarationLines(body) {
-  let fence = null;
-  return stripHTMLComments(body).split(/\r?\n/).map((text) => {
-    const marker = text.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
-    let delimiter = false;
-    const inCode = fence !== null;
-    if (fence) {
-      if (marker && marker[1][0] === fence.character &&
-          marker[1].length >= fence.length && !marker[2].trim()) {
-        fence = null;
-        delimiter = true;
+  const lines = [];
+  const append = (text, declaration = false, metadata = text) => {
+    const visible = text.split(/\r?\n/);
+    const declared = metadata.split(/\r?\n/);
+    visible.forEach((value, i) => lines.push({
+      text: value,
+      metadata: declared[i] || "",
+      delimiter: false,
+      declaration,
+      heading: null,
+    }));
+  };
+  for (const token of lexer(String(body || ""), { gfm: true })) {
+    if (token.type === "heading") {
+      const text = inlineProjection(token.tokens).trim();
+      lines.push({ text, metadata: text, delimiter: false, declaration: true, heading: text });
+    } else if (token.type === "paragraph") {
+      append(inlineProjection(token.tokens), true, inlineProjection(token.tokens, true));
+    } else if (token.type === "code") {
+      // A real version field may have a fenced or indented value. Its contents
+      // remain a value, never new metadata or a section boundary.
+      append(token.text);
+    } else if (token.type === "list") {
+      // Preserve legacy "- **Pulse version**: ..." declarations. Only an
+      // item's first line can declare one; lazy/nested copied content cannot.
+      for (const item of token.items) {
+        const first = item.tokens[0];
+        if (first && first.type === "text" && first.tokens) {
+          const text = inlineProjection(first.tokens);
+          const metadata = inlineProjection(first.tokens, true);
+          append(text.split(/\r?\n/)[0], true, metadata.split(/\r?\n/)[0]);
+          append(text.split(/\r?\n/).slice(1).join("\n"));
+          for (const nested of item.tokens.slice(1)) append(nested.raw || "");
+        } else {
+          append(item.raw);
+        }
       }
-    } else if (marker && (marker[1][0] === "~" || !marker[2].includes("`"))) {
-      fence = { character: marker[1][0], length: marker[1].length };
-      delimiter = true;
+    } else if (token.type === "html" && /^\s*<!--/.test(token.raw)) {
+      append("");
+    } else {
+      // Block quotes (including lazy continuation), HTML, tables and nested
+      // examples are evidence, not top-level form structure.
+      append(token.raw || "");
     }
-    // Pasted examples and logs are evidence, not issue-form structure. Keep
-    // their text as a value under a real field, but never scan it for fields.
-    const declaration = !inCode && !delimiter && !/^(?: {4}|\t)/.test(text);
-    return { text, delimiter, declaration, heading: declaration ? atxHeading(text) : null };
-  });
+  }
+  return lines;
 }
 
 function firstFieldValue(lines) {
@@ -64,86 +107,6 @@ function extractSectionValue(body, heading, followingHeadings = []) {
   return lines.slice(start + 1, end).map((line) => line.text).join("\n").trim();
 }
 
-function stripHTMLComments(value) {
-  let stripped = String(value || "");
-  let previous;
-  do {
-    previous = stripped;
-    let fence = null;
-    let inComment = false;
-    // Strip hidden template text, not literal markers in pasted code. In
-    // particular, an unfinished HTML response must not swallow the real form
-    // fields after its closing Markdown fence. Match the same fences and
-    // indentation that declarationLines excludes from metadata declarations.
-    stripped = stripped.split(/(\r?\n)/).map((text, index) => {
-      if (index % 2) return text;
-      const marker = text.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
-      if (!inComment) {
-        if (fence) {
-          if (marker && marker[1][0] === fence.character &&
-              marker[1].length >= fence.length && !marker[2].trim()) {
-            fence = null;
-          }
-          return text;
-        }
-        if (marker && (marker[1][0] === "~" || !marker[2].includes("`"))) {
-          fence = { character: marker[1][0], length: marker[1].length };
-          return text;
-        }
-        // A quoted log is not a top-level form declaration. Its literal
-        // comment opener must not hide the unquoted fields which follow it.
-        if (/^(?: {4}|\t| {0,3}>)/.test(text)) return text;
-      }
-      // Match complete, same-line code spans by exact backtick-run length.
-      // Looking up the next run avoids rescanning a long pasted line for each
-      // unmatched delimiter. Backticks inside a hidden comment cannot open a
-      // span: the scanner below skips the comment before considering them.
-      const codeEnds = new Map();
-      const nextRun = new Map();
-      const runs = [...text.matchAll(/`+/g)];
-      for (let i = runs.length - 1; i >= 0; i -= 1) {
-        const run = runs[i];
-        if (nextRun.has(run[0].length)) {
-          codeEnds.set(run.index, nextRun.get(run[0].length));
-        }
-        nextRun.set(run[0].length, run.index + run[0].length);
-      }
-      const token = /<!--|`+/g;
-      let visible = "";
-      let offset = 0;
-      while (offset < text.length) {
-        if (inComment) {
-          const end = text.indexOf("-->", offset);
-          if (end === -1) break;
-          offset = end + 3;
-          inComment = false;
-        } else {
-          token.lastIndex = offset;
-          const next = token.exec(text);
-          if (!next) return visible + text.slice(offset);
-          const start = next.index;
-          visible += text.slice(offset, start);
-          let escapes = 0;
-          for (let i = start - 1; i >= 0 && text[i] === "\\"; i -= 1) escapes += 1;
-          const codeEnd = next[0][0] === "`" && escapes % 2 === 0 && codeEnds.get(start);
-          if (codeEnd) {
-            visible += text.slice(start, codeEnd);
-            offset = codeEnd;
-          } else if (next[0] === "<!--" && escapes % 2 === 0) {
-            offset = start + 4;
-            inComment = true;
-          } else {
-            visible += next[0];
-            offset = start + next[0].length;
-          }
-        }
-      }
-      return visible;
-    }).join("");
-  } while (stripped !== previous);
-  return stripped;
-}
-
 function classifyAdditionalActionableTopics(body) {
   const value = extractSectionValue(body, "Additional actionable topics", [
     "Pulse version",
@@ -153,11 +116,11 @@ function classifyAdditionalActionableTopics(body) {
   ]);
   if (value === null) return null;
 
-  const normalized = stripHTMLComments(value)
+  const normalized = value
     .trim()
     .toLowerCase()
     .replace(/[.!]+$/g, "");
-  if (!normalized) return false;
+  if (!normalized || !/[\p{L}\p{N}]/u.test(normalized)) return false;
 
   return !new Set([
     "_no response_",
@@ -198,7 +161,7 @@ function extractPulseVersion(title, body) {
     }
     for (let i = 0; i < lines.length; i += 1) {
       if (!lines[i].declaration) continue;
-      const line = (lines[i].heading ?? lines[i].text).replace(/\*\*|__/g, "")
+      const line = (lines[i].heading ?? lines[i].metadata).replace(/\*\*|__/g, "")
         .replace(/^[ \t]*[-*][ \t]+/, "").trim();
       const field = line.match(
         /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
@@ -208,7 +171,12 @@ function extractPulseVersion(title, body) {
       // Legacy inline/standalone fields have the same authority as the form.
       // Unknown or incomplete must not borrow an agent/platform version or
       // an upgrade's starting version from the title.
-      const inlineValue = field[1].trim();
+      const visibleLine = (lines[i].heading ?? lines[i].text).replace(/\*\*|__/g, "")
+        .replace(/^[ \t]*[-*][ \t]+/, "").trim();
+      const visibleField = visibleLine.match(
+        /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
+      );
+      const inlineValue = visibleField ? visibleField[1].trim() : "";
       if (inlineValue) return normalizeLegacyVersionValue(inlineValue);
       // A declared value may itself be fenced; that does not turn headings
       // elsewhere in a fenced log into declarations.
@@ -216,6 +184,9 @@ function extractPulseVersion(title, body) {
     }
   }
 
+  // A starting version named in an upgrade title is not a running-version
+  // declaration. Copied examples may leave no usable body field at all.
+  if (/\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing))\b[^\n]*\bfrom\b/i.test(String(title || ""))) return null;
   return normalizeVersion(title);
 }
 

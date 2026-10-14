@@ -547,26 +547,30 @@ test("inline and quoted HTML literals cannot hide subsequent form declarations",
   }
 });
 
-test("actual hidden comments stay hidden beside inline and quoted evidence", () => {
+test("an interrupted inline comment cannot turn an unclosed code fence into visible fields", () => {
   const { extractPulseVersion, classifyV6FeedbackType, classifyAdditionalActionableTopics } = triage.internals;
   for (const evidence of [
     "A literal `<!-- unfinished` followed by <!--",
-    "A mismatched `<!-- opener`` remains an actual comment",
+    "A mismatched `<!-- opener`` remains text before a block quote",
     "An escaped \\` backtick does not protect <!-- unfinished`",
-    "An even escape \\\\<!-- still opens a comment",
+    "An even escape \\\\<!-- remains text before the quote",
     "<!-- a hidden ` backtick is not an opener --> <!-- second hidden`",
   ]) {
     const body = [evidence, "> quoted text", "```", "### Pulse version", "6.4.1",
-      "### Feedback type", "Bug / regression", "### Additional actionable topics", "Hidden topic",
+      "### Feedback type", "Bug / regression", "### Additional actionable topics", "Copied topic",
       "-->", "### Pulse version", "unknown", "### Feedback type", "Documentation issue",
       "### Additional actionable topics", "None"].join("\n");
+    // GFM's block lexer puts every later line inside the unclosed fence.
+    // The previous scanner mistakenly treated an inline opener as a comment
+    // across those blocks, then accepted invisible headings after its close.
     assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), null, body);
-    assert.equal(classifyV6FeedbackType(body), "documentation", body);
-    assert.equal(classifyAdditionalActionableTopics(body), false, body);
-    const unfinished = body.replace("-->\n### Pulse version\nunknown", "\n### Pulse version\nunknown");
-    assert.equal(extractPulseVersion("Bug", unfinished), null, unfinished);
-    assert.equal(classifyV6FeedbackType(unfinished), null, unfinished);
-    assert.equal(classifyAdditionalActionableTopics(unfinished), null, unfinished);
+    assert.equal(classifyV6FeedbackType(body), null, body);
+    assert.equal(classifyAdditionalActionableTopics(body), null, body);
+    const visible = body + "\n```\n### Pulse version\n6.5.0\n" +
+      "### Feedback type\nDocumentation issue\n### Additional actionable topics\nNone";
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5", visible), "6.5.0", visible);
+    assert.equal(classifyV6FeedbackType(visible), "documentation", visible);
+    assert.equal(classifyAdditionalActionableTopics(visible), false, visible);
   }
 });
 
@@ -1418,4 +1422,96 @@ test("a mismatched current issue identity fails closed", async () => {
   assert.equal(calls.addLabels.length, 0);
   assert.equal(calls.removeLabel.length, 0);
   assert.equal(calls.createComment.length, 0);
+});
+
+
+test("quoted and multiline inline-code versions cannot replace a legacy declaration", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const newline of ["\n", "\r\n"]) {
+    for (const copied of [
+      "> Copied old log\nPulse version: 6.4.5",
+      "Pasted text: `\nPulse version: 6.4.5\n`",
+      "Pasted text: **`\nPulse version: 6.4.5\n`**",
+      "- Copied old log\n  Pulse version: 6.4.5",
+      "<pre>\nPulse version: 6.4.5\n</pre>",
+    ]) {
+      const body = (copied + "\n\nPulse version: **`6.5.0`**").replaceAll("\n", newline);
+      assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0", body);
+      assert.equal(extractPulseVersion("Bug", copied.replaceAll("\n", newline)), null, copied);
+    }
+  }
+});
+
+test("raw HTML and nested headings cannot declare form metadata", () => {
+  const { extractPulseVersion, classifyV6FeedbackType, classifyAdditionalActionableTopics } = triage.internals;
+  const fields = "### Pulse version\n6.4.5\n### Feedback type\nBug / regression\n" +
+    "### Additional actionable topics\nCopied template text.";
+  for (const copied of [
+    "<div>\n" + fields + "\n</div>",
+    "<pre>\n" + fields + "\n</pre>",
+    "<script>\n" + fields + "\n</script>",
+    fields.split("\n").map(line => "> " + line).join("\n"),
+    "- Copied template\n\n" + fields.split("\n").map(line => "  " + line).join("\n"),
+  ]) {
+    assert.equal(extractPulseVersion("No declared version", copied), null, copied);
+    assert.equal(classifyV6FeedbackType(copied), null, copied);
+    assert.equal(classifyAdditionalActionableTopics(copied), null, copied);
+    const body = copied + "\n\n### Pulse version\nunknown\n### Feedback type\nDocumentation issue\n" +
+      "### Additional actionable topics\nNone";
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), null, body);
+    assert.equal(classifyV6FeedbackType(body), "documentation", body);
+    assert.equal(classifyAdditionalActionableTopics(body), false, body);
+  }
+});
+
+test("the actual label consumer keeps copied declarations from changing report or Community state", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2902, title: "Pasted old installer output",
+    body: "> Copied log\nPulse version: 6.4.5\n\n" +
+      "<div>\n### Feedback type\nBug / regression\n### Additional actionable topics\nExample\n</div>\n\n" +
+      "Pulse version: `6.5.0`",
+    labels: ["bug", "affects-6.4.5", "needs-version-info", "needs-retest-on-latest", "needs-human", "operator-reviewed"]
+      .map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2902]);
+});
+
+
+test("triage workflow prepares and checks the exact parser before minting its write token", () => {
+  const workflow = fs.readFileSync(path.resolve(__dirname, "../workflows/issue-version-label-sync.yml"), "utf8");
+  const install = workflow.indexOf("run: npm ci --ignore-scripts --no-audit --no-fund --prefix .github/scripts");
+  const check = workflow.indexOf("run: npm run test:triage --prefix .github/scripts");
+  const credential = workflow.indexOf("- name: Mint triage bot token");
+  assert.ok(install >= 0 && check > install && credential > check);
+  assert.match(workflow, /node-version: '24'/);
+  assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}/);
+  assert.match(workflow, /persist-credentials: false/);
+  for (const file of ["package.json", "package-lock.json", "issue-version-triage.test.cjs", "triage-comment-policy.test.cjs"]) {
+    assert.ok(workflow.includes(`.github/scripts/${file}`), file);
+  }
+  assert.ok(workflow.includes("docs/ISSUE_TRIAGE.md"));
+  assert.ok(workflow.includes(".github/ISSUE_TEMPLATE"));
+  assert.ok(workflow.includes(".github/workflows"));
+  assert.doesNotMatch(workflow, /npm install|--ignore-scripts=false|\$\{\{ github\.event\.issue\.body/);
+});
+
+test("the standalone triage graph reuses the existing exact parser without transitive or lifecycle additions", () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
+  const lock = JSON.parse(fs.readFileSync(path.join(__dirname, "package-lock.json"), "utf8"));
+  assert.equal(manifest.private, true);
+  assert.deepEqual(manifest.dependencies, { marked: "17.0.6" });
+  assert.deepEqual(lock.packages[""].dependencies, manifest.dependencies);
+  assert.deepEqual(Object.keys(lock.packages).sort(), ["", "node_modules/marked"]);
+  const parser = lock.packages["node_modules/marked"];
+  assert.equal(parser.version, manifest.dependencies.marked);
+  assert.equal(parser.resolved, "https://registry.npmjs.org/marked/-/marked-17.0.6.tgz");
+  assert.match(parser.integrity, /^sha512-/);
+  assert.equal(parser.hasInstallScript, undefined);
+  assert.equal(parser.dependencies, undefined);
+  assert.equal(parser.optionalDependencies, undefined);
 });
