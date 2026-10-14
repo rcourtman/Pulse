@@ -73,6 +73,8 @@ import {
   compareDockerContainers,
   dockerContainerPortsCompactSummary,
   dockerContainerPortsSummary,
+  dockerContainerRestartAttentionLabel,
+  dockerContainerRestartCountTitle,
   filterDockerResources,
   mapDockerContainerStatus,
   type DockerResourceStatusFilter,
@@ -93,7 +95,6 @@ import { DockerContainerLifecycleControls } from './DockerContainerLifecycleCont
 import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from './dockerCpuPresentation';
 import { DockerImageReferenceText } from './DockerImageReferenceText';
 import {
-  DOCKER_RESTART_ATTENTION_THRESHOLD,
   getDockerContainerStatePresentation,
   getDockerContainerUptimeSeconds,
   type DockerContainerStateTone,
@@ -533,7 +534,6 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const memoryPercentOnly = () =>
       memoryTotal() > 0 ? undefined : getPlatformTableFiniteMetric(resource.memory?.current);
     const hasMemoryMetric = () => memoryTotal() > 0 || memoryPercentOnly() !== undefined;
-    const restartCount = () => resource.docker?.restartCount ?? 0;
     const ports = () => dockerContainerPortsSummary(resource);
     const portsCompact = () => dockerContainerPortsCompactSummary(resource);
     const networks = () => networksSummary(resource);
@@ -628,10 +628,11 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
               >
                 <span
                   class={`tabular-nums ${
-                    restartCount() > DOCKER_RESTART_ATTENTION_THRESHOLD
-                      ? 'font-medium text-red-600 dark:text-red-400'
+                    dockerContainerRestartAttentionLabel(resource)
+                      ? DOCKER_CONTAINER_STATE_TONE_CLASS.warning
                       : ''
                   }`}
+                  title={dockerContainerRestartCountTitle(resource.docker?.restartCount ?? 0)}
                 >
                   {resource.docker?.restartCount}
                 </span>

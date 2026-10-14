@@ -2813,6 +2813,11 @@ not a replacement status card, CTA band, or page-local nested card.
    desktop table and inline detail. Consumers mark a normal-phone demotion with
    `platform-table-phone-hidden` on both its header and its body cell. The shared
    container rule owns the matching `th`/`td` visibility so the two cannot drift.
+   A table that decides a column from its own measured layout instead drops the
+   header and the cell under the same condition: the Docker Networks table had
+   the class on the Subnets cell and the Driver header, so a phone showed
+   `bridge` under SUBNETS. It now leaves both to its compact layout's Network
+   details, and its browser proof counts visible headers against cells.
    Column visibility is container-led but `md:w-[...]` widths are viewport media
    queries, so between a 34rem container and a 768px viewport the phone-hidden
    columns return while no width applies, and every visible column took an equal
@@ -5621,7 +5626,11 @@ once under the drawer's owner and reused by every rebuild of the inventory
 rows, so a refresh or clock tick never recreates the button or closes its
 review dialog. A container's row dot, State words and drawer header dot share
 `mapDockerContainerStatus`, so a degraded container with no reported state is
-amber in all three. "Worth checking" renders through
+amber in all three. That mapper also owns the restart verdict
+(`dockerContainerRestartAttentionLabel`): a running container past five
+restarts is warning in its dot, the sort, the phone State words, the Restarts
+column and the drawer's lifted Restarts row alike, never a green dot beside an
+amber or red count. "Worth checking" renders through
 `DrawerExceptionList.tsx` directly under the alerts line, above the charts:
 one compact label/value line per lifted row with the shared
 `detailValueToneClass` tone, not a card per section. A guest memory reading

@@ -7,6 +7,7 @@ import {
   getDockerContainerStatePresentation,
   getDockerContainerUptimeSeconds,
 } from '../dockerContainerStatePresentation';
+import { mapDockerContainerStatus } from '../dockerPageModel';
 
 const container = (docker: NonNullable<Resource['docker']>, status = 'online'): Resource =>
   ({
@@ -164,7 +165,7 @@ describe('restart warning where the Restarts column is hidden', () => {
     const looping = container({ containerState: 'running', health: 'healthy', restartCount: 7 });
     expect(getDockerContainerStatePresentation(looping, { flagRestarts: true })).toEqual({
       label: '7 restarts',
-      title: 'Running, but Docker has restarted it 7 times',
+      title: 'Running. Docker has restarted it 7 times in total, not necessarily recently',
       tone: 'warning',
     });
     expect(getDockerContainerStatePresentation(looping)).toMatchObject({ label: 'Healthy' });
@@ -174,6 +175,25 @@ describe('restart warning where the Restarts column is hidden', () => {
         { flagRestarts: true },
       ),
     ).toMatchObject({ label: 'Running', tone: null });
+  });
+
+  it('colours the row dot by the same restart verdict in every layout', () => {
+    const looping = container({ containerState: 'running', health: 'healthy', restartCount: 7 });
+    // The dot cannot change colour with the viewport, so it always carries
+    // the verdict; the words name it where no Restarts column does.
+    expect(mapDockerContainerStatus(looping)).toEqual({ variant: 'warning', label: '7 restarts' });
+    expect(
+      mapDockerContainerStatus(container({ containerState: 'running', restartCount: 5 })),
+    ).toEqual({ variant: 'success', label: 'Running' });
+    // A stopped container's restart history is not a running crash-loop.
+    expect(
+      mapDockerContainerStatus(container({ containerState: 'paused', restartCount: 9 })),
+    ).toMatchObject({ label: 'Paused' });
+    // The drawer shows the count on its own row, so its state stays Docker's.
+    expect(getDockerContainerRunStatePresentation(looping)).toMatchObject({
+      label: 'Running',
+      tone: null,
+    });
   });
 
   it('keeps a worse state ahead of the restart count', () => {

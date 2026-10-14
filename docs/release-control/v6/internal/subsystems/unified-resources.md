@@ -1902,7 +1902,13 @@ edge; that fallback must not match containers across Docker hosts. When a
 single network has many attached containers, relationship consumers must keep
 the attached container fields searchable and attention-filterable from the
 network detail disclosure instead of forcing operators to inspect a full
-container inventory table.
+container inventory table. Its Attention filter is the rows' verdict (the
+`mapDockerContainerStatus` dot), while Running and Other are Docker's run
+state, so an unhealthy or crash-looping container that still runs matches
+Running and Attention both; the sections stay one per row, Attention first.
+The network's State counts every Attention row ("3 need attention", the dot
+taking the worst). A phone row leaves Subnets and Driver, header and cell
+together, to the expansion's Network details.
 
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 12. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `storage-recovery`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
@@ -7074,7 +7080,15 @@ has one of those states, including an unhealthy running container. A narrow
 table (under 360 pixels, most phones) has no State column: beside the shared
 40 percent name it cut "Unhealthy" to "Unhe…", so the same words read under
 the container name on every row, and a saved State sort waits for a layout
-that shows its header. From the
+that shows its header. A running container that Docker has restarted more
+than five times gets one verdict, from `mapDockerContainerStatus`: warning,
+"N restarts". The row dot, the drawer header dot and the attention-first sort
+read it everywhere; where the row has a Restarts column the count reads amber
+there and State keeps Docker's own word, and where it has none State says
+"N restarts". The drawer's Restarts row is amber too, and its observed state
+stays Docker's word so the restart is lifted once. Amber, not red: the
+container is running. Docker's count is a total, not a rate, as its hover
+says; the alert engine owns the windowed restart-loop alert. From the
 compact layout up an Uptime column shows the current run (none for a stopped
 container, whose leftover uptime is not time spent running), which marks a
 container that just restarted; narrower rows keep it in the drawer. The Ports
