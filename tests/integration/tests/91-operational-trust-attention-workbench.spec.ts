@@ -922,7 +922,10 @@ test("puts the selected detail in view on a phone without page overflow", async 
     mobileReviewNavigation.getByRole("button", { name: "Previous" }),
   ).toBeDisabled();
   await expect(
-    mobileReviewNavigation.getByRole("button", { name: "Next issue", exact: true }),
+    mobileReviewNavigation.getByRole("button", {
+      name: "Next issue",
+      exact: true,
+    }),
   ).toBeVisible();
   const overflows = await page.evaluate(
     () =>

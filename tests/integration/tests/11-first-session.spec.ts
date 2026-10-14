@@ -403,7 +403,11 @@ test.describe.serial("First-session experience", () => {
         page.getByRole("heading", { name: "Pulse Mobile" }).last(),
       ).toBeVisible();
       const main = page.getByRole("main");
-      await expect(main.getByText(/31 March 2027/).first()).toBeVisible();
+      const retirementNotice = main.getByRole("note", {
+        name: "Pulse Mobile retirement",
+      });
+      await expect(retirementNotice).toBeVisible();
+      await expect(retirementNotice.getByText(/31 March 2027/)).toBeVisible();
       await expect(
         main.getByRole("link", { name: /Upgrade|Try Pro|Buy Relay/i }),
       ).toHaveCount(0);

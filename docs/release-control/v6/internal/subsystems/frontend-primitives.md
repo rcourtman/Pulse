@@ -20,6 +20,21 @@
 
 ## Purpose
 
+### Pulse Mobile retirement guidance stays readable (14 October 2026)
+
+The existing Pulse Mobile settings surface exposes its retirement guidance as
+a labelled note. An instance without the Relay capability uses the shared
+`InlineNotice`, not the sales gate's two-line body: the date and existing ntfy,
+Gotify and Pushover alternatives wrap in full on a phone. Existing entitled
+phones retain their configuration and pairing controls until 31 March 2027;
+neither note adds an offer, billing read, pairing action or new navigation.
+
+`RelaySettingsPanel.runtime.test.tsx` preserves the full unlicensed message,
+absence of clamping/actions and existing entitlement controls. The first-session
+and paid-navigation browser tests target the actual labelled note rather than
+the desktop-only page subtitle. Desktop and narrow consuming proof must inspect
+the rendered copy and unchanged hidden-form/entitlement boundaries.
+
 ### Independent PBS resource and inventory rendering (13 October 2026)
 
 The existing PBS health/datastore/detail table remains mounted outside backup

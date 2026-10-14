@@ -304,7 +304,11 @@ test.describe('Self-hosted plans entitlement summary', () => {
     // a renewed Relay offer, and the test must not change pairing/configuration.
     await page.goto('/settings/system-relay', { waitUntil: 'domcontentloaded' });
     const mobilePanel = page.getByRole('main');
-    await expect(mobilePanel.getByText(/31 March 2027/).first()).toBeVisible();
+    await expect(
+      mobilePanel
+        .getByRole('note', { name: 'Pulse Mobile retirement' })
+        .getByText(/31 March 2027/),
+    ).toBeVisible();
     await expect(mobilePanel.getByText('Allow Pulse Mobile connections', { exact: true })).toBeVisible();
     await expect(mobilePanel.getByText('Pair Pulse Mobile', { exact: true }).first()).toBeVisible();
     await expect(mobilePanel.getByRole('link', { name: /Buy Relay|Upgrade|Try Pro/i })).toHaveCount(0);
