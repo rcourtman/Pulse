@@ -13,6 +13,13 @@ import type {
   ConnectionFleetVersionDrift,
 } from '@/api/connections';
 import { getAgentHostProfileFamily } from '@/utils/platformSupportManifest';
+import {
+  buildDockerPath,
+  buildKubernetesPath,
+  buildProxmoxPath,
+  buildTrueNASPath,
+  buildVmwarePath,
+} from '@/routing/resourceLinks';
 
 export const lastActivityTextFromLastSeen = (lastSeen?: string | null): string => {
   if (!lastSeen) return 'No activity yet';
@@ -1037,6 +1044,25 @@ export interface InfrastructureSystemRow {
   members: InfrastructureSystemMemberRow[];
   connection: Connection;
 }
+
+// The page that shows a connected system's data. Settings lists the
+// connection, but a PBS reads as Active here while its servers live under
+// Proxmox > Backups, which users did not find (#2905). Agent hosts appear on
+// different pages depending on what they run, and availability checks under
+// Machines, so neither has a single destination.
+const MONITORING_PATH_BY_CONNECTION_TYPE: Partial<Record<ConnectionType, string>> = {
+  pve: buildProxmoxPath(),
+  pbs: buildProxmoxPath('backups'),
+  pmg: buildProxmoxPath('mail'),
+  vmware: buildVmwarePath(),
+  truenas: buildTrueNASPath(),
+  docker: buildDockerPath(),
+  kubernetes: buildKubernetesPath(),
+};
+
+export const infrastructureRowMonitoringPath = (
+  row: Pick<InfrastructureSystemRow, 'ownerType'>,
+): string | undefined => MONITORING_PATH_BY_CONNECTION_TYPE[row.ownerType];
 
 // Pick the single most important problem to surface in the row's status
 // column. Critical beats warning; otherwise first wins — the upstream
