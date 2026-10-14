@@ -405,12 +405,18 @@ download_update_asset() {
 # plausible partial result grants an update, restart or rollback.
 read_update_service_state() {
     local service_name=$1 observation="" line="" load="" state=""
-    local seen_load=false seen_state=false
-    if ! observation=$(LC_ALL=C timeout -k 1 5 systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState 2>/dev/null); then
+    local seen_load=false seen_state=false read_completed=false
+    # Keep diagnostics in the same observation and preserve trailing blank
+    # records. Command substitution otherwise discards them, turning an
+    # incomplete manager reply into consent for update/restart/rollback.
+    # The completion marker also requires the last property to end normally.
+    if ! observation=$(LC_ALL=C timeout -k 1 5 systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState 2>&1 &&
+        printf '%s' '__pulse_state_read_completed__'); then
         log error "Cannot read Pulse service state ($service_name); reconcile service state before retrying" >&2
         return 1
     fi
     while IFS= read -r line; do
+        [[ "$read_completed" == false ]] || return 1
         case "$line" in
             LoadState=*)
                 [[ "$seen_load" == false ]] || { log error "Duplicate Pulse service load state ($service_name)" >&2; return 1; }
@@ -418,12 +424,14 @@ read_update_service_state() {
             ActiveState=*)
                 [[ "$seen_state" == false ]] || { log error "Duplicate Pulse service active state ($service_name)" >&2; return 1; }
                 seen_state=true; state=${line#ActiveState=} ;;
+            __pulse_state_read_completed__) read_completed=true ;;
             *)
                 log error "Incomplete Pulse service observation ($service_name); no service action is safe" >&2
                 return 1 ;;
         esac
     done <<< "$observation"
-    if [[ "$seen_load" != true || "$seen_state" != true || ( "$load" != loaded && "$load" != masked ) ]]; then
+    if [[ "$seen_load" != true || "$seen_state" != true || "$read_completed" != true ||
+          ( "$load" != loaded && "$load" != masked ) ]]; then
         log error "Pulse service is unavailable ($service_name); no service action is safe" >&2
         return 1
     fi
@@ -437,12 +445,16 @@ read_update_service_state() {
 # Read one complete tuple so a missing/recycled process is not update evidence.
 read_update_service_main_pid() {
     local service_name=$1 observation="" line="" load="" state="" pid=""
-    local seen_load=false seen_state=false seen_pid=false
-    if ! observation=$(LC_ALL=C timeout -k 1 5 systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState --property=MainPID 2>/dev/null); then
+    local seen_load=false seen_state=false seen_pid=false read_completed=false
+    # Both sides of the executable comparison require a complete read, just
+    # like update admission. Never hide a diagnostic behind a plausible PID.
+    if ! observation=$(LC_ALL=C timeout -k 1 5 systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState --property=MainPID 2>&1 &&
+        printf '%s' '__pulse_state_read_completed__'); then
         log error "Cannot read running Pulse identity ($service_name); reconcile service state before recovery" >&2
         return 1
     fi
     while IFS= read -r line; do
+        [[ "$read_completed" == false ]] || return 1
         case "$line" in
             LoadState=*)
                 [[ "$seen_load" == false ]] || return 1
@@ -453,10 +465,11 @@ read_update_service_main_pid() {
             MainPID=*)
                 [[ "$seen_pid" == false ]] || return 1
                 seen_pid=true; pid=${line#MainPID=} ;;
+            __pulse_state_read_completed__) read_completed=true ;;
             *) return 1 ;;
         esac
     done <<< "$observation"
-    if [[ "$seen_load" != true || "$seen_state" != true || "$seen_pid" != true ||
+    if [[ "$seen_load" != true || "$seen_state" != true || "$seen_pid" != true || "$read_completed" != true ||
           ( "$load" != loaded && "$load" != masked ) || "$state" != active ||
           ! "$pid" =~ ^[1-9][0-9]*$ ]]; then
         log error "Incomplete running Pulse identity ($service_name); reconcile service state before recovery" >&2

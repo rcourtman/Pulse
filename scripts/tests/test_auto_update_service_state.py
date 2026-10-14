@@ -48,8 +48,15 @@ if args[0] == "show":
         print("LoadState=loaded\nActiveState=inactive\nUnknown=active")
         sys.exit(0)
     # Reverse property order deliberately: systemd does not promise ordering.
-    print("ActiveState=" + state)
-    print("LoadState=" + os.environ["LOAD_STATE"])
+    payload = "ActiveState=" + state + "\nLoadState=" + os.environ["LOAD_STATE"] + "\n"
+    phase = "post-stop" if stopped else ("post-install" if after else "initial")
+    fault = os.environ.get("OBSERVATION_FAULT", "") if phase == os.environ.get("OBSERVATION_PHASE") else ""
+    if fault == "stdout-blank": payload += "\n"
+    if fault == "stdout-unterminated": payload = payload.rstrip("\n")
+    sys.stdout.write(payload)
+    sys.stdout.flush()
+    if fault == "stderr-warning": sys.stderr.write("private fixture manager diagnostic\n")
+    if fault == "stderr-blank": sys.stderr.write("\n")
     sys.exit(0)
 if args[0] == "is-active":
     sys.exit(0 if state == "active" and not mode.startswith("initial-") else 1)
@@ -181,7 +188,8 @@ def read_logger_calls(path):
 class UpdaterFixture(unittest.TestCase):
     def run_fixture(self, *, mode="normal", state="active", load="loaded", success=False, flow="update",
                     installer_exit=None, collector_exit=0, installer_output=None, collector_failures=None,
-                    real_log=False, runtime_exit=0, installer_state=None, download_fault=""):
+                    real_log=False, runtime_exit=0, installer_state=None, download_fault="",
+                    observation_fault="", observation_phase="initial"):
         with tempfile.TemporaryDirectory(prefix="pulse-updater-state-") as directory:
             f = Path(directory)
             for name in ("tools", "tmp", "install/bin", "config"):
@@ -222,6 +230,7 @@ class UpdaterFixture(unittest.TestCase):
                        COLLECTOR_EXIT=str(collector_exit),
                        REAL_LOG="true" if real_log else "false", RUNTIME_EXIT=str(runtime_exit),
                        DOWNLOAD_FAULT=download_fault,
+                       OBSERVATION_FAULT=observation_fault, OBSERVATION_PHASE=observation_phase,
                        PATH=str(f / "tools") + os.pathsep + os.environ["PATH"])
             for line, status in (collector_failures or {}).items():
                 env[f"COLLECTOR_EXIT_{line}"] = str(status)
@@ -381,6 +390,58 @@ class UpdateLogSinks(UpdaterFixture):
 
 
 class UpdateServiceState(UpdaterFixture):
+    def test_manager_diagnostics_refuse_initial_update_and_restart(self):
+        for fault in ("stderr-warning", "stderr-blank", "stdout-blank", "stdout-unterminated"):
+            for flow, state in (("update", "active"), ("update", "inactive"), ("backstop", "inactive")):
+                with self.subTest(fault=fault, flow=flow, state=state):
+                    r = self.run_fixture(observation_fault=fault, flow=flow, state=state, success=True)
+                    # The backstop retains the caller's status, but no unknown
+                    # observation is consent to install, restart or allocate.
+                    self.assertEqual(r["exit"], 0 if flow == "backstop" else 1, r)
+                    self.assertFalse(r["installed"] or r["downloaded"] or r["temporary"], r)
+                    self.assertFalse(r["started"] or r["stopped"], r)
+                    self.assertEqual(r["state"], state, r)
+                    self.assertEqual(r["backups"], [], r)
+                    self.assertEqual(r["binary"], b"#!/bin/sh\necho 'Pulse v6.5.0'\n", r)
+                    self.assertEqual(len(r["calls"]), 1, r)  # No more favourable read.
+                    self.assertNotIn("private fixture manager diagnostic", r["output"] + r["error"])
+
+    def test_manager_diagnostics_after_install_retain_backup_without_mutation(self):
+        for fault in ("stderr-warning", "stderr-blank", "stdout-blank", "stdout-unterminated"):
+            for state in ("active", "inactive"):
+                with self.subTest(fault=fault, state=state):
+                    r = self.run_fixture(observation_fault=fault, observation_phase="post-install",
+                                         state=state, success=True, installer_state="active")
+                    self.assertEqual(r["exit"], 1, r)
+                    self.assertTrue(r["installed"] and r["installer_finished"], r)
+                    self.assertFalse(r["started"] or r["stopped"], r)
+                    self.assertEqual(r["state"], "active", r)
+                    self.assertEqual(r["version"], "v6.6.0\n", r)
+                    self.assertEqual(r["backups"], [b"#!/bin/sh\necho 'Pulse v6.5.0'\n"], r)
+                    self.assertEqual(r["runtime_probes"], [], r)
+                    self.assertEqual(len(r["calls"]), 2, r)
+                    self.assertNotIn("Update successfully installed and verified", r["output"])
+                    self.assertNotIn("private fixture manager diagnostic", r["output"] + r["error"])
+
+    def test_manager_diagnostics_after_stop_retain_backup_without_restart(self):
+        for fault in ("stderr-warning", "stderr-blank", "stdout-blank", "stdout-unterminated"):
+            for state in ("active", "inactive"):
+                with self.subTest(fault=fault, state=state):
+                    r = self.run_fixture(observation_fault=fault, observation_phase="post-stop",
+                                         state=state, installer_state="active")
+                    self.assertEqual(r["exit"], 1, r)
+                    self.assertTrue(r["installed"] and r["stopped"], r)
+                    self.assertFalse(r["started"], r)
+                    self.assertEqual(r["state"], "inactive", r)
+                    # The stop was authorised by the previous valid read;
+                    # incomplete readback permits neither restore nor restart.
+                    self.assertEqual(r["version"], "v6.6.0\n", r)
+                    self.assertEqual(r["backups"], [b"#!/bin/sh\necho 'Pulse v6.5.0'\n"], r)
+                    self.assertEqual(len(r["calls"]), 4, r)
+                    self.assertIn("manual recovery required", r["output"])
+                    self.assertNotIn("Previous installation restored", r["output"])
+                    self.assertNotIn("private fixture manager diagnostic", r["output"] + r["error"])
+
     def test_success_cannot_claim_unverified_running_executable(self):
         # A matching new disk version and an active manager are insufficient.
         # Preserve the currently active service; uncertainty grants no stop,
@@ -585,9 +646,19 @@ if mode == "pid-moved" and count > 1: pid = os.environ["DIFFERENT_PID"]
 load = "not-found" if mode == "not-found" else ("masked" if mode == "masked" else "loaded")
 state = "inactive" if mode == "inactive" or (mode == "state-moved" and count > 1) else "active"
 # Deliberately reverse property order, as systemd does not promise an order.
-print("MainPID=" + pid)
-if mode != "missing": print("ActiveState=" + state)
-print("LoadState=" + load)
+payload = "MainPID=" + pid + "\n"
+if mode != "missing": payload += "ActiveState=" + state + "\n"
+payload += "LoadState=" + load + "\n"
+fault = ""
+if mode.startswith("diagnostic:"):
+    _, selected_fault, selected_read = mode.split(":")
+    if count == int(selected_read): fault = selected_fault
+if fault == "stdout-blank": payload += "\n"
+if fault == "stdout-unterminated": payload = payload.rstrip("\n")
+sys.stdout.write(payload)
+sys.stdout.flush()
+if fault == "stderr-warning": sys.stderr.write("private fixture manager diagnostic\n")
+if fault == "stderr-blank": sys.stderr.write("\n")
 if mode == "duplicate": print("MainPID=" + pid)
 if mode == "extra": print("Unknown=value")
 '''
@@ -653,6 +724,18 @@ class RunningExecutable(unittest.TestCase):
                 accepted = mode in ("normal", "masked")
                 self.assertEqual(r.returncode, 0 if accepted else 2, r.stderr)
                 self.assertEqual(observations, 2 if accepted or mode in ("pid-moved", "state-moved") else 1)
+
+    def test_manager_diagnostics_refuse_either_running_identity_read(self):
+        # These read the actual private child's /proc executable before and
+        # after the unchanged byte comparison, not a simulated version file.
+        for fault in ("stderr-warning", "stderr-blank", "stdout-blank", "stdout-unterminated"):
+            for reading in (1, 2):
+                with self.subTest(fault=fault, reading=reading):
+                    r, _, observations = self.run_identity(mode=f"diagnostic:{fault}:{reading}")
+                    self.assertEqual(r.returncode, 2, r.stderr)
+                    self.assertIn(b"IDENTITY_STATUS=2", r.stdout)
+                    self.assertEqual(observations, reading)
+                    self.assertNotIn(b"private fixture manager diagnostic", r.stdout + r.stderr)
 
     def test_identity_read_timeout_is_bounded_and_owned_process_is_reaped(self):
         r, elapsed, observations = self.run_identity(mode="hang")

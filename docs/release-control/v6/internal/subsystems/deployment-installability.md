@@ -7565,6 +7565,35 @@ remains required and is not claimed here.
 
 ### Verified unattended-update backup and owned rollback
 
+The unattended updater's service-state and running-PID reads require a successful
+bounded manager command and exactly one complete allowlisted property tuple.
+Both output streams belong to that observation; diagnostic text, blank records
+(including trailing stdout or stderr blanks), duplicates, extra properties and
+an unterminated final property are not update, start, rollback or success consent.
+A completion marker preserves those records through Bash command substitution
+and cannot appear twice or precede another record. Raw manager diagnostics are
+not echoed by the updater. The existing five-second read and one-second kill
+bounds, property-order independence and loaded/masked admission stay unchanged.
+
+An unknown initial observation stops before backup/download/installer mutation.
+An unknown post-installer or post-stop observation retains the saved executable
+and requires explicit service reconciliation, without an automatic second read,
+restart, restore or claimed success. Running identity needs complete reads on
+both sides of the unchanged `/proc` executable-byte comparison; a plausible
+first PID cannot compensate for an incomplete second observation.
+
+The registered `scripts/installtests/pulse_auto_update_test.go` verification
+requires the three manager-diagnostic caller controls in `UpdateServiceState`
+and the diagnostic-bearing first/second identity control in `RunningExecutable`
+from `test_auto_update_service_state.py`. They cover stderr text, a blank stderr
+record, a trailing stdout blank and an unterminated last property through the
+real conditional update/restart/rollback callers, preserving files, identity
+and recovery. Identity controls use a real private ordinary-user child and
+confirm its cleanup, not a live Pulse service. Existing signatures, actual file
+recovery, service deadlines and all original adverse controls remain mandatory.
+This source proof neither attributes #2785 nor establishes native/installed
+recovery; the original supplied-log and signed forward/reverse jobs remain.
+
 `scripts/pulse-auto-update.sh` runs `perform_update` as a conditional, so Bash
 `errexit` is not a substitute for explicit snapshot and restore checks. Before
 executing the signed installer it must have a private unique rollback directory

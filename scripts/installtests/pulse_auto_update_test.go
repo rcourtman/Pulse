@@ -170,10 +170,13 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unattended service state/rollback controls: %v\n%s", err, out)
 	}
-	// Keep the collector controls part of actual package acceptance, not just
+	// Keep the manager/collector controls part of actual package acceptance, not just
 	// an optional Python check. A green fixture with these methods removed
 	// would otherwise silently lose early-failure and final-line coverage.
 	required := []string{
+		"test_manager_diagnostics_refuse_initial_update_and_restart",
+		"test_manager_diagnostics_after_install_retain_backup_without_mutation",
+		"test_manager_diagnostics_after_stop_retain_backup_without_restart",
 		"test_success_cannot_claim_unverified_running_executable",
 		"test_rollback_keeps_backup_until_restored_running_executable_matches",
 		"test_early_collector_failure_survives_later_success_and_drains_installer",
@@ -237,6 +240,7 @@ func TestAutoUpdateRunningExecutableIdentity(t *testing.T) {
 	for _, name := range []string{
 		"test_actual_process_not_replaced_disk_path_is_checked",
 		"test_complete_stable_main_pid_tuple_is_required",
+		"test_manager_diagnostics_refuse_either_running_identity_read",
 		"test_identity_read_timeout_is_bounded_and_owned_process_is_reaped",
 	} {
 		passed := false
