@@ -16,6 +16,28 @@
 
 ## Purpose
 
+### Issue metadata checks before publication (14 October 2026)
+
+Build and Test runs the locked issue parser and silent-triage policy tests on
+proposed source, not only after publication when an issue event obtains its
+write credential. Parser/test/manifest changes, issue templates, triage guidance
+and every workflow read by the policy tests admit the check. Missing bases admit
+it too; complete receipt-only ranges and unrelated inputs do not. Guidance-only
+changes still run it even when application runtime checks are inapplicable.
+Mixed source or dependency ranges retain every existing runtime/audit check.
+
+The bounded hosted job uses Node 24, read-only repository permission, checkout
+without persisted credentials, no dependency cache and a locked install without
+lifecycle scripts. Both install and test failures propagate; no App token,
+issue mutation, tolerant exit or production operation belongs to this job.
+The separate issue-event pre-token test remains mandatory and unchanged.
+
+`TestCIIssueMetadataUsesSourceOnlyTriageChecks` executes the actual workflow's
+classification and recipes through `test_ci_browser_proof_only.py`, including
+real Git whole-range/lookalike controls and install/test failure exits. Actual
+locked parser tests remain independently required. These source controls do not
+establish a hosted pass, live issue classification or reporter resolution.
+
 ### Unraid/QNAP removal retires exact boot entries and confirms watchdog quiescence
 
 The Unix uninstall caller selects these platforms from their vendor/installed

@@ -74,6 +74,7 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       frontend_deps: ${{ steps.filter.outputs.frontend_deps }}
       go_compile: ${{ steps.filter.outputs.go_compile }}
+      triage_helper: ${{ steps.filter.outputs.triage_helper }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -103,6 +104,7 @@ jobs:
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "frontend_deps=true" >> "$GITHUB_OUTPUT"
             echo "go_compile=true" >> "$GITHUB_OUTPUT"
+            echo "triage_helper=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # Receipts change evidence, not the application. Keep the per-push
@@ -114,10 +116,20 @@ jobs:
             echo "code=false" >> "$GITHUB_OUTPUT"
             echo "frontend_deps=false" >> "$GITHUB_OUTPUT"
             echo "go_compile=false" >> "$GITHUB_OUTPUT"
+            echo "triage_helper=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           changed=$(git diff --name-only "$base" "${{ github.sha }}")
           printf 'Changed files:\n%s\n' "$changed"
+          # The issue-event job tests before minting its App token, but that
+          # happens after publication. Test its parser and silent-mutation
+          # policy on the proposed source too, including documentation-only
+          # guidance and every workflow consumed by the policy tests.
+          triage_helper=false
+          if printf '%s\n' "$changed" | grep -E '^\.github/scripts/(issue-version-triage(\.test)?\.cjs|triage-comment-policy\.test\.cjs|package(-lock)?\.json)$|^\.github/ISSUE_TEMPLATE/|^\.github/workflows/|^docs/ISSUE_TRIAGE\.md$|^scripts/tests/test_ci_browser_proof_only\.py$' >/dev/null; then
+            triage_helper=true
+          fi
+          echo "triage_helper=$triage_helper" >> "$GITHUB_OUTPUT"
           # Note: -q must not be combined with -v here — BSD grep exits 1 for
           # that combination even when inverted matches exist.
           if printf '%s\n' "$changed" | grep -vE '^docs/|\.md$' >/dev/null; then
@@ -150,6 +162,32 @@ jobs:
             frontend_deps=false
           fi
           echo "frontend_deps=$frontend_deps" >> "$GITHUB_OUTPUT"
+
+  triage-helper:
+    name: Issue metadata and silent triage policy
+    needs: changes
+    if: needs.changes.outputs.triage_helper == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out proposed triage source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install locked parser without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix .github/scripts
+
+      - name: Test proposed issue metadata and silent policy
+        run: npm run test:triage --prefix .github/scripts
 
   provider-pair-docker:
     name: Provider pair Docker acceptance

@@ -4338,6 +4338,19 @@ func TestFrontendCIRequiresSameCheckoutRealEmbedBackend(t *testing.T) {
 	}
 }
 
+// The issue-event check runs after publication. Its real parser tests and
+// silent-mutation policy also need credential-free PR/main admission, without
+// relaxing product runtime, dependency audit or receipt-only boundaries.
+func TestCIIssueMetadataUsesSourceOnlyTriageChecks(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_ci_browser_proof_only.py"), "-v")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("issue metadata CI admission and failure controls: %v\n%s", err, out)
+	}
+}
+
 // The post-build root transaction receives only an exact-source identity and
 // synthetic binaries; native failure cannot hide or skip the existing audit.
 func TestFrontendCINativeUpdaterKeepsSecretFreeRequiredVerification(t *testing.T) {
