@@ -119,9 +119,23 @@ let browser;
         };
         const capture = async (name) => {
           const file = `${viewport.width}-${type}-${name}.png`;
-          await page
-            .getByRole('button', { name: /Test saved connection|Test entered settings/ })
-            .scrollIntoViewIfNeeded();
+          const action = page.getByRole('button', {
+            name: /Test saved connection|Test entered settings/,
+          });
+          // Input focus and a disappearing result both move the viewport.
+          // Settle the real layout, then centre the actual action before pixels.
+          await page.evaluate(async () => {
+            await document.fonts.ready;
+          });
+          await action.evaluate((button) => {
+            document.activeElement?.blur();
+            button.scrollIntoView({ block: 'end', behavior: 'instant' });
+          });
+          await page.evaluate(
+            () =>
+              new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+          );
+          await expect(action).toBeInViewport({ ratio: 1 });
           await page.screenshot({ path: path.join(output, file) });
           const bytes = fs.readFileSync(path.join(output, file));
           result.captures.push({
