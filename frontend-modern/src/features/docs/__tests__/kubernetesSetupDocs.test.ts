@@ -17,12 +17,15 @@ const yaml = createRequire(import.meta.url)('js-yaml') as {
 type Rule = { apiGroups: string[]; resources: string[]; verbs: string[] };
 type Role = { kind: string; rules: Rule[] };
 
+function isMetricsRule(rule: Rule) {
+  // Kubernetes API groups are complete array values, not URL substrings.
+  return rule.apiGroups.some((group) => group === 'metrics.k8s.io');
+}
+
 function canReadMetrics(role: Role, resource: string) {
   return role.rules.some(
     (rule) =>
-      rule.apiGroups.includes('metrics.k8s.io') &&
-      rule.resources.includes(resource) &&
-      rule.verbs.includes('list'),
+      isMetricsRule(rule) && rule.resources.includes(resource) && rule.verbs.includes('list'),
   );
 }
 
@@ -33,6 +36,37 @@ function articleFor(name: string) {
 }
 
 describe('Kubernetes credential setup and diagnosis', () => {
+  it.each([
+    { apiGroups: ['metrics.k8s.io'] },
+    { apiGroups: ['apps', 'metrics.k8s.io'] },
+    { apiGroups: ['metrics.k8s.io', 'apps'] },
+  ])('matches a complete metrics API group in $apiGroups', ({ apiGroups }) => {
+    const rule = { apiGroups, resources: ['nodes', 'pods'], verbs: ['get', 'list'] };
+    const role = { kind: 'ClusterRole', rules: [rule] };
+    expect(isMetricsRule(rule)).toBe(true);
+    for (const resource of ['nodes', 'pods']) {
+      expect(canReadMetrics(role, resource), resource).toBe(true);
+    }
+  });
+
+  it.each([
+    { apiGroups: [] },
+    { apiGroups: ['apps'] },
+    { apiGroups: ['metrics.k8s.io.example'] },
+    { apiGroups: ['other.metrics.k8s.io'] },
+    { apiGroups: ['https://metrics.k8s.io'] },
+    { apiGroups: ['metrics.k8s.io/v1beta1'] },
+    { apiGroups: ['Metrics.k8s.io'] },
+    { apiGroups: ['apps', 'metrics.k8s.io '] },
+  ])('rejects non-matching metrics API groups in $apiGroups', ({ apiGroups }) => {
+    const rule = { apiGroups, resources: ['nodes', 'pods'], verbs: ['get', 'list'] };
+    const role = { kind: 'ClusterRole', rules: [rule] };
+    expect(isMetricsRule(rule)).toBe(false);
+    for (const resource of ['nodes', 'pods']) {
+      expect(canReadMetrics(role, resource), resource).toBe(false);
+    }
+  });
+
   it('keeps both copied credential recipes intact and distinct from deployment', () => {
     const article = articleFor('KUBERNETES');
     const recipes = [...article.querySelectorAll('pre code')].map((code) => code.textContent!);
@@ -113,7 +147,7 @@ describe('Kubernetes credential setup and diagnosis', () => {
     for (const resource of ['nodes', 'pods']) {
       expect(canReadMetrics(role, resource), resource).toBe(true);
     }
-    expect(role.rules.find((rule) => rule.apiGroups.includes('metrics.k8s.io'))).toEqual({
+    expect(role.rules.find(isMetricsRule)).toEqual({
       apiGroups: ['metrics.k8s.io'],
       resources: ['nodes', 'pods'],
       verbs: ['get', 'list'],
