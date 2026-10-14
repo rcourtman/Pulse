@@ -137,10 +137,25 @@ func TestPBSStartupRecoveryKeepsTrustAndFirstPollBoundary(t *testing.T) {
 	m := newPBSHealthAuthorityMonitor([]config.PBSInstance{instance})
 	project := func(phase string) {
 		snapshot, scope := m.currentStateWithScope()
+		frontend := m.buildBroadcastFrontendStateFromSnapshot(snapshot, scope)
+		if phase == "recovered" {
+			found := false
+			for _, resource := range frontend.Resources {
+				if resource.Type == "pbs" {
+					found = true
+					if resource.CPU == nil || resource.CPU.Current != 15 || resource.Memory == nil || resource.Memory.Current != 50 {
+						t.Fatalf("broadcast lost the canonical host percentages: CPU=%+v memory=%+v", resource.CPU, resource.Memory)
+					}
+				}
+			}
+			if !found {
+				t.Fatal("broadcast omitted the recovered PBS server")
+			}
+		}
 		wire, err := json.Marshal(struct {
 			Phase string               `json:"phase"`
 			State models.StateFrontend `json:"state"`
-		}{phase, m.buildBroadcastFrontendStateFromSnapshot(snapshot, scope)})
+		}{phase, frontend})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -171,7 +186,9 @@ func TestPBSStartupRecoveryKeepsTrustAndFirstPollBoundary(t *testing.T) {
 	newRealExecutor(m).Execute(ctx, task)
 	assertPBSConnectionProjection(t, m, instance.Name, true, "online")
 	published := pbsInstanceByName(t, m.state.GetSnapshot(), instance.Name)
-	if published.CPU != 15 || published.Memory != 50 || len(published.Datastores) != 1 || published.Datastores[0].Usage != 25 || logins.Load() != 3 || !reflect.DeepEqual(instance, m.config.PBSInstances[0]) {
+	// Legacy PBS state keeps the provider CPU ratio; the canonical broadcast
+	// converts it to percent (asserted by project), not by rewriting the poll.
+	if published.CPU != 0.15 || published.Memory != 50 || len(published.Datastores) != 1 || published.Datastores[0].Usage != 25 || logins.Load() != 3 || !reflect.DeepEqual(instance, m.config.PBSInstances[0]) {
 		t.Fatalf("recovery lost native readings/identity/trust or replayed authentication: %+v logins=%d", published, logins.Load())
 	}
 	project("recovered")
