@@ -47,7 +47,14 @@ const { chromium, webkit } = require('playwright');
         if (!url.pathname.startsWith('/api/')) return route.continue();
         if (url.pathname === '/api/metrics-store/history') {
           requests.push(Object.fromEntries(url.searchParams));
-          return route.fulfill({ json: { points: samples, source: 'store' } });
+          // The client checks a reply names the series it asked for.
+          const q = url.searchParams;
+          const times = samples.map(sample => sample.timestamp);
+          return route.fulfill({ json: {
+            resourceType: q.get('resourceType'), resourceId: q.get('resourceId'), metric: q.get('metric'), range: q.get('range'),
+            start: times.length ? Math.min(...times) : Date.now() - 86400000, end: times.length ? Math.max(...times) : Date.now(),
+            points: samples, source: 'store',
+          } });
         }
         return route.fulfill({ json: url.pathname === '/api/license/runtime-capabilities'
           ? { capabilities: [], limits: [], max_history_days: 7, hosted_mode: false, runtime: { build: 'community' }, blocked_capabilities: [] }
@@ -57,7 +64,6 @@ const { chromium, webkit } = require('playwright');
       if (dark) await page.evaluate(() => document.documentElement.classList.add('dark'));
       const disk = page.getByRole('region', { name: 'Disk fixture' });
       const pool = page.getByRole('region', { name: 'Pool fixture' });
-      await disk.getByRole('tab', { name: 'History', exact: true }).click();
       const busy = disk.getByRole('img', { name: 'Busy chart', exact: true });
       const description = chart => chart.evaluate(el => document.getElementById(el.getAttribute('aria-describedby')).textContent);
       await page.waitForFunction(() => [...document.querySelectorAll('canvas')].some(el => el.getAttribute('aria-label') === 'Busy chart' && document.getElementById(el.getAttribute('aria-describedby')).textContent.includes('3 data points')));
@@ -148,7 +154,6 @@ const { chromium, webkit } = require('playwright');
           await session.detach();
         }
 
-        await pool.getByRole('tab', { name: 'History', exact: true }).click();
         const usage = pool.getByRole('img', { name: 'Usage chart', exact: true });
         await usage.waitFor();
         await page.waitForFunction(() => [...document.querySelectorAll('canvas')].some(el => el.getAttribute('aria-label') === 'Usage chart' && document.getElementById(el.getAttribute('aria-describedby')).textContent.includes('3 data points')));
