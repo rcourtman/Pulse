@@ -25,6 +25,8 @@ on the same canonical row updates only its owning last-known presentation.
 `useWorkloads.test.ts` checks VM/LXC transitions, unchanged ordered IPs and
 identities, eight normal REST reads versus zero Workloads requests for the
 owning-snapshot path. This is consumer proof, not native collection recovery.
+Network tooltip text follows the existing semantic palette; this changes no
+geometry, source selection, polling, hover ownership or portal mechanism.
 
 ### Guest filesystem guidance remains reachable by touch and keyboard (13 October 2026)
 

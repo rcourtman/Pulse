@@ -19,6 +19,9 @@ interface names. Live and silent linked-agent lists retain precedence, and
 explicitly empty lists are not replaced by the other source. Change producers
 on the same mounted guest: only selected agent interfaces inherit agent-stale
 copy/tone, while the agent's other last-known readings remain last known.
+Check the tooltip's labels, addresses and supporting text against its actual
+surface in light and dark themes: normal-sized text needs at least 4.5:1
+contrast. Inspect the actual pixels as well as computed colours.
 
 Synthetic browser fixtures are not installed Proxmox routing or reporter
 acceptance. No guest query, networking change, agent installation or native

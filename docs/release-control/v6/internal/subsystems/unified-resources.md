@@ -44,6 +44,9 @@ agent precedence, empty/absent lists, IP order and stable canonical identity;
 `GuestDrawer.test.tsx` checks reactive source-specific last-known presentation
 without clearing agent RAID/filesystem warnings. Desktop and narrow browser
 proof must consume producing JSON, not manually populated WorkloadGuest rows.
+The row's existing Network tooltip uses semantic foreground/muted tokens for
+names, addresses, MACs, traffic and the address-only fallback. Fixed dark-palette
+text must not make the newly retained names unreadable on a light surface.
 
 ### Independently known PBS remains available in Backups (13 October 2026)
 
