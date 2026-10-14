@@ -930,7 +930,11 @@ func TestClusterSavedPinResolutionRejectsConflicts(t *testing.T) {
 		{"member.example.invalid:8006/tenant/./", "https://member.example.invalid:8006/tenant"},
 	}
 	for _, pair := range pairs {
-		cc := NewClusterClient("resolution", ClientConfig{Host: "https://primary.example.invalid", Fingerprint: "base-pin"}, nil, map[string]string{pair[0]: "saved-pin", pair[1]: "other-pin"})
+		pins := map[string]string{pair[0]: "saved-pin", pair[1]: "other-pin"}
+		if err := CheckEndpointFingerprintConflicts(pins); !errors.Is(err, errConflictingEndpointFingerprints) {
+			t.Errorf("refresh check lost contradictory saved trust: %v", err)
+		}
+		cc := NewClusterClient("resolution", ClientConfig{Host: "https://primary.example.invalid", Fingerprint: "base-pin"}, nil, pins)
 		for _, endpoint := range pair {
 			fingerprint, err := cc.getEndpointFingerprint(endpoint)
 			if fingerprint != "" || !errors.Is(err, errConflictingEndpointFingerprints) {
@@ -948,7 +952,11 @@ func TestClusterSavedPinResolutionRejectsConflicts(t *testing.T) {
 	// Invalid nonempty pin presentation cannot turn into unpinned CA/opt-out
 	// admission, even when every saved spelling agrees after normalization.
 	for _, pin := range []string{":", "::", " ", "not-a-pin"} {
-		cc := NewClusterClient("invalid-pin", ClientConfig{Host: "https://primary.example.invalid", Fingerprint: "base-pin", VerifySSL: false}, nil, map[string]string{"https://member.example.invalid:443/": pin, "https://MEMBER.example.invalid": pin})
+		pins := map[string]string{"https://member.example.invalid:443/": pin, "https://MEMBER.example.invalid": pin}
+		if err := CheckEndpointFingerprintConflicts(pins); err != nil {
+			t.Errorf("refresh check refused agreeing nonempty pins: %v", err)
+		}
+		cc := NewClusterClient("invalid-pin", ClientConfig{Host: "https://primary.example.invalid", Fingerprint: "base-pin", VerifySSL: false}, nil, pins)
 		got, err := cc.getEndpointFingerprint("https://member.example.invalid")
 		if err != nil || got != pin || got == "" {
 			t.Errorf("invalid saved pin became absent trust: %q %v", got, err)
@@ -989,5 +997,27 @@ func TestClusterFirstUseCaptureDoesNotReconcileConflictingPins(t *testing.T) {
 	}
 	if f.requests.Load() != 0 || len(cc.endpointFingerprints) != 2 {
 		t.Error("capture authenticated or reconciled contradictory saved trust")
+	}
+}
+
+func TestClusterProducerPinConflictsAreOwnedAndScoped(t *testing.T) {
+	const original = "https://member.example.invalid:443/tenant/"
+	input := []string{original}
+	if err := CheckEndpointFingerprintConflicts(map[string]string{original: "saved-pin"}, input...); !errors.Is(err, errConflictingEndpointFingerprints) {
+		t.Errorf("refresh check discarded producer's duplicate-row conflict: %v", err)
+	}
+	cc := NewClusterClient("producer-conflict", ClientConfig{Host: "https://primary.example.invalid", Fingerprint: "primary-pin"}, nil, map[string]string{original: "saved-pin"}, input...)
+	input[0] = "https://other.example.invalid/tenant"
+	for _, endpoint := range []string{original, "https://MEMBER.example.invalid/tenant"} {
+		fingerprint, err := cc.getEndpointFingerprint(endpoint)
+		if fingerprint != "" || !errors.Is(err, errConflictingEndpointFingerprints) {
+			t.Errorf("producer's copied conflict was lost: %q %v", fingerprint, err)
+		}
+	}
+	for _, endpoint := range []string{"https://other.example.invalid/tenant", "https://member.example.invalid/other", "http://member.example.invalid/tenant", "https://member.example.invalid:8006/tenant"} {
+		fingerprint, err := cc.getEndpointFingerprint(endpoint)
+		if err != nil || fingerprint != "primary-pin" {
+			t.Errorf("producer conflict refused an independent authority/path: %q %v", fingerprint, err)
+		}
 	}
 }

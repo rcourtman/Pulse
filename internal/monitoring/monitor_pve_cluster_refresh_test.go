@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -362,13 +363,16 @@ func TestBuildClusterEndpoints_PreservesConfiguredAuthority(t *testing.T) {
 
 	for _, build := range []struct {
 		name string
-		fn   func(config.PVEInstance) ([]string, map[string]string)
+		fn   func(config.PVEInstance) ([]string, map[string]string, []string)
 	}{
 		{name: "initialization", fn: monitor.buildClusterEndpointsForInit},
 		{name: "reconnect", fn: monitor.buildClusterEndpointsForReconnect},
 	} {
 		t.Run(build.name, func(t *testing.T) {
-			endpoints, fingerprints := build.fn(instance)
+			endpoints, fingerprints, conflicts := build.fn(instance)
+			if len(conflicts) != 0 {
+				t.Fatalf("non-conflicting member trust was refused: %v", conflicts)
+			}
 			if len(endpoints) != len(want) {
 				t.Fatalf("expected %d ordered endpoints, got %v", len(want), endpoints)
 			}
@@ -421,4 +425,50 @@ func TestStartupClientConstructionHonoursCancellation(t *testing.T) {
 
 func TestPBSStartupCancellationKeepsFirstPollBoundary(t *testing.T) {
 	testPBSStartupCancellationKeepsFirstPollBoundary(t)
+}
+
+func TestBuildClusterEndpointsRetainsDuplicatePinConflicts(t *testing.T) {
+	monitor := &Monitor{config: &config.Config{}}
+	const member = "https://member.example.invalid:8006"
+	for _, build := range []struct {
+		name string
+		fn   func(config.PVEInstance) ([]string, map[string]string, []string)
+	}{
+		{"init", monitor.buildClusterEndpointsForInit}, {"reconnect", monitor.buildClusterEndpointsForReconnect},
+	} {
+		for _, sequence := range [][]string{{"aa:bb", "AA:BB", "aabb"}, {"aa:bb", "cc:dd"}, {"cc:dd", "aa:bb", "cc:dd"}, {"aa:bb", "", "cc:dd", "aa:bb"}, {"", "aa:bb", "cc:dd"}, {"", "aa:bb", "AA:BB"}, {":", ":"}} {
+			t.Run(build.name+"/"+strings.Join(sequence, "_"), func(t *testing.T) {
+				inst := config.PVEInstance{Host: "https://primary.example.invalid:8006", VerifySSL: true}
+				for _, pin := range sequence {
+					inst.ClusterEndpoints = append(inst.ClusterEndpoints, config.ClusterEndpoint{NodeName: "member", Host: member, Fingerprint: pin})
+				}
+				endpoints, pins, conflicts := build.fn(inst)
+				wantConflict := false
+				firstPin := ""
+				for _, pin := range sequence {
+					if firstPin == "" {
+						firstPin = pin
+					}
+					if pin != "" && strings.ToLower(strings.ReplaceAll(pin, ":", "")) != strings.ToLower(strings.ReplaceAll(firstPin, ":", "")) {
+						wantConflict = true
+					}
+				}
+				if len(endpoints) != 2 || pins[member] != firstPin {
+					t.Fatal("duplicate rows changed routing order or selected later trust")
+				}
+				if wantConflict {
+					if len(conflicts) != 1 || conflicts[0] != member {
+						t.Fatal("later row erased conflicting certificate evidence")
+					}
+				} else if len(conflicts) != 0 {
+					t.Fatal("agreeing/absent member pins created a conflict")
+				}
+				for i, ep := range inst.ClusterEndpoints {
+					if ep.Fingerprint != sequence[i] || ep.Host != member {
+						t.Fatal("producer changed saved configuration")
+					}
+				}
+			})
+		}
+	}
 }

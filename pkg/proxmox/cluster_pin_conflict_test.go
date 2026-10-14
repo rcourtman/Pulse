@@ -169,7 +169,11 @@ func TestClusterSavedPinScopesStayDistinct(t *testing.T) {
 	const endpoint = "https://member.scope.invalid:8006/tenant"
 	const pin = "saved-pin"
 	for _, other := range []string{"http://member.scope.invalid:8006/tenant", "https://member.scope.invalid:8007/tenant", "https://other.scope.invalid:8006/tenant", "https://member.scope.invalid:8006/Tenant", "https://member.scope.invalid:8006/other"} {
-		cc := NewClusterClient("scope", ClientConfig{Host: endpoint, Fingerprint: "primary-pin"}, nil, map[string]string{endpoint: pin, other: "independent-pin"})
+		pins := map[string]string{endpoint: pin, other: "independent-pin"}
+		if err := CheckEndpointFingerprintConflicts(pins); err != nil {
+			t.Errorf("independent origin/base path held refresh: %v", err)
+		}
+		cc := NewClusterClient("scope", ClientConfig{Host: endpoint, Fingerprint: "primary-pin"}, nil, pins)
 		fingerprint, err := cc.getEndpointFingerprint(endpoint)
 		if err != nil || fingerprint != pin {
 			t.Errorf("distinct endpoint created a saved-trust conflict: %q %v", fingerprint, err)

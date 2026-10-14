@@ -514,6 +514,16 @@ func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName stri
 // node addresses changed, the config is persisted and the failover client is
 // rebuilt so polling stops dialing the dead addresses.
 func (m *Monitor) refreshClusterEndpoints(instanceName string, instanceCfg *config.PVEInstance, clusterName string, discovered []config.ClusterEndpoint) {
+	// Membership discovery is not a trust decision. In particular it can
+	// collapse duplicate saved rows, or move an alias away from its conflicting
+	// authority. Keep the saved evidence and current sibling clients until an
+	// operator independently reconciles trust through normal configuration.
+	_, savedPins, conflicts := m.buildClusterClientEndpoints(*instanceCfg)
+	if err := proxmox.CheckEndpointFingerprintConflicts(savedPins, conflicts...); err != nil {
+		log.Warn().Str("instance", instanceName).Err(err).
+			Msg("Retaining cluster endpoints until conflicting saved TLS trust is reconciled")
+		return
+	}
 	refreshed := mergeRefreshedClusterEndpoints(instanceCfg.ClusterEndpoints, discovered, instanceCfg.VerifySSL)
 	if !clusterEndpointIdentityChanged(instanceCfg.ClusterEndpoints, refreshed) {
 		return
@@ -700,10 +710,10 @@ func (m *Monitor) rebuildPVEClusterClient(instanceName string) {
 		return
 	}
 
-	endpoints, endpointFingerprints := m.buildClusterEndpointsForReconnect(*pve)
+	endpoints, endpointFingerprints, conflictingEndpoints := m.buildClusterEndpointsForReconnect(*pve)
 	clientConfig := config.CreateProxmoxConfig(pve)
 	clientConfig.Timeout = m.config.ConnectionTimeout
-	clusterClient := proxmox.NewClusterClient(pve.Name, clientConfig, endpoints, endpointFingerprints)
+	clusterClient := proxmox.NewClusterClient(pve.Name, clientConfig, endpoints, endpointFingerprints, conflictingEndpoints...)
 
 	m.replacePVEClient(instanceName, clusterClient)
 

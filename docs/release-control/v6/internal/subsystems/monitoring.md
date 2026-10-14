@@ -42,9 +42,25 @@ through normalized authorities, invalid nonempty pins and a capture race.
 `TestClusterConflictingPinsEndpointProjection` uses the production endpoint
 builder, real clients and monitor projection in all three auth modes: native
 Online, identity and saved trust are not changed by failed Pulse reachability.
+The producer also records contradictory exact duplicate saved rows before
+its map/deduplication can overwrite them, and carries those endpoint conflicts
+through initialisation, missing-client reconnect and cluster refresh. The
+cluster owns a copy of that conflict set; aliases cannot escape it, and a
+later repeated row cannot clear it. Normal configuration reload with agreeing
+pins is required to resume that endpoint. A non-conflicting sibling is not
+refused. The public constructor's optional conflict inputs preserve existing
+callers and do not introduce a new trust mode. Producer tests cover both
+routes, pin formatting, repeated contradictions and configuration ownership.
+The projection cases include exact duplicates as well as URL aliases.
+A credential-free agreement check also holds automatic topology refresh while
+saved trust is contradictory: discovery cannot collapse the rows, move an
+alias or substitute a pin to clear that refusal. Current trusted sibling
+clients keep monitoring; topology changes wait for independently reconciled
+configuration. `TestClusterPinConflictsSurviveMonitorLifecycle` exercises the
+actual initialisation, missing-client retry and refresh/rebuild paths in all
+three auth modes and both layouts, including normal refresh after reconciliation.
 This establishes source/consumer behaviour, not native recovery or attribution
-of a guest, PBS or certificate report. Exact duplicate saved rows collapsed by
-the builder's map are outside this URL-alias resolver contract.
+of a guest, PBS or certificate report.
 
 
 ### Cluster recovery requires success of the operation actually probed

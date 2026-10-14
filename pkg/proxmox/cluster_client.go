@@ -20,18 +20,19 @@ import (
 
 // ClusterClient wraps multiple Proxmox clients for cluster-aware operations
 type ClusterClient struct {
-	mu                   sync.RWMutex
-	clientInitMu         sync.Mutex // Serialize lazy construction while a trust probe releases mu.
-	name                 string
-	clients              map[string]*Client   // Key is node name
-	endpoints            []string             // All available endpoints
-	endpointFingerprints map[string]string    // Per-endpoint TLS fingerprints (TOFU)
-	nodeHealth           map[string]bool      // Track node health
-	lastHealthCheck      map[string]time.Time // Track last health check time
-	lastError            map[string]string    // Track last error per endpoint
-	config               ClientConfig         // Base config (auth info)
-	rateLimitUntil       map[string]time.Time // Cooldown window for rate-limited endpoints
-	recoveryInProgress   bool                 // Prevent overlapping background recovery sweeps
+	mu                              sync.RWMutex
+	clientInitMu                    sync.Mutex // Serialize lazy construction while a trust probe releases mu.
+	name                            string
+	clients                         map[string]*Client   // Key is node name
+	endpoints                       []string             // All available endpoints
+	endpointFingerprints            map[string]string    // Per-endpoint TLS fingerprints (TOFU)
+	conflictingEndpointFingerprints map[string]bool      // Exact duplicate saved rows refused by the producer.
+	nodeHealth                      map[string]bool      // Track node health
+	lastHealthCheck                 map[string]time.Time // Track last health check time
+	lastError                       map[string]string    // Track last error per endpoint
+	config                          ClientConfig         // Base config (auth info)
+	rateLimitUntil                  map[string]time.Time // Cooldown window for rate-limited endpoints
+	recoveryInProgress              bool                 // Prevent overlapping background recovery sweeps
 }
 
 const (
@@ -157,15 +158,17 @@ func sanitizeEndpointError(errMsg string) string {
 // NewClusterClient creates a new cluster-aware client.
 // endpointFingerprints is an optional map of endpoint URL -> TLS fingerprint for per-node certificate verification.
 // This enables TOFU (Trust On First Use) for clusters with unique self-signed certs per node.
-func NewClusterClient(name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string) *ClusterClient {
-	cc, _ := NewClusterClientWithContext(context.Background(), name, config, endpoints, endpointFingerprints)
+// Optional conflictingEndpoints retain contradictory exact duplicate saved rows
+// which a map cannot represent. They refuse only those endpoint trust origins.
+func NewClusterClient(name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string, conflictingEndpoints ...string) *ClusterClient {
+	cc, _ := NewClusterClientWithContext(context.Background(), name, config, endpoints, endpointFingerprints, conflictingEndpoints...)
 	return cc
 }
 
 // NewClusterClientWithContext keeps synchronous startup checks and password
 // session construction within the caller's lifetime. Endpoint failures still
 // produce a recoverable cluster; cancellation does not publish a partial one.
-func NewClusterClientWithContext(ctx context.Context, name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string) (*ClusterClient, error) {
+func NewClusterClientWithContext(ctx context.Context, name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string, conflictingEndpoints ...string) (*ClusterClient, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -180,16 +183,21 @@ func NewClusterClientWithContext(ctx context.Context, name string, config Client
 	for endpoint, fingerprint := range endpointFingerprints {
 		ownedFingerprints[endpoint] = fingerprint
 	}
+	ownedConflicts := make(map[string]bool, len(conflictingEndpoints))
+	for _, endpoint := range conflictingEndpoints {
+		ownedConflicts[endpoint] = true
+	}
 	cc := &ClusterClient{
-		name:                 name,
-		clients:              make(map[string]*Client),
-		endpoints:            endpoints,
-		endpointFingerprints: ownedFingerprints,
-		nodeHealth:           make(map[string]bool),
-		lastHealthCheck:      make(map[string]time.Time),
-		lastError:            make(map[string]string),
-		config:               config,
-		rateLimitUntil:       make(map[string]time.Time),
+		name:                            name,
+		clients:                         make(map[string]*Client),
+		endpoints:                       endpoints,
+		endpointFingerprints:            ownedFingerprints,
+		conflictingEndpointFingerprints: ownedConflicts,
+		nodeHealth:                      make(map[string]bool),
+		lastHealthCheck:                 make(map[string]time.Time),
+		lastError:                       make(map[string]string),
+		config:                          config,
+		rateLimitUntil:                  make(map[string]time.Time),
 	}
 
 	// Initialize all endpoints as unknown (will be tested on first use)
@@ -240,6 +248,12 @@ func clusterEndpointKey(endpoint string) (string, bool) {
 
 func (cc *ClusterClient) knownEndpointFingerprintLocked(endpoint string) (string, bool, error) {
 	key, valid := clusterEndpointKey(endpoint)
+	for conflict := range cc.conflictingEndpointFingerprints {
+		conflictKey, conflictValid := clusterEndpointKey(conflict)
+		if conflict == endpoint || (valid && conflictValid && conflictKey == key) {
+			return "", true, errConflictingEndpointFingerprints
+		}
+	}
 	var fingerprint string
 	known := false
 	for storedEndpoint, fp := range cc.endpointFingerprints {
@@ -266,6 +280,24 @@ func (cc *ClusterClient) knownEndpointFingerprintLocked(endpoint string) (string
 		known = true
 	}
 	return fingerprint, known, nil
+}
+
+// CheckEndpointFingerprintConflicts checks saved trust without constructing a
+// client, probing TLS or changing any pin. Discovery must not discard ambiguity
+// by collapsing saved rows or replacing their addresses during a refresh.
+// This checks agreement only; malformed nonempty pins remain the TLS verifier's
+// responsibility and are never treated as absent trust here.
+func CheckEndpointFingerprintConflicts(fingerprints map[string]string, conflictingEndpoints ...string) error {
+	if len(conflictingEndpoints) > 0 {
+		return errConflictingEndpointFingerprints
+	}
+	cc := ClusterClient{endpointFingerprints: fingerprints}
+	for endpoint := range fingerprints {
+		if _, _, err := cc.knownEndpointFingerprintLocked(endpoint); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Only a declared, previously untrusted member may use the primary pin as a
