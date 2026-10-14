@@ -19,6 +19,9 @@ type StorageProps = {
   filterSearchPlaceholder?: string;
   filterSearchEmptyMessage?: string;
   resourceSource?: StoragePageResourceSource;
+  // False while the platform page shows another tab; `?resource=` links
+  // then belong to that tab.
+  routeActive?: boolean;
 };
 
 const Storage: Component<StorageProps> = (props) => {
@@ -75,6 +78,7 @@ const Storage: Component<StorageProps> = (props) => {
   } = useStoragePageModel({
     forcedSourceFilter: () => props.forcedSourceFilter,
     resourceSource: props.resourceSource,
+    routeActive: () => props.routeActive ?? true,
   });
 
   createEffect(() => {

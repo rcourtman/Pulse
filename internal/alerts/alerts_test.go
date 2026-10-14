@@ -22992,3 +22992,39 @@ func TestCheckNodeTemperatureJudgesPrimaryCPUReading(t *testing.T) {
 		t.Fatalf("alert value = %v, want the primary reading 92 (rule gave %v)", alert.Value, want)
 	}
 }
+
+// ZFS pool and device alerts are raised under "<storage>/zfs-pool:..." ids
+// that the resource registry cannot open; each names its storage so the
+// Alerts overview can open the pool on the Storage page.
+func TestZFSAlertsNameTheirStorage(t *testing.T) {
+	m := newTestManager(t)
+	storage := models.Storage{
+		ID:       "pve1-local-zfs",
+		Name:     "Local ZFS",
+		Node:     "pve1",
+		Instance: "lab",
+		ZFSPool: &models.ZFSPool{
+			Name:       "rpool",
+			State:      "DEGRADED",
+			ReadErrors: 3,
+			Devices: []models.ZFSDevice{
+				{Name: "sda", State: "FAULTED", ReadErrors: 3},
+			},
+		},
+	}
+
+	m.checkZFSPoolHealth(storage)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, id := range []string{
+		buildCanonicalStateID("pve1-local-zfs/zfs-pool:rpool", "pve1-local-zfs/zfs-pool:rpool-state"),
+		buildCanonicalStateID("pve1-local-zfs/zfs-pool:rpool", "pve1-local-zfs/zfs-pool:rpool-errors"),
+		buildCanonicalStateID("pve1-local-zfs/zfs-pool:rpool/device:sda", "pve1-local-zfs/zfs-pool:rpool/device:sda-health"),
+	} {
+		alert := testRequireActiveAlert(t, m, id)
+		if got := alert.Metadata["storageResourceId"]; got != "pve1-local-zfs" {
+			t.Errorf("%s: storageResourceId = %v, want pve1-local-zfs", id, got)
+		}
+	}
+}

@@ -1179,6 +1179,36 @@ describe('Storage', () => {
     });
   });
 
+  it('opens a deep-linked pool only once its Storage tab is showing', async () => {
+    // The Proxmox page keeps Storage mounted behind its other tabs, whose
+    // guest links also use ?resource=.
+    hookResources = [
+      buildStorageResource('storage-zfs-link', 'Zfs-Link-Store', 'pve1'),
+      buildStorageResource('storage-other', 'Other-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?resource=storage-zfs-link';
+    const [routeActive, setRouteActive] = createSignal(false);
+
+    render(() => <Storage routeActive={routeActive()} />);
+
+    const poolRow = (await screen.findByText('Zfs-Link-Store')).closest(
+      'tr[data-summary-series-id]',
+    );
+    expect(document.querySelector('tr[data-inline-detail-for]')).toBeNull();
+    expect(poolRow).toHaveAttribute('data-resource-highlighted', 'false');
+
+    setRouteActive(true);
+
+    await waitFor(() => {
+      expect(
+        document
+          .querySelector('tr[data-inline-detail-for]')
+          ?.getAttribute('data-inline-detail-for'),
+      ).toBe(poolRow?.getAttribute('data-summary-series-id'));
+      expect(poolRow).toHaveAttribute('data-resource-highlighted', 'true');
+    });
+  });
+
   it('restores canonical TrueNAS source filters from the storage route', async () => {
     nodeResources = [
       {

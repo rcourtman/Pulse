@@ -6570,6 +6570,25 @@ windowing test pins the row shape, and the 50-node browser fixture exercises
 expanded rows and History at desktop and phone widths. This is presentation
 work only; it changes no storage evidence, alert state or recovery authority.
 
+### Storage deep links resolve through the registry and open the pool
+
+`useStorageResourceHighlight` matches `?resource=` against a record's id,
+then its metrics resource id (alerts and history use it), then its name only
+when exactly one record carries that name, because every Proxmox node can
+have a `local-zfs` and two PBS servers can both expose `primary-vault`. Any
+other reference is resolved by `ResourceAPI.getResource` (the registry owns
+aliases, succession and ambiguity) and matched by the resolved id; a shared
+name is never looked up. Every matched pool is opened, not only Ceph, so the
+shared summary focus bridge reveals its row and details. The Proxmox page
+keeps Storage mounted behind its other tabs, whose guest links also use
+`?resource=`, so the hook acts only while Storage is the active tab
+(`routeActive`). A visit is one stretch of Storage showing one link: a
+refusal lasts for the visit, so live updates do not repeat the request but a
+later visit (another link, or the tab again) retries, and a resolved pool not
+listed yet opens when its record arrives. Once a visit has needed a lookup,
+any pool the operator opens or closes outranks the link, whether the lookup
+or a record update finds the pool first.
+
 ### App-shell AI navigation gating opens no recovery path
 
 `App.tsx` now passes the `assistantEnabled` session capability to the keyboard
