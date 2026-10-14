@@ -133,10 +133,9 @@ describe('shipped Proxmox permission diagnosis', () => {
     expect(prose(article)).toContain(
       'not evidence that Windows filesystem collection needs VM.GuestAgent.FileRead',
     );
+    // Same-document fragments stay native links; only .md links become viewer routes.
     expect(
-      article.querySelector(
-        'a[href="/docs/VM_DISK_MONITORING#windows-readings-after-a-pulse-restart"]',
-      ),
+      article.querySelector('a[href="#windows-readings-after-a-pulse-restart"]'),
     ).not.toBeNull();
     expect(article.querySelector('#windows-readings-after-a-pulse-restart')).not.toBeNull();
   });
@@ -173,9 +172,7 @@ describe('shipped Proxmox permission diagnosis', () => {
       'use-existing-machines-readings-without-changing-the-guest',
       'backup-safety',
     ]) {
-      expect(
-        content.querySelector(`a[href="/docs/VM_DISK_MONITORING#${fragment}"]`),
-      ).not.toBeNull();
+      expect(content.querySelector(`a[href="#${fragment}"]`)).not.toBeNull();
       expect(renderGuide('VM_DISK_MONITORING').querySelector(`#${fragment}`)).not.toBeNull();
     }
   });
