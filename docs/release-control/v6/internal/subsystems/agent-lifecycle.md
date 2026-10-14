@@ -9803,3 +9803,11 @@ sources through a runtime transition. Production collection/late-reply and
 publication-order controls are in `guest_poll_ownership_test.go`; diagnostics
 and both History stores are covered in `diagnostic_snapshots_test.go`. These
 controls establish no native guest restart, thaw or prior-workload restoration.
+
+### Pulse Pro runtime switch routes (14 October 2026)
+
+`GET /api/updates/pro-runtime` and `POST /api/updates/pro-runtime/apply` in
+`internal/api/updates.go` replace only the Pulse server binary through the
+existing update pipeline. They add no agent enrollment, command, install or
+reporting path, and agent continuity stays judged by the same update readiness
+verdict the apply route already computes for its target version.
