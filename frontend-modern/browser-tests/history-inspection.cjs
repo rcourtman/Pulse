@@ -57,6 +57,8 @@ const { chromium, firefox, webkit } = require('playwright');
         ...(touch ? { isMobile: engine !== 'firefox', hasTouch: true } : {}),
       });
       page.setDefaultTimeout(20_000);
+      // Time flows normally; runFor advances it to fire the 30-second poll.
+      await page.clock.install();
       const requests = [],
         errors = [];
       diagnosticPage = page;
@@ -201,15 +203,9 @@ const { chromium, firefox, webkit } = require('playwright');
         for (const control of await controls.all()) await collapsed(control);
       }
       await screenshot('default-input-controls');
-      // Tab reaches a native slider after the existing range/refresh controls.
+      // Tab reaches a native slider straight after the range control (there is
+      // no manual refresh while reads succeed).
       await fixture.getByTestId('guest-history-range-control').focus();
-      await page.keyboard.press('Tab');
-      assert.equal(
-        await fixture
-          .getByRole('button', { name: 'Refresh history' })
-          .evaluate((el) => document.activeElement === el),
-        true,
-      );
       await page.keyboard.press('Tab');
       assert.equal(await slider.evaluate((el) => document.activeElement === el), true);
       const focusStyle = await slider.evaluate((el) => {
@@ -247,7 +243,7 @@ const { chromium, firefox, webkit } = require('playwright');
       await slider.press('ArrowRight');
       assert.equal(await slider.inputValue(), '1');
       await assertValue(/CPU no observation\. Memory 30\.0%\. Disk no observation\./);
-      assert.match(await utilization.innerText(), /CPU\s*-/);
+      assert.match(await utilization.innerText(), /CPU\s*no reading/);
       assert.doesNotMatch(await utilization.innerText(), /53\.0%/);
       await layout();
       await screenshot('selected-sparse-time');
@@ -261,9 +257,9 @@ const { chromium, firefox, webkit } = require('playwright');
         'inspection must not start another API read',
       );
       const selectedBeforePoll = await value();
-      // Exercise an actual same-source refresh without moving focus, as a background poll would.
+      // Exercise an actual same-source background poll without moving focus.
       action = 'updated';
-      await fixture.getByRole('button', { name: 'Refresh history' }).evaluate((el) => el.click());
+      await page.clock.runFor(30_000);
       await page.waitForFunction(
         () =>
           document.querySelector('input[aria-label="Inspect Utilization history"]')?.max === '5',
@@ -296,7 +292,7 @@ const { chromium, firefox, webkit } = require('playwright');
 
       let hybridTouch = false;
       if (!touch && engine === 'chromium') {
-        await fixture.getByRole('button', { name: 'Refresh history' }).focus();
+        await fixture.getByTestId('guest-history-range-control').focus();
         const session = await page.context().newCDPSession(page);
         const tap = async (x, y) => {
           await session.send('Input.dispatchTouchEvent', {
@@ -333,7 +329,7 @@ const { chromium, firefox, webkit } = require('playwright');
         await screenshot('hybrid-touch-inspection');
         // Touch focus is browser-owned. Exercise a return to mouse without a
         // focused slider, then preserve an explicit keyboard selection too.
-        await fixture.getByRole('button', { name: 'Refresh history' }).focus();
+        await fixture.getByTestId('guest-history-range-control').focus();
         await page.mouse.move(box.x + (34 / 360) * box.width, box.y + box.height / 2);
         for (const control of await controls.all()) await collapsed(control);
         assert.match(await utilization.innerText(), /CPU\s*8\.0%/);
@@ -345,7 +341,7 @@ const { chromium, firefox, webkit } = require('playwright');
         assert.equal(await slider.evaluate((el) => document.activeElement === el), true);
         assert.equal(await value(), keyboardSelection);
         await layout();
-        await fixture.getByRole('button', { name: 'Refresh history' }).focus();
+        await fixture.getByTestId('guest-history-range-control').focus();
         for (const control of await controls.all()) await collapsed(control);
         await screenshot('hybrid-mouse-resumed');
         await session.detach();
@@ -366,7 +362,7 @@ const { chromium, firefox, webkit } = require('playwright');
         assert.match(await utilization.innerText(), /CPU\s*66\.0%/);
       }
       action = 'failure';
-      await fixture.getByRole('button', { name: 'Refresh history' }).click();
+      await page.clock.runFor(30_000);
       await fixture
         .getByRole('status', { name: 'History refresh status' })
         .getByText('History refresh failed. Showing previously loaded history.', { exact: true })
@@ -387,9 +383,9 @@ const { chromium, firefox, webkit } = require('playwright');
         .getByRole('img')
         .evaluate((el) => document.getElementById(el.getAttribute('aria-describedby')).textContent);
       assert.match(description, /1 stored observation time\. .*CPU 11\.0%/);
-      assert.equal(await utilization.locator('path').count(), 0);
+      assert.equal(await utilization.locator('path[data-history-series]').count(), 0);
       action = 'empty';
-      await fixture.getByRole('button', { name: 'Refresh history' }).click();
+      await page.clock.runFor(30_000);
       await page.waitForFunction(() => {
         const image = document.querySelector('[data-history-group="utilization"] svg[role="img"]');
         return (
@@ -400,7 +396,7 @@ const { chromium, firefox, webkit } = require('playwright');
       assert.equal(await fixture.getByRole('slider').count(), 0);
       // Changing resource cannot carry an inspected former-host point into the new target.
       action = 'original';
-      await fixture.getByRole('button', { name: 'Refresh history' }).click();
+      await page.clock.runFor(30_000);
       await slider.waitFor();
       await slider.focus();
       await slider.press('Home');

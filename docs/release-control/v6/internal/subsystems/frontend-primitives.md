@@ -5484,7 +5484,10 @@ and one full-width "Show <panel names>" button (`aria-expanded`, hidden from
 `sm` up) reveals the rest; wider layouts always show every panel. The charts
 poll every 30 seconds and offer no manual refresh; a "Retry history" button
 appears only while a read has failed, and when a successful retry removes it
-keyboard focus moves to the history region rather than the page. A chart
+keyboard focus moves to the history region rather than the page. Whether
+Retry held focus is read as its branch is disposed, before the node leaves the
+DOM, because Chromium blurs a removed element and a blur-tracked flag would
+already be clear (the refresh test models that removal blur). A chart
 draws alert triggers only from the resource's own alerts
 (`getOwnAlertsForUnifiedResource`): a Docker host's Needs attention lists its
 containers' alerts, but a container's memory trigger never lands on the host's

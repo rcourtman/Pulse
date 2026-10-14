@@ -103,16 +103,25 @@ const { chromium } = require('playwright');
         await detail.waitFor();
         const overview = detail.getByRole('tab', { name: 'Overview', exact: true });
         await overview.click();
+        // History charts sit on Overview, so the read starts when it opens.
+        await detail
+          .locator(
+            '[data-testid="guest-history-plot"] path[data-history-series], [data-history-observation]',
+          )
+          .first()
+          .waitFor({ state: 'attached' });
+        // The Identity card shows each identifier once, so Metrics Target may be
+        // absent when it repeats one; when shown it must name the host series.
         const identity = detail
           .locator('[data-testid="resource-identity-section"] tr')
           .filter({ hasText: 'Metrics Target' });
-        await identity.getByText(expected, { exact: true }).waitFor();
+        if ((await identity.count()) > 0) {
+          await identity.getByText(expected, { exact: true }).waitFor();
+        }
         assert.ok(!(await detail.innerText()).includes('/WRONG-HOST'), 'wrong-host disks rendered');
-        await detail.getByRole('tab', { name: 'History', exact: true }).click();
-        await detail.locator('[data-testid="guest-history-plot"] path').first().waitFor();
         assert.equal(
           await detail
-            .getByRole('tab', { name: 'History', exact: true })
+            .getByRole('tab', { name: 'Overview', exact: true })
             .getAttribute('aria-selected'),
           'true',
         );

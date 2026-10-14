@@ -37,6 +37,37 @@ const response = (value = 42, resourceId = target.resourceId): AllMetricsHistory
 const paths = (container: HTMLElement) =>
   container.querySelectorAll('[data-testid="guest-history-plot"] path');
 
+// Chromium blurs a focused element as it leaves the DOM; jsdom does not. Model
+// that so focus handoffs cannot depend on blur never firing on removal.
+const blurFocusedOnRemoval = () => {
+  const blurIfInside = (node: Node) => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && node.contains(active)) active.blur();
+  };
+  const remove = Element.prototype.remove;
+  const removeChild = Node.prototype.removeChild;
+  const replaceChild = Node.prototype.replaceChild;
+  vi.spyOn(Element.prototype, 'remove').mockImplementation(function (this: Element) {
+    blurIfInside(this);
+    remove.call(this);
+  });
+  vi.spyOn(Node.prototype, 'removeChild').mockImplementation(function <T extends Node>(
+    this: Node,
+    child: T,
+  ) {
+    blurIfInside(child);
+    return removeChild.call(this, child) as T;
+  });
+  vi.spyOn(Node.prototype, 'replaceChild').mockImplementation(function <T extends Node>(
+    this: Node,
+    node: Node,
+    child: T,
+  ) {
+    blurIfInside(child);
+    return replaceChild.call(this, node, child) as T;
+  });
+};
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (error: Error) => void;
@@ -99,6 +130,7 @@ describe('GuestDrawerHistory refresh recovery', () => {
       .mockResolvedValueOnce(response())
       .mockRejectedValueOnce(new Error('Unavailable'))
       .mockReturnValueOnce(pending.promise);
+    blurFocusedOnRemoval();
     const { container } = render(() => <GuestDrawerHistory target={target} range="24h" />);
     await vi.advanceTimersByTimeAsync(30_000);
     const original = paths(container)[0].getAttribute('d');
