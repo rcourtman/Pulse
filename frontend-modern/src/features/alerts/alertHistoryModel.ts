@@ -61,6 +61,28 @@ export interface AlertTrendSeries {
   rangeHours: number;
 }
 
+export interface AlertSeverityCounts {
+  critical: number;
+  warning: number;
+  info: number;
+}
+
+/**
+ * The frequency chart's series: each period's alerts by severity as well as
+ * in total, so a busy period shows how bad it was.
+ */
+export interface AlertFrequencySeries extends AlertTrendSeries {
+  severityBuckets: AlertSeverityCounts[];
+}
+
+// The closed alert vocabulary: legacy `error` is critical, and an empty or
+// unknown value fails safe to warning rather than reading as information.
+export const alertSeverityCountKey = (severity: string | undefined): keyof AlertSeverityCounts => {
+  const normalized = (severity ?? '').trim().toLowerCase();
+  if (normalized === 'critical' || normalized === 'error') return 'critical';
+  return normalized === 'info' ? 'info' : 'warning';
+};
+
 export interface AlertAxisTick {
   position: number;
   label: string;
@@ -326,7 +348,7 @@ export function buildAlertTrends(
   filteredAlerts: HistoryItem[],
   timeFilter: AlertHistoryRange,
   now = Date.now(),
-): AlertTrendSeries {
+): AlertFrequencySeries {
   const niceBucketSizes = [1, 2, 3, 6, 12, 24, 48, 72, 168, 336, 720, 1440];
   const maxBuckets = 30;
 
@@ -373,6 +395,11 @@ export function buildAlertTrends(
   startTime = Math.min(startTime, now - bucketCount * bucketSizeHours * MS_PER_HOUR);
 
   const buckets = new Array(bucketCount).fill(0);
+  const severityBuckets: AlertSeverityCounts[] = Array.from({ length: bucketCount }, () => ({
+    critical: 0,
+    warning: 0,
+    info: 0,
+  }));
   const bucketTimes = new Array(bucketCount)
     .fill(0)
     .map((_, index) => startTime + index * bucketSizeHours * MS_PER_HOUR);
@@ -388,11 +415,13 @@ export function buildAlertTrends(
     const bucketIndex = Math.min(bucketCount - 1, Math.max(0, rawIndex));
     if (bucketIndex >= 0 && bucketIndex < bucketCount) {
       buckets[bucketIndex]++;
+      severityBuckets[bucketIndex][alertSeverityCountKey(alert.severity)]++;
     }
   });
 
   return {
     buckets,
+    severityBuckets,
     max: Math.max(...buckets, 1),
     bucketSize: bucketSizeHours,
     bucketTimes,

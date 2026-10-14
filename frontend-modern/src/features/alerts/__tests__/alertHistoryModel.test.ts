@@ -99,6 +99,28 @@ describe('alertHistoryModel', () => {
     expect(details?.rangeLabel).toContain('Mar');
   });
 
+  it('counts each period by severity alongside its total', () => {
+    const alerts = [
+      { id: 'a', startTime: '2026-03-22T09:05:00.000Z', severity: 'critical' },
+      { id: 'b', startTime: '2026-03-22T09:10:00.000Z', severity: 'warning' },
+      { id: 'c', startTime: '2026-03-22T09:20:00.000Z', severity: 'Warning' },
+      { id: 'd', startTime: '2026-03-22T09:40:00.000Z', severity: 'info' },
+      { id: 'e', startTime: '2026-03-22T08:10:00.000Z' },
+      { id: 'f', startTime: '2026-03-22T08:20:00.000Z', severity: 'error' },
+    ];
+    const trends = buildAlertTrends(alerts as any, '24h', Date.UTC(2026, 2, 22, 10, 0, 0));
+    const nine = trends.buckets.length - 1;
+
+    expect(trends.buckets[nine]).toBe(4);
+    expect(trends.severityBuckets[nine]).toEqual({ critical: 1, warning: 2, info: 1 });
+    // A missing severity fails safe to warning; legacy `error` is critical.
+    expect(trends.severityBuckets[nine - 1]).toEqual({ critical: 1, warning: 1, info: 0 });
+    trends.buckets.forEach((total, index) => {
+      const counts = trends.severityBuckets[index];
+      expect(counts.critical + counts.warning + counts.info).toBe(total);
+    });
+  });
+
   it('keeps a stable id order for alerts sharing a startTime (#1218)', () => {
     const sharedStart = '2026-03-22T09:00:00.000Z';
     const items = [
