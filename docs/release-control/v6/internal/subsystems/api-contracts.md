@@ -12204,3 +12204,23 @@ The accepted upstream `diagnostics_token_visibility_test.go` controls and API
 reference route checks cover caller filtering and the documented authority.
 Final-source checks must retain this upstream behavior beside the reviewed
 reporting/help repairs; source proof is not installed credential recovery.
+
+### API-rejection guidance in diagnostics (14 October 2026)
+
+`GET /api/diagnostics` distinguishes `proxmox_permission_denied` (403) from
+`proxmox_auth_rejected` (401), with `proxmox_api_error` for other observed HTTP
+failures. Typed PVE/PBS statuses outrank response text. Retained scheduler text
+uses the first explicit producer status marker, not numbers in endpoint or
+token identities. Authentication guidance requires confirmed invalidity before
+replacement; permission guidance preserves both scoped ACLs and privilege
+separation. The existing `errors` array now carries these bounded diagnoses and
+recovery guidance into Errors Detected, using positional connection references
+rather than adding private identities. It does not claim to list every fault.
+PVE live-monitor reconciliation and separate PBS monitor/probe evidence remain.
+Routes, caller scope/token filtering, cache policy and probe count are unchanged.
+`TestDiagnosticsAPIStatusOutranksResponseText`,
+`TestDiagnosticsSerializedAPIStatusMarkers`,
+`TestComputeDiagnosticsAPIRejectionsPreserveCredentials` and
+`TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization` cover real
+HTTP statuses, private-body controls, same-credential fixture recovery and wire
+attribution. They are not installed permission or guest-recovery acceptance.

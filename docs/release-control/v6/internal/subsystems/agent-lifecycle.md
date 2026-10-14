@@ -9913,3 +9913,16 @@ sources through a runtime transition. Production collection/late-reply and
 publication-order controls are in `guest_poll_ownership_test.go`; diagnostics
 and both History stores are covered in `diagnostic_snapshots_test.go`. These
 controls establish no native guest restart, thaw or prior-workload restoration.
+
+### Proxmox rejection guidance is not agent recovery (14 October 2026)
+
+The shared diagnostics producer separates 403 permission denial, 401 rejected
+authentication and other observed HTTP failures, carrying bounded guidance
+through its existing error summary. It preserves intentional ACL scope and
+privilege separation; it does not request agent reinstall, token rotation as a
+test or guest-agent commands. PBS monitor and live-check evidence stay distinct.
+Agent identities, enrolment, scopes, capabilities, installer/update/removal and
+normal polling behavior are unchanged. The diagnostics source/serializer and
+same-credential fixture controls are in `diagnostics_additional_test.go` and
+`TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization`; they do not
+establish native guest restart, installed-agent or thaw recovery.
