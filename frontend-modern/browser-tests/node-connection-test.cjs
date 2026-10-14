@@ -166,7 +166,7 @@ let browser;
         if (type === 'pve') await capture('obsolete-success-removed');
 
         if (type !== 'pmg') await page.getByRole('radio', { name: 'Username & Password' }).check();
-        await page.getByLabel(/^Username/).fill('entered@pam');
+        await page.getByRole('textbox', { name: /^Username/ }).fill('entered@pam');
         await page.getByLabel('Password', { exact: true }).fill('fixture-only-secret');
         const formButton = page.getByRole('button', { name: 'Test entered settings' });
         await expect(formButton).toHaveAccessibleDescription(/No settings are saved/);
