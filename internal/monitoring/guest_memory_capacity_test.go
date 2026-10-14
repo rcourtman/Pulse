@@ -149,10 +149,13 @@ func testGuestMemorySampleCapacityPolling(t *testing.T) {
 							fmt.Fprintf(w, `{"data":{"result":[{"mountpoint":"/","type":"ext4","total-bytes":%d,"used-bytes":%d}]}}`, gib, gib/4)
 						case strings.HasSuffix(r.URL.Path, "/get-osinfo"):
 							fmt.Fprint(w, `{"data":{"name":"Linux","version":"fixture"}}`)
-						case strings.HasSuffix(r.URL.Path, "/version"):
+						case strings.HasSuffix(r.URL.Path, "/info"):
 							fmt.Fprint(w, `{"data":{"result":{"version":"fixture"}}}`)
-						default:
+						case strings.HasSuffix(r.URL.Path, "/network-get-interfaces"):
 							fmt.Fprint(w, `{"data":{"result":[]}}`)
+						default:
+							t.Errorf("unexpected guest command: %s", r.URL.Path)
+							http.NotFound(w, r)
 						}
 					case strings.HasSuffix(r.URL.Path, "/version"):
 						fmt.Fprint(w, `{"data":{"version":"9.2-fixture"}}`)

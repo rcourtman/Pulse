@@ -5676,6 +5676,28 @@ func (s *State) GetNode(nodeID string) (Node, bool) {
 	return Node{}, false
 }
 
+// GetUniqueNode returns a detached node only when exactly one source record has
+// this ID. Callers that admit agent data must not let a duplicate ID choose its
+// destination, and need not copy unrelated resources to establish uniqueness.
+func (s *State) GetUniqueNode(nodeID string) (Node, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	match := -1
+	for i := range s.Nodes {
+		if s.Nodes[i].ID == nodeID {
+			if match >= 0 {
+				return Node{}, false
+			}
+			match = i
+		}
+	}
+	if match < 0 {
+		return Node{}, false
+	}
+	return cloneNode(s.Nodes[match]), true
+}
+
 // GetHosts returns a copy of all generic hosts.
 func (s *State) GetHosts() []Host {
 	s.mu.RLock()
