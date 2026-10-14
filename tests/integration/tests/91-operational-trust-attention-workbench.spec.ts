@@ -872,7 +872,7 @@ test("puts the selected detail in view on a phone without page overflow", async 
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(
-    page.getByRole("complementary", { name: "CPU pressure on pve-main" }),
+    page.getByRole("complementary", { name: "pve-main · CPU pressure" }),
   ).toBeInViewport();
 });
 
