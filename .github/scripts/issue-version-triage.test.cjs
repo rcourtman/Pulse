@@ -1701,3 +1701,76 @@ test("already unknown-version metadata is a no-op without an extra live read", a
   assert.equal(calls.removeLabel.length, 0);
   assert.equal(calls.getIssue.length, 1);
 });
+
+test("attempted server archives separate release versions from packaging", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const version of ["6.5.0", "6.5.0-rc.1", "6.6.0-beta.3", "6.6.0-dev.branch-2"]) {
+    for (const filename of [
+      ...["386", "amd64", "arm64", "armv6", "armv7"].map(arch =>
+        `pulse-v${version}-linux-${arch}.tar.gz`),
+      `pulse-v${version}.tar.gz`,
+      `pulse-${version}.tgz`,
+    ]) {
+      for (const body of [
+        `### Pulse version\n${filename}\n### Agent version\nnone`,
+        `Pulse version: **\`${filename}\`**`,
+      ]) {
+        assert.equal(extractPulseVersion("Failed install", body), version, filename);
+      }
+    }
+  }
+});
+
+test("non-server artifacts cannot supply an attempted server version", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const filename of [
+    "pulse-agent-v6.6.0-beta.3-linux-amd64.tar.gz",
+    "pulse-agent-helper-v6.6.0-beta.3-linux-amd64.tar.gz",
+    "pulse-agent-runner-v6.6.0-beta.3-linux-amd64.tar.gz",
+    "pulse-mcp-v6.6.0-beta.3-windows-amd64.zip",
+    "pulse-provider-msp-v6.6.0-beta.3.tar.gz",
+    "pulse-v6.6.0-beta.3-linux-amd64.tar.gz.sha256",
+    "pulse-v6.6.0-beta.3-linux-amd64.tar.gz.sig",
+    "pulse-v6.6.0-beta.3-linux-amd64.tar.gz.sshsig",
+    "pulse-v6.6.0-beta.3-release.sbom.spdx.json.sha256",
+    "install.sh",
+  ]) {
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5",
+      `### Pulse version\n${filename}\n### Agent version\n6.5.0`), null, filename);
+  }
+});
+
+test("archive recognition neither borrows a later filename nor shortens bare prereleases", () => {
+  const { extractPulseVersion } = triage.internals;
+  assert.equal(extractPulseVersion("Upgrade from v6.4.5",
+    "### Pulse version\nunknown; downloaded pulse-v6.6.0-beta.3-linux-amd64.tar.gz"), null);
+  for (const version of ["6.6.0-dev.branch-2", "6.6.0-beta.3-linux-amd64", "6.6.0-custom.tgz"]) {
+    assert.equal(extractPulseVersion("Bug", `### Pulse version\n${version}`), version);
+  }
+});
+
+for (const [filename, version] of [
+  ["pulse-v6.6.0-beta.3-linux-amd64.tar.gz", "6.6.0-beta.3"],
+  ["pulse-v6.6.0-beta.3-linux-armv7.tar.gz", "6.6.0-beta.3"],
+  ["pulse-v6.6.0-beta.3.tar.gz", "6.6.0-beta.3"],
+  ["pulse-6.6.0-beta.3.tgz", "6.6.0-beta.3"],
+  ["pulse-v6.5.0-linux-amd64.tar.gz", "6.5.0"],
+]) {
+  test(`archive intake reconciles exact-version labels silently: ${filename}`, async () => {
+    const { github, calls } = createGithub();
+    const oldArtifactLabel = `affects-${filename.replace(/^pulse-v?/, "")}`;
+    const issue = { number: 2921, title: "[Bug]: Failed install",
+      body: `### Pulse version\n${filename}\n### Agent version\nnone`,
+      labels: ["bug", "affects-6.4.5", oldArtifactLabel, "needs-version-info", "needs-human",
+        "needs-retest-on-latest"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [[`affects-${version}`]]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name),
+      ["affects-6.4.5", oldArtifactLabel, "needs-version-info"]);
+    assert.deepEqual(calls.createLabel.map(call => call.name), [`affects-${version}`]);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2);
+  });
+}
