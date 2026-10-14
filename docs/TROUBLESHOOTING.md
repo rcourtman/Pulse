@@ -51,6 +51,10 @@ establish safe recovery.
   [required members, active members and spares](TROUBLESHOOTING.md#raid-array-is-degraded-with-a-spare).
   A spare-inclusive total is not the required member count; do not change the
   array just to clear a Pulse alert.
+- **Unraid reports missing disks in empty slots:** distinguish
+  [unassigned slots, missing members and parity counts](TROUBLESHOOTING.md#unraid-reports-missing-disks-in-empty-slots).
+  Unraid parity is not Linux MD RAID; do not rebuild or change disk assignments
+  just to make Pulse's count agree.
 - **Pulse itself uses more memory, CPU or disk writes:** use
   [memory baseline and growth checks](TROUBLESHOOTING.md#memory-use-keeps-growing)
   or [CPU and write-rate checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).
@@ -414,6 +418,42 @@ restore, not by overwriting today's history. Follow
 [safe audit recovery](AUDIT_LOGGING.md#verification-failures-and-safe-recovery).
 
 ### Monitoring Data
+
+#### Unraid reports missing disks in empty slots
+
+Compare the same host's **existing** Unraid status with Pulse's disk inventory,
+storage-topology alert and observation time. Keep the Pulse server and Unraid
+Unified Agent versions separate: updating the server does not establish that
+the agent updated. No new command, Diagnostics run or array operation is needed
+to report a disagreement.
+
+| Existing observation | Meaning |
+| --- | --- |
+| `DISK_NP`, no device or size, and only `fsType=auto` or a transport-only identity such as `ata-_` | A configured-but-unassigned slot, not evidence of a missing assigned disk. A slot name such as `disk6` or `parity2` alone is not assignment evidence. |
+| `DISK_NP_MISSING`, even without a device or identity | Unraid explicitly reports an assigned-but-absent member. Do not discard it as an empty slot. |
+| A missing/disabled slot with a real device, model/serial, filesystem or size | Assignment evidence remains; do not dismiss the failure because other slots are empty. `auto` alone is not a real filesystem. |
+| Single online parity disk and five data disks | Pulse's `numProtected` counts online parity devices: **1**, not five protected data disks. That count alone does not prove complete protection or healthy disks. |
+| No matching native observation, an old reading or an unknown version | The comparison is unavailable, not a healthy result. `STARTED` alone does not establish array health. |
+
+For the healthy partially populated topology in [#1788](https://github.com/rcourtman/Pulse/issues/1788),
+seventeen empty data slots wrongly contributed to `numMissing`. The final
+correction treats `fsType=auto` as a placeholder at agent collection, server
+ingestion and storage-health assessment. **Pulse v6.5.0 contains this correction
+in the server and Unified Agent**; an earlier preview retest failed before
+this final correction. This does not establish that a current alert has the
+same cause or that the reporter's installation has recovered.
+
+If existing native status shows no missing assigned members but Pulse disagrees,
+preserve the mismatch rather than suppressing the check or changing the array.
+Do not unassign a disk, rebuild, start a parity check, restart or re-enrol the
+agent, or enable Debug just to diagnose the alert. A genuine missing, disabled,
+invalid or unavailable parity member remains a separate safety concern.
+
+For a report, share only already available versions, the original time, relevant
+status/counts and redacted alert text. Keep disk serials, paths and raw agent
+payloads private; use consistent aliases and leave unknowns unknown. Follow
+[Getting Help](TROUBLESHOOTING.md#-getting-help), without repeating a failed
+update or array operation to supply evidence.
 
 #### RAID array is degraded with a spare
 
