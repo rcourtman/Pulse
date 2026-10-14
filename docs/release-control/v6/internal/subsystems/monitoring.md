@@ -47,6 +47,35 @@ remain unchanged. These are source/consumer controls, not attribution or
 installed acceptance for a reported PBS/QGA/backup incident.
 
 
+### Node inventory admission consumes the complete response
+
+The PVE `/nodes` reader consumes and closes the entire existing 8 MiB-bounded
+body before returning inventory or allowing startup/recovery/lazy probes to
+succeed. A valid JSON prefix with a missing transport tail, extra JSON values,
+oversized suffix, malformed UTF-8, missing/null data, conflicting errors or
+ambiguous/case-overwritten fields is not an authoritative inventory. Each row
+must have a canonical nonempty, unique node name; null/unnamed/duplicate rows
+and ambiguous supported node fields reject the whole response rather than
+publish partial or invented empty inventory. Validation errors contain no body
+material. Unique provider metadata and explicit empty arrays remain accepted,
+including scoped tokens with no visible nodes. Existing node fields and offline
+status are preserved without changing provider permissions.
+
+`node_inventory_response_test.go` exercises actual HTTP reads and all supported
+fields, the explicit-empty controls, byte/transport bounds and no replay.
+`cluster_node_inventory_test.go` checks pinned HTTPS in token, JSON-password and
+form-password modes at startup, recovery and lazy selection: failed success
+installs no client and never advances to a full session; distinct complete
+recovery remains usable. The cached fallback keeps its earlier failure until a
+complete ordinary read succeeds. `TestClusterNodeInventoryEndpointProjection`
+drives missing/duplicate/incomplete responses and subsequent ordinary recovery
+through the production monitor projection while native Online, identity and
+saved pins remain intact. Recovery cadence, auth encodings, TLS admission,
+rate-limit policy, other API readers and guest/backup fences are unchanged.
+These are source and consuming-surface proofs, not attribution or installed
+acceptance for any reported PBS, guest restart or workload-safety incident.
+
+
 ### First-use cluster trust includes password construction
 
 Declared, previously untrusted Proxmox members use the existing credential-free

@@ -22,6 +22,23 @@ import (
 // reports both members online. Public reads initiate later ordinary recovery;
 // no guest command, backup, credential change or guest fence is exercised.
 func TestClusterNodeProbeEndpointProjection(t *testing.T) {
+	testClusterNodeProbeEndpointProjection(t, http.StatusInternalServerError, "QEMU guest agent is not running", true)
+}
+
+func TestClusterNodeInventoryEndpointProjection(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		complete   bool
+	}{
+		{"missing", `{}`, true},
+		{"duplicate", `{"data":{},"data":[]}`, true},
+		{"truncated", `{"data":[{"node":"member","status":"online"}]}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) { testClusterNodeProbeEndpointProjection(t, http.StatusOK, tc.body, tc.complete) })
+	}
+}
+
+func testClusterNodeProbeEndpointProjection(t *testing.T, status int, failureBody string, complete bool) {
 	var acceptMember atomic.Bool
 	var memberLogins, memberNodes atomic.Int32
 	endpoint := func(member bool) *httptest.Server {
@@ -40,8 +57,11 @@ func TestClusterNodeProbeEndpointProjection(t *testing.T) {
 				if member {
 					memberNodes.Add(1)
 					if !acceptMember.Load() {
-						w.WriteHeader(http.StatusInternalServerError)
-						fmt.Fprint(w, "QEMU guest agent is not running")
+						if !complete {
+							w.Header().Set("Content-Length", fmt.Sprint(len(failureBody)+100))
+						}
+						w.WriteHeader(status)
+						fmt.Fprint(w, failureBody)
 						return
 					}
 				}
@@ -86,15 +106,23 @@ func TestClusterNodeProbeEndpointProjection(t *testing.T) {
 		}
 		wire, err := json.Marshal(struct {
 			Phase     string                   `json:"phase"`
+			Case      string                   `json:"case"`
 			Endpoints []config.ClusterEndpoint `json:"endpoints"`
-		}{phase, inst.ClusterEndpoints})
+		}{phase, t.Name(), inst.ClusterEndpoints})
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Logf("NODE_PROBE_ENDPOINT_PROJECTION_JSON=%s", wire)
 	}
 	project("nodes-probe-refused")
-	if ep := inst.ClusterEndpoints[1]; ep.PulseReachable == nil || *ep.PulseReachable || ep.PulseError != "API error 500: QEMU guest agent is not running" {
+	expectedError := "API error 500: QEMU guest agent is not running"
+	if status == http.StatusOK {
+		expectedError = "invalid Proxmox node inventory response"
+		if !complete {
+			expectedError = "read Proxmox node inventory: unexpected EOF"
+		}
+	}
+	if ep := inst.ClusterEndpoints[1]; ep.PulseReachable == nil || *ep.PulseReachable || ep.PulseError != expectedError {
 		t.Fatalf("consumer lost failed nodes observation: %+v", ep)
 	}
 	acceptMember.Store(true)
