@@ -106,6 +106,8 @@ export function useHistoryChartState(
   const dataMax = createMemo(() => getHistoryChartDataMax(data()));
 
   let previousSelection: string | undefined;
+  // The selection whose stored reply is on screen, so a pause keeps it.
+  let loadedSelection: string | undefined;
 
   // One effect owns a selection, its request and its polling timer. Cleanup
   // invalidates completions even when a transport ignores cancellation.
@@ -119,9 +121,9 @@ export function useHistoryChartState(
     const locked = isLocked();
     const interval = refreshIntervalMs();
     const orgSelection = orgVersion();
+    const enabled = props.enabled !== false;
     let active = true;
     let pending = false;
-    let hasLoaded = false;
     let controller: AbortController | undefined;
     let timer: number | undefined;
 
@@ -131,11 +133,6 @@ export function useHistoryChartState(
       if (timer !== undefined) window.clearInterval(timer);
     });
 
-    setData(suppliedData ?? []);
-    setSource(suppliedData !== undefined ? 'live' : null);
-    setError(null);
-    setRefreshFailed(false);
-    setLoading(false);
     const selection = JSON.stringify([
       orgSelection,
       resourceType,
@@ -146,6 +143,16 @@ export function useHistoryChartState(
       locked,
       suppliedData !== undefined,
     ]);
+    // Pausing and resuming the same selection keeps its readings on screen;
+    // any other change starts from nothing.
+    if (suppliedData !== undefined || selection !== previousSelection) {
+      setData(suppliedData ?? []);
+      setSource(suppliedData !== undefined ? 'live' : null);
+      setError(null);
+      setRefreshFailed(false);
+      loadedSelection = undefined;
+    }
+    setLoading(false);
     if (selection !== previousSelection) {
       pendingTouch = undefined;
       touchTimestamp = null;
@@ -155,6 +162,9 @@ export function useHistoryChartState(
     }
     previousSelection = selection;
     if (suppliedData !== undefined || locked || !resourceId || !resourceType) return;
+    // A paused chart (inside a hidden drawer tab) reads nothing until resumed.
+    if (!enabled) return;
+    let hasLoaded = loadedSelection === selection;
 
     const loadData = async () => {
       if (!active || pending) return;
@@ -176,12 +186,14 @@ export function useHistoryChartState(
         setError(null);
         setRefreshFailed(false);
         hasLoaded = true;
+        loadedSelection = selection;
       } catch (err) {
         if (!active) return;
         console.error('Failed to fetch metrics history:', err);
         const accessError = getAPIReadAccessErrorMessage(err);
         if (accessError) {
           hasLoaded = false;
+          loadedSelection = undefined;
           pendingTouch = undefined;
           touchTimestamp = null;
           batch(() => {

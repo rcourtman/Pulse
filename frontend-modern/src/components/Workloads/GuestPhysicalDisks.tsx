@@ -19,7 +19,11 @@ const LazyDiskDetail = lazy(() =>
   import('@/components/Storage/DiskDetail').then(({ DiskDetail }) => ({ default: DiskDetail })),
 );
 
-const GuestPhysicalDiskRow: Component<{ disk: Resource; alertResourceIds: string[] }> = (props) => {
+const GuestPhysicalDiskRow: Component<{
+  disk: Resource;
+  alertResourceIds: string[];
+  historyEnabled: boolean;
+}> = (props) => {
   const [expanded, setExpanded] = createSignal(false);
   const { getDiskTemperatureThresholds } = useAlertsActivation();
   const data = () =>
@@ -77,6 +81,7 @@ const GuestPhysicalDiskRow: Component<{ disk: Resource; alertResourceIds: string
               disk={props.disk}
               nodes={[]}
               alertResourceIds={props.alertResourceIds}
+              historyEnabled={props.historyEnabled}
             />
           </Suspense>
         </div>
@@ -93,6 +98,11 @@ export const GuestPhysicalDisks: Component<{
    * applies, then the guest's canonical ID and override keys.
    */
   alertResourceIds?: string[];
+  /**
+   * False while the Overview holding these disks is hidden: an expanded disk's
+   * charts and the list's live refresh pause until it is shown again.
+   */
+  historyEnabled?: boolean;
 }> = (props) => {
   // The Proxmox Overview snapshot deliberately excludes physical disks. Query
   // only the open guest's direct children rather than hydrating every disk in
@@ -102,6 +112,7 @@ export const GuestPhysicalDisks: Component<{
     query: `type=physical_disk&parent=${encodeURIComponent(parentId)}`,
     cacheKey: `guest-physical-disks:${parentId}`,
     enabled: () => parentId.length > 0,
+    realtimeEnabled: () => parentId.length > 0 && props.historyEnabled !== false,
   });
   const disks = () =>
     source
@@ -123,7 +134,11 @@ export const GuestPhysicalDisks: Component<{
           <div class="space-y-2">
             <For each={disks()}>
               {(disk) => (
-                <GuestPhysicalDiskRow disk={disk} alertResourceIds={props.alertResourceIds ?? []} />
+                <GuestPhysicalDiskRow
+                  disk={disk}
+                  alertResourceIds={props.alertResourceIds ?? []}
+                  historyEnabled={props.historyEnabled !== false}
+                />
               )}
             </For>
           </div>

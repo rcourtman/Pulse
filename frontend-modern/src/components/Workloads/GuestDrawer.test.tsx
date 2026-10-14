@@ -60,6 +60,16 @@ vi.mock('@/stores/license', () => ({
   maxHistoryDays: () => 90,
 }));
 
+// Records whether the guest's physical disks may read, without their own
+// resource query; GuestPhysicalDisks.test covers what they render.
+vi.mock('./GuestPhysicalDisks', () => ({
+  GuestPhysicalDisks: (props: { historyEnabled?: boolean }) => (
+    <div
+      data-testid="guest-physical-disks-stub"
+      data-history-enabled={String(props.historyEnabled)}
+    />
+  ),
+}));
 vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
   WebInterfaceUrlField: (props: {
     metadataKind: string;
@@ -767,6 +777,23 @@ describe('GuestDrawer', () => {
       expect(utilizationChart).toHaveTextContent('20.0%');
       expect(utilizationChart).toHaveTextContent('30.0%');
       expect(utilizationChart).toHaveTextContent('40.0%');
+    });
+
+    it('pauses the physical disk charts while Manage hides Overview', async () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({ agentVersion: '6.2.0', agentKind: 'pulse' })}
+          onClose={vi.fn()}
+        />
+      ));
+      // The drawer remembers its last tab, so start from Overview explicitly.
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      const disks = await screen.findByTestId('guest-physical-disks-stub');
+      expect(disks).toHaveAttribute('data-history-enabled', 'true');
+      await fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+      expect(disks).toHaveAttribute('data-history-enabled', 'false');
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      expect(disks).toHaveAttribute('data-history-enabled', 'true');
     });
 
     it('switches back to Overview tab', async () => {

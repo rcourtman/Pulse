@@ -13,8 +13,9 @@ vi.mock('@/components/shared/HistoryChart', () => ({
     resourceId: string;
     metric: string;
     range?: string;
+    enabled?: boolean;
   }) => (
-    <div data-testid="history-chart">
+    <div data-testid="history-chart" data-enabled={String(props.enabled !== false)}>
       {props.resourceType}:{props.resourceId}:{props.metric}:{props.range}
     </div>
   ),
@@ -51,6 +52,16 @@ const buildDisk = (): Resource =>
   }) as unknown as Resource;
 
 describe('DiskDetail', () => {
+  it('pauses every disk chart when its holder is hidden', () => {
+    const [shown, setShown] = createSignal(true);
+    render(() => <DiskDetail disk={buildDisk()} nodes={[]} historyEnabled={shown()} />);
+    const states = () => screen.getAllByTestId('history-chart').map((c) => c.dataset.enabled);
+    expect(states().length).toBeGreaterThan(0);
+    expect(new Set(states())).toEqual(new Set(['true']));
+    setShown(false);
+    expect(new Set(states())).toEqual(new Set(['false']));
+  });
+
   it('keeps disk detail range choices inside the current history entitlement', () => {
     render(() => <DiskDetail disk={buildDisk()} nodes={[]} />);
 

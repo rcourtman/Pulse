@@ -438,6 +438,41 @@ describe('HistoryChart', () => {
     expect(screen.queryByText('Min')).not.toBeInTheDocument();
   });
 
+  it('keeps its readings without a spinner or read while paused, then resumes', async () => {
+    vi.useFakeTimers();
+    try {
+      const request = vi.mocked(ChartsAPI.getMetricsHistory);
+      request.mockReset();
+      request.mockResolvedValue({
+        points: [{ timestamp: 1000, value: 10, min: 10, max: 10 }],
+        source: 'store',
+      } as never);
+      const [enabled, setEnabled] = createSignal(true);
+      render(() => (
+        <HistoryChart resourceType="disk" resourceId="d" metric="smart_temp" enabled={enabled()} />
+      ));
+      const chart = screen.getByRole('img', { name: 'History chart' });
+      const description = document.getElementById(chart.getAttribute('aria-describedby')!)!;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(description).toHaveTextContent('10');
+      const calls = request.mock.calls.length;
+      // A hidden drawer tab pauses the chart: no reads, readings kept.
+      setEnabled(false);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(request.mock.calls.length).toBe(calls);
+      expect(description).toHaveTextContent('10');
+      expect(screen.queryByLabelText('Loading history')).not.toBeInTheDocument();
+      setEnabled(true);
+      expect(request.mock.calls.length).toBe(calls + 1);
+      expect(screen.queryByLabelText('Loading history')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+      vi.mocked(ChartsAPI.getMetricsHistory)
+        .mockReset()
+        .mockResolvedValue({ points: [], source: 'store' } as never);
+    }
+  });
+
   it('exposes a stored singleton to pointer inspection without treating a later empty response as zero', async () => {
     const request = vi.mocked(ChartsAPI.getMetricsHistory);
     request.mockResolvedValueOnce({

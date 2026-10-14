@@ -15,6 +15,11 @@ export interface HistoryChartProps {
   compact?: boolean;
   hideLock?: boolean;
   data?: AggregatedMetricPoint[];
+  /**
+   * False pauses stored reads and polling while keeping the readings already
+   * shown, e.g. for a chart inside a drawer tab that is mounted but hidden.
+   */
+  enabled?: boolean;
 }
 
 export interface HistoryChartHoverPoint {

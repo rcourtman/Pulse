@@ -3669,6 +3669,11 @@ The drawer judges those disks' heat under the guest agent's alert overrides:
 its `agentId`, which `useWorkloads` copies from `resource.agent.agentId` onto
 the workload row, then the guest's own override keys. That reads the alert
 configuration already loaded and adds no query, poll or per-row work.
+While Manage hides the Overview, the drawer's `historyEnabled` also pauses
+these disks: an expanded disk's charts stop polling (they polled every 10-30
+seconds behind the hidden tab) and the list's realtime refresh is held
+through `useUnifiedResources`' `realtimeEnabled`; returning to Overview reads
+once and resumes. `browser-tests/guest-storage-2263.cjs` counts the reads.
 
 ### Configuration transfer authorization stays off persistence hot paths
 

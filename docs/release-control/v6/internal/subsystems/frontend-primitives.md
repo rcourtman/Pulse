@@ -9185,6 +9185,11 @@ remain separate errors. No polling frequency, request or access policy changes.
 and selection changes; `browser-tests/history-status.cjs` checks actual chart
 states in desktop Chromium and phone WebKit with synthetic transport failures.
 These checks do not establish native collection or released availability.
+`HistoryChart` takes `enabled` (default true) for a chart mounted inside a
+hidden drawer tab: false aborts its read and stops polling but keeps the
+readings it shows, and resuming the same selection reads at once without a
+loading state before polling again. A selection changed while paused still
+starts from nothing. The hook and mounted chart tests pin both paths.
 
 ### Shared History single observations
 

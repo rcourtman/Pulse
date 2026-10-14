@@ -24,6 +24,7 @@ const { chromium } = require('playwright');
     });
     const requests = [];
     const detailRequests = [];
+    const historyReads = [];
     const pageErrors = [];
     const disk = {
       id: 'disk-guest-101',
@@ -81,6 +82,28 @@ const { chromium } = require('playwright');
             },
           });
         }
+        if (url.pathname === '/api/metrics-store/history') {
+          const q = url.searchParams;
+          historyReads.push({ width, metric: q.get('metric'), range: q.get('range') });
+          const end = Date.now();
+          return route.fulfill({
+            json: {
+              resourceType: q.get('resourceType'),
+              resourceId: q.get('resourceId'),
+              metric: q.get('metric'),
+              range: q.get('range'),
+              start: end - 600_000,
+              end,
+              source: 'store',
+              points: [0, 1, 2].map((i) => ({
+                timestamp: end - (2 - i) * 300_000,
+                value: 40 + i,
+                min: 40 + i,
+                max: 40 + i,
+              })),
+            },
+          });
+        }
         if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
         return route.continue();
       });
@@ -91,6 +114,8 @@ const { chromium } = require('playwright');
         });
         await route.continue();
       });
+      // Disk charts poll every 10-30 seconds; the clock drives that here.
+      await page.clock.install();
       await page.goto('http://127.0.0.1:5199/browser-tests/guest-storage-2263.html', {
         waitUntil: 'domcontentloaded',
         timeout: 120_000,
@@ -165,6 +190,35 @@ const { chromium } = require('playwright');
         1,
         'reopening a disk does not reload the SMART module',
       );
+      // A hidden Overview (another drawer tab) must stop the open disk's reads.
+      const reads = () => historyReads.filter((read) => read.width === width).length;
+      await page.clock.runFor(30_000);
+      await page.waitForTimeout(200);
+      const whileShown = reads();
+      await page.clock.runFor(30_000);
+      await page.waitForTimeout(200);
+      assert.ok(reads() > whileShown, 'an open disk polls while its Overview is shown');
+      await page.getByRole('button', { name: 'Hide overview' }).click();
+      await page.waitForTimeout(200);
+      const whileHidden = reads();
+      await page.clock.runFor(120_000);
+      await page.waitForTimeout(200);
+      assert.equal(reads(), whileHidden, 'a hidden Overview reads no disk history');
+      const resumed = page.waitForRequest((request) =>
+        request.url().includes('/api/metrics-store/history'),
+      );
+      await page.getByRole('button', { name: 'Show overview' }).click();
+      await resumed;
+      await page.getByText('Reallocated Sectors').first().waitFor();
+      assert.ok(
+        await page.locator('[data-testid="disk-detail-history"] canvas').first().isVisible(),
+        'charts return with their readings',
+      );
+      // An element capture: a full-page capture resizes the page, which
+      // re-reads charts at a new point cap and would show their spinners.
+      await page.locator('[data-testid="guest-physical-disks"]').screenshot({
+        path: path.join(artifacts, `guest-storage-2263-resumed-${width}.png`),
+      });
       const beforeNoAgent = requests.length;
       await page.getByRole('button', { name: 'No agent' }).click();
       assert.equal(await page.locator('[data-testid="guest-physical-disks"]').count(), 0);
@@ -212,6 +266,7 @@ const { chromium } = require('playwright');
         route: '/browser-tests/guest-storage-2263.html',
         requests,
         detailRequests,
+        historyReads: historyReads.length,
         pageErrors,
       }),
     );
