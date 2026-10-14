@@ -837,7 +837,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertLess(readback, integrity)
 
         helm_pages = read(".github/workflows/helm-pages.yml")
-        self.assertIn("Require activated GitHub release", helm_pages)
+        self.assertIn("Require authenticated activated release packet", helm_pages)
+        self.assertLess(
+            helm_pages.index("./scripts/verify-github-release-integrity.sh"),
+            helm_pages.index("      - name: Recover immutable qualified chart"),
+        )
         self.assertIn("release-activation.json", helm_pages)
         self.assertIn("source_release_run_id", helm_pages)
         self.assertIn("Helm Pages refuses to advertise inactive", helm_pages)
