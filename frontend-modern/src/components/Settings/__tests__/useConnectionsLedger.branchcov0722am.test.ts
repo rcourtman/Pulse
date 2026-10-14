@@ -305,7 +305,7 @@ describe('connectionToRow (standalone buildRow arms)', () => {
     expect(row.lastErrorMessage).not.toContain('credentials connected');
     expect(row.statusLabel).toBe('Unauthorized');
     expect(JSON.stringify(connection)).toBe(original);
-    expect(row.primaryConnection).toBe(connection);
+    expect(row.connection).toBe(connection);
   });
 });
 
