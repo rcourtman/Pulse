@@ -48,17 +48,18 @@ jobs:
           tar -xzf "/tmp/${archive}" -C /tmp gitleaks
           install /tmp/gitleaks /usr/local/bin/gitleaks
 
+      - name: Validate delivered-history secret scan
+        run: python3 scripts/tests/test_ci_secret_scan.py
+
       - name: Run gitleaks
+        env:
+          EXPECTED_HEAD: ${{ github.sha }}
+          DIFF_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        # A merge's latest log entry can have no patch. Scan all newly
+        # delivered commits and its first-parent resolution, not just -1.
+        # Missing/non-ancestor bases scan the complete checkout history.
         run: |
-          set -euo pipefail
-          gitleaks detect \
-            --source . \
-            --log-opts=-1 \
-            --no-banner \
-            --redact \
-            --exit-code 2 \
-            --report-format sarif \
-            --report-path results.sarif
+          bash scripts/scan-ci-secrets.sh "$EXPECTED_HEAD" "$DIFF_BASE"
 
   # The secret scan above runs on every push including docs-only ones — this
   # workflow is the only per-push gitleaks pass, so it must not be path
