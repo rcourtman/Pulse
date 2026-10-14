@@ -112,6 +112,38 @@ class NativeContracts(unittest.TestCase):
             result = subprocess.run([str(allocator), "-d", "/tmp/pulse-backup.XXXXXX"], env=env, capture_output=True, check=True)
             self.assertEqual(Path(result.stdout.decode().strip()).parent, root / "tmp")
 
+    def test_transport_accepts_actual_bounded_downloader_and_rejects_option_drift(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / "curl"; script.write_text(native.TRANSPORT); script.chmod(0o755)
+            payload = b"private signed fixture bytes\n"
+            (root / "installer").write_bytes(payload)
+            (root / "installer.sshsig").write_bytes(b"private signature sidecar\n")
+            env = {**os.environ, "PULSE_NATIVE_ROOT": str(root),
+                   "PATH": str(root) + os.pathsep + os.environ["PATH"]}
+            url = "https://github.com/rcourtman/Pulse/releases/download/v0.0.2/install.sh"
+            shell = ('source "$1"; download_update_asset "$2" "$3"')
+            for suffix in ("", ".sshsig"):
+                target = root / "downloaded"
+                result = subprocess.run(["bash", "-c", shell, "fixture",
+                                         str(ROOT / "scripts/pulse-auto-update.sh"), url + suffix, str(target)],
+                                        env=env, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(target.read_bytes(), (root / ("installer" + suffix)).read_bytes())
+                target.unlink()
+            flags = ["--disable", "-fsSL", "--connect-timeout", "5", "--max-time", "60",
+                     "--proto", "=https", "--proto-redir", "=https"]
+            for changed in (flags[1:], [*flags, "--insecure"],
+                            [arg if arg != "60" else "61" for arg in flags],
+                            [arg if arg != "=https" else "=all" for arg in flags],
+                            [*flags, "https://example.com/install.sh"],
+                            [*flags, "--max-time", "60"]):
+                with self.subTest(flags=changed):
+                    result = subprocess.run([str(script), *changed, url, "-o", str(root / "refused")],
+                                            env=env, capture_output=True)
+                    self.assertEqual(result.returncode, 97)
+                    self.assertFalse((root / "refused").exists())
+
     def test_real_verifier_accepts_fixture_and_refuses_tampering(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -60,14 +60,22 @@ def generated_collector_is_running(listing, runtime):
 
 
 def write_wide_ps_adapter(tools, executable):
-    """Observe real fixture processes without Darwin's display-width truncation.
+    """Observe real fixture processes with a native basename and full argv.
 
     These Linux NAS wrappers run in a long private Darwin temporary path during
-    CI. Both comm and args contain that path. Widen only the fixture transport;
-    the production parser, exact ownership checks and deadlines are unchanged.
+    CI. Darwin truncates a middle comm path even with -ww. Its native ucomm
+    field supplies the basename Linux's comm uses; args still supplies the
+    exact executable path. Change only this fixture transport, not the
+    production parser, ownership checks or deadlines.
     """
     target = tools / "ps"
-    target.write_text("#!/bin/sh\nexec " + shlex.quote(str(executable)) + ' -ww "$@"\n')
+    target.write_text("#!/bin/sh\n" + r'''
+for arg do
+    case "$arg" in comm=) arg=ucomm= ;; esac
+    set -- "$@" "$arg"
+    shift
+done
+exec ''' + shlex.quote(str(executable)) + ' -ww "$@"\n')
     target.chmod(0o700)
     return target
 
@@ -508,7 +516,7 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                         except ProcessLookupError: pass
                         process.wait(timeout=3)
 
-    def test_private_process_reader_requests_full_width_without_changing_fields(self):
+    def test_private_process_reader_requests_native_basename_and_full_argv(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             native = root / 'native ps'
@@ -523,7 +531,8 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
             ):
                 with self.subTest(fields=fields):
                     result = subprocess.run([str(adapter), *fields], capture_output=True, text=True, check=True)
-                    self.assertEqual(result.stdout.splitlines(), ['-ww', *fields])
+                    self.assertEqual(result.stdout.splitlines(),
+                                     ['-ww', *(field if field != 'comm=' else 'ucomm=' for field in fields)])
 
     def test_generated_collector_observation_keeps_exact_identity_on_both_unix_formats(self):
         runtime = Path('/synthetic/owned/bin/pulse-agent')
@@ -535,6 +544,7 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
             'pulse-agent /synthetic/foreign/bin/pulse-agent 30\n',
             f'pulse-agent {runtime}-prod 30\n',
             f'pulse-agent /bin/sh echo {runtime} 30\n',
+            f'/synthetic/owne {runtime} 30\n',  # Original Darwin middle-column truncation.
             f'pulse-agent {runtime}\n',
             'pulse-agent\n',
             '',

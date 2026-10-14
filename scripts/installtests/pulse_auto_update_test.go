@@ -720,6 +720,7 @@ systemctl() {
 ` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
 ` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
 ` + extractAutoUpdateServiceFunctions(t) + `
+` + extractAutoUpdateFunction(t, "download_update_asset") + `
 ` + extractAutoUpdateFunction(t, "perform_update") + `
 if perform_update v5.1.25; then
   echo "RESULT:succeeded"
@@ -854,6 +855,7 @@ systemctl() {
 ` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
 ` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
 ` + extractAutoUpdateServiceFunctions(t) + `
+` + extractAutoUpdateFunction(t, "download_update_asset") + `
 ` + extractAutoUpdateFunction(t, "perform_update") + `
 if perform_update v5.1.25; then echo "RESULT:succeeded"; else echo "RESULT:failed"; fi
 echo "LEAKED:$(trap -p RETURN)"
