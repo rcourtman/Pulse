@@ -301,7 +301,8 @@ describe('Pulse system-alert overview scope', () => {
         incidentCode: 'capacity_runway_low',
         resourceSources: ['pbs'],
       },
-      href: '/proxmox/overview',
+      // Storage resolves the datastore's id through the registry and opens it.
+      href: '/proxmox/storage?resource=storage%3Apbs-1%3Amain',
       platformType: 'proxmox-pbs',
     },
     {
@@ -614,7 +615,27 @@ describe('Pulse system-alert overview scope', () => {
       ).toBe('/proxmox/overview');
     });
 
-    it('keeps the platform page for resources the workloads table does not list', () => {
+    it('opens the storage a ZFS pool or device alert names', () => {
+      // "<storage>/zfs-pool:..." ids name nothing the registry can open.
+      expect(
+        linkFor({
+          resourceId: 'pve5-local-zfs/zfs-pool:local-zfs/device:sdb2',
+          resourceName: 'west-e-service-pool (local-zfs, sdb2)',
+          metadata: { resourceType: 'storage', storageResourceId: 'pve5-local-zfs' },
+        }),
+      ).toBe('/proxmox/storage?resource=pve5-local-zfs');
+      cleanup();
+      // Raised before the stamp: the Storage page, without naming a pool.
+      expect(
+        linkFor({
+          resourceId: 'pve5-local-zfs/zfs-pool:local-zfs',
+          resourceName: 'west-e-service-pool (local-zfs)',
+          metadata: { resourceType: 'storage' },
+        }),
+      ).toBe('/proxmox/storage');
+    });
+
+    it('opens a storage pool on Storage and keeps Docker on its platform page', () => {
       expect(
         linkFor({
           resourceId: 'docker:nebula-1-mock/nebula-1-c94124aef15b',
@@ -629,7 +650,7 @@ describe('Pulse system-alert overview scope', () => {
           resourceName: 'west-a-iso-library',
           metadata: { resourceType: 'storage' },
         }),
-      ).toBe('/proxmox/overview');
+      ).toBe('/proxmox/storage?resource=mock-cluster-1-pve1-local');
     });
   });
 });

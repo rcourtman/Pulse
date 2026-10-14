@@ -252,6 +252,27 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
+  it('tells the Storage surface whether its tab is the one showing', () => {
+    // Storage stays mounted behind the other tabs; their ?resource= links
+    // must not open a pool.
+    mockPathname.mockReturnValue('/proxmox/storage');
+    setResources([
+      makeResource({
+        id: 'pbs-datastore-1',
+        type: 'storage',
+        platformType: 'proxmox-pbs',
+        sources: ['pbs'],
+      }),
+    ]);
+
+    renderSurface();
+
+    expect(screen.getByTestId('storage-surface')).toBeInTheDocument();
+    const props = mockStorageProps.mock.lastCall?.[0] as { routeActive?: boolean };
+    expect(props.routeActive).toBe(true);
+    expect(proxmoxPageSurfaceSource).toContain("routeActive={activeTab() === 'storage'}");
+  });
+
   it('surfaces stale agent-backed Proxmox nodes', () => {
     mockVersionInfo.mockReturnValue({
       version: 'v6.0.0-rc.6',

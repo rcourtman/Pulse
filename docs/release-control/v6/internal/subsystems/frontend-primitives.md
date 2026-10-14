@@ -8832,6 +8832,15 @@ state resolves non-row ids through the resource registry, and the summary
 focus bridge reveals the selected row, so the alert link and every other
 `?resource=` link share one resolution and reveal path.
 
+### Alert cards deep-link storage through the storage route search
+
+`AlertOverviewAlertCard` builds a Proxmox storage alert's link with
+`buildStorageRouteSearch({ resource })` on `/proxmox/storage`, preferring the
+alert's `storageResourceId` metadata, and adds no identity mapping of its
+own. `ProxmoxPageSurface` passes `routeActive` to the Storage surface it keeps
+mounted behind its other tabs, so a guest tab's `?resource=` link is not read
+as a storage deep link.
+
 ### Alert groups use the shared localization boundary
 
 Alert group disclosure and group acknowledgement copy routes through

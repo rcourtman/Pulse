@@ -4063,9 +4063,10 @@ alert's own resource id. The shared workloads table resolves that id
 (including a Proxmox source id such as `<cluster>-<node>-<vmid>`) through
 the resource registry, opens the guest's drawer and reveals it, so a
 notification reaches the affected guest in one tap instead of the top of a
-page with every guest on it. Other alerts (hosts, storage, Docker
+page with every guest on it. Other alerts (hosts, Docker
 containers, Kubernetes, TrueNAS, Pulse system alerts) keep their platform
-page link, because their pages do not read `?resource=`. So do orphaned
+page link, because their pages do not read `?resource=`; Proxmox storage
+alerts open their pool (below). So do orphaned
 backup alerts (`backup-subject:...`), whose ids name no resource the
 registry can open. A guest's per-filesystem alert (`<guest>-disk-<key>`,
 marked by `mountpoint` or `diskIndex` metadata) names no registry resource
@@ -4078,6 +4079,21 @@ filesystem filled; a filesystem alert without that key (raised before the
 stamp) keeps the platform page link and never falls back to its own id.
 The platform used for the monitoring policy menu is still read from the
 page path alone.
+
+### A Proxmox storage alert's name opens its pool
+
+A storage alert (`resourceType` `storage`) whose platform page is Proxmox
+links its name to `/proxmox/storage?resource=`, so a full or degraded pool
+opens on Storage instead of the top of the Proxmox overview. ZFS pool-state,
+pool-error and device alerts are raised under
+`<storage>/zfs-pool:<pool>[/device:<device>]` ids, which the resource
+registry cannot open, so `checkZFSPoolHealth` in `internal/alerts/storage.go`
+stamps the owning storage as `storageResourceId` metadata
+(`TestZFSAlertsNameTheirStorage`); the card prefers that key, then the
+alert's own id. An unstamped composite id (raised before the stamp, or a
+pool-error alert whose counters have not grown since) opens Storage without
+naming a pool and never passes the composite id. TrueNAS and vSphere storage
+alerts keep their platform page, which does not read `?resource=`.
 
 ### Thresholds lead with each group's default limits
 
