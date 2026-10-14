@@ -1,16 +1,21 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI, type AllMetricsHistoryResponse } from '@/api/charts';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { GuestDrawerHistory } from '../GuestDrawerHistory';
+import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
   maxHistoryDays: () => 90,
   isRangeLocked: () => false,
 }));
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+});
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   resetCreateNonSuspendingQueryCacheForTest();
   vi.restoreAllMocks();
@@ -47,7 +52,7 @@ const marks = (metric: string, id = 'utilization') =>
   group(id).querySelectorAll(`[data-history-observation="${metric}"]`);
 const note = (id = 'utilization') => group(id).querySelector('[data-history-gaps]');
 const mount = () => render(() => <GuestDrawerHistory target={target} range="1h" />);
-const refresh = () => fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+const refresh = () => vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
 
 describe('drawer History does not join missing stored observations', () => {
   it('breaks only the affected metric and keeps isolated recovery observations visible', async () => {
@@ -214,7 +219,7 @@ describe('drawer History does not join missing stored observations', () => {
       'aria-valuetext',
       expect.stringContaining('Memory no observation.'),
     );
-    refresh();
+    await refresh();
     await waitFor(() => expect(note()).toBeNull());
     expect(group()).toBe(chart);
     expect(paths('#f59e0b')).toHaveLength(1);
@@ -231,7 +236,7 @@ describe('drawer History does not join missing stored observations', () => {
       .mockRejectedValueOnce(Object.assign(new Error('private denial'), { status: 403 }));
     mount();
     await screen.findByRole('slider', { name: 'Inspect Utilization history' });
-    refresh();
+    await refresh();
     await screen.findByRole('button', { name: 'Retry history' });
     expect(note()).toHaveTextContent('Memory, Disk');
     expect(paths('#10b981')).toHaveLength(0);

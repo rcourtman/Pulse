@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "ba17533a03b32d8911564b3f5521540f62970f6a",
+  "verified_at": "2026-10-14T09:18:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/drawerOverviewModel.ts",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
+    "frontend-modern/src/utils/alerts.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "186da5e8e84f834a3d00b50212f4e33b8d06e923380fe20a5ecf211799fd8a8a",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "9364c5e65c111117409b30c1d6a50197d2a9e4a6a57dcc2df62964507065b0cc",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "f240101bd2197f51b65ee2eb59d494dadfd404e4886477f0b0d7497ad345e27b",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "09b6ccaef3aab12374f0ea295de6e048b783efc73d9277b7d9f5728e94ca2b82",
+    "frontend-modern/src/components/Workloads/drawerOverviewModel.ts": "843ba7094b87e1968d2d025ba5e9c2a1a05f7767f31d98bf22e52a779fc96add",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "05e86661c2bbba32b1f23b8d849473bc03bf454da27d6b2383bd6aded37d512e",
+    "frontend-modern/src/utils/alerts.ts": "d4a0ba86b5429b4d2196a549e93cd1f1e86a39dc42e7b7d7be3627f816230232"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/docker/overview",
+    "/docker/containers",
+    "/standalone/machines",
+    "/proxmox/storage",
+    "/proxmox/storage?tab=disks"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "final built bytes of this tree (origin/main ba17533a03 plus this change) embedded in a darwin binary, mock mode with 7 days of seeded metrics, headless Chromium on pulse-dev through a reverse tunnel, full-resolution element screenshots read by eye",
+    "every drawer (guest, node, Docker host, container, agent machine) and storage detail (pool, disk) at 1440px and 390px: no \"Refresh history\" button anywhere; the guest toolbar holds only the range picker",
+    "container sftp-ingest-2 with a live critical memory alert from the real alert engine (trigger 85%, breach value 99.5%, now recovering at 70%): Needs attention lists it as \"Memory 70% now, recovering / Clears after 5 minutes at 80% or lower\", the Utilization legend reads \"Memory 70.0% alert at 85.0%\" and a dashed red line sits at 85%; before this change the container drawer listed no alert at all",
+    "Docker host App Platform 01 whose container redis-cache-2 carries a memory alert: Needs attention still lists the container alert, but the host Utilization chart draws no dashed line and its own memory reading is not toned",
+    "a Sol (gpt-6.1-sol) review of the whole drawer series and these screenshots prompted the alert copy, mapping, empty-chart line, facts freshness, sticky phone panel and legend label fixes in this change"
+  ],
+  "interactions": [
+    "expanded the first guest, node, Docker host and agent rows, the sftp-ingest-2 container row, a service pool row and the first physical disk row at both widths (the 390px container row did not expose its expand control under that label and was not captured)",
+    "read each drawer for threshold lines, refresh buttons and the phone chart toggle via the DOM, and the screenshots by eye"
+  ]
+}

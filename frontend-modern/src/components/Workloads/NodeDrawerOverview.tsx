@@ -539,7 +539,11 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
       [model, hasPositiveNumber(cores) ? `${cores} logical CPUs` : ''].filter(Boolean).join(' · '),
       sizeFact(
         props.node.memory?.total,
-        memoryValue() !== undefined ? props.node.memory?.used : undefined,
+        // Only a current reading states a used amount; a retained one is
+        // qualified in the chart and shows the size alone here.
+        memoryValue() !== undefined && !deferredMetrics()?.memory
+          ? props.node.memory?.used
+          : undefined,
         'RAM',
       ),
       diskMeasured() ? sizeFact(props.node.disk?.total, props.node.disk?.used, 'root disk') : '',

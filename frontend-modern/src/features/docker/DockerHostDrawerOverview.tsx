@@ -19,10 +19,11 @@ import { useResourceDetailDrawerDockerActionsState } from '@/components/Infrastr
 import { useWebSocket } from '@/contexts/appRuntime';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
+import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
-import { getAlertsForUnifiedResource } from '@/utils/alerts';
+import { getAlertsForUnifiedResource, getOwnAlertsForUnifiedResource } from '@/utils/alerts';
 import {
   formatBytes,
   formatRelativeTime,
@@ -192,6 +193,7 @@ export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps)
 }
 
 export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
+  const now = useRelativeTimeNow();
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const docker = () => props.host.docker;
@@ -200,9 +202,11 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
   const summaryOnly = () => cleanText(docker()?.collectionMode) === 'typed-helper-summary';
   const hostAlerts = () =>
     getAlertsForUnifiedResource(props.host, activeAlerts, alertsActivation.detectionEnabled());
+  // Needs attention lists the host's containers and services too; the charts
+  // describe the host itself, so only its own alerts draw a trigger.
   const chartAlerts = () =>
     getDrawerChartAlerts(
-      hostAlerts(),
+      getOwnAlertsForUnifiedResource(props.host, activeAlerts, alertsActivation.detectionEnabled()),
       (props.historyGroups ?? []).flatMap((group) => group.series.map((series) => series.metric)),
     );
   const temperatureThresholds = createMemo(() =>
@@ -391,7 +395,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
             : []),
           ...hostAlerts().map((alert) => ({
             id: alert.id,
-            message: alert.message,
+            ...getAlertAttentionCopy(alert, now),
             subject: cleanText(alert.resourceName) || props.host.displayName || props.host.name,
             metric: alertTypeDisplayLabel(alert.type),
             severity: alert.level,

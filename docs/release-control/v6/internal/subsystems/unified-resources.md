@@ -2402,7 +2402,10 @@ their open alerts. The matcher keys a resource on its unified id, canonical
 primary and superseded ids, Proxmox source id and metrics target (PBS, PMG,
 storage); agent and Docker hosts also answer to `agent:<id>` and
 `docker:<host source id>` and to the component alerts nested under those keys
-(disks, RAID arrays, sensors, containers, services). A health reason counts as
+(disks, RAID arrays, sensors, containers, services). An `app-container` answers
+to `docker:<host source id>/<container id>` (or `/name:<name>`), the key the
+alert engine writes for it. Drawer charts take triggers only from
+`getOwnAlertsForUnifiedResource` (exact keys, no nested components). A health reason counts as
 stated when it is a whole sentence of an open alert's text, because a unified
 incident alert on storage with consumers joins the incident summary and its
 impact ("... above threshold. Affects 2 dependent resources: ...") and neither

@@ -4066,8 +4066,10 @@ reads the `min`/`max` each stored bucket already carries: one extra path per
 series with any spread (none for flat data). Range picker option labels come
 from one lookup table (`formatHistoryRangeOptionLabel`). The phone collapse of
 later chart panels is a CSS class below `sm` on panels that stay mounted: it
-hides nothing from the shared history read and adds no read or timer. None
-adds a read or timer.
+hides nothing from the shared history read and adds no read or timer. The
+removed "Refresh history" button took no read away: the 30-second poll is
+unchanged and "Retry history" still appears for a failed read. None adds a
+read or timer.
 
 The default stored-history legend resolves one latest timestamp from that
 same bounded, normalized panel index, then looks up each configured series at
