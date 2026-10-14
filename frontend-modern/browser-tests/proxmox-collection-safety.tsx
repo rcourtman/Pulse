@@ -7,7 +7,8 @@ import type { NodeConfigWithStatus } from '../src/types/nodes';
 import '../src/index.css';
 
 function Fixture() {
-  const requestedType = new URLSearchParams(location.search).get('type');
+  const parameters = new URLSearchParams(location.search);
+  const requestedType = parameters.get('type');
   const type = requestedType === 'pbs' || requestedType === 'pmg' ? requestedType : 'pve';
   const [saved, setSaved] = createSignal<unknown>(null);
   const [finished, setFinished] = createSignal(false);
@@ -19,7 +20,8 @@ function Fixture() {
     user: 'monitoring@pam',
     tokenName: 'monitoring@pam!fixture',
     hasToken: true,
-    verifySSL: true,
+    verifySSL: parameters.get('verify') !== 'false',
+    fingerprint: parameters.get('pin') === 'fixture' ? 'ab:'.repeat(31) + 'ab' : '',
     monitorVMs: true,
     monitorContainers: true,
     monitorStorage: true,

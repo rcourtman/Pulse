@@ -1,4 +1,4 @@
-import { Component, createUniqueId, Show } from 'solid-js';
+import { Component, createMemo, createUniqueId, Show } from 'solid-js';
 import type { NodeModalProps } from '@/components/Settings/nodeModalModel';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -25,40 +25,97 @@ interface NodeModalMonitoringSectionProps {
 export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionProps> = (props) => {
   const { modalProps, state } = props;
   const descriptionId = createUniqueId();
+  const tlsPolicy = createMemo(() => {
+    // Match the TLS client's precedence, not the checkbox alone. This is a
+    // description of form inputs, never evidence that a peer was verified.
+    if (state.formData().host.trim().toLowerCase().startsWith('http://')) {
+      return {
+        title: 'TLS is not used for HTTP',
+        description:
+          'This HTTP URL does not use TLS: neither the checkbox nor a fingerprint authenticates the server or protects credentials in transit. Do not switch to HTTP to bypass a certificate error.',
+        tone: 'danger' as const,
+      };
+    }
+    if (state.formData().fingerprint !== '') {
+      return {
+        title: 'Certificate fingerprint required',
+        description:
+          'The fingerprint takes precedence over the checkbox. This endpoint must present the matching certificate, even if its certificate chain is trusted or verification is unchecked.',
+        tone: 'info' as const,
+      };
+    }
+    if (state.formData().verifySSL) {
+      return {
+        title: 'Trusted certificate chain required',
+        description:
+          'With no fingerprint set, this endpoint must present a valid, hostname-matching certificate with a chain trusted by the Pulse runtime.',
+        tone: 'info' as const,
+      };
+    }
+    return {
+      title: 'Certificate identity not verified',
+      description:
+        'With no fingerprint and verification unchecked, these settings do not authenticate the server. Encryption alone does not protect credentials from an impersonated endpoint.',
+      tone: 'danger' as const,
+    };
+  });
 
   return (
     <>
-      <div>
+      <section aria-label="TLS trust">
         <SectionHeader title="SSL settings" size="sm" class="mb-4" titleClass="text-base-content" />
         <div class="space-y-3">
-          <label class="flex items-center gap-2 text-sm text-base-content">
+          <label class="flex min-h-11 items-center gap-2 text-sm text-base-content">
             <input
               type="checkbox"
               checked={state.formData().verifySSL}
               onChange={(event) => state.updateField('verifySSL', event.currentTarget.checked)}
+              aria-describedby={`${descriptionId}-tls-policy`}
               class={formCheckbox}
             />
             Verify SSL certificate
           </label>
 
           <div class={formField}>
-            <label for="node-ssl-fingerprint" class={labelClass()}>
+            <label for={`${descriptionId}-ssl-fingerprint`} class={labelClass()}>
               SSL Fingerprint (optional)
             </label>
             <input
-              id="node-ssl-fingerprint"
+              id={`${descriptionId}-ssl-fingerprint`}
               type="text"
               value={state.formData().fingerprint}
               onInput={(event) => state.updateField('fingerprint', event.currentTarget.value)}
+              aria-describedby={`${descriptionId}-fingerprint-help ${descriptionId}-tls-policy`}
               placeholder="AA:BB:CC:DD:EE:FF:..."
               class={controlClass('font-mono')}
             />
-            <p class={formHelpText}>
-              Useful when connecting to servers with self-signed certificates.
+            <p id={`${descriptionId}-fingerprint-help`} class={formHelpText}>
+              Pins the SHA-256 fingerprint of this endpoint's certificate instead of checking its
+              certificate chain. Certificate renewal can change the fingerprint, including with ACME
+              or Let's Encrypt. Independently verify the replacement through an already-trusted
+              administration channel before updating a pin. Do not disable verification or clear a
+              pin to bypass an error.
             </p>
           </div>
+          <InlineNotice
+            tone={tlsPolicy().tone}
+            role="status"
+            aria-label="Form TLS policy"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <p class="font-medium">{tlsPolicy().title}</p>
+            <p id={`${descriptionId}-tls-policy`}>{tlsPolicy().description}</p>
+          </InlineNotice>
+          <p class={formHelpText}>
+            Form settings only, not a connection-test result.
+            <Show when={modalProps.nodeType === 'pve'}>
+              {' '}
+              Cluster members may have their own saved fingerprints.
+            </Show>
+          </p>
         </div>
-      </div>
+      </section>
 
       {/* For PVE the Collection scope section below carries both the
           coverage description and the per-collector toggles, so the
