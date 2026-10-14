@@ -279,6 +279,34 @@ describe('connectionToRow (standalone buildRow arms)', () => {
     const row = connectionToRow(connectionFixture({ lastError: null }));
     expect(row.lastErrorMessage).toBeUndefined();
   });
+
+  it.each([
+    [
+      'certificate fingerprint mismatch: expected fixture-old, got fixture-new',
+      'TLS fingerprint changed.',
+      'Independently verify its identity',
+    ],
+    [
+      'API error 403: authentication failed',
+      'Permission denied.',
+      'Keep intentional access limits',
+    ],
+  ])('presents safe ledger guidance without mutating the connection: %s', (raw, headline, hint) => {
+    const connection = connectionFixture({
+      state: 'unauthorized',
+      scope: { vms: true, containers: false },
+      lastError: { message: raw, at: '2026-07-22T12:00:00Z' },
+    });
+    const original = JSON.stringify(connection);
+    const row = connectionToRow(connection);
+    expect(row.lastErrorMessage).toContain(headline);
+    expect(row.lastErrorMessage).toContain(hint);
+    expect(row.lastErrorMessage).not.toContain('disable TLS');
+    expect(row.lastErrorMessage).not.toContain('credentials connected');
+    expect(row.statusLabel).toBe('Unauthorized');
+    expect(JSON.stringify(connection)).toBe(original);
+    expect(row.primaryConnection).toBe(connection);
+  });
 });
 
 // ---- useConnectionsLedger (systemToRow & row-derivation arms) ---------------

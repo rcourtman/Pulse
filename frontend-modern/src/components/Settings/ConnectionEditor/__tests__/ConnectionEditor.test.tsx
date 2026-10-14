@@ -22,6 +22,45 @@ describe('ConnectionEditor', () => {
     vi.clearAllMocks();
   });
 
+  it.each([
+    [
+      'certificate fingerprint mismatch: expected fixture-old, got fixture-new',
+      'TLS fingerprint changed.',
+      'Keep TLS verification enabled.',
+    ],
+    [
+      'API error 403: authentication failed',
+      'Permission denied.',
+      'Keep intentional access limits',
+    ],
+  ])(
+    'renders safe probe guidance and clears it on ordinary recovery: %s',
+    async (raw, headline, hint) => {
+      mockedProbe.mockRejectedValueOnce(new Error(raw));
+      mockedProbe.mockResolvedValueOnce({ candidates: [], probedMs: 10 });
+      const renderSlot = vi.fn(() => <div />);
+      render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
+      const input = screen.getByLabelText('API endpoint') as HTMLInputElement;
+      fireEvent.input(input, { target: { value: 'https://pve.lab:8006' } });
+      fireEvent.click(screen.getByRole('button', { name: /probe api endpoint/i }));
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).toContain(headline);
+      expect(alert.textContent).toContain(hint);
+      expect(alert.textContent).not.toContain('credentials connected');
+      expect(alert.textContent).not.toContain('disable TLS');
+      expect(input.value).toBe('https://pve.lab:8006');
+      expect(mockedProbe).toHaveBeenCalledTimes(1);
+      expect(renderSlot).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: /probe api endpoint/i }));
+      await screen.findByText('No supported API-backed platform detected at that address.');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(mockedProbe).toHaveBeenCalledTimes(2);
+      expect(input.value).toBe('https://pve.lab:8006');
+      expect(renderSlot).not.toHaveBeenCalled();
+    },
+  );
+
   it('runs a probe and dispatches the detected type into the credential slot', async () => {
     const response: ProbeResponse = {
       candidates: [
