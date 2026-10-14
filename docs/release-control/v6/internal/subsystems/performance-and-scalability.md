@@ -36,6 +36,11 @@ zero bytes retain their existing wire semantics and are not aggregate metrics.
 No collector, guest request, timer, store/history point, threshold or alert
 policy is changed.
 
+Raw byte metrics always serialize a generic `value`, even its default zero.
+That scalar cannot confer a current percentage: an explicit `percent` or a
+valid used/total byte pair is required when `unit` names bytes. Legacy untyped
+value-only percentages and explicit percent-unit values remain usable.
+
 Verification: `workloadDiskUsage.test.ts`, `useWorkloads.test.ts` (REST and owning
 snapshot refreshes), `workloadSelectors.test.ts`, `GuestRow.test.ts`,
 `GuestDrawerHistory.disk-provenance.test.tsx` and stacked-disk tests cover low

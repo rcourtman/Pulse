@@ -336,7 +336,10 @@ const buildDiskMetric = (metric?: APIMetricValue): WorkloadGuest['disk'] => {
   const disk = {
     total: metric?.total,
     used: metric?.used,
-    usage: metric?.percent ?? metric?.value,
+    // Byte metrics always serialize a generic value, including default zero.
+    // Only an explicit percentage or measured byte pair establishes usage.
+    usage:
+      metric?.percent ?? (!metric?.unit || metric.unit === 'percent' ? metric?.value : undefined),
   };
   return {
     ...disk,

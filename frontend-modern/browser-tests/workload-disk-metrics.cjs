@@ -44,12 +44,16 @@ const resource = (name, metric, extras = {}) => ({
   metrics: {
     cpu: { percent: 10 },
     memory: { percent: 25, used: GB, total: 4 * GB },
-    disk: Object.fromEntries(
-      Object.entries(metric).map(([key, value]) => [
-        key,
-        key === 'used' || key === 'total' ? value * GB : value,
-      ]),
-    ),
+    disk: {
+      value: 0,
+      unit: 'bytes',
+      ...Object.fromEntries(
+        Object.entries(metric).map(([key, value]) => [
+          key,
+          key === 'used' || key === 'total' ? value * GB : value,
+        ]),
+      ),
+    },
   },
   proxmox: {
     vmid: 101,

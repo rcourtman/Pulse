@@ -33,6 +33,11 @@ metrics remain available. This aggregate metric contract is distinct from
 DiskInfo filesystem records whose zero byte fields may be omitted. Identity,
 producer selection, collection, retention and History transport are unchanged.
 
+Raw byte metrics always serialize a generic `value`, even its default zero.
+That scalar cannot confer a current percentage: an explicit `percent` or a
+valid used/total byte pair is required when `unit` names bytes. Legacy untyped
+value-only percentages and explicit percent-unit values remain usable.
+
 Verification: `useWorkloads.test.ts` exercises mounted REST and owning-snapshot
 refreshes and `workloadDiskUsage.test.ts` covers numeric admission. The
 `workload-disk-metrics` browser fixture consumes the REST mapper into production

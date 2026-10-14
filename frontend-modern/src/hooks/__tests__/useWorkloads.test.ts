@@ -107,10 +107,15 @@ describe('useWorkloads', () => {
           [{ percent: 0.5 }, 0.5],
           [{ percent: 1 }, 1],
           [{ value: 0.5 }, 0.5],
+          [{ value: 0, total: 100, unit: 'bytes' }, null],
+          [{ value: 0, used: 0, total: 100, unit: 'bytes' }, 0],
+          [{ value: 0, used: 50, total: 200, unit: 'bytes' }, 25],
+          [{ value: 0.5, unit: 'percent' }, 0.5],
           [{ used: 50, total: 200 }, 25],
           [{ percent: -1, used: 0, total: 100 }, null],
           [{ percent: Infinity, used: 0, total: 100 }, null],
         ] as const) {
+          if (transport === 'snapshot' && 'unit' in metric) continue;
           const raw = { ...sampleResource, metrics: { ...sampleResource.metrics, disk: metric } };
           if (transport === 'api') {
             apiFetchJSONMock.mockResolvedValue({ data: [raw] });
