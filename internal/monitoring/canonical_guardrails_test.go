@@ -3393,6 +3393,13 @@ func TestGuestAgentTypedReplyMonitoringContract(t *testing.T) {
 	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "typed result", "typed content", "typed truncated")
 }
 
+func TestGuestAgentCommandReplyMonitoringContract(t *testing.T) {
+	// A complete but recognizably foreign command reply cannot clear a
+	// filesystem request or renew its capacity/History. Keep actual warm
+	// observation origins and live CPU across both deferral polls.
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "foreign file", "foreign network", "foreign version")
+}
+
 func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
 	for path, want := range map[string]int{"monitor_backups.go": 2, "monitor_alerts.go": 1} {
 		raw, err := os.ReadFile(path)
