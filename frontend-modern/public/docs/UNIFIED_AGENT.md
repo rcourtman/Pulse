@@ -693,8 +693,8 @@ Pulse does not use a Proxmox node agent to look inside LXCs by default. The
 node agent does automatically collect filesystem capacity for running LXCs
 when the local `pct` tool is available. The current collector first uses
 socket-free cgroup v2 and `/proc` discovery plus bounded mount probes. A
-root/full-trust collector can fall back to `pct list`, `lxc-info` and
-`pct df <vmid>`; those commands cannot recover readings inside the isolated
+root or explicitly `--grant-pct` collector can fall back to `pct list` and
+`pct df <vmid>` (with `lxc-info` where permitted); those commands cannot recover readings inside the isolated
 typed helper. See [helper-backed LXC readings](AGENT_SECURITY.md#proxmox-lxc-filesystem-readings-with-the-typed-helper)
 for partial, unavailable and older-helper results. Do not remove `PrivateNetwork`
 or broaden the agent's privileges to clear a missing reading. It reports only mount

@@ -21,7 +21,7 @@ class PVEHelperGuidanceTest(unittest.TestCase):
         security = (self.root / 'docs/AGENT_SECURITY.md').read_text()
         general = plain(security.split('## Proxmox Deployment Choices\n', 1)[1].split('\n## ', 1)[0])
         self.assertNotIn("the safe profile uses the typed helper's bounded fixed-shape pct reads", general)
-        self.assertIn('Root/full-trust collectors can fall back', general)
+        self.assertIn('Root or explicitly --grant-pct collectors can fall back', general)
         self.assertIn('not usable inside the isolated typed helper', general)
         self.assertGreaterEqual(security.count(ANCHOR), 3)
         row = next(line for line in security.splitlines() if line.startswith('| Proxmox node-local LXC'))
