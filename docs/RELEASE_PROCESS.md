@@ -64,10 +64,12 @@ with a chart asset. Follow the existing installation's
 
 Releases follow a fixed schedule rather than individual judgment.
 
-1. **Cut a candidate from `main`.** Fourteen days after the last stable release,
-   the next release candidate is cut from `main`, provided `main` has changed since
-   that release. An important fix that should not wait for the schedule can bring
-   that cut forward, or replace a candidate that is still soaking with a fresh one
+1. **Cut a candidate from `main`.** Stable publication is targeted **seven days
+   after the last stable release**, provided `main` has changed since that release.
+   The next release candidate becomes eligible **one day earlier**, reserving the
+   full 24-hour soak. Preparation and qualification can move publication later.
+   An important fix that should not wait for the schedule can bring that cut
+   forward, or replace a candidate that is still soaking with a fresh one
    that starts its own soak. A candidate carries everything merged to `main` at the
    cut. Nothing is selected for it or added to it afterwards.
 2. **Qualify and publish it.** Required checks include targeted tests, installation

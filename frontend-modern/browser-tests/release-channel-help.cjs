@@ -97,12 +97,17 @@ const result = { result: 'incomplete', source_sha: binding.source_sha,
         'No beta is cut within a day', 'no soak and is never promoted to stable',
         'A fix merged after a beta was cut is not in that beta',
         'only when a stable release containing it ships', 'not a selected patch release or a testing exemption',
-        'Fourteen days after the last stable release', 'Do not repeat a guest freeze',
+        'seven days after the last stable release', 'one day earlier',
+        'reserving the full 24-hour soak', 'Preparation and qualification can move publication later',
+        'Do not repeat a guest freeze',
         'if the problem persists, reply on the original issue']) assert(text.includes(phrase), phrase);
       assert(!text.includes('urgent hotfix exception'));
-      record.checks.push('shipped update-guide entry; daily-beta scope, cut/inclusion, stable separation, unchanged candidate checks and safe retest');
+      assert(!text.includes('Fourteen days after the last stable release'));
+      record.checks.push('shipped update-guide entry; daily-beta scope, cut/inclusion, stable separation, weekly stable target, early eligibility, unchanged candidate checks and safe retest');
       await page.goto(`${origin}/docs/RELEASE_PROCESS#daily-betas`, { waitUntil: 'domcontentloaded' });
       await atFragment('daily-betas'); await capture('betas');
+      await page.goto(`${origin}/docs/RELEASE_PROCESS#how-releases-are-prepared`, { waitUntil: 'domcontentloaded' });
+      await atFragment('how-releases-are-prepared'); await capture('preparation');
       await page.goto(`${origin}/docs/RELEASE_PROCESS#cadence-and-stable-promotion`, { waitUntil: 'domcontentloaded' });
       await atFragment('cadence-and-stable-promotion'); await capture('promotion');
       await page.goto(`${origin}/docs/RELEASE_PROCESS#taking-part-in-preview-testing`, { waitUntil: 'domcontentloaded' });
