@@ -67,7 +67,7 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                         Unreachable — details
                         <span class="sr-only"> for {endpoint.nodeName}</span>
                       </summary>
-                      <p class="break-words whitespace-pre-wrap px-3 pb-3">
+                      <p class="break-words whitespace-pre-wrap px-3 pb-3 pt-1">
                         {endpoint.pulseError || 'Pulse could not connect to this node'}
                       </p>
                     </details>
