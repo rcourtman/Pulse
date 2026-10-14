@@ -7,7 +7,7 @@ import { NodeModalMonitoringSection } from '../NodeModalMonitoringSection';
 
 function renderMonitoring(
   nodeType: NodeModalProps['nodeType'] = 'pve',
-  trust: { verifySSL?: boolean; fingerprint?: string } = {},
+  trust: { verifySSL?: boolean; fingerprint?: string; host?: string } = {},
 ) {
   const onSave = vi.fn();
   const fetch = vi.fn();
@@ -266,6 +266,29 @@ describe('NodeModalMonitoringSection collection safety', () => {
     });
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it.each(['pve', 'pbs', 'pmg'] as const)(
+    'does not present a checked box or a pin as TLS protection for an HTTP %s endpoint',
+    (nodeType) => {
+      const { fetch, onSave } = renderMonitoring(nodeType, {
+        host: 'HTTP://fixture.example.invalid',
+        verifySSL: true,
+        fingerprint: 'ab'.repeat(32),
+      });
+      const policy = screen.getByRole('status', { name: 'Form TLS policy' });
+      expect(policy).toHaveTextContent('TLS is not used for HTTP');
+      expect(policy).toHaveTextContent('neither the checkbox nor a fingerprint authenticates');
+      expect(policy).toHaveTextContent('Do not switch to HTTP to bypass a certificate error');
+      const verification = screen.getByRole('checkbox', { name: 'Verify SSL certificate' });
+      expect(verification).toHaveAccessibleDescription(/does not use TLS/);
+      expect(verification).toBeChecked();
+      expect(screen.getByRole('textbox', { name: 'SSL Fingerprint (optional)' })).toHaveValue(
+        'ab'.repeat(32),
+      );
+      expect(onSave).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
 
   it('updates the policy and descriptions as the operator edits, without silently changing trust', () => {
     const { fetch } = renderMonitoring();

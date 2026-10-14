@@ -28,11 +28,20 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
   const tlsPolicy = createMemo(() => {
     // Match the TLS client's precedence, not the checkbox alone. This is a
     // description of form inputs, never evidence that a peer was verified.
+    if (state.formData().host.trim().toLowerCase().startsWith('http://')) {
+      return {
+        title: 'TLS is not used for HTTP',
+        description:
+          'This HTTP URL does not use TLS: neither the checkbox nor a fingerprint authenticates the server or protects credentials in transit. Do not switch to HTTP to bypass a certificate error.',
+        tone: 'danger' as const,
+      };
+    }
     if (state.formData().fingerprint !== '') {
       return {
         title: 'Certificate fingerprint required',
         description:
           'The fingerprint takes precedence over the checkbox. This endpoint must present the matching certificate, even if its certificate chain is trusted or verification is unchecked.',
+        tone: 'info' as const,
       };
     }
     if (state.formData().verifySSL) {
@@ -40,12 +49,14 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
         title: 'Trusted certificate chain required',
         description:
           'With no fingerprint set, this endpoint must present a valid, hostname-matching certificate with a chain trusted by the Pulse runtime.',
+        tone: 'info' as const,
       };
     }
     return {
       title: 'Certificate identity not verified',
       description:
         'With no fingerprint and verification unchecked, these settings do not authenticate the server. Encryption alone does not protect credentials from an impersonated endpoint.',
+      tone: 'danger' as const,
     };
   });
 
@@ -87,9 +98,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             </p>
           </div>
           <InlineNotice
-            tone={
-              state.formData().fingerprint === '' && !state.formData().verifySSL ? 'danger' : 'info'
-            }
+            tone={tlsPolicy().tone}
             role="status"
             aria-label="Form TLS policy"
             aria-live="polite"

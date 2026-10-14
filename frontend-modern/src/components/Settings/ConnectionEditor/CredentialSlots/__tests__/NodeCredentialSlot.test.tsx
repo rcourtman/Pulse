@@ -319,7 +319,9 @@ describe('NodeCredentialSlot', () => {
     ));
 
     expect(screen.getByText('Cluster members')).toBeInTheDocument();
-    expect(screen.getByText('Unreachable')).toBeInTheDocument();
+    expect(screen.getByText(/Unreachable — details/, { selector: 'summary' })).toHaveTextContent(
+      'Unreachable — details for pve2',
+    );
 
     const pve1Input = screen.getByLabelText('Connection address for pve1') as HTMLInputElement;
     const pve2Input = screen.getByLabelText('Connection address for pve2') as HTMLInputElement;
