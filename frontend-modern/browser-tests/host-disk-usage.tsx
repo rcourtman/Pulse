@@ -48,7 +48,11 @@ render(
     <WebSocketContext.Provider
       value={
         {
-          activeAlerts: {},
+          // Browser-supplied, synthetic alert observations. This exercises the
+          // same consuming surface without a live agent or induced alert.
+          activeAlerts:
+            (window as Window & { __hostDiskAlerts?: WebSocketStore['activeAlerts'] })
+              .__hostDiskAlerts ?? {},
           state: { pmg: [] },
           connected: () => false,
         } as unknown as WebSocketStore

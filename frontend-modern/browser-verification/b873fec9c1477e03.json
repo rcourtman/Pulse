@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "8d2288f1be98d0e1487c39e84f9a00af338b5485",
+  "verified_at": "2026-10-14T00:59:47Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "8c006c7094f7038406466cada8c720e98ef0264fe3055a812a3b3f69d4c9e432"
+  },
+  "routes": [
+    "/browser-tests/host-disk-usage.html?kind=docker (canonical HTTP resource \u2192 actual Docker host table and drawer)"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Playwright1.56.1, Chromium141 and WebKit26; desktop light and phone dark, exact assigned-source Vite consumer preview. No full-shell/native/installed claim.",
+    "Active host disk-read warning remains visible beside all four Overview History panels; stored ranges/min-max/peak and keyboard inspection remain finite.",
+    "Unknown disk usage with known capacity remains neutral and distinct from measured0% and50%; technical facts are visible in Docker\u2019s current layout.",
+    "Manage retains the same drawer and7d selection, no hidden Overview reads during the bounded5.5s observation; return restores the same charts.",
+    "Eight originals were opened with native view_image in the lane outcome; the first completed desktop Overview capture was reused, not recaptured. Prior driver module-load, load deadline and obsolete History-selector failures remain retained."
+  ],
+  "interactions": [
+    "Actual desktop keyboard disclosure/tab/slider End; actual390px WebKit touch disclosure/tab with keyboard chart inspection.",
+    "Select7d through the real History control; inspect the stored average/peak/spread; read per-disk unknown/zero evidence.",
+    "Switch Manage/Overview without an update, override, container, notification or host action; compare History reads and mounted identity."
+  ]
+}

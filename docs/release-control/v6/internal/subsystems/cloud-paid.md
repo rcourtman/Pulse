@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### Retired mobile settings keep information separate from entitlement
+
+Pulse Mobile retirement guidance is a full-text labelled note, not a paid
+feature offer with a clamped sales description. Instances without the existing
+Relay capability can read the date and phone-alert alternatives but cannot
+pair devices or configure connections. Entitled phones keep their existing
+configuration and pairing controls until 31 March 2027. The change introduces
+no commercial offer, billing read, entitlement substitution or service change.
+
+`RelaySettingsPanel.runtime.test.tsx` and the current first-session/paid-settings
+browser consumers verify the readable notice and unchanged access boundaries.
+
 ### Opt-in confirmed-operation transport keeps paid contexts unchanged
 
 The shared frontend client adds expectedOrgID and retry:false for the existing

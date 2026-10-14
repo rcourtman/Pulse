@@ -49,6 +49,30 @@ async function stabilizeUpdateChecks(page: Page): Promise<void> {
   );
 }
 
+// The auth visual baseline includes the default organisation. Pin the
+// runtime and org inventory, not the real login/session or permission gates:
+// a preceding probation spec must not change this page's sidebar composition.
+const AUTH_VISUAL_RUNTIME_CAPABILITIES = {
+  capabilities: ["update_alerts", "sso", "ai_patrol", "multi_tenant"],
+  limits: [],
+  hosted_mode: false,
+  max_history_days: 7,
+  runtime: { build: "community", label: "Pulse Community runtime" },
+  blocked_capabilities: [],
+};
+
+async function stabilizeAuthInventory(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem("pulse_org_id", "default");
+  });
+  await page.route("**/api/license/runtime-capabilities", (route) =>
+    route.fulfill({ json: AUTH_VISUAL_RUNTIME_CAPABILITIES }),
+  );
+  await page.route("**/api/orgs", (route) =>
+    route.fulfill({ json: [{ id: "default", displayName: "default" }] }),
+  );
+}
+
 async function applyThemePreference(
   page: Page,
   theme: ThemePreference,
@@ -174,6 +198,11 @@ async function openAuthenticatedSecurityAuth(page: Page, theme: ThemePreference)
     await expect(authHeading).toBeVisible();
   }
 
+  // Fail before pixel comparison if this is a different inventory. The
+  // screenshot threshold and baseline images remain unchanged.
+  const sidebar = page.locator('[aria-label="Settings navigation"]');
+  await expect(sidebar.getByText('Organization', { exact: true })).toBeVisible();
+  await expect(sidebar.getByText('Overview', { exact: true })).toBeVisible();
   await stabilizeVisualState(page);
 }
 
@@ -185,6 +214,7 @@ test.describe.serial('Theme visual regression (auth surfaces)', () => {
 
   test.beforeEach(async ({ page }) => {
     await stabilizeUpdateChecks(page);
+    await stabilizeAuthInventory(page);
     await page.setViewportSize(VISUAL_VIEWPORT);
   });
 

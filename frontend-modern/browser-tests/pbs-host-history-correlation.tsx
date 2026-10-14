@@ -7,6 +7,8 @@
 // Synthetic props only; the check script intercepts the metrics-history request.
 import { createSignal, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
+import { Route, Router } from '@solidjs/router';
+import { DarkModeContext, WebSocketContext, type WebSocketStore } from '../src/contexts/appRuntime';
 
 import { ProxmoxBackupServersTable } from '../src/features/proxmox/ProxmoxBackupServersTable';
 import type { Resource } from '../src/types/resource';
@@ -194,4 +196,23 @@ const Fixture = () => {
   );
 };
 
-render(() => <Fixture />, document.getElementById('root') as HTMLElement);
+render(
+  () => (
+    <WebSocketContext.Provider
+      value={
+        {
+          activeAlerts: {},
+          state: { pmg: [] },
+          connected: () => false,
+        } as unknown as WebSocketStore
+      }
+    >
+      <DarkModeContext.Provider value={() => document.documentElement.classList.contains('dark')}>
+        <Router>
+          <Route path="*" component={Fixture} />
+        </Router>
+      </DarkModeContext.Provider>
+    </WebSocketContext.Provider>
+  ),
+  document.getElementById('root') as HTMLElement,
+);
