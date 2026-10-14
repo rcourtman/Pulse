@@ -63,6 +63,12 @@ Saved-view consolidation also refuses a view with internal pin contradictions,
 so map indexing cannot hide an earlier contradictory row before monitoring
 starts. `TestConsolidatePVEInstancesRetainsInternallyConflictingPins` covers
 both merge orders, repeated rows, same-node/address evidence and agreeing formats.
+The endpoint-ownership routing control uses a five-second fixture client and
+a ten-second enclosing caller lifetime, rather than a one-second latency
+criterion. It records elapsed time and both targets' request counts; unchanged
+pin, admission and routing assertions remain required. Runtime timeouts and
+separate timeout/cancellation controls are unchanged. This is not a diagnosis
+or dismissal of the retained earlier one-second timeout.
 This establishes source/consumer behaviour, not native recovery or attribution
 of a guest, PBS or certificate report.
 
