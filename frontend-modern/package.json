@@ -71,7 +71,7 @@
     "source-map-js": "^1.2.2"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
+    "@eslint/js": "^10.0.1",
     "@solidjs/testing-library": "^0.8.5",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.3.3",
