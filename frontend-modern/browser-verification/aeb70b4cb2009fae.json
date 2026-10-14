@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "4c82d303cdf61f64a450de19f11a9c5fc3576ff9",
+  "verified_at": "2026-10-14T16:03:47Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx": "ed02d864a68ff28276a0c44e370a0ee1882b6572e7ade22fd4ca90d45a744b3f"
+  },
+  "routes": [
+    "browser-tests/proxmox-docker-rows.html Networks view (production DockerNetworksTable over REST-mapped rows, Chromium and WebKit via Playwright 1.56.1 on pulse-dev)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "network with unhealthy, crash-looping (12 restarts), degraded and exited containers: Running 2 shows the two running ones under their Attention section (old: Running 0)",
+    "Other 2 (degraded with no reported state, exited), Attention 3",
+    "network State \"3 need attention\" with a red dot (old: \"1 needs attention\")",
+    "phone: no Subnets or Driver header or cell; header and cell counts match (old: bridge under SUBNETS); State whole",
+    "attached-containers header shows the total; the filtered count reads once in the toolbar",
+    "reviewed by Sol from desktop and phone screenshots; its follow-ups applied and re-checked"
+  ],
+  "interactions": [
+    "network row expand",
+    "status chips All/Attention/Running/Other, opened from Filters on the phone"
+  ]
+}

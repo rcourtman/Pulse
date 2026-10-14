@@ -34,6 +34,7 @@ import {
 } from './DockerNativeTableShared';
 import {
   buildDockerNetworkAttachmentRows,
+  dockerContainerRunState,
   dockerResourceSearchHaystack,
   filterDockerResources,
   type DockerNetworkAttachmentRow,
@@ -55,12 +56,15 @@ const DOCKER_NETWORK_COLUMN_WIDTH_CLASS: Record<
   PlatformTableContainerLayout,
   Record<DockerNetworkColumn, string>
 > = {
+  // A phone row has no Subnets or Driver column (the expansion's Network
+  // details list both), so the attached summary and its state get the room:
+  // "3 need attention" whole beside its dot, the summary truncating instead.
   compact: {
     network: 'w-[30%]',
-    attached: 'w-[25%]',
-    attention: 'w-[15%]',
-    subnet: 'w-[15%]',
-    driver: 'w-[15%]',
+    attached: 'w-[30%]',
+    attention: 'w-[40%]',
+    subnet: 'w-0',
+    driver: 'w-0',
     host: 'w-0',
   },
   basic: {
@@ -123,12 +127,12 @@ const ATTACHMENT_STATUS_FILTER_OPTIONS: PlatformTableFilterOption<AttachmentStat
   {
     value: 'running',
     label: 'Running',
-    title: 'Running containers',
+    title: 'Running containers, including any that need review',
   },
   {
     value: 'other',
     label: 'Other',
-    title: 'Stopped, paused, or unknown containers',
+    title: 'Containers not known to be running: stopped, paused, restarting, or unknown',
   },
 ];
 
@@ -177,13 +181,13 @@ const attachmentSummary = (rows: readonly DockerNetworkAttachmentRow[]): string 
 
 const attachmentAttention = (rows: readonly DockerNetworkAttachmentRow[]): StatusIndicator => {
   if (rows.length === 0) return { variant: 'muted', label: 'Unused' };
-  const danger = rows.filter((row) => row.status.variant === 'danger').length;
-  if (danger > 0) {
-    return { variant: 'danger', label: `${danger} needs attention` };
-  }
-  const warning = rows.filter((row) => row.status.variant === 'warning').length;
-  if (warning > 0) {
-    return { variant: 'warning', label: `${warning} warning` };
+  // Counts every row the Attention filter holds; the dot takes the worst.
+  const attention = rows.filter((row) => attachmentGroupKey(row) === 'attention');
+  if (attention.length > 0) {
+    return {
+      variant: attention.some((row) => row.status.variant === 'danger') ? 'danger' : 'warning',
+      label: `${attention.length} ${attention.length === 1 ? 'needs' : 'need'} attention`,
+    };
   }
   const running = rows.filter((row) => row.status.variant === 'success').length;
   if (running === rows.length) {
@@ -207,6 +211,20 @@ const attachmentGroupKey = (row: DockerNetworkAttachmentRow): AttachmentGroupKey
   return 'other';
 };
 
+// Attention is Pulse's verdict on the row; Running and Other are Docker's run
+// state. A container that is unhealthy or restarting too often while it runs
+// is both running and worth a look, so it matches the Running filter as well
+// as Attention. The sections below stay one per row: Attention first.
+const attachmentMatchesStatus = (
+  row: DockerNetworkAttachmentRow,
+  status: AttachmentStatusFilter,
+): boolean => {
+  if (status === 'all') return true;
+  if (status === 'attention') return attachmentGroupKey(row) === 'attention';
+  const running = dockerContainerRunState(row.resource) === 'running';
+  return status === 'running' ? running : !running;
+};
+
 const filterAttachmentRows = (
   rows: DockerNetworkAttachmentRow[],
   search: string,
@@ -214,7 +232,7 @@ const filterAttachmentRows = (
 ): DockerNetworkAttachmentRow[] => {
   const needle = search.trim().toLowerCase();
   return rows.filter((row) => {
-    if (status !== 'all' && attachmentGroupKey(row) !== status) return false;
+    if (!attachmentMatchesStatus(row, status)) return false;
     if (!needle) return true;
     return row.searchText.includes(needle);
   });
@@ -265,12 +283,7 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
   const hiddenRowCount = createMemo(() =>
     Math.max(tableState.filtered().length - visibleRows().length, 0),
   );
-  const filteredSummary = createMemo(() => {
-    if (!tableState.hasActiveFilters()) return attachmentCountLabel(tableState.total());
-    return `${attachmentPlainCountLabel(tableState.visible())} of ${attachmentPlainCountLabel(
-      tableState.total(),
-    )}`;
-  });
+
   const setSearch = (value: string) => {
     tableState.setSearch(value);
     setShowAll(false);
@@ -284,7 +297,7 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
     <section class="min-w-0">
       <div class="mb-2 flex items-center justify-between gap-2">
         <h3 class="text-xs font-semibold text-base-content">Attached containers</h3>
-        <span class="text-[11px] text-muted">{filteredSummary()}</span>
+        <span class="text-[11px] text-muted">{attachmentCountLabel(tableState.total())}</span>
       </div>
       <Show
         when={props.rows.length > 0}
@@ -420,8 +433,8 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [480, 720, 960, 1200]),
   );
-  const showSubnet = () => true;
-  const showDriver = () => true;
+  const showSubnet = createMemo(() => layout() !== 'compact');
+  const showDriver = createMemo(() => layout() !== 'compact');
   const showHost = createMemo(() => layout() === 'full');
   const columnWidthClass = (column: DockerNetworkColumn) =>
     DOCKER_NETWORK_COLUMN_WIDTH_CLASS[layout()][column];
@@ -498,7 +511,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                 </Show>
                 <Show when={showDriver()}>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} platform-table-phone-hidden ${columnWidthClass('driver')}`}
+                    class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('driver')}`}
                   >
                     Driver
                   </TableHead>
@@ -567,7 +580,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                           </TableCell>
                           <Show when={showSubnet()}>
                             <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                             >
                               <span class="block truncate" title={subnets()}>
                                 {subnets()}
