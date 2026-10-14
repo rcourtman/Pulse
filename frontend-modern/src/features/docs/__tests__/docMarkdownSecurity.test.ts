@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { renderDocMarkdown, resolveDocLink } from '../docMarkdown';
 
 // The stored-XSS annotation on the post-sanitization href setter must be
@@ -71,9 +71,15 @@ describe('documentation rewritten-link security boundary', () => {
     }
   });
 
-  it.each(bases)('keeps the actual rendered href setter safe at %s', (base) => {
-    let rewritten = 0;
-    for (const currentPath of currentPaths) {
+  // Each base/path remains bounded by the standard five-second case timeout.
+  // Keep the full Cartesian matrix and its per-base non-vacuity total; splitting
+  // cases does not discard links or turn a timed-out batch into a pass.
+  describe.each(bases)('rendered href setter at %s', (base) => {
+    const completedPaths = new Set<string>();
+    let rewrittenTotal = 0;
+
+    it.each(currentPaths)('keeps every relative link safe from %s', (currentPath) => {
+      let rewritten = 0;
       for (const href of relativeLinks) {
         const label = JSON.stringify({ currentPath, href, base });
         const article = articleAt(base, renderDocMarkdown(linkHtml(href), currentPath));
@@ -90,9 +96,16 @@ describe('documentation rewritten-link security boundary', () => {
         expect(anchor.origin, label).toBe(new URL(base).origin);
         expect(article.querySelector('script, svg, [onerror], [onfocus]'), label).toBeNull();
       }
-    }
-    // Prevent a sanitizer that removes every link from passing vacuously.
-    expect(rewritten).toBeGreaterThanOrEqual(120);
+      expect(rewritten).toBeGreaterThan(0);
+      rewrittenTotal += rewritten;
+      completedPaths.add(currentPath);
+    });
+
+    afterAll(() => {
+      expect([...completedPaths].sort()).toEqual([...currentPaths].sort());
+      // Preserve the original per-base guard against removing every link.
+      expect(rewrittenTotal).toBeGreaterThanOrEqual(120);
+    });
   });
 
   it('rejects explicit executable schemes rather than treating them as documents', () => {

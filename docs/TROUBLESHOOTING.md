@@ -1329,7 +1329,13 @@ your own VPN or tunnel when away from home.
 
 ### Collect diagnostics safely
 
-**Run Diagnostics** in **Settings → Diagnostics** is not just a passive export.
+Open **Settings → Support → Diagnostics & Health** in your existing authorised
+Pulse session (`/settings/support/diagnostics` on your Pulse URL). Opening this
+panel does not run diagnostics. If no result is displayed, the download buttons
+are absent: use the original errors or observations rather than running checks
+just to obtain an attachment. Diagnostics are optional, not a condition of reporting.
+
+**Run Diagnostics** (shown as **Run** on phones) is not just a passive export.
 It can make live Proxmox/PBS API and guest-agent requests; results may also come
 from a short-lived cache. Do not run it during a backup, freeze/thaw or an
 unresponsive-host incident merely to obtain a report. Keep the original errors
@@ -1353,7 +1359,8 @@ information, including details echoed in errors or notes. Do not paste a
 Share only evidence relevant to the symptom; a screenshot or exact redacted
 error may be enough. See [Getting Help](#-getting-help).
 
-The **Support Bundle** download in **System Logs** is a different export: it can
+The **Support Bundle** download in **Settings → Support → System Logs** is a
+different export: it can
 contain a complete log file or server buffer plus configuration and environment
 information. It is not the **GitHub (review first)** diagnostics export and is
 not limited to the lines visible in the panel. Keep the archive private and
@@ -1729,9 +1736,10 @@ If you're still stuck:
    versions, not just the version before an upgrade. For Docker, include the
    running image tag or digest. If installation never started Pulse, give the
    attempted release and public installer/helper source, or say "unknown".
-3. **Choose relevant, safe evidence**: if Pulse is running and collection is
-   safe, use **Settings → Diagnostics → GitHub (review first)** for
-   connection or data failures, following [safe diagnostics collection](#collect-diagnostics-safely).
+3. **Choose relevant, safe evidence**: use existing logs, errors or observations
+   first. If a result is already displayed in **Settings → Support → Diagnostics
+   & Health**, **GitHub (review first)** downloads it without running checks again;
+   follow [safe diagnostics collection](#collect-diagnostics-safely).
    For a visual problem, a screenshot or the exact
    error may be enough. If logs are needed, use the
    [bounded Pulse log readers](#inspect-notification-logs), choosing the command
