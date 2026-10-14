@@ -9272,6 +9272,36 @@ remain separate errors. No polling frequency, request or access policy changes.
 and selection changes; `browser-tests/history-status.cjs` checks actual chart
 states in desktop Chromium and phone WebKit with synthetic transport failures.
 These checks do not establish native collection or released availability.
+`HistoryChart` takes `enabled` (default true) for a chart mounted inside a
+hidden drawer tab: false aborts its read and stops polling but keeps the
+readings it shows, and resuming the same selection reads at once without a
+loading state before polling again. A selection changed while paused still
+starts from nothing. The hook and mounted chart tests pin both paths.
+The point cap follows the chart's width but is not part of what the chart
+shows: a resize (or a full-page capture) re-reads the same series at the new
+cap while keeping its readings on screen with no loading state, and only
+pointer inspection resets, since its pixel positions moved. A changed target,
+metric, range, organisation or lock still starts from nothing.
+History axis labels must not crowd. The canvas chart draws as many evenly
+spaced time labels as its plot fits at the measured label width, from four
+down to the first and last time (`getHistoryChartTimeTickCount`), so a narrow
+live I/O card no longer runs "12:04 PM12:07 PM..." together. Both the canvas
+chart and the drawer charts blank a middle gridline label that repeats a
+neighbour (`withoutRepeatedHistoryAxisLabels`): a quiet link reads "<1K/s"
+once, not on two gridlines, and the gridline itself stays. The end labels
+always remain. `guest-storage-2263.cjs` records each chart's drawn time
+labels and checks they stand apart; `pbs-history-refresh.cjs` checks the
+drawer's network axis.
+The canvas `HistoryChart` draws the same min-max band the drawer charts do:
+when any bucket's lowest and highest readings differ
+(`hasHistoryChartSpread`), a 20% band spans them behind the line, so a short
+spike survives downsampling. It no longer fills the area under the line, so a
+storage chart reads like a drawer chart; a flat series is a line alone. A
+time label that repeats the one before it (a short window at a coarse label)
+is dropped (`withoutRepeatedHistoryTimeTicks`). Phone chart folds share one
+button, `PhoneChartsToggle` ("Show <names>" / "Show fewer charts",
+`aria-controls` naming the folded group, hidden from `sm` up); the drawer
+History and the disk detail both use it.
 
 ### Shared History single observations
 

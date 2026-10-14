@@ -15,6 +15,11 @@ export interface HistoryChartProps {
   compact?: boolean;
   hideLock?: boolean;
   data?: AggregatedMetricPoint[];
+  /**
+   * False pauses stored reads and polling while keeping the readings already
+   * shown, e.g. for a chart inside a drawer tab that is mounted but hidden.
+   */
+  enabled?: boolean;
 }
 
 export interface HistoryChartHoverPoint {
@@ -176,6 +181,14 @@ export function getHistoryChartDataMax(points: AggregatedMetricPoint[]) {
   return max;
 }
 
+/** True when any stored bucket's lowest and highest readings differ. */
+export function hasHistoryChartSpread(points: readonly AggregatedMetricPoint[]): boolean {
+  return (
+    points.length > 1 &&
+    points.some((point) => (point.max ?? point.value) > (point.min ?? point.value))
+  );
+}
+
 export function getHistoryChartScale(points: AggregatedMetricPoint[], unit?: string) {
   const minValue = 0;
   const isPercentLike = unit === '%';
@@ -208,7 +221,7 @@ export function getHistoryChartYAxisLabels(
   },
   unit?: string,
 ) {
-  return [0, 0.5, 1].map((pct) => {
+  const ticks = [0, 0.5, 1].map((pct) => {
     const scaleValue = minValue + pct * (maxValue - minValue);
     let label: string;
     if (isPercentLike) {
@@ -220,6 +233,55 @@ export function getHistoryChartYAxisLabels(
     }
     return { pct, label };
   });
+  const labels = withoutRepeatedHistoryAxisLabels(ticks.map((tick) => tick.label));
+  return ticks.map((tick, index) => ({ ...tick, label: labels[index] }));
+}
+
+/**
+ * Gridline labels in axis order. A middle label that reads the same as a
+ * neighbour (a small range rounded, or "<1K/s" twice on a quiet link) says
+ * nothing and crowds the axis, so it is left blank; the gridline stays. The
+ * end labels always remain.
+ */
+export function withoutRepeatedHistoryAxisLabels(labels: string[]): string[] {
+  return labels.map((label, index) =>
+    index > 0 &&
+    index < labels.length - 1 &&
+    (label === labels[index - 1] || label === labels[index + 1])
+      ? ''
+      : label,
+  );
+}
+
+/**
+ * Time ticks left to right without one that reads the same as the tick
+ * before it: a short window at a coarse label ("Oct 2" four times, or
+ * "11:00 AM" twice) states its time once.
+ */
+export function withoutRepeatedHistoryTimeTicks<T extends { label: string }>(
+  ticks: readonly T[],
+): T[] {
+  return ticks.filter((tick, index) => index === 0 || tick.label !== ticks[index - 1].label);
+}
+
+const HISTORY_CHART_TIME_LABEL_GAP = 12;
+
+/**
+ * How many evenly spaced time labels fit along a plot of `plotWidth` pixels
+ * when the widest label is `labelWidth` pixels, from `maxCount` down to the
+ * first and last time. Labels are centred on their times, so neighbours need
+ * a label's width plus a gap between their centres.
+ */
+export function getHistoryChartTimeTickCount(
+  plotWidth: number,
+  labelWidth: number,
+  maxCount = 4,
+): number {
+  if (!(plotWidth > 0) || !(labelWidth > 0)) return maxCount;
+  for (let count = maxCount; count > 2; count--) {
+    if (plotWidth / (count - 1) >= labelWidth + HISTORY_CHART_TIME_LABEL_GAP) return count;
+  }
+  return 2;
 }
 
 export function getHistoryChartLeftInset(labelWidths: number[]) {

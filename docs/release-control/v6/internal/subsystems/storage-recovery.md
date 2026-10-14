@@ -2907,6 +2907,16 @@ canonical pre-handler authorization proof covering both transfer routes.
     same names the resource drawers use. The range picker keeps the shared
     filter-select presentation; storage must not restore the retired
     storage-local range-selector classes and inline SVG select decoration.
+    A disk detail mounted where it can be hidden (a guest drawer's Overview
+    behind Manage) takes `historyEnabled` and passes it to every chart,
+    history and live I/O alike, so a hidden disk reads nothing.
+    Below the `sm` breakpoint a disk detail shows its first History chart
+    and any chart whose SMART card is out of bounds (cards and charts share
+    labels, `getDiskDetailPhonePinnedChartLabels`); the remaining History
+    charts and the whole Live I/O section fold behind the shared
+    `PhoneChartsToggle`. A pinned chart stays pinned after its card recovers.
+    Folded charts read nothing until the toggle opens them; wider layouts
+    show and read every chart. Its charts draw the shared min-max band.
     Storage-page pool growth readouts belong to that same contract: the table
     may derive per-pool used-capacity deltas from the shared
     `/api/storage-charts` summary payload, but it must not fan out row-local

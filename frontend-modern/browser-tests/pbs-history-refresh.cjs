@@ -123,6 +123,13 @@ const { chromium } = require('playwright');
           );
         await waitForPaths(7);
         console.log(JSON.stringify({ width, theme, stage: 'history loaded' }));
+        // A quiet link's rate axis says "<1K/s" once: a repeated middle label is blank.
+        assert.deepEqual(
+          await detail
+            .locator('[data-history-group="network"] [data-history-axis-label]')
+            .allTextContents(),
+          ['<1K/s', '', '0'],
+        );
         const status = detail.getByRole('status', { name: 'History refresh status' });
         assert.equal(await status.count(), 1);
         assert.equal(await status.innerText(), '');

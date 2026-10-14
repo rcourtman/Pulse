@@ -15,8 +15,13 @@ import type { HistoryChartState } from '@/components/shared/useHistoryChartState
 import { HistoryChart, HistoryChartHoverGroup } from '@/components/shared/HistoryChart';
 import {
   formatHistoryChartTooltipValue,
+  getHistoryChartTimeTickCount,
   getHistoryChartTooltipLayout,
+  getHistoryChartYAxisLabels,
+  hasHistoryChartSpread,
   HISTORY_CHART_RANGES,
+  withoutRepeatedHistoryAxisLabels,
+  withoutRepeatedHistoryTimeTicks,
 } from '@/components/shared/historyChartModel';
 
 it('distinguishes tiny positive percentage observations from zero in History labels', () => {
@@ -125,6 +130,129 @@ vi.mock('@/api/charts', () => ({
     getMetricsHistory: vi.fn().mockResolvedValue({ points: [], source: 'store' }),
   },
 }));
+
+describe('History chart min-max band', () => {
+  const at = (timestamp: number, value: number, min = value, max = value) => ({
+    timestamp,
+    value,
+    min,
+    max,
+  });
+
+  it("spreads only when a bucket's lowest and highest readings differ", () => {
+    expect(hasHistoryChartSpread([at(1, 5), at(2, 6)])).toBe(false);
+    expect(hasHistoryChartSpread([at(1, 5), at(2, 6, 2, 30)])).toBe(true);
+    expect(hasHistoryChartSpread([at(1, 5, 2, 30)])).toBe(false);
+  });
+
+  let restoreContext = () => {};
+  // Records what the chart fills, with the fill colour in force at the time.
+  const recordFills = () => {
+    const fills: string[] = [];
+    const getContext = vi.mocked(HTMLCanvasElement.prototype.getContext);
+    const original = getContext.getMockImplementation()!;
+    restoreContext = () => getContext.mockImplementation(original);
+    getContext.mockImplementation(function () {
+      const ctx: Record<string, unknown> = {
+        fillStyle: '',
+        clearRect: vi.fn(() => fills.splice(0)),
+        setTransform: vi.fn(),
+        beginPath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        stroke: vi.fn(),
+        fillText: vi.fn(),
+        closePath: vi.fn(),
+        fill: vi.fn(() => fills.push(String(ctx.fillStyle))),
+        arc: vi.fn(),
+        save: vi.fn(),
+        restore: vi.fn(),
+        setLineDash: vi.fn(),
+        measureText: vi.fn(() => ({ width: 40 })),
+      };
+      return ctx as never;
+    });
+    return fills;
+  };
+
+  it('draws a band behind the line for spiky buckets and no area fill for flat ones', async () => {
+    const request = vi.mocked(ChartsAPI.getMetricsHistory);
+    const fills = recordFills();
+    try {
+      request.mockResolvedValueOnce({
+        points: [at(1000, 10, 4, 60), at(2000, 12, 8, 14)],
+        source: 'store',
+      } as never);
+      const spiky = render(() => (
+        <HistoryChart resourceType="disk" resourceId="d" metric="diskread" color="#3b82f6" />
+      ));
+      await waitFor(() => expect(fills).toContain('#3b82f633'));
+      spiky.unmount();
+      fills.splice(0);
+      request.mockResolvedValueOnce({
+        points: [at(1000, 10), at(2000, 12)],
+        source: 'store',
+      } as never);
+      render(() => (
+        <HistoryChart resourceType="disk" resourceId="e" metric="diskread" color="#3b82f6" />
+      ));
+      await waitFor(() =>
+        expect(
+          document.getElementById(
+            screen.getByRole('img', { name: 'History chart' }).getAttribute('aria-describedby')!,
+          )!.textContent,
+        ).toContain('2 data points'),
+      );
+      expect(fills.filter((fill) => fill.startsWith('#3b82f6'))).toEqual([]);
+    } finally {
+      restoreContext();
+    }
+  });
+});
+
+describe('History chart axis labels', () => {
+  it('fits as many time labels as the plot holds without touching', () => {
+    // "11:30 AM" is about 45px at 10px sans-serif; neighbours need 57px apart.
+    expect(getHistoryChartTimeTickCount(600, 45)).toBe(4);
+    expect(getHistoryChartTimeTickCount(171, 45)).toBe(4);
+    expect(getHistoryChartTimeTickCount(170, 45)).toBe(3);
+    expect(getHistoryChartTimeTickCount(150, 45)).toBe(3);
+    expect(getHistoryChartTimeTickCount(100, 45)).toBe(2);
+    expect(getHistoryChartTimeTickCount(30, 45)).toBe(2);
+    expect(getHistoryChartTimeTickCount(0, 45)).toBe(4);
+  });
+
+  it('states a time label once when a short window repeats it', () => {
+    const tick = (label: string) => ({ timestamp: 0, label });
+    expect(
+      withoutRepeatedHistoryTimeTicks([tick('Oct 2'), tick('Oct 2'), tick('Oct 2')]).map(
+        (t) => t.label,
+      ),
+    ).toEqual(['Oct 2']);
+    expect(
+      withoutRepeatedHistoryTimeTicks([
+        tick('11:00 AM'),
+        tick('11:00 AM'),
+        tick('11:01 AM'),
+        tick('11:02 AM'),
+      ]).map((t) => t.label),
+    ).toEqual(['11:00 AM', '11:01 AM', '11:02 AM']);
+  });
+
+  it('blanks a middle gridline label that repeats a neighbour', () => {
+    expect(withoutRepeatedHistoryAxisLabels(['<1K/s', '<1K/s', '0'])).toEqual(['<1K/s', '', '0']);
+    expect(withoutRepeatedHistoryAxisLabels(['1', '1', '0'])).toEqual(['1', '', '0']);
+    expect(withoutRepeatedHistoryAxisLabels(['0', '0', '0'])).toEqual(['0', '', '0']);
+    expect(withoutRepeatedHistoryAxisLabels(['0', '50', '100'])).toEqual(['0', '50', '100']);
+    // A rounded range of 0-1 would read 0, 1, 1 bottom to top.
+    expect(
+      getHistoryChartYAxisLabels(
+        { minValue: 0, maxValue: 1, isPercentLike: false, isByteLike: false },
+        'sectors',
+      ).map((tick) => tick.label),
+    ).toEqual(['0', '', '1']);
+  });
+});
 
 describe('HistoryChart', () => {
   it('keeps the history chart on shell, runtime, and model owners', () => {
@@ -436,6 +564,85 @@ describe('HistoryChart', () => {
     expect(description).toHaveTextContent('Loading');
     expect(description).not.toHaveTextContent('10.0%');
     expect(screen.queryByText('Min')).not.toBeInTheDocument();
+  });
+
+  it('keeps its readings without a spinner or read while paused, then resumes', async () => {
+    vi.useFakeTimers();
+    try {
+      const request = vi.mocked(ChartsAPI.getMetricsHistory);
+      request.mockReset();
+      request.mockResolvedValue({
+        points: [{ timestamp: 1000, value: 10, min: 10, max: 10 }],
+        source: 'store',
+      } as never);
+      const [enabled, setEnabled] = createSignal(true);
+      render(() => (
+        <HistoryChart resourceType="disk" resourceId="d" metric="smart_temp" enabled={enabled()} />
+      ));
+      const chart = screen.getByRole('img', { name: 'History chart' });
+      const description = document.getElementById(chart.getAttribute('aria-describedby')!)!;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(description).toHaveTextContent('10');
+      const calls = request.mock.calls.length;
+      // A hidden drawer tab pauses the chart: no reads, readings kept.
+      setEnabled(false);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(request.mock.calls.length).toBe(calls);
+      expect(description).toHaveTextContent('10');
+      expect(screen.queryByLabelText('Loading history')).not.toBeInTheDocument();
+      setEnabled(true);
+      expect(request.mock.calls.length).toBe(calls + 1);
+      expect(screen.queryByLabelText('Loading history')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+      vi.mocked(ChartsAPI.getMetricsHistory)
+        .mockReset()
+        .mockResolvedValue({ points: [], source: 'store' } as never);
+    }
+  });
+
+  it('keeps its readings on screen while a resize re-reads at a new point cap', async () => {
+    const request = vi.mocked(ChartsAPI.getMetricsHistory);
+    const observers: Array<() => void> = [];
+    const original = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      constructor(callback: () => void) {
+        observers.push(callback);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    let width = 800;
+    const widthSpy = vi
+      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(() => width);
+    try {
+      // The first measured width replaces the unmeasured read, so every read
+      // until the resize answers with the same reading.
+      request.mockResolvedValue({
+        points: [{ timestamp: 1000, value: 10, min: 10, max: 10 }],
+        source: 'store',
+      } as never);
+      render(() => <HistoryChart resourceType="disk" resourceId="d" metric="smart_temp" />);
+      const chart = screen.getByRole('img', { name: 'History chart' });
+      const description = document.getElementById(chart.getAttribute('aria-describedby')!)!;
+      await waitFor(() => expect(description).toHaveTextContent('10'));
+      const calls = request.mock.calls.length;
+      request.mockImplementationOnce(() => new Promise(() => {}));
+      width = 400;
+      observers.forEach((resized) => resized());
+      expect(request.mock.calls.length).toBe(calls + 1);
+      expect(request.mock.calls.at(-1)![0].maxPoints).not.toBe(
+        request.mock.calls.at(-2)![0].maxPoints,
+      );
+      expect(description).toHaveTextContent('10');
+      expect(screen.queryByLabelText('Loading history')).not.toBeInTheDocument();
+    } finally {
+      widthSpy.mockRestore();
+      globalThis.ResizeObserver = original;
+      request.mockReset().mockResolvedValue({ points: [], source: 'store' } as never);
+    }
   });
 
   it('exposes a stored singleton to pointer inspection without treating a later empty response as zero', async () => {

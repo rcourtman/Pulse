@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "ed5914812c33a7b45298b5487006061a33813ed5",
+  "verified_at": "2026-10-14T11:21:20Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
+    "frontend-modern/src/components/shared/historyChartModel.ts",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "3f5b207b3610158ad2a604f3d59b064473829529acf9b305e6570a42a46326eb",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "19f2635052a1261402aea2cd2913d4a72dcb779e121c886d270907d4444bb0ae",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "1df9dd5c45a117d2fde84bc6cf7fb3b140b4e190007c496232d55956d696e38c",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "d67cfc7c291018b147ffccebc24a9ebe72b2593145dd53e7d2bd887bb5ccee56",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "9bb10c35fdda9e224fb7b49fe33016b10d1e258eca6bde95f0ddacc21034a7dd",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "2d9963744c3a100a208979f414c917825bb0c911ab0e0919e7fbd9d819c7d9ef"
+  },
+  "routes": [
+    "/browser-tests/guest-storage-2263.html (production GuestDrawerOverview, GuestPhysicalDisks, DiskDetail and HistoryChart, Chromium via Playwright 1.56.1 on pulse-dev)",
+    "/browser-tests/pbs-history-refresh.html (production GuestDrawerHistory renderer)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1365,
+      "height": 900
+    }
+  ],
+  "states": [
+    "final content of the pause, resize and axis changes together, after rebase onto #2928",
+    "disk expanded: SMART facts, 24h History and Live I/O charts loaded with time labels apart",
+    "Overview hidden: no disk history reads over 120s of clock time; shown again: same chart nodes, readings kept, no spinner",
+    "viewport narrowed and restored plus a full-page capture: readings kept, no spinner",
+    "drawer network axis on a quiet link: <1K/s, blank middle, 0; light and dark"
+  ],
+  "interactions": [
+    "disk expand by keyboard, close and reopen by pointer",
+    "Hide overview / Show overview",
+    "page.setViewportSize narrow then restore",
+    "drawer poll, failure, retry and target switch"
+  ]
+}

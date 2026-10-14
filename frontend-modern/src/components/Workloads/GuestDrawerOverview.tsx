@@ -495,6 +495,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
               ...(props.guest.canonicalResourceId ? [props.guest.canonicalResourceId] : []),
               ...getWorkloadAlertResourceIdCandidates(props.guest),
             ]}
+            historyEnabled={props.historyEnabled ?? true}
           />
         </Suspense>
       </Show>

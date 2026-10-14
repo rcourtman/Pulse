@@ -249,6 +249,21 @@ const NVME_DISK_HISTORY_CHARTS: readonly DiskDetailHistoryChartConfig[] = [
   },
 ];
 
+/**
+ * Charts a phone keeps on screen when the rest fold behind one button: the
+ * first History chart, and any chart whose SMART card is out of bounds (the
+ * cards and charts share labels). Live I/O never pins.
+ */
+export function getDiskDetailPhonePinnedChartLabels(
+  historyCharts: readonly DiskDetailHistoryChartConfig[],
+  cards: readonly DiskDetailAttributeCard[],
+): string[] {
+  const failing = new Set(cards.filter((card) => !card.ok && !card.lastKnown).map((c) => c.label));
+  return historyCharts
+    .filter((chart, index) => index === 0 || failing.has(chart.label))
+    .map((chart) => chart.label);
+}
+
 export function getDiskDetailHistoryCharts(
   disk: PhysicalDiskPresentationData,
 ): readonly DiskDetailHistoryChartConfig[] {

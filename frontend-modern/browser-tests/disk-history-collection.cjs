@@ -137,6 +137,12 @@ const parent = false;
       // Disk details have no tabs: SMART evidence, then History, in one view.
       const historySection = page.getByTestId('disk-detail-history');
       await historySection.waitFor();
+      // A phone folds every chart after the first behind one button; open it,
+      // as a reader inspecting the disk's history would.
+      if (phone) {
+        const fold = page.getByTestId('disk-detail-phone-toggle');
+        if (await fold.isVisible()) await fold.click();
+      }
       await page.waitForTimeout(300);
       await check('Stored ATA history is accessible before any current fields', async () => {
         assert.equal(await page.locator('canvas[role="img"]').count(), 2);
