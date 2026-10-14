@@ -529,7 +529,8 @@ describe('platform overview layout guardrails', () => {
     ]) {
       expect(source).not.toMatch(/class="[^"]*\binline-block\b[^"]*\btruncate\b/);
       expect(source).not.toMatch(/class="[^"]*\btruncate\b[^"]*\binline-block\b/);
-      expect(source).toContain('class="block truncate"');
+      // A block span that ellipsizes in its own cell, toned or not.
+      expect(source).toMatch(/class=(?:"|\{`)block truncate\b/);
     }
   });
 

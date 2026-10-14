@@ -1882,6 +1882,41 @@ describe('Docker native tables', () => {
     expect(screen.getByText('10.0.0.11')).toBeInTheDocument();
   });
 
+  it("reads an unreachable manager's Reachability in its dot's colour", () => {
+    render(() => (
+      <DockerSwarmNodesTable
+        resources={[
+          makeResource({
+            id: 'node-2',
+            type: 'docker-swarm-node',
+            name: 'manager-2',
+            docker: {
+              nodeRole: 'manager',
+              availability: 'active',
+              managerReachability: 'unreachable',
+            },
+          }),
+          makeResource({
+            id: 'node-3',
+            type: 'docker-swarm-node',
+            name: 'worker-3',
+            docker: { nodeRole: 'worker', availability: 'drain' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No nodes"
+        emptyDescription="No nodes"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByTitle('Manager unreachable')).toBeInTheDocument();
+    expect(screen.getByText('unreachable')).toHaveClass('text-red-600');
+    expect(screen.getByTitle('Drained')).toBeInTheDocument();
+    expect(screen.getByText('drain')).toHaveClass('text-amber-700');
+    expect(screen.getByText('active')).toHaveClass('text-base-content');
+  });
+
   it('renders Docker Swarm service API fields including update status', () => {
     render(() => (
       <DockerServicesTable
@@ -1928,8 +1963,10 @@ describe('Docker native tables', () => {
       'checkout-api:2026.05',
     );
     expect(screen.getByText('replicated')).toBeInTheDocument();
-    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getAllByText('4').length).toBeGreaterThan(0);
     expect(screen.getByText('2')).toBeInTheDocument();
+    // A phone hides Desired, so its Running count reads out of what.
+    expect(screen.getByText('/4')).toHaveClass('platform-table-phone-only-inline');
     // The snake_case rollout token reads as words; the raw token stays in the title.
     expect(screen.getByText('Rollback started')).toBeInTheDocument();
     expect(screen.getByText('Rollback started')).toHaveClass(
@@ -1939,6 +1976,13 @@ describe('Docker native tables', () => {
     expect(
       screen.getByText('Rollback started').closest('[title]')?.getAttribute('title'),
     ).toContain('rollback_started');
+    // The dot names the rollout for what it is, and the cells behind its
+    // verdict read amber: the Update words and the short Running count.
+    expect(screen.getByTitle('Rolling back')).toBeInTheDocument();
+    expect(screen.getByText('Rollback started')).toHaveClass('text-amber-700');
+    expect(document.querySelector('[data-docker-service-running="warning"]')).toHaveClass(
+      'text-amber-700',
+    );
     expect(screen.getByText('18080:8080/tcp')).toBeInTheDocument();
     expect(screen.getByText('manager-1')).toBeInTheDocument();
     expect(document.querySelector('[data-docker-service-row="service-1"]')).not.toBeNull();
@@ -2058,7 +2102,7 @@ describe('Docker native tables', () => {
               serviceName: 'web',
               slot: 2,
               desiredState: 'running',
-              currentState: 'running 2 minutes',
+              currentState: 'running',
               nodeName: 'worker-1',
               startedAt: '2026-05-24T13:05:00Z',
             },
@@ -2076,11 +2120,50 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Current')).toBeInTheDocument();
     expect(screen.getByText('web.2')).toBeInTheDocument();
     expect(screen.getByText('web')).toBeInTheDocument();
-    expect(screen.getByText('running 2 minutes')).toBeInTheDocument();
+    // Current reads the row dot's words, and Desired reads as words beside it;
+    // Docker's own token stays on hover.
+    expect(document.querySelector('[data-docker-task-state="success"]')).toHaveTextContent(
+      'Running',
+    );
+    expect(screen.getAllByText('Running')).toHaveLength(2);
+    expect(screen.getAllByTitle('running')).toHaveLength(2);
     // The raw RFC3339 stamp moves to the title; the cell shows an age.
     const started = screen.getByTitle('2026-05-24T13:05:00Z');
     expect(started).toBeInTheDocument();
     expect(started.textContent).toMatch(/ago$/);
+  });
+
+  it("reads a failed Swarm task's state in its dot's colour, error on hover", () => {
+    render(() => (
+      <DockerTasksTable
+        resources={[
+          makeResource({
+            id: 'task-2',
+            type: 'docker-task',
+            name: 'web.3',
+            docker: {
+              serviceName: 'web',
+              desiredState: 'shutdown',
+              currentState: 'failed',
+              error: 'task: non-zero exit (1)',
+              nodeName: 'worker-1',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No tasks"
+        emptyDescription="No tasks"
+        showToolbar={false}
+      />
+    ));
+
+    const state = screen.getByText('Failed');
+    expect(state).toHaveClass('text-red-600');
+    expect(state).toHaveAttribute('title', 'task: non-zero exit (1)');
+    // A phone cannot hover: the expansion says why it failed.
+    fireEvent.click(document.querySelector('[data-docker-task-row="task-2"]')!);
+    expect(screen.getByText('Error')).toBeInTheDocument();
+    expect(screen.getByText('task: non-zero exit (1)')).toBeInTheDocument();
   });
 
   it('renders Docker Swarm secret API metadata without secret data', () => {

@@ -7047,7 +7047,14 @@ host name and the Update control render whole; the percentage-only CPU and
 memory bars yield the difference. Swarm services show the rollout state as
 words ("Rollback started") with the raw token, message and completion time in
 the title, and Swarm tasks show Started as an age with the RFC3339 stamp in
-the title, matching every other platform table's time cells.
+the title, matching every other platform table's time cells. A service's dot
+names Docker's mid-change update states as themselves ("Update paused",
+"Rolling back", "Rollback paused"; `rollback_started` used to read "Rollback
+paused"), and no replicas running outranks a rollout. The cell behind each
+Swarm dot's verdict reads in its tone: a service's Running count (with
+"/desired" on phones, where Desired is hidden) and its Update words, a task's
+Current state (the dot's own word, Docker's token and error on hover and the
+error in the expansion), a node's Reachability or Availability.
 The containers table's State cell says what `docker ps` would flag, through
 `dockerContainerStatePresentation.ts` over `mapDockerContainerStatus`, so the
 row dot and the words agree: Unhealthy and Starting for a running container's
