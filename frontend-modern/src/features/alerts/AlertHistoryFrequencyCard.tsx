@@ -8,19 +8,53 @@ import {
   getAlertFrequencyClearFilterButtonClass,
   getAlertFrequencySelectionPresentation,
 } from '@/utils/alertFrequencyPresentation';
-import { getAlertSeverityDotClass } from '@/utils/alertSeverityPresentation';
+import {
+  getAlertSeverityDotClass,
+  getAlertSeverityFillClass,
+} from '@/utils/alertSeverityPresentation';
 
-import { MS_PER_HOUR } from './alertHistoryModel';
+import { MS_PER_HOUR, alertSeverityCountKey, type AlertSeverityCounts } from './alertHistoryModel';
 import type { AlertHistoryState } from './useAlertHistoryState';
 
 interface AlertHistoryFrequencyCardProps {
   state: AlertHistoryState;
 }
 
+// Most severe first: the legend reads in this order and each bar stacks it
+// from the baseline up, so a period's critical alerts are never hidden.
+const SEVERITY_ORDER = ['critical', 'warning', 'info'] as const;
+const SEVERITY_NOUNS: Record<(typeof SEVERITY_ORDER)[number], [string, string]> = {
+  critical: ['critical', 'critical'],
+  warning: ['warning', 'warnings'],
+  info: ['info', 'info'],
+};
+
+const formatSeverityCount = (severity: (typeof SEVERITY_ORDER)[number], count: number) =>
+  `${count} ${SEVERITY_NOUNS[severity][count === 1 ? 0 : 1]}`;
+
+const formatSeverityBreakdown = (counts: AlertSeverityCounts | undefined) =>
+  counts
+    ? SEVERITY_ORDER.filter((severity) => counts[severity] > 0)
+        .map((severity) => formatSeverityCount(severity, counts[severity]))
+        .join(', ')
+    : '';
+
+// The busiest period fills the chart and the rest scale by the square root of
+// their share: a burst stands well clear of a quiet period (24 alerts against
+// one is five times taller) while ordinary periods stay tall enough to read
+// their severity mix. Each bar's tooltip carries the exact counts.
+const BAR_MAX_PX = 40;
+const BAR_MIN_PX = 4;
+
 export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps) {
   const alertFrequencySelectionPresentation = createMemo(() =>
     getAlertFrequencySelectionPresentation(),
   );
+  const severityTotals = createMemo(() => {
+    const totals: AlertSeverityCounts = { critical: 0, warning: 0, info: 0 };
+    for (const alert of props.state.alertData()) totals[alertSeverityCountKey(alert.severity)]++;
+    return totals;
+  });
 
   return (
     <Card padding="md">
@@ -67,30 +101,23 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
                   Clear filter
                 </button>
               </Show>
-              <div class="flex items-center gap-2 text-xs text-muted">
-                <span class="flex items-center gap-1">
-                  <div class={getAlertSeverityDotClass('warning')}></div>
-                  {
-                    props.state.alertData().filter((alert) => alert.severity === 'warning').length
-                  }{' '}
-                  warnings
-                </span>
-                <span class="flex items-center gap-1">
-                  <div class={getAlertSeverityDotClass('critical')}></div>
-                  {
-                    props.state.alertData().filter((alert) => alert.severity === 'critical').length
-                  }{' '}
-                  critical
-                </span>
+              <div class="flex items-center gap-2 text-xs text-muted" data-alert-frequency-legend>
+                <For
+                  each={SEVERITY_ORDER.filter(
+                    (severity) => severity !== 'info' || severityTotals().info > 0,
+                  )}
+                >
+                  {(severity) => (
+                    <span class="flex items-center gap-1">
+                      <span aria-hidden="true" class={getAlertSeverityDotClass(severity)}></span>
+                      {formatSeverityCount(severity, severityTotals()[severity])}
+                    </span>
+                  )}
+                </For>
               </div>
             </div>
           </div>
         </div>
-      </div>
-
-      <div class="mb-1 text-[10px] text-muted">
-        Showing {props.state.alertTrends().buckets.length} time periods (
-        {props.state.bucketDurationLabel()} each) · Total: {props.state.alertData().length} alerts
       </div>
 
       {(() => {
@@ -111,9 +138,15 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
               <div class="rounded-sm bg-surface-alt p-1">
                 <div class="flex h-12 items-end gap-1">
                   {trends.buckets.map((value, index) => {
-                    const scaledHeight =
-                      value > 0 ? Math.min(100, Math.max(20, Math.log(value + 1) * 20)) : 0;
-                    const pixelHeight = value > 0 ? Math.max(8, (scaledHeight / 100) * 40) : 0;
+                    const pixelHeight =
+                      value > 0
+                        ? Math.max(
+                            BAR_MIN_PX,
+                            Math.round(Math.sqrt(value / trends.max) * BAR_MAX_PX),
+                          )
+                        : 0;
+                    const counts = trends.severityBuckets?.[index];
+                    const breakdown = formatSeverityBreakdown(counts);
                     const isSelected = () => props.state.selectedBarIndex() === index;
                     const bucketStart = trends.bucketTimes[index];
                     const bucketEnd = bucketStart + trends.bucketSize * MS_PER_HOUR;
@@ -124,7 +157,7 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
                         : `${trends.bucketSize} hour${trends.bucketSize === 1 ? '' : 's'}`;
                     const countLabel = getAlertBucketCountLabel(value);
                     const tooltipContent = [
-                      countLabel,
+                      breakdown ? `${countLabel}: ${breakdown}` : countLabel,
                       `${bucketDurationText} period`,
                       bucketRangeLabel,
                     ].join('\n');
@@ -135,7 +168,7 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
                         data-alert-frequency-bucket={index}
                         class="relative flex h-12 min-w-6 flex-1 cursor-pointer items-end rounded-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
                         aria-pressed={isSelected()}
-                        aria-label={`${countLabel} between ${bucketRangeLabel}`}
+                        aria-label={`${breakdown ? `${countLabel} (${breakdown})` : countLabel} between ${bucketRangeLabel}`}
                         onClick={() =>
                           props.state.setSelectedBarIndex(
                             index === props.state.selectedBarIndex() ? null : index,
@@ -144,16 +177,10 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
                       >
                         <span class="absolute bottom-0 h-1 w-full rounded-full bg-slate-300 opacity-30"></span>
                         <span
-                          class="relative w-full rounded-xs transition-all"
-                          style={{
-                            height: `${pixelHeight}px`,
-                            'background-color':
-                              value > 0 ? (isSelected() ? '#2563eb' : '#3b82f6') : 'transparent',
-                            opacity: isSelected() ? '1' : '0.8',
-                            'box-shadow': isSelected()
-                              ? '0 0 0 2px rgba(37, 99, 235, 0.4)'
-                              : 'none',
-                          }}
+                          data-alert-frequency-bar
+                          class="relative flex w-full flex-col-reverse overflow-hidden rounded-xs"
+                          classList={{ 'ring-2 ring-blue-500/60': isSelected() }}
+                          style={{ height: `${pixelHeight}px` }}
                           title={bucketRangeLabel}
                           onMouseEnter={(event) => {
                             if (value <= 0) {
@@ -167,7 +194,21 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
                             });
                           }}
                           onMouseLeave={() => hideTooltip()}
-                        />
+                        >
+                          <For
+                            each={SEVERITY_ORDER.filter(
+                              (severity) => (counts?.[severity] ?? 0) > 0,
+                            )}
+                          >
+                            {(severity) => (
+                              <span
+                                data-alert-frequency-segment={severity}
+                                class={`w-full shrink-0 ${getAlertSeverityFillClass(severity)}`}
+                                style={{ height: `${((counts?.[severity] ?? 0) / value) * 100}%` }}
+                              />
+                            )}
+                          </For>
+                        </span>
                       </button>
                     );
                   })}

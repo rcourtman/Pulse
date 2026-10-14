@@ -148,6 +148,14 @@ in alert helpers and the production held-breach browser fixture bind this
 shared presentation boundary to the alerts/API contracts.
 
 
+### Alert severity fills are one primitive
+
+`getAlertSeverityFillClass` in `frontend-modern/src/utils/alertSeverityPresentation.ts`
+is the one fill per alert severity, and `getAlertSeverityDotClass` composes
+it, so a legend dot and the chart segment it names cannot drift apart. Each
+fill holds at least 3:1 against the chart surface in both themes; yellow on
+the light surface is under 2:1, so light-theme warnings use amber-700.
+
 ### Systemd backup-pause help separates shutdown from remote completion
 
 The existing systemd precaution reads the stop result as well as the inactive
