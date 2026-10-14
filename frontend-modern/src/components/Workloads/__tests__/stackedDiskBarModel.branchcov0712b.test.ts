@@ -49,6 +49,22 @@ const makeAnomaly = (overrides: Partial<AnomalyReport> = {}): AnomalyReport => (
 });
 
 describe('stackedDiskBarModel (branch coverage 2)', () => {
+  it('does not invent aggregate usage from capacity, or bytes from a percentage', () => {
+    const capacity = buildStackedDiskBarPresentation({ aggregateDisk: { total: 100 } }, 400);
+    expect(capacity.unavailable).toBe(true);
+    expect(capacity.displayLabel).toBe('N/A');
+    expect(capacity.tooltipContent[0]).toMatchObject({ percent: '—', used: '?', total: '100 B' });
+    const percentage = buildStackedDiskBarPresentation({ aggregateDisk: { usage: 0.5 } }, 400);
+    expect(percentage.unavailable).toBe(false);
+    expect(percentage.barPercent).toBe(0.5);
+    expect(percentage.displaySublabel).toBe('');
+    expect(percentage.tooltipContent[0]).toMatchObject({ used: '?', total: '—' });
+    // DiskInfo is not an aggregate metric: its genuine zero bytes may be omitted.
+    const filesystem = buildStackedDiskBarPresentation({ disks: [{ total: 100, free: 100 }] }, 400);
+    expect(filesystem.unavailable).toBe(false);
+    expect(filesystem.displayPercentValue).toBe(0);
+  });
+
   describe('getDiskUsagePercent (via miniDisks[].percent)', () => {
     it('uses the used/total ratio when total > 0', () => {
       // Branch: disk.total > 0 -> (used / total) * 100.
@@ -76,7 +92,7 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
     );
 
     it.each([
-      { usage: 0.5, expected: 50 },
+      { usage: 0.5, expected: 0.5 },
       { usage: 75, expected: 75 },
       { usage: 0, expected: 0 },
     ])('preserves independently supplied aggregate-only percentages: %j', ({ usage, expected }) => {

@@ -1,5 +1,6 @@
 import type { Disk } from '@/types/api';
 import { getFilesystemByteUsagePercent } from '@/utils/filesystemByteUsage';
+import { getWorkloadDiskUsagePercent } from '@/utils/workloadDiskUsage';
 import type { WorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
 import type { AnomalyReport } from '@/types/aiIntelligence';
 import {
@@ -115,11 +116,7 @@ function getDiskUsagePercent(disk: Disk): number {
   if (total > 0) {
     return ((disk.used ?? 0) / total) * 100;
   }
-  const usage = disk.usage;
-  if (typeof usage === 'number' && Number.isFinite(usage)) {
-    return usage <= 1 ? usage * 100 : usage;
-  }
-  return 0;
+  return getWorkloadDiskUsagePercent(disk) ?? 0;
 }
 
 // Unknown sentinels and invalid/incomplete byte readings cannot contribute
@@ -242,17 +239,25 @@ function buildTooltipContent(
     });
   }
 
-  if (options.aggregateDisk && (options.aggregateDisk.total ?? 0) > 0) {
-    const percentValue = getDiskUsagePercent(options.aggregateDisk);
+  if (options.aggregateDisk) {
+    const aggregate = options.aggregateDisk;
+    const percentValue = getWorkloadDiskUsagePercent(aggregate);
+    const hasUsed =
+      typeof aggregate.used === 'number' && Number.isFinite(aggregate.used) && aggregate.used >= 0;
+    const hasTotal =
+      typeof aggregate.total === 'number' &&
+      Number.isFinite(aggregate.total) &&
+      aggregate.total > 0;
     return [
       {
-        color: options.current
-          ? getMetricColorRgba(percentValue, 'disk', options.thresholds)
-          : UNKNOWN_DISK_COLOR,
+        color:
+          options.current && percentValue !== null
+            ? getMetricColorRgba(percentValue, 'disk', options.thresholds)
+            : UNKNOWN_DISK_COLOR,
         label: 'Total',
-        percent: options.unavailable ? '—' : formatPercent(percentValue),
-        total: formatBytes(options.aggregateDisk.total ?? 0),
-        used: options.unavailable ? '?' : formatBytes(options.aggregateDisk.used ?? 0),
+        percent: options.unavailable || percentValue === null ? '—' : formatPercent(percentValue),
+        total: hasTotal ? formatBytes(aggregate.total!) : '—',
+        used: options.unavailable || !hasUsed ? '?' : formatBytes(aggregate.used!),
       },
     ];
   }
@@ -289,14 +294,8 @@ export function buildStackedDiskBarPresentation(
   // Independently supplied aggregate percentages keep their legacy fallback;
   // they do not make an unmeasured per-filesystem byte row usable.
   const aggregate = props.aggregateDisk;
-  const hasAggregateUsage = Boolean(
-    aggregate &&
-    (getFilesystemByteUsagePercent(aggregate) !== null ||
-      ((aggregate.total ?? 0) <= 0 &&
-        typeof aggregate.usage === 'number' &&
-        Number.isFinite(aggregate.usage) &&
-        aggregate.usage >= 0)),
-  );
+  const aggregatePercent = getWorkloadDiskUsagePercent(aggregate);
+  const hasAggregateUsage = aggregatePercent !== null;
   // Retained numbers explain the last report, not live pressure. If every
   // supplied filesystem is unmeasured, do not fall through to a fabricated 0%.
   const unavailable =
@@ -329,12 +328,11 @@ export function buildStackedDiskBarPresentation(
   const totalUsed = hasDisks
     ? disks.reduce((sum, disk) => sum + (disk.used || 0), 0)
     : (aggregateDisk?.used ?? 0);
-  const overallPercent =
-    totalCapacity > 0
-      ? (totalUsed / totalCapacity) * 100
-      : aggregateDisk
-        ? getDiskUsagePercent(aggregateDisk)
-        : 0;
+  const overallPercent = hasDisks
+    ? (totalUsed / totalCapacity) * 100
+    : unavailable
+      ? 0
+      : (aggregatePercent ?? 0);
   const anomalyRatio = formatAnomalyRatio(anomaly) ?? '';
   const maxInfo = getMaxDiskInfo(disks);
   const useMaxSummary =
@@ -351,7 +349,15 @@ export function buildStackedDiskBarPresentation(
     : '';
   const displayLabel = unavailable ? 'N/A' : formatPercent(displayPercentValue);
   const displaySublabel =
-    unavailable || (useMaxSummary && maxInfo)
+    unavailable ||
+    (useMaxSummary && maxInfo) ||
+    (!hasDisks &&
+      !(
+        typeof aggregateDisk?.used === 'number' &&
+        Number.isFinite(aggregateDisk.used) &&
+        aggregateDisk.used >= 0 &&
+        totalCapacity > 0
+      ))
       ? ''
       : `${formatBytes(totalUsed)}/${formatBytes(totalCapacity)}`;
   const diskCountLabel = hasMultipleDisks ? `${disks.length} disks` : '';

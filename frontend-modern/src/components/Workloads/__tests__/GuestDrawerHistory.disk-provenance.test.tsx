@@ -92,6 +92,24 @@ const utilization = () => screen.getAllByTestId('guest-history-group-chart')[0];
 // Actual backend provenance remains authoritative. Removing a VM lock alone
 // cannot turn retained readings into current data or prove native thaw.
 describe('GuestDrawerHistory filesystem provenance', () => {
+  it('keeps capacity-only aggregates unknown and accepts explicit zero/byte-only fallback without chart points', async () => {
+    const fetch = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    const [value, setValue] = createSignal<WorkloadGuest>({ ...guest(''), disk: { total: 100 } });
+    mount(value);
+    await settledHistory();
+    expect(utilization().querySelector('[data-history-current="disk"]')).toBeNull();
+    setValue({ ...value(), disk: { total: 100, used: 50 } });
+    expect(utilization().querySelector('[data-history-current="disk"]')).toHaveTextContent(
+      'Disk50.0%current',
+    );
+    setValue({ ...value(), disk: { usage: 0 } });
+    expect(utilization().querySelector('[data-history-current="disk"]')).toHaveTextContent(
+      'Disk0.0%current',
+    );
+    expect(utilization().querySelector('path[data-history-series]')).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('withdraws the current stopped-VM carrier but keeps real stored History', async () => {
     const fetch = vi
       .spyOn(ChartsAPI, 'getMetricsHistory')

@@ -15,6 +15,37 @@
 
 ## Purpose
 
+### Workloads aggregate disk readings keep their units and presence (14 October 2026)
+
+Workload aggregate metrics are percentage points, including values from zero
+through one; selection never guesses a fraction from magnitude. A capacity or
+used-byte scalar alone is not an aggregate utilization reading. The mapper
+preserves missing/invalid aggregate fields, while an explicit finite
+non-negative percentage or finite non-negative used bytes with positive
+capacity supplies usage. An explicit invalid percentage cannot fall back to
+retained byte carriers. Values above 100 are bounded for existing display.
+
+The row (bars and history lens), drawer current/last-known fallback, numeric
+search and capacity sorting share this numeric admission. Source-owned guest
+read deferrals, linked-agent leases and stopped-VM rules still determine
+freshness independently. Unavailable or retained values remain after current
+values in both sort directions and cannot match numeric capacity queries.
+Percentage-only readings show no invented used/capacity bytes; byte-only
+readings and explicit zero remain available. Per-filesystem DiskInfo omitted
+zero bytes retain their existing wire semantics and are not aggregate metrics.
+No collector, guest request, timer, store/history point, threshold or alert
+policy is changed.
+
+Verification: `workloadDiskUsage.test.ts`, `useWorkloads.test.ts` (REST and owning
+snapshot refreshes), `workloadSelectors.test.ts`, `GuestRow.test.ts`,
+`GuestDrawerHistory.disk-provenance.test.tsx` and stacked-disk tests cover low
+percentages, capacity-only absence, explicit zero, byte-only reads and the
+unchanged freshness controls. `browser-tests/workload-disk-metrics.tsx` feeds
+synthetic REST observations through the production mapper, selection, rows and
+full drawer at desktop and phone widths. Its browser result/pixels must be
+recorded separately; it proves neither native recovery nor availability.
+
+
 ### Existing Workloads snapshots retain guest interface names
 
 The Workloads mapper selects the existing agent interface list, otherwise the
@@ -591,6 +622,8 @@ or History work is added per row. `GuestRow.test.tsx` covers the drag, the
 in-place click and chevron activation over a selection.
 
 ## Canonical Files
+
+- `frontend-modern/src/utils/workloadDiskUsage.ts` — aggregate disk numeric/current-reading admission.
 
 - `frontend-modern/src/utils/filesystemByteUsage.ts`: shared finite byte/capacity admission for filesystem utilization.
 

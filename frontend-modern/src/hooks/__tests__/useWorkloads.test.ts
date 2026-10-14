@@ -83,6 +83,67 @@ describe('useWorkloads', () => {
     resetWorkloadsCacheForTests();
   });
 
+  it.each(['api', 'snapshot'] as const)(
+    'preserves aggregate disk presence and percentage points through %s refreshes',
+    async (transport) => {
+      const [snapshot, setSnapshot] = createSignal<Resource[]>([]);
+      let dispose = () => {};
+      let result!: ReturnType<UseWorkloadsModule['useWorkloads']>;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(
+          () => true,
+          transport === 'snapshot' ? { resourceSnapshot: snapshot } : {},
+        );
+      });
+      try {
+        await flushAsync();
+        for (const [metric, expected] of [
+          [{ total: 100 }, null],
+          [{ used: 0 }, null],
+          [{}, null],
+          [{ used: 0, total: 100 }, 0],
+          [{ percent: 0 }, 0],
+          [{ percent: 0.5 }, 0.5],
+          [{ percent: 1 }, 1],
+          [{ value: 0.5 }, 0.5],
+          [{ used: 50, total: 200 }, 25],
+          [{ percent: -1, used: 0, total: 100 }, null],
+          [{ percent: Infinity, used: 0, total: 100 }, null],
+        ] as const) {
+          const raw = { ...sampleResource, metrics: { ...sampleResource.metrics, disk: metric } };
+          if (transport === 'api') {
+            apiFetchJSONMock.mockResolvedValue({ data: [raw] });
+            await result.refetch();
+          } else {
+            const { percent, value, ...bytes } = metric as {
+              percent?: number;
+              value?: number;
+              total?: number;
+              used?: number;
+            };
+            setSnapshot([
+              {
+                ...raw,
+                lastSeen: Date.parse(raw.lastSeen),
+                disk: { ...bytes, current: percent ?? value } as Resource['disk'],
+              } as unknown as Resource,
+            ]);
+          }
+          await flushAsync();
+          const row = result.workloads()[0];
+          expect(row.id).toBe(sampleResource.id);
+          expect(row.telemetryAvailability?.disk).toBe(expected !== null);
+          expect(getDiskUsagePercent(row)).toBe(expected);
+          if (expected === null && !('used' in metric)) expect(row.disk.used).toBeUndefined();
+          expect(row.memory.usage).toBe(50);
+        }
+      } finally {
+        dispose();
+      }
+    },
+  );
+
   it.each(
     (['api', 'snapshot'] as const).flatMap((transport) =>
       (['vm', 'system-container'] as const).map((type) => ({ transport, type })),
