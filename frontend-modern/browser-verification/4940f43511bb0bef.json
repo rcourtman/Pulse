@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "fcc3e695f364602a2a13301a676567f9115d2ffc",
+  "verified_at": "2026-10-14T19:05:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/Storage.tsx",
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts",
+    "frontend-modern/src/components/Storage/useStorageResourceHighlight.ts",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/Storage.tsx": "b3a4ec12816c18e8486578fc58dad6287c73d8cb59224a9c99d8ae1a666f3b25",
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts": "5dc75a52dda01a042117fb4419bc053e8d5457234cda643bb88fe8f261f2031d",
+    "frontend-modern/src/components/Storage/useStorageResourceHighlight.ts": "3cbd5a714fe74c9af119d1586d378e6cbfe8ac656ed484a87b56837b22263462",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "4eb7f3ef132a98d85a351446a45b186e67787eface48d769a7258f5897a41420",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "df2e75399ed9c140d3a0360ec1cfe7aea2926a7fc6e324eab7361691bc4c431c"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/proxmox/storage",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Alerts overview Proxmox storage alerts link to /proxmox/storage?resource=<storage id>; ZFS pool-state and device alerts link to their storage (storageResourceId), never the composite zfs-pool id",
+    "Storage opened from a pool alert expands that pool and highlights its row; its inline detail (capacity trend) is in view at 1280 and 375 wide, no horizontal overflow at 375",
+    "An alert source id the records do not carry (mock-cluster-1-pve1-local) resolves through one registry lookup and opens its pool",
+    "An unresolved ?resource= on Storage makes exactly one registry request and opens nothing",
+    "Storage mounted behind the Overview tab ignores a guest ?resource= link; only the workloads table looks it up"
+  ],
+  "interactions": [
+    "Clicked a ZFS device alert name and a pool alert name on Alerts overview, landing on Storage with the pool open",
+    "Opened another pool by hand, followed an unresolved storage link (operator pool stayed open), then followed the first pool link again (it reopened)",
+    "Followed a guest link on the Overview tab, then a storage link, and the linked pool opened",
+    "Repeated the alert-to-Storage click at 375x812 and 1280x800"
+  ]
+}

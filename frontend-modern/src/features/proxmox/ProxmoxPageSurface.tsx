@@ -407,6 +407,7 @@ export function ProxmoxPageSurface() {
                 aria-hidden={activeTab() !== 'storage' ? 'true' : undefined}
               >
                 <StorageSurface
+                  routeActive={activeTab() === 'storage'}
                   forcedSourceFilter={PROXMOX_PLATFORM_FILTER}
                   resourceSource={storageResources}
                   suppressNodeFilter

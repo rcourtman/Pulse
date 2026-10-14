@@ -55,6 +55,7 @@ import {
   buildStandalonePath,
   buildTrueNASPath,
   buildVmwarePath,
+  buildStorageRouteSearch,
   buildWorkloadsRouteSearch,
 } from '@/routing/resourceLinks';
 import {
@@ -238,7 +239,32 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
 
   // The name opens the guest an alert is about; other resources keep their
   // platform page.
+  // A Proxmox storage alert opens its pool on Storage, which resolves the id
+  // through the resource registry and reveals the pool. ZFS pool and device
+  // alerts are raised under "<storage>/zfs-pool:..." ids the registry cannot
+  // open, so they carry their storage as storageResourceId; one raised before
+  // that stamp still opens the Storage page, without naming a pool.
+  const storagePoolLink = (): string | undefined => {
+    const metadata = props.alert.metadata;
+    const resourceType = metadata?.resourceType;
+    if (
+      typeof resourceType !== 'string' ||
+      resourceType.trim().toLowerCase() !== 'storage' ||
+      platformLink() !== buildProxmoxPath()
+    ) {
+      return undefined;
+    }
+    const stamped =
+      typeof metadata?.storageResourceId === 'string' ? metadata.storageResourceId.trim() : '';
+    const ownId = props.alert.resourceId?.trim() ?? '';
+    const resourceId = stamped || (ownId.includes('/zfs-pool:') ? '' : ownId);
+    const search = resourceId ? buildStorageRouteSearch({ resource: resourceId }) : '';
+    return `${buildProxmoxPath('storage')}${search}`;
+  };
+
   const resourceLink = (): string => {
+    const storageLink = storagePoolLink();
+    if (storageLink) return storageLink;
     const page = platformLink();
     const metadata = props.alert.metadata;
     const resourceType = metadata?.resourceType;
