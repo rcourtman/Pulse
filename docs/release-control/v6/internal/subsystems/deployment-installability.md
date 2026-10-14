@@ -5135,6 +5135,19 @@ including nested copies. Exact acquired-graph source/build/browser validation
 and the complete hosted audit remain distinct obligations; official patch
 metadata and a lockfile do not by themselves clear an audit failure.
 
+Ordinary frontend CI must check Solid's actual locked Seroval and plugin
+dependency edges before installing the graph. An npm override cannot silently
+reuse an older compatibility proof after the consumer changes its requirements.
+`scripts/check-frontend-serialization.mjs` preserves only the exact qualified
+Solid `1.9.15` / Seroval `1.6.3` root override of `~1.5.4`; otherwise each
+resolved serializer must satisfy Solid's full stable tilde range, including
+nested consumers and dependencies. New range forms require review. The
+standalone regression suite rejects the Solid `1.9.16` / `~1.6.8` update with
+stale Seroval `1.6.3` or plugins `1.5.5`, accepts matched updates, and checks
+the non-optional pre-install CI wiring. This is a graph-admission check, not
+official-byte authenticity, a security-audit verdict or installed UI proof;
+the existing security floors and actual consumer tests remain required.
+
 That same dev-runtime dependency-manifest boundary now also owns the maintained
 Docker engine module floor. `go.mod`, `go.sum`, and
 `internal/cloudcp/docker/manager.go` must route hosted runtime orchestration
