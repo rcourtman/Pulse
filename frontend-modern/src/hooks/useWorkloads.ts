@@ -116,6 +116,7 @@ type APIResource = {
     diskStatusReason?: string;
     guestAgentStatus?: string;
     guestAgentExpected?: boolean;
+    networkInterfaces?: APINetworkInterface[];
     lock?: string;
     swapUsed?: number;
     swapTotal?: number;
@@ -588,7 +589,18 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     agentKind: resource.agent?.agentVersion ? 'pulse' : undefined,
     agentId: resource.agent?.agentId,
     agentRaid: resource.agent?.raid,
-    networkInterfaces: mapNetworkInterfaces(resource.agent?.networkInterfaces),
+    // Agent reports retain precedence, including an explicitly empty list.
+    // Agentless PVE guests already supply named interfaces on their platform
+    // facet; both the REST and owning-snapshot paths must preserve them.
+    networkInterfaces: mapNetworkInterfaces(
+      resource.agent?.networkInterfaces ?? resource.proxmox?.networkInterfaces,
+    ),
+    networkInterfacesFromAgent:
+      resource.agent?.networkInterfaces != null
+        ? true
+        : resource.proxmox?.networkInterfaces != null
+          ? false
+          : undefined,
     // A linked agent past its reporting lease keeps its last report on the
     // resource, so its RAID, network and filesystem rows are not current.
     agentStale: resource.agent?.stale === true || undefined,

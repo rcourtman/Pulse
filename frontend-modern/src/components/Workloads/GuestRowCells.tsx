@@ -167,7 +167,7 @@ function NetworkInfoCell(props: {
         y={tip.pos().y}
       >
         <div class="min-w-[180px] max-w-[280px]">
-          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
+          <div class="font-medium mb-1 text-base-content border-b border-border pb-1">
             Network Interfaces
           </div>
 
@@ -175,26 +175,26 @@ function NetworkInfoCell(props: {
             <For each={props.networkInterfaces}>
               {(iface, idx) => (
                 <div class="py-1" classList={{ 'border-t border-border': idx() > 0 }}>
-                  <div class="flex items-center gap-2 text-blue-400 font-medium">
+                  <div class="flex items-center gap-2 text-base-content font-medium">
                     <span>{iface.name || 'eth' + idx()}</span>
                     <Show when={iface.mac}>
-                      <span class="text-[9px] text-slate-500 font-normal">{iface.mac}</span>
+                      <span class="text-[9px] text-muted font-normal">{iface.mac}</span>
                     </Show>
                   </div>
                   <Show when={iface.addresses && iface.addresses.length > 0}>
                     <div class="mt-0.5 flex flex-wrap gap-1">
                       <For each={iface.addresses}>
-                        {(ip) => <span class="text-slate-300 font-mono">{ip}</span>}
+                        {(ip) => <span class="text-base-content font-mono">{ip}</span>}
                       </For>
                     </div>
                   </Show>
                   <Show when={!iface.addresses || iface.addresses.length === 0}>
-                    <span class="text-slate-500 text-[9px]">
+                    <span class="text-muted text-[9px]">
                       {getWorkloadsGuestNetworkEmptyState()}
                     </span>
                   </Show>
                   <Show when={(iface.rxBytes || 0) > 0 || (iface.txBytes || 0) > 0}>
-                    <div class="mt-0.5 text-[9px] text-slate-500">
+                    <div class="mt-0.5 text-[9px] text-muted">
                       RX: {formatBytes(iface.rxBytes || 0)} / TX: {formatBytes(iface.txBytes || 0)}
                     </div>
                   </Show>
@@ -205,13 +205,13 @@ function NetworkInfoCell(props: {
 
           <Show when={!hasInterfaces() && props.ipAddresses.length > 0}>
             <div class="py-1">
-              <div class="flex items-center gap-2 text-blue-400 font-medium">
+              <div class="flex items-center gap-2 text-base-content font-medium">
                 <span>IP Addresses</span>
-                <span class="text-[9px] text-slate-500 font-normal">No agent data</span>
+                <span class="text-[9px] text-muted font-normal">No agent data</span>
               </div>
               <div class="mt-0.5 flex flex-wrap gap-1">
                 <For each={props.ipAddresses}>
-                  {(ip) => <span class="text-slate-300 font-mono">{ip}</span>}
+                  {(ip) => <span class="text-base-content font-mono">{ip}</span>}
                 </For>
               </div>
             </div>
