@@ -3529,7 +3529,27 @@ func (m *Monitor) ReadSnapshot() models.StateSnapshot {
 
 // BackupsSnapshot returns the current backup state.
 func (m *Monitor) BackupsSnapshot() models.Backups {
-	return m.GetState().Backups
+	return readMetadataSnapshot(m, (*models.State).GetBackups, func(s models.StateSnapshot) models.Backups { return s.Backups })
+}
+
+// Backup/job/connection metadata is not a unified resource inventory. Capture
+// the replaceable state pointer once, then clone only the requested fields.
+// Mock mode keeps GetState's fixture and lazy alert-maintenance behaviour;
+// absent monitors/states keep the previous zero-value projections.
+func readMetadataSnapshot[T any](m *Monitor, read func(*models.State) T, project func(models.StateSnapshot) T) T {
+	if m != nil {
+		if mock.IsMockEnabled() {
+			return project(m.GetState())
+		}
+		m.mu.RLock()
+		state := m.state
+		m.mu.RUnlock()
+		if state != nil {
+			return read(state)
+		}
+	}
+	var empty T
+	return empty
 }
 
 // PBSInstancesSnapshot returns the current PBS instances.
@@ -3559,12 +3579,12 @@ func (m *Monitor) PBSInstancesSnapshot() []models.PBSInstance {
 
 // ReplicationJobsSnapshot returns the current replication jobs.
 func (m *Monitor) ReplicationJobsSnapshot() []models.ReplicationJob {
-	return m.GetState().ReplicationJobs
+	return readMetadataSnapshot(m, (*models.State).GetReplicationJobs, func(s models.StateSnapshot) []models.ReplicationJob { return s.ReplicationJobs })
 }
 
 // ConnectionHealthSnapshot returns the current connection health map.
 func (m *Monitor) ConnectionHealthSnapshot() map[string]bool {
-	return m.GetState().ConnectionHealth
+	return readMetadataSnapshot(m, (*models.State).GetConnectionHealth, func(s models.StateSnapshot) map[string]bool { return s.ConnectionHealth })
 }
 
 // HostsSnapshot returns the current hosts.
@@ -4577,12 +4597,12 @@ func (m *Monitor) RecentlyResolvedSnapshot() []models.ResolvedAlert {
 
 // PVEBackupsSnapshot returns the current PVE backups.
 func (m *Monitor) PVEBackupsSnapshot() models.PVEBackups {
-	return m.GetState().PVEBackups
+	return readMetadataSnapshot(m, (*models.State).GetPVEBackups, func(s models.StateSnapshot) models.PVEBackups { return s.PVEBackups })
 }
 
 // PBSBackupsSnapshot returns the current PBS recovery artifacts.
 func (m *Monitor) PBSBackupsSnapshot() []models.PBSBackup {
-	return m.GetState().PBSBackups
+	return readMetadataSnapshot(m, (*models.State).GetPBSBackups, func(s models.StateSnapshot) []models.PBSBackup { return s.PBSBackups })
 }
 
 // BuildFrontendState returns the current state converted to frontend format.
