@@ -280,7 +280,7 @@ function buildTriageState(issue, core, latestVersion) {
 }
 
 function keepOnlyReportedVersionLabel(nextLabels, reportedVersion) {
-  const keep = `${VERSION_LABEL_PREFIX}${reportedVersion}`;
+  const keep = reportedVersion ? `${VERSION_LABEL_PREFIX}${reportedVersion}` : null;
   for (const label of [...nextLabels]) {
     if (
       /^affects-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(label) &&
@@ -395,7 +395,6 @@ async function syncLabels({ github, context, core }) {
       "0e8a16",
       `Bug reported against Pulse ${reportedVersion}`
     );
-    keepOnlyReportedVersionLabel(nextLabels, reportedVersion);
     nextLabels.add(`${VERSION_LABEL_PREFIX}${reportedVersion}`);
     nextLabels.delete(NEEDS_VERSION_LABEL);
   } else {
@@ -408,6 +407,11 @@ async function syncLabels({ github, context, core }) {
     );
     nextLabels.add(NEEDS_VERSION_LABEL);
   }
+
+  // A correction to unknown, incomplete or absent version evidence retires
+  // this synchronizer's old exact-version assertions too. It must not leave
+  // a known affected version beside its missing-version classification.
+  keepOnlyReportedVersionLabel(nextLabels, reportedVersion);
 
   // Retest labels are community-owned: version metadata cannot establish
   // relevant-fix availability or reconcile the live reporter conversation.

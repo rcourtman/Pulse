@@ -1629,3 +1629,75 @@ test("a report with no label delta needs no additional pre-write read", async ()
   assert.equal(calls.addLabels.length, 0);
   assert.equal(calls.removeLabel.length, 0);
 });
+
+test("unknown current versions retire only managed exact-version labels", async () => {
+  const preserved = ["bug", "needs-retest-on-latest", "needs-decomposition",
+    "needs-human", "operator-reviewed", "affects-main", "affects-storage"];
+  for (const body of [
+    "### Pulse version\nunknown\n",
+    "Pulse version: unknown; agent version 6.5.0",
+    "### Pulse version\n6.5\n### Agent version\n6.5.0",
+    "### Pulse version\n_No response_\n",
+    "### Pulse version\n\n### Agent version\n6.5.0",
+    "The running version is unavailable.",
+  ]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2916, title: "Upgrade from v6.4.5", body,
+      labels: [...preserved, "affects-6.4.5", "affects-6.6.0-beta.3"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ action: "edited", issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-version-info"]], body);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "affects-6.6.0-beta.3"], body);
+    assert.equal(calls.getIssue.length, 2);
+    assert.equal(calls.getLatestRelease.length, 0);
+    assert.equal(calls.createComment.length, 0);
+  }
+});
+
+test("a delayed known-version event cleans metadata from the current unknown report", async () => {
+  const eventIssue = { number: 2917, title: "Bug", body: "### Pulse version\n6.4.5\n",
+    labels: [{ name: "bug" }, { name: "affects-6.4.5" }] };
+  const { github, calls } = createGithub({ currentIssue: {
+    ...eventIssue, state: "open", body: "### Pulse version\nunknown\n",
+    updated_at: "2026-10-14T11:00:00Z",
+    labels: [...eventIssue.labels, { name: "needs-retest-on-latest" }, { name: "needs-version-info" }],
+  } });
+  await syncLabels({ github, context: createContext({ action: "edited", issue: eventIssue }), core: createCore() });
+  assert.equal(calls.addLabels.length, 0);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
+  assert.equal(calls.getIssue.length, 2, "a removals-only delta still needs the live-state fence");
+  assert.equal(calls.createComment.length, 0);
+});
+
+test("unknown-version removal cannot overwrite a correction during preparation", async () => {
+  const issue = { number: 2918, title: "Bug", body: "### Pulse version\nunknown\n",
+    labels: ["bug", "affects-6.5.0", "needs-version-info"].map(name => ({ name })) };
+  const { github, calls } = createGithub();
+  github.rest.issues.getLabel = async () => {
+    github.currentIssue = { ...github.currentIssue, body: "### Pulse version\n6.5.0\n" };
+    return { data: {} };
+  };
+  await syncLabels({ github, context: createContext({ action: "edited", issue }), core: createCore() });
+  assert.equal(calls.getIssue.length, 2);
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
+});
+
+test("unknown versions do not remove metadata from non-bug feedback", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2919, title: "Documentation", body: "### Pulse version\nunknown\n",
+    labels: ["documentation", "affects-6.5.0", "needs-retest-on-latest"].map(name => ({ name })) };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
+  assert.equal(calls.getIssue.length, 1);
+});
+
+test("already unknown-version metadata is a no-op without an extra live read", async () => {
+  const { github, calls } = createGithub({ existingLabels: new Set(["needs-version-info"]) });
+  const issue = { number: 2920, title: "Bug", body: "### Pulse version\nunknown\n",
+    labels: ["bug", "needs-version-info", "needs-human", "affects-main"].map(name => ({ name })) };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
+  assert.equal(calls.getIssue.length, 1);
+});
