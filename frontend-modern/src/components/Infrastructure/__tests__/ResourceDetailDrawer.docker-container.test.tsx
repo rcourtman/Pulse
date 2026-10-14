@@ -282,7 +282,8 @@ describe('ResourceDetailDrawer for Docker containers', () => {
     // A worrying restart count moves in front of the charts, not repeated below.
     const lifted = screen.getByTestId('resource-drawer-exceptions');
     expect(within(lifted).getByText('Restarts')).toBeInTheDocument();
-    expect(within(lifted).getByText('7').closest('td')).toHaveClass('text-rose-700');
+    // Amber, as its row dot reads: running, but worth a look.
+    expect(within(lifted).getByText('7').closest('td')).toHaveClass('text-amber-700');
     expect(within(section).queryByText('Restarts')).not.toBeInTheDocument();
     expect(within(section).getByText('Created')).toBeInTheDocument();
     expect(within(section).getByText('Started')).toBeInTheDocument();

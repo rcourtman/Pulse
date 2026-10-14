@@ -15,6 +15,10 @@ import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getDockerImageRegistryLink } from '@/features/docker/dockerImageReference';
 import { getDockerContainerUpdateAction } from '@/features/docker/dockerContainerUpdateAction';
+import {
+  dockerContainerRestartAttentionLabel,
+  dockerContainerRestartCountTitle,
+} from '@/features/docker/dockerPageModel';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import {
   getDockerContainerHealthCheckPresentation,
@@ -146,6 +150,7 @@ const ContainerUpdateNextSteps: Component<{ resource: Resource }> = (props) => {
 };
 
 const dockerSection = (
+  resource: Resource,
   docker: NonNullable<Resource['docker']>,
   now: number,
   updateNextSteps: () => JSX.Element,
@@ -214,7 +219,9 @@ const dockerSection = (
       : null,
     typeof docker.restartCount === 'number'
       ? makeDetailRow('Restarts', formatInteger(docker.restartCount), {
-          tone: docker.restartCount > 5 ? 'danger' : 'default',
+          // The row dot's restart verdict: running, but worth a look.
+          tone: dockerContainerRestartAttentionLabel(resource) ? 'warning' : 'default',
+          title: dockerContainerRestartCountTitle(docker.restartCount),
         })
       : null,
     createdAt
@@ -416,7 +423,9 @@ export const useResourceSummarySections = (
             ]),
           }
         : null,
-      props.content !== 'overview' && docker ? dockerSection(docker, now(), updateNextSteps) : null,
+      props.content !== 'overview' && docker
+        ? dockerSection(props.resource, docker, now(), updateNextSteps)
+        : null,
       props.content !== 'overview' ? buildKubernetesControllerSection(props.resource, now()) : null,
       props.content !== 'overview'
         ? {

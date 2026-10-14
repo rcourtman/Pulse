@@ -318,9 +318,11 @@ describe('Docker native tables', () => {
     expect(screen.getByText('volume:/usr/share/nginx/html (rw)')).toBeInTheDocument();
     expect(screen.getByText('Available')).toBeInTheDocument();
 
-    // A crash-looper (restarts above the v5 attention threshold) is flagged.
-    expect(screen.getByText('7')).toHaveClass('text-red-600');
-    expect(screen.getByText('2')).not.toHaveClass('text-red-600');
+    // A crash-looper (restarts above the v5 attention threshold) is flagged in
+    // amber, the colour its row dot shows: running, but worth a look.
+    expect(screen.getByText('7')).toHaveClass('text-amber-700');
+    expect(screen.getByText('2')).not.toHaveClass('text-amber-700');
+    expect(screen.getByTitle('7 restarts')).toBeInTheDocument();
 
     // Both rows get a CPU cell; only the row with memory data gets a bar.
     expect(screen.getAllByTestId('responsive-cpu-metric').length).toBe(2);
@@ -1123,6 +1125,8 @@ describe('Docker native tables', () => {
     ));
     expect(screen.getByText('Restarts')).toBeInTheDocument();
     expect(screen.queryByText('7 restarts')).not.toBeInTheDocument();
+    // The row dot carries the same verdict at every width.
+    expect(screen.getByTitle('7 restarts')).toBeInTheDocument();
   });
 
   it('leaves out the Uptime column when no container reports one', () => {

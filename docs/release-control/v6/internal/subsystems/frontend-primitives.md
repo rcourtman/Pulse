@@ -5548,7 +5548,11 @@ once under the drawer's owner and reused by every rebuild of the inventory
 rows, so a refresh or clock tick never recreates the button or closes its
 review dialog. A container's row dot, State words and drawer header dot share
 `mapDockerContainerStatus`, so a degraded container with no reported state is
-amber in all three. "Worth checking" renders through
+amber in all three. That mapper also owns the restart verdict
+(`dockerContainerRestartAttentionLabel`): a running container past five
+restarts is warning in its dot, the sort, the phone State words, the Restarts
+column and the drawer's lifted Restarts row alike, never a green dot beside an
+amber or red count. "Worth checking" renders through
 `DrawerExceptionList.tsx` directly under the alerts line, above the charts:
 one compact label/value line per lifted row with the shared
 `detailValueToneClass` tone, not a card per section. A guest memory reading

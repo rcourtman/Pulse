@@ -7039,7 +7039,15 @@ has one of those states, including an unhealthy running container. A narrow
 table (under 360 pixels, most phones) has no State column: beside the shared
 40 percent name it cut "Unhealthy" to "Unhe…", so the same words read under
 the container name on every row, and a saved State sort waits for a layout
-that shows its header. From the
+that shows its header. A running container that Docker has restarted more
+than five times gets one verdict, from `mapDockerContainerStatus`: warning,
+"N restarts". The row dot, the drawer header dot and the attention-first sort
+read it everywhere; where the row has a Restarts column the count reads amber
+there and State keeps Docker's own word, and where it has none State says
+"N restarts". The drawer's Restarts row is amber too, and its observed state
+stays Docker's word so the restart is lifted once. Amber, not red: the
+container is running. Docker's count is a total, not a rate, as its hover
+says; the alert engine owns the windowed restart-loop alert. From the
 compact layout up an Uptime column shows the current run (none for a stopped
 container, whose leftover uptime is not time spent running), which marks a
 container that just restarted; narrower rows keep it in the drawer. The Ports

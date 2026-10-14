@@ -1,7 +1,12 @@
 import type { Resource } from '@/types/resource';
 import { asTrimmedString } from '@/utils/stringUtils';
 
-import { dockerContainerRunState, mapDockerContainerStatus } from './dockerPageModel';
+import {
+  dockerContainerRestartAttentionLabel,
+  dockerContainerRestartCountTitle,
+  dockerContainerRunState,
+  mapDockerContainerStatus,
+} from './dockerPageModel';
 
 // The State column says what `docker ps` would flag beside the status: a
 // failing or starting health check, a non-zero exit code, a restart. It reuses
@@ -48,31 +53,35 @@ const runStateTitle = (resource: Resource): string | undefined => {
   return undefined;
 };
 
-// v5 flagged crash-loopers in the restarts column; a container that restarted
-// more than this many times needs an operator's eye even while "running".
-export const DOCKER_RESTART_ATTENTION_THRESHOLD = 5;
+// The same container without its restart count, for a surface that shows the
+// count on its own (a Restarts column or drawer row).
+const withoutRestartCount = (resource: Resource): Resource => ({
+  ...resource,
+  docker: { ...resource.docker, restartCount: undefined },
+});
 
 // flagRestarts: the row shows no Restarts column (narrow layouts), so a
-// running container past the restart threshold says so in its State cell.
+// running container past the restart threshold says so in its State cell, in
+// the words its row dot already uses. Where the row has a Restarts column,
+// that column carries the flag and State keeps Docker's own words.
 export const getDockerContainerStatePresentation = (
   resource: Resource,
   options: { flagRestarts?: boolean } = {},
 ): DockerContainerStatePresentation => {
-  const status = mapDockerContainerStatus(resource);
-  const tone = presentationTone(status.variant);
-  const restarts = resource.docker?.restartCount;
-  if (
-    options.flagRestarts &&
-    tone === null &&
-    typeof restarts === 'number' &&
-    restarts > DOCKER_RESTART_ATTENTION_THRESHOLD
-  ) {
+  const status = mapDockerContainerStatus(
+    options.flagRestarts ? resource : withoutRestartCount(resource),
+  );
+  const restartLabel = options.flagRestarts
+    ? dockerContainerRestartAttentionLabel(resource)
+    : undefined;
+  if (restartLabel && status.label === restartLabel) {
     return {
-      label: `${restarts} restarts`,
-      title: `Running, but Docker has restarted it ${restarts} times`,
+      label: restartLabel,
+      title: `Running. ${dockerContainerRestartCountTitle(resource.docker?.restartCount ?? 0)}`,
       tone: 'warning',
     };
   }
+  const tone = presentationTone(status.variant);
   return { label: status.label, title: containerStateTitle(resource, status.label), tone };
 };
 
@@ -81,9 +90,10 @@ export const getDockerContainerStatePresentation = (
 export const getDockerContainerRunStatePresentation = (
   resource: Resource,
 ): DockerContainerStatePresentation => {
+  // The drawer shows the restart count on its own row too.
   const status = mapDockerContainerStatus({
     ...resource,
-    docker: { ...resource.docker, health: undefined },
+    docker: { ...resource.docker, health: undefined, restartCount: undefined },
   });
   return {
     label: status.label,

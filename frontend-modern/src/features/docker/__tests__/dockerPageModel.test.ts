@@ -709,6 +709,25 @@ describe('dockerPageModel', () => {
       ).toEqual(['dead', 'restarting', 'stopped', 'happy']);
     });
 
+    it('ranks a running container past the restart threshold with the warnings', () => {
+      const container = (id: string, docker: Resource['docker']) =>
+        makeResource({ id, type: 'app-container', docker });
+      const rows = [
+        container('happy', { containerState: 'running', restartCount: 2 }),
+        container('at-threshold', { containerState: 'running', restartCount: 5 }),
+        container('looping', { containerState: 'running', restartCount: 6 }),
+        container('unhealthy', { containerState: 'running', health: 'unhealthy', restartCount: 9 }),
+        container('stopped', { containerState: 'exited', exitCode: 0, restartCount: 9 }),
+      ];
+      expect(rows.sort(compareDockerContainers).map((r) => r.id)).toEqual([
+        'unhealthy',
+        'looping',
+        'stopped',
+        'at-threshold',
+        'happy',
+      ]);
+    });
+
     it('orders Swarm services by replica health', () => {
       const ok = makeResource({
         id: 'svc-ok',
