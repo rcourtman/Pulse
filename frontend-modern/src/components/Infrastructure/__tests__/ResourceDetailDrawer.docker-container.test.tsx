@@ -326,6 +326,9 @@ describe('ResourceDetailDrawer for Docker containers', () => {
       />
     ));
 
+    // The header dot agrees with the row: running but unhealthy is red, not green.
+    const dot = screen.getByRole('img', { name: 'Unhealthy' });
+    expect(dot).toHaveClass('bg-red-500');
     const runtime = screen.getByTestId('resource-runtime-context-section');
     expect(within(runtime).getByText('Running')).toBeInTheDocument();
     // The failing check is lifted into Worth checking, in front of the charts.
@@ -357,6 +360,8 @@ describe('ResourceDetailDrawer for Docker containers', () => {
       />
     ));
 
+    // A failed exit is red in the header, and its stale health check says nothing.
+    expect(screen.getByRole('img', { name: 'Exited (1)' })).toHaveClass('bg-red-500');
     const runtime = screen.getByTestId('resource-runtime-context-section');
     const lifted = screen.getByTestId('resource-drawer-exceptions');
     expect(within(lifted).getByText('Exited (1)').closest('td')).toHaveClass('text-rose-700');

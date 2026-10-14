@@ -67,6 +67,8 @@ const observations = (mode) => [
       runtimeVersion: '27.5.1',
       image: 'nginx:latest',
       containerState: 'running',
+      // Running but failing its health check: row and drawer must both say so.
+      health: 'unhealthy',
       restartCount: 7,
       updateStatus: {
         updateAvailable: true,
@@ -371,6 +373,17 @@ const observations = (mode) => [
           const detail = page.getByTestId('resource-drawer-exceptions');
           await detail.getByText('Restarts', { exact: true }).waitFor();
           await detail.getByText('7', { exact: true }).waitFor();
+          // The drawer header dot agrees with the row's: unhealthy is red, not green.
+          const headerDot = page.getByRole('img', { name: 'Unhealthy' }).first();
+          await headerDot.waitFor();
+          const rowDot = row.locator('[title="Unhealthy"]').first();
+          const colours = await Promise.all(
+            [headerDot, rowDot].map((dot) =>
+              dot.evaluate((el) => getComputedStyle(el).backgroundColor),
+            ),
+          );
+          assert.equal(colours[0], colours[1], JSON.stringify(colours));
+          assert.match(colours[0], /^rgb\((2[0-9]{2}), ([0-9]{1,2}|1[0-2][0-9]), /);
         },
       );
       await capture('container-detail');

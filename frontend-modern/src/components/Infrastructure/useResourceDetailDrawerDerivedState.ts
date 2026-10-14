@@ -6,6 +6,7 @@ import type { ResourceVMwareMeta } from '@/types/resource';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getAgentStatusIndicator } from '@/utils/status';
+import { mapDockerContainerStatus } from '@/features/docker/dockerPageModel';
 import {
   dedupeResourceBadges,
   getInfrastructureSystemIdentityBadges,
@@ -113,7 +114,14 @@ export const useResourceDetailDrawerDerivedState = (
   const kubernetesClusterName = createMemo(() => getPreferredResourceClusterName(resource()) ?? '');
   const resolveResourceLabel = (resourceId: string): string =>
     resolveResourceLabelInput?.(resourceId)?.trim() || resourceId;
-  const statusIndicator = createMemo(() => getAgentStatusIndicator({ status: resource().status }));
+  // A container's dot reads its run state and health check, the same mapper
+  // its table row uses, so a running but unhealthy container is not green here
+  // while red in the row above.
+  const statusIndicator = createMemo(() =>
+    resource().type === 'app-container'
+      ? mapDockerContainerStatus(resource())
+      : getAgentStatusIndicator({ status: resource().status }),
+  );
   const healthIssue = createMemo(() => getResourceHealthIssuePresentation(resource()));
   // An open drawer keeps its rows while a resource's timestamps stay the same,
   // which is exactly when a silent resource's Last seen must keep aging, so
