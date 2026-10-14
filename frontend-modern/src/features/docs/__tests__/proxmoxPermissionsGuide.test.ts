@@ -134,13 +134,18 @@ describe('shipped Proxmox permission diagnosis', () => {
       'not evidence that Windows filesystem collection needs VM.GuestAgent.FileRead',
     );
     expect(
-      article.querySelector('a[href="/docs/VM_DISK_MONITORING#windows-readings-after-a-pulse-restart"]'),
+      article.querySelector(
+        'a[href="/docs/VM_DISK_MONITORING#windows-readings-after-a-pulse-restart"]',
+      ),
     ).not.toBeNull();
     expect(article.querySelector('#windows-readings-after-a-pulse-restart')).not.toBeNull();
   });
 
   it('explains the Windows restart state without diagnosing agent failure or recovery', () => {
-    const content = section(renderGuide('VM_DISK_MONITORING'), 'windows-readings-after-a-pulse-restart');
+    const content = section(
+      renderGuide('VM_DISK_MONITORING'),
+      'windows-readings-after-a-pulse-restart',
+    );
     const text = prose(content);
     expect(text).toContain('agent-cooldown');
     expect(text).toContain("describes Pulse's deferred collection");
@@ -152,7 +157,10 @@ describe('shipped Proxmox permission diagnosis', () => {
   });
 
   it('offers existing Windows or agent readings without new probes, privilege or state churn', () => {
-    const content = section(renderGuide('VM_DISK_MONITORING'), 'windows-readings-after-a-pulse-restart');
+    const content = section(
+      renderGuide('VM_DISK_MONITORING'),
+      'windows-readings-after-a-pulse-restart',
+    );
     const text = prose(content);
     expect(text).toContain("Windows' own filesystem view");
     expect(text).toContain('same guest identity, filesystem and observation time');
@@ -161,8 +169,13 @@ describe('shipped Proxmox permission diagnosis', () => {
     expect(text).toContain('clear a cooldown, or install, remove or restart either agent');
     expect(text).toContain('do not collect them again');
     expect(text).toContain('these interim views do not prove thaw or successful writes');
-    for (const fragment of ['use-existing-machines-readings-without-changing-the-guest', 'backup-safety']) {
-      expect(content.querySelector(`a[href="/docs/VM_DISK_MONITORING#${fragment}"]`)).not.toBeNull();
+    for (const fragment of [
+      'use-existing-machines-readings-without-changing-the-guest',
+      'backup-safety',
+    ]) {
+      expect(
+        content.querySelector(`a[href="/docs/VM_DISK_MONITORING#${fragment}"]`),
+      ).not.toBeNull();
       expect(renderGuide('VM_DISK_MONITORING').querySelector(`#${fragment}`)).not.toBeNull();
     }
   });
