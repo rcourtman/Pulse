@@ -118,6 +118,65 @@ describe('NodeModalMonitoringSection collection safety', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('gives VM collection a concise name and the full independent-recovery precaution', () => {
+    const { fetch } = renderMonitoring();
+    const vms = screen.getByRole('checkbox', { name: 'Virtual machines', exact: true });
+    const precaution = screen.getByRole('note', { name: 'Guest-agent backup precaution' });
+    // Refer to the warning text, not the named note: its accessible name would
+    // replace the actual recovery instructions in the browser description.
+    const warning = within(precaution).getByText(/^Guest-agent reads share the channel/);
+    const help = screen.getByText(/^VM state and resource usage/);
+    expect(vms).toHaveAccessibleDescription(`${help.textContent} ${precaution.textContent}`);
+    expect(vms.getAttribute('aria-describedby')?.split(' ')).toContain(warning.id);
+    fireEvent.click(vms);
+    expect(vms).not.toBeChecked();
+    expect(vms).toHaveAccessibleDescription(`${help.textContent} ${precaution.textContent}`);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Containers', 'LXC container state and resource usage.'],
+    ['Storage', 'Per-storage capacity, status, and content type breakdown.'],
+    ['Backups', 'vzdump schedules and recent backup activity.'],
+  ])('keeps %s help distinct from the VM guest-agent precaution', (name, description) => {
+    renderMonitoring();
+    const collector = screen.getByRole('checkbox', { name, exact: true });
+    expect(collector).toHaveAccessibleDescription(description);
+    const precaution = screen.getByRole('note', { name: 'Guest-agent backup precaution' });
+    const warning = within(precaution).getByText(/^Guest-agent reads share the channel/);
+    expect(collector.getAttribute('aria-describedby')?.split(' ')).not.toContain(warning.id);
+    fireEvent.click(screen.getByText(name, { exact: true }));
+    expect(collector).not.toBeChecked();
+  });
+
+  it('exposes the drive-standby warning before and after changing SMART collection', () => {
+    const { fetch } = renderMonitoring();
+    const warning = 'This will spin up idle HDDs. Leave disabled if you rely on drive standby.';
+    const enable = screen.getByRole('button', { name: 'Enable physical disk monitoring' });
+    expect(enable).toHaveAttribute('aria-pressed', 'false');
+    expect(enable).toHaveAccessibleDescription(warning);
+    fireEvent.click(enable);
+    const disable = screen.getByRole('button', { name: 'Disable physical disk monitoring' });
+    expect(disable).toHaveAttribute('aria-pressed', 'true');
+    expect(disable).toHaveAccessibleDescription(warning);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps safety descriptions local to each mounted editor', () => {
+    renderMonitoring();
+    renderMonitoring();
+    const scopes = screen.getAllByRole('region', { name: 'Collection scope' });
+    const ids = scopes.map((scope) => {
+      const editor = within(scope);
+      const vms = editor.getByRole('checkbox', { name: 'Virtual machines', exact: true });
+      const precaution = editor.getByRole('note', { name: 'Guest-agent backup precaution' });
+      const warning = within(precaution).getByText(/^Guest-agent reads share the channel/);
+      expect(vms.getAttribute('aria-describedby')?.split(' ')).toContain(warning.id);
+      return warning.id;
+    });
+    expect(new Set(ids).size).toBe(2);
+  });
+
   it.each(['pbs', 'pmg'] as const)('does not imply %s makes QEMU guest-agent reads', (nodeType) => {
     const { fetch } = renderMonitoring(nodeType);
     expect(
