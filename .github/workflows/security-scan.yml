@@ -426,6 +426,8 @@ jobs:
         include:
           - name: root tooling
             directory: '.'
+          - name: issue metadata tooling
+            directory: '.github/scripts'
           - name: product frontend
             directory: 'frontend-modern'
           - name: account frontend
