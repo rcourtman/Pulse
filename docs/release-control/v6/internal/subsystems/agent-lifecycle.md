@@ -9909,6 +9909,21 @@ reference route checks cover caller filtering and the documented authority.
 Final-source checks must retain this upstream behavior beside the reviewed
 reporting/help repairs; source proof is not installed credential recovery.
 
+### Connected systems open the page that shows their data (14 October 2026)
+
+Settings > Infrastructure listed a connected PBS as Active, but its servers
+appear under Proxmox > Backups, and a user could not find them (#2905).
+Each connected API system's name now links to the page that shows its data:
+Proxmox VE to the Proxmox overview, PBS to Proxmox > Backups, Mail Gateway to
+Proxmox > Mail Gateway, vCenter to vSphere, TrueNAS to TrueNAS, and Docker or
+Kubernetes connections to their pages. `infrastructureRowMonitoringPath`
+in `connectionsTableModel.ts` owns the mapping. Agent hosts and availability
+checks get no link: an agent host appears on Proxmox, Machines or Kubernetes
+depending on what it runs, so a fixed destination would often be wrong. The
+link is underlined at rest, because touch users have no hover hint, and it
+does not depend on edit rights or read-only mode; Manage still owns
+connection settings.
+
 ### PVE guest-cycle publication and independent agents (12 October 2026)
 
 Ending a PVE connection/runtime cancels its in-flight guest collection and rejects

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "6f7926fddfe04fa697be686c483dc1c0acdd0ec1",
+  "verified_at": "2026-10-14T17:25:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "6945af1729145ebc486be7a5400686299db487b47390a67f2fa0f473a54c8d2a",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts": "8bb363a094a4055882d795ea069be02e67ff07b1e4ee97bdf50ddd917a704c70"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/truenas/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "embedded production build of origin/main plus this change, private mock stack (PULSE_MOCK_MODE: Lab vCenter, Archive NAS and 14 agent hosts as connected systems), compared with an unchanged origin/main build where every name is plain text and rows offer only Manage",
+    "1440px dark and light: Lab vCenter and Archive NAS names render blue with a resting underline, linking to /vmware/overview and /truenas/overview; agent host names stay plain; badges, member toggle and Actions column unchanged",
+    "375px light: the connected-system cards show Archive NAS as an underlined blue link and agent cards as plain names",
+    "mock data has no Proxmox VE, PBS or Mail Gateway connection rows; their mappings are covered by unit and component tests",
+    "no console errors"
+  ],
+  "interactions": [
+    "1440px: real click on Archive NAS navigates in-app to /truenas/overview (no page reload; a window marker survived) and browser Back returns to /settings/infrastructure"
+  ]
+}
