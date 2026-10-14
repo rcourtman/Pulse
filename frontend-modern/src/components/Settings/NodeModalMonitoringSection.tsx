@@ -11,6 +11,7 @@ import {
   labelClass,
 } from '@/components/shared/Form';
 import { TogglePrimitive } from '@/components/shared/Toggle';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import {
   getNodeMonitoringCoverageCopy,
   getTemperatureMonitoringLockedCopy,
@@ -75,7 +76,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
       </Show>
 
       <Show when={modalProps.nodeType === 'pve'}>
-        <div class="space-y-3">
+        <section aria-label="Collection scope" class="space-y-3">
           <SectionHeader
             title="Collection scope"
             size="sm"
@@ -83,11 +84,17 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             titleClass="text-base-content"
           />
           <p class="text-sm text-muted">
-            Pulse tracks all supported Proxmox VE resources by default — virtual machines,
-            containers, storage, and backups — so you always get full visibility without extra
-            configuration. Disable individual collectors below to reduce API load or trim workload
-            noise.
+            Choose which resources Pulse collects from this Proxmox VE connection. Guest details
+            depend on guest-agent availability and permissions. Some readings can be unavailable or
+            temporarily deferred.
           </p>
+          <InlineNotice tone="warning" role="note" aria-label="Guest-agent backup precaution">
+            Guest-agent reads share the channel used by freeze-enabled backups. If a guest becomes
+            unresponsive around a backup, stop Pulse monitoring and leave it stopped until
+            independent checks confirm thaw and writes to every filesystem covered by the backup. Do
+            not run live diagnostics or restart the guest agent during the incident. An OK backup or
+            a running VM does not prove recovery.
+          </InlineNotice>
 
           <label class="flex items-start gap-2 text-sm text-base-content">
             <input
@@ -99,7 +106,8 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             <div>
               <div>Virtual machines</div>
               <p class="text-xs text-muted mt-1">
-                QEMU guest state, resource usage, and per-VM metrics.
+                VM state and resource usage. Guest memory and filesystem details depend on available
+                guest-agent readings.
               </p>
             </div>
           </label>
@@ -146,7 +154,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
               <p class="text-xs text-muted mt-1">vzdump schedules and recent backup activity.</p>
             </div>
           </label>
-        </div>
+        </section>
 
         <div class="space-y-4">
           <SectionHeader
