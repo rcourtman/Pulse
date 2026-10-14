@@ -85,6 +85,9 @@ jobs:
       - name: Check shipped docs before dependency work
         run: python3 scripts/check_docs_mirror.py
 
+      - name: Validate browser receipt-only CI admission
+        run: python3 scripts/tests/test_ci_browser_proof_only.py
+
       - name: Classify changed files
         id: filter
         run: |
@@ -99,6 +102,17 @@ jobs:
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "frontend_deps=true" >> "$GITHUB_OUTPUT"
             echo "go_compile=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Receipts change evidence, not the application. Keep the per-push
+          # secret scan and Canonical Governance (including receipt validation).
+          # The complete tree diff must be receipt-only; mixed source or graph
+          # changes and an unavailable diff never enter this path.
+          if [ "$(python3 scripts/ci_browser_proof_only.py --base "$base" --head "${{ github.sha }}")" = true ]; then
+            echo "Browser receipt-only tree diff; runtime checks are not applicable."
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "frontend_deps=false" >> "$GITHUB_OUTPUT"
+            echo "go_compile=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           changed=$(git diff --name-only "$base" "${{ github.sha }}")

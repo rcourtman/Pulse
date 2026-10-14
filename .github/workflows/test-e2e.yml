@@ -18,6 +18,8 @@ on:
       - 'scripts/tests/test_e2e_test_images.py'
       - 'scripts/collect_e2e_container_logs.py'
       - 'scripts/tests/test_e2e_container_logs.py'
+      - 'scripts/ci_browser_proof_only.py'
+      - 'scripts/tests/test_ci_browser_proof_only.py'
   push:
     branches:
       - main
@@ -36,6 +38,8 @@ on:
       - 'scripts/tests/test_e2e_test_images.py'
       - 'scripts/collect_e2e_container_logs.py'
       - 'scripts/tests/test_e2e_container_logs.py'
+      - 'scripts/ci_browser_proof_only.py'
+      - 'scripts/tests/test_ci_browser_proof_only.py'
   workflow_dispatch:
 
 # Let branch runs finish so busy main and release branches retain verdicts.
@@ -49,8 +53,39 @@ permissions:
   contents: read
 
 jobs:
+  scope:
+    name: Detect browser receipt-only changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      proof_only: ${{ steps.diff.outputs.proof_only }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Check shipped docs before dependency work
+        run: python3 scripts/check_docs_mirror.py
+
+      - name: Validate browser receipt-only CI admission
+        run: python3 scripts/tests/test_ci_browser_proof_only.py
+
+      - name: Read the complete tree diff
+        id: diff
+        env:
+          DIFF_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          DIFF_HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          proof_only=$(python3 scripts/ci_browser_proof_only.py --base "$DIFF_BASE" --head "$DIFF_HEAD")
+          echo "proof_only=$proof_only" >> "$GITHUB_OUTPUT"
+
   tier-selection:
     name: Validate E2E tier selection
+    needs: scope
+    if: needs.scope.outputs.proof_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -103,6 +138,8 @@ jobs:
 
   offline-org-provisioning:
     name: Offline Organization provisioning
+    needs: scope
+    if: needs.scope.outputs.proof_only != 'true'
     # Fixture acceptance only, not quarantine promotion or private RBAC proof.
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -518,6 +555,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     needs:
+      - scope
       - tier-selection
       - test-images
       - e2e
@@ -530,7 +568,29 @@ jobs:
       # this verdict. Mechanism and promotion rule: PROBATION_SPECS in
       # tests/integration/e2e-tiering.mjs.
       - name: Check E2E results
+        env:
+          PROOF_ONLY: ${{ needs.scope.outputs.proof_only }}
         run: |
+          if [ "${{ needs.scope.result }}" != "success" ]; then
+            echo "E2E change-scope admission did not pass."
+            exit 1
+          fi
+          if [ "$PROOF_ONLY" = "true" ]; then
+            # A skip is not a test pass. Require the expected all-skipped
+            # topology; never use a receipt to clear a failed runtime job.
+            for result in "${{ needs.tier-selection.result }}" "${{ needs.test-images.result }}" "${{ needs.e2e.result }}" "${{ needs.agent-registration.result }}"; do
+              if [ "$result" != "skipped" ]; then
+                echo "Unexpected runtime result for a browser receipt-only diff: $result"
+                exit 1
+              fi
+            done
+            echo "Browser receipt-only tree diff; runtime E2E is not applicable. Canonical Governance still validates evidence."
+            exit 0
+          fi
+          if [ "$PROOF_ONLY" != "false" ]; then
+            echo "E2E change scope is unknown; no runtime success is established."
+            exit 1
+          fi
           if [ "${{ needs.tier-selection.result }}" != "success" ]; then
             echo "E2E tier selection is invalid (result: ${{ needs.tier-selection.result }})"
             exit 1
