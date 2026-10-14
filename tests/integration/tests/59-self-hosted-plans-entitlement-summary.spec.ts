@@ -289,7 +289,7 @@ test.describe('Self-hosted plans entitlement summary', () => {
       'Users',
       'Audit Log',
       'Audit Webhooks',
-      'Remote Access',
+      'Pulse Mobile',
     ]) {
       await expect(settingsNav.getByText(label, { exact: true })).toBeVisible();
     }

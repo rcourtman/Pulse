@@ -37,9 +37,16 @@ test.describe("Operational trust protection posture", () => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await ensureAuthenticated(page);
     await openDesktopProxmoxBackups(page);
-    const coverageButton = page.getByRole("button", { name: "Coverage" });
-    await expect(coverageButton).toBeVisible({ timeout: 60_000 });
-    await coverageButton.click();
+    const coverageLink = page
+      .getByRole("navigation", { name: "Backup views" })
+      .getByRole("link", { name: "Coverage", exact: true });
+    await expect(coverageLink).toBeVisible({ timeout: 60_000 });
+    await expect(coverageLink).toHaveAttribute(
+      "href",
+      "/proxmox/backups/coverage",
+    );
+    await coverageLink.click();
+    await expect(page).toHaveURL(/\/proxmox\/backups\/coverage$/);
 
     const coverageTable = page
       .locator("div.overflow-x-auto")
@@ -82,9 +89,16 @@ test.describe("Operational trust protection posture", () => {
 
     await ensureAuthenticated(page);
     await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
-    const coverageButton = page.getByRole("button", { name: "Coverage" });
-    await expect(coverageButton).toBeVisible({ timeout: 60_000 });
-    await coverageButton.click();
+    const coverageLink = page
+      .getByRole("navigation", { name: "Backup views" })
+      .getByRole("link", { name: "Coverage", exact: true });
+    await expect(coverageLink).toBeVisible({ timeout: 60_000 });
+    await expect(coverageLink).toHaveAttribute(
+      "href",
+      "/proxmox/backups/coverage",
+    );
+    await coverageLink.click();
+    await expect(page).toHaveURL(/\/proxmox\/backups\/coverage$/);
     await expect(page.locator('th:has-text("Posture")').first()).toBeVisible();
 
     const viewport = await page.evaluate(() => ({
