@@ -52,14 +52,6 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                 <div class="min-w-0">
                   <div class="flex items-center gap-1.5 text-sm text-base-content">
                     <span class="truncate">{endpoint.displayName || endpoint.nodeName}</span>
-                    <Show when={endpoint.pulseReachable === false}>
-                      <span
-                        class="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/25 dark:text-amber-300"
-                        title={endpoint.pulseError || 'Pulse could not connect to this node'}
-                      >
-                        Unreachable
-                      </span>
-                    </Show>
                   </div>
                   <Show when={endpoint.displayName}>
                     <div class="truncate text-xs text-muted" title={endpoint.nodeName}>
@@ -69,6 +61,17 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                   <div class="truncate text-xs text-muted" title={discoveredAddress(endpoint)}>
                     Discovered: {discoveredAddress(endpoint)}
                   </div>
+                  <Show when={endpoint.pulseReachable === false}>
+                    <details class="mt-2 rounded-md bg-amber-100 text-xs text-amber-800 dark:bg-amber-950/25 dark:text-amber-300">
+                      <summary class="min-h-11 cursor-pointer rounded-md px-3 py-3 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 dark:focus-visible:outline-amber-300">
+                        Unreachable — details
+                        <span class="sr-only"> for {endpoint.nodeName}</span>
+                      </summary>
+                      <p class="break-words whitespace-pre-wrap px-3 pb-3 pt-1">
+                        {endpoint.pulseError || 'Pulse could not connect to this node'}
+                      </p>
+                    </details>
+                  </Show>
                 </div>
                 <div class="grid gap-2">
                   <label class="grid gap-1 text-xs text-muted">
