@@ -65,7 +65,7 @@ describe('GitHubStarBanner', () => {
   it('stays quiet without connected infrastructure', async () => {
     await renderBanner();
 
-    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
     expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('0');
   });
 
@@ -75,7 +75,7 @@ describe('GitHubStarBanner', () => {
 
     await renderBanner();
 
-    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
     expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('0');
   });
 
@@ -86,7 +86,7 @@ describe('GitHubStarBanner', () => {
 
     await waitFor(() => expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('1'));
     expect(localStorage.getItem(LAST_ACTIVE_DATE_KEY)).toBe('2026-03-14');
-    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
   });
 
   it('does not count repeated sessions on the same day', async () => {
@@ -97,7 +97,7 @@ describe('GitHubStarBanner', () => {
     await renderBanner();
 
     expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('1');
-    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
   });
 
   it('shows one compact prompt on the first return day with connected infrastructure', async () => {
@@ -107,10 +107,12 @@ describe('GitHubStarBanner', () => {
     await renderBanner();
 
     await waitFor(() => {
-      expect(screen.getByText('Finding Pulse useful?')).toBeInTheDocument();
+      expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument();
     });
     expect(
-      screen.getByText('Starring the project on GitHub helps others discover it.'),
+      screen.getByText(
+        'If Pulse is useful to you, a GitHub star helps others discover it and shows your support for the project.',
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText('Star on GitHub')).toBeInTheDocument();
     expect(screen.queryByText('Maybe later')).not.toBeInTheDocument();
@@ -126,7 +128,7 @@ describe('GitHubStarBanner', () => {
 
     await renderBanner();
 
-    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
   });
 
   it('stays quiet when another low-priority notice owns the session', async () => {
@@ -137,7 +139,7 @@ describe('GitHubStarBanner', () => {
     await renderBanner();
 
     await waitFor(() => expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('2'));
-    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
     expect(localStorage.getItem(PROMPT_SHOWN_KEY)).not.toBe('true');
   });
 
@@ -146,12 +148,12 @@ describe('GitHubStarBanner', () => {
     setResourceCount(3);
 
     await renderBanner();
-    await waitFor(() => expect(screen.getByText('Finding Pulse useful?')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument());
 
     fireEvent.click(screen.getByLabelText("Close and don't show again"));
 
     await waitFor(() => {
-      expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+      expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
     });
     expect(localStorage.getItem(DISMISSED_KEY)).toBe('true');
 
@@ -160,7 +162,7 @@ describe('GitHubStarBanner', () => {
     vi.setSystemTime(new Date('2026-03-15T12:00:00Z'));
     await renderBanner();
 
-    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
   });
 
   it('yields a visible prompt to a blocking dialog for the rest of the session', async () => {
@@ -183,14 +185,14 @@ describe('GitHubStarBanner', () => {
       );
     });
 
-    await waitFor(() => expect(screen.getByText('Finding Pulse useful?')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument());
     openDialog();
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
   });
 
   it('opens GitHub and permanently dismisses on the star action', async () => {
