@@ -117,6 +117,15 @@ type auth struct {
 
 // NewClient creates a new PBS API client
 func NewClient(cfg ClientConfig) (*Client, error) {
+	return NewClientWithContext(context.Background(), cfg)
+}
+
+// NewClientWithContext binds initial password authentication to its caller.
+// Later polling remains independent of this construction context.
+func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// Normalize host URL - ensure it has a protocol
 	defaultedScheme := !strings.HasPrefix(cfg.Host, "http://") && !strings.HasPrefix(cfg.Host, "https://")
 	if defaultedScheme {
@@ -205,9 +214,14 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 
 	// Authenticate if using password
 	if cfg.Password != "" && cfg.TokenName == "" {
-		if err := client.authenticate(context.Background()); err != nil {
+		if err := client.authenticate(ctx); err != nil {
+			httpClient.CloseIdleConnections()
 			return nil, fmt.Errorf("authentication failed: %w", err)
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		httpClient.CloseIdleConnections()
+		return nil, err
 	}
 
 	return client, nil

@@ -17,6 +17,37 @@
 
 ## Purpose
 
+### Proxmox recovery sessions honour the owning caller
+
+PVE/PBS context-aware constructors bind initial password login, including the
+existing JSON/form fallback, to the initiating context. Cluster selection,
+first-use pinned retry, synchronous construction and unhealthy-member recovery
+carry that context through both the short probe and the retained polling
+session. The six-second background recovery budget also bounds construction;
+ending a caller is neither a credential refusal nor successful recovery.
+Cancelled selection/recovery preserves prior errors and does not install a
+partial or nil client. Startup retry exits without publishing a new health
+outcome or advancing another provider after its monitor stops. Discarded probe
+transports close their idle connections.
+
+The compatibility constructors retain their background-context behaviour.
+Accepted clients retain their configured full timeout, and subsequent ordinary
+reads use their own contexts, not the ended construction context. TLS pins,
+CA verification, redirects, first-use admission, auth encodings, retry cadence,
+provider permissions, guest/backup fences and History are unchanged.
+
+`TestClientConstructionHonoursContext` in both client packages covers ended
+password/token construction, in-flight JSON/form cancellation/deadlines,
+independent later reads and wrong-pin refusal. Cluster caller-budget controls
+cover selection/recovery at first login, probe and full login, then trusted
+ordinary recovery. Startup cancellation covers PVE, PBS and multi-endpoint
+cluster construction. The connected PBS first-poll control emits the actual
+broadcast for desktop/phone consumption: cancellation cannot turn an offline
+server healthy, and accepted construction alone still cannot do so. These are
+secret-free local fixtures, not installed recovery, native guest safety or an
+attribution of any reporter's failure.
+
+
 ### Cluster recovery requires a usable polling session
 
 A short endpoint probe cannot establish successful recovery until the client

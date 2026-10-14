@@ -78,3 +78,8 @@ func TestClientAcceptedHostDiagnosticsRemainUseful(t *testing.T) {
 		}
 	}
 }
+
+// Initial authentication must obey the same caller lifetime as ordinary reads.
+func TestClientConstructionHonoursContext(t *testing.T) {
+	testClientConstructionHonoursContext(t)
+}

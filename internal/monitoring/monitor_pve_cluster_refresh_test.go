@@ -413,3 +413,12 @@ func TestClusterEndpointIdentityChanged(t *testing.T) {
 		t.Fatal("an added node must count as an identity change")
 	}
 }
+
+// Retry admission and first-poll health must not outlive the owning monitor.
+func TestStartupClientConstructionHonoursCancellation(t *testing.T) {
+	testStartupClientConstructionHonoursCancellation(t)
+}
+
+func TestPBSStartupCancellationKeepsFirstPollBoundary(t *testing.T) {
+	testPBSStartupCancellationKeepsFirstPollBoundary(t)
+}

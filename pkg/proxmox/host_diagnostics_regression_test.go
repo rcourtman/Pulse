@@ -157,3 +157,16 @@ func TestClusterDiagnosticHealthSnapshotKeepsEveryEndpoint(t *testing.T) {
 		t.Error("display snapshot lost endpoint status observations")
 	}
 }
+
+// Initial authentication must obey the same caller lifetime as ordinary reads.
+func TestClientConstructionHonoursContext(t *testing.T) {
+	testClientConstructionHonoursContext(t)
+}
+
+func TestClusterCancelledCallerStartsNoSession(t *testing.T) {
+	testClusterCancelledCallerStartsNoSession(t)
+}
+
+func TestClusterSessionConstructionHonoursCallerBudget(t *testing.T) {
+	testClusterSessionConstructionHonoursCallerBudget(t)
+}

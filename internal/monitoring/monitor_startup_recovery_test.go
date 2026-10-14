@@ -32,7 +32,7 @@ func TestConnectionRetrySurvivesLongStartupOutage(t *testing.T) {
 		m := &Monitor{config: &config.Config{PVEInstances: []config.PVEInstance{instance}, ConnectionTimeout: 3 * time.Second}, pveClients: make(map[string]PVEClientInterface), pbsClients: make(map[string]*pbs.Client), state: models.NewState()}
 		started := time.Now()
 		var attempts []time.Duration
-		newProxmoxClientFunc = func(cfg proxmox.ClientConfig) (PVEClientInterface, error) {
+		newProxmoxClientFunc = func(_ context.Context, cfg proxmox.ClientConfig) (PVEClientInterface, error) {
 			want := config.CreateProxmoxConfig(&instance)
 			want.Timeout = 3 * time.Second
 			if !reflect.DeepEqual(cfg, want) {
@@ -66,7 +66,7 @@ func TestConnectionRetryLongOutageStopsOnCancellation(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		m := &Monitor{config: &config.Config{PVEInstances: []config.PVEInstance{{Name: "still-unavailable", Host: "https://pve.local:8006"}}}, pveClients: make(map[string]PVEClientInterface), pbsClients: make(map[string]*pbs.Client), state: models.NewState()}
 		calls := 0
-		newProxmoxClientFunc = func(proxmox.ClientConfig) (PVEClientInterface, error) {
+		newProxmoxClientFunc = func(context.Context, proxmox.ClientConfig) (PVEClientInterface, error) {
 			calls++
 			return nil, fmt.Errorf("fixture provider still unavailable")
 		}
@@ -85,7 +85,7 @@ func TestConnectionRetryDoesNotResumePausedConnections(t *testing.T) {
 	defer func() { newProxmoxClientFunc = original }()
 	synctest.Test(t, func(t *testing.T) {
 		m := &Monitor{config: &config.Config{PVEInstances: []config.PVEInstance{{Name: "paused-pve", Disabled: true}}, PBSInstances: []config.PBSInstance{{Name: "paused-pbs", Disabled: true, Host: "://invalid"}}}, pveClients: make(map[string]PVEClientInterface), pbsClients: make(map[string]*pbs.Client), state: models.NewState()}
-		newProxmoxClientFunc = func(proxmox.ClientConfig) (PVEClientInterface, error) {
+		newProxmoxClientFunc = func(context.Context, proxmox.ClientConfig) (PVEClientInterface, error) {
 			t.Fatal("retry attempted a paused connection")
 			return nil, nil
 		}

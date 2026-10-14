@@ -317,6 +317,15 @@ type auth struct {
 
 // NewClient creates a new Proxmox VE API client
 func NewClient(cfg ClientConfig) (*Client, error) {
+	return NewClientWithContext(context.Background(), cfg)
+}
+
+// NewClientWithContext binds initial password authentication to its caller.
+// The retained client's later reads keep their own contexts and full timeout.
+func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var user, realm string
 
 	// For token authentication, we don't need user@realm format
@@ -410,9 +419,14 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 
 	// Authenticate if using password
 	if cfg.Password != "" && cfg.TokenName == "" {
-		if err := client.authenticate(context.Background()); err != nil {
+		if err := client.authenticate(ctx); err != nil {
+			httpClient.CloseIdleConnections()
 			return nil, fmt.Errorf("authentication failed: %w", err)
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		httpClient.CloseIdleConnections()
+		return nil, err
 	}
 
 	return client, nil

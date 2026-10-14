@@ -179,6 +179,17 @@ func sanitizeEndpointError(errMsg string) string {
 // endpointFingerprints is an optional map of endpoint URL -> TLS fingerprint for per-node certificate verification.
 // This enables TOFU (Trust On First Use) for clusters with unique self-signed certs per node.
 func NewClusterClient(name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string) *ClusterClient {
+	cc, _ := NewClusterClientWithContext(context.Background(), name, config, endpoints, endpointFingerprints)
+	return cc
+}
+
+// NewClusterClientWithContext keeps synchronous startup checks and password
+// session construction within the caller's lifetime. Endpoint failures still
+// produce a recoverable cluster; cancellation does not publish a partial one.
+func NewClusterClientWithContext(ctx context.Context, name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string) (*ClusterClient, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// The caller may reuse configuration storage after construction. Keep live
 	// routing and first-use trust on the same membership snapshot registered for
 	// guest-command coordination, including during initial health checks.
@@ -211,9 +222,15 @@ func NewClusterClient(name string, config ClientConfig, endpoints []string, endp
 
 	// Do a quick parallel health check on initialization (synchronous to avoid race)
 	// This will mark unhealthy nodes but won't prevent trying them later
-	cc.initialHealthCheck()
+	cc.initialHealthCheck(ctx)
+	if err := ctx.Err(); err != nil {
+		for _, client := range cc.clients {
+			client.httpClient.CloseIdleConnections()
+		}
+		return nil, err
+	}
 
-	return cc
+	return cc, nil
 }
 
 // getEndpointFingerprint returns the TLS fingerprint to use for a specific endpoint.
@@ -343,7 +360,7 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 	cfg.Fingerprint = newFingerprint
 	cfg.Timeout = timeout
 
-	retryClient, err := NewClient(cfg)
+	retryClient, err := NewClientWithContext(ctx, cfg)
 	if err != nil {
 		return nil, err, true
 	}
@@ -356,7 +373,7 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 }
 
 // initialHealthCheck performs a quick parallel health check on all endpoints
-func (cc *ClusterClient) initialHealthCheck() {
+func (cc *ClusterClient) initialHealthCheck(ctx context.Context) {
 	// Skip initial health check if there's only one endpoint
 	// For single-endpoint clusters (using main host for routing), assume healthy
 	if len(cc.endpoints) == 1 {
@@ -382,7 +399,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 			cfg.Fingerprint = cc.getEndpointFingerprint(ep)
 			cfg.Timeout = 5 * time.Second
 
-			testClient, err := NewClient(cfg)
+			testClient, err := NewClientWithContext(ctx, cfg)
 			if err != nil {
 				cc.mu.Lock()
 				cc.nodeHealth[ep] = false
@@ -396,13 +413,17 @@ func (cc *ClusterClient) initialHealthCheck() {
 					Msg("Cluster endpoint marked unhealthy on initialization")
 				return
 			}
+			defer testClient.httpClient.CloseIdleConnections()
 
 			// Quick test with slightly longer timeout for initial check
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_, err = testClient.GetNodes(ctx)
+			testCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			_, err = testClient.GetNodes(testCtx)
 			cancel()
 
-			if _, retryErr, refreshed := cc.refreshTOFUFingerprintAndRetry(context.Background(), ep, 5*time.Second, err); refreshed {
+			if retryClient, retryErr, refreshed := cc.refreshTOFUFingerprintAndRetry(ctx, ep, 5*time.Second, err); refreshed {
+				if retryClient != nil {
+					defer retryClient.httpClient.CloseIdleConnections()
+				}
 				err = retryErr
 			}
 
@@ -414,7 +435,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 				fullCfg := cc.config
 				fullCfg.Host = ep
 				fullCfg.Fingerprint = cc.getEndpointFingerprint(ep)
-				fullClient, clientErr := NewClient(fullCfg)
+				fullClient, clientErr := NewClientWithContext(ctx, fullCfg)
 
 				cc.mu.Lock()
 				if clientErr != nil {
@@ -540,8 +561,14 @@ func (cc *ClusterClient) endpointHealthDiagnosticsLocked() []endpointHealthDiagn
 // member addresses are failover candidates rather than a random load-balancing
 // pool.
 func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	now := time.Now()
 	healthyEndpoints, coolingEndpoints := cc.availableEndpointsLocked(now)
@@ -596,6 +623,9 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 				defer cc.mu.Lock()
 				cc.recoverUnhealthyNodes(ctx)
 			}()
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 
 			now = time.Now()
 			healthyEndpoints, coolingEndpoints = cc.availableEndpointsLocked(now)
@@ -658,8 +688,11 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		testCfg := cfg
 		testCfg.Timeout = 3 * time.Second
 
-		testClient, err := NewClient(testCfg)
+		testClient, err := NewClientWithContext(ctx, testCfg)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			// Mark as unhealthy
 			cc.nodeHealth[selectedEndpoint] = false
 			log.Debug().
@@ -669,11 +702,15 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 				Msg("Failed to create client for cluster endpoint")
 			return nil, fmt.Errorf("failed to create client for %s: %w", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint), err)
 		}
+		defer testClient.httpClient.CloseIdleConnections()
 
 		// Connectivity test - 5 seconds to allow for TLS handshake (~3s typical)
-		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		testCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		testNodes, testErr := testClient.GetNodes(testCtx)
 		cancel()
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 
 		if testErr != nil {
 			// Check if this is a transient rate limit error that shouldn't mark the node unhealthy
@@ -717,17 +754,20 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			Int("nodes", len(testNodes)).
 			Msg("Cluster endpoint passed connectivity test")
 
-		// Clear any stale error from previous failures now that connectivity succeeded
-		delete(cc.lastError, selectedEndpoint)
-
 		// Create the actual client with full timeout
-		newClient, err := NewClient(cfg)
+		newClient, err := NewClientWithContext(ctx, cfg)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			// This shouldn't happen since we just tested it
 			cc.nodeHealth[selectedEndpoint] = false
 			return nil, fmt.Errorf("failed to create client for %s: %w", securityutil.InfrastructureEndpointDiagnostic(selectedEndpoint), err)
 		}
 
+		// A completed probe cannot clear an error until the polling session is
+		// accepted. Ending a caller is not endpoint failure or recovery evidence.
+		delete(cc.lastError, selectedEndpoint)
 		cc.clients[selectedEndpoint] = newClient
 		client = newClient
 	}
@@ -768,6 +808,9 @@ func (cc *ClusterClient) clearEndpointError(endpoint string) {
 
 // recoverUnhealthyNodes attempts to recover unhealthy nodes
 func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
 	cc.mu.RLock()
 	unhealthyEndpoints := make([]string, 0)
 	throttledEndpoints := make([]string, 0)
@@ -810,6 +853,9 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 	var failureMu sync.Mutex
 	failureReasons := make(map[string]string, len(unhealthyEndpoints))
 	recordFailure := func(ep string, err error) {
+		if ctx.Err() != nil {
+			return
+		}
 		sanitized := sanitizeEndpointError(err.Error())
 		failureMu.Lock()
 		failureReasons[ep] = sanitized
@@ -823,6 +869,9 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 		wg.Add(1)
 		go func(ep string) {
 			defer wg.Done()
+			if ctx.Err() != nil {
+				return
+			}
 
 			// Update last check time
 			cc.mu.Lock()
@@ -837,7 +886,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			cfg.Fingerprint = cc.getEndpointFingerprint(ep)
 			cfg.Timeout = 5 * time.Second
 
-			testClient, err := NewClient(cfg)
+			testClient, err := NewClientWithContext(ctx, cfg)
 			if err != nil {
 				recordFailure(ep, err)
 				log.Debug().
@@ -847,15 +896,22 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 					Msg("Failed to create client during recovery attempt")
 				return
 			}
+			defer testClient.httpClient.CloseIdleConnections()
 
 			// Try a simple API call
 			testCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			_, err = testClient.GetNodes(testCtx)
 			cancel()
 
-			if _, retryErr, refreshed := cc.refreshTOFUFingerprintAndRetry(ctx, ep, 5*time.Second, err); refreshed {
+			if retryClient, retryErr, refreshed := cc.refreshTOFUFingerprintAndRetry(ctx, ep, 5*time.Second, err); refreshed {
+				if retryClient != nil {
+					defer retryClient.httpClient.CloseIdleConnections()
+				}
 				err = retryErr
 				cfg.Fingerprint = cc.getEndpointFingerprint(ep)
+			}
+			if ctx.Err() != nil {
+				return
 			}
 
 			// Check if error is VM-specific (shouldn't prevent recovery)
@@ -865,7 +921,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 				// Store the client with original timeout
 				cfg.Timeout = cc.config.Timeout
 				cfg.Fingerprint = cc.getEndpointFingerprint(ep)
-				fullClient, clientErr := NewClient(cfg)
+				fullClient, clientErr := NewClientWithContext(ctx, cfg)
 				if clientErr != nil {
 					// A short probe is not a usable polling session. Password
 					// authentication may fail when constructing the actual client;
@@ -881,6 +937,11 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 				}
 
 				cc.mu.Lock()
+				if ctx.Err() != nil {
+					cc.mu.Unlock()
+					fullClient.httpClient.CloseIdleConnections()
+					return
+				}
 				cc.nodeHealth[ep] = true
 				delete(cc.lastError, ep)
 				cc.lastHealthCheck[ep] = time.Now()

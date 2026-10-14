@@ -78,8 +78,8 @@ func alertManagerRestoreOptions(mockEnabled bool) []alerts.ManagerOption {
 
 // newProxmoxClientFunc is a variable that holds the function to create a new Proxmox client.
 // It is used to allow mocking the client creation in tests.
-var newProxmoxClientFunc = func(cfg proxmox.ClientConfig) (PVEClientInterface, error) {
-	return proxmox.NewClient(cfg)
+var newProxmoxClientFunc = func(ctx context.Context, cfg proxmox.ClientConfig) (PVEClientInterface, error) {
+	return proxmox.NewClientWithContext(ctx, cfg)
 }
 
 // PVEClientInterface defines the interface for PVE clients (both regular and cluster)

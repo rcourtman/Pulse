@@ -103,13 +103,23 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 		// Try to recreate PVE clients
 		for _, pve := range missingPVE {
+			if ctx.Err() != nil {
+				return
+			}
 			if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
 				// Create cluster client
 				endpoints, endpointFingerprints := m.buildClusterEndpointsForReconnect(pve)
 
 				clientConfig := config.CreateProxmoxConfig(&pve)
 				clientConfig.Timeout = connectionTimeout
-				clusterClient := proxmox.NewClusterClient(pve.Name, clientConfig, endpoints, endpointFingerprints)
+				clusterClient, err := proxmox.NewClusterClientWithContext(ctx, pve.Name, clientConfig, endpoints, endpointFingerprints)
+				if ctx.Err() != nil {
+					return
+				}
+				if err != nil {
+					log.Warn().Err(err).Str("instance", pve.Name).Msg("Failed to reconnect cluster client, will retry")
+					continue
+				}
 
 				m.replacePVEClient(pve.Name, clusterClient)
 				m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
@@ -124,7 +134,10 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 			// Create regular client
 			clientConfig := config.CreateProxmoxConfig(&pve)
 			clientConfig.Timeout = connectionTimeout
-			client, err := newProxmoxClientFunc(clientConfig)
+			client, err := newProxmoxClientFunc(ctx, clientConfig)
+			if ctx.Err() != nil {
+				return
+			}
 			if err != nil {
 				log.Warn().
 					Err(err).
@@ -143,9 +156,15 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 		// Try to recreate PBS clients
 		for _, pbsInst := range missingPBS {
+			if ctx.Err() != nil {
+				return
+			}
 			clientConfig := config.CreatePBSConfig(&pbsInst)
 			clientConfig.Timeout = 60 * time.Second
-			client, err := pbs.NewClient(clientConfig)
+			client, err := pbs.NewClientWithContext(ctx, clientConfig)
+			if ctx.Err() != nil {
+				return
+			}
 			if err != nil {
 				monErr := monitorerrors.WrapConnectionError("recreate_pbs_client", pbsInst.Name, err)
 				log.Warn().

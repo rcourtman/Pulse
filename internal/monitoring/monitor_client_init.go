@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -58,7 +59,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 		// Create regular client
 		clientConfig := config.CreateProxmoxConfig(&pve)
 		clientConfig.Timeout = cfg.ConnectionTimeout
-		client, err := newProxmoxClientFunc(clientConfig)
+		client, err := newProxmoxClientFunc(context.Background(), clientConfig)
 		if err != nil {
 			monErr := errors.WrapConnectionError("create_pve_client", pve.Name, err)
 			log.Error().
