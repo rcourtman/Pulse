@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -950,17 +951,14 @@ func (c *Client) GetNodes(ctx context.Context) ([]Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Node `json:"data"`
+	// /nodes is also the cluster's startup/recovery probe. A decodable JSON
+	// prefix or absent inventory cannot establish usable polling health.
+	body, readErr := readResponseBodyLimited(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil || closeErr != nil {
+		return nil, fmt.Errorf("read Proxmox node inventory: %w", errors.Join(readErr, closeErr))
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return decodeNodeInventory(body)
 }
 
 // GetNodeStatus returns detailed status for a specific node
