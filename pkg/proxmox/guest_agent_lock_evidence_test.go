@@ -2,6 +2,7 @@ package proxmox
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -205,7 +206,11 @@ func TestGuestAgentLockEvidenceHealthyConfigAndSessionRecovery(t *testing.T) {
 // earlier case's VM-wide uncertainty. Every client within a case keeps its key.
 func lockEvidenceFixtureEndpoint(t *testing.T, serverURL string) string {
 	t.Helper()
-	return serverURL + "/lock-evidence-fixture/" + strings.ReplaceAll(t.Name(), "/", "-")
+	// Go appends #NN to repeated subtest names. Names are evidence labels,
+	// not URL syntax; a digest keeps their full identity without fragments,
+	// query parameters or ambiguous path separators.
+	identity := sha256.Sum256([]byte(t.Name()))
+	return serverURL + "/lock-evidence-fixture/" + fmt.Sprintf("%x", identity)
 }
 
 func TestGuestAgentLockEvidenceFixtureIsolation(t *testing.T) {
