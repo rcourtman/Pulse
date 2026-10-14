@@ -412,7 +412,7 @@ test("label consumer uses edited headings without changing Community-owned state
   assert.deepEqual(calls.createComment, []);
   assert.deepEqual(calls.getLatestRelease, []);
   assert.deepEqual(calls.paginate, []);
-  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2900]);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2900, 2900]);
 });
 
 test("invalid headings cannot create classification or decomposition mutations", async () => {
@@ -588,7 +588,7 @@ test("syncLabels preserves visible fields after inline HTML without new contact"
     assert.deepEqual(calls.createComment, []);
     assert.deepEqual(calls.getLatestRelease, []);
     assert.deepEqual(calls.paginate, []);
-    assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2808]);
+    assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2808, 2808]);
   }
 });
 
@@ -606,7 +606,7 @@ test("syncLabels consumes real fields after pasted HTML without contact or state
   assert.deepEqual(calls.createComment, []);
   assert.deepEqual(calls.getLatestRelease, []);
   assert.deepEqual(calls.paginate, []);
-  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2801]);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2801, 2801]);
 });
 
 test("a hidden hint or empty topic field is not an actionable declaration", () => {
@@ -633,7 +633,7 @@ test("syncLabels surfaces newly added later-line topics without resetting Commun
     assert.deepEqual(calls.createComment, []);
     assert.deepEqual(calls.getLatestRelease, []);
     assert.deepEqual(calls.paginate, []);
-    assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2800]);
+    assert.deepEqual(calls.getIssue.map(call => call.issue_number), action === "reopened" ? [2800] : [2800, 2800]);
   }
 });
 
@@ -1334,7 +1334,7 @@ test("delayed events classify the current report and labels, not an old version"
   const { github, calls } = createGithub({ currentIssue });
   await syncLabels({ github, context: createContext({ issue: eventIssue }), core: createCore() });
 
-  assert.deepEqual(calls.getIssue, [{ owner: "rcourtman", repo: "Pulse", issue_number: 2800 }]);
+  assert.deepEqual(calls.getIssue, Array(2).fill({ owner: "rcourtman", repo: "Pulse", issue_number: 2800 }));
   assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
   assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
   assert.equal(calls.getLatestRelease.length, 0);
@@ -1478,7 +1478,7 @@ test("the actual label consumer keeps copied declarations from changing report o
   assert.deepEqual(calls.createComment, []);
   assert.deepEqual(calls.getLatestRelease, []);
   assert.deepEqual(calls.paginate, []);
-  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2902]);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2902, 2902]);
 });
 
 
@@ -1514,4 +1514,118 @@ test("the standalone triage graph reuses the existing exact parser without trans
   assert.equal(parser.hasInstallScript, undefined);
   assert.equal(parser.dependencies, undefined);
   assert.equal(parser.optionalDependencies, undefined);
+});
+
+
+// Exercise the real mutation consumer, not just its Markdown classifier. A
+// successful first read cannot authorize a stale write after label preparation.
+for (const [scenario, changes] of [
+  ["closure", { state: "closed" }],
+  ["body correction", { body: "### Pulse version\n6.6.0\n" }],
+  ["title correction", { title: "Corrected report" }],
+  ["review activity", { updated_at: "2026-10-14T10:01:00Z" }],
+  ["classification removal", { labels: [] }],
+  ["human ownership", { labels: [{ name: "bug" }, { name: "needs-human" }] }],
+  ["pull request", { pull_request: {} }],
+]) {
+  test(`label preparation cannot outlive a report's ${scenario}`, async () => {
+    const issue = {
+      number: 2910, state: "open", title: "Current bug",
+      body: "### Pulse version\n6.5.0\n### Additional actionable topics\nA separate History problem\n",
+      updated_at: "2026-10-14T10:00:00Z",
+      labels: ["bug", "affects-6.4.5", "needs-version-info"].map(name => ({ name })),
+    };
+    const { github, calls } = createGithub({ currentIssue: structuredClone(issue) });
+    const read = github.rest.issues.get;
+    github.rest.issues.get = async payload => ({ data: structuredClone((await read(payload)).data) });
+    github.rest.issues.getLabel = async ({ name }) => {
+      calls.getLabel.push(name);
+      github.currentIssue = { ...github.currentIssue, ...structuredClone(changes) };
+      return { data: { name } };
+    };
+    const messages = [];
+    await syncLabels({ github, context: createContext({ issue }), core: { info: text => messages.push(text) } });
+    assert.equal(calls.getIssue.length, 2);
+    assert.equal(calls.addLabels.length, 0);
+    assert.equal(calls.removeLabel.length, 0);
+    assert.equal(calls.createComment.length, 0);
+    assert.equal(calls.getLatestRelease.length, 0);
+    assert.equal(calls.paginate.length, 0);
+    assert.ok(messages.includes("Issue changed during metadata preparation. Skipping outdated label delta."));
+  });
+}
+
+test("a non-bug classification also requires a current report before its write", async () => {
+  const issue = { number: 2911, state: "open", title: "Feedback", labels: [],
+    body: "### Feedback type\nDocumentation issue\n" };
+  const { github, calls } = createGithub({ currentIssue: issue });
+  const read = github.rest.issues.get;
+  github.rest.issues.get = async payload => {
+    const result = await read(payload);
+    return { data: calls.getIssue.length === 1 ? result.data : { ...issue, state: "closed" } };
+  };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.getIssue.length, 2);
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
+});
+
+for (const status of [403, 404, 500]) {
+  test(`a failed pre-write read (${status}) cannot use the initial snapshot`, async () => {
+    const issue = { number: 2912, state: "open", title: "Bug", labels: [{ name: "bug" }],
+      body: "### Pulse version\n6.5.0\n" };
+    const { github, calls } = createGithub({ currentIssue: issue });
+    const read = github.rest.issues.get;
+    github.rest.issues.get = async payload => {
+      const result = await read(payload);
+      if (calls.getIssue.length === 2) throw Object.assign(new Error("Read failed"), { status });
+      return result;
+    };
+    await assert.rejects(syncLabels({ github, context: createContext({ issue }), core: createCore() }), { status });
+    assert.equal(calls.getIssue.length, 2);
+    assert.equal(calls.addLabels.length, 0);
+    assert.equal(calls.removeLabel.length, 0);
+    assert.equal(calls.createComment.length, 0);
+  });
+}
+
+test("a mismatched pre-write issue identity fails closed", async () => {
+  const issue = { number: 2913, state: "open", title: "Bug", labels: [{ name: "bug" }],
+    body: "### Pulse version\n6.5.0\n" };
+  const { github, calls } = createGithub({ currentIssue: issue });
+  const read = github.rest.issues.get;
+  github.rest.issues.get = async payload => {
+    const result = await read(payload);
+    return { data: calls.getIssue.length === 1 ? result.data : { ...issue, number: 9999 } };
+  };
+  await assert.rejects(syncLabels({ github, context: createContext({ issue }), core: createCore() }),
+    /Current issue identity did not match/);
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
+});
+
+test("the pre-write comparison treats label order as irrelevant", async () => {
+  const issue = { number: 2914, state: "open", title: "Bug",
+    labels: ["bug", "needs-human", "needs-retest-on-latest", "affects-6.4.5"].map(name => ({ name })),
+    body: "### Pulse version\n6.5.0\n" };
+  const { github, calls } = createGithub({ currentIssue: issue });
+  const read = github.rest.issues.get;
+  github.rest.issues.get = async payload => {
+    const result = await read(payload);
+    return { data: calls.getIssue.length === 1 ? result.data : { ...issue, labels: [...issue.labels].reverse() } };
+  };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
+});
+
+test("a report with no label delta needs no additional pre-write read", async () => {
+  const issue = { number: 2915, state: "open", title: "Bug",
+    labels: ["bug", "affects-6.5.0", "needs-human"].map(name => ({ name })),
+    body: "### Pulse version\n6.5.0\n" };
+  const { github, calls } = createGithub({ currentIssue: issue });
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.getIssue.length, 1);
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
 });

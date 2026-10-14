@@ -293,17 +293,36 @@ function keepOnlyReportedVersionLabel(nextLabels, reportedVersion) {
 
 // Apply only this event's classification delta. Replacing the complete label
 // set would overwrite Community changes made after the event was queued.
-async function applyLabelDelta(github, context, issue, before, after) {
+async function applyLabelDelta(github, context, issue, before, after, core) {
   const target = {
     owner: context.repo.owner,
     repo: context.repo.repo,
     issue_number: issue.number,
   };
   const additions = [...after].filter((name) => !before.has(name)).sort();
+  const removals = [...before].filter((name) => !after.has(name)).sort();
+  if (!additions.length && !removals.length) return;
+
+  // Label lookup/creation can take time after the initial report read. Do not
+  // apply that prepared decision to a report since edited, closed or reviewed.
+  // This narrows the race; GitHub's separate label APIs are not a transaction.
+  const { data: current } = await github.rest.issues.get(target);
+  if (!current || current.number !== issue.number) {
+    throw new Error("Current issue identity did not match the triage event");
+  }
+  const currentLabels = new Set((current.labels || []).map((label) => label.name));
+  if (current.state !== "open" || current.pull_request ||
+      ["title", "body", "updated_at"].some((field) => current[field] !== issue[field]) ||
+      currentLabels.size !== before.size ||
+      [...before].some((name) => !currentLabels.has(name))) {
+    core.info("Issue changed during metadata preparation. Skipping outdated label delta.");
+    return;
+  }
+
   if (additions.length) {
     await github.rest.issues.addLabels({ ...target, labels: additions });
   }
-  for (const name of [...before].filter((name) => !after.has(name)).sort()) {
+  for (const name of removals) {
     try {
       await github.rest.issues.removeLabel({ ...target, name });
     } catch (error) {
@@ -364,7 +383,7 @@ async function syncLabels({ github, context, core }) {
 
   if (!isBugLike) {
     core.info("Issue is not bug-like after classification. Skipping version triage.");
-    await applyLabelDelta(github, context, issue, labelNames, nextLabels);
+    await applyLabelDelta(github, context, issue, labelNames, nextLabels, core);
     return;
   }
 
@@ -392,7 +411,7 @@ async function syncLabels({ github, context, core }) {
 
   // Retest labels are community-owned: version metadata cannot establish
   // relevant-fix availability or reconcile the live reporter conversation.
-  await applyLabelDelta(github, context, issue, labelNames, nextLabels);
+  await applyLabelDelta(github, context, issue, labelNames, nextLabels, core);
 }
 
 // Compatibility entry points for callers using the old helper API. Version
