@@ -32,6 +32,24 @@ describe('UpdatesAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/version');
   });
 
+  it('checks and applies the Pulse Pro runtime switch', async () => {
+    const response = {
+      available: true,
+      currentVersion: '6.5.0',
+      version: '6.5.0',
+      installInPlace: true,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(response as any);
+    await expect(UpdatesAPI.checkProRuntimeSwitch()).resolves.toEqual(response);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/pro-runtime');
+
+    apiFetchJSONMock.mockResolvedValueOnce({ status: 'started', message: 'ok' } as any);
+    await UpdatesAPI.applyProRuntimeSwitch();
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/updates/pro-runtime/apply', {
+      method: 'POST',
+    });
+  });
+
   it('fetches release notes for the running version', async () => {
     const response = {
       version: '6.1.0-rc.1',

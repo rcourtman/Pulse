@@ -20,6 +20,7 @@ import {
 import { isReleaseVersion } from '@/components/whatsNewModel';
 import { UpdateInstallGuide } from '@/components/Settings/UpdateInstallGuide';
 import { UpdateHistorySection } from '@/components/Settings/UpdateHistorySection';
+import { ProRuntimeSwitchCard } from '@/components/Settings/ProRuntimeSwitchCard';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import {
   getUpdateChannelCardOptions,
@@ -63,6 +64,8 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
   // Keys off the compiled runtime identity (same signal UpdateBanner uses):
   // a Pro-runtime install must never be shown community pull commands.
   const isProRuntime = () => runtimeCapabilities()?.runtime?.build === 'pro';
+  const shouldCheckProRuntimeSwitch = () =>
+    runtimeCapabilities()?.runtime?.build === 'community' && !props.versionInfo()?.isSourceBuild;
   const isPreviewChannel = () => props.updateChannel() === 'rc';
   const autoUpdateLocked = () => Boolean(props.versionInfo()?.isSourceBuild || isPreviewChannel());
   const updateChannelOptions = (): SelectionCardOption<UpdateChannelOptionValue>[] =>
@@ -104,6 +107,8 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
     <SettingsPanel title={UPDATES_PANEL_COPY.title} noPadding bodyClass="divide-y divide-border">
       <div class="p-4 sm:p-6">
         <div class="space-y-4">
+          <ProRuntimeSwitchCard shouldCheck={shouldCheckProRuntimeSwitch()} />
+
           {/* Version Status Section */}
           <div class="rounded-md border border-border overflow-hidden">
             {/* Version Grid */}

@@ -11,6 +11,8 @@ Pulse is distributed as a lightweight, Alpine-based Docker image.
 > line to use the `PULSE_IMAGE` variable, as shown below. If your compose file
 > hardcodes `image: rcourtman/pulse:...`, replace that line with the variable
 > form or with the private image shown on the download page before restarting.
+> With a paid activation on the community image, **Settings → Updates** shows
+> these commands for your license.
 
 ## 🚀 Quick Start
 
