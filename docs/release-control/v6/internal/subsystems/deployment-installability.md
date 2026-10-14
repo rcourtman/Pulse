@@ -3082,6 +3082,22 @@ artifact-selection behaviour.
    affordance for auto-updatable Pro deployments (the broker path preserves
    the Pro runtime) and surfaces the portal path for deployments the updater
    cannot drive, such as Docker.
+   The one sanctioned way a community binary moves onto the Pro runtime from
+   inside Pulse is the explicit runtime switch in
+   `internal/updates/pro_runtime_switch.go` (`GET /api/updates/pro-runtime`,
+   `POST /api/updates/pro-runtime/apply`). It never infers a switch from
+   licence state on an ordinary update: only a request carrying
+   `SwitchToProRuntime` takes the broker path on the community edition. The
+   broker decides eligibility from the activation's licence (a 401/403 is
+   reported as `not_eligible`, any other failure as `unavailable`), and the
+   check makes no network call without activation credentials. The in-place
+   switch is limited to systemd and Proxmox LXC deployments, accepts the Pro
+   build of the running version or newer and refuses an older broker pin, and
+   runs the same apply pipeline as an update (signed archive, manifest hash,
+   pre-install self-test, backup, restart), so the recorded update-history
+   entry keeps the normal rollback back to the community build. Docker
+   installs get the broker's digest-pinned Docker command block as
+   `ProRuntimeSwitch.docker` instead, never the community image.
    A Docker deployment of the compiled Pro binary is part of that same
    boundary: the container cannot self-replace its binary and a Pro compose
    file pins the previous image digest, so `internal/updates/pro_update.go`

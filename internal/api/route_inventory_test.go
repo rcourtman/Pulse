@@ -464,6 +464,8 @@ var allRouteAllowlist = []string{
 	"/api/updates/release-notes",
 	"/api/updates/stream",
 	"/api/updates/plan",
+	"/api/updates/pro-runtime",
+	"/api/updates/pro-runtime/apply",
 	"/api/updates/history",
 	"/api/updates/history/entry",
 	"/api/infra-updates",
