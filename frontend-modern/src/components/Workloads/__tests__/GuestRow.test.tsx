@@ -797,7 +797,7 @@ describe('GuestRow', () => {
 
     it('shows dash when disk data is unavailable', () => {
       renderGuestRow({
-        guest: makeGuest({ disk: { total: 0, used: 0, free: 0, usage: 0 } }),
+        guest: makeGuest({ disk: { total: 0, used: 0, free: 0 } }),
       });
       expect(screen.queryByTestId('disk-bar')).toBeNull();
       // Fallback is a hyphen "-"
@@ -2543,6 +2543,45 @@ describe('GuestRow', () => {
   });
 
   describe('disk usage edge cases', () => {
+    it.each(['bars', 'sparklines'] as const)(
+      'keeps missing capacity-only reads separate from zero and byte-only reads in %s',
+      (mode) => {
+        const [value, setValue] = createSignal(makeGuest({ disk: { total: 100 }, disks: [] }));
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={value()}
+                visibleColumnIds={['name', 'disk']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        const row = container.querySelector('tr');
+        const cell = () => container.querySelector('[data-workload-col="disk"]')!;
+        expect(screen.queryByTestId('disk-bar')).toBeNull();
+        expect(cell()).not.toHaveTextContent('0%');
+        setValue({ ...value(), disk: { usage: 1 } });
+        if (mode === 'bars') expect(screen.getByTestId('disk-bar')).toBeInTheDocument();
+        else
+          expect(
+            screen.getByRole('img', { name: 'test-vm disk usage history, current 1%' }),
+          ).toBeInTheDocument();
+        setValue({ ...value(), disk: { used: 50, total: 100 } });
+        if (mode === 'sparklines')
+          expect(
+            screen.getByRole('img', { name: 'test-vm disk usage history, current 50%' }),
+          ).toBeInTheDocument();
+        setValue({ ...value(), disk: { usage: 0 } });
+        if (mode === 'sparklines')
+          expect(
+            screen.getByRole('img', { name: 'test-vm disk usage history, current 0%' }),
+          ).toBeInTheDocument();
+        expect(container.querySelector('tr')).toBe(row);
+      },
+    );
+
     it('shows dash when disk usage is -1 (unsupported)', () => {
       renderGuestRow({
         guest: makeGuest({
