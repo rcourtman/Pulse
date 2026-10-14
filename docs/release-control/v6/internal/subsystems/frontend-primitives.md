@@ -2841,7 +2841,14 @@ not a replacement status card, CTA band, or page-local nested card.
    Below a 360-pixel content width, the shared narrow layout promotes identity to
    40 percent and may remove one additional lowest-priority context column via
    `platform-table-narrow-hidden` rather than shrinking names and metric values
-   into illegible fragments. The shared container rule then applies that stage
+   into illegible fragments. That 40 percent is a floor on the name header,
+   and a browser lays a fixed table out by the larger of a header's width and
+   its column's, so a table cannot shrink identity below it from its colgroup
+   (doing so only rescales every other column). A field that needs more room
+   than the remainder gives it moves into the identity cell instead: Docker's
+   container State words read on a second line under the name there, on every
+   row so the rows keep one height, and CPU, memory and the Update control
+   share the rest. The shared container rule then applies that stage
    across provider tables, direct Storage tables, and nested provider detail
    tables without a global reveal or page-local media-query exception.
    `PlatformTableShell` marks every
@@ -3884,7 +3891,12 @@ default` instead of fusing provider and badge text such as
     table's default order remains its page-model status-first compare until
     the user selects a column, and grouped modes (for example Docker's
     grouped-by-host containers view) sort within groups while grouping itself
-    stays orthogonal to sort state.
+    stays orthogonal to sort state. A saved sort applies only while its
+    column's header shows: where a layout hides that column (Docker's Host
+    and Engine while grouped, State under a phone row's name, Uptime on a
+    phone), the rows keep the default order instead of reordering with no
+    visible indicator, and the preference stays saved for the layouts that
+    show it.
 
 18. Keep estate orientation inside the canonical controls operators already
     scan. Large-estate workload totals must flow from the unfiltered shared

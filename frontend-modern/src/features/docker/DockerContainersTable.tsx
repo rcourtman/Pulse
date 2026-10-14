@@ -84,6 +84,7 @@ import {
   getDockerContainerTableMinWidthClass,
   getDockerContainerVisibleColumnsForLayout,
   isDockerContainerColumnInLayout,
+  isDockerContainerStateUnderName,
   type DockerContainerSortKey,
   type DockerContainerTableColumn,
 } from './dockerContainerTableModel';
@@ -378,6 +379,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   const flagRestartsInState = createMemo(
     () => !isDockerContainerColumnInLayout('restarts', layoutMode()),
   );
+  const stateUnderName = createMemo(() => isDockerContainerStateUnderName(layoutMode()));
   const stateFor = (resource: Resource) =>
     getDockerContainerStatePresentation(resource, { flagRestarts: flagRestartsInState() });
   // Sorting reorders rows only; grouped mode re-buckets the sorted rows, so
@@ -407,49 +409,6 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   const groupingMode = createMemo<GroupedTableMode>(() =>
     isGroupable() ? groupingModePreference() : 'flat',
   );
-  const hostResourceByName = createMemo(() => {
-    const map = new Map<string, Resource>();
-    for (const hostResource of props.hosts ?? []) {
-      const keys = [
-        dockerHostName(hostResource),
-        asTrimmedString(hostResource.name) ?? '',
-        asTrimmedString(hostResource.displayName) ?? '',
-      ];
-      for (const key of keys) {
-        if (key && key !== '—' && !map.has(key)) map.set(key, hostResource);
-      }
-    }
-    return map;
-  });
-  const groupedRows = createMemo<DockerContainerHostGroup[]>(() => {
-    const groups = new Map<string, Resource[]>();
-    // Host and engine columns are hidden while grouped, so a sort saved on
-    // either would reorder rows with no visible indicator; grouped mode falls
-    // back to the attention-first order instead and flat mode keeps the sort.
-    const hiddenSortKey = sort.sortKey() === 'host' || sort.sortKey() === 'runtime';
-    const sourceRows = hiddenSortKey
-      ? [...scopedRows()].sort(compareDockerContainers)
-      : sortedRows();
-    for (const resource of sourceRows) {
-      const host = dockerHostName(resource);
-      const rows = groups.get(host);
-      if (rows) rows.push(resource);
-      else groups.set(host, [resource]);
-    }
-    return [...groups.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([host, rows]) => ({ host, hostResource: hostResourceByName().get(host), rows }));
-  });
-  const groupedRenderItems = createMemo<DockerContainerRenderItem[]>(() => {
-    const items: DockerContainerRenderItem[] = [];
-    for (const group of groupedRows()) {
-      items.push({ kind: 'group', key: `group:${group.host}`, group });
-      for (const resource of group.rows) {
-        items.push({ kind: 'resource', key: `resource:${resource.id}`, resource });
-      }
-    }
-    return items;
-  });
   // Runtime is host-level data repeated on every container row; it only
   // informs when the fleet actually mixes runtimes (docker vs podman).
   const showRuntimeColumn = createMemo(() => {
@@ -488,6 +447,53 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     ),
   );
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
+  // A sort applies only while its column shows. A saved sort on a column this
+  // layout hides (Host or Engine while grouped, State under a phone row's
+  // name, Uptime on a phone) would reorder rows with no visible indicator, so
+  // those rows fall back to the attention-first order; the preference stays
+  // saved for the layouts that show its column.
+  const displayRows = createMemo(() => {
+    const sortKey = sort.sortKey();
+    return sortKey && !visibleColumnIds().includes(sortKey)
+      ? [...scopedRows()].sort(compareDockerContainers)
+      : sortedRows();
+  });
+  const hostResourceByName = createMemo(() => {
+    const map = new Map<string, Resource>();
+    for (const hostResource of props.hosts ?? []) {
+      const keys = [
+        dockerHostName(hostResource),
+        asTrimmedString(hostResource.name) ?? '',
+        asTrimmedString(hostResource.displayName) ?? '',
+      ];
+      for (const key of keys) {
+        if (key && key !== '—' && !map.has(key)) map.set(key, hostResource);
+      }
+    }
+    return map;
+  });
+  const groupedRows = createMemo<DockerContainerHostGroup[]>(() => {
+    const groups = new Map<string, Resource[]>();
+    for (const resource of displayRows()) {
+      const host = dockerHostName(resource);
+      const rows = groups.get(host);
+      if (rows) rows.push(resource);
+      else groups.set(host, [resource]);
+    }
+    return [...groups.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([host, rows]) => ({ host, hostResource: hostResourceByName().get(host), rows }));
+  });
+  const groupedRenderItems = createMemo<DockerContainerRenderItem[]>(() => {
+    const items: DockerContainerRenderItem[] = [];
+    for (const group of groupedRows()) {
+      items.push({ kind: 'group', key: `group:${group.host}`, group });
+      for (const resource of group.rows) {
+        items.push({ kind: 'resource', key: `resource:${resource.id}`, resource });
+      }
+    }
+    return items;
+  });
   const drawerColSpan = createMemo(() => visibleColumns().length);
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-container-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
@@ -496,6 +502,15 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const indicator = mapDockerContainerStatus(resource);
     const image = () => dockerTextValue(resource.docker?.image);
     const state = () => stateFor(resource);
+    const stateWords = () => (
+      <span
+        class={`block max-w-full truncate ${DOCKER_CONTAINER_STATE_TONE_CLASS[state().tone ?? 'none']}`}
+        title={state().title}
+        data-docker-container-state={state().tone ?? 'ok'}
+      >
+        {state().label}
+      </span>
+    );
     const runtime = () => runtimeSummary(resource);
     const host = () => dockerHostName(resource);
     const running = () => isContainerRunning(resource);
@@ -535,6 +550,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             <DockerResourceNameCell
               resource={resource}
               indicator={indicator}
+              detail={stateUnderName() ? stateWords() : undefined}
               detailToggle={
                 <PlatformResourceDetailToggleButton
                   expanded={isExpanded()}
@@ -570,13 +586,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         case 'state':
           return (
             <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
-              <span
-                class={`block max-w-full truncate ${DOCKER_CONTAINER_STATE_TONE_CLASS[state().tone ?? 'none']}`}
-                title={state().title}
-                data-docker-container-state={state().tone ?? 'ok'}
-              >
-                {state().label}
-              </span>
+              {stateWords()}
             </TableCell>
           );
         case 'cpu':
@@ -905,7 +915,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
               <Show
                 when={groupingMode() === 'grouped'}
                 fallback={
-                  <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+                  <PlatformWindowedRows items={displayRows} estimatedRowHeight={32}>
                     {(resource) => renderContainerRow(resource)}
                   </PlatformWindowedRows>
                 }
