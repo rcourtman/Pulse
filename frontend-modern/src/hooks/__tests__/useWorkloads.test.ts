@@ -107,6 +107,7 @@ describe('useWorkloads', () => {
         sourceType: 'api',
         sources: ['proxmox'],
         status: 'running',
+        lastSeen: Date.parse(sampleResource.lastSeen),
         identity: { ips: ['192.0.2.80', '10.88.0.1'] },
         metricsTarget: { resourceType: type, resourceId: 'site-a-node-a-2757' },
         proxmox: {
@@ -118,6 +119,7 @@ describe('useWorkloads', () => {
       };
       const apiResource = (value: Resource) => ({
         ...value,
+        lastSeen: new Date(value.lastSeen).toISOString(),
         identity: { ipAddresses: value.identity?.ips },
       });
       const [snapshot, setSnapshot] = createSignal([resource]);
@@ -152,6 +154,7 @@ describe('useWorkloads', () => {
           node: 'node-a',
           instance: 'site-a',
           ipAddresses: ['192.0.2.80', '10.88.0.1'],
+          lastSeen: sampleResource.lastSeen,
           networkInterfacesFromAgent: fromAgent,
         });
         expect(guest.networkInterfaces).toEqual(interfaces);
