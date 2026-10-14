@@ -140,6 +140,8 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   // the guest, so its RAID, network and filesystem rows read as last known.
   const agentLastKnownReason = () =>
     props.guest.agentStale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined;
+  const networkLastKnownReason = () =>
+    props.guest.networkInterfacesFromAgent === false ? undefined : agentLastKnownReason();
   const coverageLabel = () => {
     if (props.hasWorkloadActionAgent) return WORKLOAD_ACTION_AGENT_LABEL;
     if (props.hasAgentInfo) return `${props.agentHeading} observed`;
@@ -327,10 +329,11 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         ? {
             label: 'Network',
             rows: compactDetailRows([
-              // Only the linked Pulse agent reports guest interfaces.
+              // Agent freshness applies only to the selected agent list,
+              // not interfaces supplied independently by Proxmox.
               makeDetailRow(
                 'Status',
-                agentLastKnownReason()
+                networkLastKnownReason()
                   ? 'Using last known interface details. The Pulse Agent in this guest stopped reporting.'
                   : null,
                 { layout: 'stacked', wrap: true },
@@ -353,7 +356,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                   iface.name || `Interface ${index + 1}`,
                   detail || 'No details',
                   {
-                    tone: agentLastKnownReason() ? 'muted' : undefined,
+                    tone: networkLastKnownReason() ? 'muted' : undefined,
                     wrap: true,
                   },
                 );

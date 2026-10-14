@@ -1480,6 +1480,37 @@ describe('GuestDrawer', () => {
       );
     });
 
+    it('keeps Proxmox interface freshness independent of a silent linked agent', () => {
+      const [guest, setGuest] = createSignal(
+        makeAgentGuest({ agentStale: true, networkInterfacesFromAgent: false }),
+      );
+      render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+      const staleNetwork =
+        'Using last known interface details. The Pulse Agent in this guest stopped reporting.';
+      const networkValue = () =>
+        technicalDetails()
+          .getByText(/^192\.168\.1\.5/)
+          .closest('td');
+      expect(technicalDetails().getByText('eth0')).toBeInTheDocument();
+      expect(technicalDetails().queryByText(staleNetwork)).toBeNull();
+      expect(networkValue()).not.toHaveClass('text-muted');
+      // This source distinction does not make the agent's other readings current.
+      expect(technicalDetails().getByText(/^Last known 75%/)).toBeInTheDocument();
+      expect(screen.getByTestId('raid-card-array')).toHaveAttribute(
+        'data-raid-reading',
+        'last-known',
+      );
+
+      setGuest({ ...guest(), networkInterfacesFromAgent: true });
+      expect(technicalDetails().getByText(staleNetwork)).toBeInTheDocument();
+      expect(networkValue()).toHaveClass('text-muted');
+
+      setGuest({ ...guest(), networkInterfacesFromAgent: false });
+      expect(technicalDetails().queryByText(staleNetwork)).toBeNull();
+      expect(networkValue()).not.toHaveClass('text-muted');
+      expect(technicalDetails().getByText(/^Last known 75%/)).toBeInTheDocument();
+    });
+
     it('keeps a live in-guest agent current when Proxmox has no guest reads', () => {
       render(() => <GuestDrawer guest={makeAgentGuest()} onClose={vi.fn()} />);
 

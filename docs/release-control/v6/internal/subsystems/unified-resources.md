@@ -23,6 +23,28 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Workloads preserve platform guest interfaces — issue #2757
+
+Both the `/api/resources` and owning canonical-snapshot Workloads projections
+retain `proxmox.networkInterfaces` when the linked agent reports no interface
+list. A present agent list still wins, including an explicit empty list;
+lists from different producers are not merged. Names, addresses, MACs and
+reported traffic retain their association. The selected identity/IP order,
+canonical row and History coordinates do not change.
+
+`networkInterfacesFromAgent` is internal frontend provenance. Only the selected
+agent list inherits `agentStale` in the drawer's Network section. A silent linked
+agent still marks its other readings last known, but cannot mark independently
+supplied Proxmox interfaces as its last report. Legacy drawer callers keep their
+existing agent-freshness semantics. This adds no wire field, guest query,
+collection command, permission or native freshness/recovery guarantee.
+
+`useWorkloads.test.ts` checks REST/snapshot VM and LXC source transitions,
+agent precedence, empty/absent lists, IP order and stable canonical identity;
+`GuestDrawer.test.tsx` checks reactive source-specific last-known presentation
+without clearing agent RAID/filesystem warnings. Desktop and narrow browser
+proof must consume producing JSON, not manually populated WorkloadGuest rows.
+
 ### Independently known PBS remains available in Backups (13 October 2026)
 
 The resource-owned PBS table is outside backup-inventory loading/error gates.
