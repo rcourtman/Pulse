@@ -120,7 +120,8 @@ describe('NodeModalMonitoringSection collection safety', () => {
 
   it('gives VM collection a concise name and the full independent-recovery precaution', () => {
     const { fetch } = renderMonitoring();
-    const vms = screen.getByRole('checkbox', { name: 'Virtual machines', exact: true });
+    const vms = screen.getByRole('checkbox', { name: 'Virtual machines' });
+    expect(vms).toHaveAccessibleName('Virtual machines');
     const precaution = screen.getByRole('note', { name: 'Guest-agent backup precaution' });
     // Refer to the warning text, not the named note: its accessible name would
     // replace the actual recovery instructions in the browser description.
@@ -140,7 +141,8 @@ describe('NodeModalMonitoringSection collection safety', () => {
     ['Backups', 'vzdump schedules and recent backup activity.'],
   ])('keeps %s help distinct from the VM guest-agent precaution', (name, description) => {
     renderMonitoring();
-    const collector = screen.getByRole('checkbox', { name, exact: true });
+    const collector = screen.getByRole('checkbox', { name });
+    expect(collector).toHaveAccessibleName(name);
     expect(collector).toHaveAccessibleDescription(description);
     const precaution = screen.getByRole('note', { name: 'Guest-agent backup precaution' });
     const warning = within(precaution).getByText(/^Guest-agent reads share the channel/);
@@ -168,7 +170,7 @@ describe('NodeModalMonitoringSection collection safety', () => {
     const scopes = screen.getAllByRole('region', { name: 'Collection scope' });
     const ids = scopes.map((scope) => {
       const editor = within(scope);
-      const vms = editor.getByRole('checkbox', { name: 'Virtual machines', exact: true });
+      const vms = editor.getByRole('checkbox', { name: 'Virtual machines' });
       const precaution = editor.getByRole('note', { name: 'Guest-agent backup precaution' });
       const warning = within(precaution).getByText(/^Guest-agent reads share the channel/);
       expect(vms.getAttribute('aria-describedby')?.split(' ')).toContain(warning.id);
