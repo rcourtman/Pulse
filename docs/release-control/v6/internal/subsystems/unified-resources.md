@@ -1153,7 +1153,13 @@ workflow tab; legacy object routes such as `/kubernetes/pods`,
 `/kubernetes/autoscaling` are compatibility aliases for that workflow. Pods
 render through `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
 with Pod phase, container readiness, restart, owner, node, image, and age fields
-from the Kubernetes API projection. StatefulSet, DaemonSet, Job, and CronJob rows
+from the Kubernetes API projection. Each Kubernetes row's status words read in
+its dot's colour through `getPlatformStatusTextToneClass`: a Pod's Status
+("CrashLoopBackOff" red, "Pending" amber, Running plain), a Deployment's Ready
+count while replicas are short, a controller's Exceptions. The Pods Status
+column takes 12 percent so a failure reason such as CrashLoopBackOff reads
+whole, and a phone, which hides that column, reads the same words under the
+Pod name. StatefulSet, DaemonSet, Job, and CronJob rows
 render through
 `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx` and must
 preserve the Kubernetes API status semantics for desired replica/node/job
