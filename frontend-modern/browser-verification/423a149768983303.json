@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "de74aa95a1f9ea91d7450f6e984d9484681edccc",
+  "changed_paths": [
+    "frontend-modern/public/docs/TRUENAS.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/TRUENAS.md": "c4f9a13f9ec0d472c43a2bbf6edea55d4f500f7ca8c9782f939974f0e5efdb56"
+  },
+  "routes": [
+    "/docs/TRUENAS#inventory-works-but-cpu-memory-or-history-is-missing",
+    "/docs/TRUENAS#stale-truenas-data"
+  ],
+  "states": [
+    "Production Docs page/router fetches the actual shipped Markdown; only the app-auth probe is synthetic.",
+    "Known CORE rejection, native Reporting fallback, unavailable versus measured zero and distinct pool capacity text are rendered. No appliance, API diagnostic or release recovery is exercised."
+  ],
+  "interactions": [
+    "At 1440 and 390 pixels, keyboard Enter on the rejection paragraph link focuses the existing Stale TrueNAS data heading; browser Back keeps the guide.",
+    "Both widths have no horizontal document overflow, page errors or failed HTTP responses."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "Chromium"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "desktop-rejection.png",
+      "sha256": "3de93bec1121e5b48c0f14dd0080f24b09f992ecc44d66dbc52206e9a6cf90bc",
+      "native_pixel_review": true,
+      "observations": "Desktop: readable native Reporting fallback, exact CORE rejection, unchanged credentials/TLS/History precautions and separate pool-capacity explanation."
+    },
+    {
+      "path": "phone-rejection.png",
+      "sha256": "318f11ef2c994d478627d4d48b1b094eeac369e4cd890760615348ee996f4d46",
+      "native_pixel_review": true,
+      "observations": "Phone: existing section heading wraps, native Reporting fallback and unknown-not-idle distinction are readable; the exact CORE 400 error starts below them with ordinary line wrapping. Later capacity text is below this capture, not claimed visually inspected."
+    }
+  ],
+  "proof_command": "pulse-worker-browser scripts/check-core-reporting-help.cjs",
+  "verified_at": "2026-10-15T11:35:08Z",
+  "playwright": "1.56.1",
+  "chromium": "141.0.7390.37",
+  "script_sha256": "e7ed79480d5a16cb40e5de63bfa6f7cb5a7e28361e78fe497913e6e8db4270b6",
+  "source_proofs": {
+    "DOCS": {
+      "receipt_id": "source-8uzn7yuc",
+      "source_sha": "3b21eb2283e609adf48eaf422fa65a56743c6b4c",
+      "exitcode": 0,
+      "guest_stop_completed": true
+    },
+    "FRONTEND": {
+      "receipt_id": "source-0pmbccb2",
+      "source_sha": "3b21eb2283e609adf48eaf422fa65a56743c6b4c",
+      "exitcode": 0,
+      "guest_stop_completed": true
+    }
+  },
+  "limits": [
+    "Initial driver stopped at ambiguous link selection after six desktop checks; the corrected driver passes all nineteen checks. The original result/capture hash remains in the private outcome.",
+    "A separate supplementary close-up driver was refused for busy browser capacity before execution and was not retried. It adds no observations. Narrow below-fold capacity copy is supported by DOM checks, not claimed visible in the retained phone capture.",
+    "Source suites/build ran on the content commit. Its guide, mirror, tests, renderer and manifests are byte-identical here; the only later source change narrows the browser-driver locator. No source proof was replayed."
+  ]
+}
