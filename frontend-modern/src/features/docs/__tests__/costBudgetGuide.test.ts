@@ -54,7 +54,9 @@ describe('shipped AI cost and budget guidance', () => {
     const rows = [...costSection().querySelectorAll('tbody tr')];
     expect(rows).toHaveLength(4);
     expect(prose(rows[0])).toContain('Pulse has declined analysis');
-    expect(prose(rows[0])).toContain('resetting a circuit breaker does not repair a budget refusal');
+    expect(prose(rows[0])).toContain(
+      'resetting a circuit breaker does not repair a budget refusal',
+    );
     expect(prose(rows[1])).toContain('unavailable, not free');
     expect(prose(rows[1])).toContain('partial total');
     expect(prose(rows[1])).toContain('do not guarantee');
@@ -65,7 +67,7 @@ describe('shipped AI cost and budget guidance', () => {
 
   it('makes the destructive reset warning prominent without an executable reset recipe', () => {
     const section = costSection();
-    const warning = [...section.querySelectorAll('strong')].find(element =>
+    const warning = [...section.querySelectorAll('strong')].find((element) =>
       prose(element).startsWith('Reset usage history'),
     );
     expect(warning).toBeDefined();
