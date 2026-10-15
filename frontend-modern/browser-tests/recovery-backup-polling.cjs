@@ -17,7 +17,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const binding = JSON.parse(fs.readFileSync(path.join(compiled, 'binding.json')));
 const result = {
   variant, binding, playwright: require('playwright/package.json').version,
-  cases: [], captures: [], mutations: [], errors: [], unexpectedRequests: [], cleanup: {},
+  cases: [], captures: [], mutations: [], csrfReads: 0, errors: [], unexpectedRequests: [], cleanup: {},
 };
 let server;
 let browser;
@@ -28,8 +28,10 @@ const assets = new Map();
 
 async function capture(page, name, section) {
   const file = path.join(output, `${name}.png`);
-  if (section) await section.screenshot({ path: file });
-  else await page.screenshot({ path: file });
+  // Keep the panel padding in frame: an element-only crop cuts off the
+  // checkbox's outside focus outline and cannot establish its actual bounds.
+  if (section) await section.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: file });
   result.captures.push({ path: path.relative(root, file), sha256: hash(fs.readFileSync(file)) });
 }
 async function focusEvidence(toggle) {
@@ -67,6 +69,11 @@ async function noOverflow(page) {
   server = http.createServer(async (req, res) => {
     const url = new URL(req.url, origin);
     const json = (value) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value)); };
+    if (url.pathname === '/api/health' && req.method === 'GET') {
+      result.csrfReads += 1;
+      res.setHeader('Set-Cookie', 'pulse_csrf=offline-fixture; Path=/; SameSite=Lax');
+      return json({ status: 'ok' });
+    }
     if (url.pathname === '/api/system/settings' && req.method === 'GET') {
       return json({ ...saved, envOverrides: locked ? { ENABLE_BACKUP_POLLING: true } : {} });
     }
@@ -76,6 +83,7 @@ async function noOverflow(page) {
       const data = JSON.parse(body);
       result.mutations.push(data);
       assert(!locked, 'An environment-locked case must not save');
+      assert.equal(req.headers['x-csrf-token'], 'offline-fixture', 'Real client must use the synthetic CSRF cookie');
       saved = { ...saved, ...data };
       return json({ success: true });
     }
@@ -199,6 +207,7 @@ async function noOverflow(page) {
   }
   assert.deepEqual(result.errors, []);
   assert.deepEqual(result.unexpectedRequests, []);
+  assert.equal(result.csrfReads, 3, 'Each isolated browser context bootstraps its own synthetic CSRF cookie');
   result.passed = true;
 })().catch((err) => { result.failure = err.stack; process.exitCode = 1; }).finally(async () => {
   if (browser) await browser.close();
