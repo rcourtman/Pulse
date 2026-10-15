@@ -115,6 +115,13 @@ describe('GuestDrawerHistory filesystem provenance', () => {
       expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
         `while the VM is ${status}`,
       );
+      // The drawer can live inside a table cell that inherits nowrap. Long
+      // safety explanations must stay within their chart, not cross its peers.
+      expect(chart).toHaveClass('min-w-0');
+      expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveClass(
+        'whitespace-normal',
+        'wrap-anywhere',
+      );
       expect(paths()).toEqual(storedPaths);
       // Capacity alone must not become an invented retained zero.
       setValue({ ...value(), disk: { total: 100 } });

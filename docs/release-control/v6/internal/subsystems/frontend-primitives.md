@@ -60,7 +60,11 @@ power states, linked and platform sources, missing readings, retained zero,
 stored History preservation and subsequent running reports in the
 `workloadGuestPresentation`, `GuestRow`, `GuestDrawerOverview.filesystems`,
 `GuestDrawerHistory.disk-provenance`, canonical linked-filesystem History and
-`useThresholdsGuestData` tests. Consuming desktop/narrow browser proof is required.
+`useThresholdsGuestData` tests. The existing History chart's deferred reading
+explanation must explicitly wrap inside its own shrinkable column, even in a
+no-wrap table cell. The `paused-filesystem` consuming fixture covers the shared
+surfaces; desktop/narrow browser and native pixel proof are required. This
+fixture provides no native guest recovery evidence.
 
 ### Backup activity calendar-day presentation
 
