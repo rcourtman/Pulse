@@ -242,13 +242,6 @@ if [ "$VISUAL_CAPTURE_COUNT" -gt 0 ]; then
   echo ""
   echo "Model-selected release-note visual plan:"
   cat "$VISUAL_PLAN_FILE"
-  echo ""
-  read -p "Use this visual plan? [Y/n] " -n 1 -r
-  echo ""
-  if [[ $REPLY =~ ^[Nn]$ ]]; then
-    printf '%s\n' '{"schema_version":1,"decision":"The release owner declined the model-selected visual plan.","captures":[]}' > "$VISUAL_PLAN_FILE"
-    VISUAL_CAPTURE_COUNT=0
-  fi
 fi
 echo "✓ Release-note visual plan validated (${VISUAL_CAPTURE_COUNT} capture(s))"
 

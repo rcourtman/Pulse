@@ -145,6 +145,49 @@ type releaseNotesProvider interface {
 	GetReleaseNotes(ctx context.Context, version string) (*updates.ReleaseNotesInfo, error)
 }
 
+type releaseNoteImageProvider interface {
+	GetReleaseNoteImage(ctx context.Context, version, name string) ([]byte, error)
+}
+
+// HandleGetReleaseNoteImage keeps published screenshots inside Pulse's normal
+// authenticated image boundary and pins browser caching to the running version.
+func (h *UpdateHandlers) HandleGetReleaseNoteImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	provider, ok := h.manager.(releaseNoteImageProvider)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	version, err := h.getCurrentVersion()
+	if err != nil {
+		http.Error(w, "Failed to get version info", http.StatusInternalServerError)
+		return
+	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/updates/release-notes/assets/"), "/")
+	if version.IsDevelopment || version.IsSourceBuild || len(parts) != 2 || parts[0] != "v"+strings.TrimPrefix(version.Version, "v") {
+		http.NotFound(w, r)
+		return
+	}
+	image, err := provider.GetReleaseNoteImage(r.Context(), version.Version, parts[1])
+	if err != nil {
+		if errors.Is(err, updates.ErrReleaseNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		log.Warn().Err(err).Msg("Failed to fetch release screenshot")
+		http.Error(w, "Screenshot unavailable", http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "private, max-age=86400, immutable")
+	w.Header().Set("Content-Length", strconv.Itoa(len(image)))
+	_, _ = w.Write(image)
+}
+
 // HandleGetReleaseNotes returns the GitHub release notes for the currently
 // running version. Unlike the other update endpoints it is exposed to all
 // authenticated users so the UI can show a post-update "What's New" card.

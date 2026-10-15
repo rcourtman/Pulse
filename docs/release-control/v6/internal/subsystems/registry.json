@@ -3202,6 +3202,19 @@
             ]
           },
           {
+            "id": "route-registration-contract",
+            "label": "registered route and authorization proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/router_routes_registration.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/route_inventory_test.go"
+            ]
+          },
+          {
             "id": "backend-payload-contracts",
             "label": "backend API payload proof",
             "match_prefixes": [
@@ -4453,6 +4466,7 @@
       "owned_files": [
         ".dockerignore",
         ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
+        ".github/PULL_REQUEST_TEMPLATE.md",
         ".github/scripts/check-demo-reachability.sh",
         ".github/scripts/demo-runtime-transaction.py",
         ".github/scripts/dispatch-demo-runtime.py",
@@ -4511,6 +4525,7 @@
         "frontend-modern/src/api/updates.ts",
         "frontend-modern/src/components/UpdateBanner.tsx",
         "frontend-modern/src/components/WhatsNewCard.tsx",
+        "frontend-modern/src/components/WhatsNewContent.tsx",
         "frontend-modern/src/components/whatsNewModel.ts",
         "frontend-modern/src/utils/localStorage.ts",
         "frontend-modern/vite.config.ts",
@@ -4537,6 +4552,7 @@
         "scripts/build-release-binaries.sh",
         "scripts/build-release.sh",
         "scripts/build-secure-runtime-qualification.sh",
+        "scripts/capture-release-note-visuals.sh",
         "scripts/check-workflow-dispatch-inputs.py",
         "scripts/clean-mock-alerts.sh",
         "scripts/com.pulse.hot-dev.plist.template",
@@ -4686,6 +4702,29 @@
             ]
           },
           {
+            "id": "release-note-presentation",
+            "label": "release highlights and screenshot evidence proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/PULL_REQUEST_TEMPLATE.md",
+              "docs/releases/RELEASE_NOTES_TEMPLATE.md",
+              "frontend-modern/src/components/WhatsNewCard.tsx",
+              "frontend-modern/src/components/WhatsNewContent.tsx",
+              "frontend-modern/src/components/whatsNewModel.ts",
+              "scripts/capture-release-note-visuals.sh",
+              "scripts/generate-release-notes.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/__tests__/WhatsNewCard.test.tsx",
+              "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
+              "scripts/installtests/build_release_assets_test.go",
+              "scripts/release_control/capture_release_note_visuals.test.mjs",
+              "scripts/release_control/release_note_visuals_test.py"
+            ]
+          },
+          {
             "id": "release-promotion-metadata-runtime",
             "label": "release promotion and artifact dispatch proof",
             "match_prefixes": [
@@ -4723,8 +4762,6 @@
               "docs/UPGRADE_v6.md",
               "frontend-modern/public/docs/UPGRADE_v6.md",
               "frontend-modern/src/components/UpdateBanner.tsx",
-              "frontend-modern/src/components/WhatsNewCard.tsx",
-              "frontend-modern/src/components/whatsNewModel.ts",
               "frontend-modern/src/utils/localStorage.ts",
               "pulse-enterprise:.github/workflows/build-pro-release.yml",
               "pulse-enterprise:scripts/validate-pro-release-line.sh",
@@ -4732,7 +4769,6 @@
               "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
               "pulse-pro:scripts/validate_paid_runtime_distribution.py",
               "scripts/check-workflow-dispatch-inputs.py",
-              "scripts/generate-release-notes.sh",
               "scripts/release-preflight-worker.sh",
               "scripts/release_control/customer_promotion_lease.sh",
               "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",

@@ -138,6 +138,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	// Release notes for the running version are readable by any authenticated
 	// user (public GitHub data) so the What's New card works for non-admins.
 	r.mux.HandleFunc("/api/updates/release-notes", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, updateHandlers.HandleGetReleaseNotes)))
+	r.mux.HandleFunc("/api/updates/release-notes/assets/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, updateHandlers.HandleGetReleaseNoteImage)))
 	r.mux.HandleFunc("/api/updates/history", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleListUpdateHistory)))
 	r.mux.HandleFunc("/api/updates/history/entry", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleGetUpdateHistoryEntry)))
 	// Config management routes

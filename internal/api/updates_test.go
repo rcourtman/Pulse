@@ -20,15 +20,23 @@ import (
 
 // MockUpdateManager implements UpdateManager interface for testing
 type MockUpdateManager struct {
-	CheckOptionsFunc       func(context.Context, updates.UpdateCheckOptions) (*updates.UpdateInfo, error)
-	CheckForUpdatesFunc    func(ctx context.Context, channel string) (*updates.UpdateInfo, error)
-	GetReleaseNotesFunc    func(ctx context.Context, version string) (*updates.ReleaseNotesInfo, error)
-	ApplyUpdateFunc        func(ctx context.Context, req updates.ApplyUpdateRequest) error
-	RollbackToBackupFunc   func(ctx context.Context, req updates.RollbackRequest) error
-	GetStatusFunc          func() updates.UpdateStatus
-	GetSSECachedStatusFunc func() (updates.UpdateStatus, time.Time)
-	AddSSEClientFunc       func(w http.ResponseWriter, clientID string) *updates.SSEClient
-	RemoveSSEClientFunc    func(clientID string)
+	CheckOptionsFunc        func(context.Context, updates.UpdateCheckOptions) (*updates.UpdateInfo, error)
+	CheckForUpdatesFunc     func(ctx context.Context, channel string) (*updates.UpdateInfo, error)
+	GetReleaseNotesFunc     func(ctx context.Context, version string) (*updates.ReleaseNotesInfo, error)
+	GetReleaseNoteImageFunc func(ctx context.Context, version, name string) ([]byte, error)
+	ApplyUpdateFunc         func(ctx context.Context, req updates.ApplyUpdateRequest) error
+	RollbackToBackupFunc    func(ctx context.Context, req updates.RollbackRequest) error
+	GetStatusFunc           func() updates.UpdateStatus
+	GetSSECachedStatusFunc  func() (updates.UpdateStatus, time.Time)
+	AddSSEClientFunc        func(w http.ResponseWriter, clientID string) *updates.SSEClient
+	RemoveSSEClientFunc     func(clientID string)
+}
+
+func (m *MockUpdateManager) GetReleaseNoteImage(ctx context.Context, version, name string) ([]byte, error) {
+	if m.GetReleaseNoteImageFunc != nil {
+		return m.GetReleaseNoteImageFunc(ctx, version, name)
+	}
+	return nil, updates.ErrReleaseNotFound
 }
 
 func (m *MockUpdateManager) GetReleaseNotes(ctx context.Context, version string) (*updates.ReleaseNotesInfo, error) {
@@ -207,6 +215,54 @@ func TestHandleGetReleaseNotesRejectsDevelopmentBuild(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleGetReleaseNoteImage(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		tag         string
+		development bool
+		source      bool
+		upstream    error
+		status      int
+	}{
+		{name: "running release", tag: "v6.6.0", status: 200},
+		{name: "other release", tag: "v6.5.0", status: 404},
+		{name: "development build", tag: "v6.6.0", development: true, status: 404},
+		{name: "source build", tag: "v6.6.0", source: true, status: 404},
+		{name: "missing image", tag: "v6.6.0", upstream: updates.ErrReleaseNotFound, status: 404},
+		{name: "upstream failure", tag: "v6.6.0", upstream: errors.New("offline"), status: 502},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			manager := &MockUpdateManager{GetReleaseNoteImageFunc: func(_ context.Context, version, name string) ([]byte, error) {
+				calls++
+				if version != "6.6.0" || name != "release-note-backups-now.png" {
+					t.Fatal("wrong release asset")
+				}
+				return []byte("PNG fixture"), tc.upstream
+			}}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			h := NewUpdateHandlersWithContext(manager, nil, ctx)
+			h.getCurrentVersion = func() (*updates.VersionInfo, error) {
+				return &updates.VersionInfo{Version: "6.6.0", IsDevelopment: tc.development, IsSourceBuild: tc.source}, nil
+			}
+			w := httptest.NewRecorder()
+			h.HandleGetReleaseNoteImage(w, httptest.NewRequest(http.MethodGet, "/api/updates/release-notes/assets/"+tc.tag+"/release-note-backups-now.png", nil))
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d", w.Code, tc.status)
+			}
+			if tc.development || tc.source || tc.tag != "v6.6.0" {
+				if calls != 0 {
+					t.Fatal("ineligible build fetched screenshots")
+				}
+			}
+			if tc.status == 200 && (w.Header().Get("Content-Type") != "image/png" || w.Header().Get("Cache-Control") != "private, max-age=86400, immutable") {
+				t.Fatal("missing PNG/cache headers")
+			}
+		})
 	}
 }
 
