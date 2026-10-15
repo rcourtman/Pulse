@@ -13,9 +13,10 @@ const output = path.join(root, 'tmp/container-image-update-help');
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const bindingBytes = fs.readFileSync(path.join(preview, 'binding.json'));
 const binding = JSON.parse(bindingBytes);
-const result = { source_sha: binding.source_sha, binding_sha256: hash(bindingBytes),
-  cases: [], captures: [], errors: [], unexpectedRequests: [], served: [] };
+const result = { source_sha: binding.source_sha, binding_sha256: hash(bindingBytes), result: 'incomplete',
+  cases: [], captures: [], errors: [], unexpectedRequests: [], failedResponses: [], failedRequests: [], served: [] };
 const fragment = 'image-update-disagrees-with-the-runtime';
+const checkpoint = () => fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n');
 
 (async () => {
   fs.mkdirSync(output, { recursive: true });
@@ -55,6 +56,12 @@ const fragment = 'image-update-disagrees-with-the-runtime';
       const page = await context.newPage();
       page.on('pageerror', error => result.errors.push(error.message));
       page.on('console', message => { if (message.type() === 'error') result.errors.push(message.text()); });
+      page.on('response', response => {
+        if (response.status() >= 400) result.failedResponses.push({ url: response.url(), status: response.status() });
+      });
+      page.on('requestfailed', request => result.failedRequests.push({ url: request.url(), failure: request.failure() }));
+      const caseResult = { ...state, browser: browser.version() };
+      result.cases.push(caseResult);
       await page.addInitScript(dark => document.addEventListener('DOMContentLoaded', () =>
         document.documentElement.classList.toggle('dark', dark)), state.dark);
       const jump = locator => locator.evaluate(el => window.scrollBy(0, el.getBoundingClientRect().top - 48));
@@ -64,6 +71,7 @@ const fragment = 'image-update-disagrees-with-the-runtime';
         const file = `${state.name}-${name}.png`;
         await page.screenshot({ path: path.join(output, file) });
         result.captures.push({ file, sha256: hash(fs.readFileSync(path.join(output, file))), state });
+        checkpoint();
       };
       await page.goto(`${origin}/docs/TROUBLESHOOTING#container-${fragment}`);
       await page.getByRole('heading', { name: 'Container image update disagrees with the runtime', exact: true }).waitFor();
@@ -92,6 +100,15 @@ const fragment = 'image-update-disagrees-with-the-runtime';
       assert.ok((await recipe.innerText()).includes('"$image_id"'));
       await jump(recipe);
       await capture('recipe');
+      const extent = await recipe.evaluate(el => el.scrollWidth - el.clientWidth);
+      await recipe.hover();
+      if (extent > 1) await page.mouse.wheel(extent + 100, 0);
+      await page.waitForFunction(() => {
+        const el = [...document.querySelectorAll('article pre')].find(node => node.textContent.includes('image_id=$(docker inspect'));
+        return el && el.scrollWidth - el.clientWidth - el.scrollLeft <= 1;
+      }, undefined, { timeout: 5000 });
+      caseResult.recipeScroll = await recipe.evaluate(el => ({ extent: el.scrollWidth - el.clientWidth, reached: el.scrollLeft }));
+      if (extent > 1) await capture('recipe-right-edge');
       const text = (await page.locator('article').innerText()).replace(/\s+/g, ' ');
       for (const phrase of ['does not contact a registry or pull an image',
         'do not switch to root\'s separate image store', 'If inspection fails, retain the error and stop',
@@ -109,18 +126,33 @@ const fragment = 'image-update-disagrees-with-the-runtime';
         'Case, whitespace and hidden-comment-only changes do not restart that review'])
         assert.ok(intake.includes(phrase), phrase);
       await capture('topic-intake');
-      result.cases.push({ ...state, browser: browser.version(), entryLink: state.width < 500 ? 'touch' : 'keyboard',
+      Object.assign(caseResult, { entryLink: state.width < 500 ? 'touch' : 'keyboard',
         receiptLink: true, fourComparisonRows: true, scrollResult, topicIntakeMirror: true, noDocumentOverflow: true });
+      await page.waitForLoadState('networkidle');
       await browser.close(); browser = undefined;
     }
+    checkpoint();
     assert.deepEqual(result.errors, []);
     assert.deepEqual(result.unexpectedRequests, []);
+    assert.deepEqual(result.failedResponses, []);
+    assert.deepEqual(result.failedRequests, []);
     result.result = 'passed';
     result.scope = 'source-bound rendered help, safe comparison and navigation; not runtime or collector recovery';
-    fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n');
+    checkpoint();
     console.log(JSON.stringify(result));
+  } catch (error) {
+    result.result = 'failed';
+    result.failure = { name: error.name, message: error.message, stack: error.stack };
+    throw error;
   } finally {
-    if (browser) await browser.close();
-    if (server) await new Promise(resolve => server.close(resolve));
+    try {
+      if (browser) await browser.close();
+      result.browser_closed = true;
+    } finally {
+      try {
+        if (server) await new Promise(resolve => server.close(resolve));
+        result.server_closed = true;
+      } finally { checkpoint(); }
+    }
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
