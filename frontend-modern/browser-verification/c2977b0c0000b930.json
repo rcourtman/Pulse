@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "7168a9ac46a817cd498544e51f32ae0f94e753f0",
+  "verified_at": "2026-10-15T22:20:03Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx": "0f0605736bfbfe7540b7d251a56bbd29af3d2ea74f3a596ed01810c5563eb0fc"
+  },
+  "routes": [
+    "/browser-tests/recovery-backup-polling.html: real settings loader, draft/save API client and RecoverySettingsPanel",
+    "/docs/VM_DISK_MONITORING#backup-safety: actual shipped Docs renderer and safety fragment"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "width": 390,
+      "height": 1100
+    },
+    {
+      "width": 320,
+      "height": 1100
+    }
+  ],
+  "states": [
+    "Polling enabled with automatic cadence0 and visible keyboard focus. Selected settings are not live monitor health.",
+    "Polling disabled draft and saved/readback state: unrefreshed-evidence explanation and guest-agent precaution remain visible.",
+    "Re-enabled polling and custom90-minute save/readback preserve the independent PVE cadence.",
+    "Environment-locked disabled polling retains the precaution and environment description, without an editable/save state.",
+    "Shipped backup-safety fragment renders at desktop and both narrow viewports."
+  ],
+  "interactions": [
+    "Keyboard Tab/Space and narrow touch re-enable the native checkbox. Draft changes send no settings mutation.",
+    "Six loopback synthetic settings POSTs across three isolated browser contexts use the real API client and synthetic CSRF bootstrap/cookie. Saved off and custom5400-second values are consumed again after reload.",
+    "The backup safety link opens the real Docs fragment, whose text preserves independent thaw, every-filesystem writes/liveness and prior-active restoration.",
+    "All twelve final viewport captures were opened with native view_image from retained worker-local files; the focused ring remains entirely in frame, warning text wraps and the dark off-track is visible."
+  ],
+  "proof_source_sha": "7168a9ac46a817cd498544e51f32ae0f94e753f0",
+  "playwright": "1.56.1",
+  "browsers": [
+    "Chromium141.0.7390.37 desktop/light",
+    "WebKit26.0 phone390/dark and narrow320/light"
+  ],
+  "notes": [
+    "First own-parent receipt for this final production content. No older receipt was edited or rebound.",
+    "The previous attempt completed three UI loops but failed on six missing synthetic /api/health responses; its complete result and twelve inspected captures remain retained. The corrected fixture proves the real client cookie path without relaxing error assertions.",
+    "Final proof has zero page/console errors, unexpected HTTP paths or off-origin requests; all final locked settings states have no document overflow. Browser and server closed.",
+    "Synthetic source/browser proof is not native guest thaw, filesystem writes, installed recovery, protected publication or release acceptance."
+  ]
+}
