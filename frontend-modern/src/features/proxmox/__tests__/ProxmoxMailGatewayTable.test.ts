@@ -71,7 +71,7 @@ describe('ProxmoxMailGatewayTable phone presentation', () => {
 
   it('matches gateway alerts across identity aliases and shows the problem in the drawer', () => {
     // Alerts are keyed by the PMG instance id, rows by the unified id.
-    expect(mailGatewayTableSource).toContain('getResourceIdentityAliases(resource)');
+    expect(mailGatewayTableSource).toContain('getPMGAlertResourceIds(resource)');
     expect(mailGatewayTableSource).toContain(
       'filterPlatformResources(resources, search, status, effectiveStatus)',
     );

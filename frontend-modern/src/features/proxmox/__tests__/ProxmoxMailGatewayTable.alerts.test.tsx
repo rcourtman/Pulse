@@ -81,6 +81,46 @@ describe('ProxmoxMailGatewayTable open alerts', () => {
     expect(screen.getByText('Needs attention')).toBeInTheDocument();
   });
 
+  it('accepts an explicit scoped connection alias but never a shared name/hostname', async () => {
+    const configured = gateway('unified-1', 'shared-name', 'pmg-generated');
+    configured.canonicalIdentity!.aliases = ['shared-name', 'shared.invalid', 'pmg:config-id'];
+    activeAlerts.connection = {
+      id: 'connection',
+      resourceId: 'pmg:config-id',
+      type: 'connection-degraded',
+      level: 'critical',
+      message: 'Collection failed',
+      acknowledged: false,
+    } as Alert;
+    activeAlerts.unrelated = {
+      id: 'unrelated',
+      resourceId: 'shared-name',
+      node: 'shared.invalid',
+      type: 'queue-total',
+      level: 'critical',
+      message: 'Wrong gateway',
+      acknowledged: false,
+    } as Alert;
+    render(() => (
+      <ProxmoxMailGatewayTable
+        resources={[configured, gateway('unified-2', 'shared-name', 'other-instance')]}
+        emptyTitle="No gateways"
+        emptyDescription="No gateways"
+      />
+    ));
+    expect(document.querySelectorAll('[data-mail-gateway-alert-summary]')).toHaveLength(1);
+    expect(document.querySelector('[data-mail-gateway-alert-summary]')).toHaveTextContent(
+      'Collection failed',
+    );
+    expect(document.querySelector('[data-mail-gateway-alert-summary]')).not.toHaveTextContent(
+      'Wrong gateway',
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: /Expand details for shared-name/ })[0]);
+    expect(screen.getByRole('img', { name: 'Needs attention' })).toHaveClass('bg-red-500');
+    expect(screen.getByTestId('drawer-attention-section')).toHaveTextContent('Collection failed');
+    expect(screen.getByTestId('drawer-attention-section')).not.toHaveTextContent('Wrong gateway');
+  });
+
   it('ignores acknowledged alerts', () => {
     activeAlerts['pmg-main::oldest'] = {
       id: 'pmg-main::oldest',

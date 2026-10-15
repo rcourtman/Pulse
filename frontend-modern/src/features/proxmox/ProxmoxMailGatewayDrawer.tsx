@@ -23,6 +23,7 @@ import {
   PlatformTableNumberValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { StatusIndicatorVariant } from '@/utils/status';
+import { getPMGHealth } from './pmgPresentation';
 import { formatBytes } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { apiFetch } from '@/utils/apiClient';
@@ -50,21 +51,6 @@ async function fetchPMGInstance(id: string): Promise<PMGInstance | null> {
   return payload?.data?.[0] ?? null;
 }
 
-function classifyHealth(status: string | undefined): {
-  variant: StatusIndicatorVariant;
-  label: string;
-} {
-  const raw = (status ?? '').toLowerCase();
-  if (raw === 'online' || raw === 'ok' || raw === 'healthy') {
-    return { variant: 'success', label: 'Healthy' };
-  }
-  if (raw === 'degraded' || raw === 'warning') return { variant: 'warning', label: 'Degraded' };
-  if (raw === 'offline' || raw === 'error' || raw === 'critical') {
-    return { variant: 'danger', label: 'Offline' };
-  }
-  return { variant: 'muted', label: raw || 'Unknown' };
-}
-
 function classifyNode(node: PMGNodeStatus): { variant: StatusIndicatorVariant; label: string } {
   const raw = (node.status ?? '').toLowerCase();
   if (raw === 'online' || raw === 'ok') return { variant: 'success', label: 'Online' };
@@ -81,11 +67,16 @@ function formatAge(seconds: number): string {
   return `${Math.floor(seconds / 86_400)}d`;
 }
 
-function queueCell(queue: PMGQueueStatus | undefined): { count: number; label: string } {
-  if (!queue) return { count: 0, label: '—' };
+function queueCell(queue: PMGQueueStatus | undefined): {
+  count: number | undefined;
+  label: string;
+} {
+  if (!queue) return { count: undefined, label: '' };
   return {
     count: queue.total,
-    label: `${queue.active}/${queue.deferred}/${queue.hold}/${queue.incoming}`,
+    label: [queue.active, queue.deferred, queue.hold, queue.incoming]
+      .map((value) => formatPlatformTableIntegerValue(value))
+      .join('/'),
   };
 }
 
@@ -244,19 +235,18 @@ export const ProxmoxMailGatewayDrawer: Component<{
   );
   const relayDomains = createMemo(() => instance()?.relayDomains ?? []);
 
-  // A reachable gateway with open alerts reads as needing attention, matching
-  // its table row, rather than a green "Healthy" beside the alert below.
-  const health = () => {
-    const base = classifyHealth(instance()?.status ?? props.instanceRow.status);
-    const open = (props.alerts ?? []).filter((alert) => !alert.acknowledged);
-    if (open.length === 0 || base.variant === 'danger') return base;
-    return {
-      variant: open.some((alert) => alert.level === 'critical')
-        ? ('danger' as const)
-        : ('warning' as const),
-      label: 'Needs attention',
-    };
-  };
+  // The full instance can still report online after a partial collection
+  // failure. Do not let it erase a stale/degraded resource or an open alert.
+  const health = () =>
+    getPMGHealth(
+      [
+        props.instanceRow.status,
+        props.instanceRow.pmg?.connectionHealth,
+        instance()?.status,
+        instance()?.connectionHealth,
+      ],
+      props.alerts,
+    );
   const name = () =>
     asTrimmedString(instance()?.name) ||
     asTrimmedString(props.instanceRow.name) ||
