@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "4bb2ce4e70638dcb453c172771e7a2b20d077f46",
+  "verified_at": "2026-10-14T14:16:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/dockerContainerUpdateAction.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "6b8707b57e6ac7d227270acb5eae663220fc3a54ad0bc512ec53e46344b383c0",
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx": "f88feb6935b0035af45d4861e0f612b3dedebc8ed4df6cfb59b898d72e6fab4a",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts": "14669da470bb235fc5100fbdaa535a9c9071c02496dab61de788d0a454f390e2",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "04c3e2a730fac9ebdf8c212e34c93af758e0cef89837c55567f0ea0cef5cbbc5",
+    "frontend-modern/src/features/docker/dockerContainerUpdateAction.ts": "a19e5160da9ace56562968cf9d9c43f3137a93da57b07fb53af1f7b6c7b67724"
+  },
+  "routes": [
+    "browser-tests/proxmox-docker-rows.html (production DockerContainersTable and ResourceDetailDrawer with system settings loaded, Chromium via Playwright 1.56.1 on pulse-dev)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "container with an available update: Worth checking shows \"Available\", the shared Update button (enabled, the same control as the row) and \"View image tags\"",
+    "phone 390px: Update button at least 44px tall, link wraps inside the card, label aligned with the first line",
+    "table Updates column keeps the compact pill",
+    "refused update (unit test): locked \"Update available\" with the reason, 44px class, no button",
+    "reviewed twice by Sol from the screenshots"
+  ],
+  "interactions": [
+    "row expand by pointer and tap",
+    "update control rendered enabled; review dialog and its survival across refresh covered by unit tests"
+  ]
+}

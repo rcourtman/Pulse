@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
@@ -18,9 +18,11 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
     range: string;
     enabled?: boolean;
     onRangeChange?: (range: string) => void;
+    alerts?: Record<string, unknown>;
   }) => (
     <div
       data-testid="docker-host-history"
+      data-alert-metrics={Object.keys(props.alerts ?? {}).join(',')}
       data-target={props.target.resourceId}
       data-range={props.range}
       data-enabled={String(props.enabled)}
@@ -110,6 +112,24 @@ describe('DockerHostDrawer open alerts', () => {
 });
 
 describe('DockerHostDrawer history', () => {
+  it("lists a container's memory alert but draws no trigger for it on the host's charts", () => {
+    wsActiveAlerts.container = {
+      ...openAlert(
+        'container',
+        'docker:docker-source-1/abc123',
+        'Container memory at 97%',
+        'critical',
+      ),
+      type: 'memory',
+      threshold: 85,
+    };
+    render(() => <DockerHostDrawer host={host()} />);
+    expect(screen.getByTestId('drawer-attention-section')).toHaveTextContent(
+      'Container memory at 97%',
+    );
+    expect(screen.getByTestId('docker-host-history')).toHaveAttribute('data-alert-metrics', '');
+  });
+
   it('charts history on Overview with its range picker, and pauses it behind Manage', () => {
     render(() => <DockerHostDrawer host={host()} />);
     expect(screen.queryByRole('tab', { name: 'History' })).toBeNull();
@@ -136,5 +156,55 @@ describe('DockerHostDrawer typed-helper summary mode', () => {
 
     await fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
     expect(screen.queryByTestId('docker-host-management-actions')).toBeNull();
+  });
+});
+
+describe('DockerHostDrawer inventory', () => {
+  const inventoryHost = (overrides: Partial<Resource> = {}): Resource =>
+    ({
+      ...host(),
+      memory: { current: 50, total: 8 * 1024 ** 3, used: 4 * 1024 ** 3 },
+      disk: { current: 25, total: 100 * 1024 ** 3, used: 25 * 1024 ** 3 },
+      docker: {
+        hostSourceId: 'docker-source-1',
+        runtime: 'docker',
+        dockerVersion: '27.3.1',
+        os: 'Debian GNU/Linux 12',
+        kernelVersion: '6.1.0',
+        updatesAvailableCount: 2,
+      },
+      ...overrides,
+    }) as Resource;
+
+  it('lifts what needs checking, states one facts line and keeps the rest under Details', () => {
+    render(() => <DockerHostDrawer host={inventoryHost()} />);
+    expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent('No active alerts');
+    const lifted = screen.getByTestId('docker-host-drawer-exceptions');
+    expect(within(lifted).getByText('Updates')).toBeInTheDocument();
+    expect(within(lifted).getByText('2 available')).toBeInTheDocument();
+    const facts = screen.getByTestId('docker-host-drawer-facts');
+    // The row already states the engine version.
+    expect(facts).not.toHaveTextContent('Docker 27.3.1');
+    expect(facts).toHaveTextContent('Debian GNU/Linux 12');
+    expect(facts).toHaveTextContent('4.00 GB of 8.00 GB RAM');
+    expect(facts).toHaveTextContent('25.0 GB of 100 GB disk');
+    const details = screen.getByTestId('docker-host-technical-details') as HTMLDetailsElement;
+    expect(details.tagName).toBe('DETAILS');
+    expect(details.open).toBe(false);
+    expect(within(details).getByText('Kernel')).toBeInTheDocument();
+    expect(within(details).queryByText('Updates')).toBeNull();
+  });
+
+  it('lifts an offline host and states sizes, not used amounts that would read as live', () => {
+    render(() => (
+      <DockerHostDrawer
+        host={inventoryHost({ status: 'offline', lastSeen: Date.now() - 600_000 })}
+      />
+    ));
+    const lifted = screen.getByTestId('docker-host-drawer-exceptions');
+    expect(within(lifted).getByText(/^Offline · last seen/)).toBeInTheDocument();
+    const facts = screen.getByTestId('docker-host-drawer-facts');
+    expect(facts).toHaveTextContent('8.00 GB RAM');
+    expect(facts).not.toHaveTextContent('of 8.00 GB');
   });
 });

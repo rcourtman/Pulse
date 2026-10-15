@@ -136,16 +136,24 @@ const settle = (page) =>
           }),
         dark,
       );
+      // Charts poll every 30 seconds; the proof drives that poll with the clock.
+      await page.clock.install();
       await page.goto(origin + '/browser-tests/guest-history-provenance.html');
       await page.waitForFunction(() => window.__guestHistoryProvenance, undefined, {
         timeout: 60000,
       });
       const activate = (locator) => (width < 768 ? locator.tap() : locator.click());
-      await activate(page.getByRole('tab', { name: 'History', exact: true }));
+      // History charts sit on Overview, which the drawer opens on.
       const chart = page.locator('[data-history-group="utilization"]');
       const notice = chart.locator('[data-history-deferred="disk"]');
       const waitRead = async () => {
-        await page.waitForFunction(() => document.querySelector('button[aria-busy="false"]'));
+        await page.waitForFunction(() => !document.querySelector('button[aria-busy="true"]'));
+        await settle(page);
+      };
+      const pollRead = async () => {
+        const read = page.waitForResponse((r) => r.url().includes('/api/metrics-store/history'));
+        await page.clock.runFor(30_000);
+        await read;
         await settle(page);
       };
       const observe = async (next) => {
@@ -213,7 +221,7 @@ const settle = (page) =>
               true,
             );
           }
-          assert.equal(await chart.locator('path').count(), 0);
+          assert.equal(await chart.locator('path[data-history-series]').count(), 0);
           assert.equal(await chart.locator('[data-history-observation]').count(), 0);
           assert.equal(await chart.locator('[data-history-current="cpu"]').count(), 1);
           record.states.push({ reason, retained, geometry: await checkGeometry() });
@@ -236,13 +244,15 @@ const settle = (page) =>
       await screenshot('unavailable');
       await observe({ reason: 'prev-agent-timeout', usage: 50 });
       mode = 'stored';
-      await activate(page.getByRole('button', { name: 'Refresh history', exact: true }));
+      await pollRead();
       await page.waitForFunction(
-        () => document.querySelectorAll('[data-history-group="utilization"] path').length === 2,
+        () =>
+          document.querySelectorAll('[data-history-group="utilization"] path[data-history-series]')
+            .length === 2,
       );
       await settle(page);
       const paths = await chart
-        .locator('path')
+        .locator('path[data-history-series]')
         .evaluateAll((nodes) => nodes.map((el) => el.getAttribute('d')));
       assert.equal(await chart.locator('[data-history-last-known]').count(), 0);
       assert.match(
@@ -250,8 +260,13 @@ const settle = (page) =>
         /Completion is uncertain\. Do not restart the guest agent during a backup/,
       );
       const slider = chart.getByRole('slider', { name: 'Inspect Utilization history' });
-      if (width < 768) await slider.tap({ position: { x: 3, y: 20 } });
-      else {
+      if (width < 768) {
+        // Headless Chromium reports a fine pointer even with touch, which keeps
+        // the slider visually hidden until a touch reaches the chart; a phone
+        // user touches the plot first, as here.
+        await chart.getByTestId('guest-history-plot').tap();
+        await slider.tap({ position: { x: 3, y: 20 } });
+      } else {
         await slider.focus();
         await slider.press('Home');
       }
@@ -259,7 +274,9 @@ const settle = (page) =>
       assert.match(await slider.getAttribute('aria-valuetext'), /Disk 20\.0%/);
       assert.equal(await chart.locator('[data-history-current]').count(), 0);
       assert.deepEqual(
-        await chart.locator('path').evaluateAll((nodes) => nodes.map((el) => el.getAttribute('d'))),
+        await chart
+          .locator('path[data-history-series]')
+          .evaluateAll((nodes) => nodes.map((el) => el.getAttribute('d'))),
         paths,
       );
       await screenshot('stored-inspection');
@@ -268,9 +285,11 @@ const settle = (page) =>
         'Keyboard/touch inspection uses actual stored 20% at its own date, not retained 50%; paths remain unchanged.',
       );
       mode = 'cpu-only';
-      await activate(page.getByRole('button', { name: 'Refresh history', exact: true }));
+      await pollRead();
       await page.waitForFunction(
-        () => document.querySelectorAll('[data-history-group="utilization"] path').length === 1,
+        () =>
+          document.querySelectorAll('[data-history-group="utilization"] path[data-history-series]')
+            .length === 1,
       );
       await settle(page);
       await slider.focus();
@@ -278,12 +297,14 @@ const settle = (page) =>
       assert.match(await slider.getAttribute('aria-valuetext'), /Disk no observation/);
       assert.equal(await chart.locator('[data-history-last-known]').count(), 0);
       await slider.blur();
-      assert.equal(await chart.locator('[data-history-last-known="disk"]').count(), 1);
+      // At rest the legend reads the latest stored time, where disk has no point.
+      assert.equal(await chart.locator('[data-history-last-known="disk"]').count(), 0);
+      assert.match(await chart.innerText(), /Disk\s*no reading/);
       record.checks.push('A dated CPU observation cannot borrow the retained filesystem value.');
       mode = '503';
-      await activate(page.getByRole('button', { name: 'Refresh history', exact: true }));
+      await pollRead();
       await page.getByRole('button', { name: 'Retry history', exact: true }).waitFor();
-      assert.equal(await chart.locator('path').count(), 1);
+      assert.equal(await chart.locator('path[data-history-series]').count(), 1);
       assert.equal(await notice.count(), 1);
       assert.equal(
         (await page.locator('main').innerText()).includes('fixture-private-error-body'),
@@ -308,7 +329,7 @@ const settle = (page) =>
         await chart.locator('[data-history-current="disk"]').innerText(),
         /75\.0%[\s\S]*current/,
       );
-      assert.equal(await chart.locator('path').count(), 0);
+      assert.equal(await chart.locator('path[data-history-series]').count(), 0);
       await screenshot('fresh-resumption');
       record.checks.push(
         'Successful read and fresh same-VM data restore current 75%, clear provenance, and create no history points.',

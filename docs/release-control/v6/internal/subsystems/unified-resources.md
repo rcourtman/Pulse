@@ -1118,7 +1118,18 @@ workflow tab; legacy object routes such as `/kubernetes/pods`,
 `/kubernetes/autoscaling` are compatibility aliases for that workflow. Pods
 render through `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
 with Pod phase, container readiness, restart, owner, node, image, and age fields
-from the Kubernetes API projection. StatefulSet, DaemonSet, Job, and CronJob rows
+from the Kubernetes API projection. Each Kubernetes row's status words read in
+its dot's colour through `getPlatformStatusTextToneClass`: a Pod's Status
+("CrashLoopBackOff" red, "Pending" amber, Running plain), a Deployment's Ready
+count while replicas are short, a controller's Exceptions. The Pods Status
+column takes 12 percent so a failure reason such as CrashLoopBackOff reads
+whole, and a phone, which hides that column, reads the same words under the
+Pod name. The TrueNAS and vSphere tables follow the same rule: a TrueNAS app,
+which has no State column, reads its state under its name at every width
+("Crashed" amber, Running plain); a share's State ("Disabled" red, "Attention"
+amber) and a vSphere activity's State ("Error" red) take the dot's tone; and
+where a phone hides a State column (shares, services, VMs, vSphere activity)
+the state, with any note such as "should be running", reads under the name. StatefulSet, DaemonSet, Job, and CronJob rows
 render through
 `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx` and must
 preserve the Kubernetes API status semantics for desired replica/node/job
@@ -1867,7 +1878,21 @@ edge; that fallback must not match containers across Docker hosts. When a
 single network has many attached containers, relationship consumers must keep
 the attached container fields searchable and attention-filterable from the
 network detail disclosure instead of forcing operators to inspect a full
-container inventory table.
+container inventory table. Its Attention filter is the rows' verdict (the
+`mapDockerContainerStatus` dot), while Running and Other are Docker's run
+state, so an unhealthy or crash-looping container that still runs matches
+Running and Attention both; the sections stay one per row, Attention first.
+The network's State counts every Attention row ("3 need attention"). A
+network has no health of its own (the adapter reports it online unless its
+host is lost), so its row carries one dot, in the name cell: the network's
+own status when that is worse, otherwise amber while anything attached needs
+attention (degraded, not down; each container keeps its own severity in the
+expansion), otherwise green. The State words take that tone without a second
+dot, and the table's Healthy / Degraded / Offline chips filter by the same
+verdict. Inside the expansion each attached-container card's state words read
+in its own dot's colour ("Unhealthy" red, "12 restarts" amber), as the
+containers table's State words do. A phone row leaves Subnets and Driver, header and cell together, to
+the expansion's Network details.
 
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 12. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `storage-recovery`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
@@ -2382,6 +2407,28 @@ TrueNAS dataset's state (`state:readonly`, `state:locked`, `state:unmounted`)
 because a read-only dataset raises no incident, and uses the rollup's category
 label (Resource Health Issue, Capacity Pressure) only when no reason is more
 specific.
+Below the charts, the resource and Docker host Overviews read their
+inventory as unified-resource facts: `useResourceSummarySections` and
+`getResourceDrawerFacts` (`ResourceDetailSummary.tsx`) take Compose labels,
+image, agent CPU count, `memory`/`disk` used and total, and the primary
+address from the resource itself, state used amounts only for an online or
+running resource whose memory observation (if any) is current, and lift an
+offline resource's state with its `lastSeen`. A row an open alert of the
+resource's own already states (`getAlertStatedRowLabels`) stays in Details.
+The drawer header's status dot for an `app-container` uses the container
+row's mapper (`mapDockerContainerStatus`), so its run state and health check
+decide the colour and label in both places: a running container failing its
+health check is red "Unhealthy" in the row and the header alike. Other
+resources keep `getAgentStatusIndicator` on `status`.
+When a container reports no state of its own (blank counts as none), that
+mapper reads its unified status as other resources' dots do: lost contact
+(offline, error, failed, down, unreachable, disconnected, timeout) is danger,
+degraded/warning/partial/recovering is warning and unknown stays muted; a
+reported state, such as exited on a lost host, still wins.
+A container's update controls read its `docker.hostSourceId`, `containerId`,
+`updateStatus` and the resource's `actionReadiness` through one helper,
+`getDockerContainerUpdateAction`, shared by the containers table and the
+drawer, so an update the server refuses is refused the same way in both.
 Those open alerts come from the websocket `activeAlerts` map through
 `getAlertsForUnifiedResource` in `frontend-modern/src/utils/alerts.ts`, which
 the Docker host drawer (`DockerHostDrawerOverview.tsx`) uses the same way.
@@ -2392,7 +2439,10 @@ their open alerts. The matcher keys a resource on its unified id, canonical
 primary and superseded ids, Proxmox source id and metrics target (PBS, PMG,
 storage); agent and Docker hosts also answer to `agent:<id>` and
 `docker:<host source id>` and to the component alerts nested under those keys
-(disks, RAID arrays, sensors, containers, services). A health reason counts as
+(disks, RAID arrays, sensors, containers, services). An `app-container` answers
+to `docker:<host source id>/<container id>` (or `/name:<name>`), the key the
+alert engine writes for it. Drawer charts take triggers only from
+`getOwnAlertsForUnifiedResource` (exact keys, no nested components). A health reason counts as
 stated when it is a whole sentence of an open alert's text, because a unified
 incident alert on storage with consumers joins the incident summary and its
 impact ("... above threshold. Affects 2 dependent resources: ...") and neither
@@ -2620,6 +2670,17 @@ Any future platform that wants to default to a Systems / Hosts
 overview must first have its canonical resource adapter project the
 platform's top-level system as a unified resource so the builder
 default still resolves to a populated table.
+
+`ALERT_BACKUP_THRESHOLDS_PATH` (`/alerts/thresholds/proxmox#backups`) names
+the Recovery thresholds whose fresh and stale hours colour every backup
+shield; the backup dialog links there and the thresholds page treats
+`#backups` like `#pbs` and `#pmg` (`resourceLinks.test.ts`).
+
+`buildAlertThresholdsPath(tab, { query })` builds a thresholds tab address
+already searched to one resource through `ALERT_THRESHOLDS_QUERY_PARAMS`,
+the `?q=` key the thresholds page owns; callers pass a resource's display
+label, never an id, because the thresholds search matches names
+(`resourceLinks.test.ts`).
 
 17. Platform table ordering is a two-layer contract. Each platform table's
     default order is owned by its page model's status-first compare
@@ -7002,7 +7063,14 @@ host name and the Update control render whole; the percentage-only CPU and
 memory bars yield the difference. Swarm services show the rollout state as
 words ("Rollback started") with the raw token, message and completion time in
 the title, and Swarm tasks show Started as an age with the RFC3339 stamp in
-the title, matching every other platform table's time cells.
+the title, matching every other platform table's time cells. A service's dot
+names Docker's mid-change update states as themselves ("Update paused",
+"Rolling back", "Rollback paused"; `rollback_started` used to read "Rollback
+paused"), and no replicas running outranks a rollout. The cell behind each
+Swarm dot's verdict reads in its tone: a service's Running count (with
+"/desired" on phones, where Desired is hidden) and its Update words, a task's
+Current state (the dot's own word, Docker's token and error on hover and the
+error in the expansion), a node's Reachability or Availability.
 The containers table's State cell says what `docker ps` would flag, through
 `dockerContainerStatePresentation.ts` over `mapDockerContainerStatus`, so the
 row dot and the words agree: Unhealthy and Starting for a running container's
@@ -7010,7 +7078,19 @@ health check, Exited (139) for a crash, Restarting, and muted Exited or Paused
 for a container stopped on purpose, with the full sentence on hover. A health
 status only counts for a running container, because Docker keeps the last one
 on a stopped container (#1724). The State column appears when any row in view
-has one of those states, including an unhealthy running container. From the
+has one of those states, including an unhealthy running container. A narrow
+table (under 360 pixels, most phones) has no State column: beside the shared
+40 percent name it cut "Unhealthy" to "Unhe…", so the same words read under
+the container name on every row, and a saved State sort waits for a layout
+that shows its header. A running container that Docker has restarted more
+than five times gets one verdict, from `mapDockerContainerStatus`: warning,
+"N restarts". The row dot, the drawer header dot and the attention-first sort
+read it everywhere; where the row has a Restarts column the count reads amber
+there and State keeps Docker's own word, and where it has none State says
+"N restarts". The drawer's Restarts row is amber too, and its observed state
+stays Docker's word so the restart is lifted once. Amber, not red: the
+container is running. Docker's count is a total, not a rate, as its hover
+says; the alert engine owns the windowed restart-loop alert. From the
 compact layout up an Uptime column shows the current run (none for a stopped
 container, whose leftover uptime is not time spent running), which marks a
 container that just restarted; narrower rows keep it in the drawer. The Ports
@@ -7706,9 +7786,17 @@ manufacturing a target. The
 boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
 drawer at desktop and narrow widths: selecting Manage, dropping the merged
 metrics target, and restoring it must keep the selection and bring the Overview
-charts back. Its fixture page currently fails before the drawer renders
-(no WebSocket provider), so that proof does not run until the fixture is
-repaired.
+charts back. Its fixture, `browser-tests/pbs-host-history-correlation.tsx`,
+supplies an explicit offline WebSocket context like the other drawer fixtures;
+it threw before rendering until 2026-10-14. With the #1723 reset reintroduced
+(dropping the target sends the drawer to Overview) the proof fails at both
+widths, so it detects the regression it guards.
+`scripts/check-pbs-host-history-correlation.cjs` uses the same fixture and
+asserts the Overview tab stays selected with stable chart paths and Identity
+rows across refreshes; it accepts the Metrics Target row's absence when the
+Identity card suppresses a repeated identifier, and still requires the
+intercepted history request to name the host series (forcing the service key
+makes it fail).
 
 ### Canonical reference resolution uses a derived alias index
 

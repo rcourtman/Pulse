@@ -1301,6 +1301,12 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     than converting missing evidence into "never backed up." Legacy workload
     rows without platform metadata retain the Proxmox-compatible behavior at
     the migration boundary.
+
+    A backup shield's hover card and dialog name the limit that coloured it
+    through `getWorkloadsGuestBackupAgeRule` (Fresh Hours decides amber for stale
+    and overdue alike; overdue also names Stale Hours), read from the same
+    configured thresholds the row already holds, so the row adds no request. The
+    dialog links to the Recovery thresholds (`ALERT_BACKUP_THRESHOLDS_PATH`).
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
     The selected resource owns its drawer tab and History range. Regrouping the
     same resource under a new parent or node retains both even if its drawer
@@ -3669,6 +3675,11 @@ The drawer judges those disks' heat under the guest agent's alert overrides:
 its `agentId`, which `useWorkloads` copies from `resource.agent.agentId` onto
 the workload row, then the guest's own override keys. That reads the alert
 configuration already loaded and adds no query, poll or per-row work.
+While Manage hides the Overview, the drawer's `historyEnabled` also pauses
+these disks: an expanded disk's charts stop polling (they polled every 10-30
+seconds behind the hidden tab) and the list's realtime refresh is held
+through `useUnifiedResources`' `realtimeEnabled`; returning to Overview reads
+once and resumes. `browser-tests/guest-storage-2263.cjs` counts the reads.
 
 ### Configuration transfer authorization stays off persistence hot paths
 
@@ -4018,7 +4029,18 @@ Numeric gridline labels are computed from the scale the panel already holds;
 the compact "Worth checking" list reuses rows already derived, and an alert's
 dashed trigger line reuses the alert the drawer already holds. The min-max band
 reads the `min`/`max` each stored bucket already carries: one extra path per
-series with any spread (none for flat data). None adds a read or timer.
+series with any spread (none for flat data). Range picker option labels come
+from one lookup table (`formatHistoryRangeOptionLabel`). The phone collapse of
+later chart panels is a CSS class below `sm` on panels that stay mounted: it
+hides nothing from the shared history read and adds no read or timer. The
+removed "Refresh history" button took no read away: the 30-second poll is
+unchanged and "Retry history" still appears for a failed read. Its focus
+handoff reads `document.activeElement` once, as the Retry branch is disposed.
+Repeated gridline labels are blanked from the three labels each panel already
+formats, and the canvas chart measures the time labels it already draws to
+choose how many fit. None adds a read or timer. The disk detail's phone fold
+removes reads rather than adding them: folded charts stay paused until opened. The readout and notice
+naming a reply's source read the `source` field the reply already carries.
 
 The default stored-history legend resolves one latest timestamp from that
 same bounded, normalized panel index, then looks up each configured series at

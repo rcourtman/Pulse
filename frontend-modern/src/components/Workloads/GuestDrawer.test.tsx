@@ -60,6 +60,16 @@ vi.mock('@/stores/license', () => ({
   maxHistoryDays: () => 90,
 }));
 
+// Records whether the guest's physical disks may read, without their own
+// resource query; GuestPhysicalDisks.test covers what they render.
+vi.mock('./GuestPhysicalDisks', () => ({
+  GuestPhysicalDisks: (props: { historyEnabled?: boolean }) => (
+    <div
+      data-testid="guest-physical-disks-stub"
+      data-history-enabled={String(props.historyEnabled)}
+    />
+  ),
+}));
 vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
   WebInterfaceUrlField: (props: {
     metadataKind: string;
@@ -79,6 +89,7 @@ import { GuestDrawer } from './GuestDrawer';
 // Overview loads its charts lazily; warm the module so a cold transform does
 // not outlast the tests' waits.
 import './GuestDrawerHistory';
+import { GUEST_DRAWER_HISTORY_POLL_MS } from './guestDrawerHistoryQuery';
 
 const render = (...args: Parameters<typeof solidRender>): ReturnType<typeof solidRender> => {
   const result = solidRender(...args);
@@ -230,6 +241,7 @@ describe('GuestDrawer', () => {
   });
 
   it('keeps stored History gaps through live guest recovery without another read', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const points = makeHistoryPoints(10);
     const payload = {
       resourceType: 'vm',
@@ -277,7 +289,7 @@ describe('GuestDrawer', () => {
       ...payload,
       metrics: { cpu: points, memory: points },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+    await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
     await waitFor(() => expect(chart.querySelector('[data-history-gaps]')).toBeNull());
     expect(chart.querySelectorAll('path[data-history-series]')).toHaveLength(2);
     expect(chart.querySelector('[data-history-observation="memory"]')).toBeNull();
@@ -767,6 +779,23 @@ describe('GuestDrawer', () => {
       expect(utilizationChart).toHaveTextContent('40.0%');
     });
 
+    it('pauses the physical disk charts while Manage hides Overview', async () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({ agentVersion: '6.2.0', agentKind: 'pulse' })}
+          onClose={vi.fn()}
+        />
+      ));
+      // The drawer remembers its last tab, so start from Overview explicitly.
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      const disks = await screen.findByTestId('guest-physical-disks-stub');
+      expect(disks).toHaveAttribute('data-history-enabled', 'true');
+      await fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+      expect(disks).toHaveAttribute('data-history-enabled', 'false');
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      expect(disks).toHaveAttribute('data-history-enabled', 'true');
+    });
+
     it('switches back to Overview tab', async () => {
       const { container } = render(() => (
         <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
@@ -1169,7 +1198,17 @@ describe('GuestDrawer', () => {
         <GuestDrawer
           guest={makeGuest({
             cpus: 4,
-            memory: { total: 4 * GiB, used: GiB, free: 3 * GiB, usage: 25 },
+            memory: {
+              total: 4 * GiB,
+              used: GiB,
+              free: 3 * GiB,
+              usage: 25,
+              observation: {
+                state: 'current',
+                source: 'status-mem',
+                observedAt: new Date().toISOString(),
+              },
+            },
             disk: { total: 100 * GiB, used: 25 * GiB, free: 75 * GiB, usage: 25 },
           })}
           onClose={vi.fn()}
@@ -1179,6 +1218,27 @@ describe('GuestDrawer', () => {
       expect(facts).toHaveTextContent('4 vCPU');
       expect(facts).toHaveTextContent(/1\.00 GB of 4\.00 GB RAM/);
       expect(facts).toHaveTextContent(/25\.0 GB of 100 GB disk/);
+    });
+
+    it('states only the memory size for a retained reading, not a used amount', () => {
+      const GiB = 1024 ** 3;
+      solidRender(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            memory: {
+              total: 4 * GiB,
+              used: GiB,
+              free: 3 * GiB,
+              usage: 25,
+              observation: { state: 'last-known', source: 'guest-agent-meminfo' },
+            },
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      const facts = screen.getByTestId('guest-drawer-facts');
+      expect(facts).toHaveTextContent('4.00 GB RAM');
+      expect(facts).not.toHaveTextContent(/of 4\.00 GB RAM/);
     });
 
     it('shows no memory amount when the memory reading is withdrawn', () => {

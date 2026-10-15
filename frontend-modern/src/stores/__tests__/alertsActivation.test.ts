@@ -65,4 +65,45 @@ describe('alerts activation ownership boundary', () => {
     expect(store.notificationDeliveryEnabled()).toBe(false);
     expect(window.__pulseAlertsDetectionEnabled).toBe(false);
   });
+  // An Alerts page save re-reads this config so backup shields and metric
+  // colours follow a saved limit; that read must not land in another
+  // organisation, nor let an older read overwrite a newer one.
+  it('drops a config read that an organisation switch has overtaken', async () => {
+    let resolveRead: (config: AlertConfig) => void = () => undefined;
+    vi.spyOn(AlertsAPI, 'getConfig').mockReturnValue(
+      new Promise<AlertConfig>((resolve) => {
+        resolveRead = resolve;
+      }),
+    );
+    const store = useAlertsActivation();
+    const read = store.refreshConfig();
+
+    eventBus.emit('org_switched', 'other-org');
+    resolveRead(alertConfig('active'));
+    await read;
+
+    expect(store.config()).toBeNull();
+    expect(store.activationState()).toBeNull();
+  });
+
+  it('keeps the newest config read when an older one answers last', async () => {
+    const reads: Array<(config: AlertConfig) => void> = [];
+    vi.spyOn(AlertsAPI, 'getConfig').mockImplementation(
+      () =>
+        new Promise<AlertConfig>((resolve) => {
+          reads.push(resolve);
+        }),
+    );
+    const store = useAlertsActivation();
+    const older = store.refreshConfig();
+    const newer = store.refreshConfig();
+
+    reads[1]?.(alertConfig('snoozed'));
+    await newer;
+    reads[0]?.(alertConfig('active'));
+    await older;
+
+    expect(store.activationState()).toBe('snoozed');
+    expect(store.isLoading()).toBe(false);
+  });
 });

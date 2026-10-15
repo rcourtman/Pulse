@@ -267,6 +267,10 @@ server posture policy (`freshnessWindowSeconds`) using the causes
 `internal/recovery/posture.go` evaluates, and renders no rule until that policy
 has loaded rather than a guessed window.
 
+The workload backup shield explains its colour from the configured Fresh and
+Stale Hours and links to the Recovery thresholds through the shared
+`ALERT_BACKUP_THRESHOLDS_PATH`; it reads no recovery evidence of its own.
+
 Phone pool/disk rows preserve health and identity while using weighted widths,
 consistent gutters and compact capacity/health labels. Full disk risk reasons
 move into the existing expanded header; the ZFS activity badge uses supplied
@@ -2882,9 +2886,21 @@ canonical pre-handler authorization proof covering both transfer routes.
     picker, then configuration, topology and devices; a disk detail shows its
     health verdict and SMART facts, then its History charts with the range
     picker beside their heading, then live I/O. With only one view left, these
-    details render no `Subtabs` strip. The range picker keeps the shared
+    details render no `Subtabs` strip. Both pickers label their options with
+    the shared `formatHistoryRangeOptionLabel` ("24 hours", "7 days"), the
+    same names the resource drawers use. The range picker keeps the shared
     filter-select presentation; storage must not restore the retired
     storage-local range-selector classes and inline SVG select decoration.
+    A disk detail mounted where it can be hidden (a guest drawer's Overview
+    behind Manage) takes `historyEnabled` and passes it to every chart,
+    history and live I/O alike, so a hidden disk reads nothing.
+    Below the `sm` breakpoint a disk detail shows its first History chart
+    and any chart whose SMART card is out of bounds (cards and charts share
+    labels, `getDiskDetailPhonePinnedChartLabels`); the remaining History
+    charts and the whole Live I/O section fold behind the shared
+    `PhoneChartsToggle`. A pinned chart stays pinned after its card recovers.
+    Folded charts read nothing until the toggle opens them; wider layouts
+    show and read every chart. Its charts draw the shared min-max band.
     Storage-page pool growth readouts belong to that same contract: the table
     may derive per-pool used-capacity deltas from the shared
     `/api/storage-charts` summary payload, but it must not fan out row-local
@@ -6538,6 +6554,33 @@ windowing test pins the row shape, and the 50-node browser fixture exercises
 expanded rows and History at desktop and phone widths. This is presentation
 work only; it changes no storage evidence, alert state or recovery authority.
 
+### Storage deep links resolve through the registry and open the pool
+
+`useStorageResourceHighlight` matches `?resource=` against a record's id,
+then its metrics resource id (alerts and history use it), then its name only
+when exactly one record carries that name, because every Proxmox node can
+have a `local-zfs` and two PBS servers can both expose `primary-vault`. Any
+other reference is resolved by `ResourceAPI.getResource` (the registry owns
+aliases, succession and ambiguity) and matched by the resolved id; a shared
+name is never looked up. Every matched pool is opened, not only Ceph, so the
+shared summary focus bridge reveals its row and details. The Proxmox page
+keeps Storage mounted behind its other tabs, whose guest links also use
+`?resource=`, so the hook acts only while Storage is the active tab
+(`routeActive`). A visit is one stretch of Storage showing one link: a
+refusal lasts for the visit, so live updates do not repeat the request but a
+later visit (another link, or the tab again) retries, and a resolved pool not
+listed yet opens when its record arrives. Once a visit has needed a lookup,
+any pool the operator opens or closes outranks the link, whether the lookup
+or a record update finds the pool first.
+
+### Thresholds deep links open no storage or recovery path
+
+`buildAlertThresholdsPath` in `frontend-modern/src/routing/resourceLinks.ts`
+adds only a thresholds tab and its `?q=` name search. It reads no storage or
+recovery state and grants no storage action, and Patrol's alert-only guidance
+sends a physical disk to its tab unsearched, so it never filters storage or
+recovery rows by a disk name they do not carry.
+
 ### App-shell AI navigation gating opens no recovery path
 
 `App.tsx` now passes the `assistantEnabled` session capability to the keyboard
@@ -6828,3 +6871,11 @@ The accepted upstream `diagnostics_token_visibility_test.go` controls and API
 reference route checks cover caller filtering and the documented authority.
 Final-source checks must retain this upstream behavior beside the reviewed
 reporting/help repairs; source proof is not installed credential recovery.
+
+### Pulse Pro runtime switch opens no storage or recovery path (14 October 2026)
+
+The Pulse Pro runtime switch routes added under `internal/api/` reuse the
+update pipeline's existing backup of the installed binary before replacing it
+and its existing history-entry rollback. The data directory, metrics and
+configuration stores, backups, snapshots and recovery points are untouched,
+and no new backup, retention or restore path is added.

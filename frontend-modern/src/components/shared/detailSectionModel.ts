@@ -20,6 +20,11 @@ export type DetailRow = {
   /** Put long identifying labels above the value instead of in the compact label column. */
   layout?: 'stacked';
   progress?: DetailRowProgress;
+  /**
+   * Something the reader can act on, though not wrong (an available update):
+   * drawers lift it in front with the warning- and danger-toned rows.
+   */
+  lift?: boolean;
 };
 
 export type DetailSection = {
@@ -34,7 +39,7 @@ export const makeDetailRow = (
   value?: string | null,
   options: Pick<
     DetailRow,
-    'title' | 'tone' | 'wrap' | 'layout' | 'progress' | 'valueContent' | 'valueClass'
+    'title' | 'tone' | 'wrap' | 'layout' | 'progress' | 'valueContent' | 'valueClass' | 'lift'
   > = {},
 ): DetailRow | null => {
   const trimmed = value?.trim();

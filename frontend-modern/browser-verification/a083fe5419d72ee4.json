@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "ac18c1d9583f0a5a69e9cd6c516834ec44cd120b",
+  "verified_at": "2026-10-14T16:20:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "ea2c5b255fa32e6c2a6717f428fe62844f0ec226dba99fa755e2806b4427b931",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx": "c6344a728276fa3220b1e3a2fb1863718c916a67d8e31fcf60af0de80be14cd2",
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx": "ae619e365009d5164978fc3abfe663b1b3ca5d717711820cbe0635756a2844db"
+  },
+  "routes": [
+    "browser-tests/proxmox-docker-rows.html Networks and Containers views (production DockerNetworksTable and DockerContainersTable over REST-mapped rows, Chromium and WebKit via Playwright 1.56.1 on pulse-dev)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "network with an unhealthy container on it: one amber name dot titled \"3 need attention\" (old: green \"Online\" dot plus a red State dot)",
+    "State words \"3 need attention\" amber, no second dot",
+    "attached containers keep their own red and amber dots in the expansion",
+    "containers table State words and Restarts tones unchanged after the shared tone helper",
+    "reviewed by Sol from desktop screenshots"
+  ],
+  "interactions": [
+    "network row expand",
+    "attached-container status chips"
+  ]
+}

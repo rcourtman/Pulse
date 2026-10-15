@@ -121,7 +121,13 @@ const initial = {
       const drawer = page.getByRole('region', { name: 'Guest details' });
       await drawer.waitFor({ state: 'visible' });
       const precaution = page.getByTestId('guest-read-precaution');
-      const overview = page.getByTestId('guest-technical-details');
+      // A deferred read is lifted into Worth checking; other rows sit under the
+      // closed Details disclosure. Read the whole Overview with Details open.
+      const overview = page.getByTestId('guest-drawer-overview');
+      const openDetails = async () => {
+        const details = page.getByTestId('guest-technical-details');
+        if (!(await details.evaluate((el) => el.open))) await details.locator('summary').click();
+      };
       const stateCell = () =>
         overview.getByText('Guest-agent reads', { exact: true }).locator('..');
       const update = async (value) => {
@@ -140,6 +146,7 @@ const initial = {
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       };
       await precaution.waitFor();
+      await openDetails();
       assert((await precaution.innerText()).includes('does not prove thaw'));
       assert((await precaution.innerText()).includes('filesystems covered by the backup'));
       assert((await stateCell().innerText()).includes('Deferred'));
@@ -167,7 +174,7 @@ const initial = {
         await page.waitForFunction(
           (label) =>
             document
-              .querySelector('[data-testid="guest-technical-details"]')
+              .querySelector('[data-testid="guest-drawer-overview"]')
               .textContent.includes(label),
           label,
         );
@@ -184,7 +191,7 @@ const initial = {
       await update({ ...initial, version: '', assignment: true });
       assert((await overview.innerText()).includes('Node agent assigned'));
       assert((await stateCell().innerText()).includes('Deferred'));
-      await page.getByRole('tab', { name: 'History', exact: true }).click();
+      // History charts sit on Overview, under the same precaution.
       await precaution.waitFor();
       await page.getByText('No stored history in this range', { exact: true }).first().waitFor();
       await update({
@@ -209,7 +216,7 @@ const initial = {
         true,
       );
       checks.push(
-        'Same guest retains drawer/tab identity; precaution persists across History/Manage; assignment is not connectivity',
+        'Same guest retains drawer/tab identity; precaution persists across Overview/Manage; assignment is not connectivity',
       );
       await update({
         ...initial,
@@ -220,13 +227,11 @@ const initial = {
         diskUsed: 7.5 * 1024 ** 3,
       });
       await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+      await openDetails();
       assert.equal(await precaution.count(), 0);
       assert((await stateCell().innerText()).includes('Reported available'));
-      assert(
-        (await stateCell().getByText('Reported available').getAttribute('title')).includes(
-          'does not independently confirm thaw',
-        ),
-      );
+      // The caveat is visible text, not only a title, so touch users read it.
+      assert((await stateCell().innerText()).includes('does not independently confirm thaw'));
       assert((await row.locator('[data-workload-col="disk"]').innerText()).includes('75%'));
       await checkLayout(stateCell());
       await capture('reported-available');
@@ -248,7 +253,7 @@ const initial = {
           'Pulse monitoring and alerts are unavailable while stopped',
         ),
       );
-      assert((await article.innerText()).includes('filesystems covered by the backup'));
+      assert((await article.innerText()).includes('filesystem covered by the backup'));
       if (width === 320) await capture('safety-guide');
       assert.equal(
         requests.filter((r) => r.path.includes('diagnostics') || r.method !== 'GET').length,

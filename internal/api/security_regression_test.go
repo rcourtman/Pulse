@@ -1440,6 +1440,7 @@ func TestUpdateReadEndpointsRequireSettingsReadScope(t *testing.T) {
 		"/api/updates/check",
 		"/api/updates/status",
 		"/api/updates/plan",
+		"/api/updates/pro-runtime",
 	}
 
 	for _, path := range paths {
@@ -1475,15 +1476,17 @@ func TestUpdateApplyRequiresSettingsWriteScope(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/updates/apply", strings.NewReader(`{}`))
-	req.Header.Set("X-API-Token", rawToken)
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
-		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	for _, path := range []string{"/api/updates/apply", "/api/updates/pro-runtime/apply"} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("%s: expected 403 for missing settings:write scope, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+			t.Fatalf("%s: expected missing scope response to mention %q, got %q", path, config.ScopeSettingsWrite, rec.Body.String())
+		}
 	}
 }
 
@@ -2917,6 +2920,8 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/logs/level", body: `{}`},
 		{method: http.MethodGet, path: "/api/updates/check", body: ""},
 		{method: http.MethodPost, path: "/api/updates/apply", body: `{}`},
+		{method: http.MethodGet, path: "/api/updates/pro-runtime", body: ""},
+		{method: http.MethodPost, path: "/api/updates/pro-runtime/apply", body: `{}`},
 		{method: http.MethodGet, path: "/api/updates/status", body: ""},
 		{method: http.MethodGet, path: "/api/updates/stream", body: ""},
 		{method: http.MethodGet, path: "/api/updates/plan", body: ""},
@@ -4065,6 +4070,8 @@ func TestPrivilegedSecurityEndpointsRejectNonAdminSession(t *testing.T) {
 		{method: http.MethodGet, path: "/api/updates/plan", body: ``},
 		{method: http.MethodGet, path: "/api/updates/history", body: ``},
 		{method: http.MethodPost, path: "/api/updates/apply", body: `{}`},
+		{method: http.MethodGet, path: "/api/updates/pro-runtime", body: ``},
+		{method: http.MethodPost, path: "/api/updates/pro-runtime/apply", body: `{}`},
 		{method: http.MethodGet, path: "/api/logs/stream", body: ``},
 		{method: http.MethodGet, path: "/api/logs/download", body: ``},
 		{method: http.MethodGet, path: "/api/settings/relay", body: ``},

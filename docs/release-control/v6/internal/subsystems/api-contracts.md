@@ -598,6 +598,16 @@ collapse evidence, protection posture, and lifecycle history, but it must not
 drop those typed fields or replace their server-authored trust state. Decision,
 finding, and approval counts remain distinct API projections and must not be
 presented as interchangeable totals.
+`subjectResourceId` and `subjectResourceType` also decide the browser's
+`Open resource` destination: the browser resolves the id through
+`GET /api/resources/{id}` for the subject's platform and falls back to the
+type hint, so both fields must keep naming the subject the alert or finding
+is about (an alert's `unifiedAlertType` display words are accepted as hints).
+
+The same resolution picks the thresholds tab and search behind the alert-only
+guidance link, so the registry resource's display label must stay the label
+the thresholds rows are built from (`getAlertResourceDisplayLabel`).
+
 The attention list's authenticated read contract is independent of Patrol's
 model-readiness and on/off state. `PatrolIntelligenceSurface.tsx` must not gate
 the attention transport or its canonical list on `shouldShowPatrolSetupOnly`;
@@ -2678,6 +2688,18 @@ payload shape change when the portal presents compact client rows.
     and answers with the same started-acknowledgement shape as apply;
     conflict responses cover pruned or missing backups and Docker
     deployments, and not-found covers unknown history entries.
+    `GET /api/updates/pro-runtime` (admin plus `settings:read`) answers
+    whether a community build can switch to the Pulse Pro runtime as
+    `{available, reason?, currentVersion, version?, installInPlace, docker?}`,
+    where `reason` is the closed set `already_pro`, `not_activated`,
+    `not_eligible`, `source_build`, `unsupported_deployment`, `older_release`
+    and `unavailable`, and `docker` reuses the `DockerUpdateCommands` shape.
+    `POST /api/updates/pro-runtime/apply` (admin plus `settings:write`) takes
+    no body, re-checks that an in-place switch is offered (otherwise a plain
+    conflict response, with the reason logged rather than returned), runs the
+    same readiness gate as apply against the switch target version, and
+    answers with the apply started-acknowledgement shape. Neither route
+    exposes broker credentials.
 87. `pkg/aicontracts/fix_execution.go` shared with `ai-runtime`: the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders.
 88. `pkg/aicontracts/investigation.go` shared with `ai-runtime`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
 89. `pkg/aicontracts/orchestrator_deps.go` shared with `ai-runtime`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.

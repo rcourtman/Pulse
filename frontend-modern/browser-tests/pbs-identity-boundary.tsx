@@ -1,10 +1,10 @@
 // Synthetic bounded Backups/Overview resources, not installed host evidence.
 import { createMemo, createSignal } from 'solid-js';
-import { render } from 'solid-js/web';
 
 import { ProxmoxBackupServersTable } from '../src/features/proxmox/ProxmoxBackupServersTable';
 import type { Resource } from '../src/types/resource';
 import '../src/index.css';
+import { renderInAppRuntime } from './fixtureRuntime';
 
 const seen = Date.now();
 const suffixes = ['one', 'two', 'three'];
@@ -113,4 +113,4 @@ const Fixture = () => {
   );
 };
 
-render(() => <Fixture />, document.getElementById('root') as HTMLElement);
+renderInAppRuntime(Fixture);

@@ -59,6 +59,7 @@ const observations = (mode) => [
     actionReadiness: [{ name: 'restart', available: false, reason: 'Command agent disconnected' }],
     metrics: { cpu: { percent: 42 }, memory: { percent: 50, used: 5e8, total: 1e9 } },
     docker: {
+      networks: [{ name: 'edge-net', ipv4: '10.88.0.10' }],
       agentId: 'agent-edge',
       hostSourceId: 'agent-edge',
       containerId: 'native-edge-web',
@@ -67,6 +68,8 @@ const observations = (mode) => [
       runtimeVersion: '27.5.1',
       image: 'nginx:latest',
       containerState: 'running',
+      // Running but failing its health check: row and drawer must both say so.
+      health: 'unhealthy',
       restartCount: 7,
       updateStatus: {
         updateAvailable: true,
@@ -80,6 +83,7 @@ const observations = (mode) => [
     status: 'offline',
     metrics: { cpu: { percent: 0 }, memory: { percent: 0 } },
     docker: {
+      networks: [{ name: 'edge-net', ipv4: '10.88.0.11' }],
       agentId: 'agent-edge',
       hostname: 'edge-long-hostname',
       runtime: 'podman',
@@ -87,6 +91,46 @@ const observations = (mode) => [
       image: 'redis:7.4',
       containerState: 'exited',
       restartCount: 0,
+    },
+  }),
+  // No container state reported: its degraded unified status must read amber.
+  base('edge-queue', 'app-container', {
+    status: 'degraded',
+    metrics: { cpu: { percent: 3 }, memory: { percent: 20 } },
+    docker: {
+      networks: [{ name: 'edge-net', ipv4: '10.88.0.12' }],
+      agentId: 'agent-edge',
+      hostSourceId: 'agent-edge',
+      containerId: 'native-edge-queue',
+      hostname: 'edge-long-hostname',
+      runtime: 'docker',
+      runtimeVersion: '27.5.1',
+      image: 'rabbitmq:3',
+    },
+  }),
+  // Running, but restarted past the attention threshold: its dot reads amber.
+  base('edge-loop', 'app-container', {
+    status: 'running',
+    metrics: { cpu: { percent: 5 }, memory: { percent: 10 } },
+    docker: {
+      networks: [{ name: 'edge-net', ipv4: '10.88.0.13' }],
+      agentId: 'agent-edge',
+      hostname: 'edge-long-hostname',
+      runtime: 'docker',
+      runtimeVersion: '27.5.1',
+      image: 'worker:2',
+      containerState: 'running',
+      restartCount: 12,
+    },
+  }),
+  base('edge-net', 'docker-network', {
+    docker: {
+      hostSourceId: 'agent-edge',
+      hostname: 'edge-long-hostname',
+      networkId: 'net-edge',
+      driver: 'bridge',
+      scope: 'local',
+      enableIpv4: true,
     },
   }),
   base('nginx:latest', 'docker-image', {
@@ -264,7 +308,7 @@ const observations = (mode) => [
         timeout: 120000,
       });
       if (width === 390) await page.evaluate(() => document.documentElement.classList.add('dark'));
-      await page.getByText('8 REST-mapped rows', { exact: true }).waitFor();
+      await page.getByText('11 REST-mapped rows', { exact: true }).waitFor();
       await check(
         'REST-first PMG counters and facets are present before any websocket hydration',
         async () => {
@@ -356,7 +400,19 @@ const observations = (mode) => [
           const headers = await table.locator('th:visible').allTextContents();
           if (width === 390) {
             assert.ok(!headers.some((h) => h.includes('Restarts')));
-            assert.ok(headers.some((h) => h.includes('State')));
+            // A phone row reads the state words under the name, whole: as a
+            // column beside the name they were cut to "Unhe…".
+            assert.ok(!headers.some((h) => h.includes('State')));
+            const words = table
+              .locator('[data-docker-container-row="edge-web"]')
+              .locator('[data-docker-container-state]');
+            assert.equal(await words.innerText(), 'Unhealthy');
+            const fit = await words.evaluate((e) => ({
+              scroll: e.scrollWidth,
+              client: e.clientWidth,
+              name: e.closest('td') === e.closest('tr').querySelector('td'),
+            }));
+            assert.ok(fit.name && fit.scroll <= fit.client, JSON.stringify(fit));
           }
         },
       );
@@ -367,12 +423,90 @@ const observations = (mode) => [
           const row = page.locator('[data-docker-container-row="edge-web"]');
           if (width === 390) await row.locator('td').first().tap();
           else await row.getByRole('button', { name: /details/i }).click();
-          const detail = page.getByTestId('resource-docker-container-section');
+          // A worrying restart count is lifted in front of the drawer's charts.
+          const detail = page.getByTestId('resource-drawer-exceptions');
           await detail.getByText('Restarts', { exact: true }).waitFor();
           await detail.getByText('7', { exact: true }).waitFor();
+          // The lifted update offers its next steps: the row's update control and
+          // where to see the new image.
+          const updateLine = detail.locator('tr').filter({ hasText: 'Image update' });
+          const drawerUpdate = updateLine.getByRole('button').filter({ hasText: 'Update' });
+          await drawerUpdate.waitFor();
+          assert.equal(await drawerUpdate.isEnabled(), true);
+          if (width === 390) {
+            // Outside the table a phone taps this control: 44px tall at least.
+            const box = await drawerUpdate.boundingBox();
+            assert.ok(box && box.height >= 44, JSON.stringify(box));
+          }
+          assert.match(
+            await updateLine.getByRole('link', { name: 'View image tags' }).getAttribute('href'),
+            /nginx/,
+          );
+          // The drawer header dot agrees with the row's: unhealthy is red, not green.
+          const headerDot = page.getByRole('img', { name: 'Unhealthy' }).first();
+          await headerDot.waitFor();
+          const rowDot = row.locator('[title="Unhealthy"]').first();
+          const colours = await Promise.all(
+            [headerDot, rowDot].map((dot) =>
+              dot.evaluate((el) => getComputedStyle(el).backgroundColor),
+            ),
+          );
+          assert.equal(colours[0], colours[1], JSON.stringify(colours));
+          assert.match(colours[0], /^rgb\((2[0-9]{2}), ([0-9]{1,2}|1[0-2][0-9]), /);
         },
       );
       await capture('container-detail');
+      await check('A degraded container reads amber in its row and its drawer', async () => {
+        const row = page.locator('[data-docker-container-row="edge-queue"]');
+        const rowDot = row.locator('[title="Degraded"]').first();
+        await rowDot.waitFor();
+        if (width === 390) await row.locator('td').first().tap();
+        else await row.getByRole('button', { name: /details/i }).click();
+        const headerDot = page.getByRole('img', { name: 'Degraded' }).first();
+        await headerDot.waitFor();
+        const colours = await Promise.all(
+          [rowDot, headerDot].map((dot) =>
+            dot.evaluate((el) => getComputedStyle(el).backgroundColor),
+          ),
+        );
+        assert.equal(colours[0], colours[1], JSON.stringify(colours));
+        // Amber: strong red and green, little blue.
+        const [r, g, b] = colours[0].match(/\d+/g).map(Number);
+        assert.ok(r > 200 && g > 120 && b < 80, JSON.stringify(colours));
+      });
+      await capture('container-degraded');
+      await check(
+        'A crash-looping running container reads amber in its dot and drawer',
+        async () => {
+          const row = page.locator('[data-docker-container-row="edge-loop"]');
+          const rowDot = row.locator('[title="12 restarts"]').first();
+          await rowDot.waitFor();
+          const amber = (colour) => {
+            const [r, g, b] = colour.match(/\d+/g).map(Number);
+            return r > 200 && g > 120 && b < 80;
+          };
+          const dotColour = await rowDot.evaluate((el) => getComputedStyle(el).backgroundColor);
+          assert.ok(amber(dotColour), dotColour);
+          if (width === 390) {
+            // No Restarts column on a phone: the words under the name say why.
+            const words = row.locator('[data-docker-container-state]');
+            assert.equal(await words.innerText(), '12 restarts');
+            assert.equal(await words.getAttribute('data-docker-container-state'), 'warning');
+            await row.locator('td').first().tap();
+          } else {
+            await row.getByRole('button', { name: /details/i }).click();
+          }
+          const headerDot = page.getByRole('img', { name: '12 restarts' }).first();
+          await headerDot.waitFor();
+          assert.equal(
+            await headerDot.evaluate((el) => getComputedStyle(el).backgroundColor),
+            dotColour,
+          );
+          const detail = page.getByTestId('resource-drawer-exceptions');
+          await detail.getByText('Restarts', { exact: true }).waitFor();
+        },
+      );
+      await capture('container-restarts');
       await select('Images');
       await check('Image verdict fits; phone hidden headers and cells are symmetric', async () => {
         const table = page.getByRole('region', { name: 'Image table' });
@@ -386,6 +520,79 @@ const observations = (mode) => [
         }
       });
       await capture('images');
+      await select('Networks');
+      await check('Network Running filter follows run state, not the verdict', async () => {
+        const table = page.getByRole('region', { name: 'Network table' });
+        const networkRow = table.locator('[data-docker-network-row="edge-net"]');
+        const headers = await table.locator('th:visible').allTextContents();
+        // Every visible header sits over its own cells, and a phone leaves
+        // Subnets and Driver to the expansion's Network details.
+        assert.equal(await networkRow.locator('td:visible').count(), headers.length);
+        if (width === 390) {
+          assert.ok(!headers.some((h) => /Subnets|Driver/i.test(h)), JSON.stringify(headers));
+        }
+        // The state counts every container the Attention filter holds, whole.
+        const state = networkRow.getByText('3 need attention', { exact: true });
+        const fit = await state.evaluate((e) => ({ scroll: e.scrollWidth, client: e.clientWidth }));
+        assert.ok(fit.scroll <= fit.client, JSON.stringify(fit));
+        // One dot per row, in the name cell: amber, the network degraded by what
+        // is on it (old: a green "Online" dot beside a red one). Each container
+        // keeps its own severity in the expansion.
+        const dots = networkRow.locator('[title="3 need attention"]');
+        assert.equal(await dots.count(), 2); // the dot and the State words' hover
+        const dotColour = await dots.first().evaluate((el) => getComputedStyle(el).backgroundColor);
+        const [r, g, b] = dotColour.match(/\d+/g).map(Number);
+        assert.ok(r > 200 && g > 120 && b < 80, dotColour);
+        assert.equal(await networkRow.locator('[title="Online"]').count(), 0);
+        await networkRow.click();
+        const detail = table.locator('[data-docker-network-detail-row="edge-net"]');
+        await detail.getByText('edge-loop', { exact: true }).waitFor();
+        const visibleNames = async () =>
+          (
+            await Promise.all(
+              ['edge-web', 'edge-loop', 'edge-queue', 'edge-cache'].map(async (name) =>
+                (await detail.getByText(name, { exact: true }).count()) > 0 ? name : null,
+              ),
+            )
+          ).filter(Boolean);
+        // A phone keeps the status chips behind the toolbar's Filters button.
+        const chooseStatus = async (name) => {
+          const chip = page.getByRole('button', { name });
+          if (!(await chip.isVisible())) {
+            await detail.getByRole('button', { name: /Filters/ }).click();
+          }
+          await chip.click();
+        };
+        // Unhealthy and crash-looping containers still run: they match Running
+        // and sit in its Attention section.
+        await chooseStatus(/^Running, 2$/);
+        assert.deepEqual(await visibleNames(), ['edge-web', 'edge-loop']);
+        await detail.getByText('Needs operator review', { exact: true }).waitFor();
+        // Each card's state words take its dot's colour: red, then amber.
+        const cardTones = await detail
+          .locator('[data-docker-attachment-state]')
+          .evaluateAll((spans) =>
+            spans.map((s) => [
+              s.textContent,
+              getComputedStyle(s).color,
+              s.dataset.dockerAttachmentState,
+            ]),
+          );
+        assert.deepEqual(
+          cardTones.map(([text, , variant]) => [text, variant]),
+          [
+            ['Unhealthy', 'danger'],
+            ['12 restarts', 'warning'],
+          ],
+        );
+        assert.notEqual(cardTones[0][1], cardTones[1][1], JSON.stringify(cardTones));
+        await chooseStatus(/^Other, 2$/);
+        assert.deepEqual(await visibleNames(), ['edge-queue', 'edge-cache']);
+        await chooseStatus(/^Attention, 3$/);
+        assert.deepEqual(await visibleNames(), ['edge-web', 'edge-loop', 'edge-queue']);
+        await chooseStatus(/^Running, 2$/);
+      });
+      await capture('networks');
       await select('Swarm');
       await check(
         'Swarm state and started time use operator wording with raw evidence retained',
@@ -415,10 +622,41 @@ const observations = (mode) => [
           const started = page.locator('[title="2026-10-03T11:30:00.123456Z"]');
           await started.waitFor({ state: 'attached' });
           assert.match(await started.innerText(), /ago/);
-          await page
+          const taskState = page
             .getByRole('region', { name: 'Swarm tasks' })
-            .getByTitle('running', { exact: true })
-            .waitFor();
+            .locator('[data-docker-task-state]');
+          await taskState.waitFor({ state: 'attached' });
+          // Current reads the task dot's own word; Docker's token stays on hover.
+          assert.equal(await taskState.textContent(), 'Running');
+          assert.equal(await taskState.getAttribute('title'), 'running');
+          // The service dot names the rollout, and the cells behind its verdict
+          // read in its amber: the Update words and the short Running count.
+          const serviceRow = page.locator('[data-docker-service-row="web-service"]');
+          const amber = (colour) => {
+            const [r, g, b] = colour.match(/\d+/g).map(Number);
+            return r > 150 && g > 70 && b < 80;
+          };
+          const colourOf = (locator) =>
+            locator.evaluate((el) =>
+              getComputedStyle(el).backgroundColor === 'rgba(0, 0, 0, 0)'
+                ? getComputedStyle(el).color
+                : getComputedStyle(el).backgroundColor,
+            );
+          const dot = serviceRow.locator('[title="Rolling back"]').first();
+          await dot.waitFor();
+          const running = serviceRow.locator('[data-docker-service-running="warning"]');
+          // A phone hides Desired, so the count reads out of what.
+          assert.equal(
+            (await running.innerText()).replace(/\s+/g, ''),
+            width === 390 ? '2/4' : '2',
+          );
+          for (const colour of [
+            await colourOf(dot),
+            await colourOf(state),
+            await colourOf(serviceRow.locator('[data-docker-service-running="warning"]')),
+          ]) {
+            assert.ok(amber(colour), colour);
+          }
         },
       );
       await capture('swarm');

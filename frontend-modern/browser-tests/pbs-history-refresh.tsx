@@ -1,12 +1,12 @@
 // Direct production renderer proof; this is not the complete PBS table/drawer.
 import { createSignal } from 'solid-js';
-import { render } from 'solid-js/web';
 import type { HistoryTimeRange } from '../src/api/charts';
 import {
   GuestDrawerHistory,
   GuestDrawerHistoryRangeSelect,
 } from '../src/components/Workloads/GuestDrawerHistory';
 import { HOST_METRICS_HISTORY_GROUPS } from '../src/components/shared/hostMetricsHistoryModel';
+import { renderInAppRuntime } from './fixtureRuntime';
 import '../src/index.css';
 
 const Fixture = () => {
@@ -32,4 +32,4 @@ const Fixture = () => {
     </main>
   );
 };
-render(() => <Fixture />, document.getElementById('root') as HTMLElement);
+renderInAppRuntime(Fixture);

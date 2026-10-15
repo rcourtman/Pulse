@@ -6,6 +6,7 @@ import {
   getAlertSeverityBadgeClass,
   getAlertSeverityCompactLabel,
   getAlertSeverityDotClass,
+  getAlertSeverityFillClass,
   getAlertSeverityIndicatorVariant,
   getAlertSeverityTextClass,
 } from '@/utils/alertSeverityPresentation';
@@ -60,8 +61,17 @@ describe('alertSeverityPresentation', () => {
 
   it('maps severity dots to canonical colors', () => {
     expect(getAlertSeverityDotClass('critical')).toBe('h-2 w-2 rounded-full bg-red-500');
-    expect(getAlertSeverityDotClass('warning')).toBe('h-2 w-2 rounded-full bg-yellow-500');
+    expect(getAlertSeverityDotClass('warning')).toBe(
+      'h-2 w-2 rounded-full bg-amber-700 dark:bg-yellow-500',
+    );
     expect(getAlertSeverityDotClass('info')).toBe('h-2 w-2 rounded-full bg-blue-500');
+  });
+
+  it('fills a severity the same colour as its dot, so a chart segment matches its legend', () => {
+    for (const level of ['critical', 'warning', 'info', 'unknown']) {
+      expect(getAlertSeverityDotClass(level)).toContain(getAlertSeverityFillClass(level));
+    }
+    expect(getAlertSeverityFillClass('CRITICAL')).toBe('bg-red-500');
   });
 
   it('maps compact severity labels canonically', () => {

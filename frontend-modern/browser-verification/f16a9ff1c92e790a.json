@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "15c31e85ce98f693f83eef70a02bda05ea9d0e86",
+  "verified_at": "2026-10-14T19:46:20Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx",
+    "frontend-modern/src/features/platformPage/PlatformIssueReason.tsx",
+    "frontend-modern/src/features/platformPage/platformStatusTone.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx": "fd0a25a33e5498ec6b71c12ee1bb55e9309918bf913438e07c9263c5959e3705",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "7b002a7dc3b135a2a36d6aee43122adde9f389cea079fdfcf8cf4ce355d419d2",
+    "frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx": "168ba421fc271e7b6dbf28ce18056e84890cf87d356947d6c1e45176041c73ce",
+    "frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx": "c8e14b0a583d603089fd69ba9a2a82316d4d94478b73544d88c7c7d5c6a14882",
+    "frontend-modern/src/features/platformPage/PlatformIssueReason.tsx": "c5ef3baba0fcc20be2260de8e121a85fe5a919d1c81eaa794f29bbbc16ecbead",
+    "frontend-modern/src/features/platformPage/platformStatusTone.ts": "e3aed998bbf2b9ed8ead5dbf2906bff576b3ef21f54a786da4f9b508287033d7"
+  },
+  "routes": [
+    "browser-tests/kubernetes-status-rows.html (production KubernetesPodsTable, KubernetesDeploymentsTable and KubernetesControllersTable over REST-mapped rows, Chromium and WebKit via Playwright 1.56.1 on pulse-dev, tree built on origin/main)",
+    "browser-tests/proxmox-docker-rows.html (Docker tables after the shared tone helper; 52 checks)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Pod CrashLoopBackOff: red dot, red Status words, whole at 1440 (old: plain \"CrashLoopBa\u2026\")",
+    "Pod Pending amber, Running plain",
+    "phone (dark WebKit): Status column hidden, the reason reads under the Pod name in the dot's colour (old: dot only)",
+    "Deployment 1/3 ready: amber Ready count; full deployment plain",
+    "ReplicaSet \"1 not ready\" exception amber",
+    "Docker tables unchanged in colour after delegating to the platform helper",
+    "reviewed by Sol from desktop and phone screenshots; its guardrail and phone-reason points applied"
+  ],
+  "interactions": [
+    "page load at both widths; no row interaction needed for the status cells"
+  ]
+}

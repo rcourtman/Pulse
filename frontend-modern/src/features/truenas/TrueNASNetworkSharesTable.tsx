@@ -19,6 +19,7 @@ import {
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
@@ -287,6 +288,13 @@ export const TrueNASNetworkSharesTable: Component<{
                                 >
                                   {name()}
                                 </div>
+                                {/* A phone hides State; the same words read under the name. */}
+                                <span
+                                  class={`platform-table-phone-only-inline max-w-full text-[11px] ${getPlatformStatusTextToneClass(indicator().variant)}`}
+                                  data-truenas-share-state-phone={indicator().variant}
+                                >
+                                  <span class="min-w-0 truncate">{stateLabel()}</span>
+                                </span>
                               </div>
                             </div>
                           </TableCell>
@@ -320,7 +328,10 @@ export const TrueNASNetworkSharesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
                           >
-                            <span class="text-[11px] font-medium text-base-content">
+                            <span
+                              class={`text-[11px] font-medium ${getPlatformStatusTextToneClass(indicator().variant) || 'text-base-content'}`}
+                              data-truenas-share-state={indicator().variant}
+                            >
                               {stateLabel()}
                             </span>
                           </TableCell>

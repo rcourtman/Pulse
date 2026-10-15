@@ -65,6 +65,8 @@ const settle = (page) => page.evaluate(async () => {
         window.__trustedInput = [];
         document.addEventListener('click', (event) => window.__trustedInput.push(event.isTrusted), true);
       }, dark);
+      // Charts poll every 30 seconds; the proof drives that poll with the clock.
+      await page.clock.install();
       await page.goto(origin + '/browser-tests/guest-disk-provenance.html');
       await page.waitForFunction(() => window.__guestDiskProvenance);
       const apply = async (value) => { await page.evaluate((next) => window.__guestDiskProvenance.apply(next), value); await settle(page); };
@@ -87,7 +89,9 @@ const settle = (page) => page.evaluate(async () => {
       else { await disclosure.focus(); await page.keyboard.press('Enter'); }
       const drawer = page.getByRole('region', { name: 'Guest details' });
       await drawer.waitFor({ state: 'visible' });
-      const technical = drawer.getByTestId('guest-technical-details');
+      // Filesystems have their own Overview section; an unavailable one may be
+      // lifted into Worth checking, so read the whole Overview.
+      const technical = drawer.getByTestId('guest-drawer-overview');
       const filesystem = technical.getByText('/data', { exact: true }).locator('xpath=ancestor::tr');
       const capture = async (state, target) => {
         await target.scrollIntoViewIfNeeded(); await settle(page);
@@ -103,10 +107,10 @@ const settle = (page) => page.evaluate(async () => {
       await apply({ disksFromAgent: true });
       assert.match(await filesystem.innerText(), /Usage unavailable/);
       record.checks.push('Platform and linked-agent carriers obey the same stopped-VM rule in filesystem detail.');
-      await click(drawer.getByRole('tab', { name: 'History', exact: true }));
+      // History charts sit on Overview beside the filesystem detail.
       const chart = drawer.locator('[data-history-group="utilization"]');
-      await page.waitForFunction(() => document.querySelector('[data-history-group="utilization"] path'));
-      const stored = await chart.locator('path').evaluateAll((items) => items.map((item) => item.getAttribute('d')));
+      await page.waitForFunction(() => document.querySelector('[data-history-group="utilization"] path[data-history-series]'));
+      const stored = await chart.locator('path[data-history-series]').evaluateAll((items) => items.map((item) => item.getAttribute('d')));
       assert.ok(stored.length > 0);
       assert.equal(await chart.locator('[data-history-current="disk"]').count(), 0);
       assert.equal(await chart.locator('[data-history-last-known="disk"]').count(), 0);
@@ -116,12 +120,14 @@ const settle = (page) => page.evaluate(async () => {
       assert.match(await chart.locator('[data-history-deferred="disk"]').innerText(), /earlier guest request/);
       assert.equal(await chart.locator('[data-history-last-known="disk"]').count(), 0);
       assert.equal(await chart.locator('[data-history-current="disk"]').count(), 0);
-      assert.deepEqual(await chart.locator('path').evaluateAll((items) => items.map((item) => item.getAttribute('d'))), stored);
+      assert.deepEqual(await chart.locator('path[data-history-series]').evaluateAll((items) => items.map((item) => item.getAttribute('d'))), stored);
       record.checks.push('Stored historical values/paths stay separate from retained live numbers throughout stop and restart.');
       // A separate synthetic empty-store response exercises the live fallback
       // legend, not data removal or a guest probe.
       historyMode = 'empty';
-      await click(drawer.getByRole('button', { name: 'Refresh history', exact: true }));
+      const read = page.waitForResponse((r) => r.url().includes('/api/metrics-store/history'));
+      await page.clock.runFor(30_000);
+      await read;
       await chart.getByText('No stored history in this range', { exact: true }).waitFor();
       assert.match(await chart.locator('[data-history-last-known="disk"]').innerText(), /90.0%.*last known/s);
       await apply({ status: 'stopped', reason: '' });
@@ -134,9 +140,8 @@ const settle = (page) => page.evaluate(async () => {
       await apply({ reason: '', usage: 0 });
       assert.match(await chart.locator('[data-history-current="disk"]').innerText(), /0.0%.*current/s);
       assert.equal(await chart.locator('[data-history-deferred="disk"]').count(), 0);
-      assert.equal(await chart.locator('path').count(), 0);
+      assert.equal(await chart.locator('path[data-history-series]').count(), 0);
       record.checks.push('Empty-store History never fabricates points: restart deferral is last known and fresh measured zero returns as current.');
-      await click(drawer.getByRole('tab', { name: 'Overview', exact: true }));
       assert.equal(await filesystem.getByRole('progressbar').getAttribute('aria-valuenow'), '0');
       await apply({ kind: 'lxc', status: 'stopped', reason: '', usage: 30 });
       assert.equal(await filesystem.getByRole('progressbar').getAttribute('aria-valuenow'), '30');
@@ -150,7 +155,8 @@ const settle = (page) => page.evaluate(async () => {
       assert.equal(await drawer.count(), 0);
       assert.ok((await page.evaluate(() => window.__trustedInput)).some(Boolean));
       assert.deepEqual(record.errors, []);
-      assert.ok(record.requests.every((item) => ['GET', 'HEAD'].includes(item.method) && !item.blocked), JSON.stringify(record.requests));
+      // Opening details records one content-free usage milestone; nothing else may write.
+      assert.ok(record.requests.every((item) => (['GET', 'HEAD'].includes(item.method) || (item.method === 'POST' && item.path === '/api/usage/workload-history')) && !item.blocked), JSON.stringify(record.requests));
       record.checks.push('Trusted keyboard/touch disclosure and close; no overflow, page error, off-origin or mutating request.');
       await context.close(); await browser.close(); browser = null;
     }

@@ -108,6 +108,55 @@ describe('mapDockerContainerStatus — state fallbacks', () => {
     ).toEqual({ variant: 'muted', label });
   });
 
+  it.each([
+    ['offline', 'danger', 'Offline'],
+    ['disconnected', 'danger', 'Disconnected'],
+    ['degraded', 'warning', 'Degraded'],
+    ['warning', 'warning', 'Warning'],
+    ['unknown', 'muted', 'Unknown'],
+    ['stopped', 'muted', 'Stopped'],
+  ] as const)(
+    'reads a %s status as other resources do when no container state is reported',
+    (status, variant, label) => {
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: `c-status-${status}`,
+            type: 'app-container',
+            status: status as Resource['status'],
+            docker: {},
+          }),
+        ),
+      ).toEqual({ variant, label });
+    },
+  );
+
+  it('treats a blank reported state as no report and falls back to the status', () => {
+    expect(
+      mapDockerContainerStatus(
+        makeResource({
+          id: 'c-blank-degraded',
+          type: 'app-container',
+          status: 'degraded',
+          docker: { containerState: '   ' },
+        }),
+      ),
+    ).toEqual({ variant: 'warning', label: 'Degraded' });
+  });
+
+  it("keeps the container's own reported state ahead of its unified status", () => {
+    expect(
+      mapDockerContainerStatus(
+        makeResource({
+          id: 'c-exited-offline',
+          type: 'app-container',
+          status: 'offline',
+          docker: { containerState: 'exited' },
+        }),
+      ),
+    ).toEqual({ variant: 'muted', label: 'Exited' });
+  });
+
   it('treats removing as a fatal state with a title-cased label', () => {
     expect(
       mapDockerContainerStatus(

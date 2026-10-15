@@ -110,14 +110,21 @@ describe('TrueNASServicesTable', () => {
     expect(noteFor('SMB')).toBeNull();
     expect(noteFor('NFS')).toHaveAttribute('title', 'TrueNAS reports Crashed');
     expect(noteFor('NFS')).toHaveAttribute('data-truenas-service-state-note', 'warning');
-    const smartNameCell = screen.getByText('SMART').closest('td');
-    expect(smartNameCell).not.toHaveTextContent('should be running');
+    // On desktop the name cell stays single-line: the note under the name is
+    // the phone line alone, shown where the State column is hidden.
+    const smartNameCell = screen.getByText('SMART').closest('td')!;
+    const smartPhoneLine = smartNameCell.querySelector('[data-truenas-service-state-phone]');
+    expect(smartPhoneLine).toHaveClass('platform-table-phone-only-inline', 'text-red-600');
+    expect(smartPhoneLine).toHaveTextContent('Stopped · should be running');
+    const smartNameText = smartNameCell.cloneNode(true) as HTMLElement;
+    smartNameText.querySelector('[data-truenas-service-state-phone]')?.remove();
+    expect(smartNameText).not.toHaveTextContent('should be running');
 
     const headers = [...container.querySelectorAll('thead th')].map((th) => th.textContent?.trim());
     expect(headers).toEqual(['Service', 'State', 'Boot', 'System']);
     expect(container).not.toHaveTextContent('2418');
 
-    // Phones hide the State column, so the drawer carries the condition.
+    // The drawer carries the full condition too.
     await fireEvent.click(screen.getByText('SMART').closest('tr')!);
     const detail = within(screen.getByTestId('truenas-service-detail'));
     expect(detail.getByText('Condition')).toBeInTheDocument();

@@ -139,9 +139,12 @@ const { chromium, firefox, webkit } = require('playwright');
         assert.match(await text(), expected);
         assert.match(await text(), absent);
         const markers = await plot
-          .locator('circle[r="3"]')
+          .locator('[data-history-hover-marker]')
           .evaluateAll((nodes) =>
-            nodes.map((node) => ({ x: node.getAttribute('cx'), y: node.getAttribute('cy') })),
+            nodes.map((node) => ({
+              x: node.getAttribute('data-x'),
+              y: node.getAttribute('data-y'),
+            })),
           );
         assert.equal(new Set(markers.map((marker) => marker.x)).size, 1);
         return markers;
@@ -153,39 +156,61 @@ const { chromium, firefox, webkit } = require('playwright');
       // Element screenshots scroll a tall phone fixture and end its hover.
       // Capture the current viewport without disturbing the active pointer.
       await page.screenshot({ path: path.join(artifacts, `sparse-pointer-${theme}.png`) });
-      assert.match(await text(), /CPU\s*- Memory\s*30\.0% Disk\s*-/);
-      assert.equal(await plot.locator('circle[r="3"]').count(), 1);
-      assert.equal(await utilization.getByTestId('guest-history-hover-time').innerText(), '22:13');
-      const descriptionId = await plot.getAttribute('aria-describedby');
+      assert.match(await text(), /CPU\s*no reading Memory\s*30\.0% Disk\s*no reading/);
+      assert.equal(await plot.locator('[data-history-hover-marker]').count(), 1);
+      assert.equal(
+        await utilization.getByTestId('guest-history-hover-time').innerText(),
+        'Stored · 22:13',
+      );
+      // The plot names its description first, then any missing-reading note.
+      const descriptionId = (await plot.getAttribute('aria-describedby')).split(' ')[0];
       assert.match(
         await page.locator(`[id="${descriptionId}"]`).innerText(),
         /14\/11\/2023, 22:13:50\. CPU no observation\. Memory 30\.0%\. Disk no observation\./,
       );
-      await sparseTime(0, /CPU\s*11\.0%/, /Memory\s*- Disk\s*-/);
-      await sparseTime(45_000, /Disk\s*0\.0%/, /CPU\s*- Memory\s*-/);
+      await sparseTime(0, /CPU\s*11\.0%/, /Memory\s*no reading Disk\s*no reading/);
+      await sparseTime(45_000, /Disk\s*0\.0%/, /CPU\s*no reading Memory\s*no reading/);
       assert.equal(
-        await plot.locator('path').count(),
-        2,
+        await plot.locator('path[data-history-series="disk"]').count(),
+        0,
         'lone disk sample must not become a path',
       );
       await hover(utilization, 120_000);
-      assert.match(await text(), /CPU\s*43\.0% Memory\s*55\.0% Disk\s*-/);
-      assert.equal(await plot.locator('circle[r="3"]').count(), 2);
-      assert.equal(await utilization.getByTestId('guest-history-hover-time').innerText(), '22:15');
+      assert.match(await text(), /CPU\s*43\.0% Memory\s*55\.0% Disk\s*no reading/);
+      assert.equal(await plot.locator('[data-history-hover-marker]').count(), 2);
+      assert.equal(
+        await utilization.getByTestId('guest-history-hover-time').innerText(),
+        'Stored · 22:15',
+      );
       const network = fixture.locator('[data-history-group="network"]');
       await hover(network, 0);
-      assert.match((await network.innerText()).replace(/\s+/g, ' '), /In\s*0 B\/s Out\s*-/);
+      assert.match(
+        (await network.innerText()).replace(/\s+/g, ' '),
+        /In\s*0 B\/s Out\s*no reading/,
+      );
       await hover(network, 30_000);
-      assert.match((await network.innerText()).replace(/\s+/g, ' '), /In\s*- Out\s*4\.00 KB\/s/);
+      assert.match(
+        (await network.innerText()).replace(/\s+/g, ' '),
+        /In\s*no reading Out\s*4\.00 KB\/s/,
+      );
       await page.mouse.move(1, 1);
-      assert.match(await text(), /CPU\s*43\.0% Memory\s*55\.0% Disk\s*0\.0%/);
-      assert.equal(await fixture.getByTestId('guest-history-hover-time').count(), 0);
+      // The default readout is one stored time; disk has no point at the latest.
+      assert.match(await text(), /CPU\s*43\.0% Memory\s*55\.0% Disk\s*no reading/);
+      // Not inspecting: any readout names the latest stored time, never "Stored ·".
+      assert.deepEqual(
+        await fixture
+          .getByTestId('guest-history-hover-time')
+          .evaluateAll(
+            (nodes) => nodes.filter((node) => node.textContent.startsWith('Stored ·')).length,
+          ),
+        0,
+      );
       assert.equal(requests.length, readsBefore, 'pointer inspection must not request data');
       // Native keyboard selection remains authoritative even with the pointer on another time.
       await slider.focus();
       await slider.press('Home');
       await hover(utilization, 30_000);
-      assert.match(await text(), /CPU\s*11\.0% Memory\s*- Disk\s*-/);
+      assert.match(await text(), /CPU\s*11\.0% Memory\s*no reading Disk\s*no reading/);
       await slider.press('ArrowRight');
       assert.match(
         await slider.getAttribute('aria-valuetext'),
@@ -193,7 +218,7 @@ const { chromium, firefox, webkit } = require('playwright');
       );
       await slider.press('Tab');
       await hover(utilization, 45_000);
-      assert.match(await text(), /CPU\s*- Memory\s*- Disk\s*0\.0%/);
+      assert.match(await text(), /CPU\s*no reading Memory\s*no reading Disk\s*0\.0%/);
       if (width === 390) {
         const box = await slider.boundingBox();
         assert.ok(box.height >= 44);
@@ -208,11 +233,12 @@ const { chromium, firefox, webkit } = require('playwright');
       }
       await page.mouse.move(1, 1);
       kind = 'failure';
-      await fixture.getByRole('button', { name: 'Refresh history' }).evaluate((el) => el.click());
+      // No manual refresh: the next 30-second poll reads the failing body.
+      await page.waitForTimeout(31_000);
       await fixture
         .getByText('History refresh failed. Showing previously loaded history.')
         .waitFor();
-      await sparseTime(30_000, /Memory\s*30\.0%/, /CPU\s*-/);
+      await sparseTime(30_000, /Memory\s*30\.0%/, /CPU\s*no reading/);
       await page.screenshot({
         path: path.join(artifacts, `retained-sparse-pointer-${theme}.png`),
       });
@@ -224,7 +250,7 @@ const { chromium, firefox, webkit } = require('playwright');
           (el) => el.textContent === '31.0%',
         ),
       );
-      assert.match(await text(), /CPU\s*- Memory\s*31\.0% Disk\s*-/);
+      assert.match(await text(), /CPU\s*no reading Memory\s*31\.0% Disk\s*no reading/);
       kind = 'hold';
       await page
         .getByRole('button', { name: 'Switch to service target' })
@@ -233,15 +259,25 @@ const { chromium, firefox, webkit } = require('playwright');
         () =>
           [...document.querySelectorAll('[data-history-group="utilization"] path')].length === 0,
       );
-      assert.equal(await fixture.getByTestId('guest-history-hover-time').count(), 0);
-      assert.equal(await plot.locator('circle[r="3"]').count(), 0);
-      assert.match(await text(), /CPU\s*42\.0% Memory\s*53\.0% Disk\s*-/);
+      // Not inspecting: any readout names the latest stored time, never "Stored ·".
+      assert.deepEqual(
+        await fixture
+          .getByTestId('guest-history-hover-time')
+          .evaluateAll(
+            (nodes) => nodes.filter((node) => node.textContent.startsWith('Stored ·')).length,
+          ),
+        0,
+      );
+      assert.equal(await plot.locator('[data-history-hover-marker]').count(), 0);
+      // The new target's read is held, so the legend shows qualified live
+      // readings and a plain dash for disk, which has none.
+      assert.match(await text(), /CPU\s*42\.0%\s*current Memory\s*53\.0%\s*current Disk\s*-/);
       assert.ok(held);
       kind = 'service';
       await held.fulfill({ json: response('pbs-three', '24h', 'service') });
       await slider.waitFor();
       await hover(utilization, 0);
-      assert.match(await text(), /CPU\s*77\.0% Memory\s*- Disk\s*-/);
+      assert.match(await text(), /CPU\s*77\.0% Memory\s*no reading Disk\s*no reading/);
       const dimensions = await page.evaluate(() => ({
         scroll: document.documentElement.scrollWidth,
         inner: innerWidth,

@@ -3,7 +3,8 @@
 // Exercises PBS-only, bare-metal PVE/PBS side-by-side, and a PVE guest plus
 // standalone representation of one agent. Each has two datastores. Switches
 // rows and applies timer-driven fresh snapshots in stable and reversed order.
-// Checks the drawer identity, selected History tab, populated chart paths and
+// Checks the drawer identity, selected Overview tab (which carries the history
+// charts since the History tab was folded into it), populated chart paths and
 // exact host metrics target at desktop/mobile widths. Synthetic API responses
 // prove UI behaviour, not backend persistence or installed release behaviour.
 // Run: pulse-worker-browser scripts/check-pbs-host-history-correlation.cjs
@@ -148,15 +149,12 @@ const launchOptions = {
               await row.getByRole('button').focus();
               await page.keyboard.press('Enter');
               await page
-                .getByRole('tab', { name: 'History', exact: true })
-                .click();
-              await page
                 .locator('[data-testid="guest-history-plot"] path')
                 .first()
                 .waitFor();
               assert.equal(
                 await page
-                  .getByRole('tab', { name: 'History', exact: true })
+                  .getByRole('tab', { name: 'Overview', exact: true })
                   .getAttribute('aria-selected'),
                 'true',
               );
@@ -195,16 +193,23 @@ const launchOptions = {
                 identityLabels.includes('Discovery'),
                 'Discovery identity row missing from the drawer',
               );
-              assert.ok(
-                identityLabels.includes('Metrics Target'),
-                'Metrics Target identity row missing from the drawer',
-              );
+              // Since the Identity card shows each identifier once (4884052bc5),
+              // Metrics Target appears only when it names something not already
+              // shown. When it does appear it must name the host series; the
+              // intercepted history request below proves the target either way.
+              const metricsRow = identityBefore.find(([label]) => label === 'Metrics Target');
+              if (metricsRow) {
+                assert.ok(
+                  metricsRow[1].endsWith(expected.split('/').pop()),
+                  `Metrics Target identity row names ${metricsRow[1]}, not the host series ${expected}`,
+                );
+              }
               await page
                 .getByRole('button', { name: 'Schedule automatic snapshot' })
                 .click();
-              // Return focus to History before the timer-driven data replacement.
+              // Return focus to the drawer's tabs before the timer-driven data replacement.
               await page
-                .getByRole('tab', { name: 'History', exact: true })
+                .getByRole('tab', { name: 'Overview', exact: true })
                 .focus();
               await page
                 .getByRole('status', { name: 'Snapshot number' })
@@ -223,10 +228,10 @@ const launchOptions = {
               );
               assert.equal(
                 await page
-                  .getByRole('tab', { name: 'History', exact: true })
+                  .getByRole('tab', { name: 'Overview', exact: true })
                   .getAttribute('aria-selected'),
                 'true',
-                'history reset after snapshot',
+                'tab selection reset after snapshot',
               );
               assert.equal(
                 await detail
@@ -265,10 +270,10 @@ const launchOptions = {
             );
             assert.equal(
               await page
-                .getByRole('tab', { name: 'History', exact: true })
+                .getByRole('tab', { name: 'Overview', exact: true })
                 .getAttribute('aria-selected'),
               'true',
-              'history reset after the host row was omitted',
+              'tab selection reset after the host row was omitted',
             );
             assert.equal(
               await detail

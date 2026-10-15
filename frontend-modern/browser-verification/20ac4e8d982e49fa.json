@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "fcc3e695f364602a2a13301a676567f9115d2ffc",
+  "verified_at": "2026-10-14T18:56:31Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/docker/DockerSwarmNodesTable.tsx",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx",
+    "frontend-modern/src/features/docker/dockerPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "0122db89daafd9dea33862058f37825215560ecadc1e788cad11fbe3196f97b4",
+    "frontend-modern/src/features/docker/DockerSwarmNodesTable.tsx": "eaae93d27b96f4ddc569cc258b873d886b8a3458cafae27bd3ce27650e281530",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx": "e845a67b63430b7191cfd6baf5abbe159169e95e025c7e0741a572be002548c6",
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "4a7f741943d8509ed8e57f2ca4f59c27ff3f3d4e2e4f388f3b68c8d1219fa30a"
+  },
+  "routes": [
+    "browser-tests/proxmox-docker-rows.html Swarm view (production DockerServicesTable and DockerTasksTable over REST-mapped rows, Chromium and WebKit via Playwright 1.56.1 on pulse-dev, tree built on origin/main)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "service with 2 of 4 replicas and rollback_started: amber dot titled \"Rolling back\" (old title: \"Rollback paused\"), Update words and Running count amber",
+    "phone: Running reads \"2/4\" in amber with Desired hidden",
+    "task: Current reads \"Running\" (Docker's token on hover), Desired reads \"Running\"",
+    "Swarm node Reachability and Availability tones covered by unit tests (no node fixture in the page)",
+    "reviewed by Sol from desktop and phone screenshots; its title-case, 2/4 and task-error points applied"
+  ],
+  "interactions": [
+    "service row disclosure by keyboard (desktop) and tap (phone)"
+  ]
+}

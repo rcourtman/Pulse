@@ -135,6 +135,8 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/updates/status", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleUpdateStatus)))
 	r.mux.HandleFunc("/api/updates/stream", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleUpdateStream)))
 	r.mux.HandleFunc("/api/updates/plan", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleGetUpdatePlan)))
+	r.mux.HandleFunc("/api/updates/pro-runtime", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleCheckProRuntimeSwitch)))
+	r.mux.HandleFunc("/api/updates/pro-runtime/apply", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, updateHandlers.HandleApplyProRuntimeSwitch)))
 	// Release notes for the running version are readable by any authenticated
 	// user (public GitHub data) so the What's New card works for non-admins.
 	r.mux.HandleFunc("/api/updates/release-notes", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, updateHandlers.HandleGetReleaseNotes)))

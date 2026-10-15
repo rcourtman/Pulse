@@ -396,7 +396,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
     if (!memory || !hasReading || memory.usageUnavailable || !((memory.total ?? 0) > 0)) {
       return '';
     }
-    // The short qualifier sits on the size it qualifies; the full note (why,
+    // A retained or undated reading is qualified in the chart; here it states
+    // the size only, so no used amount reads as current.
+    if (props.deferredMetrics?.memory) return `${formatBytes(memory.total ?? 0)} RAM`;
+    // The short qualifier sits on the amount it qualifies; the full note (why,
     // and what to do) is the Details row "About this reading".
     const size = `${formatBytes(memory.used ?? 0)} of ${formatBytes(memory.total ?? 0)} RAM`;
     return memoryReading()?.mayIncludeCache ? `${size} (may include cache)` : size;
@@ -492,6 +495,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
               ...(props.guest.canonicalResourceId ? [props.guest.canonicalResourceId] : []),
               ...getWorkloadAlertResourceIdCandidates(props.guest),
             ]}
+            historyEnabled={props.historyEnabled ?? true}
           />
         </Suspense>
       </Show>

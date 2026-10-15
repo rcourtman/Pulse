@@ -2808,6 +2808,41 @@ intermediate and narrow linked journey is exercised by
 rule reason requirement, the remembered-decision path, the alert-only
 guidance, and the flapping collapse.
 
+### Open resource goes to the page that shows the resource
+
+The attention detail's `Open resource` link sent every subject to
+`/standalone/machines?resource=`, which lists only standalone agent hosts and
+does not read `?resource=`, so Docker, Proxmox, vSphere, TrueNAS and
+Mail Gateway decisions opened a page without their resource. The workbench
+now resolves `subjectResourceId` through `ResourceAPI.getResource` and builds
+the link with `buildResourcePagePath`
+(`frontend-modern/src/features/platformNavigation/resourcePagePath.ts`): the
+platform comes from the registry resource's own platform evidence, or, while
+that lookup runs or when the registry cannot resolve the record, from the
+item's `subjectResourceType` hint in the alert display vocabulary. The page
+then selects the resource where it can (`?resource=` on Proxmox and vSphere
+workloads and Proxmox storage, the owning storage for `<storage>/zfs-pool:...`
+records), filters by name where that is the page's only selection (Docker
+containers, Kubernetes, Machines, Proxmox physical disks), and otherwise opens
+the owning tab. A subject that names no platform hides the link rather than
+opening a page without it (`resourcePagePath.test.ts`,
+`PatrolAttentionWorkbench.test.tsx`).
+
+### Alert-only guidance links to the subject's thresholds
+
+A decision about a bare alert tells the operator to adjust when the alert
+fires or turn it off under alert thresholds. Its `Adjust alert thresholds`
+link used to open `/alerts/thresholds`, the top of the Proxmox tab, whatever
+the subject was. The workbench now builds it with
+`buildResourceThresholdsPath`
+(`frontend-modern/src/features/platformNavigation/resourcePagePath.ts`) from
+the same resolved subject as `Open resource`: the platform picks the
+thresholds tab (standalone agents open Systems) and the resource's display
+label, the one its thresholds row is built from, fills the thresholds search. A composed label such as `Disk (node)` and a physical
+disk, which has no thresholds row of its own, open the tab unsearched rather
+than a search that hides every row (`resourcePagePath.test.ts`,
+`PatrolAttentionWorkbench.test.tsx`).
+
 ### A used-up cost budget pauses Patrol visibly
 
 Patrol distinguishes "Pulse declined to spend" from "the provider failed".

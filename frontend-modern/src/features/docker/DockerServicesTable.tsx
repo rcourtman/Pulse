@@ -23,11 +23,13 @@ import {
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
-import { DockerNativeDetailPanel } from './DockerNativeTableShared';
+import { DockerNativeDetailPanel, dockerStateTextToneClass } from './DockerNativeTableShared';
 import type { Resource } from '@/types/resource';
 import {
   compareDockerServices,
+  dockerServiceReplicaStatus,
   dockerServiceStack,
+  dockerServiceUpdateAttention,
   filterDockerResources,
   mapDockerServiceStatus,
   type DockerResourceStatusFilter,
@@ -301,6 +303,15 @@ export const DockerServicesTable: Component<{
                     const host = () => asTrimmedString(service.docker?.hostname) || '—';
                     const indicator = () => mapDockerServiceStatus(service);
                     const update = () => formatServiceUpdate(service.docker?.serviceUpdate);
+                    // The cell behind the dot's verdict reads in its colour: the
+                    // Running count when replicas are missing, the Update words
+                    // when a rollout is paused or rolling back.
+                    const runningTone = () =>
+                      dockerStateTextToneClass(dockerServiceReplicaStatus(service).variant);
+                    const updateTone = () =>
+                      dockerStateTextToneClass(
+                        dockerServiceUpdateAttention(service)?.variant ?? null,
+                      );
                     const detailRowId = () => drawer.detailRowId(service);
                     const isExpanded = () => drawer.isExpanded(service);
                     return (
@@ -352,16 +363,24 @@ export const DockerServicesTable: Component<{
                             <PlatformTableNumberValue value={service.docker?.desiredTasks ?? 0} />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} ${runningTone() || 'text-base-content'}`}
+                            data-docker-service-running={
+                              dockerServiceReplicaStatus(service).variant
+                            }
                           >
                             <PlatformTableNumberValue value={service.docker?.runningTasks ?? 0} />
+                            {/* A phone hides Desired, so the count says out of what. */}
+                            <span class="platform-table-phone-only-inline tabular-nums">
+                              /{service.docker?.desiredTasks ?? 0}
+                            </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class="block whitespace-normal wrap-break-word leading-3 md:truncate md:leading-normal"
+                              class={`block whitespace-normal wrap-break-word leading-3 md:truncate md:leading-normal ${updateTone()}`}
                               title={update().title}
+                              data-docker-service-update-tone={updateTone() ? 'warning' : 'none'}
                             >
                               {update().label}
                             </span>

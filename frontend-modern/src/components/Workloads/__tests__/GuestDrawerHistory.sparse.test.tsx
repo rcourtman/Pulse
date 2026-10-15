@@ -1,10 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI, type AllMetricsHistoryResponse, type HistoryTimeRange } from '@/api/charts';
 import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { GuestDrawerHistory } from '../GuestDrawerHistory';
+import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
@@ -12,11 +13,23 @@ vi.mock('@/stores/license', () => ({
   isRangeLocked: (range: HistoryTimeRange) => ['14d', '30d', '90d'].includes(range),
 }));
 
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+});
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   resetCreateNonSuspendingQueryCacheForTest();
   vi.restoreAllMocks();
 });
+
+// The charts have no manual refresh while reads succeed; tests drive the
+// 30-second poll on a fake interval clock (timeouts stay real for waitFor).
+const settledHistory = () =>
+  waitFor(() => {
+    expect(ChartsAPI.getMetricsHistory).toHaveBeenCalled();
+    expect(screen.queryByText('Loading history')).not.toBeInTheDocument();
+  });
 
 const start = Date.UTC(2026, 9, 1, 11);
 const time = start + 30 * 60_000;
@@ -56,12 +69,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     render(() => (
       <GuestDrawerHistory target={source()} range="1h" currentMetrics={{ memory: usage() }} />
     ));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Refresh history' })).toHaveAttribute(
-        'aria-busy',
-        'false',
-      ),
-    );
+    await settledHistory();
     const chart = group();
     setSource({ ...target });
     setUsage(35);
@@ -260,7 +268,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
       .mockResolvedValueOnce(response({ cpu: [point(time, 0), point(end, 5)] }));
     mount();
     await waitFor(() => expect(dots()).toHaveLength(1));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+    await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
     await screen.findByText('History refresh failed. Showing previously loaded history.');
     expect(dots()).toHaveLength(1);
     expect(group()).toHaveTextContent('Single observation. No trend yet.');

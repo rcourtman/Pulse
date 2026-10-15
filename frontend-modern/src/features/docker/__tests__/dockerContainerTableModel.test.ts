@@ -5,6 +5,7 @@ import {
   getDockerContainerColumnWidthStyle,
   getDockerContainerTableMinWidthClass,
   getDockerContainerVisibleColumnsForLayout,
+  isDockerContainerStateUnderName,
 } from '../dockerContainerTableModel';
 
 describe('dockerContainerTableModel', () => {
@@ -26,19 +27,29 @@ describe('dockerContainerTableModel', () => {
     const columns = getDockerContainerVisibleColumnsForLayout('narrow', true, true, true);
     const ids = columns.map((column) => column.id);
 
-    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'updates']);
+    // State reads under the name there: beside the 40% name it could not
+    // hold "Unhealthy" without cutting the metric pills or the Update control.
+    expect(ids).toEqual(['container', 'cpu', 'memory', 'updates']);
+    expect(isDockerContainerStateUnderName('narrow')).toBe(true);
+    expect(isDockerContainerStateUnderName('phone')).toBe(false);
     expect(getDockerContainerColumnWidthStyle('container', 'narrow', ids)).toEqual({
       width: '40%',
     });
-    expect(getDockerContainerColumnWidthStyle('cpu', 'narrow', ids)).toEqual({ width: '15%' });
+    // At the 286px table of a 320px phone that is 57px a column: a "100%" pill
+    // needs about 53px and the Update control about 46px.
+    for (const columnId of ['cpu', 'memory', 'updates'] as const) {
+      expect(getDockerContainerColumnWidthStyle(columnId, 'narrow', ids)).toEqual({
+        width: '20%',
+      });
+    }
   });
 
-  it('keeps the five-field narrow projection stable when every container is running', () => {
+  it('keeps the narrow projection stable when every container is running', () => {
     const ids = getDockerContainerVisibleColumnsForLayout('narrow', true, false, false).map(
       (column) => column.id,
     );
 
-    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'updates']);
+    expect(ids).toEqual(['container', 'cpu', 'memory', 'updates']);
   });
 
   it('keeps phone rows focused on container identity and live health signals', () => {

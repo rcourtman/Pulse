@@ -9,6 +9,7 @@ import {
   getGuestDrawerHistoryRangeBounds,
   normalizeGuestDrawerHistoryPoints,
 } from '../guestDrawerModel';
+import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
@@ -70,6 +71,53 @@ const selectSharedTime = (chart: HTMLElement) => {
   return chart.querySelector('[data-history-hover-marker]')!;
 };
 
+describe('GuestDrawerHistory reading source', () => {
+  const readout = () => within(group('utilization')).getByTestId('guest-history-hover-time');
+
+  it.each([
+    ['store', 'Latest stored', 'Stored', null],
+    ['memory', 'Latest recorded', 'Recorded', 'Recent readings only.'],
+    ['live', 'Current', 'Current', 'No history for this range yet.'],
+  ] as const)('names %s readings as such', async (source, latest, inspected, notice) => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response({ source }));
+    mount();
+    const slider = await screen.findByRole('slider', { name: 'Inspect Utilization history' });
+    expect(readout().textContent).toMatch(new RegExp(`^${latest} · `));
+    if (notice) expect(screen.getByTestId('history-source-notice')).toHaveTextContent(notice);
+    else expect(screen.queryByTestId('history-source-notice')).toBeNull();
+    slider.focus();
+    fireEvent.input(slider, { target: { value: '0' } });
+    expect(readout().textContent).toMatch(new RegExp(`^${inspected} · `));
+    expect(readout()).toHaveAttribute(
+      'aria-label',
+      expect.stringMatching(new RegExp(`^${inspected} observation: `)),
+    );
+  });
+});
+
+describe('GuestDrawerHistory value axis', () => {
+  it('labels a quiet link\'s rate axis once, not "<1K/s" on two gridlines', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(
+      response({
+        metrics: {
+          cpu: [point(end - 10 * 60_000, 12), point(end - 5 * 60_000, 25)],
+          netin: [point(end - 10 * 60_000, 200), point(end - 5 * 60_000, 400)],
+          netout: [point(end - 10 * 60_000, 100), point(end - 5 * 60_000, 300)],
+        },
+      }),
+    );
+    mount();
+    await screen.findByRole('slider', { name: 'Inspect Network I/O history' });
+    const labels = (id: string) =>
+      Array.from(
+        group(id).querySelectorAll('[data-history-axis-label]'),
+        (label) => label.textContent,
+      );
+    expect(labels('network')).toEqual(['<1K/s', '', '0']);
+    expect(labels('utilization')).toEqual(['100%', '50%', '0%']);
+  });
+});
+
 describe('GuestDrawerHistory shared time window', () => {
   it('does not stretch five minutes of stored CPU across a 24-hour query', async () => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
@@ -107,6 +155,7 @@ describe('GuestDrawerHistory shared time window', () => {
   });
 
   it('retains the last fulfilled window with its data after a failed refresh', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     vi.spyOn(ChartsAPI, 'getMetricsHistory')
       .mockResolvedValueOnce(response())
       .mockRejectedValueOnce(new Error('Private fixture detail'));
@@ -115,7 +164,7 @@ describe('GuestDrawerHistory shared time window', () => {
     const before = group('utilization')
       .querySelector('path[data-history-series]')!
       .getAttribute('d');
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+    await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
     await screen.findByText('History refresh failed. Showing previously loaded history.');
     expect(group('utilization').querySelector('path[data-history-series]')).toHaveAttribute(
       'd',

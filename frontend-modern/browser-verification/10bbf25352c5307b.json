@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "03de664ec7988d41a2d9d9c004dd87b5710605e6",
+  "verified_at": "2026-10-14T16:53:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx": "780b20fe2f78440ed385b6ebe2b712de1a18081d4ece4ab0b6dc2720eb041c0b"
+  },
+  "routes": [
+    "browser-tests/proxmox-docker-rows.html Networks view (production DockerNetworksTable over REST-mapped rows, Chromium and WebKit via Playwright 1.56.1 on pulse-dev)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "attached-container cards: \"Unhealthy\" red and \"12 restarts\" amber beside dots of the same colour (old: plain text)",
+    "a running card's words stay plain",
+    "light desktop and dark WebKit phone contrast readable",
+    "reviewed by Sol from desktop and phone screenshots"
+  ],
+  "interactions": [
+    "network row expand",
+    "attached-container Running chip, opened from Filters on the phone"
+  ]
+}

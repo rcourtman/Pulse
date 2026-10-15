@@ -330,6 +330,7 @@ import vsphereActivityTableSource from '@/features/vmware/VsphereActivityTable.t
 import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?raw';
 import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereNetworksTableSource from '@/features/vmware/VsphereNetworksTable.tsx?raw';
+import dockerHostDrawerOverviewSource from '@/features/docker/DockerHostDrawerOverview.tsx?raw';
 
 const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsive/*.tsx'], {
   query: '?raw',
@@ -1319,6 +1320,15 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain("value: 'history', label: 'History'");
     }
     expect(resourceDetailDrawerSource).not.toContain("activeTab() === 'history'");
+    // Drawer charts draw triggers from the resource's own alerts; Needs
+    // attention may list nested resources, the charts never do.
+    expect(resourceDetailDrawerOverviewTabSource).toContain('getOwnAlertsForUnifiedResource(');
+    expect(dockerHostDrawerOverviewSource).toContain('getOwnAlertsForUnifiedResource(');
+    expect(dockerHostDrawerOverviewSource).toContain('getAlertAttentionCopy(alert, now)');
+    expect(resourceDetailDrawerOverviewTabSource).toContain('getAlertAttentionCopy(alert, now)');
+    // Range pickers name their options from one table, never a local list.
+    expect(guestDrawerHistorySource).toContain('formatHistoryRangeOptionLabel(option)');
+    expect(guestDrawerHistorySource).not.toContain('const formatRangeLabel');
 
     expect(resourceDetailDrawerSource).toContain('@/components/shared/Subtabs');
     expect(resourceDetailDrawerSource).toContain('tabs={drawer.tabs().map');
@@ -2096,6 +2106,8 @@ describe('shared primitive guardrails', () => {
     expect(statusBadgeSource).not.toContain('cursor-not-allowed');
     expect(statusBadgeSource).not.toContain('props.onToggle?.()');
     expect(statusBadgeSource).not.toContain('labelEnabled ??');
+    // Pages of alike On/Off badges name each one for assistive tech.
+    expect(statusBadgeSource).toContain('aria-label={getStatusBadgeAriaLabel(props)}');
 
     expect(statusBadgeStateSource).toContain('export function useStatusBadgeState');
     expect(statusBadgeStateSource).toContain('Boolean(props.disabled)');
@@ -8725,7 +8737,9 @@ describe('shared primitive guardrails', () => {
     for (const consumerPath of overviewConsumers) {
       const source = readFrontendSource(consumerPath);
       expect(source).toContain('DrawerAttentionSection');
-      expect(source).toContain('TechnicalDetailsSection');
+      // Warning rows lift in front; the rest waits under one Details disclosure.
+      expect(source).toContain('DrawerExceptionList');
+      expect(source).toContain('<TechnicalDetailsDisclosure');
       expect(source).not.toContain('ResourceOperatorStateSection');
     }
 
@@ -8792,7 +8806,7 @@ describe('shared primitive guardrails', () => {
       'src/features/docker/DockerHostDrawerOverview.tsx',
     ]) {
       const source = readFrontendSource(overviewPath);
-      expect(source).toContain('<TechnicalDetailsSection');
+      expect(source).toMatch(/<TechnicalDetails(Section|Disclosure)\b/);
       expect(source).toContain('...technicalSections()');
       expect(source).not.toContain('const DetailCard');
     }
@@ -8800,7 +8814,7 @@ describe('shared primitive guardrails', () => {
     const resourceOverviewSource = readFrontendSource(
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
     );
-    expect(resourceOverviewSource).toContain('content="all"');
+    expect(resourceOverviewSource).toContain("content: 'all'");
 
     const registry = JSON.parse(readFrontendSource('scripts/shared-template-registry.json')) as {
       rules?: Array<{ id: string; requiredConsumers?: Array<{ path: string }> }>;

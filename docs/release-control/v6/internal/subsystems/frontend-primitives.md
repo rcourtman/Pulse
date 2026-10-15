@@ -148,6 +148,14 @@ in alert helpers and the production held-breach browser fixture bind this
 shared presentation boundary to the alerts/API contracts.
 
 
+### Alert severity fills are one primitive
+
+`getAlertSeverityFillClass` in `frontend-modern/src/utils/alertSeverityPresentation.ts`
+is the one fill per alert severity, and `getAlertSeverityDotClass` composes
+it, so a legend dot and the chart segment it names cannot drift apart. Each
+fill holds at least 3:1 against the chart surface in both themes; yellow on
+the light surface is under 2:1, so light-theme warnings use amber-700.
+
 ### Systemd backup-pause help separates shutdown from remote completion
 
 The existing systemd precaution reads the stop result as well as the inactive
@@ -599,6 +607,12 @@ zero, pre-sample status, dated inspection, access denial and resumption.
 `browser-tests/guest-history-provenance.cjs` uses the production full drawer
 and History API client at desktop and touch widths with synthetic responses.
 These checks do not establish native guest thaw, collection or release availability.
+
+Backup age rules read through one resolver: `resolveBackupThresholds` in
+`frontend-modern/src/utils/format.ts` fills the fresh and stale defaults for
+both `getBackupInfo` and `getWorkloadsGuestBackupAgeRule`, so the copy that
+explains a shield (#2858) cannot disagree with the colour it explains.
+`workloadGuestPresentation.test.ts` pins the wording.
 
 ### Completed guest backup evidence versus current activity
 
@@ -2740,6 +2754,11 @@ not a replacement status card, CTA band, or page-local nested card.
    desktop table and inline detail. Consumers mark a normal-phone demotion with
    `platform-table-phone-hidden` on both its header and its body cell. The shared
    container rule owns the matching `th`/`td` visibility so the two cannot drift.
+   A table that decides a column from its own measured layout instead drops the
+   header and the cell under the same condition: the Docker Networks table had
+   the class on the Subnets cell and the Driver header, so a phone showed
+   `bridge` under SUBNETS. It now leaves both to its compact layout's Network
+   details, and its browser proof counts visible headers against cells.
    Column visibility is container-led but `md:w-[...]` widths are viewport media
    queries, so between a 34rem container and a 768px viewport the phone-hidden
    columns return while no width applies, and every visible column took an equal
@@ -2768,7 +2787,14 @@ not a replacement status card, CTA band, or page-local nested card.
    Below a 360-pixel content width, the shared narrow layout promotes identity to
    40 percent and may remove one additional lowest-priority context column via
    `platform-table-narrow-hidden` rather than shrinking names and metric values
-   into illegible fragments. The shared container rule then applies that stage
+   into illegible fragments. That 40 percent is a floor on the name header,
+   and a browser lays a fixed table out by the larger of a header's width and
+   its column's, so a table cannot shrink identity below it from its colgroup
+   (doing so only rescales every other column). A field that needs more room
+   than the remainder gives it moves into the identity cell instead: Docker's
+   container State words read on a second line under the name there, on every
+   row so the rows keep one height, and CPU, memory and the Update control
+   share the rest. The shared container rule then applies that stage
    across provider tables, direct Storage tables, and nested provider detail
    tables without a global reveal or page-local media-query exception.
    `PlatformTableShell` marks every
@@ -3811,7 +3837,12 @@ default` instead of fusing provider and badge text such as
     table's default order remains its page-model status-first compare until
     the user selects a column, and grouped modes (for example Docker's
     grouped-by-host containers view) sort within groups while grouping itself
-    stays orthogonal to sort state.
+    stays orthogonal to sort state. A saved sort applies only while its
+    column's header shows: where a layout hides that column (Docker's Host
+    and Engine while grouped, State under a phone row's name, Uptime on a
+    phone), the rows keep the default order instead of reordering with no
+    visible indicator, and the preference stays saved for the layouts that
+    show it.
 
 18. Keep estate orientation inside the canonical controls operators already
     scan. Large-estate workload totals must flow from the unfiltered shared
@@ -4455,6 +4486,9 @@ confirmation note or rule reason is a `FormTextarea`, and the alert-only
 guidance link is a `ButtonLink`. `PatrolIntelligenceSurface.tsx` passes the
 Patrol findings accessor into the workbench; the workbench does not fetch or
 poll findings itself.
+`Open resource` in the attention detail is a `ButtonLink` whose destination
+comes from `buildResourcePagePath`; the workbench hides it when no platform
+page can show the subject instead of linking to a page that cannot.
 The feature shell keeps the independent attention workbench mounted when
 Patrol is off or its model needs setup, while retaining the existing setup task
 above it. Desktop and narrow browser checks must show the task and attention
@@ -4960,6 +4994,10 @@ bounds, including provider-backed alert-history wording. `frontend-modern/src/fe
 backed host and VM incidents with the shared `resource-incident` vocabulary
 and existing alert-history shells instead of introducing VMware-only labels,
 badges, or panel copy just because the underlying signal came from vSphere.
+The same helper labels the `host-offline` alert type `Agent Not Reporting`:
+that alert only means an agent's reports lapsed, so drawers and the alerts
+page must not call it a host outage beside a node row that is still online.
+`docker-host-offline` keeps its own `Host Offline` label.
 That same shared settings and modal boundary now also owns the public usage-data
 vocabulary. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts`, and
@@ -5446,12 +5484,10 @@ Pulse observation or action coverage, primary reachability, protection gaps,
 pending updates, or an identified service. Routine health, placement, and
 metric values already visible in the row must not be restated merely to fill
 the drawer. Curated raw IDs, kernel/build strings, interface and disk facts, and
-provider metadata stay visible through `TechnicalDetailsSection` and the same
-compact `DetailSectionTable` rows as Overview; those facts must not switch to a
-provider-local card mosaic or require another tap. Only genuinely large or
-interactive provider-support content belongs behind
-`TechnicalDetailsDisclosure`, which owns its collapsed, lazily mounted
-boundary.
+provider metadata use the same compact `DetailSectionTable` rows as Overview;
+those facts must not switch to a provider-local card mosaic. Since 2026-10-14
+every object drawer keeps them under its one closed Details disclosure
+(below).
 The Proxmox guest and node drawers (`GuestDrawerOverview.tsx`,
 `NodeDrawerOverview.tsx`) are the exception, by maintainer decision on
 2026-10-13 (demand ledger "Drawer Overview leads with attention and trends",
@@ -5474,7 +5510,24 @@ behind it spans every bucket's own lowest and highest reading
 (`buildGuestDrawerHistoryBandPath`): a short spike stays visible after
 downsampling. While a time is inspected the readout names that bucket's peak
 when it rises at least a tenth of the plot above the average, and the
-accessible value states each reading's average and range. Any
+accessible value states each reading's average and range. Every history range
+picker (these drawers, storage disk and pool details) names its options through
+`formatHistoryRangeOptionLabel` in `historyChartModel.ts` ("1 hour", "24 hours",
+"7 days"), so one range is never shown as "24h", "24 hours" and "Last 24 hours"
+in three places. Below the `sm` breakpoint the chart panels stack, so a phone
+shows the first panel (Utilization) plus any panel carrying an active alert,
+and one full-width "Show <panel names>" button (`aria-expanded`, hidden from
+`sm` up) reveals the rest; wider layouts always show every panel. The charts
+poll every 30 seconds and offer no manual refresh; a "Retry history" button
+appears only while a read has failed, and when a successful retry removes it
+keyboard focus moves to the history region rather than the page. Whether
+Retry held focus is read as its branch is disposed, before the node leaves the
+DOM, because Chromium blurs a removed element and a blur-tracked flag would
+already be clear (the refresh test models that removal blur). A chart
+draws alert triggers only from the resource's own alerts
+(`getOwnAlertsForUnifiedResource`): a Docker host's Needs attention lists its
+containers' alerts, but a container's memory trigger never lands on the host's
+memory chart. Any
 warning- or danger-toned detail row
 is lifted into a "Worth checking" section in front, whichever section owns it,
 so demotion never hides a reason a reading cannot be trusted. Guest
@@ -5492,8 +5545,50 @@ one-line facts strip carries OS, the amounts the charts' percentages are of
 and root disk, capacity only while its readings are withheld), address, a
 healthy last completed backup and tags. The complete inventory sits in a closed "Details"
 `TechnicalDetailsDisclosure` with `keepMounted`, so its rows stay in the
-document for find-in-page and tests while hidden. Other drawers keep the rule
-above until that bet is graded. "Worth checking" renders through
+document for find-in-page and tests while hidden. On 2026-10-14 the maintainer
+carried this layout to every object drawer: the shared resource-detail drawer
+(agents, containers, Kubernetes, TrueNAS, vSphere and other platform rows) and
+the Docker host drawer now open with the same alerts line, "Worth checking",
+charts, a facts line (container: image, Compose project and service, address;
+host: logical CPUs, used-of-total RAM and disk, address; Docker host: named OS,
+RAM and disk, the engine version being in its row) and one closed "Details"
+holding every inventory section, healthy availability checks and, for the
+resource drawer, the provider "Platform details" that had their own disclosure.
+Facts state used amounts only while the resource is online or running and its
+memory observation, if any, is current. A row is lifted when it is warning- or
+danger-toned or carries `lift` (an available container image update), unless
+one of the resource's own alerts already states it
+(`getAlertStatedRowLabels`, `partitionDrawerExceptionRows`): a container's
+health alert leaves "Health check: Failing" in Details rather than repeating
+it. An offline resource's "Observed state" is danger-toned with when it was
+last seen, so it is lifted without an alert. A passing availability check moves into
+Details, except on an endpoint that is itself a check (`network-endpoint`,
+platform `availability`), whose cards are its whole reading and stay in front. A container's lifted
+"Image update: Available" carries its next steps in place: the same shared
+`UpdateButton` as the containers table's Updates column (both built by
+`getDockerContainerUpdateAction` in `features/docker/dockerContainerUpdateAction.ts`,
+so readiness and refusal read the same) and a "View image tags" registry link.
+The drawer passes `touchTarget`, a 44px minimum height below `sm`; tables keep
+the compact pill. The control is one `ContainerUpdateNextSteps` element created
+once under the drawer's owner and reused by every rebuild of the inventory
+rows, so a refresh or clock tick never recreates the button or closes its
+review dialog. A container's row dot, State words and drawer header dot share
+`mapDockerContainerStatus`, so a degraded container with no reported state is
+amber in all three. That mapper also owns the restart verdict
+(`dockerContainerRestartAttentionLabel`): a running container past five
+restarts is warning in its dot, the sort, the phone State words, the Restarts
+column and the drawer's lifted Restarts row alike, never a green dot beside an
+amber or red count. Docker State words read in their row dot's colour through
+`dockerStateTextToneClass` (`DockerNativeTableShared.tsx`) with no second dot,
+which now delegates to the platform helper `getPlatformStatusTextToneClass`
+(`features/platformPage/platformStatusTone.ts`): every platform table colours
+the cell behind a dot's verdict through it, and `PlatformIssueReason` and the
+TrueNAS Services and VMs state notes take their tones from it too;
+the Docker Networks row's single name-cell dot carries its attached-container
+verdict the same way, and each attached-container card's state words take its
+dot's tone through the same helper. The Swarm tables follow it too: the cell
+behind a service, task or node dot's verdict (Running count and Update words,
+Current state, Reachability or Availability) reads in that dot's tone. "Worth checking" renders through
 `DrawerExceptionList.tsx` directly under the alerts line, above the charts:
 one compact label/value line per lifted row with the shared
 `detailValueToneClass` tone, not a card per section. A guest memory reading
@@ -5614,6 +5709,10 @@ gating and click runtime, and
 label/title fallback policy, and status-badge class selection. Future status
 badge work should extend those owners instead of pushing label/title policy or
 disabled click handling back into the shell.
+A badge given `ariaLabel` is named "<ariaLabel>: <visible label>" through
+`getStatusBadgeAriaLabel`, so pages of alike On/Off badges say what each
+switches while keeping the visible word in the name (WCAG 2.5.3); without it
+the visible label remains the name.
 Read-only health/state badges are a separate shared primitive.
 `frontend-modern/src/components/shared/StatusIndicatorBadge.tsx` owns
 status-to-tone mapping, optional dot wiring, sizing, shape, and label
@@ -8604,6 +8703,15 @@ unresolved status would flash the default tab away from an admin on every load.
 `__tests__/useSettingsAccess.test.tsx` pin the complete named-capability,
 fail-closed mount, failed-status, deduplicated-load, and General-fallback rules.
 
+### Infrastructure system names are plain in-app links
+
+`InfrastructureSourceManager` renders a connected system's name as a plain
+`<a href>` to its monitoring page in both the desktop table and the phone
+cards; Solid Router intercepts it as an in-app navigation, so the component
+needs no router context. The name keeps its existing tooltip, carries a
+resting underline, and leaves the Actions column (budgeted for Manage and
+the install button) unchanged.
+
 ### Alert monitoring actions preserve domain ownership
 
 The Alerts overview may offer a compact per-resource Monitoring menu, but the
@@ -8754,6 +8862,23 @@ adds no identity mapping of its own: the workloads selection
 state resolves non-row ids through the resource registry, and the summary
 focus bridge reveals the selected row, so the alert link and every other
 `?resource=` link share one resolution and reveal path.
+
+### Alert cards deep-link storage through the storage route search
+
+`AlertOverviewAlertCard` builds a Proxmox storage alert's link with
+`buildStorageRouteSearch({ resource })` on `/proxmox/storage`, preferring the
+alert's `storageResourceId` metadata, and adds no identity mapping of its
+own. `ProxmoxPageSurface` passes `routeActive` to the Storage surface it keeps
+mounted behind its other tabs, so a guest tab's `?resource=` link is not read
+as a storage deep link.
+
+### Thresholds search is a route search
+
+The thresholds resource search writes `?q=` through `navigate(..., { replace:
+true })` instead of a component signal, so a deep link, a reload and the back
+button all keep the narrowed list. Pages with an unsaved-changes leave guard
+must compare the destination path, not every navigation, before asking, or a
+route-owned search prompts on every keystroke (`shouldConfirmAlertsLeave`).
 
 ### Alert groups use the shared localization boundary
 
@@ -9168,6 +9293,45 @@ remain separate errors. No polling frequency, request or access policy changes.
 and selection changes; `browser-tests/history-status.cjs` checks actual chart
 states in desktop Chromium and phone WebKit with synthetic transport failures.
 These checks do not establish native collection or released availability.
+`HistoryChart` takes `enabled` (default true) for a chart mounted inside a
+hidden drawer tab: false aborts its read and stops polling but keeps the
+readings it shows, and resuming the same selection reads at once without a
+loading state before polling again. A selection changed while paused still
+starts from nothing. The hook and mounted chart tests pin both paths.
+The point cap follows the chart's width but is not part of what the chart
+shows: a resize (or a full-page capture) re-reads the same series at the new
+cap while keeping its readings on screen with no loading state, and only
+pointer inspection resets, since its pixel positions moved. A changed target,
+metric, range, organisation or lock still starts from nothing.
+History axis labels must not crowd. The canvas chart draws as many evenly
+spaced time labels as its plot fits at the measured label width, from four
+down to the first and last time (`getHistoryChartTimeTickCount`), so a narrow
+live I/O card no longer runs "12:04 PM12:07 PM..." together. Both the canvas
+chart and the drawer charts blank a middle gridline label that repeats a
+neighbour (`withoutRepeatedHistoryAxisLabels`): a quiet link reads "<1K/s"
+once, not on two gridlines, and the gridline itself stays. The end labels
+always remain. `guest-storage-2263.cjs` records each chart's drawn time
+labels and checks they stand apart; `pbs-history-refresh.cjs` checks the
+drawer's network axis.
+The canvas `HistoryChart` draws the same min-max band the drawer charts do:
+when any bucket's lowest and highest readings differ
+(`hasHistoryChartSpread`), a 20% band spans them behind the line, so a short
+spike survives downsampling. It no longer fills the area under the line, so a
+storage chart reads like a drawer chart; a flat series is a line alone. A
+time label that repeats the one before it (a short window at a coarse label)
+is dropped (`withoutRepeatedHistoryTimeTicks`). Phone chart folds share one
+button, `PhoneChartsToggle` ("Show <names>" / "Show fewer charts",
+`aria-controls` naming the folded group, hidden from `sm` up); the drawer
+History and the disk detail both use it.
+History names where its readings came from, from the reply's `source`, in
+one shared vocabulary (`getHistoryReadoutLabel`, `getHistorySourceNotice`):
+stored history (and demo data) reads "Latest stored · <time>" / "Stored ·";
+readings Pulse holds in memory because the store has none for the range read
+"Latest recorded" / "Recorded", with one line above the drawer charts ("Recent
+readings only. The history store has none for this range yet.") and a "Recent
+only" badge on a canvas chart (it said "Buffer"); a lone current reading
+reads "Current" with "Current only" (it said "Live"). A drawer readout never
+calls memory or live readings stored.
 
 ### Shared History single observations
 

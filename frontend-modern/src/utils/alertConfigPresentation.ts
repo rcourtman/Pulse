@@ -138,6 +138,20 @@ export function getAlertConfigResetDefaultsTitle() {
   return ALERT_CONFIG_RESET_DEFAULTS_TITLE;
 }
 
+/**
+ * Whether leaving with unsaved alert settings needs confirmation. Narrowing
+ * the same page (the thresholds search in `?q=`, a `#section`) keeps the
+ * edits, so only a different page asks.
+ */
+export function shouldConfirmAlertsLeave(
+  to: string | number,
+  fromPathname: string,
+  hasUnsavedChanges: boolean,
+): boolean {
+  if (!hasUnsavedChanges) return false;
+  return typeof to !== 'string' || to.split(/[?#]/)[0] !== fromPathname;
+}
+
 export function getAlertConfigLeaveConfirmation() {
   return ALERT_CONFIG_LEAVE_CONFIRMATION;
 }

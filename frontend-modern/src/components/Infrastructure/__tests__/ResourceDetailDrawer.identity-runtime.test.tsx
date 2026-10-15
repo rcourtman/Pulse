@@ -665,7 +665,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(getByTestId('resource-header-badges')).getByText('PMG')).toBeInTheDocument();
     expect(queryByText('Mode')).toBeNull();
     expect(queryByText('Platform ID')).toBeNull();
-    expect(queryByText('Details')).toBeNull();
+    // Routine inventory waits under the Overview's Details disclosure.
+    expect(getByTestId('resource-technical-details').tagName).toBe('DETAILS');
     expect(queryByText('Show details')).toBeNull();
   });
 
@@ -834,7 +835,11 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     const inlineAliases = inlineRender.getByText('Aliases');
     expect(inlineAliases).toBeInTheDocument();
     expect(inlineAliases.closest('summary')).toBeNull();
-    expect(inlineRender.container.querySelectorAll('details')).toHaveLength(1);
+    // Few aliases need no collapse of their own: their only enclosing
+    // disclosure is the Overview's Details section.
+    expect(inlineAliases.closest('details')).toBe(
+      inlineRender.getByTestId('resource-technical-details'),
+    );
     expect(inlineRender.getByText('agent-inline-1')).toBeInTheDocument();
     // A long alias wraps inside the drawer cell instead of spilling past it.
     expect(inlineRender.getByText('agent-inline-1')).toHaveClass('max-w-full', 'wrap-anywhere');
@@ -939,10 +944,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
+    // Platform context sits inside the Overview's Details, opened by render().
     await waitFor(() => expect(getByTestId('resource-platform-details')).toBeInTheDocument());
-    const platformDetails = getByTestId('resource-platform-details') as HTMLDetailsElement;
-    platformDetails.open = true;
-    fireEvent(platformDetails, new Event('toggle'));
     await waitFor(() => expect(getByText('Context')).toBeInTheDocument());
 
     expect(queryByText('Analysis')).toBeNull();

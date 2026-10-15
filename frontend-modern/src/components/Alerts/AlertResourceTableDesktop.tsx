@@ -84,6 +84,8 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
     state: OfflineState,
     disabled: boolean,
     onToggle: () => void,
+    // What the button sets; its visible state word ends the accessible name.
+    name: string,
   ) => {
     const config = getAlertResourceTableOfflineStatePresentation(state);
 
@@ -97,6 +99,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
           onToggle();
         }}
         title={config.title}
+        aria-label={`${name}: ${config.label}`}
       >
         {config.label}
       </button>
@@ -113,6 +116,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
     titleEnabled?: string;
     titleDisabled?: string;
     titleWhenDisabled?: string;
+    ariaLabel?: string;
   }) => <StatusBadge {...config} />;
 
   const resourceRows = createMemo<AlertResourceRenderItem[]>(() => {
@@ -339,6 +343,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                               'Offline alerts currently enabled by default. Click to disable.',
                             titleDisabled:
                               'Offline alerts currently disabled by default. Click to enable.',
+                            ariaLabel: 'Offline alerts default',
                           });
                         })()}
                       </Show>
@@ -354,11 +359,16 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                           ? 'critical'
                           : 'warning';
 
-                      return renderOfflineStateButton(state, disabledGlobally, () => {
-                        if (disabledGlobally) return;
-                        const next = nextOfflineState(state);
-                        props.table.onSetGlobalOfflineState?.(next);
-                      });
+                      return renderOfflineStateButton(
+                        state,
+                        disabledGlobally,
+                        () => {
+                          if (disabledGlobally) return;
+                          const next = nextOfflineState(state);
+                          props.table.onSetGlobalOfflineState?.(next);
+                        },
+                        'Offline alerts default',
+                      );
                     })()}
                   </Show>
                 </TableCell>

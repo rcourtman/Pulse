@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "ef486d54e657880bdd95d3e26ae4eaba9e330542",
+  "verified_at": "2026-10-14T11:20:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/shared/historyChartModel.ts",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "19f2635052a1261402aea2cd2913d4a72dcb779e121c886d270907d4444bb0ae",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "9bb10c35fdda9e224fb7b49fe33016b10d1e258eca6bde95f0ddacc21034a7dd",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "2d9963744c3a100a208979f414c917825bb0c911ab0e0919e7fbd9d819c7d9ef"
+  },
+  "routes": [
+    "/browser-tests/guest-storage-2263.html (production DiskDetail HistoryChart canvases, Chromium via Playwright 1.56.1 on pulse-dev)",
+    "/browser-tests/pbs-history-refresh.html (production GuestDrawerHistory renderer)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1365,
+      "height": 900
+    }
+  ],
+  "states": [
+    "expanded disk at 1440: 314px History cards draw 4 time labels, 197px Live I/O cards draw 3, none touching (old code drew 4 overlapping)",
+    "expanded disk at 390: every 288px card draws 4 time labels apart",
+    "drawer network panel with sub-1K rates: axis reads <1K/s, blank middle, 0",
+    "utilization axis keeps 100%, 50%, 0%",
+    "light and dark drawer themes"
+  ],
+  "interactions": [
+    "disk summary expand by keyboard, close and reopen by pointer",
+    "viewport narrowed and restored",
+    "drawer history poll, failure, retry and target switch (existing refresh proof flow)"
+  ]
+}

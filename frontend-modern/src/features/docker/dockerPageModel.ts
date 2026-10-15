@@ -79,6 +79,18 @@ const FATAL_CONTAINER_STATES = new Set(['dead', 'removing', 'oomkilled']);
 // problem. Pulse should surface these as muted, not as success or danger.
 const STOPPED_CONTAINER_STATES = new Set(['created', 'paused', 'stopped', 'exited']);
 
+// Unified statuses that stand in when a container reports no state of its own.
+const CONTAINER_LOST_STATUSES = new Set([
+  'offline',
+  'error',
+  'failed',
+  'down',
+  'unreachable',
+  'disconnected',
+  'timeout',
+]);
+const CONTAINER_DEGRADED_STATUSES = new Set(['degraded', 'warning', 'partial', 'recovering']);
+
 const normalizeDockerToken = (value: unknown): string =>
   typeof value === 'string'
     ? value
@@ -97,9 +109,32 @@ const dockerDisplayName = (resource: Resource): string =>
 // Docker's own container state, or the unified resource status when an agent
 // did not report one; "online" there means the container is running.
 export const dockerContainerRunState = (resource: Resource): string => {
-  const state = normalizeDockerToken(resource.docker?.containerState || resource.status);
+  // A blank reported state is no report: fall back to the unified status.
+  const state =
+    normalizeDockerToken(resource.docker?.containerState) || normalizeDockerToken(resource.status);
   return state === 'online' ? 'running' : state;
 };
+
+// v5 flagged crash-loopers in the restarts column; a container that restarted
+// more than this many times needs an operator's eye even while "running".
+// Docker's restart count covers the container's life, not a recent window:
+// the alert engine owns the windowed restart-loop alert.
+export const DOCKER_RESTART_ATTENTION_THRESHOLD = 5;
+
+// "7 restarts" for a running container past the restart threshold, the one
+// restart verdict the row dot, the State words, the sort and the drawer share.
+export const dockerContainerRestartAttentionLabel = (resource: Resource): string | undefined => {
+  const restarts = resource.docker?.restartCount;
+  if (dockerContainerRunState(resource) !== 'running') return undefined;
+  if (typeof restarts !== 'number' || restarts <= DOCKER_RESTART_ATTENTION_THRESHOLD) {
+    return undefined;
+  }
+  return `${restarts} restarts`;
+};
+
+// Docker's restart count is a total, not a rate, which the hover says.
+export const dockerContainerRestartCountTitle = (restarts: number): string =>
+  `Docker has restarted it ${restarts} times in total, not necessarily recently`;
 
 export function mapDockerContainerStatus(resource: Resource): StatusIndicator {
   const state = dockerContainerRunState(resource);
@@ -122,27 +157,58 @@ export function mapDockerContainerStatus(resource: Resource): StatusIndicator {
   if (state === 'running' && health === 'starting') {
     return { variant: 'warning', label: 'Starting' };
   }
+  const restartLabel = dockerContainerRestartAttentionLabel(resource);
+  if (restartLabel) return { variant: 'warning', label: restartLabel };
   if (state === 'running') {
     return { variant: 'success', label: health === 'healthy' ? 'Healthy' : 'Running' };
   }
   if (STOPPED_CONTAINER_STATES.has(state)) {
     return { variant: 'muted', label: titleCase(state) };
   }
+  // With no container state reported, the unified status stands in, read as
+  // every other resource's dot reads it: lost contact is danger, a degraded
+  // or warning status is warning. Unknown stays muted.
+  if (!normalizeDockerToken(resource.docker?.containerState)) {
+    if (CONTAINER_LOST_STATUSES.has(state)) return { variant: 'danger', label: titleCase(state) };
+    if (CONTAINER_DEGRADED_STATUSES.has(state)) {
+      return { variant: 'warning', label: titleCase(state) };
+    }
+  }
   if (!state) return { variant: 'muted', label: 'Unknown' };
   return { variant: 'muted', label: titleCase(state) };
 }
 
-export function mapDockerServiceStatus(resource: Resource): StatusIndicator {
+// Docker's update states that leave a service mid-change: an update paused on
+// a failure, a rollback under way, or a rollback that itself paused.
+const DOCKER_SERVICE_UPDATE_ATTENTION: Record<string, string> = {
+  paused: 'Update paused',
+  rollbackstarted: 'Rolling back',
+  rollbackpaused: 'Rollback paused',
+};
+
+// The service's update verdict, when its update state needs a look.
+export const dockerServiceUpdateAttention = (resource: Resource): StatusIndicator | undefined => {
+  const label =
+    DOCKER_SERVICE_UPDATE_ATTENTION[normalizeDockerToken(resource.docker?.serviceUpdate?.state)];
+  return label ? { variant: 'warning', label } : undefined;
+};
+
+// The service's replica verdict alone: what its Running count says.
+export const dockerServiceReplicaStatus = (resource: Resource): StatusIndicator => {
   const desired = resource.docker?.desiredTasks ?? 0;
   const running = resource.docker?.runningTasks ?? 0;
-  const updateState = normalizeDockerToken(resource.docker?.serviceUpdate?.state);
-  if (updateState === 'paused' || updateState === 'rollbackstarted') {
-    return { variant: 'warning', label: 'Rollback paused' };
-  }
   if (desired <= 0) return { variant: 'muted', label: 'Scaled to 0' };
   if (running >= desired) return { variant: 'success', label: 'Healthy' };
   if (running <= 0) return { variant: 'danger', label: `0 / ${desired} running` };
   return { variant: 'warning', label: `${running} / ${desired} running` };
+};
+
+// The row dot: no replicas running outranks a rollout in progress, which
+// outranks a partial count.
+export function mapDockerServiceStatus(resource: Resource): StatusIndicator {
+  const replicas = dockerServiceReplicaStatus(resource);
+  if (replicas.variant === 'danger') return replicas;
+  return dockerServiceUpdateAttention(resource) ?? replicas;
 }
 
 export function mapDockerTaskStatus(resource: Resource): StatusIndicator {

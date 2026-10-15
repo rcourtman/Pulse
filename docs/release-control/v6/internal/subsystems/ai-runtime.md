@@ -7831,6 +7831,12 @@ cannot be registered or shadowed by extensions. Docker update/control,
 Kubernetes scale/restart/delete, arbitrary exec, raw command, and file writes
 are omitted from offered schemas and denied if fabricated.
 
+The Pulse self-update administrative exception `admin.pulse.self-update`
+covers `POST /api/updates/apply`, `/api/updates/rollback` and
+`/api/updates/pro-runtime/apply`. The runtime-switch route is the same
+admin-only manager apply pipeline as an update, with no model-originated,
+Assistant tool or agent transport path.
+
 The registry audits enumerate actual registered tool discriminator values and
 bind mechanically discovered API, job, and transport candidates to one registry
 disposition. The action lifecycle API surface registers five lifecycle

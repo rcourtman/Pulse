@@ -175,11 +175,18 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
             true,
           );
       }, dark);
+      // Charts poll every 30 seconds; the proof drives that poll with the clock.
+      await page.clock.install();
       await page.goto(
         origin + '/browser-tests/resource-history-provenance.html' + (guest ? '?guest' : ''),
       );
       const activate = (locator) => (width < 768 ? locator.tap() : locator.click());
-      await activate(page.getByRole('tab', { name: 'History', exact: true }));
+      // History charts sit on Overview, which the drawer opens on.
+      const pollRead = async () => {
+        const read = page.waitForResponse((r) => r.url().includes('/api/metrics-store/history'));
+        await page.clock.runFor(30_000);
+        await read;
+      };
       const chart = page.locator('[data-history-group="utilization"]');
       await chart.locator('[data-history-last-known="memory"]').waitFor();
       await page.evaluate(
@@ -298,7 +305,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         'Fresh measured zero and independent disk recovery render in place without extra reads or inferred thaw.',
       );
       mode = 'stored';
-      await activate(page.getByRole('button', { name: 'Refresh history', exact: true }));
+      await pollRead();
       const slider = chart.getByRole('slider', { name: 'Inspect Utilization history' });
       await slider.waitFor();
       assert.equal(
@@ -312,11 +319,11 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
       assert.match(await slider.getAttribute('aria-valuetext'), /Memory 5.0%.*Disk 40.0%/);
       await page.keyboard.press('End');
       assert.match(await slider.getAttribute('aria-valuetext'), /Memory 0.0%.*Disk 45.0%/);
-      assert.equal(await chart.locator('path').count(), 2);
+      assert.equal(await chart.locator('path[data-history-series]').count(), 2);
       await screenshot('stored');
       await slider.blur();
       await activate(page.getByRole('button', { name: 'retained', exact: true }));
-      assert.equal(await chart.locator('path').count(), 2);
+      assert.equal(await chart.locator('path[data-history-series]').count(), 2);
       assert.match(
         await chart.locator('[data-history-deferred="memory"]').innerText(),
         /Last known/,
@@ -325,9 +332,9 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         'Actual stored history and trusted Home/End inspection remain separate from live/retained provenance.',
       );
       mode = 'transient';
-      await activate(page.getByRole('button', { name: 'Refresh history', exact: true }));
+      await pollRead();
       await page.getByRole('button', { name: 'Retry history', exact: true }).waitFor();
-      assert.equal(await chart.locator('path').count(), 2);
+      assert.equal(await chart.locator('path[data-history-series]').count(), 2);
       assert.match(
         await page.getByRole('status', { name: 'History refresh status' }).innerText(),
         /previously loaded history/,

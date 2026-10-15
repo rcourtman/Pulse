@@ -26,6 +26,7 @@ import {
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
@@ -428,6 +429,17 @@ export const VsphereActivityTable: Component<{
                                 >
                                   {activity.resourceName}
                                 </div>
+                                {/* A phone hides State; the same words read under the name. */}
+                                <span
+                                  class={`platform-table-phone-only-inline max-w-full text-[11px] ${getPlatformStatusTextToneClass(activityStateVariant(activity.stateBucket))}`}
+                                  data-vsphere-activity-state-phone={activityStateVariant(
+                                    activity.stateBucket,
+                                  )}
+                                >
+                                  <span class="min-w-0 truncate">
+                                    {formatActivityState(activity)}
+                                  </span>
+                                </span>
                               </div>
                             </div>
                           </TableCell>
@@ -454,7 +466,12 @@ export const VsphereActivityTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
                           >
-                            <span class="text-[11px] font-semibold text-base-content">
+                            <span
+                              class={`text-[11px] font-semibold ${getPlatformStatusTextToneClass(activityStateVariant(activity.stateBucket)) || 'text-base-content'}`}
+                              data-vsphere-activity-state={activityStateVariant(
+                                activity.stateBucket,
+                              )}
+                            >
                               {formatActivityState(activity)}
                             </span>
                           </TableCell>

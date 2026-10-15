@@ -335,6 +335,112 @@ func (h *UpdateHandlers) HandleApplyUpdate(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// proRuntimeSwitcher is implemented by update managers that can move a
+// community install with a paid licence onto the Pulse Pro runtime.
+type proRuntimeSwitcher interface {
+	CheckProRuntimeSwitch(ctx context.Context, channel string) (*updates.ProRuntimeSwitch, error)
+	ApplyProRuntimeSwitch(ctx context.Context, channel string, initiatedBy updates.InitiatedBy, initiatedVia updates.InitiatedVia) error
+}
+
+// HandleCheckProRuntimeSwitch reports whether this install can switch to the
+// Pulse Pro runtime, and how (in place, or with Docker image commands).
+func (h *UpdateHandlers) HandleCheckProRuntimeSwitch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	switcher, ok := h.manager.(proRuntimeSwitcher)
+	if !ok {
+		http.Error(w, "Pulse Pro runtime switch is not supported", http.StatusNotImplemented)
+		return
+	}
+	channel, err := normalizeRequestedUpdateChannel(r.URL.Query().Get("channel"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Cache-Control", "no-store")
+	result, err := switcher.CheckProRuntimeSwitch(r.Context(), channel)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to check the Pulse Pro runtime switch")
+		http.Error(w, "Failed to check the Pulse Pro runtime switch", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		log.Error().Err(err).Msg("Failed to encode Pulse Pro runtime switch")
+	}
+}
+
+// HandleApplyProRuntimeSwitch installs the Pulse Pro runtime over this
+// community binary. It re-checks eligibility and runs the same readiness gate
+// as an update before starting.
+func (h *UpdateHandlers) HandleApplyProRuntimeSwitch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	switcher, ok := h.manager.(proRuntimeSwitcher)
+	if !ok {
+		http.Error(w, "Pulse Pro runtime switch is not supported", http.StatusNotImplemented)
+		return
+	}
+	channel, err := normalizeRequestedUpdateChannel(r.URL.Query().Get("channel"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	check, err := switcher.CheckProRuntimeSwitch(r.Context(), channel)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to check the Pulse Pro runtime switch before apply")
+		http.Error(w, "Failed to check the Pulse Pro runtime switch", http.StatusInternalServerError)
+		return
+	}
+	if !check.Available || !check.InstallInPlace {
+		log.Warn().Str("reason", check.Reason).Bool("available", check.Available).Msg("Pulse Pro runtime switch refused: no in-place switch offered")
+		http.Error(w, "Switching to Pulse Pro is not available for this install right now. Reload the page to check again.", http.StatusConflict)
+		return
+	}
+
+	if h.hasUpdateReadinessSources() {
+		plan, statusCode, msg, err := h.prepareUpdatePlan(r.Context(), check.Version, channel)
+		if err != nil {
+			log.Warn().Err(err).Str("version", check.Version).Msg("Pulse Pro runtime switch readiness request rejected")
+			http.Error(w, msg, statusCode)
+			return
+		}
+		if plan.Readiness != nil && plan.Readiness.Status == updateReadinessBlocked {
+			http.Error(w, plan.Readiness.Summary, http.StatusConflict)
+			return
+		}
+	}
+
+	result := make(chan error, 1)
+	go func() {
+		result <- switcher.ApplyProRuntimeSwitch(context.Background(), channel, updates.InitiatedByUser, updates.InitiatedViaUI)
+	}()
+	select {
+	case err := <-result:
+		if err != nil {
+			statusCode, msg := classifyApplyUpdateStartError(err)
+			log.Warn().Err(err).Str("channel", channel).Msg("Pulse Pro runtime switch rejected")
+			http.Error(w, msg, statusCode)
+			return
+		}
+	case <-time.After(applyUpdateStartAckTimeout):
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{
+		"status":  "started",
+		"message": "Pulse Pro runtime switch started",
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to encode Pulse Pro runtime switch start response")
+	}
+}
+
 func decodeStrictJSONBody(body io.Reader, dst any) error {
 	decoder := json.NewDecoder(body)
 	decoder.DisallowUnknownFields()
@@ -374,7 +480,10 @@ func classifyApplyUpdateStartError(err error) (int, string) {
 		return http.StatusConflict, err.Error()
 	case strings.Contains(errMsg, "cannot be applied in docker environment"),
 		strings.Contains(errMsg, "manual migration required"),
-		strings.Contains(errMsg, "pulse pro updates need an activated license"):
+		strings.Contains(errMsg, "pulse pro updates need an activated license"),
+		strings.Contains(errMsg, "already runs the pulse pro runtime"),
+		strings.Contains(errMsg, "cannot be installed in place"),
+		strings.Contains(errMsg, "older than this install"):
 		return http.StatusConflict, err.Error()
 	default:
 		return http.StatusInternalServerError, "Failed to start update"

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "e787ca857d82f793242211dc18c5c881b7a82d6b",
+  "verified_at": "2026-10-14T14:29:40Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/dockerPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "4ba0f40ecaee1409f93fde377919e8d834f2d3909281c6903f2ad54d0a4e2e39"
+  },
+  "routes": [
+    "browser-tests/proxmox-docker-rows.html (production DockerContainersTable and ResourceDetailDrawer, Chromium via Playwright 1.56.1 on pulse-dev)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "container with no reported state and status degraded: row dot, State \"Degraded\" and drawer header dot all amber (old mapper: grey)",
+    "Worth checking lifts \"Observed state: Degraded\"",
+    "exited container on an offline host stays muted \"Exited\"",
+    "unhealthy and update-available containers unchanged",
+    "reviewed by Sol from the desktop and phone screenshots"
+  ],
+  "interactions": [
+    "row expand by pointer (desktop) and tap (phone)"
+  ]
+}

@@ -390,3 +390,102 @@ describe('buildGuestDrawerHistoryBandPath', () => {
     expect(path).toBe('M34.00,8.00 L352.00,8.00 L352.00,74.00 L34.00,74.00 Z');
   });
 });
+
+describe('drawer History range picker', () => {
+  it('names its options the same way as every history range picker', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    render(() => <GuestDrawerHistory target={target} range="24h" onRangeChange={() => {}} />);
+    const picker = (await screen.findByTestId('guest-history-range-control')) as HTMLSelectElement;
+    expect(Array.from(picker.options).map((option) => option.textContent)).toEqual([
+      '1 hour',
+      '6 hours',
+      '12 hours',
+      '24 hours',
+      '7 days',
+      '14 days',
+      '30 days',
+      '90 days',
+    ]);
+  });
+});
+
+describe('drawer History on a phone', () => {
+  const groupIds = () =>
+    screen
+      .getAllByTestId('guest-history-group-chart')
+      .filter((chart) => chart.dataset.phoneCollapsed !== 'true')
+      .map((chart) => chart.dataset.historyGroup);
+
+  it('keeps the first panel and collapses the rest behind one toggle', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    render(() => <GuestDrawerHistory target={target} range="24h" />);
+    await screen.findAllByTestId('guest-history-group-chart');
+    expect(groupIds()).toEqual(['utilization']);
+    for (const chart of screen.getAllByTestId('guest-history-group-chart').slice(1)) {
+      expect(chart).toHaveClass('max-sm:hidden');
+    }
+    const toggle = screen.getByTestId('history-phone-toggle');
+    expect(toggle).toHaveClass('sm:hidden');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // The shared phone toggle controls the grid that holds the folded panels.
+    const grid = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    expect(grid.querySelectorAll('[data-testid="guest-history-group-chart"]')).toHaveLength(3);
+    expect(toggle).toHaveTextContent('Show Network I/O, Disk I/O');
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveTextContent('Show fewer charts');
+    expect(groupIds()).toEqual(['utilization', 'network', 'disk-io']);
+    for (const chart of screen.getAllByTestId('guest-history-group-chart')) {
+      expect(chart).not.toHaveClass('max-sm:hidden');
+    }
+  });
+
+  it('keeps a panel with an active alert visible on a phone', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    render(() => (
+      <GuestDrawerHistory
+        target={target}
+        range="24h"
+        alerts={{ diskread: { severity: 'warning', value: 1024 } }}
+      />
+    ));
+    await screen.findAllByTestId('guest-history-group-chart');
+    expect(groupIds()).toEqual(['utilization', 'disk-io']);
+    expect(screen.getByTestId('history-phone-toggle')).toHaveTextContent('Show Network I/O');
+  });
+});
+
+describe('drawer History alert triggers', () => {
+  it('labels the trigger in the legend and draws no line before any history exists', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({ ...response(), metrics: {} });
+    render(() => (
+      <GuestDrawerHistory
+        target={target}
+        range="24h"
+        alerts={{ diskread: { severity: 'critical', value: 100 * 1024 * 1024 } }}
+      />
+    ));
+    await screen.findAllByText('No stored history in this range');
+    expect(document.querySelector('[data-history-threshold]')).toBeNull();
+    expect(document.querySelector('[data-history-alert-label="diskread"]')).toHaveTextContent(
+      /^alert at 100(\.0)? MB\/s$/,
+    );
+  });
+
+  it('keeps a phone panel shown after the alert that revealed it clears', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    const [alerts, setAlerts] = createSignal<
+      Record<string, { severity: 'warning' | 'critical'; value?: number } | undefined>
+    >({ netin: { severity: 'warning', value: 1024 } });
+    render(() => <GuestDrawerHistory target={target} range="24h" alerts={alerts()} />);
+    const network = () =>
+      screen
+        .getAllByTestId('guest-history-group-chart')
+        .find((chart) => chart.dataset.historyGroup === 'network')!;
+    await screen.findAllByTestId('guest-history-group-chart');
+    expect(network()).not.toHaveClass('max-sm:hidden');
+    setAlerts({});
+    expect(network()).not.toHaveClass('max-sm:hidden');
+  });
+});

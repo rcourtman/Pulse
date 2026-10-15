@@ -71,6 +71,8 @@ const { chromium, firefox, webkit } = require('playwright');
         ...(width === 390 ? { isMobile: true, hasTouch: true } : {}),
       });
       page.setDefaultTimeout(25_000);
+      // Time flows normally; runFor advances it to fire the 30-second poll.
+      await page.clock.install();
       const requests = [],
         errors = [];
       page.on('pageerror', (error) => errors.push(error.message));
@@ -172,10 +174,30 @@ const { chromium, firefox, webkit } = require('playwright');
       );
       await page.getByRole('button', { name: 'Corroborate links', exact: true }).click();
       progress('linked-table-ready', { theme });
-      const xs = async (plot) =>
-        [
-          ...(await plot.locator('path').first().getAttribute('d')).matchAll(/[ML](-?[\d.]+),/g),
-        ].map((match) => Number(match[1]));
+      // Lines break where a reading is missing, so sparse series draw single
+      // observation dots instead of a path. Read x from whichever is drawn.
+      const drawn = (plot) => plot.locator('path[data-history-series], [data-history-observation]');
+      const xs = async (plot) => {
+        const series = plot.locator('path[data-history-series]');
+        if ((await series.count()) > 0) {
+          return [...(await series.first().getAttribute('d')).matchAll(/[ML](-?[\d.]+),/g)].map(
+            (match) => Number(match[1]),
+          );
+        }
+        return (
+          (
+            await plot
+              .locator('[data-history-observation]')
+              // The first series drawn, as the path branch reads the first path.
+              .evaluateAll((nodes) => {
+                const metric = nodes[0]?.getAttribute('data-history-observation');
+                return nodes
+                  .filter((node) => node.getAttribute('data-history-observation') === metric)
+                  .map((node) => Number(node.getAttribute('data-x')));
+              })
+          ).sort((a, b) => a - b)
+        );
+      };
       const expectedX = (minutes, range) =>
         34 + ((durations[range] - advance - minutes * 60_000) / durations[range]) * 318;
       const verifyWindow = async (detail, range) => {
@@ -220,10 +242,10 @@ const { chromium, firefox, webkit } = require('playwright');
           'true',
         );
         detail = page.locator(`[data-inline-platform-resource-detail-for="pbs-${suffix}"]`);
-        await detail.getByRole('tab', { name: 'History', exact: true }).click();
+        // History charts sit on the drawer's Overview.
         const utilization = detail.locator('[data-history-group="utilization"]');
         const plot = utilization.getByTestId('guest-history-plot');
-        await plot.locator('path').first().waitFor();
+        await drawn(plot).first().waitFor({ state: 'attached' });
         const observedXs = await xs(plot);
         const observed = {
           suffix,
@@ -265,16 +287,16 @@ const { chromium, firefox, webkit } = require('playwright');
       );
       const utilizationX = await utilization
         .getByTestId('guest-history-plot')
-        .locator('circle[r="3"]')
+        .locator('[data-history-hover-marker]')
         .first()
-        .getAttribute('cx');
+        .getAttribute('data-x');
       await networkSlider.focus();
       await networkSlider.press('End');
       const networkX = await network
         .getByTestId('guest-history-plot')
-        .locator('circle[r="3"]')
+        .locator('[data-history-hover-marker]')
         .first()
-        .getAttribute('cx');
+        .getAttribute('data-x');
       assert.equal(networkX, utilizationX);
       assert.match(
         (await network.innerText()).replace(/\s+/g, ' '),
@@ -294,7 +316,7 @@ const { chromium, firefox, webkit } = require('playwright');
       progress('inspection-verified', { theme });
       await networkSlider.press('Tab');
       state = 'failure';
-      await detail.getByRole('button', { name: 'Refresh history' }).click();
+      await page.clock.runFor(30_000);
       await detail
         .getByText('History refresh failed. Showing previously loaded history.')
         .waitFor();
@@ -310,7 +332,7 @@ const { chromium, firefox, webkit } = require('playwright');
       advance = 10 * 60_000;
       state = 'success';
       await detail.getByRole('button', { name: 'Retry history' }).click();
-      await detail.getByRole('button', { name: 'Refresh history' }).waitFor();
+      await detail.getByRole('button', { name: 'Retry history' }).waitFor({ state: 'detached' });
       await page.waitForFunction(
         (expected) =>
           document
@@ -330,12 +352,17 @@ const { chromium, firefox, webkit } = require('playwright');
       await detail.getByRole('combobox', { name: 'History range' }).selectOption('1h');
       await detail.getByText('Loading history', { exact: true }).first().waitFor();
       assert.equal(await detail.getByTestId('guest-history-time-window').count(), 0);
-      assert.equal(await detail.getByTestId('guest-history-plot').locator('path').count(), 0);
+      assert.equal(
+        await detail.getByTestId('guest-history-plot').locator('path[data-history-series]').count(),
+        0,
+      );
       assert.equal(await detail.getByRole('slider').count(), 0);
       assert.ok(held);
       state = 'success';
       await held.route.fulfill({ json: response(held.type, held.id, held.range) });
-      await utilization.getByTestId('guest-history-plot').locator('path').first().waitFor();
+      await drawn(utilization.getByTestId('guest-history-plot'))
+        .first()
+        .waitFor({ state: 'attached' });
       await verifyWindow(detail, '1h');
       assert.ok(
         Math.abs(
@@ -345,9 +372,11 @@ const { chromium, firefox, webkit } = require('playwright');
       await detail.screenshot({ path: path.join(artifacts, `one-hour-${theme}.png`) });
       progress('replacement-window-verified', { theme });
       state = 'sparse';
-      await detail.getByRole('button', { name: 'Refresh history' }).click();
+      await page.clock.runFor(30_000);
       await page.waitForFunction(
-        () => document.querySelectorAll('[data-testid="guest-history-plot"] path').length === 0,
+        () =>
+          document.querySelectorAll('[data-testid="guest-history-plot"] path[data-history-series]')
+            .length === 0,
       );
       await detail.screenshot({ path: path.join(artifacts, `sparse-${theme}.png`) });
       const sparseObservation = {
@@ -368,12 +397,12 @@ const { chromium, firefox, webkit } = require('playwright');
       assert.equal(await detail.getByRole('slider').count(), 0);
       assert.equal(await detail.getByText('Single observation. No trend yet.').count(), 4);
       for (const dot of await detail.locator('[data-history-observation]').all()) {
-        assert.ok(Math.abs(Number(await dot.getAttribute('cx')) - expectedX(5, '1h')) < 0.01);
-        assert.ok(Number.isFinite(Number(await dot.getAttribute('cy'))));
+        assert.ok(Math.abs(Number(await dot.getAttribute('data-x')) - expectedX(5, '1h')) < 0.01);
+        assert.ok(Number.isFinite(Number(await dot.getAttribute('data-y'))));
       }
       await verifyWindow(detail, '1h');
       state = 'failure';
-      await detail.getByRole('button', { name: 'Refresh history' }).click();
+      await page.clock.runFor(30_000);
       await detail
         .getByText('History refresh failed. Showing previously loaded history.')
         .waitFor();
@@ -394,7 +423,9 @@ const { chromium, firefox, webkit } = require('playwright');
       await detail.screenshot({ path: path.join(artifacts, `empty-${theme}.png`) });
       state = 'success';
       await detail.getByRole('combobox', { name: 'History range' }).selectOption('7d');
-      await utilization.getByTestId('guest-history-plot').locator('path').first().waitFor();
+      await drawn(utilization.getByTestId('guest-history-plot'))
+        .first()
+        .waitFor({ state: 'attached' });
       await verifyWindow(detail, '7d');
       const readsBeforeLock = requests.length;
       await detail.getByRole('combobox', { name: 'History range' }).selectOption('14d');
@@ -417,7 +448,10 @@ const { chromium, firefox, webkit } = require('playwright');
       );
       assert.match((await liveCPU.innerText()).replace(/\s+/g, ' '), /CPU\s*42\.0%\s*current/);
       assert.equal(await detail.locator('[data-history-observation]').count(), 0);
-      assert.equal(await detail.getByTestId('guest-history-plot').locator('path').count(), 0);
+      assert.equal(
+        await detail.getByTestId('guest-history-plot').locator('path[data-history-series]').count(),
+        0,
+      );
       await detail.screenshot({ path: path.join(artifacts, `current-empty-${theme}.png`) });
       observations.push({ theme, requests, errors, utilizationX, networkX });
       progress('completed-theme', { theme });

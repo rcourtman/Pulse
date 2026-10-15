@@ -740,6 +740,15 @@ and hide the resource identity. Backup, snapshot and offline controls keep their
 separate configuration contracts. Global default cells never route backup or
 snapshot into numeric thresholds. Host cards preserve the canonical cluster
 context shown by table rows, so identically named hosts remain distinguishable.
+Every threshold control names itself for assistive tech, because moving
+between form controls reads a control's own name, not its column header:
+the editor's input is "<column> default" or "<column> for <resource>" and its
+On/Off badge "... alerts: On"; offline, backup and snapshot toggles and the
+three-state Warn / Crit / Off control are "Offline alerts for <resource>: Warn";
+display-mode value buttons are "Edit <column> threshold for <resource>: <value>";
+and the alert switches are "Alerts for <resource>". Each name ends with the
+control's visible word or value so voice control can say what is on screen
+(WCAG 2.5.3). `ResourceTable.test.tsx` pins the names in both layouts.
 
 A per-metric threshold is off whenever its trigger is `<= 0`. That boundary is
 engine truth (`internal/alerts/canonical_metric.go`,
@@ -1543,6 +1552,20 @@ low-urgency information accidentally. Informational alerts use the shared blue
 presentation and sort below warnings, while the history facet exposes a real
 Info option whose count and filtered rows use the same predicate as every
 other severity.
+
+The alert history frequency chart in `AlertHistoryFrequencyCard.tsx` stacks
+each period by severity, critical at the base, from the `severityBuckets` that
+`buildAlertTrends` counts in the same pass as its totals. Those counts use
+`alertSeverityCountKey`, the closed vocabulary above: `error` is critical and
+an empty or unknown value is a warning, never information. Segment fills and
+legend dots share `getAlertSeverityFillClass`, each at least 3:1 against the
+chart surface in both themes (light-theme warnings use amber-700). A bar's
+height is the square root of its share of the busiest period (4px floor, 40px
+ceiling), so a burst stands well clear while ordinary periods stay tall
+enough to read their mix; each bar's tooltip and accessible name carry the
+exact counts. The legend counts critical, warnings and info (info only when
+present) over the current window and bar selection
+(`AlertHistoryFrequencyCard.test.tsx`, `alertHistoryModel.test.ts`).
 
 The desktop alert history table sizes each column for its content instead of
 giving all visible columns an equal share. Each density is sized for the
@@ -2761,6 +2784,15 @@ health handling, host cleanup, and host offline lifecycle handling; future host
 agent alert behavior should extend that resource checker owner while shared
 health-assessment evaluation remains package-level until all storage-health
 callers can be separated behind a narrower owner.
+The host offline lifecycle is raised only by a lapsed agent report, and
+Pulse cannot tell a dead host from an agent that lost its route to Pulse.
+Its message therefore names the silent agent ("Pulse agent on '<name>'
+stopped reporting", using the agent's own name without the linked
+`(Host Agent)` qualifier) and never claims the host is offline, because a
+linked Proxmox node keeps reporting through its API while its agent is
+silent. The `host-offline` type, alert identity and lifecycle stay
+unchanged. `TestHandleHostOfflineNamesSilentAgentNotHostOutage` in
+`internal/alerts/alerts_test.go` pins this wording.
 Host long-running storage-operation alerts require fresh operation evidence.
 An accepted Unraid cancellation/completion or terminal Linux RAID report
 resolves the corresponding operation alert immediately. A normal polling gap
@@ -2964,6 +2996,34 @@ node names, source-system messages, commands, command output, event payloads,
 log text, and the English Assistant model-context labels must remain
 untranslated; only the user-visible briefing labels and alert controls may use
 the active app locale.
+
+The Recovery section is a thresholds deep link: `/alerts/thresholds/proxmox#backups`
+expands and scrolls to it like `#pbs` and `#pmg` (`useThresholdsTableState.test.tsx`).
+
+The thresholds resource search is route state: `useThresholdsTableState`
+reads and writes `?q=` (`ALERT_THRESHOLDS_QUERY_PARAMS.query`) with replace
+navigation, keeps it across platform tab clicks, section hashes and the
+legacy-path redirects, so a link from elsewhere can open a tab already
+searched to one resource (`buildAlertThresholdsPath`). Host and Docker host
+rows match the search on their shown, display and raw names
+(`matchesThresholdResourceSearch`), because a link carries the full display
+label while those rows show a shortened name and keep the label as their raw
+name. Because each search edit navigates within the
+page, the Alerts page's unsaved-changes guard asks only when the destination
+path differs (`shouldConfirmAlertsLeave` in `alertConfigPresentation.ts`):
+narrowing the list keeps an unsaved edit without a prompt, leaving the page
+still asks (`useThresholdsTableState.test.tsx`,
+`alertConfigPresentation.test.ts`, `Alerts.helpers.test.ts`).
+
+A successful Alerts page save re-reads the shared `alertsActivation` config in
+`useAlertsConfigurationState.ts` (only when the config write landed and the
+save still owns the editor), because backup shields and metric colours on
+every page read that config and otherwise kept the old limits until a reload.
+`refreshConfig` in `frontend-modern/src/stores/alertsActivation.ts` installs a
+read only while it is the latest: each read and each organisation switch takes
+a new generation, so a slow reply for the previous organisation or an older
+read cannot overwrite the current config (`alertsActivation.test.ts`,
+`useAlertsConfigurationState.test.tsx`).
 
 The remaining alert configuration and history presentation helpers now also
 have explicit alerts ownership. `frontend-modern/src/utils/alertActivationPresentation.ts`,
@@ -4063,9 +4123,10 @@ alert's own resource id. The shared workloads table resolves that id
 (including a Proxmox source id such as `<cluster>-<node>-<vmid>`) through
 the resource registry, opens the guest's drawer and reveals it, so a
 notification reaches the affected guest in one tap instead of the top of a
-page with every guest on it. Other alerts (hosts, storage, Docker
+page with every guest on it. Other alerts (hosts, Docker
 containers, Kubernetes, TrueNAS, Pulse system alerts) keep their platform
-page link, because their pages do not read `?resource=`. So do orphaned
+page link, because their pages do not read `?resource=`; Proxmox storage
+alerts open their pool (below). So do orphaned
 backup alerts (`backup-subject:...`), whose ids name no resource the
 registry can open. A guest's per-filesystem alert (`<guest>-disk-<key>`,
 marked by `mountpoint` or `diskIndex` metadata) names no registry resource
@@ -4078,6 +4139,21 @@ filesystem filled; a filesystem alert without that key (raised before the
 stamp) keeps the platform page link and never falls back to its own id.
 The platform used for the monitoring policy menu is still read from the
 page path alone.
+
+### A Proxmox storage alert's name opens its pool
+
+A storage alert (`resourceType` `storage`) whose platform page is Proxmox
+links its name to `/proxmox/storage?resource=`, so a full or degraded pool
+opens on Storage instead of the top of the Proxmox overview. ZFS pool-state,
+pool-error and device alerts are raised under
+`<storage>/zfs-pool:<pool>[/device:<device>]` ids, which the resource
+registry cannot open, so `checkZFSPoolHealth` in `internal/alerts/storage.go`
+stamps the owning storage as `storageResourceId` metadata
+(`TestZFSAlertsNameTheirStorage`); the card prefers that key, then the
+alert's own id. An unstamped composite id (raised before the stamp, or a
+pool-error alert whose counters have not grown since) opens Storage without
+naming a pool and never passes the composite id. TrueNAS and vSphere storage
+alerts keep their platform page, which does not read `?resource=`.
 
 ### Thresholds lead with each group's default limits
 
@@ -4671,7 +4747,18 @@ canonical lookup from one unified resource to its open alerts in the websocket
 resource (unified id, canonical primary and superseded ids, Proxmox source id,
 metrics target, and for agent and Docker hosts `agent:<id>` and
 `docker:<host source id>` plus the component alerts nested under them) and
-orders them most severe first. The Machines/Infrastructure and Docker host
+orders them most severe first. A Docker container answers to the key the
+engine writes for it, `docker:<host source id>/<container id>` (or
+`docker:<host source id>/name:<name>` without an ID, per
+`DockerContainerResourceID`), so its drawer lists its own alerts; until
+2026-10-14 the container drawer matched none of them.
+`getOwnAlertsForUnifiedResource` returns only the exact-key alerts, without
+the nested component alerts, and is what drawer charts use for dashed
+triggers: a host's Needs attention lists its containers, but a container's
+memory trigger is not the host's. Those rows use `getAlertAttentionCopy`, so a
+latched or recovering alert, whose message keeps its breach-time value, reads
+as "Memory 70% now, recovering" beside a chart showing 70%. The
+Machines/Infrastructure and Docker host
 drawers build their "Needs attention" rows from it; resources no longer embed
 an alert list, so no drawer can silently read an always-empty copy.
 `getUnifiedResourceAlertStyles` computes row highlighting from that same set,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getAlertsForResource,
   getAlertsForUnifiedResource,
+  getOwnAlertsForUnifiedResource,
   getAlertStyles,
   getUnifiedResourceAlertStyles,
 } from '@/utils/alerts';
@@ -286,6 +287,60 @@ describe('getAlertsForUnifiedResource', () => {
 
     expect(ids(getAlertsForUnifiedResource(host, active, true))).toEqual(['disk', 'cpu', 'raid']);
     expect(getAlertsForUnifiedResource(host, active, false)).toEqual([]);
+  });
+
+  it("matches a Docker container's alerts on its host and container ID, or its name", () => {
+    const container = resource({
+      id: 'app-container-b858bc8f1caf601a',
+      type: 'app-container',
+      name: 'sftp-ingest-2',
+      metricsTarget: { resourceType: 'app-container', resourceId: 'aurora-3-a68e33cfc81c' },
+      docker: { hostSourceId: 'aurora-3-mock', containerId: 'aurora-3-a68e33cfc81c' },
+    } as Partial<Resource>);
+    const active = byId(
+      alert('memory', 'docker:aurora-3-mock/aurora-3-a68e33cfc81c', { type: 'memory' }),
+      alert('host', 'docker:aurora-3-mock'),
+      alert('other', 'docker:aurora-3-mock/aurora-3-ffffffffffff'),
+    );
+    expect(ids(getAlertsForUnifiedResource(container, active, true))).toEqual(['memory']);
+    expect(ids(getOwnAlertsForUnifiedResource(container, active, true))).toEqual(['memory']);
+
+    const unnamedId = resource({
+      id: 'app-container-2',
+      type: 'app-container',
+      name: '/batch-job',
+      docker: { hostSourceId: 'aurora-3-mock' },
+    } as Partial<Resource>);
+    expect(
+      ids(
+        getAlertsForUnifiedResource(
+          unnamedId,
+          byId(alert('by-name', 'docker:aurora-3-mock/name:batch-job')),
+          true,
+        ),
+      ),
+    ).toEqual(['by-name']);
+  });
+
+  it("keeps a host's own alerts apart from its containers' and disks' for charts", () => {
+    const host = resource({
+      id: 'agent-4406b8737ed55d92',
+      agent: { agentId: 'app-platform-01' },
+      docker: { hostSourceId: 'orion-2-mock' },
+    } as Partial<Resource>);
+    const active = byId(
+      alert('own-cpu', 'agent:app-platform-01', { type: 'cpu' }),
+      alert('own-offline', 'docker:orion-2-mock', { type: 'docker-host-offline' }),
+      alert('container-memory', 'docker:orion-2-mock/orion-2-af2ca82947cd', { type: 'memory' }),
+      alert('disk', 'agent:app-platform-01/disk:root', { type: 'disk' }),
+    );
+    expect(ids(getAlertsForUnifiedResource(host, active, true)).sort()).toEqual(
+      ['container-memory', 'disk', 'own-cpu', 'own-offline'].sort(),
+    );
+    expect(ids(getOwnAlertsForUnifiedResource(host, active, true)).sort()).toEqual(
+      ['own-cpu', 'own-offline'].sort(),
+    );
+    expect(getOwnAlertsForUnifiedResource(host, active, false)).toEqual([]);
   });
 
   it('matches a Proxmox node agent by node id and by its linked agent key', () => {
