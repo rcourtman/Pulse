@@ -314,7 +314,7 @@ describe('AISettings model loading error states', () => {
       expect(helper()).toHaveTextContent('preceding 30 days');
       expect(helper()).toHaveTextContent('Set 0 or leave empty to disable this check');
       expect(helper()).toHaveTextContent('Missing pricing or untracked usage');
-      expect(helper()).toHaveTextContent('if no pricing is known, calls are allowed');
+      expect(helper()).toHaveTextContent('If no pricing is known, calls are allowed');
       expect(helper()).toHaveTextContent('not a provider spending cap');
       expect(screen.queryByText('Set a budget to receive usage alerts')).not.toBeInTheDocument();
     };

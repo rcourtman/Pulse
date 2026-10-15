@@ -72,7 +72,7 @@ export const AIProviderRuntimeControlsSection: Component<AIRuntimeControlsSectio
         <p id="ai-cost-budget-help" class="text-xs text-muted">
           Pulse refuses new AI calls, including Patrol, when retained estimated usage for the
           preceding 30 days reaches this budget. Set 0 or leave empty to disable this check. Missing
-          pricing or untracked usage can leave costs out of the check; if no pricing is known, calls
+          pricing or untracked usage can leave costs out of the check. If no pricing is known, calls
           are allowed. This is not a provider spending cap.
         </p>
       </div>

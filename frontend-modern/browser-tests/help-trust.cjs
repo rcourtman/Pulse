@@ -231,7 +231,7 @@ const result = { result: 'incomplete', source_sha: binding.source_sha,
         const text = (await helper.innerText()).replace(/\s+/g, ' ');
         for (const phrase of ['refuses new AI calls, including Patrol', 'preceding 30 days',
           'Set 0 or leave empty to disable this check', 'Missing pricing or untracked usage',
-          'if no pricing is known, calls are allowed', 'not a provider spending cap']) assert(text.includes(phrase), phrase);
+          'If no pricing is known, calls are allowed', 'not a provider spending cap']) assert(text.includes(phrase), phrase);
         assert(!text.includes('receive usage alerts'));
       };
       await checkHelper();
