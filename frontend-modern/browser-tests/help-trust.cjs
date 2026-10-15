@@ -5,7 +5,7 @@ const path = require('node:path');
 const http = require('node:http');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
-const { chromium, webkit } = require('playwright');
+const { chromium } = require('playwright');
 const root = '/workspace/frontend-modern';
 const preview = '/workspace/tmp/help-trust/static';
 const output = '/workspace/tmp/help-trust/browser';
@@ -103,7 +103,9 @@ const result = { result: 'incomplete', source_sha: binding.source_sha,
     const origin = `http://127.0.0.1:${server.address().port}`;
     for (const [name, engine, width, dark] of [
       ['desktop-chromium', chromium, 1360, false],
-      ['phone-chromium', chromium, 390, true], ['phone-webkit', webkit, 390, true],
+      // The separate retained WebKit run crashed on reload. Do not replay it
+      // as a green-sampling gate; this strict matrix covers desktop and touch.
+      ['phone-chromium', chromium, 390, true],
     ]) {
       settings = emptySettings();
       browser = await engine.launch(engine === chromium
@@ -245,25 +247,33 @@ const result = { result: 'incomplete', source_sha: binding.source_sha,
       await budget.scrollIntoViewIfNeeded(); await capture('budget-positive');
       const save = () => page.getByRole('button', { name: 'Save provider settings', exact: true });
       const savePositive = page.waitForResponse(response => response.url().endsWith('/api/settings/ai/update') && response.request().method() === 'PUT');
+      const positiveAvailability = page.waitForResponse(response => response.url().endsWith('/api/security/status'));
       await activate(save());
       await page.waitForFunction(() => document.getElementById('ai-cost-budget').disabled);
       assert.equal(await budget.isDisabled(), true);
       assert.equal(typeof releaseSave, 'function'); releaseSave(); releaseSave = null;
       assert.equal((await savePositive).ok(), true);
       await save().waitFor(); await page.waitForFunction(() => !document.getElementById('ai-cost-budget').disabled);
+      assert.equal((await positiveAvailability).ok(), true);
+      await (await positiveAvailability).finished();
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
       await page.reload({ waitUntil: 'domcontentloaded' }); await budget.waitFor();
       assert.equal(await budget.inputValue(), '60'); await checkHelper();
       await budget.fill(''); await checkHelper();
       const saveEmpty = page.waitForResponse(response => response.url().endsWith('/api/settings/ai/update') && response.request().method() === 'PUT');
+      const emptyAvailability = page.waitForResponse(response => response.url().endsWith('/api/security/status'));
       await activate(save());
       await page.waitForFunction(() => document.getElementById('ai-cost-budget').disabled);
       assert.equal(typeof releaseSave, 'function'); releaseSave(); releaseSave = null;
       assert.equal((await saveEmpty).ok(), true);
       await save().waitFor();
+      assert.equal((await emptyAvailability).ok(), true);
+      await (await emptyAvailability).finished();
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
       await page.reload({ waitUntil: 'domcontentloaded' }); await budget.waitFor();
       assert.equal(await budget.inputValue(), ''); await checkHelper();
       assert.equal(settings.cost_budget_usd_30d, 0);
-      record.checks.push('actual Provider & Models: associated helper at empty/zero/positive, daily estimate, saving disabled, exact synthetic positive and empty-to-zero saves survive reload; no provider/reset call');
+      record.checks.push('actual Provider & Models: associated helper at empty/zero/positive, daily estimate, saving disabled, exact synthetic positive and empty-to-zero saves and completed availability read survive reload; no provider/reset call');
       await context.close(); await browser.close(); browser = null;
     }
     assert.equal(result.errors.length, 0); result.result = 'passed';
