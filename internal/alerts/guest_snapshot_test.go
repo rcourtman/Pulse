@@ -428,6 +428,9 @@ func TestSnapshotPartialEvidenceScopeDoesNotTransferHeldMetrics(t *testing.T) {
 	m, snapshot, guests := snapshotPartialFixture(t)
 	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
 	original := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	m.mu.Lock()
+	m.activeAlertAlias["snapshot-age-"+snapshot.ID] = original.CanonicalState
+	m.mu.Unlock()
 	peer := snapshot
 	// Even a colliding legacy alias cannot lend evidence across connections.
 	peer.Instance, peer.VMID = "other", 101
@@ -436,5 +439,39 @@ func TestSnapshotPartialEvidenceScopeDoesNotTransferHeldMetrics(t *testing.T) {
 	remaining := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
 	if remaining.ID != original.ID {
 		t.Fatal("another connection/name inherited held metrics or cleared the original")
+	}
+}
+
+func TestSnapshotPartialEvidenceRestoredAliasCacheIsSerialized(t *testing.T) {
+	m, snapshot, guests := snapshotPartialFixture(t)
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	original := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	snapshot.Time, snapshot.SizeBytes = time.Time{}, 0
+	done, stopped := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				m.mu.RLock()
+				_ = len(m.activeAlertAlias)
+				m.mu.RUnlock()
+			}
+		}
+	}()
+	defer func() { close(done); <-stopped }()
+	for range 50 {
+		// Restore a legacy storage key without its disposable alias cache.
+		m.mu.Lock()
+		m.activeAlerts = map[string]*Alert{"legacy-snapshot-key": original.Clone()}
+		m.activeAlertAlias = make(map[string]string)
+		m.mu.Unlock()
+		m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+		alert := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+		if alert.ID != original.ID || !alert.LastSeen.Equal(original.LastSeen) {
+			t.Fatal("alias repair changed held snapshot identity or evidence age")
+		}
 	}
 }

@@ -414,7 +414,8 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 
 		alertID := fmt.Sprintf("snapshot-age-%s", snapshot.ID)
 		specID := resourceID + "/snapshot:" + snapshot.ID
-		m.mu.RLock()
+		// The resolver may repair a restored alert's alias cache.
+		m.mu.Lock()
 		previous, _ := m.getActiveAlertNoLock(buildCanonicalStateID(resourceID, specID))
 		if previous == nil {
 			previous, _ = m.getActiveAlertNoLock(alertID)
@@ -425,7 +426,7 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			previous = nil
 		}
 		previous = previous.Clone()
-		m.mu.RUnlock()
+		m.mu.Unlock()
 		evidence := resolveSnapshotAlertEvidence(snapshot, previous, now)
 		ageDays := evidence.ageDays
 		const gib = 1024.0 * 1024 * 1024
