@@ -96,7 +96,12 @@ func TestAnthropicUsageSSEToPersistedBudget(t *testing.T) {
 			if err := owner.LoadConfig(); err != nil {
 				t.Fatal(err)
 			}
-			svc := chat.NewService(chat.Config{AIConfig: cfg, DataDir: t.TempDir(), CostStore: owner.CostStore()})
+			state := &scopedPatrolStateProvider{state: models.StateSnapshot{
+				Nodes: []models.Node{{ID: "fixture-node", Name: "fixture", Status: "online"}},
+			}}
+			svc := chat.NewService(chat.Config{
+				AIConfig: cfg, DataDir: t.TempDir(), CostStore: owner.CostStore(), StateProvider: state,
+			})
 			if err := svc.Start(context.Background()); err != nil {
 				t.Fatal(err)
 			}
@@ -111,9 +116,7 @@ func TestAnthropicUsageSSEToPersistedBudget(t *testing.T) {
 				return providers.NewAnthropicClientWithBaseURL("fixture-key", "claude-sonnet-5", server.URL, 2*time.Second), nil
 			})
 			svc.SetBudgetChecker(func() error { return owner.CheckBudget("chat") })
-			owner.SetStateProvider(&scopedPatrolStateProvider{state: models.StateSnapshot{
-				Nodes: []models.Node{{ID: "fixture-node", Name: "fixture", Status: "online"}},
-			}})
+			owner.SetStateProvider(state)
 			patrol := owner.GetPatrolService()
 			patrol.SetConfig(ai.PatrolConfig{Enabled: true, AnalyzeNodes: true})
 			patrol.TriggerScopedPatrol(context.Background(), ai.PatrolScope{
@@ -142,7 +145,7 @@ func TestAnthropicUsageSSEToPersistedBudget(t *testing.T) {
 			}
 			totals := restarted.GetCostSummary(30).Totals
 			if !totals.PricingKnown || math.Abs(totals.EstimatedUSD-tc.usd) > 1e-12 ||
-				totals.TotalTokens != int64(tc.input+tc.output) {
+				totals.TotalTokens != int64(tc.input+tc.output+tc.creation+tc.read) {
 				t.Fatalf("persisted stream totals/rates changed: %+v, want USD %.7f", totals, tc.usd)
 			}
 			err := restarted.CheckBudget("patrol")

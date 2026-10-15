@@ -106,7 +106,9 @@ func TestAnthropicUsageHTTPToPersistedBudget(t *testing.T) {
 			if !totals.PricingKnown || math.Abs(totals.EstimatedUSD-tc.usd) > 1e-12 ||
 				totals.InputTokens != int64(tc.input) || totals.OutputTokens != int64(tc.output) ||
 				totals.CacheCreationInputTokens != int64(tc.creation) || totals.CacheReadInputTokens != int64(tc.read) ||
-				totals.TotalTokens != int64(tc.input+tc.output) {
+				// Total includes every disjoint billing bucket; ordinary input
+				// still excludes both cache buckets.
+				totals.TotalTokens != int64(tc.input+tc.output+tc.creation+tc.read) {
 				t.Fatalf("persisted totals/rates changed: %+v, want USD %.7f", totals, tc.usd)
 			}
 
