@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { batch, createSignal, onCleanup } from 'solid-js';
 import {
   ConnectionsAPI,
   type ConnectionType,
@@ -26,11 +26,12 @@ export interface ConnectionEditorState {
   address: () => string;
   setAddress: (value: string) => void;
   phase: () => ProbePhase;
+  probing: () => boolean;
   candidates: () => ProbeCandidate[];
   probedMs: () => number;
   errorMessage: () => string;
   reset: () => void;
-  runProbe: () => Promise<CompletedProbePhase>;
+  runProbe: () => Promise<CompletedProbePhase | null>;
 }
 
 // CONNECTION_TYPE_LABELS drives both the detected-candidate header copy and
@@ -57,21 +58,50 @@ function isSubmittableAddress(address: string): boolean {
 }
 
 export function createConnectionEditorState(): ConnectionEditorState {
-  const [address, setAddress] = createSignal('');
+  const [address, setAddressValue] = createSignal('');
   const [phase, setPhase] = createSignal<ProbePhase>('idle');
+  const [probing, setProbing] = createSignal(false);
   const [candidates, setCandidates] = createSignal<ProbeCandidate[]>([]);
   const [probedMs, setProbedMs] = createSignal(0);
   const [errorMessage, setErrorMessage] = createSignal('');
 
-  const reset = () => {
-    setAddress('');
+  let generation = 0;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+    generation += 1;
+  });
+
+  const clearResult = () => {
     setPhase('idle');
     setCandidates([]);
     setProbedMs(0);
     setErrorMessage('');
   };
 
+  const setAddress = (value: string) => {
+    if (disposed || value === address()) return;
+    generation += 1;
+    batch(() => {
+      setAddressValue(value);
+      clearResult();
+    });
+  };
+
+  const reset = () => {
+    if (disposed) return;
+    // Reset is also a lifecycle boundary, even when the address is already empty.
+    generation += 1;
+    batch(() => {
+      setAddressValue('');
+      clearResult();
+    });
+  };
+
   const runProbe = async () => {
+    // Invalidating evidence does not cancel the server's request. Do not admit
+    // an overlapping probe in this mounted editor while it is still settling.
+    if (disposed || probing()) return null;
     const value = address().trim();
     if (!isSubmittableAddress(value)) {
       setErrorMessage('Enter an API endpoint to probe.');
@@ -79,31 +109,39 @@ export function createConnectionEditorState(): ConnectionEditorState {
       return 'error';
     }
 
-    setPhase('probing');
-    setErrorMessage('');
-    setCandidates([]);
-    setProbedMs(0);
+    const currentGeneration = ++generation;
+    batch(() => {
+      clearResult();
+      setPhase('probing');
+      setProbing(true);
+    });
 
-    let response: ProbeResponse;
     try {
-      response = await ConnectionsAPI.probe(value);
+      const response: ProbeResponse = await ConnectionsAPI.probe(value);
+      if (disposed || currentGeneration !== generation) return null;
+      const nextPhase: CompletedProbePhase =
+        response.candidates.length > 0 ? 'detected' : 'no-match';
+      batch(() => {
+        setProbedMs(response.probedMs);
+        setCandidates(response.candidates);
+        setPhase(nextPhase);
+      });
+      return nextPhase;
     } catch (error: unknown) {
+      if (disposed || currentGeneration !== generation) return null;
       setErrorMessage(describeProbeError(error));
       setPhase('error');
       return 'error';
+    } finally {
+      if (!disposed) setProbing(false);
     }
-
-    setProbedMs(response.probedMs);
-    setCandidates(response.candidates);
-    const nextPhase: CompletedProbePhase = response.candidates.length > 0 ? 'detected' : 'no-match';
-    setPhase(nextPhase);
-    return nextPhase;
   };
 
   return {
     address,
     setAddress,
     phase,
+    probing,
     candidates,
     probedMs,
     errorMessage,

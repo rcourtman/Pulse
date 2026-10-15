@@ -46,6 +46,10 @@ try {
             'src/utils/nodeModalPresentation.ts',
             'src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx',
             'src/api/nodes.ts',
+            'src/components/Settings/ConnectionEditor/ConnectionEditor.tsx',
+            'src/components/Settings/ConnectionEditor/AddressProbeStep.tsx',
+            'src/components/Settings/ConnectionEditor/useConnectionEditor.ts',
+            'src/api/connections.ts',
           ])
             if (!binding.sources[file]) throw new Error(`Real consumer not compiled: ${file}`);
         },
@@ -58,7 +62,12 @@ try {
       target: 'esnext',
       outDir: output,
       emptyOutDir: true,
-      rollupOptions: { input: path.join(root, 'browser-tests/node-connection-test.html') },
+      rollupOptions: {
+        input: [
+          path.join(root, 'browser-tests/node-connection-test.html'),
+          path.join(root, 'browser-tests/connection-probe.html'),
+        ],
+      },
     },
   });
   const bind = (directory) => {

@@ -1,4 +1,4 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, onCleanup } from 'solid-js';
 import type { ProbeCandidate } from '@/api/connections';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
@@ -18,15 +18,21 @@ export interface AddressProbeStepProps {
 }
 
 export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
+  let active = true;
+  onCleanup(() => {
+    active = false;
+    props.state.reset();
+  });
+
   const handleSubmit = async (event: SubmitEvent) => {
     event.preventDefault();
-    if (props.state.address().trim().length === 0) {
+    if (props.state.probing() || props.state.address().trim().length === 0) {
       return;
     }
 
     props.onProbeSubmitted?.();
     const outcome = await props.state.runProbe();
-    props.onProbeResolved?.(outcome);
+    if (active && outcome !== null) props.onProbeResolved?.(outcome);
   };
 
   return (
@@ -44,11 +50,12 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
           onInput={(event) => props.state.setAddress(event.currentTarget.value)}
           autocomplete="off"
           spellcheck={false}
-          disabled={props.state.phase() === 'probing'}
+          aria-describedby="connection-address-help"
+          disabled={props.state.probing()}
         />
-        <p class={formHelpText}>
-          Paste a hostname, IP, or URL for a supported API-backed platform. Pulse validates the
-          match and asks for credentials next.
+        <p id="connection-address-help" class={formHelpText}>
+          Paste a hostname, IP, or URL for a supported API-backed platform. A detected platform does
+          not confirm credentials or certificate trust. Enter credentials next.
         </p>
       </div>
 
@@ -57,9 +64,9 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
           type="submit"
           variant="primary"
           size="settingsAction"
-          disabled={props.state.phase() === 'probing' || props.state.address().trim().length === 0}
+          disabled={props.state.probing() || props.state.address().trim().length === 0}
         >
-          {props.state.phase() === 'probing' ? 'Probing…' : 'Probe API endpoint'}
+          {props.state.probing() ? 'Probing…' : 'Probe API endpoint'}
         </Button>
       </div>
 
