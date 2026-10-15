@@ -1096,6 +1096,7 @@ export function PlatformErrorState(props: {
   title: string;
   description: string;
   onRefresh: () => void;
+  refreshDisabled?: boolean;
 }) {
   return (
     <TableCard>
@@ -1108,7 +1109,8 @@ export function PlatformErrorState(props: {
             <button
               type="button"
               onClick={props.onRefresh}
-              class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover"
+              disabled={props.refreshDisabled}
+              class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover disabled:cursor-wait disabled:opacity-60"
             >
               Refresh
             </button>

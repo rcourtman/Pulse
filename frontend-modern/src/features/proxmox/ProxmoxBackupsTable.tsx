@@ -733,6 +733,7 @@ export const ProxmoxBackupsTable: Component<{
             title="Could not load Proxmox backup inventory"
             description="PVE and PBS backup inventories are unavailable. Counts are incomplete. Refresh to retry both sources."
             onRefresh={refreshBackups}
+            refreshDisabled={backupReadPending()}
           />
         }
       >

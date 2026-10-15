@@ -347,6 +347,29 @@ describe('ProxmoxBackupsTable', () => {
     },
   );
 
+  it('keeps the all-failed Refresh action disabled while the initial posture read is still pending', async () => {
+    mockBackupAPIs();
+    const posture = deferred<unknown>();
+    apiFetchJSONMock.mockReturnValue(posture.promise);
+    apiFetchMock.mockImplementation(() => Promise.resolve(new Response('{}', { status: 503 })));
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+    const refresh = await screen.findByRole('button', { name: 'Refresh' });
+    expect(refresh).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Reading backups…' })).toBeDisabled();
+    fireEvent.click(refresh);
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    posture.resolve({ data: [], policy: {} });
+    await waitFor(() => expect(refresh).toBeEnabled());
+    mockBackupAPIs();
+    fireEvent.click(refresh);
+    await waitFor(() =>
+      expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(3),
+    );
+  });
+
   it('keeps successful backup inventory independent of unavailable datastore capacity', async () => {
     mockBackupAPIs();
     const failed = {
@@ -1228,8 +1251,11 @@ describe('independent Proxmox backup inventory reads', () => {
       apiFetchMock.mockImplementation((url) =>
         Promise.resolve(jsonResponse(url.endsWith('/pbs') ? pbsPayload : readPvePayload)),
       );
-      if (failed === 'both') fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
-      else
+      if (failed === 'both') {
+        const refresh = screen.getByRole('button', { name: 'Refresh' });
+        await waitFor(() => expect(refresh).toBeEnabled());
+        fireEvent.click(refresh);
+      } else
         fireEvent.click(
           screen.getByRole('button', { name: `Retry ${failed.toUpperCase()} inventory` }),
         );
@@ -1255,7 +1281,9 @@ describe('independent Proxmox backup inventory reads', () => {
     apiFetchMock.mockImplementation((url) =>
       url.endsWith('/pve') ? pending.promise : Promise.resolve(jsonResponse(pbsPayload)),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    const refresh = screen.getByRole('button', { name: 'Refresh' });
+    await waitFor(() => expect(refresh).toBeEnabled());
+    fireEvent.click(refresh);
     await screen.findByText(/PVE backup inventory is unavailable/);
     await waitFor(() => expect(recoverableRows()).toHaveLength(1));
     pending.resolve(jsonResponse(readPvePayload));

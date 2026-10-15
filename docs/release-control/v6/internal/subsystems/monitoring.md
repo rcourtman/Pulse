@@ -35,6 +35,11 @@ Filters, route, logical row expansion and the refresh control are not remounted
 to perform a read. This does not establish appliance collection freshness,
 backup completion, thaw or filesystem writes.
 
+The existing all-failed error action uses the same pending predicate, including
+an initial posture read that has not settled yet. It must not appear enabled
+while its handler would reject the click. Other platform error actions retain
+their existing behaviour when no disabled state is supplied.
+
 `ProxmoxBackupsTable.test.tsx` covers readable/empty/failed starts, replacement,
 per-owner pending settlement and disabled duplicate activation. Consuming desktop
 and narrow browser proof must drive actual synthetic GET responses through the
