@@ -47,8 +47,10 @@ export function buildProtectionPostureBatchURL(resourceIDs: readonly string[]): 
   return `${PROTECTION_POSTURES_URL}?${params.toString()}`;
 }
 
-async function fetchProtectionPostures(resourceIDs: readonly string[]) {
-  return apiFetchJSON<ProtectionPosturesResponse>(buildProtectionPostureBatchURL(resourceIDs));
+async function fetchProtectionPostures(resourceIDs: readonly string[], signal: AbortSignal) {
+  return apiFetchJSON<ProtectionPosturesResponse>(buildProtectionPostureBatchURL(resourceIDs), {
+    signal,
+  });
 }
 
 /**
@@ -57,12 +59,15 @@ async function fetchProtectionPostures(resourceIDs: readonly string[]) {
  */
 async function fetchAllProtectionPostures(
   resourceIDs: readonly string[],
+  signal: AbortSignal,
 ): Promise<ProtectionPosturesResponse> {
   const batches: string[][] = [];
   for (let offset = 0; offset < resourceIDs.length; offset += MAX_PROTECTION_POSTURE_BATCH_SIZE) {
     batches.push(resourceIDs.slice(offset, offset + MAX_PROTECTION_POSTURE_BATCH_SIZE));
   }
-  const responses = await Promise.all(batches.map(fetchProtectionPostures));
+  const responses = await Promise.all(
+    batches.map((batch) => fetchProtectionPostures(batch, signal)),
+  );
   return {
     data: responses.flatMap((response) => response.data ?? []),
     policy: responses[0]?.policy ?? EMPTY_POLICY,
@@ -78,16 +83,22 @@ export function useProtectionPostures(resourceIDs: Accessor<readonly string[] | 
   const state = createNonSuspendingQuery<ProtectionPosturesResponse, string>({
     source,
     cacheKey: (key) => `protection-postures:${key}`,
-    fetcher: (key) => fetchAllProtectionPostures(JSON.parse(key) as string[]),
+    fetcher: (key, signal) => fetchAllProtectionPostures(JSON.parse(key) as string[], signal),
     initialValue: EMPTY_RESPONSE,
     pollMs: REFRESH_MS,
+    retainPreviousValueOnSourceChange: false,
   });
 
-  const postures = createMemo<ProtectionPosture[]>(() => state.value().data ?? []);
+  // The query retains fulfilled data through transient failures for continuity.
+  // A protection verdict is not restore evidence: after a failed evaluation it
+  // cannot remain a current "Protected" (or other) verdict under an unavailable
+  // notice. Keep it withdrawn through pending retries, including cache remounts.
+  const currentResponse = () => (state.error() ? EMPTY_RESPONSE : state.value());
+  const postures = createMemo<ProtectionPosture[]>(() => currentResponse().data ?? []);
   const postureByResourceID = createMemo<ReadonlyMap<string, ProtectionPosture>>(
     () => new Map(postures().map((posture) => [posture.subjectResourceId, posture] as const)),
   );
-  const policy = createMemo(() => state.value().policy ?? EMPTY_POLICY);
+  const policy = createMemo(() => currentResponse().policy ?? EMPTY_POLICY);
 
   return {
     response: {

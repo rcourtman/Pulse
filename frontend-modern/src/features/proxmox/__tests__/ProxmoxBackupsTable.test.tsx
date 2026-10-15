@@ -209,6 +209,8 @@ const expectCanonicalPlatformTableShell = (table: HTMLElement): void => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.history.replaceState({}, '', '/');
   apiFetchMock.mockReset();
@@ -355,6 +357,59 @@ describe('ProxmoxBackupsTable', () => {
       ).toBe(true),
     );
     expect(screen.queryByText('Checking')).not.toBeInTheDocument();
+  });
+
+  it('withdraws a failed protection refresh without losing restore evidence and retries only posture', async () => {
+    mockBackupAPIs();
+    const validPosture = await apiFetchJSONMock();
+    apiFetchJSONMock.mockClear();
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    window.history.replaceState({}, '', '/proxmox/backups/coverage');
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+    const coverageRow = () => container.querySelector('[data-proxmox-backup-row="coverage"]')!;
+    await waitFor(() => expect(coverageRow()).toHaveTextContent('Protected'));
+    fireEvent.click(screen.getByRole('button', { name: /expand.*pbs-docker/i }));
+    await screen.findByText('Restore evidence');
+    const details = container.querySelector('[data-inline-detail-for="resource:ct-112"]');
+    expect(details).toHaveTextContent('A current verified backup is available.');
+    const originalEvidence = details!.querySelector('table')!.textContent;
+    const inventoryReads = apiFetchMock.mock.calls.length;
+    apiFetchJSONMock.mockRejectedValue(new Error('PRIVATE_PROVIDER_FAILURE'));
+    await vi.advanceTimersByTimeAsync(30_000);
+    await screen.findByText(/Protection posture is unavailable/);
+    expect(coverageRow()).toHaveTextContent('Unknown');
+    expect(details).toHaveTextContent('Pulse cannot tell yet whether this guest is backed up.');
+    expect(details!.querySelector('table')!.textContent).toBe(originalEvidence);
+    expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_FAILURE');
+    expect(container.querySelector('[data-coverage-strip-footnote]')).toBeNull();
+    expect(screen.getByText('protected', { exact: true }).closest('li')).toHaveTextContent(
+      '0protected',
+    );
+    expect(screen.getByRole('button', { name: '1 unknown' })).toBeInTheDocument();
+
+    let finishRetry!: (value: unknown) => void;
+    apiFetchJSONMock.mockReturnValue(new Promise((resolve) => (finishRetry = resolve)));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry protection posture' }));
+    expect(screen.getByRole('button', { name: 'Retrying protection posture…' })).toBeDisabled();
+    expect(coverageRow()).toHaveTextContent('Unknown');
+    const retryReads = apiFetchJSONMock.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Retrying protection posture…' }));
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(retryReads);
+    finishRetry({
+      ...validPosture,
+      data: validPosture.data.map((posture: object) => ({
+        ...posture,
+        state: 'attention',
+        explanation: 'The latest provider job needs attention.',
+      })),
+    });
+    await waitFor(() => expect(coverageRow()).toHaveTextContent('Needs attention'));
+    expect(screen.queryByText(/Protection posture is unavailable/)).not.toBeInTheDocument();
+    expect(details).toHaveTextContent('The latest provider job needs attention.');
+    expect(details!.querySelector('table')!.textContent).toBe(originalEvidence);
+    expect(apiFetchMock).toHaveBeenCalledTimes(inventoryReads);
   });
 
   it('defaults to coverage when protection needs attention and keeps the dated feed one click away', async () => {

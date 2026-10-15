@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "e6bc287bba58528bfca56e78e66399eda87cd551",
+  "verified_at": "2026-10-15T07:35:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/hooks/useProtectionPostures.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "afc7fa41ed21867cc74f766f35dfc78e8f0c5b723c0bcd375128f378c9fcac8f",
+    "frontend-modern/src/hooks/useProtectionPostures.ts": "66254645b57ac6845e0c5ba78688a66cee0ed9c1d2717e559c39755aa3be3f96"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Backups table, real protection-posture hook/query owner/API client/router and shipped CSS, compiled at the containing source. Synthetic inventory/evaluation reads only; Playwright 1.56.1 with Chromium desktop light and WebKit narrow dark touch.",
+    "After an initially Protected verdict, a failed ordinary poll withdraws the verdict, counts, rule and expanded explanation to Unknown without removing the PVE/PBS restore evidence or known backup server.",
+    "A pending posture-only retry remains Unknown and disabled; the fresh successful response changes the verdict and explanation to Needs attention. Later ordinary polling also restores a current verdict without making Retry a prerequisite.",
+    "Eight final-state captures and one rejected initial phone capture were all opened natively. The desktop and narrow notices, actions, counts, policy states and evidence are legible without document horizontal overflow. This is presentation proof, not native backup/guest/installed recovery."
+  ],
+  "interactions": [
+    "Expand desktop Coverage with its disclosure button; on a phone tap the visible workload row as intended by the existing whole-row interaction. Exercise the producer through actual intercepted GET responses rather than passing presentational status props.",
+    "Drive the existing poll through 503, focus and activate Retry by desktop Enter or narrow touch, hold the read, verify pending disable/no duplicate, then accept a new attention result. Verify the unchanged expanded evidence and no inventory reload.",
+    "Drive a further failed poll and successful ordinary poll. Sixty checks and fourteen synthetic GETs in the completed desktop/narrow matrix; no page errors.",
+    "The initial combined call completed desktop proof but exited 1 when its phone driver pointer-clicked the intentionally sr-only keyboard button. Retain that result/capture; run only the corrected intended phone-row tap, exit 0. Source, compiled artifact and completed desktop proof were not changed or replayed."
+  ]
+}
