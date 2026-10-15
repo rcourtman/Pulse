@@ -31,17 +31,24 @@ names = [f"TestFixture{i:03d}" for i in range(497)]
 names += ["ExampleInstaller", "FuzzInstaller", "TestFutureFixture"]
 reset = ["TestRootInstallResetSafety", "TestRootInstallResetPersistence"]
 preflight = ["TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure"]
-inventory = "\n".join(names + reset + preflight + ["BenchmarkIgnored", "ok package 0.1s"])
+fixtures = ["TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure",
+            "TestAutoUpdateServiceStateFailsClosed"]
+inventory = "\n".join(names + reset + preflight + fixtures + ["BenchmarkIgnored", "ok package 0.1s"])
 groups = runner.partition(inventory)
-assert tuple(runner.GROUPS) == ("nas-preflight", "general-0", "general-1", "reset")
-assert [len(group) for group in groups] == [1, 250, 250, 2]
-assert sorted(sum(groups, [])) == sorted(names + reset + preflight)
-assert len(set(sum(groups, []))) == 503
-assert groups[0] == preflight and groups[3] == sorted(reset)
-assert groups == runner.partition("\n".join(reversed(names + reset + preflight)))
+assert tuple(runner.GROUPS) == ("nas-preflight", "truenas-retirement", "update-state", "general-0", "general-1", "reset")
+assert [len(group) for group in groups] == [1, 1, 1, 250, 250, 2]
+assert sorted(sum(groups, [])) == sorted(names + reset + preflight + fixtures)
+assert len(set(sum(groups, []))) == 505
+assert list(groups[:3]) == [preflight, fixtures[:1], fixtures[1:]] and groups[-1] == sorted(reset)
+legacy_general = sorted(names + preflight + fixtures)
+for actual, previous in zip(groups[3:5], [legacy_general[::2], legacy_general[1::2]]):
+    assert actual == [name for name in previous if name not in preflight + fixtures]
+assert groups == runner.partition("\n".join(reversed(names + reset + preflight + fixtures)))
 for unsafe in ["", "TestOnly", "TestOne\nTestTwo", inventory + "\nTestFixture000",
                inventory + "\nTestUnsafe|TestInjected", inventory + "\nFuzzBad.*",
-               "\n".join(names + reset)]:
+               "\n".join(names + reset + fixtures),
+               "\n".join(names + reset + preflight + fixtures[:1]),
+               "\n".join(names + reset + preflight + fixtures[1:])]:
     try:
         runner.partition(unsafe)
     except ValueError:
@@ -61,9 +68,10 @@ def execute(failure_at=None, output=inventory, phase="all"):
             assert argv == ["go", "test", "-list", ".", runner.PACKAGE]
             assert kwargs["capture_output"] is True and kwargs["text"] is True
             return SimpleNamespace(stdout=output)
-        assert argv[:6] == ["go", "test", "-count=1", "-timeout", "10m", "-run"]
-        assert argv[-1] == runner.PACKAGE
-        assert argv[6] == "^(" + "|".join(selected[len(calls) - 2]) + ")$"
+        group_names = selected[len(calls) - 2]
+        verbose = ["-v"] if group_names in groups[:3] else []
+        assert argv == ["go", "test", "-count=1", "-timeout", "10m", *verbose,
+                        "-run", "^(" + "|".join(group_names) + ")$", runner.PACKAGE]
         assert "-parallel" not in argv
         return SimpleNamespace(returncode=0)
     with patch.object(runner.subprocess, "run", side_effect=run):
@@ -78,19 +86,19 @@ def execute(failure_at=None, output=inventory, phase="all"):
     return calls
 
 calls = execute()
-assert len(calls) == 5
-patterns = [re.compile(call[6]) for call in calls[1:]]
-for name in names + reset + preflight:
+assert len(calls) == 7
+patterns = [re.compile(call[call.index("-run") + 1]) for call in calls[1:]]
+for name in names + reset + preflight + fixtures:
     assert sum(bool(pattern.fullmatch(name)) for pattern in patterns) == 1
 for name in ["TestFixture000/child", "TestInjected", "BenchmarkIgnored", "TestFixture000Extra"]:
     assert not any(pattern.fullmatch(name) for pattern in patterns)
-for failure_at in range(1, 6):
+for failure_at in range(1, 8):
     assert len(execute(failure_at=failure_at)) == failure_at
 assert len(execute(output=inventory + "\nTestFixture000")) == 1
 early = execute(phase="preflight")
 remaining = execute(phase="remaining")
 assert early[1:] + remaining[1:] == calls[1:]
-for phase, count in [("preflight", 2), ("remaining", 4)]:
+for phase, count in [("preflight", 2), ("remaining", 6)]:
     for failure_at in range(1, count + 1):
         assert len(execute(failure_at=failure_at, phase=phase)) == failure_at
 `, repoFile("scripts", "installtests", "run_unix_contracts.py"))

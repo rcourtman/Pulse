@@ -174,6 +174,8 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 	// an optional Python check. A green fixture with these methods removed
 	// would otherwise silently lose early-failure and final-line coverage.
 	required := []string{
+		"test_manager_uses_selected_isolated_interpreter",
+		"test_timing_reports_control_and_cumulative_progress",
 		"test_manager_diagnostics_refuse_initial_update_and_restart",
 		"test_manager_diagnostics_after_install_retain_backup_without_mutation",
 		"test_manager_diagnostics_after_stop_retain_backup_without_restart",
@@ -193,6 +195,7 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 			t.Fatalf("required updater collector control %s did not pass:\n%s", name, out)
 		}
 	}
+	t.Logf("%s", out)
 }
 
 // Keep the full real-sink matrix mandatory, but give it its own existing-size
