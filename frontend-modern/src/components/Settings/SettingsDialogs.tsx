@@ -4,6 +4,7 @@ import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
 import { BackupTransferDialogs } from './BackupTransferDialogs';
 import { ChangePasswordModal } from './ChangePasswordModal';
+import type { BackupTransferStatus } from './useBackupTransferFlow';
 
 interface SettingsDialogsProps {
   showUpdateConfirmation: Accessor<boolean>;
@@ -27,6 +28,8 @@ interface SettingsDialogsProps {
   showApiTokenModal: Accessor<boolean>;
   apiTokenInput: Accessor<string>;
   setApiTokenInput: (value: string) => void;
+  transferStatus: Accessor<BackupTransferStatus | null>;
+  transferError: Accessor<string | null>;
   handleExport: () => void;
   handleImport: () => void;
   closeExportDialog: () => void;
@@ -74,6 +77,8 @@ export const SettingsDialogs: Component<SettingsDialogsProps> = (props) => {
         showApiTokenModal={props.showApiTokenModal}
         apiTokenInput={props.apiTokenInput}
         setApiTokenInput={props.setApiTokenInput}
+        transferStatus={props.transferStatus}
+        transferError={props.transferError}
         handleExport={props.handleExport}
         handleImport={props.handleImport}
         closeExportDialog={props.closeExportDialog}

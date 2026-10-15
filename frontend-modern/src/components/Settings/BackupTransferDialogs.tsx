@@ -7,6 +7,8 @@ import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { getAPITokenManagementLocationMessage } from '@/utils/apiTokenPresentation';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { getShippedDocUrl } from '@/utils/docsLinks';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import type { BackupTransferStatus } from './useBackupTransferFlow';
 
 interface BackupTransferDialogsProps {
   securityStatus: Accessor<SecurityStatusInfo | null>;
@@ -23,6 +25,8 @@ interface BackupTransferDialogsProps {
   showApiTokenModal: Accessor<boolean>;
   apiTokenInput: Accessor<string>;
   setApiTokenInput: (value: string) => void;
+  transferStatus: Accessor<BackupTransferStatus | null>;
+  transferError: Accessor<string | null>;
   handleExport: () => void;
   handleImport: () => void;
   closeExportDialog: () => void;
@@ -32,6 +36,31 @@ interface BackupTransferDialogsProps {
 }
 
 export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (props) => {
+  const busy = () => props.transferStatus() !== null;
+  const Feedback: Component = () => (
+    <>
+      <Show when={props.transferError()}>
+        <InlineNotice tone="danger" role="alert">
+          {props.transferError()}
+        </InlineNotice>
+      </Show>
+      <Show when={props.transferStatus()}>
+        {(status) => (
+          <InlineNotice tone="info" role="status" aria-live="polite" aria-atomic="true">
+            {status().phase === 'authentication'
+              ? 'Waiting for the API token. Cancel the token prompt to change this submission.'
+              : status().phase === 'reading'
+                ? 'Reading the selected backup. Keep this page open.'
+                : status().phase === 'reloading'
+                  ? 'Configuration imported. Reloading this page…'
+                  : status().kind === 'import'
+                    ? 'Importing configuration. Keep this page open. A request already sent cannot be cancelled or rolled back here.'
+                    : 'Preparing the encrypted export. Keep this page open.'}
+          </InlineNotice>
+        )}
+      </Show>
+    </>
+  );
   return (
     <>
       <Show when={props.showExportDialog()}>
@@ -51,6 +80,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                     <label class="flex items-start gap-3 cursor-pointer">
                       <input
                         type="radio"
+                        disabled={busy()}
                         checked={!props.useCustomPassphrase()}
                         onChange={() => {
                           props.setUseCustomPassphrase(false);
@@ -71,6 +101,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                     <label class="flex items-start gap-3 cursor-pointer">
                       <input
                         type="radio"
+                        disabled={busy()}
                         checked={props.useCustomPassphrase()}
                         onChange={() => props.setUseCustomPassphrase(true)}
                         class="mt-1 text-blue-600 focus:ring-blue-500"
@@ -99,6 +130,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 <input
                   id="backup-export-passphrase"
                   type="password"
+                  disabled={busy()}
                   value={props.exportPassphrase()}
                   onInput={(event) => props.setExportPassphrase(event.currentTarget.value)}
                   placeholder={
@@ -161,10 +193,12 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 </div>
               </div>
 
+              <Feedback />
               <div class="flex justify-end space-x-3">
                 <button
                   type="button"
                   onClick={props.closeExportDialog}
+                  disabled={busy()}
                   class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
                 >
                   Cancel
@@ -172,13 +206,10 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 <button
                   type="button"
                   onClick={props.handleExport}
-                  disabled={
-                    !props.exportPassphrase() ||
-                    (props.useCustomPassphrase() && props.exportPassphrase().length < 12)
-                  }
+                  disabled={busy() || props.exportPassphrase().length < 12}
                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Export
+                  {busy() ? 'Exporting…' : 'Export'}
                 </button>
               </div>
             </div>
@@ -263,6 +294,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 <input
                   id="backup-import-file"
                   type="file"
+                  disabled={busy()}
                   accept=".json"
                   onChange={(event) => {
                     const file = event.currentTarget.files?.[0] ?? null;
@@ -279,6 +311,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 <input
                   id="backup-import-passphrase"
                   type="password"
+                  disabled={busy()}
                   value={props.importPassphrase()}
                   onInput={(event) => props.setImportPassphrase(event.currentTarget.value)}
                   placeholder="Enter the password used when creating this backup"
@@ -312,10 +345,12 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 </div>
               </div>
 
+              <Feedback />
               <div class="flex justify-end space-x-3">
                 <button
                   type="button"
                   onClick={props.closeImportDialog}
+                  disabled={busy()}
                   class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
                 >
                   Cancel
@@ -323,10 +358,10 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 <button
                   type="button"
                   onClick={props.handleImport}
-                  disabled={!props.importPassphrase() || !props.importFile()}
+                  disabled={busy() || !props.importPassphrase() || !props.importFile()}
                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Import
+                  {busy() ? 'Importing…' : 'Import'}
                 </button>
               </div>
             </div>
