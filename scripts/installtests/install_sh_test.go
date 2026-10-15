@@ -8536,12 +8536,15 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 		"test_disabled_absent_missing_bootstrap_and_repeated_removal_are_observed",
 		"test_ordinary_linux_state_is_not_appliance_evidence",
 		"test_process_read_exposes_only_roles_and_real_timeout_child_is_stopped",
+		"test_private_models_use_selected_isolated_interpreter",
+		"test_timeout_child_absence_requires_observed_exit",
+		"test_timing_reports_control_and_cumulative_progress",
 	} {
 		if !strings.Contains(string(output), name+" (__main__.AgentTrueNASTeardown."+name+") ... ok") {
 			t.Fatalf("TrueNAS SCALE control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 16 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 19 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete TrueNAS SCALE verdict:\n%s", output)
 	}
 	t.Logf("%s", output)

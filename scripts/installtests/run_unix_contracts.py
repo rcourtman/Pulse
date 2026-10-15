@@ -9,6 +9,10 @@ macOS Intel. Split it deterministically rather than extending safety deadlines.
 Run the existing NAS process/boot-owner control before frontend preparation;
 the remaining phase still requires that identity in the discovered inventory
 and excludes only the check already executed by the workflow's preflight.
+The TrueNAS retirement and updater state matrices also have their own existing
+individual budgets. Run them separately from the general package alarm so their
+cost cannot starve unrelated checks; verbose progress identifies the last control
+if either individual deadline is reached. No check is omitted or retried.
 """
 
 import argparse
@@ -19,7 +23,9 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = "./scripts/installtests"
 PREFLIGHT = ("TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure",)
-GROUPS = ("nas-preflight", "general-0", "general-1", "reset")
+FIXTURES = ("TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure",
+            "TestAutoUpdateServiceStateFailsClosed")
+GROUPS = ("nas-preflight", "truenas-retirement", "update-state", "general-0", "general-1", "reset")
 
 
 def partition(output):
@@ -34,16 +40,19 @@ def partition(output):
         if name in PREFLIGHT:
             preflight.append(name)
         (reset if name.startswith("TestRootInstallReset") else general).append(name)
-    if set(preflight) != set(PREFLIGHT) or len(general) - len(preflight) < 2 or not reset:
-        raise ValueError("missing preflight, general or reset installer inventory")
+    if (set(preflight) != set(PREFLIGHT) or not set(FIXTURES) <= seen
+            or len(general) - len(preflight) - len(FIXTURES) < 2 or not reset):
+        raise ValueError("missing preflight, fixture, general or reset installer inventory")
     # Interleave sorted identities so adjacent fixture families do not all
     # consume the same package budget. Never omit or retry a discovered check.
     general.sort()
-    # Remove the preflight only after partitioning so every other check keeps
+    # Remove the dedicated fixtures only after partitioning so every other check keeps
     # its existing group and order, rather than reshuffling the package budgets.
+    dedicated = set(PREFLIGHT + FIXTURES)
     return (sorted(preflight),
-            [name for name in general[::2] if name not in PREFLIGHT],
-            [name for name in general[1::2] if name not in PREFLIGHT],
+            [FIXTURES[0]], [FIXTURES[1]],
+            [name for name in general[::2] if name not in dedicated],
+            [name for name in general[1::2] if name not in dedicated],
             sorted(reset))
 
 
@@ -60,8 +69,10 @@ def main(phase="all"):
         if phase == "remaining" and group == "nas-preflight":
             continue
         print(f"Native Unix installer {group}: {len(names)} discovered checks", flush=True)
+        verbose = ["-v"] if group in GROUPS[:3] else []
         subprocess.run(
-            ["go", "test", "-count=1", "-timeout", "10m", "-run", "^(" + "|".join(names) + ")$", PACKAGE],
+            ["go", "test", "-count=1", "-timeout", "10m", *verbose,
+             "-run", "^(" + "|".join(names) + ")$", PACKAGE],
             cwd=ROOT, check=True,
         )
 
