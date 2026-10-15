@@ -165,7 +165,9 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 					m.updateResourceStore(m.currentStateWithScope())
 				}
 				view := m.currentModeReadState().VMs()[0]
-				if view.DiskStatusReason() != vm.DiskStatusReason || view.DiskObservation() != vm.DiskObservation || !reflect.DeepEqual(previousVMFromView(view).Disks, vm.Disks) {
+				// Ordinary state publication normalizes empty arrays; compare the
+				// same representation without relaxing any filesystem contents.
+				if view.DiskStatusReason() != vm.DiskStatusReason || view.DiskObservation() != vm.DiskObservation || !reflect.DeepEqual(previousVMFromView(view).NormalizeCollections().Disks, vm.NormalizeCollections().Disks) {
 					t.Fatalf("canonical projection changed completeness, original age or mount rows: vm=%+v view=%+v", vm, previousVMFromView(view))
 				}
 				if vm.Disk.Usage >= 0 && (view.DiskTotal() != vm.Disk.Total || view.DiskUsed() != vm.Disk.Used || view.DiskPercent() != vm.Disk.Usage) {
