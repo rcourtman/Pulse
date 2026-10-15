@@ -136,14 +136,26 @@ describe('manual backup safety help', () => {
     expect(read('frontend-modern/public/docs/VM_DISK_MONITORING.md')).toBe(guide);
     const troubleshooting = read('docs/TROUBLESHOOTING.md');
     expect(read('frontend-modern/public/docs/TROUBLESHOOTING.md')).toBe(troubleshooting);
-    // The symptom-first navigation also links to this precaution. Require both
-    // entry points without rejecting other symptom-specific safety links.
-    const links = render(troubleshooting, 'TROUBLESHOOTING').querySelectorAll(
-      'a[href="/docs/VM_DISK_MONITORING#backup-safety"]',
-    );
-    const labels = [...links].map((link) => link.textContent);
-    for (const label of ['Backup safety', 'manual backup precaution']) {
-      expect(labels.filter((text) => text === label)).toHaveLength(1);
+    const article = render(troubleshooting, 'TROUBLESHOOTING');
+    // Different workflows may use the same safety label. Each must retain its
+    // own link; a link elsewhere in the guide cannot satisfy that requirement.
+    for (const [headingText, label] of [
+      ['Choose the affected workflow', 'Backup safety'],
+      ['Cluster members and conflicting saved trust', 'Backup safety'],
+      ['VMs show "-" for disk usage', 'manual backup precaution'],
+    ]) {
+      const headings = [...article.querySelectorAll('h2, h3, h4')].filter(
+        (heading) => heading.textContent === headingText,
+      );
+      expect(headings, headingText).toHaveLength(1);
+      const heading = headings[0];
+      const section = document.createElement('section');
+      for (let next = heading.nextElementSibling; next; next = next.nextElementSibling) {
+        if (/^H[1-6]$/.test(next.tagName) && next.tagName <= heading.tagName) break;
+        section.appendChild(next.cloneNode(true));
+      }
+      const links = section.querySelectorAll('a[href="/docs/VM_DISK_MONITORING#backup-safety"]');
+      expect([...links].map((link) => link.textContent), headingText).toEqual([label]);
     }
     const target = render(guide, 'VM_DISK_MONITORING');
     expect(target.querySelector('#backup-safety')?.textContent).toBe('Backup safety');

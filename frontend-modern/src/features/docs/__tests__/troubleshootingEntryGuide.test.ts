@@ -11,7 +11,7 @@ const renderedGuides = new Map<string, HTMLElement>();
 
 function renderGuide(name: string): HTMLElement {
   // Several destinations share a long guide. Render each immutable document
-  // once, rather than making seventeen navigation checks parse it repeatedly.
+  // once, rather than making navigation checks parse it repeatedly.
   // entry() clones its section, so the cached article is never modified.
   const cached = renderedGuides.get(name);
   if (cached) return cached;
@@ -39,12 +39,91 @@ function entry(): HTMLElement {
 const prose = (element: HTMLElement): string =>
   (element.textContent ?? '').replace(/\s+/g, ' ').trim();
 
+// Name each shipped workflow and its destinations rather than accepting an
+// aggregate row/link count, which cannot detect a missing or misrouted entry.
+const workflowDestinations = [
+  [
+    'Not sure which version is affected:',
+    ['/docs/TROUBLESHOOTING#find-the-running-server-and-agent-versions'],
+  ],
+  [
+    'Cannot sign in:',
+    [
+      '/docs/TROUBLESHOOTING#i-forgot-my-password',
+      '/docs/TROUBLESHOOTING#cannot-login--401-unauthorized',
+    ],
+  ],
+  [
+    'Update failed or its result is uncertain:',
+    [
+      '/docs/AUTO_UPDATE#update-failed',
+      '/docs/DOCKER#check-a-failed-or-pending-workload-update',
+    ],
+  ],
+  [
+    'Agent host is missing or reporting is rejected:',
+    ['/docs/UNIFIED_AGENT#agent-lookup-returns-http-401-or-403'],
+  ],
+  [
+    'Proxmox or PBS reports a certificate error:',
+    ['/docs/TROUBLESHOOTING#proxmox-or-pbs-certificate-validation-failed'],
+  ],
+  [
+    'Copied agent install or removal command failed:',
+    ['/docs/UNIFIED_AGENT#copied-agent-command-fails-before-installation'],
+  ],
+  [
+    'Guest readings are missing or disagree:',
+    [
+      '/docs/VM_DISK_MONITORING#current-retained-and-unavailable-disk-readings',
+      '/docs/TROUBLESHOOTING#guest-memory-is-high-but-available-memory-is-plentiful',
+    ],
+  ],
+  [
+    'Proxmox data belongs to the wrong host, or healthy jobs look Pending:',
+    [
+      '/docs/TROUBLESHOOTING#monitoring-is-mixed-between-proxmox-installations',
+      '/docs/TROUBLESHOOTING#replication-jobs-are-pending-stale-or-missing',
+    ],
+  ],
+  ['TrueNAS readings are stale or absent:', ['/docs/TRUENAS#stale-truenas-data']],
+  [
+    'PBS is Active but missing from monitoring:',
+    ['/docs/PBS#pbs-is-active-but-missing-from-monitoring'],
+  ],
+  [
+    'RAID is reported degraded despite a spare:',
+    ['/docs/TROUBLESHOOTING#raid-array-is-degraded-with-a-spare'],
+  ],
+  [
+    'Unraid reports missing disks in empty slots:',
+    ['/docs/TROUBLESHOOTING#unraid-reports-missing-disks-in-empty-slots'],
+  ],
+  [
+    'Pulse itself uses more memory, CPU or disk writes:',
+    [
+      '/docs/TROUBLESHOOTING#memory-use-keeps-growing',
+      '/docs/TROUBLESHOOTING#excessive-cpu-writes-or-database-growth',
+    ],
+  ],
+  [
+    'Notification Test works but alerts do not arrive:',
+    ['/docs/TROUBLESHOOTING#test-succeeds-but-real-alerts-are-missing'],
+  ],
+  [
+    'Private information was posted:',
+    ['/docs/TROUBLESHOOTING#if-you-already-posted-private-information'],
+  ],
+] as const;
+
 describe('troubleshooting workflow entry', () => {
   it('puts guest incident safety before the symptom links and any collection recipe', () => {
     const section = entry();
     const link = section.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/docs/VM_DISK_MONITORING#backup-safety');
-    expect(section.querySelectorAll('li')).toHaveLength(12);
+    expect(
+      [...section.querySelectorAll('li')].map((row) => prose(row.querySelector('strong')!)),
+    ).toEqual(workflowDestinations.map(([label]) => label));
     expect(section.querySelector('pre')).toBeNull();
     const beforeList = [...section.children]
       .slice(
@@ -98,8 +177,23 @@ describe('troubleshooting workflow entry', () => {
   });
 
   it('routes every entry to an existing shipped heading in the production viewer', () => {
-    const links = [...entry().querySelectorAll('a[href]')];
-    expect(links).toHaveLength(19);
+    const section = entry();
+    for (const [label, destinations] of workflowDestinations) {
+      const rows = [...section.querySelectorAll('li')].filter(
+        (row) => prose(row.querySelector('strong')!) === label,
+      );
+      expect(rows, label).toHaveLength(1);
+      expect(
+        [...rows[0].querySelectorAll('a[href]')].map((link) => link.getAttribute('href')),
+        label,
+      ).toEqual(destinations);
+    }
+    const links = [...section.querySelectorAll('a[href]')];
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/docs/VM_DISK_MONITORING#backup-safety',
+      ...workflowDestinations.flatMap(([, destinations]) => [...destinations]),
+      '/docs/TROUBLESHOOTING#-getting-help',
+    ]);
     for (const link of links) {
       const href = link.getAttribute('href')!;
       const match = /^\/docs\/([^#]+)#(.+)$/.exec(href);
