@@ -747,6 +747,10 @@ time into the operator's own browser as accessible names. They are local UI
 copy: they add nothing to the Assistant handoff, the model-bound context or
 any request, so resource-policy redaction is unaffected.
 
+Renaming the alerts Schedule page title (`alerts.page.schedule.title`) changes
+local presentation copy only; it carries no resource data and changes no
+request, handoff or model-bound context.
+
 Docker and Podman container CPU normalization may expose numeric raw per-core
 CPU percent, normalized capacity percent, and reporting host CPU count in
 resource or alert metadata. Those fields are operational usage telemetry only;

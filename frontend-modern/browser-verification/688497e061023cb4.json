@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "898981c6d8682559305bb50b48c7efd9aa3a54ff",
+  "verified_at": "2026-10-15T13:46:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/i18n/messages.de.ts": "3e5e14d773e7588e08ba632b09c0deb50bda39c780d23cc56da319683d1a3fca",
+    "frontend-modern/src/i18n/messages.es.ts": "06a6a6aff1668a2bc4708f19d435a006bdfcf0782cd39ad0457ffa7b9e73f125",
+    "frontend-modern/src/i18n/messages.ts": "23eb63fcb091c4039be2d95bbc01c6929f08bd8badff0f626df8add5812bf601",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts": "0a619dda37470587da200824f87074402e9e1eadb3149fb02c89c3cb83918e87"
+  },
+  "routes": [
+    "/alerts/schedule"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): the Schedule tab header and browser tab read \"Maintenance Schedule\" over quiet hours, cooldown, grouping, delivery channels, recovery and escalation settings",
+    "After: header and browser tab read \"Delivery Schedule\"; the nav item stays \"Schedule\"; no text on the page mentions maintenance",
+    "The 375px sweep of 24 routes earlier this session showed no horizontal overflow; the shorter title changes no layout"
+  ],
+  "interactions": [
+    "Opened /alerts/schedule and read the h1, document title and nav label"
+  ]
+}
