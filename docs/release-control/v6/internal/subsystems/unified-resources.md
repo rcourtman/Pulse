@@ -8538,3 +8538,8 @@ alias resolution and degraded-to-online replacement without merging siblings.
 `TestPMGConnectionAliasRequiresExplicitReference` rejects inferred references.
 The reference is attribution, not permission, a health override or proof of
 native monitoring/release recovery.
+
+The canonical PMG view also exposes the explicit connection reference unchanged
+(or empty for legacy/nil data), allowing full-instance consumers to retain the
+same attribution as the slim resource. `TestPMGViewConfiguredConnectionReference`
+covers this boundary without inferring a value from the runtime ID or label.

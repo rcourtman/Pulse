@@ -6937,3 +6937,5 @@ PMG read still retains previously accepted backups; a complete empty read can
 replace only that connection's inventory. `TestPMGNodeDiscoveryFailurePreservesAcceptedBackups`
 and `TestPMGConfiguredConnectionIdentity` cover those distinct boundaries;
 connection recovery is not backup restoration or native guest safety evidence.
+
+The full PMG detail projection retains the configured connection reference without turning its presence or version read into backup completeness. Detail mapping changes no backup list, retained source time or restoration decision.

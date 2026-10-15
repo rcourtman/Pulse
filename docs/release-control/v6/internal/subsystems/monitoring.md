@@ -8021,3 +8021,5 @@ No request, credential, TLS, backup replacement or scope rule changes.
 and `TestPMGConfiguredConnectionSnapshotWire` cover failure/recovery and snapshot
 preservation. Consumer/HTTP and desktop/narrow evidence remains separate from
 native appliance recovery and release availability.
+
+The full PMG detail handler consumes the same canonical view reference as the slim resource. It preserves degraded collection health and optional configured attribution without an extra collection request; `TestContract_PMGConfiguredReferenceInFullDetail` covers both legacy absence and explicit reference.

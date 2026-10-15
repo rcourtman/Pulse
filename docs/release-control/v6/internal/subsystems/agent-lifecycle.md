@@ -9997,3 +9997,5 @@ preserve its explicit value or legacy absence (`TestPMGConfiguredConnectionSnaps
 It does not enter host-agent reports, stable host identity, deletion,
 re-enrolment or continuity decisions. PMG runtime IDs remain independent of
 the scoped connection-alert reference; no agent identity is re-created from it.
+
+The full PMG detail projection preserves that optional reference too; it remains outside host-agent report, removal and re-enrolment contracts. `TestContract_PMGConfiguredReferenceInFullDetail` checks absence as well as presence through the real handler.

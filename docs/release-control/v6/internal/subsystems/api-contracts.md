@@ -12272,3 +12272,14 @@ mode, installer TLS, import review and editor lifetime changes retire output,
 including reversals. Same-target health polling preserves an unexpired cache.
 A late result is not a retry, cancellation, token revocation or installed
 platform acceptance. Separate-token and least-privilege handoffs still apply.
+
+### PMG full-detail configured connection reference (15 October 2026)
+
+`GET /api/pmg/instances` preserves the optional configured `connectionId` from
+the canonical PMG read-state view, matching the resource's scoped connection
+alias. Missing legacy references remain absent; ID/name filters, runtime IDs,
+selected/missing readings, health and request/authentication semantics are
+unchanged. `TestHandleListPMGInstancesUsesUnifiedReadStateWithFullPayload`
+checks that a configured key different from both the runtime ID and display
+name survives the actual handler's JSON response. This is attribution, not a
+new endpoint, access grant or native/released monitoring claim.

@@ -1842,6 +1842,18 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 	})
 }
 
+func TestPMGViewConfiguredConnectionReference(t *testing.T) {
+	for _, resource := range []*Resource{nil, {Type: ResourceTypePMG}, {Type: ResourceTypePMG, PMG: &PMGData{InstanceID: "pmg-display"}}} {
+		if got := NewPMGInstanceView(resource).ConnectionID(); got != "" {
+			t.Fatalf("missing connection reference inferred as %q", got)
+		}
+	}
+	resource := &Resource{Type: ResourceTypePMG, PMG: &PMGData{InstanceID: "pmg-display", ConnectionID: "pmg:configured-key"}}
+	if got := NewPMGInstanceView(resource).ConnectionID(); got != "pmg:configured-key" {
+		t.Fatalf("configured reference = %q", got)
+	}
+}
+
 func TestView_K8sClusterViewAccessors(t *testing.T) {
 	now := time.Date(2026, 2, 10, 12, 7, 0, 0, time.UTC)
 	caps := &K8sMetricCapabilities{NodeCPUMemory: true, PodCPUMemory: true}
