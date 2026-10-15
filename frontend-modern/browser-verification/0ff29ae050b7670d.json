@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "1731d66b8dacbd019ef1e7412af9aa9a329c446c",
+  "verified_at": "2026-10-15T18:18:56.099522Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/TechnicalDetailsDisclosure.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/TechnicalDetailsDisclosure.tsx": "3faaf5a9c9f725771b3d3c4c55fdf55c2b769ae897ed533a8ac6ae5dfcfeb036"
+  },
+  "routes": [
+    "/browser-tests/paused-filesystem.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "The existing full guest drawer consumes safe resource snapshots with paused filesystem readings. Its complete Details description remains visible when closed, open and reclosed; narrow tables no longer pass inherited nowrap into the summary.",
+    "At 320px WebKit and Chromium the description wraps onto two lines within its measured boundary, keeping at least the existing 44px phone touch target; desktop keeps the inline layout.",
+    "Deferred filesystem readings remain last known, no current disk History carrier is introduced, and the saved filesystem threshold remains 95%."
+  ],
+  "interactions": [
+    "Expand desktop drawer normally; tap the narrow WebKit row name or click the narrow Chromium row name.",
+    "Tap native Details summary to open/reclose on touch; use native Enter and Space on Chromium. Complete inventory, keep-mounted content and focus remain intact."
+  ],
+  "browsers": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "project_lock": "Playwright/@playwright/test 1.56.1 in tests/integration/package-lock.json; matches browser runtime."
+  },
+  "proof_source_sha": "1731d66b8dacbd019ef1e7412af9aa9a329c446c",
+  "proof_source_tree": "94a264fff90cb40cec37775f6d52b6ffae9ffce3",
+  "coverage_note": "16 completed states / eight final captures across the three completed cases of attempt two and the remaining case of attempt three. Attempt one timed out waiting for DOMContentLoaded despite a rendered row; use navigation commit then real consumer readiness. Attempt two ended attempting to pointer-click the screenreader-only wide-layout control at 320px; the separate remaining-case proof uses its visible name. Neither failed whole attempt is claimed passed, no timeout increased, no force-click or completed-case replay. All attempts are retained.",
+  "pixel_review": "All eight final, two baseline and four distinct adverse/duplicate captures were opened through native view_image. The complete 320px description is visible rather than clipped. New proof for this summary rendering fix, not reconstruction of historical paused-state screenshots.",
+  "capture_sha256": {
+    "summary-chromium-desktop-closed.png": "ef35462983fa7b3da6a06173165baabbccbb2dca1fd924489a9b6d66624e207d",
+    "summary-chromium-desktop-open.png": "1b8907f448a8fda3c03eeef9f2183573d16fad7ba4753f6028360646194e2c68",
+    "summary-webkit-390-closed.png": "24a9c7fe9738d584af5616ecc13d1a2a3307c62a657ff60be3f83184f6bd50e8",
+    "summary-webkit-390-open.png": "8a46aa420b62e27bfd8900cb630d7ee932edbc3377785e377d00566ec79dc31b",
+    "summary-webkit-320-closed.png": "f63791e6bbc36fb587c37ee6609211f3219e23c366073bfca1c3a656df46a6c0",
+    "summary-webkit-320-open.png": "83bab018fc34a2ec646031db5666258944bd78fe4c430d51fa93ae7a2c20ca27",
+    "summary-chromium-320-closed.png": "c9de2ee1cf23ae6ad386eeb9dcbe29f8422ef1f733ae1402de473f25abc0c04c",
+    "summary-chromium-320-open.png": "cfac491f4e82e273d0db9d1d955cdba9ebbe6a6e3bf8a8bcf19963e0502f243d"
+  },
+  "scope": "Actual production useWorkloads mapper, GuestRow/full GuestDrawer/shared Details consumer with synthetic REST snapshots and read-only History/license fixtures. No guest/backup/settings mutation, native thaw, independent writes/liveness, full-App navigation, installed recovery or release/use proof."
+}
