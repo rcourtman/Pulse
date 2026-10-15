@@ -57,7 +57,9 @@ export const TechnicalDetailsDisclosure: Component<TechnicalDetailsDisclosurePro
       class={props.class ?? 'rounded-sm border border-border bg-surface px-2 py-1.5'}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
-      <summary class="flex min-h-11 cursor-pointer list-none flex-wrap items-center text-xs font-medium text-base-content sm:min-h-0">
+      {/* Object drawers can live inside no-wrap tables. Their complete summary
+          must still wrap within the available phone width. */}
+      <summary class="flex min-h-11 min-w-0 cursor-pointer list-none flex-wrap items-center whitespace-normal text-xs font-medium text-base-content sm:min-h-0">
         <span
           aria-hidden="true"
           class={`mr-1 inline-block text-muted transition-transform ${expanded() ? 'rotate-90' : ''}`}
@@ -65,7 +67,7 @@ export const TechnicalDetailsDisclosure: Component<TechnicalDetailsDisclosurePro
           ›
         </span>
         {props.title ?? 'Technical details'}
-        <span class="ml-2 font-normal text-muted">{props.subtitle}</span>
+        <span class="ml-2 min-w-0 font-normal text-muted wrap-anywhere">{props.subtitle}</span>
       </summary>
       <Show when={props.keepMounted || expanded()}>
         <div class={props.contentClass ?? 'mt-2 border-t border-border pt-2'}>

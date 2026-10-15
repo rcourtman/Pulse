@@ -279,6 +279,35 @@ describe('DetailSectionTable', () => {
     expect(disclosure.querySelector('table')).toHaveClass('table-fixed');
   });
 
+  it('keeps the complete disclosure summary wrappable inside no-wrap tables', () => {
+    const subtitle = 'system, coverage, memory, network and availability checks';
+    render(() => (
+      <div class="whitespace-nowrap">
+        <TechnicalDetailsDisclosure
+          dataTestId="technical-details"
+          title="Details"
+          subtitle={subtitle}
+          keepMounted
+          sections={[{ label: 'Coverage', rows: [{ label: 'Guest reads', value: 'Deferred' }] }]}
+        />
+      </div>
+    ));
+
+    const details = screen.getByTestId('technical-details') as HTMLDetailsElement;
+    const summary = details.querySelector('summary')!;
+    expect(summary).toHaveClass('whitespace-normal', 'min-w-0', 'min-h-11', 'flex-wrap');
+    expect(within(summary).getByText(subtitle)).toHaveClass('min-w-0', 'wrap-anywhere');
+    expect(details.open).toBe(false);
+    expect(within(details).getByText('Guest reads')).toBeInTheDocument();
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(within(details).getByText('Deferred')).toBeInTheDocument();
+    details.open = false;
+    fireEvent(details, new Event('toggle'));
+    expect(within(details).getByText('Guest reads')).toBeInTheDocument();
+    expect(within(summary).getByText(subtitle)).toHaveTextContent(subtitle);
+  });
+
   it('renders curated technical rows without an extra disclosure interaction', () => {
     render(() => (
       <TechnicalDetailsSection
