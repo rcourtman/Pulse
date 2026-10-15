@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "3be0d771055b1983124f4112034d8f5a16c48ffe",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx": "a2fb822934936fbc84f1c2b0029ac06d94176795d0250276de8390404e80a528",
+    "frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts": "c4e556da46c7846c715b1f5a8b325d8726cd1e6d6dd8c659d628dcfdbb80a296"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "states": [
+    "Platform match for alpha, explicitly not credential or certificate acceptance",
+    "Editing beta removes old candidate and timing before another request, including A-B-A and empty input",
+    "No-match and failure are retired on address changes; current TLS failure keeps safe guidance",
+    "Only a new explicit probe hands beta to the real PBS credential slot, preserving TLS defaults and import approval",
+    "Back to API probe resets the setup evidence"
+  ],
+  "interactions": [
+    "Desktop keyboard and narrow touch through the actual ConnectionEditor, AddressProbeStep, state hook and ConnectionsAPI client",
+    "Eight explicit synthetic local POSTs; no automatic request on edit/selection, credential test, save or platform/guest operation",
+    "Pending disabled input/button and a programmatic duplicate submit reject an overlap",
+    "Accessible input help, retained focus on edit and no horizontal page overflow at both widths",
+    "All eight retained captures opened with native view_image after verifying copied hashes"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-15T00:48:19Z",
+  "evidence": {
+    "source_proof": "source-hzqk96il",
+    "containing_source": "3be0d771055b1983124f4112034d8f5a16c48ffe",
+    "driver": "frontend-modern/browser-tests/connection-probe.cjs",
+    "browser": "Chromium 141.0.7390.37",
+    "playwright": "1.56.1",
+    "integration_lock_parity": true,
+    "browser_result_sha256": "d54fcdc48dec56df42113032644116f4ee50c7e5719ff89e5c6f44b0c1f3de59",
+    "native_pixel_inspections": 8,
+    "scope": "Synthetic existing-setup producer/consumer proof, not installed TLS/credential/guest recovery, native platform/API acceptance, physical Safari, full-app authentication or a release."
+  }
+}
