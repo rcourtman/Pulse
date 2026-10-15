@@ -1519,60 +1519,23 @@ func (c *Client) GetStorageContent(ctx context.Context, node, storage string) ([
 	return backups, nil
 }
 
-// GetVMSnapshots returns snapshots for a specific VM
+// GetVMSnapshots returns snapshots for a specific VM. Only a complete
+// inventory can authorise removal of previously collected snapshots.
 func (c *Client) GetVMSnapshots(ctx context.Context, node string, vmid int) ([]Snapshot, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/snapshot", node, vmid))
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Snapshot `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	// Filter out the 'current' snapshot which is not a real snapshot
-	var snapshots []Snapshot
-	for _, snap := range result.Data {
-		if snap.Name != "current" {
-			snap.VMID = vmid
-			snapshots = append(snapshots, snap)
-		}
-	}
-
-	return snapshots, nil
+	return readSnapshotInventory(resp, vmid)
 }
 
-// GetContainerSnapshots returns snapshots for a specific container
+// GetContainerSnapshots returns snapshots for a specific container.
 func (c *Client) GetContainerSnapshots(ctx context.Context, node string, vmid int) ([]Snapshot, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/snapshot", node, vmid))
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Snapshot `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	// Filter out the 'current' snapshot which is not a real snapshot
-	var snapshots []Snapshot
-	for _, snap := range result.Data {
-		if snap.Name != "current" {
-			snap.VMID = vmid
-			snapshots = append(snapshots, snap)
-		}
-	}
-
-	return snapshots, nil
+	return readSnapshotInventory(resp, vmid)
 }
 
 // ClusterStatus represents the cluster status response

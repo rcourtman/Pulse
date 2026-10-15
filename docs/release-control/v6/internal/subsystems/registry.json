@@ -6090,6 +6090,7 @@
         "pkg/proxmox/client.go",
         "pkg/proxmox/cluster_client.go",
         "pkg/proxmox/io_counters.go",
+        "pkg/proxmox/snapshot_inventory_response.go",
         "pkg/proxmox/zfs.go",
         "pkg/tlsutil/certificate.go"
       ],
@@ -6654,6 +6655,21 @@
               "internal/filesystemprobe/observer_test.go",
               "internal/monitoring/docker_filesystem_evidence_test.go",
               "pkg/agents/filesystem/report_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-snapshot-inventory-runtime",
+            "label": "Complete Proxmox snapshot inventory admission and ordinary recovery proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/proxmox/snapshot_inventory_response.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/pve_protection_observation_test.go",
+              "pkg/proxmox/host_diagnostics_regression_test.go",
+              "pkg/proxmox/snapshot_inventory_response_test.go"
             ]
           }
         ],

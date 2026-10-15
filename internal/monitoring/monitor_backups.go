@@ -1176,12 +1176,10 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 				for _, snap := range snapshots {
 					result.snapshots = append(result.snapshots, buildSnapshot(target, snap))
 				}
-			} else if target.guestType == "lxc" {
-				errStr := err.Error()
-				if strings.Contains(errStr, "596") || strings.Contains(errStr, "not available") {
-					result.polled = true
-				}
 			}
+			// A failed read, including an unavailable LXC endpoint, is not an
+			// empty inventory. Keep this guest's known snapshots until an
+			// authoritative successful enumeration replaces them.
 
 			results <- result
 		}()

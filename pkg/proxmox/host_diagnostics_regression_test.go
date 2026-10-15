@@ -263,3 +263,39 @@ func TestClusterCancelledCallerStartsNoSession(t *testing.T) {
 func TestClusterSessionConstructionHonoursCallerBudget(t *testing.T) {
 	testClusterSessionConstructionHonoursCallerBudget(t)
 }
+
+// A malformed snapshot inventory is a collection failure, not a new empty
+// list or an instruction to change credentials. Ordinary rereading recovers.
+func TestSnapshotInventoryReadRecovery(t *testing.T) {
+	for _, kind := range []string{"qemu", "lxc"} {
+		t.Run(kind, func(t *testing.T) {
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if calls.Add(1) == 1 {
+					fmt.Fprint(w, `{"data":null,"detail":"fixture-private-detail"}`)
+					return
+				}
+				fmt.Fprint(w, `{"data":[{"name":"current"},{"name":"weekly","snaptime":1700000000}]}`)
+			}))
+			defer server.Close()
+			client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.httpClient.CloseIdleConnections()
+			read := func() ([]Snapshot, error) {
+				if kind == "lxc" {
+					return client.GetContainerSnapshots(context.Background(), "member", 105)
+				}
+				return client.GetVMSnapshots(context.Background(), "member", 105)
+			}
+			if rows, err := read(); err == nil || rows != nil || strings.Contains(err.Error(), "authentication") || strings.Contains(err.Error(), "fixture-private-detail") {
+				t.Fatalf("unknown inventory became empty success or unsafe diagnosis: %+v / %v", rows, err)
+			}
+			rows, err := read()
+			if err != nil || len(rows) != 1 || rows[0].VMID != 105 || calls.Load() != 2 {
+				t.Fatalf("ordinary snapshot reread failed: %+v / %v / %d calls", rows, err, calls.Load())
+			}
+		})
+	}
+}

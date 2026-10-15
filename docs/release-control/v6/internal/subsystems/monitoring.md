@@ -17,6 +17,33 @@
 
 ## Purpose
 
+### Snapshot inventories distinguish unavailable from empty
+
+PVE QEMU/LXC snapshot reads authorise removal only after a complete bounded
+HTTP 200 response with one unambiguous array and unique named rows. Missing/null
+inventories, conflicting error envelopes, duplicate/case-overwritten fields,
+invalid names/types, broken/truncated bodies and trailing values are collection
+failures, not empty success or a reason to rotate credentials. Additive metadata,
+optional snapshot times and PVE's filtered `current` position remain supported.
+Only endpoint scope supplies the guest's VMID. Invalid response contents do not
+appear in the new validation diagnostic.
+
+Every failed guest snapshot read, including an unavailable LXC endpoint, retains
+that guest's existing inventory. Error text containing `596` or `not available`
+cannot clear it. Independent guests still refresh; successful explicit empty
+lists remove only their scoped snapshots, recovery points and corresponding
+alerts. Other connections and backup classes remain outside that reconciliation.
+No QGA command, trust policy, guest action or notification routing is changed.
+
+`TestSnapshotInventoryResponseAdmission`, `TestSnapshotInventoryReadRecovery`
+and `TestSnapshotInventoryFailuresPreserveServedRecovery` cover real HTTP client
+admission, ordinary collection, original snapshot/alert identity, recovery-store
+reconciliation and served state through failure, usable recovery and scoped
+empty-list replacement. Consuming desktop/narrow proof exercises those actual
+projections through the production Backups and Alerts surfaces. This controlled
+proof is not native thaw, backup completion, every-filesystem writes/liveness,
+prior-active restoration or installed/fresh-install recovery.
+
 ### Guest metadata safety follows the VM across node migration
 
 Guest metadata, OS-command suppression, refresh/backoff and whole-fetch ownership
