@@ -201,6 +201,31 @@ describe('NodeCredentialSlot', () => {
     });
   });
 
+  it('asks for the endpoint first and names the node from it', () => {
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={createSettings()}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+
+    const endpoint = screen.getByLabelText(/^Endpoint URL/);
+    const name = screen.getByLabelText(/^Node Name/);
+    expect(endpoint.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(endpoint).toBeRequired();
+    expect(name).not.toBeRequired();
+    expect(screen.queryByText(/must be unique/)).not.toBeInTheDocument();
+
+    fireEvent.input(endpoint, { target: { value: 'https://pve1.local:8006' } });
+    expect(name).toHaveValue('pve1.local');
+
+    fireEvent.input(name, { target: { value: 'Rack A' } });
+    fireEvent.input(endpoint, { target: { value: 'https://pve2.local:8006' } });
+    expect(name).toHaveValue('Rack A');
+  });
+
   it('requires candidate import plan approval before guided setup handoff or manual save', () => {
     render(() => (
       <NodeCredentialSlot
