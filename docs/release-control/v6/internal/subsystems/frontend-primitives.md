@@ -9779,3 +9779,22 @@ remains visible beside invalid capacity without formatting NaN/Infinity bytes.
 Model/component controls cover non-finite, absent and non-positive capacity;
 `workload-disk-metrics.cjs` checks both Bars (including the tooltip) and Sparklines
 through the same REST reading at desktop and phone widths.
+
+### Configuration transfer submission ownership (15 October 2026)
+
+Recovery's existing configuration import/export dialogs and their Settings
+composition share one submission owner through authentication, file reading,
+HTTP completion and the successful-import reload. Each action captures its
+file/passphrase before yielding. Pending controls and close paths cannot replace
+that submission or start another transfer. Cancelling an API-token prompt drops
+its captured intent rather than resuming a later draft. The prompt remains an
+existing credential entry point, not a grant of additional server authority.
+
+Transfer requests opt out of automatic transport retries. Leaving Settings
+prevents pending local reads from dispatching, aborts further client preparation,
+suppresses late downloads/feedback and clears the reload timer. An already-sent
+import cannot be recalled or described as rolled back; unconfirmed results say
+settings may already have changed without echoing response text or retrying via
+an authentication prompt. UI/legacy/CLI encrypted archive formats, export's
+12-character minimum, server authorization and the migration scope warnings stay
+in force. Browser/component proof does not establish installed restore recovery.

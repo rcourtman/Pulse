@@ -195,6 +195,10 @@ describe('settings architecture guardrails', () => {
     expect(settingsPageShellSource).not.toContain('animate-slideInRight');
     expect(settingsPageShellSource).not.toContain('min-h-[600px]">');
     expect(settingsDialogsSource).toContain('export const SettingsDialogs');
+    expect(settingsSource).toContain('transferStatus={backupTransferFlow.transferStatus}');
+    expect(settingsSource).toContain('transferError={backupTransferFlow.transferError}');
+    expect(settingsDialogsSource).toContain('transferStatus={props.transferStatus}');
+    expect(settingsDialogsSource).toContain('transferError={props.transferError}');
   });
 
   it('keeps preview release maturity explicit in the shared update settings surface', () => {

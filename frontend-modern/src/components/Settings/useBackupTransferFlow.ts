@@ -1,6 +1,5 @@
-import { Accessor, createSignal } from 'solid-js';
+import { createSignal, onCleanup, type Accessor, type Setter } from 'solid-js';
 import { notificationStore } from '@/stores/notifications';
-import { logger } from '@/utils/logger';
 import {
   apiFetchJSON,
   getApiToken as getApiClientToken,
@@ -8,11 +7,35 @@ import {
 } from '@/utils/apiClient';
 import type { SecurityStatus } from '@/types/config';
 
-type ApiTokenModalSource = 'export' | 'import' | null;
+export interface BackupTransferStatus {
+  kind: 'export' | 'import';
+  phase: 'authentication' | 'reading' | 'request' | 'reloading';
+}
+
+type Submission = {
+  passphrase: string;
+  controller: AbortController;
+} & ({ kind: 'export' } | { kind: 'import'; file: File });
 
 interface UseBackupTransferFlowParams {
   securityStatus: Accessor<SecurityStatus | null>;
 }
+
+// Preserve UI, legacy and CLI archives without treating arbitrary parsed JSON
+// (including null, arrays or non-string data) as encrypted configuration.
+const encryptedArchive = (content: string): string | null => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return content.trim() || null;
+  }
+  if (typeof parsed === 'string') return parsed.trim() || null;
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && 'data' in parsed) {
+    return typeof parsed.data === 'string' ? parsed.data.trim() || null : null;
+  }
+  return null;
+};
 
 export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowParams) {
   const [exportPassphrase, setExportPassphrase] = createSignal('');
@@ -23,233 +46,186 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
   const [showImportDialog, setShowImportDialog] = createSignal(false);
   const [showApiTokenModal, setShowApiTokenModal] = createSignal(false);
   const [apiTokenInput, setApiTokenInput] = createSignal('');
-  const [apiTokenModalSource, setApiTokenModalSource] = createSignal<ApiTokenModalSource>(null);
+  const [transferStatus, setTransferStatus] = createSignal<BackupTransferStatus | null>(null);
+  const [transferError, setTransferError] = createSignal<string | null>(null);
+  let submission: Submission | null = null;
+  let disposed = false;
+  let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const active = (current: Submission) => !disposed && submission === current;
+  const release = () => {
+    submission = null;
+    setTransferStatus(null);
+  };
+  const guard = <T>(get: Accessor<T>, set: Setter<T>): Setter<T> =>
+    ((value: T | ((previous: T) => T)) =>
+      disposed || submission ? get() : set(value as Parameters<Setter<T>>[0])) as Setter<T>;
+
+  onCleanup(() => {
+    disposed = true;
+    submission?.controller.abort();
+    submission = null;
+    if (reloadTimer !== undefined) clearTimeout(reloadTimer);
+  });
 
   const closeExportDialog = () => {
+    if (disposed || submission) return;
     setShowExportDialog(false);
     setExportPassphrase('');
     setUseCustomPassphrase(false);
+    setTransferError(null);
   };
-
   const closeImportDialog = () => {
+    if (disposed || submission) return;
     setShowImportDialog(false);
     setImportPassphrase('');
     setImportFile(null);
+    setTransferError(null);
   };
-
   const closeApiTokenModal = () => {
+    if (disposed || transferStatus()?.phase !== 'authentication') return;
     setShowApiTokenModal(false);
     setApiTokenInput('');
+    release();
+  };
+
+  const execute = async (current: Submission) => {
+    if (!active(current)) return;
+    try {
+      let data: string | undefined;
+      if (current.kind === 'import') {
+        setTransferStatus({ kind: current.kind, phase: 'reading' });
+        const content = await current.file.text();
+        if (!active(current)) return;
+        const archive = encryptedArchive(content);
+        if (!archive) {
+          setTransferError('Invalid backup file. Choose an encrypted configuration backup.');
+          return;
+        }
+        data = archive;
+      }
+
+      if (!active(current)) return;
+      setTransferStatus({ kind: current.kind, phase: 'request' });
+      // Never replay configuration replacement on an auth/CSRF/rate-limit error.
+      // Abort stops dispatch if CSRF preparation yields while the view leaves;
+      // it cannot roll back a request already sent.
+      const result = await apiFetchJSON<{ status: string; data?: string }>(
+        `/api/config/${current.kind}`,
+        {
+          method: 'POST',
+          retry: false,
+          signal: current.controller.signal,
+          body: JSON.stringify({ passphrase: current.passphrase, ...(data ? { data } : {}) }),
+        },
+      );
+      if (!active(current)) return;
+
+      if (current.kind === 'export') {
+        const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `pulse-config-${new Date().toISOString().split('T')[0]}.json`;
+        try {
+          document.body.appendChild(anchor);
+          anchor.click();
+        } finally {
+          anchor.remove();
+          URL.revokeObjectURL(url);
+        }
+        setShowExportDialog(false);
+        setExportPassphrase('');
+        setUseCustomPassphrase(false);
+        notificationStore.success('Configuration exported successfully');
+      } else {
+        setImportPassphrase('');
+        setImportFile(null);
+        setTransferStatus({ kind: 'import', phase: 'reloading' });
+        notificationStore.success('Configuration imported successfully. Reloading...');
+        reloadTimer = setTimeout(() => {
+          if (active(current)) window.location.reload();
+        }, 2000);
+      }
+    } catch {
+      if (!active(current)) return;
+      // Error text can contain private configuration, paths or tokens. An
+      // uncertain write is not an auth prompt or permission to replay it.
+      setTransferError(
+        transferStatus()?.phase === 'reading'
+          ? 'Could not read the backup file. Choose a readable configuration backup.'
+          : current.kind === 'import'
+            ? 'Could not confirm the import. Settings may already have changed. Check the current configuration before trying again. Verify the backup and passphrase if it was rejected.'
+            : 'Could not export the configuration. Check your access and try again.',
+      );
+    } finally {
+      if (active(current) && transferStatus()?.phase !== 'reloading') release();
+    }
+  };
+
+  const begin = (current: Submission) => {
+    submission = current;
+    setTransferError(null);
+    // Authentication resumes this exact submission, not a later draft.
+    if (
+      !securityStatus()?.hasAuthentication &&
+      securityStatus()?.apiTokenConfigured &&
+      !getApiClientToken()
+    ) {
+      setTransferStatus({ kind: current.kind, phase: 'authentication' });
+      setShowApiTokenModal(true);
+      return Promise.resolve();
+    }
+    return execute(current);
   };
 
   const handleExport = async () => {
-    if (!exportPassphrase()) {
-      const hasAuth = securityStatus()?.hasAuthentication;
-      notificationStore.error(
-        hasAuth
-          ? useCustomPassphrase()
-            ? 'Please enter a passphrase'
-            : 'Please enter your password'
-          : 'Please enter a passphrase',
-      );
+    if (disposed || submission || !showExportDialog()) return;
+    const passphrase = exportPassphrase();
+    if (passphrase.length < 12) {
+      setTransferError('Use an encryption passphrase of at least 12 characters.');
       return;
     }
-
-    // Backend requires at least 12 characters for encryption security
-    if (exportPassphrase().length < 12) {
-      const hasAuth = securityStatus()?.hasAuthentication;
-      notificationStore.error(
-        hasAuth && !useCustomPassphrase()
-          ? 'Your password must be at least 12 characters. Please use a custom passphrase instead.'
-          : 'Passphrase must be at least 12 characters long',
-      );
-      return;
-    }
-
-    // Only check for API token if user is not authenticated via password
-    // If user is logged in with password, session auth is sufficient
-    const hasPasswordAuth = securityStatus()?.hasAuthentication;
-    if (!hasPasswordAuth && securityStatus()?.apiTokenConfigured && !getApiClientToken()) {
-      setApiTokenModalSource('export');
-      setShowApiTokenModal(true);
-      return;
-    }
-
-    try {
-      // Get CSRF token from cookie
-      const csrfCookie = document.cookie.split('; ').find((row) => row.startsWith('pulse_csrf='));
-      const csrfToken = csrfCookie
-        ? decodeURIComponent(csrfCookie.split('=').slice(1).join('='))
-        : undefined;
-
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-
-      // Add CSRF token if available
-      if (csrfToken) {
-        headers['X-CSRF-Token'] = csrfToken;
-      }
-
-      // Add API token if configured
-      const apiToken = getApiClientToken();
-      if (apiToken) {
-        headers['X-API-Token'] = apiToken;
-      }
-
-      const data = await apiFetchJSON<any>('/api/config/export', {
-        method: 'POST',
-        body: JSON.stringify({ passphrase: exportPassphrase() }),
-      });
-
-      // Create and download file
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `pulse-config-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      notificationStore.success('Configuration exported successfully');
-      setShowExportDialog(false);
-      setExportPassphrase('');
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to export configuration';
-      notificationStore.error(errorMessage);
-      logger.error('Export error', error);
-    }
+    await begin({ kind: 'export', passphrase, controller: new AbortController() });
   };
-
   const handleImport = async () => {
-    if (!importPassphrase()) {
-      notificationStore.error('Please enter the password');
+    if (disposed || submission || !showImportDialog()) return;
+    const passphrase = importPassphrase();
+    const file = importFile();
+    if (!passphrase || !file) {
+      setTransferError('Choose a configuration backup and enter its password.');
       return;
     }
-
-    if (!importFile()) {
-      notificationStore.error('Please select a file to import');
-      return;
-    }
-
-    // Only check for API token if user is not authenticated via password
-    // If user is logged in with password, session auth is sufficient
-    const hasPasswordAuth = securityStatus()?.hasAuthentication;
-    if (!hasPasswordAuth && securityStatus()?.apiTokenConfigured && !getApiClientToken()) {
-      setApiTokenModalSource('import');
-      setShowApiTokenModal(true);
-      return;
-    }
-
-    try {
-      const fileContent = await importFile()!.text();
-
-      // Support three formats:
-      // 1. UI export: {status: "success", data: "base64string"}
-      // 2. Legacy format: {data: "base64string"}
-      // 3. CLI export: raw base64 string (no JSON wrapper)
-      let encryptedData: string;
-
-      // Try to parse as JSON first
-      try {
-        const exportData = JSON.parse(fileContent);
-
-        if (typeof exportData === 'string') {
-          // Raw base64 string wrapped in JSON (edge case)
-          encryptedData = exportData;
-        } else if (exportData.data) {
-          // Standard format with data field
-          encryptedData = exportData.data;
-        } else {
-          notificationStore.error(
-            'Invalid backup file format. Expected encrypted data in "data" field.',
-          );
-          return;
-        }
-      } catch (_parseError) {
-        // Not JSON - treat entire contents as raw base64 from CLI export
-        encryptedData = fileContent.trim();
-      }
-
-      await apiFetchJSON('/api/config/import', {
-        method: 'POST',
-        body: JSON.stringify({
-          passphrase: importPassphrase(),
-          data: encryptedData,
-        }),
-      });
-
-      notificationStore.success('Configuration imported successfully. Reloading...');
-      setShowImportDialog(false);
-      setImportPassphrase('');
-      setImportFile(null);
-
-      // Reload page to apply new configuration
-      setTimeout(() => window.location.reload(), 2000);
-    } catch (error) {
-      const errorText = error instanceof Error ? error.message : String(error);
-
-      // Handle specific error cases if possible, though apiFetch usually handles 401/403
-      // But for Import, we might want to trigger the token modal if it was a token issue
-      // Note: apiFetch throws Error with message.
-
-      const normalizedError = errorText.toLowerCase();
-      if (
-        errorText.includes('API_TOKEN') ||
-        errorText.includes('API_TOKENS') ||
-        normalizedError.includes('api token') ||
-        normalizedError.includes('x-api-token')
-      ) {
-        setApiTokenModalSource('import');
-        setShowApiTokenModal(true);
-        return;
-      }
-
-      notificationStore.error(errorText || 'Failed to import configuration');
-      logger.error('Import error', error);
-    }
+    await begin({ kind: 'import', passphrase, file, controller: new AbortController() });
   };
-
   const handleApiTokenAuthenticate = () => {
-    if (!apiTokenInput()) {
-      notificationStore.error('Please enter the API token');
-      return;
-    }
-
-    const tokenValue = apiTokenInput()!;
-    setApiClientToken(tokenValue);
-    const source = apiTokenModalSource();
+    const current = submission;
+    if (disposed || !current || transferStatus()?.phase !== 'authentication') return;
+    if (!apiTokenInput().trim()) return;
+    setApiClientToken(apiTokenInput());
     setShowApiTokenModal(false);
     setApiTokenInput('');
-    setApiTokenModalSource(null);
-
-    // Retry the operation that triggered the modal
-    if (source === 'export') {
-      void handleExport();
-    } else if (source === 'import') {
-      void handleImport();
-    }
+    void execute(current);
   };
 
   return {
     exportPassphrase,
-    setExportPassphrase,
+    setExportPassphrase: guard(exportPassphrase, setExportPassphrase),
     useCustomPassphrase,
-    setUseCustomPassphrase,
+    setUseCustomPassphrase: guard(useCustomPassphrase, setUseCustomPassphrase),
     importPassphrase,
-    setImportPassphrase,
+    setImportPassphrase: guard(importPassphrase, setImportPassphrase),
     importFile,
-    setImportFile,
+    setImportFile: guard(importFile, setImportFile),
     showExportDialog,
-    setShowExportDialog,
+    setShowExportDialog: guard(showExportDialog, setShowExportDialog),
     showImportDialog,
-    setShowImportDialog,
+    setShowImportDialog: guard(showImportDialog, setShowImportDialog),
     showApiTokenModal,
     apiTokenInput,
     setApiTokenInput,
+    transferStatus,
+    transferError,
     handleExport,
     handleImport,
     closeExportDialog,

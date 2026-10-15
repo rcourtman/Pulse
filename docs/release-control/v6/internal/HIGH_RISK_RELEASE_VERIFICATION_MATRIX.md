@@ -1321,3 +1321,18 @@ as verification progresses:
 - Exact-source race/vet/build and desktop/narrow consuming pixels are source qualification, not installed/native acceptance or release availability.
 
 `TestClusterFirstUseConcurrentSelectionSharesConstruction` holds a real first-use TLS capture while eight ordinary readers join: one captured pin, one short/full login pair, independent returned readings and usable concurrent health inspection.
+
+### Configuration transfer lifetime (15 October 2026)
+
+- `useBackupTransferFlow.lifecycle.test.tsx` must reject overlapping transfers,
+  mixed file/passphrase submissions, dispatch after a retired file read and late
+  export/download/reload effects. Exercise token-intent cancellation and exact
+  resume, preserved UI/legacy/CLI formats, invalid input, no-retry request options
+  and privacy-safe unconfirmed-write feedback.
+- `BackupTransferDialogs.test.tsx` and `settingsArchitecture.test.ts` keep the
+  pending/error state connected through Settings and verify visible pending
+  consequences, disabled fields/close/submit controls and encryption limits.
+- Desktop and narrow consuming-browser proof must exercise the actual Settings
+  recovery route, file selection, pending locking, uncertain server responses,
+  export and token handoff using synthetic archives/credentials. Inspect retained
+  pixels. None of this substitutes for a real installed migration or thaw proof.
