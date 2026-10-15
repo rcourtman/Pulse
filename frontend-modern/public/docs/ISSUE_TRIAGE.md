@@ -10,6 +10,9 @@ Issue forms ask for one primary outcome and provide an **Additional actionable
 topics** field. Declaring a topic when opening an issue or newly adding one to
 this field applies the `needs-decomposition` label automatically. This is a
 queue-integrity signal, not a statement that every topic will be built.
+Materially editing an already populated field also surfaces it for review:
+disposition of its earlier topics cannot dispose of a later added symptom.
+Case, whitespace and hidden-comment-only changes do not restart that review.
 The synchronizer never removes this label, nor restores it after a maintainer
 has cleared it when an unrelated edit or reopen occurs. A later `None` in the
 form does not prove that topics raised in comments were dispositioned; triage
