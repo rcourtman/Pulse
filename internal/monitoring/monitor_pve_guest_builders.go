@@ -594,6 +594,10 @@ func (m *Monitor) buildVMFromClusterResource(
 		}
 	}
 	if res.Status != "running" {
+		// The older inventory can still contain running CPU usage. Match the
+		// non-running alert policy in the published tuple too, rather than
+		// relabel that stale value as current in the row and drawer.
+		vm.CPU = 0
 		vm.NetworkIn = 0
 		vm.NetworkOut = 0
 		vm.DiskRead = 0

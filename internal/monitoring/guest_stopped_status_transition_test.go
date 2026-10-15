@@ -137,7 +137,7 @@ func TestGuestStoppedDetailedStatusTransition(t *testing.T) {
 							if p == 4 {
 								wantUsed, wantDisk = int64(4*mib), 0
 							}
-							if vm.Status != "running" || vm.GuestAgentStatus != "available" || vm.Memory.Used != wantUsed || vm.Memory.Observation.State != "current" || vm.Disk.Used != wantDisk || vm.DiskStatusReason != "" || commands.Load() <= before {
+							if vm.Status != "running" || vm.CPU != res.CPU || vm.GuestAgentStatus != "available" || vm.Memory.Used != wantUsed || vm.Memory.Observation.State != "current" || vm.Disk.Used != wantDisk || vm.DiskStatusReason != "" || commands.Load() <= before {
 								t.Fatalf("%s did not obtain its own current readings: %+v", label, vm)
 							}
 							if p == 1 {
@@ -145,7 +145,7 @@ func TestGuestStoppedDetailedStatusTransition(t *testing.T) {
 								originalCPU = m.metricsHistory.GetGuestMetrics(id, "cpu", time.Hour)
 							}
 						} else {
-							if vm.Status != "stopped" || vm.GuestAgentStatus != "" || vm.GuestAgentExpected || !vm.GuestAgentEvidence.ObservedAt.IsZero() || vm.DiskStatusReason != "vm-stopped" || vm.Disk.Usage != -1 || len(vm.Disks) != 0 || !vm.DiskObservation.ObservedAt.IsZero() || vm.Memory.Used != 0 || vm.Memory.Observation.Source != "powered-off" || vm.OnBoot == nil || !*vm.OnBoot {
+							if vm.Status != "stopped" || vm.CPU != 0 || vm.GuestAgentStatus != "" || vm.GuestAgentExpected || !vm.GuestAgentEvidence.ObservedAt.IsZero() || vm.DiskStatusReason != "vm-stopped" || vm.Disk.Usage != -1 || len(vm.Disks) != 0 || !vm.DiskObservation.ObservedAt.IsZero() || vm.Memory.Used != 0 || vm.Memory.Observation.Source != "powered-off" || vm.OnBoot == nil || !*vm.OnBoot {
 								t.Errorf("%s newer stopped observation lost to stale running inventory: %+v", label, vm)
 							}
 							if commands.Load() != before {
