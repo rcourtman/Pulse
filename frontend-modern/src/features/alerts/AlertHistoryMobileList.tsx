@@ -87,6 +87,20 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
     }),
   );
 
+  // A link that opened one alert asks for its timeline; the cards show a
+  // timeline only in their drawer, so open it there while they are on show.
+  createEffect(
+    on(
+      () => props.state.focusRequest?.(),
+      (request) => {
+        if (!request) return;
+        props.state.takeFocusRequest();
+        if (!active() || aiChatStore.isOpen) return;
+        setInvestigation({ kind: 'timeline', alert: request.alert, rowKey: request.rowKey });
+      },
+    ),
+  );
+
   const getInvestigationReturnFocusTarget = (
     current: MobileAlertHistoryInvestigation,
   ): HTMLElement | null => {

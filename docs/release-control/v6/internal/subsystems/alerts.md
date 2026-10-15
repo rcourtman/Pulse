@@ -1650,6 +1650,21 @@ timeline or resource view moves into the cards' drawer when the cards take
 over and back to the inline expansion when the table returns
 (`AlertHistoryTableSection.test.tsx`, `AlertHistoryMobileList.test.tsx`).
 
+`/alerts/history?alert=<id>` (`buildAlertHistoryAlertPath`) opens History
+narrowed to one alert's occurrences, the landing a notification can link to.
+`useAlertHistoryState` filters to that id before severity and search, shows
+every loaded occurrence regardless of the range window, and decides once per
+id, only after saved history has loaded and the live alert list is `ready`
+(saved history holds resolved alerts only): if nothing matches outside "All
+time" it widens to All time once, so a later range is the operator's;
+`focusedAlertMissing` reports an id history no longer holds. It opens the
+latest occurrence (still firing first) through the shared timeline expansion
+and hands the cards a one-shot drawer request a remounted list cannot replay.
+The tab names the alert in a status notice with "Show all alerts", and while
+the live list is `unavailable` it says the alert may still be firing and
+offers Retry instead of a verdict (`useAlertHistoryState.test.tsx`,
+`HistoryTab.test.tsx`, `alertOverviewPresentation.test.ts`).
+
 Alert history row timestamps render clock time in the viewer's own locale and
 must carry the absolute date and time as a title. The date otherwise lives
 only in the day group header, which scrolls out of sight, and a hardcoded

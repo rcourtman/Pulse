@@ -433,6 +433,39 @@ export function getAlertHistoryLoadFailure() {
   } as const;
 }
 
+/**
+ * The notice above History when a link narrowed it to one alert. It names the
+ * alert once it is found and says plainly when history no longer holds it.
+ */
+export function getAlertHistoryFocusNotice(options: {
+  alertTitle?: string;
+  resourceName?: string;
+  missing: boolean;
+  liveAlertsUnavailable?: boolean;
+}) {
+  const clearLabel = 'Show all alerts';
+  // Saved history holds resolved alerts only; without the live list Pulse
+  // cannot tell whether the linked alert is still firing.
+  if (options.liveAlertsUnavailable) {
+    return {
+      text: 'Pulse could not load the alerts firing now, so this alert may still be active.',
+      clearLabel,
+    } as const;
+  }
+  if (options.missing) {
+    return { text: "That alert is no longer in Pulse's alert history.", clearLabel } as const;
+  }
+  const subject = [options.alertTitle, options.resourceName && `on ${options.resourceName}`]
+    .filter(Boolean)
+    .join(' ');
+  return {
+    text: subject
+      ? `Showing ${subject}, opened from a link.`
+      : 'Showing one alert, opened from a link.',
+    clearLabel,
+  } as const;
+}
+
 export function getAlertBucketCountLabel(count: number) {
   return count === 0 ? ALERT_BUCKET_EMPTY_LABEL : `${count} alert${count === 1 ? '' : 's'}`;
 }

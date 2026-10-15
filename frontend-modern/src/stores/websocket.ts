@@ -576,8 +576,11 @@ export function createWebSocketStore(url: string) {
     activeAlertsRevision += 1;
     hasActiveAlertsSnapshot = true;
     lastActiveAlertsPayload = alertsMap;
-    setActiveAlertsHydrationStatus('ready');
-    applyActiveAlerts(alertsEnabled ? alertsMap : {});
+    // One batch: a reader that sees "ready" must also see the alerts.
+    batch(() => {
+      setActiveAlertsHydrationStatus('ready');
+      applyActiveAlerts(alertsEnabled ? alertsMap : {});
+    });
   };
 
   // Cold-start recovery is owned by the canonical store rather than the page.
