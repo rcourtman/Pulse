@@ -2145,6 +2145,7 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 				"if !shouldSkipNativeMockStateMetricWrites() {",
 				"guestHistoryRates(",
 				"m.recordGuestMetric(",
+				"historyVMDiskUsage(vm)",
 			},
 		},
 		{

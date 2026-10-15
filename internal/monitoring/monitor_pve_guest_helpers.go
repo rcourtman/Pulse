@@ -110,12 +110,7 @@ func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.
 		}
 		if vm.Status == "running" {
 			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(vm.DiskRead, vm.DiskWrite, vm.NetworkIn, vm.NetworkOut, vm.IORateValidity)
-			memoryUsage, memoryUsed, diskUsage := historyMemoryUsage(vm.Memory), historyMemoryUsed(vm.Memory), vm.Disk.Usage
-			// A failed filesystem read can leave a positive cluster allocation,
-			// not just a retained prev- reading. Neither is current usage.
-			if vm.DiskStatusReason != "" {
-				diskUsage = -1
-			}
+			memoryUsage, memoryUsed, diskUsage := historyMemoryUsage(vm.Memory), historyMemoryUsed(vm.Memory), historyVMDiskUsage(vm)
 			// Only legacy unannotated memory needs the diagnostic heuristic.
 			// An explicit observation belongs to the selected source: deferred
 			// filesystem/QGA work cannot disqualify independent current memory.
@@ -137,6 +132,16 @@ func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.
 			m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), historyMemoryUsage(ct.Memory), historyMemoryUsed(ct.Memory), ct.Disk.Usage, diskRead, diskWrite, networkIn, networkOut, now)
 		}
 	}
+}
+
+// A failed filesystem read can leave a positive cluster allocation or retained
+// usage for display. Neither is a fresh History sample, whichever poll route
+// collected it. A complete measured zero remains an ordinary observation.
+func historyVMDiskUsage(vm models.VM) float64 {
+	if vm.DiskStatusReason != "" {
+		return -1
+	}
+	return vm.Disk.Usage
 }
 
 func guestHistoryRates(diskRead, diskWrite, networkIn, networkOut int64, validity models.IORateValidity) (int64, int64, int64, int64) {
