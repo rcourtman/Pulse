@@ -414,8 +414,7 @@ describe('docsLinks', () => {
       'ARCHITECTURE.md',
       'CONTRIBUTING.md',
     ]);
-    const indexScreenshotUrl =
-      'https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md';
+    const indexScreenshotUrl = 'https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md';
 
     function collectShippedDocs(dir: string, prefix = ''): string[] {
       return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
