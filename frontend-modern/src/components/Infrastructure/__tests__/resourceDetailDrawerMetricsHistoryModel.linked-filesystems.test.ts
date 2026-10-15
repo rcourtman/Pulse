@@ -30,6 +30,24 @@ const guest = (patch: Partial<Resource> = {}): Resource => ({
 });
 
 describe('canonical History filesystem source ownership', () => {
+  it.each(['paused', 'suspended'])(
+    'qualifies a native %s filesystem even when canonical health and its agent stay online',
+    (runtimeStatus) => {
+      for (const disks of [undefined, [agentDisk]]) {
+        const value = guest({ proxmox: { runtimeStatus, disks } });
+        expect(current(value).disk).toBeUndefined();
+        expect(current(value).usage).toBeUndefined();
+        expect(deferred(value).disk.lastKnownValue).toBe(62);
+        expect(deferred(value).disk.message).toContain(`while the VM is ${runtimeStatus}`);
+        expect(current(value).cpu).toBe(10);
+        value.disk = { current: 0, used: 0, total: 100 };
+        expect(deferred(value).disk.lastKnownValue).toBe(0);
+        value.disk = undefined;
+        expect(deferred(value).disk.lastKnownValue).toBeUndefined();
+      }
+    },
+  );
+
   it.each([
     'agent-not-running',
     'agent-error',

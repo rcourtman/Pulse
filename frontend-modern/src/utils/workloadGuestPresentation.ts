@@ -226,6 +226,19 @@ export function getWorkloadGuestDiskRead(
       needsAction: false,
     };
   }
+  // A paused/suspended VM cannot supply a live in-guest filesystem reading.
+  // Its last report can outlive the power-state change, even while the linked
+  // agent's reporting lease is still valid. Downgrade only otherwise-current
+  // readings: an explicit failed read or stale-agent reason stays authoritative.
+  // LXC's host-reported storage is independent of guest execution.
+  const current: WorkloadGuestDiskRead =
+    isVM && (guest.status === 'paused' || guest.status === 'suspended')
+      ? {
+          state: 'last-known',
+          message: `Guest filesystem readings are not current while the VM is ${guest.status}. Any displayed values are last known.`,
+          needsAction: false,
+        }
+      : { state: 'current', message: null, needsAction: false };
   if (guest.disksFromAgent) {
     if (guest.status === 'stopped') {
       return {
@@ -242,9 +255,9 @@ export function getWorkloadGuestDiskRead(
           message: 'Using last known disk stats. The Pulse Agent in this guest stopped reporting.',
           needsAction: false,
         }
-      : { state: 'current', message: null, needsAction: false };
+      : current;
   }
-  if (!reason) return { state: 'current', message: null, needsAction: false };
+  if (!reason) return current;
   return {
     state: reason.startsWith('prev-') ? 'last-known' : 'unavailable',
     message: getWorkloadGuestDiskStatusMessage(reason),

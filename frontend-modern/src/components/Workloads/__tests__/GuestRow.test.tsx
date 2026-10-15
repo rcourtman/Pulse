@@ -822,6 +822,43 @@ describe('GuestRow', () => {
       },
     );
 
+    it.each(['bars', 'sparklines'] as const)(
+      'keeps paused and suspended VM disk readings last known in %s',
+      (mode) => {
+        const [guest, setGuest] = createSignal(makeGuest());
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                visibleColumnIds={['name', 'disk']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        const row = container.querySelector('tr');
+        for (const status of ['paused', 'suspended']) {
+          setGuest(makeGuest({ status, diskStatusReason: undefined }));
+          const cell = container.querySelector('[data-workload-col="disk"]')!;
+          expect(cell).toHaveTextContent('Last known');
+          expect(cell.getAttribute('title')).toContain(`while the VM is ${status}`);
+          if (mode === 'bars')
+            expect(screen.getByTestId('disk-bar')).toHaveAttribute(
+              'data-reading-state',
+              'last-known',
+            );
+          else
+            expect(cell.querySelector('[role="img"]')?.getAttribute('aria-label')).not.toMatch(
+              /current 50%/,
+            );
+          expect(container.querySelector('tr')).toBe(row);
+        }
+        setGuest(makeGuest());
+        expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+      },
+    );
+
     it('shows dash when disk data is unavailable', () => {
       renderGuestRow({
         guest: makeGuest({ disk: { total: 0, used: 0, free: 0 } }),
