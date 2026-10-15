@@ -20,9 +20,9 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
     assert.equal(resources[0].proxmox.nodeName, phase === 'migrated' || phase === 'refreshed' ? 'node-b' : 'node-a');
   }
   const result = {
-    source: binding.source, source_receipt: binding.receipt,
+    source: binding.source, browser_source: binding.browser_source, source_receipt: binding.receipt,
     input_sha256: hash(input), playwright: require('playwright/package.json').version,
-    scope: 'Actual monitor HTTP/poller projections through production Workloads adapter, row, drawer and CSS. Not full App, native migration, thaw, writes/liveness, installed or release acceptance.',
+    scope: 'Actual monitor HTTP/poller projections through production Workloads adapter, row, drawer and CSS. QGA version is asserted in the producer projection; this existing Workloads adapter does not render it. Not full App, native migration, thaw, writes/liveness, installed or release acceptance.',
     sources: {}, cases: [], screenshots: [],
   };
   assert.equal(result.playwright, JSON.parse(fs.readFileSync('/workspace/tests/integration/package-lock.json')).packages['node_modules/@playwright/test'].version);
@@ -92,14 +92,14 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         await drawer.getByTestId('guest-drawer-facts').getByText(ip, { exact: true }).waitFor();
         const model = await page.evaluate(() => {
           const guest = window.__guestMetadataMigration.guest();
-          return { node: guest.node, osName: guest.osName, osVersion: guest.osVersion, agentVersion: guest.agentVersion, ips: guest.ipAddresses, disk: guest.disk };
+          return { node: guest.node, osName: guest.osName, osVersion: guest.osVersion, qgaVersion: window.__guestMetadataMigration.snapshot()[0].proxmox.agentVersion, ips: guest.ipAddresses, disk: guest.disk };
         });
         assert.equal(model.node, node); assert.equal(model.osName, 'OpenBSD'); assert.equal(model.osVersion, '7.8');
-        assert.equal(model.agentVersion, version); assert.deepEqual(model.ips, [ip]);
+        assert.equal(model.qgaVersion, version); assert.deepEqual(model.ips, [ip]);
         assert.equal(model.disk.used, 314572800);
         const details = drawer.getByTestId('guest-technical-details').getByRole('button', { name: /^Details/ });
         if (await details.getAttribute('aria-expanded') !== 'true') await click(details);
-        await drawer.getByTestId('guest-technical-details-sections').getByText(node, { exact: true }).waitFor();
+        await row.getByTitle(node, { exact: true }).waitFor();
         await drawer.getByTestId('guest-technical-details-sections').getByText('vio0', { exact: false }).first().waitFor();
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'Horizontal viewport overflow');
         record.checks.push({ phase, model, actualDetails: await drawer.getByTestId('guest-technical-details-sections').innerText() });
@@ -109,7 +109,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         result.screenshots.push({ file, phase, name, sha256: hash(path.join(output, file)) });
       }
       assert.deepEqual(record.errors, []);
-      await click(drawer.getByRole('button', { name: /Close/ }).first());
+      await click(drawer.getByRole('button', { name: /^Collapse .* details$/ }).first());
       await drawer.waitFor({ state: 'hidden' });
       record.checks.push('Drawer closes by the real control after migration and refresh.');
       await browser.close(); browser = undefined;

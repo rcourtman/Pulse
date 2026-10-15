@@ -59,7 +59,7 @@ function Fixture() {
           <tbody>
             <GuestRow
               guest={guest()}
-              visibleColumnIds={window.innerWidth <= 768 ? ['name', 'disk'] : ['name', 'node', 'cpu', 'memory', 'disk', 'ip', 'os']}
+              visibleColumnIds={window.innerWidth <= 768 ? ['name', 'node', 'disk'] : ['name', 'node', 'cpu', 'memory', 'disk', 'ip', 'os']}
               isExpanded={expanded()}
               onClick={() => setExpanded(!expanded())}
               workloadTableLayoutMode={window.innerWidth <= 768 ? 'phone' : 'wide'}
