@@ -160,6 +160,15 @@ describe('manual backup safety help', () => {
         headingText,
       ).toEqual([label]);
     }
+    // The opening warning and later symptom guidance can both be labelled
+    // Backup safety. Check the warning in its own context, not global label
+    // uniqueness, while retaining the distinct manual-precaution destination.
+    const links = article.querySelectorAll('a[href="/docs/VM_DISK_MONITORING#backup-safety"]');
+    const labels = [...links].map((link) => link.textContent);
+    expect(labels[0]).toBe('Backup safety');
+    const warning = links[0].closest('p')?.textContent?.replace(/\s+/g, ' ');
+    expect(warning).toContain("an earlier guest request's state is uncertain");
+    expect(labels.filter((text) => text === 'manual backup precaution')).toHaveLength(1);
     const target = render(guide, 'VM_DISK_MONITORING');
     expect(target.querySelector('#backup-safety')?.textContent).toBe('Backup safety');
     for (const fragment of [
