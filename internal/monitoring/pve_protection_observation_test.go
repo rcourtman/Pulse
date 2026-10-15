@@ -1,9 +1,14 @@
 package monitoring
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -207,4 +212,33 @@ func TestPersistGuestIdentitySkipsUnchangedIdentities(t *testing.T) {
 	if !firstWrite.ModTime().Equal(secondWrite.ModTime()) {
 		t.Error("unchanged identity triggered a redundant write")
 	}
+}
+
+// A skipped/unreadable non-final log supplies no new guest observation. In
+// particular, it cannot extend the retained running task's alert-intent age.
+func TestPVELogRetryDoesNotRenewRetainedEvidence(t *testing.T) {
+	for _, cancelled := range []bool{false, true} {
+		t.Run(fmt.Sprint(cancelled), func(t *testing.T) {
+			observed := time.Now().Add(-time.Hour).UTC()
+			task := models.BackupTask{ID: "proof-job-100", Instance: "proof", Node: "pve1", VMID: 100, Status: "running", ObservedAt: observed}
+			m := &Monitor{state: models.NewState(), vzdumpJobTaskCache: map[string]vzdumpJobTaskCacheEntry{"proof|job": {tasks: []models.BackupTask{task}}}}
+			client := &unreadableJobLogClient{}
+			ctx := context.Background()
+			if cancelled {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			got := m.synthesizeVzdumpJobGuestTasks(ctx, "proof", client, []models.BackupTask{{ID: "parent", Node: "pve1"}}, map[string]string{"parent": "job"})
+			if !reflect.DeepEqual(got, []models.BackupTask{task}) {
+				t.Fatalf("retained log observation renewed or lost: %+v", got)
+			}
+		})
+	}
+}
+
+type unreadableJobLogClient struct{ PVEClientInterface }
+
+func (*unreadableJobLogClient) GetTaskLog(context.Context, string, string) ([]proxmox.TaskLogLine, error) {
+	return nil, errors.New("fixture unavailable")
 }

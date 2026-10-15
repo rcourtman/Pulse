@@ -1378,17 +1378,7 @@ func (c *Client) GetNodeTasks(ctx context.Context, node string) ([]Task, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Task `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return readTasks(resp)
 }
 
 // backupTaskListLimit caps how many vzdump tasks are listed per node. The PVE
@@ -1413,21 +1403,18 @@ func (c *Client) GetBackupTasks(ctx context.Context) ([]Task, error) {
 
 		resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/tasks?typefilter=vzdump&source=all&limit=%d", node.Node, backupTaskListLimit))
 		if err != nil {
-			// Log error but continue with other nodes
-			continue
+			// The caller replaces the instance's task set on success. A failed
+			// online node is not evidence that its running/failed tasks vanished.
+			return nil, fmt.Errorf("get backup tasks: %w", err)
 		}
 
-		var result struct {
-			Data []Task `json:"data"`
-		}
-		decodeErr := json.NewDecoder(resp.Body).Decode(&result)
-		resp.Body.Close()
-		if decodeErr != nil {
-			continue
+		tasks, err := readTasks(resp)
+		if err != nil {
+			return nil, fmt.Errorf("read backup tasks: %w", err)
 		}
 
 		// Filter for backup tasks
-		for _, task := range result.Data {
+		for _, task := range tasks {
 			if task.Type == "vzdump" {
 				allTasks = append(allTasks, task)
 			}
@@ -1454,25 +1441,17 @@ func (c *Client) GetTaskLog(ctx context.Context, node, upid string) ([]TaskLogLi
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("failed to get task log (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var result struct {
-		Data []TaskLogLine `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	lines, err := readTaskRows[TaskLogLine](resp, "n", "t")
+	if err != nil {
 		return nil, err
 	}
-
-	return result.Data, nil
+	// A bounded prefix of a long finished log is not immutable per-guest
+	// completion evidence. Keep the existing request budget, but do not cache
+	// that prefix forever as though it covered every guest in the job.
+	if len(lines) >= taskLogLineLimit {
+		return nil, fmt.Errorf("Proxmox task log reached bounded limit (%d lines)", taskLogLineLimit)
+	}
+	return lines, nil
 }
 
 // GetContainerInterfaces returns the network interfaces (with IPs) for a container.
