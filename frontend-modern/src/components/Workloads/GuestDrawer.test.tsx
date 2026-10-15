@@ -439,6 +439,46 @@ describe('GuestDrawer', () => {
     expect(details.getByText('No completed backup found')).toBeVisible();
   });
 
+  it.each([
+    { type: 'qemu', platformScopes: ['vmware-vsphere'] },
+    { type: 'lxc', platformScopes: ['incus'] },
+    { type: 'system-container', platformScopes: ['truenas'] },
+    { type: 'docker', platformScopes: ['proxmox-pve', 'docker'] },
+    { type: 'pod', platformScopes: ['kubernetes'] },
+  ])('keeps unsupported backup coverage neutral in the full drawer (%j)', (source) => {
+    render(() => <GuestDrawer guest={makeGuest(source)} onClose={vi.fn()} />);
+    const overview = technicalDetails();
+    expect(overview.getByText('Not reported by this integration').closest('td')).toHaveClass(
+      'text-muted',
+    );
+    expect(overview.queryByText('No completed backup found')).not.toBeInTheDocument();
+    expect(overview.queryByText('Last completed backup')).not.toBeInTheDocument();
+    expect(overview.queryByText('Backup activity')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('guest-drawer-exceptions')).not.toBeInTheDocument();
+  });
+
+  it('withdraws previous completion and activity when the integration no longer reports coverage', () => {
+    const [guest, setGuest] = createSignal(
+      makeGuest({ lastBackup: Date.now() - 3600_000, backupInProgress: true }),
+    );
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    const drawer = screen.getByTestId('guest-drawer-overview');
+    expect(technicalDetails().getByText('Running · not completed yet')).toBeVisible();
+    setGuest({ ...guest(), platformScopes: ['vmware-vsphere'] });
+    expect(screen.getByTestId('guest-drawer-overview')).toBe(drawer);
+    expect(technicalDetails().getByText('Not reported by this integration')).toBeVisible();
+    expect(technicalDetails().queryByText('Running · not completed yet')).not.toBeInTheDocument();
+    expect(technicalDetails().queryByText('Last completed backup')).not.toBeInTheDocument();
+    expect(within(drawer).queryByText(/Last completed backup 1 hour ago/)).not.toBeInTheDocument();
+    expect(drawer.querySelector('time')).toBeNull();
+    setGuest({ ...guest(), platformScopes: ['proxmox-pve'], lastBackup: 0 });
+    expect(technicalDetails().getByText('No completed backup found')).toBeVisible();
+    expect(technicalDetails().getByText('Running · not completed yet')).toBeVisible();
+    expect(
+      technicalDetails().queryByText('Not reported by this integration'),
+    ).not.toBeInTheDocument();
+  });
+
   it('keeps deferred filesystem fallback last-known through History and fresh resumption', async () => {
     chartsApiMocks.getMetricsHistory.mockResolvedValue({
       resourceType: 'vm',

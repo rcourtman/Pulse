@@ -1,4 +1,19 @@
 import { resolveBackupThresholds, type BackupStatus, type BackupThresholds } from '@/utils/format';
+import type { WorkloadGuest } from '@/types/workloads';
+import { getWorkloadPlatformScopes, resolveWorkloadType } from '@/utils/workloads';
+
+// The shared backup scalar comes only from Proxmox vzdump/PBS inventory.
+// Other integrations not reporting it is not evidence of a missing backup.
+// Legacy VM/LXC callers without platform metadata retain their Proxmox shape.
+// Keep the row and full drawer on the same applicability rule.
+export function supportsWorkloadBackupEvidence(
+  guest: Pick<WorkloadGuest, 'type' | 'workloadType' | 'platformType' | 'platformScopes'>,
+): boolean {
+  const type = resolveWorkloadType(guest);
+  if (type !== 'vm' && type !== 'system-container') return false;
+  const scopes = getWorkloadPlatformScopes(guest);
+  return scopes.length === 0 || scopes.includes('proxmox-pve');
+}
 
 // The age-derived BackupStatus plus the overlay state for a backup that is
 // running right now. 'running' never comes from getBackupInfo (which only

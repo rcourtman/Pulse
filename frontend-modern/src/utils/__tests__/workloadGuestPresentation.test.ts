@@ -8,9 +8,31 @@ import {
   getWorkloadGuestDiskRead,
   getWorkloadGuestDiskStatusMessage,
   getWorkloadsGuestNetworkEmptyState,
+  supportsWorkloadBackupEvidence,
 } from '@/utils/workloadGuestPresentation';
 
 describe('workloadGuestPresentation', () => {
+  it.each([
+    { type: 'qemu' },
+    { type: 'lxc' },
+    { type: 'vm', platformType: 'proxmox-pve' },
+    { type: 'system-container', platformScopes: ['proxmox-pve', 'docker'] },
+  ])('preserves reported and legacy Proxmox backup coverage (%j)', (guest) => {
+    expect(supportsWorkloadBackupEvidence(guest)).toBe(true);
+  });
+
+  it.each([
+    { type: 'vm', platformType: 'vmware-vsphere' },
+    { type: 'qemu', platformScopes: ['vmware-vsphere'] },
+    { type: 'system-container', platformScopes: ['incus'] },
+    { type: 'system-container', platformScopes: ['truenas'] },
+    { type: 'app-container', platformScopes: ['proxmox-pve', 'docker'] },
+    { type: 'docker' },
+    { type: 'pod' },
+  ])('does not infer backup absence for integrations without that evidence (%j)', (guest) => {
+    expect(supportsWorkloadBackupEvidence(guest)).toBe(false);
+  });
+
   it.each([undefined, '', 'prev-agent-busy'])(
     'does not promote a stopped VM’s retained numbers without a current read (%s)',
     (diskStatusReason) => {
