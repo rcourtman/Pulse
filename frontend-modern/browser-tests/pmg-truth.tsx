@@ -15,7 +15,11 @@ import { useAlertIncidentTimelineState } from '@/features/alerts/useAlertInciden
 // The browser supplies the unchanged retained producer bytes. No live PMG.
 const projections = await fetch('/__fixture/phases').then((response) => response.json());
 setActiveLocale(DEFAULT_LOCALE);
-const alertMap = (p: any) => Object.fromEntries((p.alerts || []).map((a: any) => [a.id, a]));
+// Store reconciliation mutates its target. Keep it separate from the retained
+// producer phases so returning to an earlier phase still reads the original
+// response, including the alert's nested evidence.
+const alertMap = (p: any) =>
+  Object.fromEntries((p.alerts || []).map((a: any) => [a.id, structuredClone(a)]));
 function Probe() {
   const [phase, setPhase] = createSignal(projections[0]);
   const [activeAlerts, setActiveAlerts] = createStore(alertMap(phase()));
