@@ -158,12 +158,21 @@ func testGuestDetailedContainerStatusRejectsPrefixOncePerPoll(t *testing.T) {
 			}))
 			defer server.Close()
 			client := windowsBootstrapClient(t, server.URL, kind)
-			m := &Monitor{rateTracker: NewRateTracker()}
+			m := &Monitor{config: &config.Config{}, state: models.NewState(), rateTracker: NewRateTracker(),
+				resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))}
+			projections := make(map[string]any)
+			project := func(label string, ct models.Container) {
+				m.state.UpdateContainers([]models.Container{ct})
+				m.updateResourceStore(m.currentStateWithScope())
+				front := m.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{Containers: []models.Container{ct}}, m.mockModeFence.begin())
+				projections[label] = front.Resources
+			}
 			res := proxmox.ClusterResource{Type: "lxc", Node: "node", Name: "status-evidence-container", VMID: 106, Status: "running", CPU: .2, MaxMem: 1000, Mem: 400, MaxDisk: 2000, Disk: 600, DiskRead: 4096, NetIn: 2048, ObservedAt: time.Now()}
 			ct, _, _, _, ok := m.buildContainerFromClusterResource(context.Background(), "status-evidence", res, client, nil, nil)
 			if !ok || ct.Memory.Used != 400 || ct.Disk.Used != 600 || len(ct.IPAddresses) != 0 || calls.Load() != 1 {
 				t.Fatalf("rejected container status escaped or was fetched twice: %+v / calls=%d", ct, calls.Load())
 			}
+			project("rejected", ct)
 			key := makeGuestRateKey("status-evidence", "lxc", res.VMID)
 			m.rateTracker.mu.RLock()
 			initial := *m.rateTracker.history[key]
@@ -182,6 +191,12 @@ func testGuestDetailedContainerStatusRejectsPrefixOncePerPoll(t *testing.T) {
 			if resumed.diskRead.value != 9000000 || resumed.networkIn.value != 8000000 || !resumed.lastObservedAt.After(res.ObservedAt) {
 				t.Fatal("complete status did not own new counter observations")
 			}
+			project("resumed", ct)
+			wire, err := json.Marshal(projections)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("DETAILED_CONTAINER_STATUS_PROJECTION %s", wire)
 		})
 	}
 }

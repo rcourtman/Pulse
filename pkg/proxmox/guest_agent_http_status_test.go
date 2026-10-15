@@ -56,13 +56,16 @@ func TestGuestAgentHTTPFailureDefersEveryRead(t *testing.T) {
 						}
 					}))
 					defer server.Close()
-					c := backupTestClient(t, server.URL)
+					// These cases intentionally leave uncertainty alive. A later
+					// fixture may reuse this port, but is not the same guest channel.
+					endpoint := lockEvidenceFixtureEndpoint(t, server.URL)
+					c := backupTestClient(t, endpoint)
 					err := first(context.Background(), c, 105)
 					if !errors.Is(err, ErrGuestAgentDeferred) || GuestAgentDeferredReason(err) != "agent-completion-unverified" {
 						t.Errorf("unknown completion = %v, want completion-unverified deferral", err)
 					}
 					// A separately constructed diagnostic cannot follow with any command.
-					diagnostic := backupTestClient(t, server.URL)
+					diagnostic := backupTestClient(t, endpoint)
 					for later, read := range backupAgentReads() {
 						if err := read(context.Background(), diagnostic, 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
 							t.Errorf("next %s = %v, want VM-wide cooldown", later, err)
@@ -440,5 +443,49 @@ func TestGuestAgentHTTPUncertaintyExpiresAndKeepsOtherVMsIndependent(t *testing.
 	}
 	if calls.Load() != 3 {
 		t.Errorf("wire commands = %d, want uncertain/other/resumed", calls.Load())
+	}
+}
+
+// Keep an older uncertainty fence on the same listener while this HTTP-error
+// fixture runs. Listener/port reuse cannot identify an independent test guest.
+func TestGuestAgentHTTPFailureFixtureRetainsIndependentUncertainty(t *testing.T) {
+	var commands atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
+		commands.Add(1)
+		w.WriteHeader(http.StatusConflict)
+		fmt.Fprint(w, "upstream API error 403: permission denied")
+	}))
+	defer server.Close()
+	previous := backupTestClient(t, server.URL)
+	release, err := acquireGuestAgent(previous.baseURL, 105)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release(true)
+	key, _ := guestAgentEndpointKey(previous.baseURL)
+	guestAgentGuards.Lock()
+	prior := guestAgentGuards.entries[guestAgentGuardKey{endpoint: key, vmid: 105}]
+	guestAgentGuards.Unlock()
+	current := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
+	if _, err := current.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
+		t.Fatalf("HTTP fixture bypassed its own command or trusted the quoted refusal: %v", err)
+	}
+	for name, read := range backupAgentReads() {
+		if err := read(context.Background(), current, 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+			t.Errorf("%s bypassed this fixture's uncertainty: %v", name, err)
+		}
+	}
+	if _, err := previous.GetVMAgentInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+		t.Fatal("fixture isolation cleared an existing uncertainty fence")
+	}
+	guestAgentGuards.Lock()
+	unchanged := guestAgentGuards.entries[guestAgentGuardKey{endpoint: key, vmid: 105}] == prior
+	guestAgentGuards.Unlock()
+	if !unchanged || commands.Load() != 1 {
+		t.Fatal("fixture isolation changed earlier work or sent follow-up commands")
 	}
 }
