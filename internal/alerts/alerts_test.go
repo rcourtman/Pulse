@@ -1250,6 +1250,32 @@ func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
 	m.mu.RUnlock()
 }
 
+func TestHandleHostOfflineNamesSilentAgentNotHostOutage(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	// A Proxmox node keeps reporting through its API while its linked agent
+	// is silent, so the alert must not claim the host itself is offline.
+	host := models.Host{ID: "host-linked", Hostname: "delly", LinkedNodeID: "homelab-delly"}
+	alertID := canonicalConnectivityStateID(hostResourceID(host.ID))
+
+	for i := 0; i < 3; i++ {
+		m.HandleHostOffline(host)
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	alert, ok := testLookupActiveAlert(t, m, alertID)
+	if !ok {
+		t.Fatalf("expected alert %q after three offline detections", alertID)
+	}
+	if want := "Pulse agent on 'delly' stopped reporting"; alert.Message != want {
+		t.Fatalf("message = %q, want %q", alert.Message, want)
+	}
+	if want := "delly (Host Agent)"; alert.ResourceName != want {
+		t.Fatalf("resource name = %q, want %q", alert.ResourceName, want)
+	}
+}
+
 func TestHandleHostOfflineWithCorrelationPreservesHostLifecycleIdentity(t *testing.T) {
 	m := newTestManager(t)
 	host := models.Host{ID: "host-correlated", Hostname: "pve-1"}
