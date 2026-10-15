@@ -266,16 +266,6 @@ func (m *Monitor) buildVMFromClusterResource(
 	if res.Type == "qemu" && state.diskUsed == 0 && state.diskTotal > 0 && res.Status == "running" {
 		state.diskUsage = -1
 	}
-	if res.Status != "running" {
-		// A subsequent start must obtain its own guest memory observation rather
-		// than inherit a success or failure from before this stopped poll.
-		m.clearGuestMemoryCache(instanceName, res.Node, res.VMID)
-		if state.diskTotal > 0 {
-			state.diskUsage = -1
-			state.diskStatusReason = "vm-stopped"
-		}
-	}
-
 	// For running VMs, always try to get filesystem info from guest agent
 	// The cluster/resources endpoint often returns 0 or incorrect values for disk usage
 	// We should prefer guest agent data when available for accurate metrics
@@ -293,7 +283,16 @@ func (m *Monitor) buildVMFromClusterResource(
 				Int("vmid", res.VMID).
 				Msg("Could not get VM status to check guest agent availability")
 		} else if status != nil {
-			m.applyVMStatusDetails(ctx, instanceName, res, client, guestID, vmIDToHostAgent, status, recentGuestAgentEvidence, &state)
+			// A VM can stop after the inventory was collected. A complete newer
+			// status owns that transition even if its agent bit is still enabled
+			// or prior metadata/linked-agent readings exist. Do not queue guest
+			// work, renew QGA evidence or publish a running row from the older list.
+			if status.Status != "" && status.Status != "running" {
+				res.Status = status.Status
+				state.detailedStatus = status
+			} else {
+				m.applyVMStatusDetails(ctx, instanceName, res, client, guestID, vmIDToHostAgent, status, recentGuestAgentEvidence, &state)
+			}
 		} else {
 			if state.diskTotal > 0 {
 				state.diskStatusReason = "no-status"
@@ -305,7 +304,9 @@ func (m *Monitor) buildVMFromClusterResource(
 				Int("vmid", res.VMID).
 				Msg("Could not get VM status, using cluster/resources disk data")
 		}
+	}
 
+	if res.Status == "running" && res.Type == "qemu" {
 		if state.detailedStatus != nil && state.detailedStatus.Lock != "" {
 			res.Lock = state.detailedStatus.Lock
 		}
@@ -388,6 +389,16 @@ func (m *Monitor) buildVMFromClusterResource(
 				Bool("guestAgentDiskAvailable", state.diskFromAgent).
 				Float64("usage", state.diskUsage).
 				Msg("QEMU disk: preferring linked Pulse host agent disk inventory")
+		}
+	}
+
+	if res.Status != "running" {
+		// A subsequent start must obtain its own guest memory observation rather
+		// than inherit a success or failure from before this stopped poll.
+		m.clearGuestMemoryCache(instanceName, res.Node, res.VMID)
+		if state.diskTotal > 0 {
+			state.diskUsage = -1
+			state.diskStatusReason = "vm-stopped"
 		}
 	}
 
