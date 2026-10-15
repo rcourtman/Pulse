@@ -9949,3 +9949,18 @@ settings may already have changed without echoing response text or retrying via
 an authentication prompt. UI/legacy/CLI encrypted archive formats, export's
 12-character minimum, server authorization and the migration scope warnings stay
 in force. Browser/component proof does not establish installed restore recovery.
+
+### Readable operator overrides inside table drawers (15 October 2026)
+
+`ResourceOperatorStateSection` restores normal wrapping at its own boundary,
+including unbroken saved attribution, rather than inheriting a table cell's
+no-wrap rule. Its header can stack. Control descriptions, maintenance scope and
+remediation confirmations must remain within their own column at desktop and
+narrow widths, not merely be present in the DOM. No global table scan layout,
+policy text, saved state, request or confirmation semantics change.
+
+`ResourceOperatorStateSection.render.test.tsx` pins that boundary and the
+accessible descriptions/unchanged retirement-discard behaviour. The
+`operator-overrides-readability.cjs` browser checks actual text-line geometry
+and controls through the production workload drawer and API client. This is
+presentation proof, not native guest thaw, filesystem writes or recovery.

@@ -8604,3 +8604,14 @@ A critical connection failure therefore survives actual Resources HTTP health
 projection without colouring a sibling sharing its presentation data.
 `TestPMGConnectionHealthUsesOnlyConfiguredReference` covers critical precedence,
 collision negatives, absent references, degraded collection and recovery.
+
+### Readable per-resource operator consequences (15 October 2026)
+
+The shared operator overrides section owns its text wrapping even when mounted
+inside a fixed-layout workload table. Priority, monitoring, lifecycle and
+maintenance guidance, confirmation text and saved attribution stay readable
+without overlapping adjacent controls. Inventory ownership, retirement,
+maintenance, remediation locking and saved-policy behaviour are unchanged.
+The connected render control and desktop/narrow workload-drawer browser proof
+cover descriptions plus discard, confirmation cancellation and synthetic
+retirement/restoration; none establishes native or installed recovery.

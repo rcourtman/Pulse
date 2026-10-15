@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 
 import type { ResourceCapability } from '@/types/resource';
 
@@ -115,4 +115,62 @@ describe('maintenance schedule timestamps', () => {
       expect(badge.parentElement).toHaveTextContent(/attention.*paused/i);
     },
   );
+});
+
+describe('operator guidance inside a workload table', () => {
+  it('opts out of inherited no-wrap without changing descriptions or saved policy', async () => {
+    const record = {
+      canonicalId: 'table-readable-guidance',
+      monitoringMode: 'normal',
+      lifecycleState: 'active',
+      intentionallyOffline: false,
+      neverAutoRemediate: false,
+      note: 'Independent thaw and filesystem checks remain required.',
+      setAt: new Date().toISOString(),
+      setBy: 'fixture-administrator-with-a-long-unbroken-identity@example.invalid',
+    };
+    apiClientMock.apiFetchJSON.mockResolvedValue({ configured: true, state: record });
+    render(() => (
+      <table class="table-fixed">
+        <tbody>
+          <tr>
+            <td>
+              <ResourceOperatorStateSection
+                resourceId={record.canonicalId}
+                resourceType="vm"
+                platformType="proxmox"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    ));
+    const section = screen.getByRole('region', { name: 'Operator overrides' });
+    expect(section).toHaveClass('min-w-0', 'whitespace-normal', 'wrap-anywhere');
+    expect(section.querySelector('header')).toHaveClass('flex-wrap', 'gap-2');
+    await screen.findByText(/Set by fixture-administrator-with-a-long-unbroken-identity/);
+    expect(screen.getByRole('combobox', { name: 'Patrol priority' })).toHaveAccessibleDescription(
+      'Orders this resource among same-severity Patrol findings.',
+    );
+    const monitoring = screen.getByRole('combobox', { name: 'Monitoring' });
+    expect(monitoring).toHaveAccessibleDescription(
+      'Expected offline hides availability noise only. Mute all stops Alerts and Patrol while keeping this resource visible.',
+    );
+    const lifecycle = screen.getByRole('combobox', { name: 'Lifecycle' });
+    expect(lifecycle).toHaveAccessibleDescription(
+      'Proxmox owns this inventory record. Retiring it stops Pulse attention and automation without deleting it from Proxmox. Restore active monitoring here at any time.',
+    );
+    const callsBeforeEditing = apiClientMock.apiFetchJSON.mock.calls.length;
+    fireEvent.change(lifecycle, { target: { value: 'retired' } });
+    expect(monitoring).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Never auto-remediate this resource' }),
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(lifecycle).toHaveValue('active');
+    expect(monitoring).toHaveValue('normal');
+    expect(monitoring).toBeEnabled();
+    expect(screen.getByRole('textbox', { name: 'Operator note' })).toHaveValue(record.note);
+    expect(apiClientMock.apiFetchJSON.mock.calls).toHaveLength(callsBeforeEditing);
+  });
 });
