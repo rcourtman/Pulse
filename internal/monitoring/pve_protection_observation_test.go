@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -241,4 +245,48 @@ type unreadableJobLogClient struct{ PVEClientInterface }
 
 func (*unreadableJobLogClient) GetTaskLog(context.Context, string, string) ([]proxmox.TaskLogLine, error) {
 	return nil, errors.New("fixture unavailable")
+}
+
+func TestPVERunningLogCacheKeepsActualSuccessfulReceipt(t *testing.T) {
+	var failed atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api2/json/nodes":
+			fmt.Fprint(w, `{"data":[{"node":"pve1","status":"online"}]}`)
+		case r.URL.Path == "/api2/json/nodes/pve1/tasks":
+			fmt.Fprint(w, `{"data":[{"upid":"running-job","node":"pve1","type":"vzdump","starttime":1792028280}]}`)
+		case strings.HasSuffix(r.URL.Path, "/log"):
+			if failed.Load() {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			fmt.Fprint(w, `{"data":[{"n":1,"t":"INFO: Starting Backup of VM 100 (qemu)"}]}`)
+		default:
+			t.Errorf("unexpected operation %s", r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Monitor{state: models.NewState()}
+	m.pollBackupTasks(context.Background(), "proof", client)
+	initial := m.state.GetSnapshot().PVEBackups.BackupTasks
+	if len(initial) != 2 || initial[1].VMID != 100 || initial[1].ObservedAt.IsZero() {
+		t.Fatalf("initial running guest observation missing: %+v", initial)
+	}
+	failed.Store(true)
+	m.pollBackupTasks(context.Background(), "proof", client)
+	retained := m.state.GetSnapshot().PVEBackups.BackupTasks
+	if len(retained) != 2 || !reflect.DeepEqual(retained[1], initial[1]) {
+		t.Fatalf("unreadable running log lost/renewed the successful receipt: %+v -> %+v", initial, retained)
+	}
+	failed.Store(false)
+	m.pollBackupTasks(context.Background(), "proof", client)
+	resumed := m.state.GetSnapshot().PVEBackups.BackupTasks
+	if len(resumed) != 2 || !resumed[1].ObservedAt.After(initial[1].ObservedAt) {
+		t.Fatalf("ordinary successful running log did not resume: %+v", resumed)
+	}
 }

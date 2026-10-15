@@ -2424,7 +2424,10 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			continue
 		}
 
-		guestTasks := parseVzdumpJobLog(jobTask, upid, logLines)
+		// Store the successful read's receipt in the cache itself, not just in
+		// the published copy. A later failed non-final read must retain this
+		// original time rather than renew it or fall back to a zero timestamp.
+		guestTasks := refreshObservedAt(parseVzdumpJobLog(jobTask, upid, logLines), now)
 		m.mu.Lock()
 		if m.vzdumpJobTaskCache == nil {
 			m.vzdumpJobTaskCache = make(map[string]vzdumpJobTaskCacheEntry)
@@ -2434,7 +2437,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			final: !jobTask.EndTime.IsZero(),
 		}
 		m.mu.Unlock()
-		synthesized = append(synthesized, refreshObservedAt(guestTasks, now)...)
+		synthesized = append(synthesized, guestTasks...)
 	}
 
 	m.pruneVzdumpJobTaskCache(instanceName, seen)

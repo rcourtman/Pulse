@@ -30,7 +30,8 @@ running/failed peers. This does not claim the retained tasks are still current.
 
 A task log at the existing line cap is incomplete evidence, not an immutable
 finished-job log. Failed/cancelled/skipped log reads cannot renew a non-final
-cached guest observation; a later complete ordinary read can populate the
+cached guest observation. The cache itself stores the original successful read
+time, not merely the published copy; a later complete ordinary read can populate the
 cache, and completed immutable logs remain reusable. Independent guest status,
 zero/presence counters, operation-lock checks and every QGA safety fence are
 unchanged. Source/consumer proof establishes no backup success, guest thaw,
