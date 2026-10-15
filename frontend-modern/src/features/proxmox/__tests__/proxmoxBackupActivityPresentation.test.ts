@@ -22,10 +22,9 @@ import { getProxmoxBackupSourcePresentation } from '../proxmoxBackupSourcePresen
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Anchor "now" at a February date so the window never crosses a DST
-// transition (DST never changes in February in either hemisphere). Every
-// timestamp below is built with the local Date constructor, matching the
-// module's local-day bucketing, so the assertions are timezone-independent.
+// Anchor the short windows in February, away from seasonal clock changes.
+// Long ranges and transitions are also covered by the calendar matrix test.
+// Local Date constructors below match the module's local-day bucketing.
 // Observe after the same-day mixed-outcome/value fixtures below (up to 14:00).
 const NOW = new Date(2026, 1, 13, 15, 30, 0);
 

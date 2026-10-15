@@ -8,6 +8,23 @@ A gate is only `passed` when its automated proof still passes and the manual
 scenario has been exercised in a staging-like environment with the expected
 result.
 
+## Backups local-calendar activity
+
+Run `proxmoxBackupActivityPresentation.calendar.test.ts` with timezone set
+before Vitest starts: UTC, Europe/London, America/New_York and
+Australia/Lord_Howe. All existing activity ranges must retain a unique ordered
+column per local date, its early/late-hour count and byte volume, the first
+midnight and exactly-now boundaries, and future exclusion.
+
+Consume synthetic PVE/PBS inventories through the real Backups table, chart,
+router, API client and CSS on desktop and narrow touch. Cross the spring
+change, the autumn changeover day and a window crossing it, including both
+occurrences of its repeated hour, plus a half-hour change. Select the
+previously missing/partial day with keyboard or touch, check URL and matching
+rows, change count/volume and 7/30/90/365-day ranges, then clear the filter.
+Inspect actual captured pixels for legible selected-date feedback, totals and
+rows. No native backup, thaw or installed recovery acceptance follows.
+
 ## Workloads guest interface source selection — issue #2757
 
 Automated: `useWorkloads.test.ts` (both REST and owning-snapshot VM/LXC

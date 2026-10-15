@@ -21,6 +21,20 @@
 
 ## Purpose
 
+### Backup activity follows local calendar dates
+
+The existing Backups activity chart and its date filter share local date keys.
+Each 7/30/90/365-day window starts at local midnight and contains one bucket
+per local calendar date, including 23/25-hour and half-hour clock changes.
+Count and volume retain the first instant of the first date and observations
+through exactly now, not future timestamps. Repeated local hours are distinct
+backup records in the same date, not duplicated days or discarded evidence.
+Provider protection judgments, completion/age rules and native recovery
+authority are unchanged. `proxmoxBackupActivityPresentation.calendar.test.ts`
+covers UTC, London, New York and Lord Howe; consuming browser proof covers
+the production table/chart/filter in desktop and narrow touch layouts.
+
+
 ### Known PBS health survives unreadable backup inventories (13 October 2026)
 
 Backups keeps the separately supplied PBS server/datastore projection mounted

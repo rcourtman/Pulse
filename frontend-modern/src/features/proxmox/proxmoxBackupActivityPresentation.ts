@@ -81,10 +81,8 @@ function emptyCounts(): Record<BackupActivitySegmentKind, number> {
   return { archive: 0, pbs: 0, ok: 0, failed: 0, running: 0, snapshot: 0 };
 }
 
-function startOfLocalDayMs(date: Date): number {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-  return copy.getTime();
+function startOfLocalDayMs(date: Date, dayOffset: number): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + dayOffset).getTime();
 }
 
 export function buildBackupActivityTimeline<T>(
@@ -100,14 +98,15 @@ export function buildBackupActivityTimeline<T>(
 ): BackupActivityTimeline {
   const now = options?.now ?? new Date();
   const getValue = options?.getValue ?? (() => 1);
-  const todayStart = startOfLocalDayMs(now);
-  const windowStart = todayStart - (days - 1) * 24 * 60 * 60 * 1000;
+  // The chart and its day filter use local calendar dates. A clock change
+  // can make a day shorter or longer than 24 hours, including half-hour shifts.
+  const windowStart = startOfLocalDayMs(now, 1 - days);
 
   const buckets = new Map<string, BackupActivityPoint>();
   const orderedKeys: string[] = [];
 
   for (let i = 0; i < days; i += 1) {
-    const dayStart = windowStart + i * 24 * 60 * 60 * 1000;
+    const dayStart = startOfLocalDayMs(now, 1 - days + i);
     const key = recoveryDateKeyFromTimestamp(dayStart);
     orderedKeys.push(key);
     buckets.set(key, { key, total: 0, counts: emptyCounts() });
@@ -119,7 +118,6 @@ export function buildBackupActivityTimeline<T>(
     // A future time on today's date is still not observed past activity.
     if (ts > now.getTime()) continue;
     if (ts < windowStart) continue;
-    if (ts >= todayStart + 24 * 60 * 60 * 1000) continue;
     const kind = classify(item);
     if (!kind) continue;
     const value = getValue(item);
