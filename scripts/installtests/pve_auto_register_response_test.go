@@ -25,7 +25,7 @@ func TestPVEAutoRegisterConfirmationKeepsCredentialsOutOfArgvAndDiagnostics(t *t
 	if err != nil {
 		t.Fatalf("PVE confirmation controls: %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "Ran 8 tests") || !strings.Contains(string(out), "\nOK\n") || strings.Contains(string(out), "skipped") {
+	if !strings.Contains(string(out), "Ran 10 tests") || !strings.Contains(string(out), "\nOK\n") || strings.Contains(string(out), "skipped") {
 		t.Fatalf("incomplete PVE confirmation controls:\n%s", out)
 	}
 	t.Logf("%s", out)

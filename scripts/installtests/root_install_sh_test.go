@@ -673,11 +673,11 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		`data.get("nodeId") != node_name`,
 		`not all(c.isprintable() for c in node_name)`,
 		`for secret in (request["tokenValue"], request["authToken"])`,
-		`Pulse auto-registration returned an invalid confirmation; skipping automatic node registration`,
+		`Pulse auto-registration could not be confirmed; check the node in Pulse before trying again`,
 		`AUTO_NODE_REGISTERED_NAME="$register_node_name"`,
 		`curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"`,
 		`printf %s "$register_payload" | curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-`,
-		`token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)`,
+		`created_token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)`,
 		`pveum aclmod / -token "$token_id" -role PVEAuditor`,
 		`pveum aclmod / -token "$token_id" -role PulseMonitor`,
 		`pveum aclmod /storage -token "$token_id" -role PVEDatastoreAdmin`,
@@ -1221,7 +1221,7 @@ func TestRootInstallAutoRegisterPrefersJsonTokenForm(t *testing.T) {
 	}
 
 	jsonIdx := strings.Index(script, `--privsep 1 --output-format json 2>&1`)
-	bareIdx := strings.Index(script, "\n        token_output=$(pveum user token add pulse-monitor@pve \"$token_name\" --privsep 1 2>&1)")
+	bareIdx := strings.Index(script, "\n        created_token_output=$(pveum user token add pulse-monitor@pve \"$token_name\" --privsep 1 2>&1)")
 	if jsonIdx < 0 || bareIdx < 0 || jsonIdx > bareIdx {
 		t.Fatalf("expected JSON token form to precede the legacy table fallback (json=%d bare=%d)", jsonIdx, bareIdx)
 	}

@@ -25,7 +25,14 @@ type/source, host and exact token pair before returning only the canonical node
 name. A stored disambiguated name remains valid; absent or mismatched identity,
 non-string fields, control characters, secret-echo names and malformed/non-object
 replies fail without a traceback or raw response in the installer diagnostic.
-No request, token ownership/rotation, ACL, TLS or API response contract changes.
+An unconfirmed POST is not reported as absent or safe to replay: the operator
+is directed to check the node in Pulse before trying again.
+
+The token-creation helper returns both data and the real exit status to its
+actual caller variables; helper-local names must not shadow those outputs.
+JSON success, explicit legacy fallback, failure and deterministic-token rotation
+remain executable controls, not merely source-shape assertions. No request,
+token ownership/rotation, ACL, TLS or API response contract changes.
 This is not installed cluster recovery or a correction for #2980.
 
 `scripts/installtests/pve_auto_register_response.py` runs the complete actual

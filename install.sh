@@ -2310,24 +2310,24 @@ create_pve_auto_register_token() {
     local token_name="$1"
     local token_output_var="$2"
     local token_status_var="$3"
-    local token_output=""
-    local token_status=0
+    local created_token_output=""
+    local created_token_status=0
 
     set +e
-    token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 --output-format json 2>&1)
-    token_status=$?
+    created_token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 --output-format json 2>&1)
+    created_token_status=$?
     set -e
 
     # Older pveum builds reject --output-format; fall back to the legacy table form.
-    if [[ $token_status -ne 0 ]] && printf '%s\n' "$token_output" | grep -Eqi 'unknown option|unknown command|no such option|unable to parse option|output-format'; then
+    if [[ $created_token_status -ne 0 ]] && printf '%s\n' "$created_token_output" | grep -Eqi 'unknown option|unknown command|no such option|unable to parse option|output-format'; then
         set +e
-        token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)
-        token_status=$?
+        created_token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)
+        created_token_status=$?
         set -e
     fi
 
-    printf -v "$token_output_var" '%s' "$token_output"
-    printf -v "$token_status_var" '%s' "$token_status"
+    printf -v "$token_output_var" '%s' "$created_token_output"
+    printf -v "$token_status_var" '%s' "$created_token_status"
 }
 
 pve_auto_register_api_status() {
@@ -2804,7 +2804,7 @@ except Exception:
 PY_REGISTER
 ); then
         AUTO_NODE_REGISTER_ERROR="auto-register unsuccessful"
-        print_warn "Pulse auto-registration returned an invalid confirmation; skipping automatic node registration"
+        print_warn "Pulse auto-registration could not be confirmed; check the node in Pulse before trying again"
         return
     fi
 
