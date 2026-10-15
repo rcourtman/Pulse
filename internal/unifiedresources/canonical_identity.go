@@ -32,13 +32,24 @@ func canonicalPrimaryID(resource Resource) string {
 	if nodeID := canonicalProxmoxNodePrimaryID(resource); nodeID != "" {
 		return nodeID
 	}
+	if isDockerChildResource(resource) {
+		for _, target := range []interface {
+			GetResourceType() string
+			GetResourceID() string
+		}{resource.MetricsTarget, resource.DiscoveryTarget} {
+			if id := dockerChildTargetID(resource, target); id != "" {
+				return string(CanonicalResourceType(resource.Type)) + ":" + id
+			}
+		}
+		if identity := canonicalDockerSwarmNodePrimaryID(resource); identity != "" {
+			return identity
+		}
+		return strings.TrimSpace(resource.ID)
+	}
 	if identity := formatTargetIdentity(resource.MetricsTarget); identity != "" {
 		return identity
 	}
 	if identity := formatTargetIdentity(resource.DiscoveryTarget); identity != "" {
-		return identity
-	}
-	if identity := canonicalDockerSwarmNodePrimaryID(resource); identity != "" {
 		return identity
 	}
 	if runtimeID := strings.TrimSpace(canonicalDockerRuntimeID(resource)); runtimeID != "" {
@@ -81,6 +92,21 @@ func canonicalProxmoxNodePrimaryID(resource Resource) string {
 
 func canonicalAliases(resource Resource, primaryID, platformID, hostname string) []string {
 	values := append([]string{}, resource.SupersededCanonicalIDs...)
+	if isDockerChildResource(resource) {
+		// Docker placement identifies the command host, not the collected
+		// object. Indexing that host on every child makes the real host's
+		// otherwise unique hostname and agent ID ambiguous.
+		values = append(values, primaryID)
+		if CanonicalResourceType(resource.Type) == ResourceTypeDockerSwarmNode {
+			values = append(values, canonicalDockerNodeID(resource), canonicalDockerNodeName(resource))
+		}
+		values = append(values,
+			dockerChildTargetID(resource, resource.MetricsTarget),
+			dockerChildTargetID(resource, resource.DiscoveryTarget),
+			platformID, hostname, resource.Name, resource.Identity.MachineID, resource.ID,
+		)
+		return uniqueTrimmed(append(values, resource.Identity.Hostnames...)...)
+	}
 	values = append(values,
 		primaryID,
 		targetResourceID(resource.MetricsTarget),
@@ -145,6 +171,13 @@ func canonicalAliases(resource Resource, primaryID, platformID, hostname string)
 }
 
 func canonicalPlatformID(resource Resource) string {
+	if isDockerChildResource(resource) {
+		return firstTrimmed(
+			dockerChildTargetID(resource, resource.MetricsTarget),
+			dockerChildTargetID(resource, resource.DiscoveryTarget),
+			resource.Name, resource.ID,
+		)
+	}
 	return firstTrimmed(
 		canonicalProxmoxNodeName(resource),
 		canonicalAgentHostname(resource),
@@ -160,6 +193,9 @@ func canonicalPlatformID(resource Resource) string {
 }
 
 func canonicalHostname(resource Resource) string {
+	if isDockerChildResource(resource) {
+		return firstIdentityHostname(resource.Identity)
+	}
 	return firstTrimmed(
 		firstIdentityHostname(resource.Identity),
 		canonicalAgentHostname(resource),
@@ -169,6 +205,29 @@ func canonicalHostname(resource Resource) string {
 		canonicalTrueNASHostname(resource),
 		canonicalAvailabilityAddress(resource),
 	)
+}
+
+func isDockerChildResource(resource Resource) bool {
+	if resource.Docker == nil {
+		return false
+	}
+	switch CanonicalResourceType(resource.Type) {
+	case ResourceTypeAppContainer, ResourceTypeDockerService, ResourceTypeDockerImage,
+		ResourceTypeDockerVolume, ResourceTypeDockerNetwork, ResourceTypeDockerTask,
+		ResourceTypeDockerSwarmNode, ResourceTypeDockerSecret, ResourceTypeDockerConfig:
+		return true
+	}
+	return false
+}
+
+func dockerChildTargetID(resource Resource, target interface {
+	GetResourceType() string
+	GetResourceID() string
+}) string {
+	if target == nil || CanonicalResourceType(ResourceType(target.GetResourceType())) != CanonicalResourceType(resource.Type) {
+		return ""
+	}
+	return targetResourceID(target)
 }
 
 func canonicalProxmoxNodeName(resource Resource) string {

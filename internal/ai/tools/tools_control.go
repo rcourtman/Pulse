@@ -357,6 +357,16 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 // unavailableCommandConnection preserves monitoring context without inferring
 // installation, permission, or guest capability from an absent connection.
 func unavailableCommandConnection(target string, routing CommandRoutingResult) CallToolResult {
+	if routing.ResolvedKind == "ambiguous" {
+		return NewToolResponseResult(ToolResponse{
+			OK: false,
+			Error: &ToolError{
+				Code: ErrCodeStrictResolution, Failed: true,
+				Message: fmt.Sprintf("Target %q matches multiple monitored resources. Select the exact canonical resource ID from the inventory. The requested operation did not run.", target),
+				Details: map[string]any{"target": target, "resource_kind": "ambiguous"},
+			},
+		})
+	}
 	message := "No command connection is available. Specify a target with diagnostic access."
 	details := map[string]any{"target": target}
 	if target != "" {
