@@ -2733,6 +2733,12 @@ the Recovery thresholds whose fresh and stale hours colour every backup
 shield; the backup dialog links there and the thresholds page treats
 `#backups` like `#pbs` and `#pmg` (`resourceLinks.test.ts`).
 
+`buildAlertThresholdsPath(tab, { query })` builds a thresholds tab address
+already searched to one resource through `ALERT_THRESHOLDS_QUERY_PARAMS`,
+the `?q=` key the thresholds page owns; callers pass a resource's display
+label, never an id, because the thresholds search matches names
+(`resourceLinks.test.ts`).
+
 17. Platform table ordering is a two-layer contract. Each platform table's
     default order is owned by its page model's status-first compare
     (`compareDockerContainers`, `compareKubernetesPods`, and peers), which

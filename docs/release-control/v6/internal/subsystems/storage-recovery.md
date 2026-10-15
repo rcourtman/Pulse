@@ -6607,6 +6607,14 @@ listed yet opens when its record arrives. Once a visit has needed a lookup,
 any pool the operator opens or closes outranks the link, whether the lookup
 or a record update finds the pool first.
 
+### Thresholds deep links open no storage or recovery path
+
+`buildAlertThresholdsPath` in `frontend-modern/src/routing/resourceLinks.ts`
+adds only a thresholds tab and its `?q=` name search. It reads no storage or
+recovery state and grants no storage action, and Patrol's alert-only guidance
+sends a physical disk to its tab unsearched, so it never filters storage or
+recovery rows by a disk name they do not carry.
+
 ### App-shell AI navigation gating opens no recovery path
 
 `App.tsx` now passes the `assistantEnabled` session capability to the keyboard

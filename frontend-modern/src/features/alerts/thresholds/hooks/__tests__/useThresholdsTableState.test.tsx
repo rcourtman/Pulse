@@ -6,11 +6,12 @@ import { useThresholdsTableState } from '../useThresholdsTableState';
 
 let mockPathname = '/alerts/thresholds/systems';
 let mockHash = '';
+let mockSearch = '';
 const setCollapsedSpy = vi.fn();
 const navigateSpy = vi.fn();
 
 vi.mock('@solidjs/router', () => ({
-  useLocation: () => ({ pathname: mockPathname, hash: mockHash }),
+  useLocation: () => ({ pathname: mockPathname, hash: mockHash, search: mockSearch }),
   useNavigate: () => navigateSpy,
 }));
 
@@ -186,6 +187,7 @@ const buildProps = (): ThresholdsTableProps =>
 beforeEach(() => {
   mockPathname = '/alerts/thresholds/systems';
   mockHash = '';
+  mockSearch = '';
   setCollapsedSpy.mockReset();
   navigateSpy.mockReset();
   localStorage.clear();
@@ -261,5 +263,46 @@ describe('useThresholdsTableState', () => {
     const section = { scrollIntoView: vi.fn() } as unknown as HTMLDivElement;
     captured!.registerSection('backups')(section);
     expect(section.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+  });
+  // Patrol links a bare alert's decision here to change when that resource's
+  // alert fires, so the search must arrive from the link and survive tabs.
+  it('keeps the resource search in the route across edits, tabs and redirects', () => {
+    mockPathname = '/alerts/thresholds/proxmox';
+    mockSearch = '?q=nginx';
+    mockHash = '#backups';
+    let captured: ReturnType<typeof useThresholdsTableState> | undefined;
+    const Harness = () => {
+      captured = useThresholdsTableState(buildProps());
+      return null;
+    };
+    render(() => <Harness />);
+
+    expect(captured!.searchTerm()).toBe('nginx');
+
+    captured!.setSearchTerm('web');
+    expect(navigateSpy).toHaveBeenLastCalledWith('/alerts/thresholds/proxmox?q=web#backups', {
+      replace: true,
+    });
+    captured!.setSearchTerm('');
+    expect(navigateSpy).toHaveBeenLastCalledWith('/alerts/thresholds/proxmox#backups', {
+      replace: true,
+    });
+
+    captured!.handleTabClick('docker');
+    expect(navigateSpy).toHaveBeenLastCalledWith('/alerts/thresholds/docker?q=nginx');
+  });
+
+  it('keeps the search when a legacy thresholds address redirects', () => {
+    mockPathname = '/alerts/thresholds/containers';
+    mockSearch = '?q=nginx';
+    const Harness = () => {
+      useThresholdsTableState(buildProps());
+      return null;
+    };
+    render(() => <Harness />);
+
+    expect(navigateSpy).toHaveBeenCalledWith('/alerts/thresholds/docker?q=nginx', {
+      replace: true,
+    });
   });
 });

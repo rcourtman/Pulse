@@ -8974,6 +8974,14 @@ own. `ProxmoxPageSurface` passes `routeActive` to the Storage surface it keeps
 mounted behind its other tabs, so a guest tab's `?resource=` link is not read
 as a storage deep link.
 
+### Thresholds search is a route search
+
+The thresholds resource search writes `?q=` through `navigate(..., { replace:
+true })` instead of a component signal, so a deep link, a reload and the back
+button all keep the narrowed list. Pages with an unsaved-changes leave guard
+must compare the destination path, not every navigation, before asking, or a
+route-owned search prompts on every keystroke (`shouldConfirmAlertsLeave`).
+
 ### Alert groups use the shared localization boundary
 
 Alert group disclosure and group acknowledgement copy routes through

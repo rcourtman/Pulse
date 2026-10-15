@@ -616,6 +616,11 @@ presented as interchangeable totals.
 `GET /api/resources/{id}` for the subject's platform and falls back to the
 type hint, so both fields must keep naming the subject the alert or finding
 is about (an alert's `unifiedAlertType` display words are accepted as hints).
+
+The same resolution picks the thresholds tab and search behind the alert-only
+guidance link, so the registry resource's display label must stay the label
+the thresholds rows are built from (`getAlertResourceDisplayLabel`).
+
 The attention list's authenticated read contract is independent of Patrol's
 model-readiness and on/off state. `PatrolIntelligenceSurface.tsx` must not gate
 the attention transport or its canonical list on `shouldShowPatrolSetupOnly`;
