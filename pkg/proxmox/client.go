@@ -2158,8 +2158,8 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		log.Debug().
 			Str("node", node).
 			Int("vmid", vmid).
-			Interface("result", objectResult.Data.Result).
-			Msg("GetVMFSInfo received object instead of array")
+			Int("result_bytes", len(rawFS)).
+			Msg("GetVMFSInfo received unrecognized result instead of filesystem array")
 		return []VMFileSystem{}, nil
 	}
 
