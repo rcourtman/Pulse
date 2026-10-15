@@ -131,7 +131,8 @@ def confirmation(request, **changes):
 
 
 class RegistrationFixture(unittest.TestCase):
-    def exercise(self, response=confirmation, *, accepted=False, name=CANONICAL_NAME, legacy=False, rotate=False,
+    def exercise(self, response=confirmation, *, accepted=False, name=CANONICAL_NAME, legacy=False,
+                 existing_error="", repetitions=1,
                  fault_path="", status=200, redirect="", stall=False, disconnect=False, partial=False,
                  ambient=False, proxy=""):
         peer = RegistrationPeer(response, legacy=legacy, fault_path=fault_path, status=status,
@@ -153,12 +154,17 @@ class RegistrationFixture(unittest.TestCase):
                     path.write_text(observer)
                     path.chmod(0o700)
                 (root / "token.json").write_text(json.dumps({"value": TOKEN}))
+                (root / "token-state").write_text("existing" if existing_error else "absent")
                 (tools / "pveum").write_text(
                     '#!/bin/sh\nprintf "%s\\n" "$*" >> "$FIXTURE/pve-calls"\n'
                     'if [ "$1 $2 $3" = "user token add" ]; then '
-                    'if [ "$TOKEN_ROTATE" = true ] && [ ! -e "$FIXTURE/first-create" ]; then '
-                    ': > "$FIXTURE/first-create"; printf "token already exists\\n"; exit 1; fi; '
+                    'state=$(cat "$FIXTURE/token-state"); '
+                    'if [ -n "$TOKEN_EXISTS_MESSAGE" ] && [ "$state" != absent ] && [ "$state" != removed ]; then '
+                    'printf "%s\\n" "$TOKEN_EXISTS_MESSAGE"; exit 1; fi; '
+                    'printf created > "$FIXTURE/token-state"; '
                     'cat "$FIXTURE/token.json"; '
+                    'elif [ "$1 $2 $3" = "user token remove" ]; then '
+                    'printf removed > "$FIXTURE/token-state"; '
                     'elif [ "$1 $2" = "role list" ]; then printf "Sys.Audit VM.GuestAgent.Audit VM.GuestAgent.FileRead\\n"; fi\n')
                 (tools / "pveum").chmod(0o700)
                 (tools / "hostname").write_text('#!/bin/sh\nprintf "fixture-pve\\n"\n')
@@ -182,15 +188,15 @@ IN_CONTAINER=false
 AUTO_NODE_REGISTERED=false
 AUTO_NODE_REGISTERED_NAME=""
 AUTO_NODE_REGISTER_ERROR=""
-""" + source + """
-auto_register_pve_node 999 127.0.0.1 "$PULSE_FIXTURE_PORT"
+""" + source + ("\nauto_register_pve_node 999 127.0.0.1 \"$PULSE_FIXTURE_PORT\"\n" * repetitions) + """
 printf 'RESULT=%s\nNAME=%s\nERROR=%s\n' "$AUTO_NODE_REGISTERED" "$AUTO_NODE_REGISTERED_NAME" "$AUTO_NODE_REGISTER_ERROR"
 """
                 # Syntax failure must not look like a confidentiality refusal.
                 subprocess.run(["bash", "-n"], input=script, text=True,
                                capture_output=True, check=True, timeout=3)
                 env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ["PATH"],
-                           HOME=str(root), CURL_HOME=str(root), FIXTURE=str(root), TOKEN_ROTATE=str(rotate).lower(),
+                           HOME=str(root), CURL_HOME=str(root), FIXTURE=str(root),
+                           TOKEN_EXISTS_MESSAGE=existing_error,
                            REAL_PYTHON=sys.executable, REAL_CURL=shutil.which("curl"),
                            ARGV_LOG=str(root / "argv"), PULSE_PVE_HOST_URL=HOST,
                            PULSE_FIXTURE_PORT=str(peer.server.server_port), PULSE_AUTO_BACKUP_PERMS="true",
@@ -214,9 +220,15 @@ printf 'RESULT=%s\nNAME=%s\nERROR=%s\n' "$AUTO_NODE_REGISTERED" "$AUTO_NODE_REGI
                 self.assertNotIn("Traceback", output)
                 self.assertEqual(result.returncode, 0, "optional registration must not abort installation")
                 self.assertEqual(peer.errors, [])
+                # Check credential state before response shape, so the exact
+                # parent control identifies replacement, not just a POST count.
+                if existing_error:
+                    self.assertEqual((root / "token-state").read_text(), "existing",
+                                     "automatic registration replaced an existing monitoring credential")
                 expected_paths = ["/api/setup-script-url"]
-                if fault_path != "/api/setup-script-url":
+                if fault_path != "/api/setup-script-url" and not existing_error:
                     expected_paths.append("/api/auto-register")
+                expected_paths *= repetitions
                 self.assertEqual([path for path, _ in peer.requests], expected_paths,
                                  "bootstrap POST was repeated or did not reach its intended peer")
                 self.assertEqual(peer.ambient_headers, [], "ambient curl configuration affected the request")
@@ -233,13 +245,16 @@ printf 'RESULT=%s\nNAME=%s\nERROR=%s\n' "$AUTO_NODE_REGISTERED" "$AUTO_NODE_REGI
                         self.assertNotIn(flag, argv)
                 python_args = [argv[1:] for argv in args if argv[0] == "python3"]
                 self.assertTrue(all(argv[0] == "-" for argv in python_args))
-                if not fault_path:
+                if not fault_path and not existing_error:
                     self.assertGreaterEqual(len(python_args), 7)
                     self.assertEqual(python_args[-1], ["-"], "confirmation parser accepted a process argument")
                 calls = (root / "pve-calls").read_text().splitlines() if (root / "pve-calls").exists() else []
-                created = 0 if fault_path == "/api/setup-script-url" else (2 if rotate else 1)
+                created = 0 if fault_path == "/api/setup-script-url" else repetitions
                 self.assertEqual(sum(call.startswith("user token add ") for call in calls), created)
-                self.assertEqual(sum(call.startswith("user token remove ") for call in calls), 1 if rotate else 0)
+                self.assertEqual(sum(call.startswith("user token remove ") for call in calls), 0)
+                if existing_error:
+                    self.assertFalse(any(call.startswith("aclmod ") and " -token " in call for call in calls),
+                                     "existing-token refusal changed token ACLs")
                 if fault_path == "/api/setup-script-url":
                     self.assertEqual(calls, [], "failed bootstrap changed PVE state")
                 self.assertIn("RESULT=" + str(accepted).lower() + "\n", output)
@@ -248,10 +263,14 @@ printf 'RESULT=%s\nNAME=%s\nERROR=%s\n' "$AUTO_NODE_REGISTERED" "$AUTO_NODE_REGI
                     self.assertIn("SUCCESS=Registered " + name + " with Pulse automatically", output)
                     self.assertNotIn("WARN=", output)
                 else:
-                    error = ("setup token request failed" if fault_path == "/api/setup-script-url"
+                    error = ("existing monitoring token preserved" if existing_error
+                             else "setup token request failed" if fault_path == "/api/setup-script-url"
                              else "auto-register request failed" if fault_path else "auto-register unsuccessful")
                     self.assertIn("NAME=\nERROR=" + error + "\n", output)
-                    if fault_path != "/api/setup-script-url":
+                    if existing_error:
+                        self.assertIn("was preserved; skipping automatic node registration", output)
+                        self.assertIn("Check the node in Pulse; a separate installation needs its own token.", output)
+                    elif fault_path != "/api/setup-script-url":
                         self.assertIn("WARN=Pulse auto-registration could not be confirmed; check the node in Pulse before trying again", output)
                     self.assertNotIn("SUCCESS=", output)
                 return elapsed
@@ -264,8 +283,15 @@ class RegistrationResponse(RegistrationFixture):
             with self.subTest(legacy=legacy):
                 self.exercise(accepted=True, legacy=legacy)
 
-    def test_existing_deterministic_token_rotation_reaches_confirmed_registration(self):
-        self.exercise(accepted=True, rotate=True)
+    def test_existing_token_survives_repeated_registration_without_rotation_or_post(self):
+        # Neither modern nor legacy bootstrap replies grant token replacement.
+        # A second explicit installer invocation must preserve the same token.
+        for legacy in (False, True):
+            for message in ("token already exists", "token already defined",
+                            "duplicate token", "token exists already"):
+                with self.subTest(legacy=legacy, message=message):
+                    self.exercise(legacy=legacy, repetitions=2,
+                                  existing_error=message + " " + TOKEN + " " + PRIVATE_TEXT)
 
     def test_token_helper_returns_data_and_exit_status_to_actual_caller_names(self):
         for mode, expected_status in (("json", 0), ("legacy", 0), ("failed", 7)):

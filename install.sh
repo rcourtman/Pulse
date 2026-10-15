@@ -2358,7 +2358,7 @@ pve_auto_register_api_status() {
 
 preflight_pve_auto_register_api() {
     local api_status=""
-    # Establish TLS and API availability before creating or rotating a token.
+    # Establish TLS and API availability before creating a token.
     # A 401/403 is expected from this deliberately credential-free request.
     if ! api_status=$(pve_auto_register_api_status "$1"); then
         api_status=""
@@ -2732,13 +2732,12 @@ PY
     local token_status=0
     create_pve_auto_register_token "$token_name" token_output token_status
     if [[ $token_status -ne 0 ]] && pve_token_already_exists_error "$token_output"; then
-        print_info "Existing Proxmox monitoring token '${token_name}' found; rotating it so Pulse receives a fresh secret"
-        if ! pveum user token remove pulse-monitor@pve "$token_name" >/dev/null 2>&1; then
-            AUTO_NODE_REGISTER_ERROR="failed to rotate existing token"
-            print_warn "Unable to remove existing monitoring API token; skipping automatic node registration"
-            return
-        fi
-        create_pve_auto_register_token "$token_name" token_output token_status
+        # A previous installation or an unconfirmed registration can still be
+        # using this secret. Its one-time value cannot be recovered here, and
+        # replacing it before Pulse confirms registration would break that node.
+        AUTO_NODE_REGISTER_ERROR="existing monitoring token preserved"
+        print_warn "Existing Proxmox monitoring token '${token_name}' was preserved; skipping automatic node registration. Check the node in Pulse; a separate installation needs its own token."
+        return
     fi
     if [[ $token_status -ne 0 ]]; then
         AUTO_NODE_REGISTER_ERROR="failed to create token"
