@@ -55,7 +55,7 @@ try {
   for (const file of ['package.json', 'package-lock.json', 'tsconfig.json', 'index.html'])
     binding.sources[file] = hash(fs.readFileSync(path.join(root, file)));
   fs.mkdirSync(path.join(output, 'docs'), { recursive: true });
-  for (const name of ['README', 'FAQ', 'UNIFIED_AGENT', 'TROUBLESHOOTING', 'DOCKER', 'PBS', 'AGENT_SECURITY',
+  for (const name of ['README', 'FAQ', 'UNIFIED_AGENT', 'TROUBLESHOOTING', 'DOCKER', 'PBS', 'MAIL_GATEWAY', 'AGENT_SECURITY',
     'RELEASE_PROCESS', 'AUTO_UPDATE', 'MIGRATION', 'DEPLOYMENT_MODELS', 'TRUENAS', 'VM_DISK_MONITORING',
     'AI_TRANSPARENCY', 'AI', 'ISSUE_TRIAGE']) {
     const file = `public/docs/${name}.md`;

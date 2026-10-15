@@ -50,6 +50,11 @@ establish safe recovery.
   [server, backup inventory and History](PBS.md#pbs-is-active-but-missing-from-monitoring).
   An Active API connection does not establish a visible PBS resource; installing
   an agent does not prove API recovery.
+- **Mail Gateway Test succeeds but collection fails:** use
+  [PMG read-failure checks](MAIL_GATEWAY.md#troubleshooting-without-changing-the-gateway).
+  For `ClusterStatusEntry.data.cid` or `hostname lookup failed`, read the
+  [cluster-response guidance](MAIL_GATEWAY.md#cluster-response-or-backup-lookup-errors)
+  before changing credentials, DNS or TLS. Missing queue data is not an empty queue.
 - **RAID is reported degraded despite a spare:** compare
   [required members, active members and spares](TROUBLESHOOTING.md#raid-array-is-degraded-with-a-spare).
   A spare-inclusive total is not the required member count; do not change the
