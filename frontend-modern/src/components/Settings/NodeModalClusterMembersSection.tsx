@@ -70,6 +70,29 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                       <p class="break-words whitespace-pre-wrap px-3 pb-3 pt-1">
                         {endpoint.pulseError || 'Pulse could not connect to this node'}
                       </p>
+                      <div
+                        role="group"
+                        aria-label={`Saved certificate trust for ${endpoint.nodeName}`}
+                        class="space-y-2 border-t border-current/20 px-3 py-3"
+                      >
+                        <p class="font-medium">Saved member certificate pin</p>
+                        <Show
+                          when={endpoint.fingerprint?.trim()}
+                          fallback={<p>No member certificate pin is recorded.</p>}
+                        >
+                          {(fingerprint) => (
+                            <code class="block whitespace-pre-wrap font-mono [overflow-wrap:anywhere]">
+                              {fingerprint()}
+                            </code>
+                          )}
+                        </Show>
+                        <p>
+                          Saved configuration, not a fresh certificate check. Independently verify a
+                          replacement through a trusted administration channel. Do not clear a pin
+                          or disable verification to bypass an error. A connection address override
+                          does not replace this pin.
+                        </p>
+                      </div>
                     </details>
                   </Show>
                 </div>

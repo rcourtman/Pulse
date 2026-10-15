@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { createSignal, type Setter } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClusterEndpoint, NodeConfig } from '@/types/nodes';
@@ -113,6 +113,86 @@ describe('Cluster member connection diagnostics', () => {
     const { container } = renderMembers([member({ pulseError: error })]);
     expect(screen.getByText(error)).toBeInTheDocument();
     expect(container.querySelector('img')).not.toBeInTheDocument();
+  });
+
+  it('shows the complete saved member pin without treating it as a verified peer or an editable field', () => {
+    const pin = Array.from({ length: 32 }, (_, i) => i.toString(16).padStart(2, '0')).join(':');
+    const { fetch, onSave } = renderMembers([member({ fingerprint: pin })]);
+    const trust = screen.getByRole('group', {
+      name: 'Saved certificate trust for member',
+      hidden: true,
+    });
+    expect(within(trust).getByText(pin).tagName).toBe('CODE');
+    expect(trust).toHaveTextContent('Saved configuration, not a fresh certificate check');
+    expect(trust).toHaveTextContent('Independently verify a replacement');
+    expect(trust).toHaveTextContent('Do not clear a pin or disable verification');
+    expect(trust).toHaveTextContent('A connection address override does not replace this pin');
+    expect(trust.querySelector('input,button')).not.toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, '', '   '])(
+    'does not invent member trust for an absent pin (%s)',
+    (fingerprint) => {
+      renderMembers([member({ fingerprint })]);
+      expect(screen.getByText('No member certificate pin is recorded.')).toBeInTheDocument();
+      expect(
+        screen.queryByText(/Trusted certificate|Certificate verified/),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it('keeps malformed pin text literal and separate for each member', () => {
+    const invalid = '<img src="untrusted" onerror="alert(1)">';
+    const otherPin = 'cd'.repeat(32);
+    const { container } = renderMembers([
+      member({ fingerprint: invalid }),
+      member({ nodeId: 'node/other', nodeName: 'other', fingerprint: otherPin }),
+    ]);
+    const first = screen.getByRole('group', {
+      name: 'Saved certificate trust for member',
+      hidden: true,
+    });
+    const other = screen.getByRole('group', {
+      name: 'Saved certificate trust for other',
+      hidden: true,
+    });
+    expect(first).toHaveTextContent(invalid);
+    expect(first).not.toHaveTextContent(otherPin);
+    expect(other).toHaveTextContent(otherPin);
+    expect(other).not.toHaveTextContent(invalid);
+    expect(container.querySelector('img')).not.toBeInTheDocument();
+  });
+
+  it('adopts refreshed saved pins without discarding dirty edits or submitting member pins', () => {
+    const oldPin = 'ab'.repeat(32);
+    const newPin = 'cd'.repeat(32);
+    const { setNode, fetch, onSave } = renderMembers([member({ fingerprint: oldPin })]);
+    fireEvent.input(screen.getByLabelText('Display name for member'), {
+      target: { value: 'Operator label' },
+    });
+    fireEvent.input(screen.getByLabelText('Connection address for member'), {
+      target: { value: 'member.example.invalid:8006' },
+    });
+    setNode(cluster([member({ fingerprint: newPin })]));
+    expect(screen.queryByText(oldPin)).not.toBeInTheDocument();
+    expect(screen.getByText(newPin)).toBeInTheDocument();
+    expect(screen.getByLabelText('Display name for member')).toHaveValue('Operator label');
+    fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+    expect(onSave).toHaveBeenCalledOnce();
+    const payload = onSave.mock.calls[0][0];
+    expect(payload).toMatchObject({
+      verifySSL: true,
+      clusterEndpointOverrides: [{ nodeName: 'member', ipOverride: 'member.example.invalid:8006' }],
+      clusterNodeDisplayNameOverrides: [
+        { nodeIdentity: 'member-identity', displayName: 'Operator label' },
+      ],
+    });
+    expect(payload).not.toHaveProperty('clusterEndpoints');
+    expect(payload).not.toHaveProperty('tokenValue');
+    expect(payload).not.toHaveProperty('password');
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('keeps each member reason separate, including members with the same native name', () => {

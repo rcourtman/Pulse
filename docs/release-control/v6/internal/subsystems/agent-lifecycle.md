@@ -6401,6 +6401,14 @@ lifecycle path for members without an agent. The configured-nodes cache in
 `useInfrastructureConfiguredNodesState.ts` must mirror saved overrides onto
 its cached `clusterEndpoints` rather than spreading the write-only payload
 field onto node config state.
+Failed-member diagnostics also expose that member's complete saved certificate
+fingerprint as read-only, wrapping text (or explicitly report no recorded member
+pin). This is saved configuration, never a fresh peer-certificate verification.
+It remains distinct from the connection's form TLS policy and address override;
+reading it must not fetch a certificate, change trust or submit member pins.
+Refreshed configuration replaces the displayed pin without discarding dirty
+display names or connection addresses. The cluster-member section tests cover
+missing, distinct, malformed and refreshed pins and unchanged save boundaries.
 That same node setup owner also includes
 `frontend-modern/src/utils/nodeModalPresentation.ts`, which now owns the
 canonical node-type defaults, endpoint/auth placeholders, monitoring coverage
