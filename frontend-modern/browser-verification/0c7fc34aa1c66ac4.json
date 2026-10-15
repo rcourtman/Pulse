@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "base_sha": "ddf66e5cf8baf664fe1a40b0a0c2e970fb7b3fb3",
+  "proof_source_sha": "ddf66e5cf8baf664fe1a40b0a0c2e970fb7b3fb3",
+  "verified_at": "2026-10-15T17:10:44.286196Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx": "2d866f9a7b636fdc3d08b85a9d6848c6e6a96914f832627433b59223b6a934cc"
+  },
+  "routes": [
+    "/browser-tests/cluster-member-trust.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "native disclosure",
+    "complete selectable wrapped pin",
+    "separate member pins",
+    "missing pin",
+    "refreshed saved pin",
+    "dirty edits preserved",
+    "explicit unchanged-trust save"
+  ],
+  "interactions": [
+    "Desktop Enter/Space open and close the existing native disclosure, with a 44px summary target; narrow WebKit opens by touch.",
+    "Select the complete wrapped pin, inspect distinct/missing members, update synthetic HTTP configuration through NodesAPI.getNodes, preserve dirty edits, and explicitly save once through NodesAPI.updateNode without sending member pins or secrets."
+  ],
+  "browsers": {
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "playwright": "1.56.1",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/cluster-member-trust.cjs",
+  "scope": "Offline dev preview of the production GET normalizer, PVE credential slot/sections, reactive state and explicit PUT client using synthetic HTTP. Not full App, real TLS handshake, installed recovery, protected landing or release proof.",
+  "pixel_review": "All nine PNGs were opened with native view_image and image content inspected in this turn. Output copies match the captured hashes.",
+  "captures": {
+    "chromium-1440-saved-pin.png": "a50090a86e2eafac8cab37142aea8a3c31f158c50019dcf25763e490fffcaf4f",
+    "chromium-1440-missing-pin.png": "88ac0deacb79f1062194e59c19af4e1db7928091983ff4ec15c596a7490bae34",
+    "chromium-1440-refreshed-pin.png": "d6d2a0b40691cce97e2992515b7e176539aabce87caeddf445f57b8c416d45f1",
+    "webkit-390-saved-pin.png": "6fa94b5fcb0a074d7b16b01b9f9977f6ecb4906a0e827e7ae6152e00492a0706",
+    "webkit-390-missing-pin.png": "fc9c6898408198ad88c78105adcae78c8b469c38507f448a15dea4cf190e3011",
+    "webkit-390-refreshed-pin.png": "0badda5d0c60415442b71885cc2e66bd9ef4ef653a1bef7b1d4e5b2bedf0983f",
+    "webkit-320-saved-pin.png": "d58976243c4e4bcc7a307bdb5635ebc01dbf3bef4d68af5da91f7652c32b5c2d",
+    "webkit-320-missing-pin.png": "82f8b1a94c0bfa0a5fd820b43ed2e575e7b27dc30c99b27dd0e7178537394e57",
+    "webkit-320-refreshed-pin.png": "28ce36a0bd952f29cab33169ee102592f3fa5212bcc9d7386f9a335fb456d6d0"
+  },
+  "limits": "No dark-theme or full-App check. Existing 320px discovered-address truncation is not repaired. Displayed pins are saved values, not independently verified certificates."
+}
