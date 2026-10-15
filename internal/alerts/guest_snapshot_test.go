@@ -241,7 +241,7 @@ func requireSnapshotPartialAlert(t *testing.T, m *Manager, level AlertLevel) *Al
 	if len(active) != 1 || active[0].Level != level {
 		t.Fatalf("expected one %s snapshot condition, got %+v", level, active)
 	}
-	return active[0]
+	return &active[0]
 }
 
 // No native snapshot, guest command, backup, clock change or database fault is
