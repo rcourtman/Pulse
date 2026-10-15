@@ -16,6 +16,30 @@
 
 ## Purpose
 
+### Automatic PVE registration preserves an existing monitoring credential
+
+If token creation reports that the deterministic monitoring token already exists,
+optional install-time registration stops without removing it, creating another
+value, applying token ACLs, or sending an auto-registration POST. This includes a
+second explicit installer invocation after an earlier unconfirmed registration.
+The installer cannot recover a one-time secret and must not invalidate a working
+node to obtain it again. The warning states that the token was preserved, asks
+the operator to check the node in Pulse, and distinguishes a separate installation
+needing its own token. It does not assert whether an earlier POST succeeded.
+Existing user/role provisioning, fresh-token ACLs, trust and API shapes remain;
+manual full-setup choices are not changed by this automatic-path restriction.
+
+`RegistrationResponse.test_existing_token_survives_repeated_registration_without_rotation_or_post`
+executes the complete caller for four duplicate-error forms, modern/legacy setup
+replies and two explicit invocations per fixture. The closed PVE model checks
+preserved credential state, no remove/recreate or token-ACL work, no registration
+POST and no leaked secret/provider text. The exact-parent control must detect
+credential replacement. Fresh registration, refusal, lost-response and bounded
+transport controls remain gating, with both ninety-second wrapper limits intact.
+`TestRootInstallAutoRegisterPreservesExistingDeterministicToken` also excludes
+token removal/recreation in the automatic producer. These are synthetic source
+controls, not installed PVE recovery or a report's resolution.
+
 ### Bounded, single-attempt install-time Pulse bootstrap
 
 The PVE root installer sends setup-token and auto-registration POSTs directly
@@ -55,9 +79,10 @@ is directed to check the node in Pulse before trying again.
 
 The token-creation helper returns both data and the real exit status to its
 actual caller variables; helper-local names must not shadow those outputs.
-JSON success, explicit legacy fallback, failure and deterministic-token rotation
-remain executable controls, not merely source-shape assertions. Request shapes,
-token ownership/rotation, ACLs, TLS and API response contracts are unchanged.
+JSON success, explicit legacy fallback, failure and existing-token preservation
+remain executable controls, not merely source-shape assertions. The automatic
+path no longer rotates an existing token; request shapes, token ownership, ACL
+provisioning, TLS and API response contracts are otherwise unchanged.
 This is not installed cluster recovery or a correction for #2980.
 
 `scripts/installtests/pve_auto_register_response.py` runs the complete actual
@@ -74,7 +99,7 @@ suite establishes native PVE installation, protected landing or released use.
 The root installer's optional PVE auto-registration accepts an HTTPS API origin,
 not URL credentials, a path, query, fragment or invalid port. DNS names and
 bracketed IPv6 retain their explicit/default API port. Before requesting a Pulse
-setup token or creating/rotating a PVE token, a credential-free, bounded request
+setup token or creating a PVE token, a credential-free, bounded request
 must authenticate the API's certificate and observe HTTP 200, 401 or 403.
 Failure skips optional registration without changing monitoring credentials.
 

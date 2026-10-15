@@ -18,6 +18,23 @@
 
 ## Purpose
 
+### Repeated PVE installer registration cannot revoke an existing token
+
+Automatic root-installer registration treats an existing deterministic monitoring
+token as a stop condition, not authority to delete/recreate it. No token-scoped
+ACL or registration POST follows that collision. Its one-time secret and any
+previous working or unconfirmed registration remain intact; fixed guidance
+mentions the node and a separate installation's own token, never raw PVE output
+or credentials. User/role provisioning and deliberate manual setup remain
+separate. This does not establish native monitoring or installed recovery.
+
+The real-curl/closed-PVE caller matrix in `pve_auto_register_response.py` retains
+modern/legacy replies, four collision diagnostics and repeated explicit calls,
+checking modelled token state and zero destructive/token-ACL/registration work.
+`TestRootInstallAutoRegisterPreservesExistingDeterministicToken` pins the
+producer boundary; existing credential confidentiality, TLS and bootstrap
+non-replay controls are unchanged and remain required.
+
 ### Conflicting saved endpoint pins cannot select certificate trust
 
 For equivalent Proxmox endpoint URL spellings, all nonempty saved member pins

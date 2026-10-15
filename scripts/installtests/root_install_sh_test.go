@@ -1231,35 +1231,24 @@ func TestRootInstallAutoRegisterPrefersJsonTokenForm(t *testing.T) {
 	}
 }
 
-func TestRootInstallAutoRegisterRotatesExistingDeterministicToken(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
-	if err != nil {
-		t.Fatalf("read root install.sh: %v", err)
-	}
-	script := string(content)
-
-	required := []string{
-		`pve_token_already_exists_error() {`,
-		`create_pve_auto_register_token() {`,
+func TestRootInstallAutoRegisterPreservesExistingDeterministicToken(t *testing.T) {
+	script := extractRootInstallShellFunction(t, "auto_register_pve_node")
+	for _, needle := range []string{
 		`create_pve_auto_register_token "$token_name" token_output token_status`,
 		`pve_token_already_exists_error "$token_output"`,
-		`pveum user token remove pulse-monitor@pve "$token_name"`,
-		`Existing Proxmox monitoring token '${token_name}' found; rotating it so Pulse receives a fresh secret`,
-	}
-	for _, needle := range required {
+		`AUTO_NODE_REGISTER_ERROR="existing monitoring token preserved"`,
+		`was preserved; skipping automatic node registration`,
+		`Check the node in Pulse; a separate installation needs its own token.`,
+	} {
 		if !strings.Contains(script, needle) {
-			t.Fatalf("install.sh missing deterministic token rotation contract: %s", needle)
+			t.Fatalf("install.sh missing existing-token preservation contract: %s", needle)
 		}
 	}
-
-	alreadyExistsIdx := strings.Index(script, `pve_token_already_exists_error "$token_output"`)
-	removeIdx := strings.Index(script, `pveum user token remove pulse-monitor@pve "$token_name"`)
-	retryIdx := strings.LastIndex(script, `create_pve_auto_register_token "$token_name" token_output token_status`)
-	if alreadyExistsIdx < 0 || removeIdx < 0 || retryIdx < 0 || !(alreadyExistsIdx < removeIdx && removeIdx < retryIdx) {
-		t.Fatalf("expected existing-token detection to remove then retry token creation (exists=%d remove=%d retry=%d)", alreadyExistsIdx, removeIdx, retryIdx)
+	if strings.Contains(script, "user token remove") {
+		t.Fatal("automatic registration must not revoke a previous installation's credential")
 	}
-	if strings.Contains(script, `pveum user token remove pulse-monitor@pve`) && !strings.Contains(script, `pve_token_already_exists_error "$token_output"`) {
-		t.Fatalf("token removal must stay gated by an explicit existing-token create error")
+	if strings.Count(script, `create_pve_auto_register_token "$token_name" token_output token_status`) != 1 {
+		t.Fatal("an existing-token or unconfirmed result must not retry credential creation")
 	}
 }
 
