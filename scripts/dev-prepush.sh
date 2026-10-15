@@ -27,16 +27,31 @@ FAILURES=0
 step() { printf '\n=== %s ===\n' "$1"; }
 fail() { printf 'FAIL: %s\n' "$1"; FAILURES=$((FAILURES + 1)); }
 
+require_clean_worktree() {
+  local status
+  if ! status=$(git status --porcelain=v1 --untracked-files=normal --ignore-submodules=none); then
+    echo "Cannot establish a clean working tree; pre-push source checks have not passed." >&2
+    exit 2
+  fi
+  if [ -n "$status" ]; then
+    echo "Working tree is not clean; commit or set aside changes before checking the outgoing source." >&2
+    exit 2
+  fi
+}
+
 if ! BASE_SHA=$(git rev-parse --verify --quiet "${BASE}^{commit}"); then
   echo "Base ref $BASE not found; run git fetch origin first." >&2
   exit 2
 fi
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "Note: working tree has uncommitted changes; only committed work is checked."
+# The guards inspect commits, but compilers and their configuration read this
+# checkout. A repaired overlay or an untracked source file must not turn a
+# different outgoing commit green. Leave all caller work untouched.
+require_clean_worktree
+if ! HEAD_SHA=$(git rev-parse --verify HEAD); then
+  echo "Cannot establish the outgoing commit; pre-push source checks have not passed." >&2
+  exit 2
 fi
-
-HEAD_SHA=$(git rev-parse --verify HEAD)
 AHEAD=$(git rev-list --count "$BASE_SHA".."$HEAD_SHA")
 if [ "$AHEAD" -eq 0 ]; then
   echo "No commits ahead of $BASE; nothing to check."
@@ -136,6 +151,14 @@ if printf '%s\n' "$CHANGED" | grep '^frontend-modern/' >/dev/null; then
     fail "frontend type-check: frontend-modern/node_modules missing (run npm ci there first)"
   fi
 fi
+
+# A check can generate ignored build outputs, but a changed source tree or HEAD
+# during validation no longer answers for the commit selected above.
+if ! FINAL_HEAD_SHA=$(git rev-parse --verify HEAD) || [ "$FINAL_HEAD_SHA" != "$HEAD_SHA" ]; then
+  echo "HEAD changed or became unavailable during validation; pre-push source checks have not passed." >&2
+  exit 2
+fi
+require_clean_worktree
 
 step "Result"
 if [ "$FAILURES" -gt 0 ]; then

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -45,6 +46,7 @@ class DevPrepushFixture(unittest.TestCase):
             PREPUSH_GUARD_CALLS=str(self.guard_calls),
             PREPUSH_AUDIT_MODE="clean",
             PREPUSH_TYPE_STATUS="0",
+            PREPUSH_TYPE_MUTATION="",
             PREPUSH_GUARD_STATUS="0",
             # Own the canned-provider budget, not the real runner's default.
             NPM_AUDIT_ATTEMPTS="2",
@@ -58,6 +60,7 @@ class DevPrepushFixture(unittest.TestCase):
         self.write("frontend-modern/package.json", '{"private":true}\n')
         self.write("frontend-modern/package-lock.json", '{"lockfileVersion":3}\n')
         self.write("frontend-modern/src/example.ts", "export const value = 1;\n")
+        self.write(".gitignore", "node_modules/\n.generated/\n__pycache__/\n")
         self.write("README.md", "Local gate fixture\n")
         # The completion guard has its own exact-source tests. This fixture
         # records the real prepush invocation and exit handling only; it does
@@ -80,12 +83,19 @@ class DevPrepushFixture(unittest.TestCase):
         npm = self.bin / "npm"
         npm.write_text(
             "#!/usr/bin/env python3\n"
-            "import json,os,sys\n"
+            "import json,os,subprocess,sys\n"
             "args=sys.argv[1:]\n"
             "with open(os.environ['PREPUSH_NPM_CALLS'],'a') as output:\n"
             " output.write(json.dumps({'args':args,'cwd':os.getcwd(),"
             "'require':os.environ.get('NPM_AUDIT_REQUIRE_RESULT')})+'\\n')\n"
             "if args == ['run','type-check']:\n"
+            " mutation=os.environ.get('PREPUSH_TYPE_MUTATION','')\n"
+            " if mutation == 'tracked':\n"
+            "  with open('src/example.ts','a') as output: output.write('// changed during validation\\n')\n"
+            " if mutation == 'untracked':\n"
+            "  with open('src/new.ts','w') as output: output.write('// new source during validation\\n')\n"
+            " if mutation == 'commit':\n"
+            "  subprocess.run(['git','commit','--quiet','--allow-empty','-m','Concurrent fixture commit'],check=True)\n"
             " sys.exit(int(os.environ['PREPUSH_TYPE_STATUS']))\n"
             "if args != ['audit','--json']:\n"
             " sys.exit(64)\n"
@@ -152,6 +162,119 @@ class DevPrepushFixture(unittest.TestCase):
         self.assertEqual([call["args"] for call in calls], [["audit", "--json"]] * reads)
         self.assertTrue(all(call["require"] == "true" for call in calls))
         self.assertEqual(guards, [])
+
+
+class DevPrepushSourceIdentityTest(DevPrepushFixture):
+    def assert_initial_source_refused(self):
+        head = self.git("rev-parse", "HEAD").stdout
+        status = self.git("status", "--porcelain=v1", "--untracked-files=normal").stdout
+        result, calls, guards = self.run_gate()
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("Working tree is not clean", result.stderr)
+        self.assertNotIn("All pre-push checks passed", result.stdout)
+        self.assertEqual(calls, [])
+        self.assertEqual(guards, [])
+        self.assertEqual(self.git("rev-parse", "HEAD").stdout, head)
+        self.assertEqual(self.git("status", "--porcelain=v1", "--untracked-files=normal").stdout, status)
+
+    def test_unstaged_replacement_cannot_answer_for_committed_source(self):
+        self.change("frontend-modern/src/example.ts")
+        replacement = "// uncommitted replacement, not the outgoing source\n"
+        self.write("frontend-modern/src/example.ts", replacement)
+        self.assert_initial_source_refused()
+        self.assertEqual((self.repo / "frontend-modern/src/example.ts").read_text(), replacement)
+
+    def test_staged_replacement_is_preserved_and_not_checked_as_the_commit(self):
+        self.change("frontend-modern/src/example.ts")
+        replacement = "// staged replacement, not the outgoing source\n"
+        self.write("frontend-modern/src/example.ts", replacement)
+        self.git("add", "--", "frontend-modern/src/example.ts")
+        self.assert_initial_source_refused()
+        self.assertEqual(self.git("show", ":frontend-modern/src/example.ts").stdout, replacement)
+
+    def test_untracked_source_and_configuration_stop_before_audit_or_guards(self):
+        self.change("frontend-modern/package-lock.json")
+        for relative in ("frontend-modern/src/untracked.ts", "new-package/injected.go", "eslint.config.js"):
+            with self.subTest(path=relative):
+                self.write(relative, "// untracked fixture source\n")
+                self.assert_initial_source_refused()
+                (self.repo / relative).unlink()
+
+    def test_deleted_tracked_source_stops_before_checks(self):
+        self.change("frontend-modern/src/example.ts")
+        (self.repo / "frontend-modern/src/example.ts").unlink()
+        self.assert_initial_source_refused()
+
+    def test_no_outgoing_commit_does_not_hide_a_dirty_tree(self):
+        self.write("README.md", "uncommitted base change\n")
+        self.assert_initial_source_refused()
+
+    def test_ignored_dependencies_and_build_outputs_do_not_block_clean_source(self):
+        self.change("frontend-modern/src/example.ts")
+        self.write(".generated/result.txt", "ignored fixture output\n")
+        self.write("scripts/release_control/__pycache__/fixture.pyc", "ignored Python helper cache\n")
+        result, calls, guards = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("All pre-push checks passed", result.stdout)
+        self.assertEqual([call["args"] for call in calls], [["run", "type-check"]])
+        self.assertEqual(len(guards), 1)
+
+    def assert_changed_during_check_refused(self, mutation):
+        self.change("frontend-modern/src/example.ts")
+        self.env["PREPUSH_TYPE_MUTATION"] = mutation
+        result, calls, guards = self.run_gate()
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("HEAD changed" if mutation == "commit" else "Working tree is not clean", result.stderr)
+        self.assertNotIn("All pre-push checks passed", result.stdout)
+        self.assertEqual([call["args"] for call in calls], [["run", "type-check"]])
+        self.assertEqual(len(guards), 1)
+
+    def test_tracked_edit_during_a_successful_check_does_not_pass(self):
+        self.assert_changed_during_check_refused("tracked")
+        self.assertIn("changed during validation", (self.repo / "frontend-modern/src/example.ts").read_text())
+
+    def test_untracked_source_created_during_a_successful_check_does_not_pass(self):
+        self.assert_changed_during_check_refused("untracked")
+        self.assertEqual((self.repo / "frontend-modern/src/new.ts").read_text(), "// new source during validation\n")
+
+    def test_concurrent_commit_during_a_successful_check_does_not_pass(self):
+        self.assert_changed_during_check_refused("commit")
+        self.assertIn("Concurrent fixture commit", self.git("log", "-1", "--format=%s").stdout)
+
+    def git_status_fault(self, fail_read):
+        real_git = shutil.which("git", path=self.env["PATH"])
+        wrapper = self.bin / "git"
+        counter = Path(self.directory.name) / "git-status-count"
+        wrapper.write_text(
+            "#!/usr/bin/env python3\n"
+            "import pathlib,subprocess,sys\n"
+            f"counter=pathlib.Path({str(counter)!r})\n"
+            "if sys.argv[1:2] == ['status']:\n"
+            " count=int(counter.read_text())+1 if counter.exists() else 1\n"
+            " counter.write_text(str(count))\n"
+            f" if count == {fail_read}: sys.exit(23)\n"
+            f"sys.exit(subprocess.run([{real_git!r},*sys.argv[1:]]).returncode)\n"
+        )
+        wrapper.chmod(0o755)
+
+    def test_unavailable_initial_source_read_stops_before_checks(self):
+        self.change("frontend-modern/package-lock.json")
+        self.git_status_fault(1)
+        result, calls, guards = self.run_gate()
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("Cannot establish a clean working tree", result.stderr)
+        self.assertEqual(calls, [])
+        self.assertEqual(guards, [])
+
+    def test_unavailable_final_source_read_cannot_publish_a_local_pass(self):
+        self.change("frontend-modern/src/example.ts")
+        self.git_status_fault(2)
+        result, calls, guards = self.run_gate()
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("Cannot establish a clean working tree", result.stderr)
+        self.assertNotIn("All pre-push checks passed", result.stdout)
+        self.assertEqual([call["args"] for call in calls], [["run", "type-check"]])
+        self.assertEqual(len(guards), 1)
 
 
 class DevPrepushFrontendTest(DevPrepushFixture):
