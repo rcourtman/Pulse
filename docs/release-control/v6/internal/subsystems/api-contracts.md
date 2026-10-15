@@ -604,6 +604,12 @@ presented as interchangeable totals.
 type hint, so both fields must keep naming the subject the alert or finding
 is about (an alert's `unifiedAlertType` display words are accepted as hints).
 
+Governed action audits are read the same way: the browser resolves
+`request.resourceId` through `GET /api/resources/{id}` for the action
+review's `Open resource` link and falls back to the audit's recorded
+`resource` name and type, so both must keep naming the resource the action
+acts on.
+
 The same resolution picks the thresholds tab and search behind the alert-only
 guidance link, so the registry resource's display label must stay the label
 the thresholds rows are built from (`getAlertResourceDisplayLabel`).

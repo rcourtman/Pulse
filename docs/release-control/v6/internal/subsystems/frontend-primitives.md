@@ -8872,6 +8872,16 @@ own. `ProxmoxPageSurface` passes `routeActive` to the Storage surface it keeps
 mounted behind its other tabs, so a guest tab's `?resource=` link is not read
 as a storage deep link.
 
+### Record-to-resource links resolve through one hook
+
+A surface that links a record (a Patrol item, a governed action) to its
+resource's page resolves the id with `useResolvedResource` and builds the
+link with `buildResourcePagePath`, rather than issuing its own
+`ResourceAPI.getResource` call. The action review's `Open resource` and
+`Open Patrol` links share one wrapping row whose links keep 44px targets on
+phones. A dialog offers a link away only when its host keeps the dialog in
+the address, so Back returns to it (`showResourceLink`).
+
 ### Thresholds search is a route search
 
 The thresholds resource search writes `?q=` through `navigate(..., { replace:
