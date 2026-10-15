@@ -132,5 +132,68 @@ class ContainerImageUpdateDocsTest(unittest.TestCase):
                       (ROOT / "docs/TROUBLESHOOTING.md").read_text())
 
 
+class DockerUpdateLifecycleHelpTest(unittest.TestCase):
+    """Source-bound help checks, not execution proof of the collector repair."""
+
+    def guidance(self):
+        guide = (ROOT / "docs/DOCKER.md").read_text()
+        return " ".join(guide.split(
+            "### Update alert resolves and returns without an image change\n", 1
+        )[1].split("\n### ", 1)[0].replace("**", "").split())
+
+    def test_report_freshness_and_registry_comparison_are_distinct(self):
+        guide = self.guidance()
+        for fact in (
+            "resolved image-update alert does not establish that the container was updated",
+            "a fresh agent report can carry an older cached registry result",
+            "Last seen advancing means the host is reporting, not that the registry comparison is new",
+            "not the registry-check interval",
+        ):
+            with self.subTest(fact=fact):
+                self.assertIn(fact, guide)
+        labels = (ROOT / "frontend-modern/src/features/docker/DockerContainersTable.tsx").read_text()
+        self.assertIn("update.lastChecked", labels)
+        self.assertIn("checked ${update.lastChecked}", labels)
+
+    def test_unknown_digest_and_cleanup_safeguards_have_separate_sources(self):
+        guide = self.guidance()
+        collector = (ROOT / "internal/dockeragent/collect.go").read_text()
+        alerts = (ROOT / "internal/alerts/docker.go").read_text()
+        self.assertIn("lastLocalImage", collector)
+        missing = alerts.split(
+            'if !container.UpdateStatus.UpdateAvailable && strings.TrimSpace(container.UpdateStatus.CurrentDigest) == "" {', 1
+        )[1].split("\n\t}", 1)[0]
+        self.assertIn("m.touchDockerContainerUpdateAlert(canonicalAlertID)", missing)
+        self.assertNotIn("m.clearAlert", missing)
+        self.assertIn("firstSeen, exists = active.StartTime, true", alerts)
+        self.assertIn("without knowing the current digest", guide)
+        self.assertIn("distinct from correcting a wrong registry digest", guide)
+        self.assertIn("alone does not identify what initiated a resolution", guide)
+        self.assertIn("what an installed server and agent contain", guide)
+
+    def test_no_new_live_action_or_secret_collection_is_required(self):
+        guide = self.guidance()
+        for boundary in (
+            "existing alert History and container details for the same host and container",
+            "original sequence and the separate server/agent versions",
+            "unknown details are valid",
+            "No new registry request, Test, update, restart or diagnostic run",
+            "Do not pull or recreate a workload, clear History, change registry credentials or replay a notification",
+            "Keep raw inspections, registry credentials and private host/image names out",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, guide)
+        self.assertNotIn("```", guide)
+
+    def test_both_entry_points_reach_the_shipped_section(self):
+        anchor = "#update-alert-resolves-and-returns-without-an-image-change"
+        self.assertIn(anchor, section())
+        troubleshooting = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        self.assertIn("DOCKER.md" + anchor, troubleshooting)
+        for name in ("DOCKER.md", "TROUBLESHOOTING.md"):
+            self.assertEqual((ROOT / "docs" / name).read_bytes(),
+                             (ROOT / "frontend-modern/public/docs" / name).read_bytes())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -868,6 +868,12 @@ to compare the same host, running image and observation time without pulling or
 recreating the workload. If an update action was already sent or its result is
 unknown, follow its existing receipt and state checks instead of retrying it.
 
+If an image-update alert **resolves and returns without an image change**, use
+the [alert-lifecycle checks](DOCKER.md#update-alert-resolves-and-returns-without-an-image-change).
+An advancing **Last seen** is not a fresh registry check, and a resolved alert
+is not proof that the workload was updated. Keep the original transition times;
+do not force another cycle or change the alert delay to reproduce it.
+
 #### Docker hosts appearing/disappearing
 
 Cloned hosts can share a **saved Pulse agent ID**, not just an OS machine ID.
