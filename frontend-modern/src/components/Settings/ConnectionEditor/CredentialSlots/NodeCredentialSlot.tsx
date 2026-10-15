@@ -173,7 +173,7 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
             </span>
             <div>
               <div class="font-medium text-base-content">Endpoint</div>
-              <div class="text-xs text-muted">Name and API address</div>
+              <div class="text-xs text-muted">API address and name</div>
             </div>
           </div>
           <div class="flex items-start gap-2">

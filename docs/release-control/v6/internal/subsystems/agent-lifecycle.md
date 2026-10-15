@@ -668,6 +668,10 @@ duplicates with the host IP. The help copy therefore says only that an empty
 name is named after the host, and makes no uniqueness demand. This adds no
 agent authority and changes no setup or save payload.
 
+The connection sequence above the form follows the same order: its first step
+reads "Endpoint — API address and name" (`NodeCredentialSlot.tsx`), so the
+summary never asks for the name before the address it is derived from.
+
 ### Explicit filesystem selections survive the report boundary
 
 Disk reports carry optional `explicitlyIncluded` evidence when the collector

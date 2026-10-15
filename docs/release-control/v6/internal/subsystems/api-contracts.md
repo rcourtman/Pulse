@@ -375,6 +375,10 @@ so registration falls back to the reported server name, and
 new empty-name request shape. `NodeCredentialSlot.test.tsx` pins endpoint-first
 order, the optional name and the derivation as the endpoint is typed.
 
+The sequence summary in `NodeCredentialSlot.tsx` names the endpoint step "API
+address and name" to match that field order; it is copy only and changes no
+request.
+
 ### Canonical incident-history query contract
 
 Incident APIs discover canonical-only occurrences and retain exact-start
