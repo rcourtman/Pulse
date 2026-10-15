@@ -405,6 +405,10 @@ history = p.get("history")
 env = os.environ.copy()
 if history:
     env.update(HISTFILE=history, HISTSIZE="100", HISTFILESIZE="100", HISTCONTROL="", PS1="PULSE_TEST$ ")
+# Phases share a fixture directory. A marker left by an earlier run would let
+# the shell's echo of the command line pass for the real prompt.
+try: os.remove(env["READER_PID"])
+except FileNotFoundError: pass
 program = ["bash", "--noprofile", "--norc", "-i"] if history else ["sh", "-c", p["command"]]
 child = subprocess.Popen(program, stdin=slave, stdout=slave, stderr=slave, preexec_fn=session, env=env)
 command_sent = not bool(history)

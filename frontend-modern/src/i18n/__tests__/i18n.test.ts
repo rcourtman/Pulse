@@ -482,6 +482,18 @@ describe('i18n foundation', () => {
     }
   });
 
+  // The setup message names the environment variable an operator must remove;
+  // a translated name would point at a variable that does not exist.
+  it('keeps PULSE_TELEMETRY untranslated in the setup lock message', () => {
+    for (const locale of ['en', ...FIRST_LOCALIZATION_LOCALES] as const) {
+      // Removing the variable restores the default (on), so the copy must
+      // name the value that turns statistics off.
+      expect(I18N_MESSAGES[locale]['setup.security.error.telemetryLockedOn']).toContain(
+        'PULSE_TELEMETRY=false',
+      );
+    }
+  });
+
   it('keeps machine-facing identifiers unchanged in alerts overview catalog copy', () => {
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
       expect(I18N_MESSAGES[locale]['alerts.assistant.button.full']).toContain('Pulse Assistant');

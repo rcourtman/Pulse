@@ -18,6 +18,21 @@ interface SecurityStepProps {
 const GENERATED_PASSWORD_LENGTH = 20;
 const GENERATED_PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
 
+// What the server keeps after an opt-out it refused: already off, held on by
+// the PULSE_TELEMETRY environment variable, or unknown.
+const readTelemetryOutcome = async (): Promise<'off' | 'lockedOn' | 'unknown'> => {
+  try {
+    const settings = await SettingsAPI.getSystemSettings();
+    if (settings.telemetryEnabled === false) return 'off';
+    const locked = Boolean(
+      settings.envOverrides?.telemetryEnabled || settings.envOverrides?.PULSE_TELEMETRY,
+    );
+    return locked && settings.telemetryEnabled === true ? 'lockedOn' : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+};
+
 export const SecurityStep: Component<SecurityStepProps> = (props) => {
   const [username, setUsername] = createSignal(props.state.username || 'admin');
   const [useCustomPassword, setUseCustomPassword] = createSignal(false);
@@ -124,7 +139,15 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
         try {
           await SettingsAPI.updateSystemSettings({ telemetryEnabled: false });
         } catch {
-          showError(t('setup.security.error.telemetryDisableFailed'));
+          // A server started with PULSE_TELEMETRY owns this choice and refuses
+          // the write. Read what it chose rather than report a failure: when
+          // it already keeps statistics off there is nothing to tell.
+          const outcome = await readTelemetryOutcome();
+          if (outcome === 'lockedOn') {
+            showError(t('setup.security.error.telemetryLockedOn'));
+          } else if (outcome !== 'off') {
+            showError(t('setup.security.error.telemetryDisableFailed'));
+          }
         }
       }
 
