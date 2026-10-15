@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "5cd659b325fe0e68a8532407df489c398ddafa04",
+  "changed_paths": [
+    "frontend-modern/public/docs/PBS.md",
+    "frontend-modern/public/docs/METRICS_HISTORY.md",
+    "frontend-modern/src/features/docs/__tests__/drawerHistoryGuide.test.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/PBS.md": "6f062d5644e963421215722c7931da43dac1b23c545e9a141d0e139d2873b9c0",
+    "frontend-modern/public/docs/METRICS_HISTORY.md": "3dd860f7fdcff31991b4000d09df487bcec737642d49949430189db3748a28ce",
+    "frontend-modern/src/features/docs/__tests__/drawerHistoryGuide.test.ts": "56feaabd86ac53a23dfcd70804c0beb169b6ca0ed7ee17742dc345a7d8d1b701"
+  },
+  "routes": [
+    "/docs/PBS#pbs-is-connected-but-history-stays-empty",
+    "/docs/METRICS_HISTORY#read-a-history-panel"
+  ],
+  "states": [
+    "Actual shipped Markdown through Docs and sanitised renderer; served producer byte hashes independently matched in both browsers.",
+    "Phone chart concealment versus actual empty samples; active-alert panels retained; desktop all panels; current and older installed navigation.",
+    "Safe fixture consumes actual GuestDrawerHistory, hostMetricsHistoryModel, query, API parser and CSS from assigned source. This is not native reporter recovery."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and 390 px WebKit touch use both existing cross-guide bookmarks.",
+    "Touch expands and re-collapses actual shared source charts with unchanged 24h range and History read count; active-alert fixture retains Thermals and adjusts Show labels."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-14T01:13:21.997Z",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "opened": [
+      "chromium-pbs-guide.jpg",
+      "chromium-history-guide.jpg",
+      "chromium-all-charts.jpg",
+      "webkit-pbs-guide.jpg",
+      "webkit-history-guide.jpg",
+      "webkit-collapsed.jpg",
+      "webkit-revealed.jpg",
+      "webkit-alert-panel.jpg"
+    ],
+    "observations": [
+      "Desktop Docs: both updated paragraphs and preserved bookmarks are readable. PBS help explicitly distinguishes visible Utilization CPU/memory from secondary collapsed panels. History help shows dynamic labels, empty/zero/error distinctions and the no-refresh caveat.",
+      "390 px WebKit Docs: both updated paragraphs wrap within the viewport, with no page overflow. The complete phone reveal explanation and the no-new-measurements/empty-history caveats are visible in the History frame; the PBS distinction is visible in its frame.",
+      "Desktop source-component fixture: all four host panels render side by side with no phone toggle. Disk I/O displays the empty-history message beside actual synthetic Thermals observations, without fabricating zero samples.",
+      "390 px source-component fixture: collapsed frame shows only Utilization and the full-width Show Network I/O, Disk I/O, Thermals control. The revealed frame shows newly visible Network I/O and the empty Disk I/O panel; Thermals and the collapse control are below that retained frame, not falsely claimed as pictured.",
+      "390 px alert fixture: Utilization and the alerting Thermals panel remain visible, including its threshold line; the control names only Network I/O and Disk I/O. Source-bound interaction assertions additionally verify all panels revealed, Show fewer charts, re-collapse, unchanged range and no extra History read."
+    ],
+    "remaining": null
+  },
+  "browser_cleanup": {
+    "closed": true,
+    "preview_stop_requested": "SIGTERM",
+    "preview_exit": 143,
+    "preview_signal": null
+  },
+  "evidence": "PI RECEIPTS.md, BROWSER.json, PIXEL-REVIEW.json and eight current worker-owned captures. Ten cases passed; no external request, API mutation, installed action or native alert. Pending independent review/protected publication/release inclusion."
+}

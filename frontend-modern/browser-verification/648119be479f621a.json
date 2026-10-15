@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "62f291eead40205ca1a70940958c3e3a2b8f6458",
+  "verified_at": "2026-10-15T00:25:52Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/utils/connectionErrorPresentation.ts",
+    "frontend-modern/src/utils/format.ts",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "505b2bd3f7e431a11bfca040f2e25555cc8e03baa53e3e6c6e7dbe3c60f226c2",
+    "frontend-modern/src/utils/connectionErrorPresentation.ts": "34189858f78a1bdfe80b6f572612d3c8ad802891c508ce70e313015fe41f799e",
+    "frontend-modern/src/utils/format.ts": "b01f987d3dd6389818cfb58968d9d077e718b5e60200ae51d6d15f1b44546de8",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "c6bd561d99512d779cb143116e66f7bd1660a856b0e2519d219148c86d7ff0b3"
+  },
+  "routes": [
+    "/browser-tests/publication-reconciliation.html",
+    "/alerts/thresholds/proxmox#backups"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Real BackupStatusCell combines the UTC completion instant and upstream Fresh Hours explanation/settings link with the independent redirect uncertainty and backup-safety guidance. Desktop and phone pixels are readable, wrap within the dialog and show both links.",
+    "Real AddressProbeStep renders the sentence-only scoped-denial correction. Desktop and phone captures show the complete intended-resource/proxy/access-limit instruction without horizontal clipping.",
+    "All four native captures were opened and inspected. Guest-agent state remains Unknown in the synthetic fixture; no thaw, permission, native recovery or installed acceptance is inferred."
+  ],
+  "interactions": [
+    "Keyboard disclosure, Escape closure and trigger-focus restoration pass on desktop Chromium and narrow WebKit.",
+    "Backup settings link follows the exact upstream /alerts/thresholds/proxmox#backups destination and closes the dialog. This does not establish a full threshold-page journey.",
+    "Offline API interception accepts GET only. Both browser clients and server close successfully. Playwright 1.56.1 matches the committed integration lock."
+  ],
+  "source_proof": "source-o6h_xkvs: offline install, full lint, types, 672 tests, production embed and containing static build at exact parent source. Complete output and owned guest stop.",
+  "limits": "Presentation with synthetic observations only. No backup/QGA/thaw, production endpoint, installed access recovery, deployment or release readiness."
+}

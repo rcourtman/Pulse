@@ -314,8 +314,8 @@ func TestMonitor_ConsolidateDuplicateClusters_RetiresRemovedStandaloneRuntimeSta
 		backupPermissionWarnings: map[string]string{"minipc-standalone": "warn"},
 		nodeLastOnline:           map[string]time.Time{"minipc-standalone-minipc": time.Now()},
 		nodePendingUpdatesCache:  map[string]pendingUpdatesCache{"minipc-standalone-minipc": {count: 1, checkedAt: time.Now()}},
-		nodeSnapshots:            map[string]NodeMemorySnapshot{"minipc-standalone|minipc": {RetrievedAt: time.Now()}},
-		guestSnapshots:           map[string]GuestMemorySnapshot{"minipc-standalone|qemu|minipc|100": {RetrievedAt: time.Now()}},
+		nodeSnapshots:            map[string]NodeMemorySnapshot{"minipc-standalone|minipc": {Instance: "minipc-standalone", RetrievedAt: time.Now()}},
+		guestSnapshots:           map[string]GuestMemorySnapshot{"minipc-standalone|qemu|minipc|100": {Instance: "minipc-standalone", RetrievedAt: time.Now()}},
 		guestMetadataCache:       map[string]guestMetadataCacheEntry{"minipc-standalone|minipc|100": {fetchedAt: time.Now()}},
 		guestMetadataLimiter:     map[string]time.Time{"minipc-standalone|minipc|100": time.Now().Add(time.Minute)},
 	}
@@ -2416,7 +2416,7 @@ func TestMonitor_RetryPVEPortFallback_Detailed_Extra(t *testing.T) {
 	cause := fmt.Errorf("dial tcp 127.0.0.1:8006: connect: connection refused")
 
 	// 1. Success case
-	newProxmoxClientFunc = func(cfg proxmox.ClientConfig) (PVEClientInterface, error) {
+	newProxmoxClientFunc = func(_ context.Context, cfg proxmox.ClientConfig) (PVEClientInterface, error) {
 		if strings.Contains(cfg.Host, "8006") {
 			return nil, fmt.Errorf("should not be called with 8006 in fallback")
 		}
@@ -2439,7 +2439,7 @@ func TestMonitor_RetryPVEPortFallback_Detailed_Extra(t *testing.T) {
 	_ = nodes // ignore
 
 	// 2. Failure to create client
-	newProxmoxClientFunc = func(cfg proxmox.ClientConfig) (PVEClientInterface, error) {
+	newProxmoxClientFunc = func(_ context.Context, cfg proxmox.ClientConfig) (PVEClientInterface, error) {
 		return nil, fmt.Errorf("create failed")
 	}
 	_, _, err = m.retryPVEPortFallback(context.Background(), "pve1", instanceCfg, currentClient, cause)
@@ -2448,7 +2448,7 @@ func TestMonitor_RetryPVEPortFallback_Detailed_Extra(t *testing.T) {
 	}
 
 	// 3. Failure to get nodes
-	newProxmoxClientFunc = func(cfg proxmox.ClientConfig) (PVEClientInterface, error) {
+	newProxmoxClientFunc = func(_ context.Context, cfg proxmox.ClientConfig) (PVEClientInterface, error) {
 		// Return a client that fails GetNodes
 		return &mockPVEClientFailNodes{}, nil
 	}

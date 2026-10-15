@@ -5,6 +5,7 @@ import type { WorkloadGuest } from '@/types/workloads';
 import { formatUptime, formatSpeed, getShortImageName } from '@/utils/format';
 import { StackedDiskBar } from './StackedDiskBar';
 import { StackedMemoryBar } from './StackedMemoryBar';
+import { WorkloadReadingStatus } from './WorkloadReadingStatus';
 import {
   AvailabilityProbeCell,
   BackupIndicator,
@@ -79,6 +80,7 @@ export function GuestRow(props: GuestRowProps) {
     customUrl,
     diskAnomaly,
     diskIOEmphasis,
+    diskPercent,
     diskRead,
     diskThresholds,
     diskUsageRead,
@@ -343,7 +345,7 @@ export function GuestRow(props: GuestRowProps) {
     });
   const renderDiskSparkline = () =>
     renderMetricSparkline('disk', {
-      valueLabel: () => (hasDiskUsage() ? formatMetricPercent(props.guest.disk?.usage) : '—'),
+      valueLabel: () => (hasDiskUsage() ? formatMetricPercent(diskPercent()) : '—'),
       title: () => `${props.guest.name} disk usage history`,
       tooltip: () => diskReadStatus()?.message,
       formatValue: formatMetricPercent,
@@ -494,6 +496,7 @@ export function GuestRow(props: GuestRowProps) {
                       lastBackup={props.guest.lastBackup}
                       isTemplate={props.guest.template}
                       backupRunning={props.guest.backupInProgress}
+                      guestReadEvidence={props.guest}
                     />
                   </Show>
                   <Show when={nestedWorkloadCueLabel()}>
@@ -730,14 +733,13 @@ export function GuestRow(props: GuestRowProps) {
                   }
                 >
                   {(label) => (
-                    <p
-                      data-workload-memory-read-status
-                      class="mt-0.5 text-center text-[10px] leading-none text-muted"
-                      title={status().message}
-                    >
-                      <span aria-hidden="true">{label()}</span>
-                      <span class="sr-only">{status().message}</span>
-                    </p>
+                    <WorkloadReadingStatus
+                      metric="Memory"
+                      guestId={guestId()}
+                      guestName={props.guest.name}
+                      label={label()}
+                      message={status().message}
+                    />
                   )}
                 </Show>
               )}
@@ -796,16 +798,14 @@ export function GuestRow(props: GuestRowProps) {
                   }
                 >
                   {(label) => (
-                    <p
-                      data-workload-disk-read-status
-                      class={`mt-0.5 text-center text-[10px] leading-none ${
-                        status().needsAction ? 'text-amber-700 dark:text-amber-300' : 'text-muted'
-                      }`}
-                      title={status().message}
-                    >
-                      <span aria-hidden="true">{label()}</span>
-                      <span class="sr-only">{status().message}</span>
-                    </p>
+                    <WorkloadReadingStatus
+                      metric="Disk"
+                      guestId={guestId()}
+                      guestName={props.guest.name}
+                      label={label()}
+                      message={status().message}
+                      needsAction={status().needsAction}
+                    />
                   )}
                 </Show>
               )}
@@ -973,6 +973,7 @@ export function GuestRow(props: GuestRowProps) {
                     guestName={props.guest.name}
                     lastBackup={props.guest.lastBackup}
                     backupRunning={props.guest.backupInProgress}
+                    guestReadEvidence={props.guest}
                   />
                 </Show>
                 <Show when={props.guest.template}>

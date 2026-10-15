@@ -49,6 +49,22 @@ const makeAnomaly = (overrides: Partial<AnomalyReport> = {}): AnomalyReport => (
 });
 
 describe('stackedDiskBarModel (branch coverage 2)', () => {
+  it('does not invent aggregate usage from capacity, or bytes from a percentage', () => {
+    const capacity = buildStackedDiskBarPresentation({ aggregateDisk: { total: 100 } }, 400);
+    expect(capacity.unavailable).toBe(true);
+    expect(capacity.displayLabel).toBe('N/A');
+    expect(capacity.tooltipContent[0]).toMatchObject({ percent: '—', used: '?', total: '100 B' });
+    const percentage = buildStackedDiskBarPresentation({ aggregateDisk: { usage: 0.5 } }, 400);
+    expect(percentage.unavailable).toBe(false);
+    expect(percentage.barPercent).toBe(0.5);
+    expect(percentage.displaySublabel).toBe('');
+    expect(percentage.tooltipContent[0]).toMatchObject({ used: '?', total: '—' });
+    // DiskInfo is not an aggregate metric: its genuine zero bytes may be omitted.
+    const filesystem = buildStackedDiskBarPresentation({ disks: [{ total: 100, free: 100 }] }, 400);
+    expect(filesystem.unavailable).toBe(false);
+    expect(filesystem.displayPercentValue).toBe(0);
+  });
+
   describe('getDiskUsagePercent (via miniDisks[].percent)', () => {
     it('uses the used/total ratio when total > 0', () => {
       // Branch: disk.total > 0 -> (used / total) * 100.
@@ -59,31 +75,70 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
       expect(p.miniDisks[0].percent).toBe(25);
     });
 
-    it('scales a fractional usage (<=1) by 100 when total <= 0', () => {
-      // Branch: total <= 0, Number.isFinite(usage), usage <= 1 -> usage * 100.
+    it.each([0.5, 75, Number.NaN])(
+      'withholds per-filesystem utilization without byte capacity (%s)',
+      (usage) => {
+        // Normalized filesystem rows do not carry independently observed
+        // aggregate percentages. No capacity means no usable byte reading.
+        const p = buildStackedDiskBarPresentation(
+          { disks: [makeDisk({ total: 0, used: 0, free: 0, usage })] },
+          400,
+        );
+        expect(p.miniDisks).toEqual([]);
+        expect(p.unavailable).toBe(true);
+        expect(p.displayLabel).toBe('N/A');
+        expect(p.tooltipContent[0]).toMatchObject({ percent: '—', total: '—', used: '?' });
+      },
+    );
+
+    it.each([
+      { usage: 0.5, expected: 0.5 },
+      { usage: 75, expected: 75 },
+      { usage: 0, expected: 0 },
+    ])('preserves independently supplied aggregate-only percentages: %j', ({ usage, expected }) => {
       const p = buildStackedDiskBarPresentation(
-        { disks: [makeDisk({ total: 0, used: 0, free: 0, usage: 0.5 })] },
+        { disks: [makeDisk({ total: 0 })], aggregateDisk: { usage } },
         400,
       );
-      expect(p.miniDisks[0].percent).toBe(50);
+      expect(p.unavailable).toBe(false);
+      expect(p.displayPercentValue).toBe(expected);
+      expect(p.miniDisks).toEqual([]);
+    });
+  });
+
+  describe('independent aggregate percentage with invalid bytes', () => {
+    it.each([
+      { total: Infinity, used: 50 },
+      { total: -Infinity, used: 50 },
+      { total: Number.NaN, used: 50 },
+      { total: -100, used: 50 },
+      { total: 0, used: 50 },
+      { total: undefined, used: 50 },
+      { total: 100, used: Infinity },
+      { total: 100, used: Number.NaN },
+      { total: 100, used: -1 },
+      { total: 100, used: undefined },
+    ])('keeps 50%% but withholds the invalid byte summary: %j', (bytes) => {
+      const p = buildStackedDiskBarPresentation(
+        { aggregateDisk: { ...bytes, usage: 50 }, mode: 'aggregate' },
+        400,
+      );
+      expect(p.unavailable).toBe(false);
+      expect(p.displayLabel).toBe('50%');
+      expect(p.barPercent).toBe(50);
+      expect(p.displaySublabel).toBe('');
+      expect(p.showSublabel).toBe(false);
+      expect(JSON.stringify(p)).not.toMatch(/NaN|undefined/);
     });
 
-    it('returns a usage value > 1 unchanged when total <= 0', () => {
-      // Branch: total <= 0, usage finite, usage > 1 -> usage.
+    it('still shows finite positive capacity and measured zero bytes', () => {
       const p = buildStackedDiskBarPresentation(
-        { disks: [makeDisk({ total: 0, used: 0, free: 0, usage: 75 })] },
+        { aggregateDisk: { total: 100, used: 0, usage: 0 }, mode: 'aggregate' },
         400,
       );
-      expect(p.miniDisks[0].percent).toBe(75);
-    });
-
-    it('returns 0 when total <= 0 and usage is not finite', () => {
-      // Branch: total <= 0, !Number.isFinite(usage) -> 0.
-      const p = buildStackedDiskBarPresentation(
-        { disks: [makeDisk({ total: 0, used: 0, free: 0, usage: Number.NaN })] },
-        400,
-      );
-      expect(p.miniDisks[0].percent).toBe(0);
+      expect(p.displayLabel).toBe('0%');
+      expect(p.displaySublabel).toBe('0 B/100 B');
+      expect(p.showSublabel).toBe(true);
     });
   });
 
@@ -441,18 +496,12 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
       ]);
     });
 
-    it('falls back to getDiskUsagePercent(aggregateDisk) for overall percent when aggregate total is 0', () => {
-      // totalCapacity 0 -> overallPercent = aggregateDisk ? getDiskUsagePercent(...) : 0.
-      // getDiskUsagePercent: total <= 0, usage 75 (>1) -> 75. Tooltip total>0 arm
-      // skipped (total 0) -> empty.
-      const p = buildStackedDiskBarPresentation(
-        { aggregateDisk: makeDisk({ total: 0, used: 0, free: 0, usage: 75 }) },
-        400,
-      );
+    it('shows an independently observed aggregate percentage without inventing byte totals', () => {
+      const p = buildStackedDiskBarPresentation({ aggregateDisk: { usage: 75 } }, 400);
       expect(p.displayPercentValue).toBe(75);
       expect(p.barPercent).toBe(75);
-      expect(p.displaySublabel).toBe('0 B/0 B');
-      expect(p.tooltipContent).toEqual([]);
+      expect(p.displaySublabel).toBe('');
+      expect(p.tooltipContent[0]).toMatchObject({ percent: '75%', used: '?', total: '—' });
     });
 
     it('maps anomaly severity to a class and formats each anomaly-ratio tier', () => {
@@ -718,5 +767,38 @@ describe('disk observation decorations', () => {
     expect(zero.barColor).toBe(NORMAL);
     expect(zero.tooltipContent[0].percent).toBe('0%');
     expect(zero.unavailable).toBe(false);
+  });
+});
+
+describe('partial filesystem byte admission shared with host drawers', () => {
+  it('excludes unavailable capacity and invalid used bytes from combined utilization and bars', () => {
+    const known = makeDisk({ mountpoint: '/known', total: 100, used: 50, usage: 50 });
+    const partials = [
+      makeDisk({ mountpoint: '/no-capacity', total: 0, used: 30, usage: 0 }),
+      makeDisk({ mountpoint: '/negative', total: 200, used: -1, usage: 0 }),
+      makeDisk({ mountpoint: '/non-finite', total: Infinity, used: 20, usage: 0 }),
+      makeDisk({ mountpoint: '/sentinel', total: 200, used: 70, usage: -1 }),
+    ];
+    const presentation = buildStackedDiskBarPresentation(
+      { disks: [known, ...partials], mode: 'aggregate' },
+      200,
+    );
+    expect(presentation.displayPercentValue).toBe(50);
+    expect(presentation.tooltipContent.map((item) => item.percent)).toEqual([
+      '50%',
+      '—',
+      '—',
+      '—',
+      '—',
+    ]);
+    expect(presentation.tooltipContent[1].total).toBe('—');
+    expect(presentation.tooltipContent[2].total).toBe('200 B');
+    expect(presentation.tooltipContent[3].total).toBe('—');
+    const vertical = buildStackedDiskBarPresentation(
+      { disks: [known, ...partials], mode: 'vertical-bars' },
+      200,
+    );
+    expect(vertical.verticalBars).toHaveLength(1);
+    expect(vertical.verticalBars[0].fillPercent).toBe(50);
   });
 });

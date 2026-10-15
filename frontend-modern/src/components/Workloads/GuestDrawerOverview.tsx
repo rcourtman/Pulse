@@ -140,6 +140,8 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   // the guest, so its RAID, network and filesystem rows read as last known.
   const agentLastKnownReason = () =>
     props.guest.agentStale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined;
+  const networkLastKnownReason = () =>
+    props.guest.networkInterfacesFromAgent === false ? undefined : agentLastKnownReason();
   const coverageLabel = () => {
     if (props.hasWorkloadActionAgent) return WORKLOAD_ACTION_AGENT_LABEL;
     if (props.hasAgentInfo) return `${props.agentHeading} observed`;
@@ -291,7 +293,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             footerContent:
               diskStatusMessage && isGuestDrawerVM(props.guest) ? (
                 <a
-                  class="text-xs font-semibold underline underline-offset-2"
+                  class="inline-flex min-h-11 items-center rounded-sm text-xs font-semibold text-base-content underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content sm:min-h-0"
                   href={`${getShippedDocUrl('VM_DISK_MONITORING.md')}#a-missing-reading-is-not-an-installation-diagnosis`}
                 >
                   Filesystem reading guidance
@@ -327,10 +329,11 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         ? {
             label: 'Network',
             rows: compactDetailRows([
-              // Only the linked Pulse agent reports guest interfaces.
+              // Agent freshness applies only to the selected agent list,
+              // not interfaces supplied independently by Proxmox.
               makeDetailRow(
                 'Status',
-                agentLastKnownReason()
+                networkLastKnownReason()
                   ? 'Using last known interface details. The Pulse Agent in this guest stopped reporting.'
                   : null,
                 { layout: 'stacked', wrap: true },
@@ -353,7 +356,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                   iface.name || `Interface ${index + 1}`,
                   detail || 'No details',
                   {
-                    tone: agentLastKnownReason() ? 'muted' : undefined,
+                    tone: networkLastKnownReason() ? 'muted' : undefined,
                     wrap: true,
                   },
                 );
@@ -406,7 +409,16 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   };
   const diskFact = () => {
     const disk = props.guest.disk;
-    if (!disk || !((disk.total ?? 0) > 0) || typeof props.currentMetrics?.disk !== 'number') {
+    if (
+      !disk ||
+      typeof disk.total !== 'number' ||
+      !Number.isFinite(disk.total) ||
+      disk.total <= 0 ||
+      typeof disk.used !== 'number' ||
+      !Number.isFinite(disk.used) ||
+      disk.used < 0 ||
+      typeof props.currentMetrics?.disk !== 'number'
+    ) {
       return '';
     }
     return `${formatBytes(disk.used ?? 0)} of ${formatBytes(disk.total ?? 0)} disk`;
@@ -523,7 +535,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           data-testid="guest-drawer-facts"
           class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
         >
-          <For each={facts()}>{(fact) => <span class="wrap-break-word">{fact}</span>}</For>
+          <For each={facts()}>
+            {(fact) => <span class="max-w-full whitespace-normal wrap-anywhere">{fact}</span>}
+          </For>
           <For each={tagChips()}>
             {(tag) => (
               <span class="max-w-full rounded-full border border-border px-2 py-0.5 text-[11px] break-all">

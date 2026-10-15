@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "30455a2c349253ef9b8e8b243a9b996944d0f5e4",
+  "verified_at": "2026-10-14T05:38:40.046023Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx": "8533167a234d2b42bf3af5658e855361ab46f6357b51de4082671dfaef37f387"
+  },
+  "routes": [
+    "/browser-tests/proxmox-collection-safety.html?type=pve"
+  ],
+  "states": [
+    "Final PVE text also keeps the original reduce-API-load/trim-workload-noise reason for disabling collectors; availability/permission caveats and independent backup recovery precaution remain.",
+    "PBS/PMG branches and shared editor/hook/CSS are byte-unchanged from the previously qualified six-case parent. Their four negative cases are retained, not repeated."
+  ],
+  "interactions": [
+    "Desktop keyboard Space and genuine 390px WebKit touch disable VM collection and save through the production editor to the safe fixture; target, other collectors, TLS verification and credentials remain intact.",
+    "Final PVE source consumes no live API request and has no page/console errors or horizontal overflow. The new copy is compiled and wrapped at both viewports."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "solid": "1.9.15",
+    "seroval": "1.6.3"
+  },
+  "pixel_review": {
+    "tool": "native view_image; both final original PVE image contents presented to the model",
+    "observations": [
+      "Complete final scope rationale, availability/deferred caveat and every-covered-filesystem backup precaution are readable at desktop and 390px. VM is visibly off; other collectors remain on.",
+      "The source change adds only the missing collection rationale. No baseline, threshold, runtime gate or production policy is changed."
+    ],
+    "captures": [
+      {
+        "file": "final-chromium-pve-collection.png",
+        "sha256": "be277d3a2ad350849340acf446251dea91eaef8551e3b0ac2fbf1e82851ebabf",
+        "bytes": 71410
+      },
+      {
+        "file": "final-webkit-pve-collection.png",
+        "sha256": "0980ca628db76a6ce4d995ed8aec938661fa96d98999000110905fdf85281a65",
+        "bytes": 64456
+      }
+    ]
+  },
+  "scope": "Existing collection guidance and its production editor consumer only. Does not establish native thaw, writes, restart recovery, release availability, a passing authentication golden or qualification of the unmounted upgraded graph.",
+  "proof_scope": "Final PVE wording qualification. Previous PBS/PMG branch/control proof remains retained; this is not native monitoring/recovery, authentication golden acceptance or upgraded-graph qualification."
+}

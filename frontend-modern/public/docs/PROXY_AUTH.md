@@ -154,6 +154,7 @@ prints only the HTTP status, not settings, cookies or credential-bearing logs:
   touch "$header_file"
   vi "$header_file"
   if status=$(curl --disable --silent --show-error --output /dev/null \
+    --proto '=http' --noproxy 127.0.0.1 \
     --connect-timeout 5 --max-time 10 \
     --write-out '%{http_code}' --header "@$header_file" \
     http://127.0.0.1:7655/api/system/settings); then
@@ -173,10 +174,18 @@ The temporary header file is removed on exit, including an editor or curl
 failure. Cleanup does not revoke the shared secret.
 
 The loopback address applies only on the Pulse host with a loopback listener.
-Otherwise use its existing private backend address over HTTPS with certificate
-verification enabled. Do not send forged test identities through a public proxy
-that should replace them. Keep `--disable` first to ignore local curl defaults;
-do not enable verbose/trace output, `--insecure` or redirect following.
+`--noproxy 127.0.0.1` explicitly bypasses proxy environment settings for this
+direct request. `--disable` ignores curl's configuration file, **not** those
+environment settings: without the bypass, a proxy could receive the shared
+secret and its response could be mistaken for Pulse's role result.
+
+Otherwise use the existing private backend address over HTTPS with certificate
+verification enabled. Replace `--proto '=http'` with `--proto '=https'` and the
+`--noproxy` value with that exact backend hostname or IP; do not send the shared
+secret through an environment proxy. Keep backend isolation intact. Do not send
+forged test identities through a public proxy that should replace them. Keep
+`--disable` first to ignore local curl defaults; do not enable verbose/trace
+output, `--insecure` or redirect following.
 
 With role gating configured on Pulse 6.2.2 or later, expect **403** for a valid
 non-admin identity. Repeat the same read-only probe with the role line omitted,

@@ -691,11 +691,13 @@ and task inventory on the Docker page.
 
 Pulse does not use a Proxmox node agent to look inside LXCs by default. The
 node agent does automatically collect filesystem capacity for running LXCs
-when the local `pct` tool is available. On cgroup v2 PVE hosts it finds running
-guests from the node's container configs and cgroup state and measures mount
-capacity with statfs through each guest's init process in `/proc`; it falls back
-to bounded `pct list` and `pct df <vmid>` calls when that discovery or a
-per-container probe cannot establish a guest's state. It reports only mount
+when the local `pct` tool is available. The current collector first uses
+socket-free cgroup v2 and `/proc` discovery plus bounded mount probes. A
+root or explicitly `--grant-pct` collector can fall back to `pct list` and
+`pct df <vmid>` (with `lxc-info` where permitted); those commands cannot recover readings inside the isolated
+typed helper. See [helper-backed LXC readings](AGENT_SECURITY.md#proxmox-lxc-filesystem-readings-with-the-typed-helper)
+for partial, unavailable and older-helper results. Do not remove `PrivateNetwork`
+or broaden the agent's privileges to clear a missing reading. It reports only mount
 keys, volume labels, mount paths, and capacity/usage values; it does not run
 commands inside a guest or read guest files. Stopped LXCs retain the normal
 API-derived disk view.
@@ -1039,6 +1041,49 @@ readinessProbe:
 Set `--health-addr=""` or `PULSE_HEALTH_ADDR=off` to disable the health/metrics server. Set `--health-addr :9191` when network Prometheus scraping is intentional.
 
 ## Troubleshooting
+
+### Copied agent command fails before installation
+
+The copied Unix command prepares a download and, for installation, runs a
+`--preflight-only` check before entering a private token prompt. Passing
+preflight is **not installation** or accepted reporting. Read the original
+error to identify which step stopped; do not run the command again to find out.
+
+- **`stty: command not found`, followed by a terminal-required message:** the
+  command's environment cannot run the tool used to prepare the private prompt.
+  A real terminal can still produce this error. It does not establish that the
+  token is invalid, that the target platform cannot run an agent, or that an
+  existing agent was removed.
+- **A terminal-required or interrupted-input message without that error:**
+  token entry did not complete safely. Keep it separate from an installer's
+  later result; do not assume a missing tool from the terminal message alone.
+- **`Safe-profile migration is unsupported on this platform`:** this concerns
+  the Linux safe-profile migration path. `--safe-profile-inspect` is a
+  standalone **read-only** action, not removal; `--uninstall` is a separate,
+  destructive action. The inspection can produce this error on an unsupported
+  platform such as QNAP. The error alone does not prove that removal ran. Do
+  not combine those flags or request a broader-privilege fallback.
+
+**Stop rather than bypass the private prompt.** Do not enable token echo, put a
+secret in command arguments or an environment assignment, weaken TLS, generate
+a replacement token or delete installed identity, connection files or logs.
+For a planned first installation where the prompt is unavailable, the
+[private-file installation](#private-file-installation-linux-macos-and-nas)
+uses a private editor and `--token-file`, with the same download trust and
+collector choices. It is not an instruction to repeat a failed recovery attempt.
+
+For an existing unavailable or outdated agent, retain that original failure
+separately and use [reporting checks](#agent-lookup-returns-http-401-or-403) or
+[update guidance](#auto-update). If removal was intentional, read its
+[state-preservation and result checks](#uninstall) before another action. A
+failed new command does not establish the cause of the earlier outage or
+automatic-update failure.
+
+When reporting a command failure, share only the original failure stage and
+manually redacted error. If the action is consequential, name only the flag
+already used (`--safe-profile-inspect` or `--uninstall`), or say **unknown**.
+Do not post the full copied command, a token, its file contents or service
+configuration, and do not repeat installation or removal to complete a report.
 
 ### Collect agent logs safely
 

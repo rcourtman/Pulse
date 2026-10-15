@@ -61,6 +61,26 @@ describe('workloadGuestPresentation', () => {
     },
   );
 
+  it('distinguishes uncertain completion and redirects from a request refused before dispatch', () => {
+    const completion = getWorkloadGuestDiskStatusMessage('agent-completion-unverified');
+    expect(completion).toContain('completion of the earlier request could not be verified');
+    expect(completion).toContain('after the cooldown');
+    const redirect = getWorkloadGuestDiskStatusMessage('agent-redirect');
+    expect(redirect).toContain('Pulse did not follow it');
+    expect(redirect).toContain('Completion of the original guest request is uncertain');
+    for (const message of [completion, redirect]) {
+      expect(message).not.toContain('This guest request was not sent');
+    }
+    const transport = getWorkloadGuestDiskStatusMessage('agent-transport-unverified');
+    expect(transport).toContain('configured connection avoids resending guest requests');
+    expect(transport).toContain('This guest request was not sent');
+    expect(transport).not.toMatch(/completion.*uncertain|after the cooldown/);
+    for (const message of [completion, redirect, transport]) {
+      expect(message).toContain('backups or a guest incident');
+      expect(message).not.toMatch(/Install|disable verification|retry now|qm agent|curl/);
+    }
+  });
+
   it.each(['agent-not-running', 'agent-disabled', 'future-private-error', undefined])(
     'keeps %s out of installation, activation and guessed OS advice',
     (reason) => {

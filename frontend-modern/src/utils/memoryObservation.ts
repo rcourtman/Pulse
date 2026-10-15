@@ -75,13 +75,16 @@ const memoryObservationState = (
   value: number | undefined,
   observation: MemoryObservation | undefined,
   timestamp: number | null,
+  agentStale = false,
 ): MemoryObservationPresentation['state'] =>
   !isMemoryPercent(value) || observation?.state === 'unavailable'
     ? 'unavailable'
     : observation?.state === 'last-known'
       ? 'last-known'
       : observation?.state === 'current' && timestamp !== null
-        ? 'current'
+        ? agentStale && observation.source === 'agent'
+          ? 'last-known'
+          : 'current'
         : 'unknown';
 
 const requiresWorkloadMemoryObservation = (guest: WorkloadGuest): boolean => {
@@ -116,6 +119,7 @@ export const getCurrentWorkloadMemoryUsage = (guest: WorkloadGuest): number | nu
       memory.usage,
       memory.observation,
       memoryObservationTime(memory.observation),
+      guest.agentStale === true,
     ) !== 'current'
   ) {
     return null;
@@ -142,13 +146,17 @@ export const getMemoryObservationPresentation = (
   value: number | undefined,
   observation: MemoryObservation | undefined,
   requiresObservation = false,
-  options: { includeCurrent?: boolean; guestKind?: MemoryGuestKind } = {},
+  options: { includeCurrent?: boolean; guestKind?: MemoryGuestKind; agentStale?: boolean } = {},
 ): MemoryObservationPresentation | null => {
   // Unannotated unrelated platforms retain their existing behaviour. Legacy
   // Proxmox readings lack authority to assert current freshness.
   if (!requiresObservation && !observation) return null;
   const timestamp = memoryObservationTime(observation);
-  const state = memoryObservationState(value, observation, timestamp);
+  // An agent-facet update can arrive without replacing the selected memory
+  // carrier. Honour the server's explicit source invalidation, but only for
+  // that agent's own reading: QGA and Proxmox remain independent. Do not add a
+  // client lease, renew the observation time or mutate its wire metadata.
+  const state = memoryObservationState(value, observation, timestamp, options.agentStale);
   // An unavailable reading shows no number, so there is nothing to qualify.
   const mayIncludeCache =
     state !== 'unavailable' &&
@@ -197,10 +205,14 @@ export const getMemoryObservationPresentation = (
       mayIncludeCache,
     };
   }
+  const sourceStatus =
+    options.agentStale && observation?.source === 'agent'
+      ? ' The Pulse Agent that supplied this reading stopped reporting.'
+      : '';
   return {
     state,
-    summary: `${label} · ${source}${mayIncludeCache ? ' (may include cache)' : ''}${observed ? ` · ${observed}` : ' · time unknown'}`,
-    message: `${label}. Source: ${source}. ${time}${state === 'last-known' || state === 'unknown' ? ' Not a current measurement.' : ''}${cacheNote ? ` ${cacheNote}` : ''}`,
+    summary: `${label} · ${source}${sourceStatus ? ' (stopped reporting)' : ''}${mayIncludeCache ? ' (may include cache)' : ''}${observed ? ` · ${observed}` : ' · time unknown'}`,
+    message: `${label}. Source: ${source}. ${time}${state === 'last-known' || state === 'unknown' ? ' Not a current measurement.' : ''}${sourceStatus}${cacheNote ? ` ${cacheNote}` : ''}`,
     mayIncludeCache,
     ...(cacheNote ? { cacheNote } : {}),
   };
@@ -233,6 +245,7 @@ export const getWorkloadMemoryObservationPresentation = (
     {
       ...options,
       guestKind: getWorkloadMemoryGuestKind(guest),
+      agentStale: guest.agentStale === true,
     },
   );
 };

@@ -56,6 +56,90 @@ describe('humanizeConnectionError', () => {
     expect(result?.headline).toBe('Permission denied');
   });
 
+  describe('trust-preserving recovery guidance', () => {
+    it.each([
+      ['x509: certificate signed by unknown authority', 'TLS certificate not trusted'],
+      ['x509: certificate has expired or is not yet valid', 'TLS certificate expired'],
+      ['remote error: tls: handshake failure', 'TLS handshake failed'],
+      [
+        'certificate fingerprint mismatch: expected fixture-old, got fixture-new',
+        'TLS fingerprint changed',
+      ],
+      ['truenas tls pinning failed: fingerprint mismatch', 'TLS fingerprint changed'],
+      [
+        'TLS fingerprint changed - independently verify the certificate before updating the saved fingerprint',
+        'TLS fingerprint changed',
+      ],
+      ['x509: certificate is valid for old.lab, not new.lab', 'TLS certificate validation failed'],
+      [
+        'TLS certificate error - check SSL settings or add fingerprint',
+        'TLS certificate validation failed',
+      ],
+      ['TLS certificate validation failed', 'TLS certificate validation failed'],
+    ])('keeps verification and independently checked identity for %s', (raw, headline) => {
+      const result = humanizeConnectionError(raw);
+      expect(result?.headline).toBe(headline);
+      expect(result?.hint).toContain('Keep TLS verification enabled.');
+      expect(result?.hint).toContain('hostname, expiry and trusted chain');
+      expect(result?.hint).toContain(
+        'Independently verify its identity before adding or replacing',
+      );
+      expect(result?.hint).not.toMatch(/disable|temporarily|switch.*HTTP/i);
+    });
+
+    it.each([
+      'API error 403: Forbidden',
+      'HTTP status 403: authentication failed; quoted upstream 401',
+      'authentication error: API error 403: invalid credentials',
+      'permission denied',
+    ])('does not infer a successful login or prescribe broader access for %s', (raw) => {
+      const result = humanizeConnectionError(raw);
+      expect(result?.headline).toBe('Permission denied');
+      expect(result?.hint).toContain('intended resource');
+      expect(result?.hint).toContain('any proxy policy');
+      expect(result?.hint).toContain('Keep intentional access limits');
+      expect(result?.hint).toContain('Do not replace credentials or broaden access just to test');
+      expect(result?.hint).not.toMatch(/credentials connected|logged in|Administrator/);
+    });
+
+    it.each(['401 Unauthorized', 'authentication failed', 'invalid API token'])(
+      'makes credential replacement conditional for %s',
+      (raw) => {
+        const result = humanizeConnectionError(raw);
+        expect(result?.headline).toBe('Authentication failed');
+        expect(result?.hint).toContain('user, realm and token ID');
+        expect(result?.hint).toContain('Replace it only if invalidity is confirmed');
+      },
+    );
+
+    it.each([500, 502, 595])(
+      'does not misclassify HTTP %i provider auth text as a 401',
+      (status) => {
+        const result = humanizeConnectionError(
+          `API error ${status}: Authentication failed; provider mentioned 401 and 403`,
+        );
+        expect(result?.headline).toBe('Server error');
+        expect(result?.hint).not.toMatch(/token|credential/);
+      },
+    );
+
+    it('ignores status-shaped numbers in the endpoint and poll identity', () => {
+      expect(
+        humanizeConnectionError(
+          'poll_nodes failed on 401: Get "https://pve.lab:403/api/500": something novel',
+        ),
+      ).toEqual({ headline: 'something novel', hint: null });
+    });
+
+    it.each([400, 429])(
+      'keeps unclassified HTTP %i responses instead of inferring auth failure',
+      (status) => {
+        const raw = `API error ${status}: provider mentioned 401 Unauthorized`;
+        expect(humanizeConnectionError(raw)).toEqual({ headline: raw, hint: null });
+      },
+    );
+  });
+
   it('classifies access violations as blocked connections', () => {
     const result = humanizeConnectionError(
       'poll_nodes failed on delly: Get "https://delly:8006/api2/json/nodes": Access violation',

@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -50,7 +51,7 @@ func TestNew_MockModeClientInitializationRespectsKeepRealPollingSetting(t *testi
 		orig := newProxmoxClientFunc
 		t.Cleanup(func() { newProxmoxClientFunc = orig })
 		called := false
-		newProxmoxClientFunc = func(cfg proxmox.ClientConfig) (PVEClientInterface, error) {
+		newProxmoxClientFunc = func(_ context.Context, cfg proxmox.ClientConfig) (PVEClientInterface, error) {
 			called = true
 			return &mockPVEClient{}, nil
 		}

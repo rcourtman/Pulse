@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "3e1cf31378eacf644544e89fcaedb6f1d585da77",
+  "verified_at": "2026-10-14T13:38:07Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "3df19439c819987d5a7d2770482b8528c5d4b2b93b7d9e6ac1ad01b37f7a1bdc"
+  },
+  "routes": [
+    "/?kind=lxc&transport=api (offline actual production useWorkloads/GuestRow/GuestDrawer with source-produced synthetic collector HTTP JSON)",
+    "/?kind=lxc&transport=snapshot (offline owning broadcast observations)",
+    "/?kind=vm (explicit synthetic VM and physical-disk observations through actual GuestDrawer/GuestPhysicalDisks/DiskDetail)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Scoped GuestDrawerOverview proof only: six executed guest cases complete 64 functional state assertions on containing source 3e1cf31378eacf644544e89fcaedb6f1d585da77; raw driver aggregate exits 1 on a WebKit physical-disk cancellation string after those assertions, not a product HTTP error. The cancelled initial-layout read is superseded by the same metric/range/resource at its measured point cap. This is not an all-green containing browser claim.",
+    "Actual source-produced status/config/runtime LXC observations retain primary and secondary order, interface names and canonical IDs. Explicit live/silent/empty-agent and silent-agent-without-list overlays preserve selected-source precedence and stale wording.",
+    "Overview-to-Manage pauses all guest and expanded physical-disk History reads over 120 seconds. Resume catches up with the same group/canvas and stored values; resize and restoration keep readings without a spinner. Stored, memory and lone-current history labels remain distinct.",
+    "Retained /data, unknown memory and visible backup safety guidance are readable at desktop and 390px dark WebKit. All twelve guest capture files opened with native view_image and inspected. No guest page/console errors or overflow. Browser/server close calls complete; Playwright 1.56.1 matches integration lock.",
+    "Node/Docker desktop proof exists, but their phone cases are NOT covered by this receipt. Final corrected containing runner was refused for pre-execution browser capacity; no replay. Native recovery, release/user availability, strict-auth and original PR2928 sixteen-run claims are not established."
+  ],
+  "interactions": [
+    "Native Details disclosure click/tap; select producer and explicit agent overlays on the same drawer; inspect named primary/secondary interfaces.",
+    "Native Manage/Overview controls and clock-driven polling; viewport 1365 to 1000 and restore / 390 to 350 and restore; expanded physical-disk read and retained lock/safety presentation."
+  ]
+}

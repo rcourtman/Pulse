@@ -20,6 +20,19 @@
 
 ## Purpose
 
+### Copied backend bootstrap commands have one portable private reader
+
+Existing setup artifact aliases and Proxmox/container command fields retain
+separate credential response fields. Their command text now selects standalone
+`stty` or, only when absent, BusyBox `stty`, with distinct fail-closed terminal,
+tool and mode diagnostics. One isolated root/sudo prefix emits the privileged
+reader once, preserving complete fetch/preflight and 0700/0600 path handoff.
+No route, payload key, issuance scope, TLS policy or install authority changes.
+`TestContract_PortablePrivateBootstrapPayloads` checks the serialized producer
+boundary; full configapi PTY/tool/privacy/caller tests exercise the commands.
+Browser acceptance must use the actual producer fields through their existing
+setup/agent consumers, not a frontend-file guard skip or fabricated commands.
+
 ### Patrol setup panel reuses existing AI endpoints
 
 The Patrol page setup panel adds no endpoint or payload field. It calls
@@ -12074,7 +12087,7 @@ requirements. No runtime paths or required contract updates are exempted.
 shell grammar for paste hosts (#2123), canonical URLs, custom CA/insecure
 continuity and complete-download-before-execution. Token values select private
 entry only and never become shell source, argv or environment. The privileged
-Bash child uses the bounded Core bootstrap reader; 4096-character input is
+Bash child uses the bounded private bootstrap reader; 4096-character input is
 preserved, overflow is drained before returning to the caller, and terminal
 modes and temporary 0700/0600 files are restored/removed on exit. Download and
 unprivileged preflight precede credential entry and installation; sudo
@@ -12084,9 +12097,22 @@ A no-terminal command can use an absolute local `tokenFilePath`. It requires a
 privileged-user-owned regular non-symlink 0600 file in an owned non-symlink 0700
 parent, passes only its path, and leaves this operator-owned file untouched.
 The existing installer's bounded trusted token reader still validates content
-and ancestor trust. The FreeBSD card explains this existing private-file route
+and ancestor trust. The Linux/NAS and FreeBSD cards explain this existing private-file route
 and does not put credentials in GUI command fields. It does not claim a GUI can
 create private files or establish native appliance installation.
+
+Root/sudo dispatch emits the quoted private reader only once via an isolated
+POSIX positional-argument prefix. Normal quoted URL/profile/identity variants
+remain below the common 4096-byte terminal line boundary. Actual interactive
+PTY controls wait for the caller prompt before pasting and before exiting, so
+startup truncation or a queued exit is not mistaken for a reader failure.
+
+The frontend terminal reader can select `busybox stty` only when standalone
+`stty` is absent. It distinguishes missing TTY, absent/unsupported tool and
+mode-save/echo-disable/restoration failures, refuses unsafe entry/installation,
+and restores using the selected tool on normal and signal exits. A host without
+a usable tool keeps the existing private-file option; credential issuance and
+transport do not change. Core owns the separate backend-generated reader mirror.
 
 Unix install, credential replacement, upgrade and uninstall use the shared
 transport. Explicit replacement/uninstall retain canonical agent ID and host;
@@ -12212,3 +12238,23 @@ The accepted upstream `diagnostics_token_visibility_test.go` controls and API
 reference route checks cover caller filtering and the documented authority.
 Final-source checks must retain this upstream behavior beside the reviewed
 reporting/help repairs; source proof is not installed credential recovery.
+
+### API-rejection guidance in diagnostics (14 October 2026)
+
+`GET /api/diagnostics` distinguishes `proxmox_permission_denied` (403) from
+`proxmox_auth_rejected` (401), with `proxmox_api_error` for other observed HTTP
+failures. Typed PVE/PBS statuses outrank response text. Retained scheduler text
+uses the first explicit producer status marker, not numbers in endpoint or
+token identities. Authentication guidance requires confirmed invalidity before
+replacement; permission guidance preserves both scoped ACLs and privilege
+separation. The existing `errors` array now carries these bounded diagnoses and
+recovery guidance into Errors Detected, using positional connection references
+rather than adding private identities. It does not claim to list every fault.
+PVE live-monitor reconciliation and separate PBS monitor/probe evidence remain.
+Routes, caller scope/token filtering, cache policy and probe count are unchanged.
+`TestDiagnosticsAPIStatusOutranksResponseText`,
+`TestDiagnosticsSerializedAPIStatusMarkers`,
+`TestComputeDiagnosticsAPIRejectionsPreserveCredentials` and
+`TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization` cover real
+HTTP statuses, private-body controls, same-credential fixture recovery and wire
+attribution. They are not installed permission or guest-recovery acceptance.

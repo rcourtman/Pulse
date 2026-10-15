@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "ee8df79a58a60d9af21ef3f0cd07b3af477e6177",
+  "verified_at": "2026-10-14T14:38:25.683Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/shared/HistoryChart.tsx",
+    "frontend-modern/src/components/shared/HistoryChartHeader.tsx",
+    "frontend-modern/src/components/shared/PhoneChartsToggle.tsx",
+    "frontend-modern/src/components/shared/historyChartModel.ts",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "03b1d6f65d32aac6bc5f55886fde0bf06fe94953db3eccbd738d7d4760000428",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx": "0cb80626d85ff783b07495779a7f3791778dcbdbec4692aedfdff62369e2a753",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "0ec0c06291cce526988749094bceafcb78a947f896968570b3001e3ed8eb0ab2",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "7f39626fd1c1c0eb33f953ebad2d06dc61772867a9fb760739f5979b185a72bf",
+    "frontend-modern/src/components/shared/HistoryChart.tsx": "1c19a3dcedbc257bfd8e06973c16fa89c2828c9b7e45371975f7ab6386cce58d",
+    "frontend-modern/src/components/shared/HistoryChartHeader.tsx": "46a353942d31d318125a0ee7bc41232cfecadb7c1bb16e6733ba5c04291df367",
+    "frontend-modern/src/components/shared/PhoneChartsToggle.tsx": "95e68032c8b3e1b849f4334706ce3ef1f4a9dc6a2b8bccc9cf9582e7b6972923",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "a8b8894cfa937ce26299d72eae9d1cbebd17b977e0f8f2d12943cf7324d22a1e",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "1a8760b01b853000a3ee22f333ad35bb5aa44b8dbdaceaed8b6104ab5803d723",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "b7cfb9aff00bf9c4a6017f8aaae8fb7e81d2243207355642bc0e6dd6e1f02da9",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "e72d7faa6e8c014c3e530a0c3b4c5c7f34572b78412b46cead334b261690731b"
+  },
+  "routes": [
+    "/?kind=node (real NodeDrawer/Overview with synthetic producing fields and History HTTP replies)",
+    "/?kind=docker (real DockerHostDrawer/Overview with synthetic owning/foreign alerts and HTTP replies)",
+    "/?kind=storage (real DiskDetail/StoragePoolDetail native canvas with synthetic SMART/history replies)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Current combined source, Chromium desktop light and WebKit phone dark, Playwright 1.56.1; 66 completed state records across six consumer cases.",
+    "Own-node CPU and own-Docker thermal triggers only; foreign guest/container warnings do not label host memory charts. Offline states retain stored History and capacity-only facts. Closed Details, full addresses, denied-update help and visible adverse availability evidence remain usable.",
+    "Storage/native canvas min/max spread renders behind average, flat buckets render no shaded area; SMART-adverse phone panel pins through recovery. First/previously pinned charts retain read ownership; folded live I/O charts issue no reads.",
+    "Actual memory/live/store response provenance reads Latest recorded/Current/Latest stored on drawers and Recent only on canvas; range, scale and keyboard/touch inspection are faithful.",
+    "All 26 new captures opened natively, including original fixture-assertion failure. First aggregate exits 1 at storage hex/RGBA comparison; its two finished desktop cases plus corrected remaining four-case exit 0 establish this bounded scope, not a full-suite/auth/native pass."
+  ],
+  "interactions": [
+    "Open/close Details and denied-update popover; ordinary producer replacement preserves dialog; Escape restores exact trigger focus.",
+    "Manage hides mounted Node/Docker Overview for 120 seconds with zero History reads; resume preserves chart identity/data; resize/restoration keeps values without loading regression.",
+    "Phone shared toggle expands/folds panels with at least 44px control height; synthetic SMART adverse/recovery pins its chart, folded reads remain stopped; pause disk holder for 120 seconds then resume.",
+    "Change drawer range to seven days and capacity trend to 24 hours; inspect first/last recorded averages with native Home/End or touch on actual canvas."
+  ],
+  "evidence_note": "Fresh exact-parent browser evidence. All runtime content is unchanged by this evidence commit. Earlier receipts and original strict-auth failures remain unchanged. Linked detailed run/capture/source/cleanup dossier accompanies the lane outcome."
+}

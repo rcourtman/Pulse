@@ -52,8 +52,11 @@ describe('canonical History filesystem source ownership', () => {
         disk: undefined,
         usage: undefined,
         cpu: 10,
-        memory: 0,
+        memory: undefined,
       });
+      expect(deferred(value).memory.lastKnownValue).toBe(0);
+      expect(deferred(value).memory.message).toContain('stopped reporting');
+      expect(deferred(value).memory.message).toContain('2026-10-12 00:00:00 UTC');
       expect(deferred(value).disk).toEqual({
         lastKnownValue: 62,
         message: 'Using last known disk stats. The Pulse Agent in this guest stopped reporting.',
@@ -62,6 +65,13 @@ describe('canonical History filesystem source ownership', () => {
       value.proxmox!.diskStatusReason = '';
       expect(current(value).disk).toBeUndefined();
       expect(deferred(value).disk.lastKnownValue).toBe(62);
+      expect(current(value).memory).toBeUndefined();
+      // Independent current QGA/PVE memory does not inherit this Pulse
+      // agent's silence or filesystem state, including measured zero.
+      value.memory!.observation!.source = type === 'vm' ? 'guest-agent-meminfo' : 'available-field';
+      expect(current(value).memory).toBe(0);
+      expect(deferred(value).memory).toBeUndefined();
+      expect(current(value).disk).toBeUndefined();
     },
   );
 

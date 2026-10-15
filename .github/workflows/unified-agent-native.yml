@@ -128,7 +128,7 @@ jobs:
 
       - name: Retain bounded native agent removal receipt
         if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-agent-removal-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pulse-agent-removal.json
@@ -147,21 +147,6 @@ jobs:
       - name: Check immutable integration images before frontend preparation
         if: matrix.unix
         run: go test -count=1 -timeout 3m -run '^TestIntegrationContainer' ./scripts/installtests
-
-      - name: Set up Node.js for native runtime test assets
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: 'frontend-modern/package-lock.json'
-
-      - name: Install frontend test dependencies
-        working-directory: frontend-modern
-        run: npm ci
-
-      - name: Build real frontend assets for API-linked native tests
-        working-directory: frontend-modern
-        run: npm run build
 
       - name: Supply GNU timeout for macOS guidance checks
         if: runner.os == 'macOS'
@@ -182,6 +167,69 @@ jobs:
         run: |
           set -euo pipefail
           timeout --version | grep -q 'GNU coreutils'
+
+      # Server/LXC fixtures execute Linux-only scripts, not a macOS installer.
+      # Keep their Bash/GNU metadata, archive and rename semantics local to that step;
+      # native macOS agent/runtime tests still use the runner's own utilities.
+      - name: Supply Linux server installer fixture tools on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install bash gnu-tar gawk
+          linux_bash="$(brew --prefix bash)/bin/bash"
+          test -x "$linux_bash"
+          "$linux_bash" -c '(( BASH_VERSINFO[0] >= 5 ))'
+          coreutils_bin="$(brew --prefix coreutils)/bin"
+          fixture_bin="$(mktemp -d "$RUNNER_TEMP/pulse-installer-fixture-tools.XXXXXX")"
+          ln -s "$linux_bash" "$fixture_bin/bash"
+          for tool in stat chmod chown mv; do
+            executable="$coreutils_bin/g$tool"
+            test -x "$executable"
+            "$executable" --version | grep -q 'GNU coreutils'
+            ln -s "$executable" "$fixture_bin/$tool"
+          done
+          gnu_tar="$(brew --prefix gnu-tar)/bin/gtar"
+          test -x "$gnu_tar"
+          "$gnu_tar" --version | grep -q 'GNU tar'
+          ln -s "$gnu_tar" "$fixture_bin/tar"
+          # The NAS boot filter rejects embedded NUL/control bytes with octal
+          # ranges. Use the same binary-aware awk semantics as its Linux jobs,
+          # not the native macOS parser, only within these server fixtures.
+          gnu_awk="$(brew --prefix gawk)/bin/gawk"
+          test -x "$gnu_awk"
+          "$gnu_awk" --version | grep -q 'GNU Awk'
+          ln -s "$gnu_awk" "$fixture_bin/awk"
+          printf 'PULSE_INSTALLER_FIXTURE_BIN=%s\n' "$fixture_bin" >> "$GITHUB_ENV"
+
+      # Observe the existing generated NAS watchdog/collector control before
+      # Node acquisition and the large installer inventory. The runner's two
+      # phases partition the same discovered checks; no check runs twice or is
+      # dropped, and the production process/cleanup deadlines stay unchanged.
+      - name: Test NAS removal contracts before frontend preparation
+        if: matrix.unix
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${PULSE_INSTALLER_FIXTURE_BIN:-}" ]]; then
+            export PATH="$PULSE_INSTALLER_FIXTURE_BIN:$PATH"
+          fi
+          python3 scripts/installtests/run_unix_contracts.py --phase preflight
+
+      - name: Set up Node.js for native runtime test assets
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
+
+      - name: Install frontend test dependencies
+        working-directory: frontend-modern
+        run: npm ci
+
+      - name: Build real frontend assets for API-linked native tests
+        working-directory: frontend-modern
+        run: npm run build
 
       - name: Test native agent runtime
         run: >-
@@ -212,33 +260,6 @@ jobs:
         if: runner.os == 'Linux'
         run: go build -o pulse-agent-helper-native ./cmd/pulse-agent-helper
 
-      # Server/LXC fixtures execute Linux-only scripts, not a macOS installer.
-      # Keep their Bash/GNU metadata, archive and rename semantics local to that step;
-      # native macOS agent/runtime tests still use the runner's own utilities.
-      - name: Supply Linux server installer fixture tools on macOS
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euo pipefail
-          brew install bash gnu-tar
-          linux_bash="$(brew --prefix bash)/bin/bash"
-          test -x "$linux_bash"
-          "$linux_bash" -c '(( BASH_VERSINFO[0] >= 5 ))'
-          coreutils_bin="$(brew --prefix coreutils)/bin"
-          fixture_bin="$(mktemp -d "$RUNNER_TEMP/pulse-installer-fixture-tools.XXXXXX")"
-          ln -s "$linux_bash" "$fixture_bin/bash"
-          for tool in stat chmod chown mv; do
-            executable="$coreutils_bin/g$tool"
-            test -x "$executable"
-            "$executable" --version | grep -q 'GNU coreutils'
-            ln -s "$executable" "$fixture_bin/$tool"
-          done
-          gnu_tar="$(brew --prefix gnu-tar)/bin/gtar"
-          test -x "$gnu_tar"
-          "$gnu_tar" --version | grep -q 'GNU tar'
-          ln -s "$gnu_tar" "$fixture_bin/tar"
-          printf 'PULSE_INSTALLER_FIXTURE_BIN=%s\n' "$fixture_bin" >> "$GITHUB_ENV"
-
       - name: Test native Unix installer contracts
         if: matrix.unix
         shell: bash
@@ -247,7 +268,7 @@ jobs:
           if [[ -n "${PULSE_INSTALLER_FIXTURE_BIN:-}" ]]; then
             export PATH="$PULSE_INSTALLER_FIXTURE_BIN:$PATH"
           fi
-          python3 scripts/installtests/run_unix_contracts.py
+          python3 scripts/installtests/run_unix_contracts.py --phase remaining
 
       - name: Test native Windows installer contracts
         if: ${{ !matrix.unix }}

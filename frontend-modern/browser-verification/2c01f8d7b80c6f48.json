@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "base_sha": "10ea4aa5ceb5f4784fb4b1e8aa122251acb1d676",
+  "verified_at": "2026-10-14T10:01:52.924345Z",
+  "result": "passed",
+  "changed_paths": ["frontend-modern/public/docs/ISSUE_TRIAGE.md"],
+  "content_sha256": {
+    "frontend-modern/public/docs/ISSUE_TRIAGE.md": "7e8fe77d75220e04983890ee85899f8521c97af22e0caab70f43943dd104e759"
+  },
+  "routes": ["/docs/ISSUE_TRIAGE#intake-contract", "/docs/README"],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Existing shipped issue-triage asset exactly matches the containing root document after its reviewed metadata-parser explanation was omitted from the copy. The existing production Docs page/router/Markdown/CSS renders the actual served asset.",
+    "Current metadata paragraph distinguishes actual top-level declarations from copied examples/logs/hidden comments and says existing reports need no refile. Entire document preserves valid UTF-8 curly quotes. No new route/page/navigation entry or source policy is added."
+  ],
+  "interactions": [
+    "Asynchronous direct fragment navigation focuses the existing Intake contract heading and reads the new paragraph at desktop and narrow widths.",
+    "Keyboard Enter on All documentation at desktop and a genuine WebKit touch tap reach the existing index; browser Back returns to the same unchanged paragraph. No backend request, mutation, page/console error or horizontal overflow.",
+    "An unchanged native fetch response clone from the actual Docs consumer supplies identical 17,682-byte ArrayBuffer hashes in both browsers. Chromium Playwright response.body text differs only at two Unicode curly quotes; that separate observation and preliminary failures remain retained, not hidden or mistaken for producer bytes."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "input_hashes": {
+    "docs/ISSUE_TRIAGE.md": "7e8fe77d75220e04983890ee85899f8521c97af22e0caab70f43943dd104e759",
+    "frontend-modern/public/docs/ISSUE_TRIAGE.md": "7e8fe77d75220e04983890ee85899f8521c97af22e0caab70f43943dd104e759",
+    "frontend-modern/src/pages/Docs.tsx": "2ddb5a1daef50d23a99a7d1cb510c73cd7a85600f07ea9f69ad72f741f3b5229",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "572a3b4bc5bc1114adef5aa64bb0ea833c0dbe5865bbd57d3dc767fd1965aa55",
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c",
+    "frontend-modern/package.json": "8d8da916d45b0aaf90d256787ea294b45c4aec89ee9fa3cab773bb8368c8da97",
+    "frontend-modern/package-lock.json": "927b6fd356ececa0de2d44bd68a62a7733a6bf2a93314bb24cc66d1c120e3915",
+    "frontend-modern/browser-tests/docs-fragment-navigation.html": "8303e101060aabd3247446676624d0f83b2cf81b9f6b1b71f180ea3432f66208",
+    "frontend-modern/browser-tests/docs-fragment-navigation.tsx": "2de6b8c853e5cd87790dcb6e582fefae07661d449835366cb72f2623b1bfe053",
+    "tmp/issue-triage-doc-browser.cjs": "69449238e5cfc6d406feda7deea8f93b57dc142b1fdc5585113eae1b5d62cb77"
+  },
+  "pixel_review": {
+    "tool": "native view_image; both retained original PNG contents presented to the model",
+    "captures": [
+      {
+        "file": "docs-browser/chromium-issue-triage.png",
+        "bytes": 252112,
+        "sha256": "578e66ad9b852c8f0275d9e2be88d4532ee79f899a61e707bf913888f18f04a4"
+      },
+      {
+        "file": "docs-browser/webkit-issue-triage.png",
+        "bytes": 149153,
+        "sha256": "74da7a03b3fe84a0cb61f90e553293675ff953ad70051628bd7bfbdbcec67c8d"
+      }
+    ],
+    "observations": [
+      "The new metadata paragraph is completely readable at both viewports. Its bold Pulse version reference, copied-continuation/hidden-comment distinction and no-refile instruction wrap correctly without horizontal clipping.",
+      "Existing long guide continues vertically beyond the viewport; screenshots show the changed paragraph in full, not an assertion that the whole document fits on screen."
+    ]
+  },
+  "scope": "Synchronise the existing served copy only, retaining the root document exactly. This establishes local source-bound documentation consumption, not installed intake/provider acceptance, report attribution/contact or release availability."
+}

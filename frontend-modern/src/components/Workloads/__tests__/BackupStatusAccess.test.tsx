@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { BackupIndicator, BackupStatusCell } from '../GuestRowCells';
+import { getGuestDrawerBackupPresentation } from '../guestDrawerModel';
 
 vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({ getBackupThresholds: () => undefined }),
@@ -37,14 +38,11 @@ describe('backup evidence access', () => {
       fireEvent.click(trigger);
       const dialog = screen.getByRole('dialog', { name: 'Backup status details' });
       expect(dialog).toHaveTextContent('Last completed backup');
-      expect(dialog).toHaveTextContent(
-        new Date(completed).toLocaleDateString(undefined, {
-          weekday: 'short',
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        }),
-      );
+      const completion = dialog.querySelector('time')!;
+      const drawer = getGuestDrawerBackupPresentation(completed, undefined, now);
+      expect(completion).toHaveAttribute('datetime', drawer.completedAt);
+      expect(completion).toHaveTextContent('2026-10-05 06:00:00 UTC');
+      expect(completion.textContent).toBe(drawer.dateLabel);
       expect(dialog).toHaveTextContent('2 hours ago');
       expect(trigger).toHaveAttribute('aria-expanded', 'true');
       await Promise.resolve();

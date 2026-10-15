@@ -2,6 +2,109 @@
 
 Pulse persists metrics history to disk so trend views and sparklines survive restarts.
 
+## Read a History panel
+
+In current drawers, open the affected resource's **Overview** and use **History
+range** beside its charts. Proxmox guests and nodes, Docker hosts and resource
+drawers (including PBS) show stored charts there instead of a separate History
+tab. If your installed version still has a **History** tab, use that tab; do not
+upgrade or restart just to follow this guide. A resource without a supported
+history target may have no chart.
+
+**On a phone**, drawers can show only **Utilization** and panels with active
+alerts. Use the **Show …** button below the charts to reveal the others, for
+example **Show Network I/O, Disk I/O, Thermals**. Its labels name the currently
+collapsed panels, so they vary by resource and alert. **Show fewer charts**
+collapses them again. Wider layouts show all panels and may have no button;
+older installed layouts may differ.
+
+This button changes only the layout, preserving **History range**; it does not
+refresh history or collect new measurements. A collapsed panel is not missing
+data or measured zero. After revealing it, **No stored history in this range**
+means that panel has no plotted stored samples for the selected range, not zero
+usage or proof that collection stopped. Loading, an access error, a locked range
+and **History unavailable** are different states: retain the existing message
+and range. Do not refresh, run Diagnostics or restart just to reveal a chart.
+
+These charts are separate from **Alerts → History**, table sparklines and
+current summary cards. A current card or a short trend preview does not
+establish the observations in the selected stored range. For a PBS host, use
+the [Backup Server chart](PBS.md#pbs-is-connected-but-history-stays-empty),
+not its datastore or the VM that happens to host it.
+
+Start with the existing chart, not a restart or a storage change. A current
+reading does not prove that it was stored, and a selected time range does not
+prove continuous coverage. **Window start** and **Window end** bound the
+requested interval; they are not the first and last successful observations.
+
+VM and LXC drawer panels can show these labels. Other charts and older Pulse
+versions may differ; if a time or source is not shown, keep it unknown rather
+than borrowing one from the current overview.
+
+| Display | How to read it | What it does not establish |
+| --- | --- | --- |
+| **Latest stored** | The newest stored observation time in this panel. Each value belongs to that time; a dash means no stored observation for that metric at that time. | Not necessarily now, every metric's newest value, or another panel's time. |
+| **Stored** while inspecting | Values at the selected stored observation time. | Not a live reading or an interpolated observation between points. |
+| **current**, **last known** or **freshness unknown** with no stored history | A separately qualified fallback reading. Keep its label and explanation. | Not proof that the value was persisted or belongs to a past incident. |
+| **Single observation. No trend yet.** | One stored time in that panel. | Not a flat trend or sustained recovery. |
+| **Missing observations** | Some series lack readings at other stored times in that panel; lines stop across those gaps. | Not the cause or duration of a monitoring outage. Missing is not measured zero. |
+| **Shaded low–high band** | The recorded minimum and maximum within an aggregated bucket, when supplied; the line shows its average. | Not continuous coverage, every original sample, or the duration of a spike. |
+| **peak** while inspecting | That metric's maximum in the inspected bucket, when the panel shows it beside the average. | Not necessarily the highest value in the whole selected range or the value at an alert's exact time. |
+
+For example, CPU **22% at 12:02** and memory **95% at 12:01** are not one
+observation. At **Latest stored · 12:02**, memory is a dash if there is no
+memory point at 12:02; the earlier 95% remains inspectable. Network and disk
+I/O panels have their own times, not a shared snapshot of the guest.
+
+An aggregated CPU bucket can show **22% average, 10% to 95%**. The line at 22%
+does not rule out the recorded 95% peak, and the band does not say how long
+that peak lasted. No visible band may mean a single reading, equal bounds or
+unavailable bounds; it does not prove that usage stayed constant. Older panels
+may not show these bounds. Keep that limitation rather than inferring a peak
+from the line alone.
+
+1. Keep the same resource, metric and range when comparing existing readings.
+   **Inspect history**, when offered, steps through stored times: focus the
+   slider and use the arrow keys, **Home** or **End**, or move it by touch.
+   Hover is another way to inspect; it is not required. Leaving the slider
+   returns to the latest stored display.
+2. Keep the displayed observation time and qualification with the value.
+   Stored points can be aggregated or downsampled; they are not a measurement
+   of every instant in the selected range. A page refresh time is not the
+   observation time. If an absolute time is unavailable, retain that limit.
+3. Compare an alert or Patrol finding with the original episode, not just
+   today's overview. Today's source cannot identify the source of a past
+   warning. Follow [guest memory interpretation](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful)
+   when unlike readings suggest memory pressure.
+
+Use already available observations; do not run Diagnostics or guest-agent
+probes, restart a guest, repeat a backup, clear History or change retention to
+make a comparison agree. An unresponsive guest or an uncertain freeze/thaw
+operation needs [Backup safety](VM_DISK_MONITORING.md#backup-safety), not chart
+inspection. When reporting a display disagreement, keep the panel, time,
+range, labels and relevant values with consistent private aliases; do not
+share raw responses, credentials or a full network export.
+
+## Retention and accessible range
+
+Storage retention and the range your running instance can serve are separate.
+Community supports up to **7 days**; Pro and legacy Pro+ entitlements support
+up to **90 days**. The panel uses the active runtime's history limit, not the
+length of time the database has existed. A longer retention setting does not
+grant access, and a licence cannot recover observations that were never stored.
+
+**Relay is no longer sold.** Continuing Relay subscribers receive Pro features,
+including 90-day history, at their existing price. Older Relay payloads can
+still show a 14-day compatibility limit; that is not a plan to buy or proof
+that a continuing subscription has received its current entitlement. See
+[plans and legacy subscriptions](PULSE_PRO.md#self-hosted-commercial-model).
+
+An API request beyond the active limit returns **402 Payment Required**, not
+an empty history or a failed collector. Use an allowed range and the existing
+licence/range display first; do not buy another licence, reset history or
+reinstall merely to diagnose it. Storage defaults below do not guarantee that
+every resource has data for every allowed range.
+
 ## Storage Location
 
 Metrics history is stored in a SQLite database named `metrics.db` under the Pulse data directory:
@@ -178,7 +281,9 @@ durable historical coverage. An HTTP 200 with no points proves neither zero
 usage nor successful collection, and a non-zero current value does not prove
 every historical interval is present.
 
-> **License**: Requests beyond Community's `7d` floor require the paid `long_term_metrics` entitlement. Relay unlocks `14d`, Pro and legacy Pro+ unlock `90d`, and requests beyond the active tier's limit return `402 Payment Required`.
+> **History limit**: Requests beyond the active runtime's allowed range return
+> `402 Payment Required`. See [retention and accessible range](#retention-and-accessible-range);
+> stored retention is not access or proof of collected observations.
 > **Older examples**: `container`, `dockerHost`, `dockerContainer`, `guest` and
 > `docker` are not current `resourceType` query values. Use the chart's current
 > type rather than a display label or internal storage name.

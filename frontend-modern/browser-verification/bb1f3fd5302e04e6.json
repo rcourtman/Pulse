@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "a665ef8ff1f54843b9dc769c2106b728b76922ef",
+  "verified_at": "2026-10-13T06:41:16.987Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/public/docs/VM_DISK_MONITORING.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/VM_DISK_MONITORING.md": "b3f1c6266a142b8087358c65cc5c269f2cfdfcb05f5c78f2537d03df42319544"
+  },
+  "routes": [
+    "/browser-tests/guest-reading-help.html (production GuestRow and GuestDrawer)",
+    "/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis",
+    "/docs/VM_DISK_MONITORING#current-retained-and-unavailable-disk-readings (shipped Docs renderer)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Supplied Windows unavailable filesystem reason remains distinct from installation cause. Follow the existing same-guest drawer link to shipped guidance, then its context anchor.",
+    "Changed Markdown is fetched by the real Docs renderer: exact b3f1c626 bytes at both viewports; existing unknown/not-zero, retained/not-current, coverage, QGA-only recovery and access limits remain visible.",
+    "Native view_image inspected both retained captures: the context paragraph and three-row reading table wrap at390px without horizontal overflow; desktop keyboard focus on the heading is visible. No native, PR2893, installed or release acceptance."
+  ],
+  "interactions": [
+    "Keyboard disclosure and Enter follow both existing links at desktop; touch opens the same drawer and links on WebKit phone.",
+    "Nine rendered guidance distinctions and exact served Markdown hash verified in each context; no page errors, external or mutating requests.",
+    "Both browser engines and the source-bound fixture listener close."
+  ]
+}

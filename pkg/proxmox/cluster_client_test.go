@@ -226,40 +226,6 @@ func TestIsNotImplementedError(t *testing.T) {
 	}
 }
 
-func TestIsVMSpecificError(t *testing.T) {
-	tests := []struct {
-		name     string
-		errStr   string
-		expected bool
-	}{
-		{"empty string", "", false},
-		{"generic connection error", "connection refused", false},
-		{"no qemu guest agent", "no qemu guest agent", true},
-		{"No QEMU guest agent uppercase", "No QEMU guest agent running", true},
-		{"qemu guest agent is not running", "qemu guest agent is not running", true},
-		{"QEMU guest agent is not running", "QEMU guest agent is not running", true},
-		{"guest agent generic", "guest agent error", true},
-		{"qmp command timeout", "qmp command 'guest-get-fsinfo' failed - got timeout", true},
-		{"QMP command uppercase", "QMP Command failed", true},
-		{"guest-get-fsinfo", "guest-get-fsinfo returned empty", true},
-		{"guest-get-memory-blocks", "guest-get-memory-blocks failed", true},
-		{"guest-get-vcpus", "error in guest-get-vcpus", true},
-		{"authentication error not VM specific", "authentication failed", false},
-		{"connection timeout not VM specific", "connection timeout", false},
-		{"node offline not VM specific", "node offline", false},
-		{"vm in error message but not agent", "VM 100 is offline", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isVMSpecificError(tt.errStr)
-			if result != tt.expected {
-				t.Errorf("isVMSpecificError(%q) = %v, want %v", tt.errStr, result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestIsEndpointConnectivityError(t *testing.T) {
 	tests := []struct {
 		name     string

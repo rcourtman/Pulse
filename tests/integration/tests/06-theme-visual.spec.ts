@@ -1,5 +1,6 @@
 import { expect, Page, test } from '@playwright/test';
 import { ensureAuthenticated, maybeCompleteSetupWizard, waitForPulseReady } from './helpers';
+import { captureAuthRenderer } from '../scripts/capture-auth-renderer.mjs';
 
 type ThemePreference = 'light' | 'dark';
 
@@ -46,6 +47,30 @@ async function stabilizeUpdateChecks(page: Page): Promise<void> {
       contentType: 'application/json',
       body: JSON.stringify(NO_UPDATE_INFO),
     }),
+  );
+}
+
+// The auth visual baseline includes the default organisation. Pin the
+// runtime and org inventory, not the real login/session or permission gates:
+// a preceding probation spec must not change this page's sidebar composition.
+const AUTH_VISUAL_RUNTIME_CAPABILITIES = {
+  capabilities: ["update_alerts", "sso", "ai_patrol", "multi_tenant"],
+  limits: [],
+  hosted_mode: false,
+  max_history_days: 7,
+  runtime: { build: "community", label: "Pulse Community runtime" },
+  blocked_capabilities: [],
+};
+
+async function stabilizeAuthInventory(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem("pulse_org_id", "default");
+  });
+  await page.route("**/api/license/runtime-capabilities", (route) =>
+    route.fulfill({ json: AUTH_VISUAL_RUNTIME_CAPABILITIES }),
+  );
+  await page.route("**/api/orgs", (route) =>
+    route.fulfill({ json: [{ id: "default", displayName: "default" }] }),
   );
 }
 
@@ -174,6 +199,11 @@ async function openAuthenticatedSecurityAuth(page: Page, theme: ThemePreference)
     await expect(authHeading).toBeVisible();
   }
 
+  // Fail before pixel comparison if this is a different inventory. The
+  // screenshot threshold and baseline images remain unchanged.
+  const sidebar = page.locator('[aria-label="Settings navigation"]');
+  await expect(sidebar.getByText('Organization', { exact: true })).toBeVisible();
+  await expect(sidebar.getByText('Overview', { exact: true })).toBeVisible();
   await stabilizeVisualState(page);
 }
 
@@ -185,11 +215,23 @@ test.describe.serial('Theme visual regression (auth surfaces)', () => {
 
   test.beforeEach(async ({ page }) => {
     await stabilizeUpdateChecks(page);
+    await stabilizeAuthInventory(page);
     await page.setViewportSize(VISUAL_VIEWPORT);
   });
 
+  // Preserve actual font selection and complete CSS byte identities on both
+  // passes and failures. A font package install or a short asset name is not
+  // evidence of what this renderer used; keep the pixel thresholds unchanged.
+  async function attachRenderer(page: Page): Promise<void> {
+    await test.info().attach('auth-renderer', {
+      body: Buffer.from(JSON.stringify(await captureAuthRenderer(page), null, 2)),
+      contentType: 'application/json',
+    });
+  }
+
   test('logged-out login surface (light)', async ({ page }) => {
     await openLoggedOutLogin(page, 'light');
+    await attachRenderer(page);
 
     await expect(page).toHaveScreenshot('auth-login-light.png', {
       fullPage: true,
@@ -205,6 +247,7 @@ test.describe.serial('Theme visual regression (auth surfaces)', () => {
 
   test('logged-out login surface (dark)', async ({ page }) => {
     await openLoggedOutLogin(page, 'dark');
+    await attachRenderer(page);
 
     await expect(page).toHaveScreenshot('auth-login-dark.png', {
       fullPage: true,
@@ -220,6 +263,7 @@ test.describe.serial('Theme visual regression (auth surfaces)', () => {
 
   test('authenticated security-auth surface (light)', async ({ page }) => {
     await openAuthenticatedSecurityAuth(page, 'light');
+    await attachRenderer(page);
 
     await expect(page).toHaveScreenshot('auth-settings-light.png', {
       fullPage: true,
@@ -230,6 +274,7 @@ test.describe.serial('Theme visual regression (auth surfaces)', () => {
 
   test('authenticated security-auth surface (dark)', async ({ page }) => {
     await openAuthenticatedSecurityAuth(page, 'dark');
+    await attachRenderer(page);
 
     await expect(page).toHaveScreenshot('auth-settings-dark.png', {
       fullPage: true,

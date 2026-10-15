@@ -387,6 +387,65 @@ class APIAuthDocsTest(unittest.TestCase):
                         self.assertNotIn("Content-Type", headers)
             self.assertEqual(len(requests), 4)
 
+    def test_shared_helper_keeps_glob_shaped_paths_and_queries_literal(self):
+        # One curl process can still send multiple HTTP requests: shell quoting
+        # and an argv-count assertion do not prevent curl's own URL expansion.
+        paths = (
+            "/api/admin/roles/{review,ops}",
+            "/api/admin/roles/team[1-3]",
+            "/api/audit/actions?resourceId=host[1-3]&limit=10",
+            "/api/audit/actions?filter[resource]=host{a,b}",
+        )
+        self.assert_literal_requests(paths)
+
+    def test_shared_helper_preserves_percent_encoded_identifiers(self):
+        self.assert_literal_requests((
+            "/api/admin/roles/%7Breview%2Cops%7D%5B1-3%5D",
+            "/api/audit/actions?resourceId=host%5B1-3%5D&limit=10",
+        ))
+
+    def assert_literal_requests(self, paths):
+        with private_recording_server() as (port, requests), tempfile.TemporaryDirectory() as temporary:
+            for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
+                for method in ("GET", "POST", "PUT", "DELETE"):
+                    for path in paths:
+                        with self.subTest(header=key, method=method, path=path):
+                            before = len(requests)
+                            call = f"pulse_api {method} '{path}' <<'JSON'\n{{\"fixture\":true}}\nJSON\n"
+                            result = self.run_documented_request(Path(temporary), f"{key}: {value}", port,
+                                                                 request_helper() + "\n" + call)
+                            self.assertEqual(len(requests), before + 1,
+                                             "one supplied URL must not expand into multiple requests")
+                            sent_path, headers, sent_method, body = requests[-1]
+                            self.assertEqual((sent_method, sent_path), (method, path))
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            self.assertEqual(headers[key], value)
+                            other_key = "Authorization" if key == "X-API-Token" else "X-API-Token"
+                            self.assertNotIn(other_key, headers)
+                            self.assertNotIn("X-Curlrc-Injected", headers)
+                            if method in ("POST", "PUT"):
+                                self.assertEqual(headers["Content-Type"], "application/json")
+                                self.assertEqual(json.loads(body), {"fixture": True})
+                            else:
+                                self.assertEqual(body, b"")
+                                self.assertNotIn("Content-Type", headers)
+
+    def test_glob_shaped_write_fails_privately_without_additional_requests(self):
+        for status, partial, expected_exit in ((401, False, 22), (302, False, 1), (200, True, 18)):
+            with private_recording_server(status, partial) as (port, requests):
+                for method in ("POST", "DELETE"):
+                    for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
+                        with self.subTest(status=status, method=method, header=key), tempfile.TemporaryDirectory() as temporary:
+                            before = len(requests)
+                            path = "/api/admin/roles/{review,ops}"
+                            call = f"pulse_api {method} '{path}' <<'JSON'\n{{\"fixture\":true}}\nJSON\n"
+                            result = self.run_documented_request(Path(temporary), f"{key}: {value}", port,
+                                                                 request_helper() + "\n" + call)
+                            self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
+                            self.assertEqual(len(requests), before + 1,
+                                             "failure must not submit another target or retry the write")
+                            self.assertEqual((requests[-1][2], requests[-1][0]), (method, path))
+
     def test_shared_helper_refuses_unsupported_methods_urls_and_missing_auth_before_transport(self):
         with recording_server() as (port, requests), tempfile.TemporaryDirectory() as temporary:
             env = dict(os.environ, HOME=temporary)

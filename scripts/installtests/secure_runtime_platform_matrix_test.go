@@ -20,7 +20,8 @@ func TestSecureRuntimePlatformMatrixRemainsExplicitAndShipped(t *testing.T) {
 		t.Fatal("shipped Agent Security documentation differs from the canonical source")
 	}
 
-	content := string(canonical)
+	// Paragraph wrapping is not part of the shipped safety contract.
+	content := strings.Join(strings.Fields(string(canonical)), " ")
 	required := []string{
 		"### Safe-profile support and qualification matrix",
 		"Standard Linux systemd host telemetry and collector update",
@@ -36,17 +37,18 @@ func TestSecureRuntimePlatformMatrixRemainsExplicitAndShipped(t *testing.T) {
 		"currently explicit rather than the installer default.",
 		"Residual owner and removal condition",
 		"systemd does not enforce `RestrictAddressFamilies` on native 32-bit x86",
-		"Do not\nremove `PrivateNetwork` to work around a telemetry failure.",
-		"helper's private network namespace",
+		"Do not remove `PrivateNetwork` to work around a telemetry failure.",
+		"runs in a private network namespace rather than the host network namespace",
 		"operation v2 preserves the collected",
 		// The helper now avoids abstract IPC rather than relaxing its private
 		// network. Check the replacement route and its remaining limits, not
 		// the retired matrix wording that called every such host unavailable.
-		"Configs are read through the pmxcfs mount",
+		"reads the owning node's container configuration",
 		"cgroup v2 and `/proc`",
-		"pins the guest's init, re-checks its identity",
-		"the caller selects no VMID, path, or command",
-		"whenever discovery cannot establish a guest's state",
+		"finds running guests and their init processes",
+		"does not execute a command inside a guest, read guest file contents or accept a caller-selected VMID or path",
+		"when a running guest's state cannot be established",
+		"degraded or unavailable inventory rather than a complete list",
 		"Does not yet justify Proxmox host-agent parity or a default change",
 	}
 	for _, marker := range required {

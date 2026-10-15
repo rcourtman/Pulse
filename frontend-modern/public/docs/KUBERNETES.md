@@ -215,7 +215,13 @@ To monitor Kubernetes resources, run the unified agent as a DaemonSet and enable
 
 **Recommended options:**
 - **Kubernetes-only monitoring**: `PULSE_ENABLE_KUBERNETES=true` and `PULSE_ENABLE_HOST=false` (no host mounts required).
-- **Kubernetes + node metrics**: `PULSE_ENABLE_KUBERNETES=true` and `PULSE_ENABLE_HOST=true` (requires host mounts and privileged mode).
+- **Node and pod CPU/memory usage**: the Kubernetes module reads the cluster's
+  `metrics.k8s.io` API. It does not require host mounts or privileged mode;
+  the [read-only RBAC example](#rbac) includes the necessary metrics permissions.
+- **Additional host-local telemetry**: a separate, deliberate host-agent
+  deployment, with a distinct identity for each node. See
+  [host metrics](#add-host-metrics-optional); do not enable it merely to repair
+  missing API usage.
 
 #### Minimal DaemonSet Example
 
@@ -323,45 +329,40 @@ See [UNIFIED_AGENT.md](UNIFIED_AGENT.md) for all available configuration options
 
 #### Add Host Metrics (Optional)
 
-If you want node CPU/memory/disk metrics, add privileged mode plus host mounts:
+Keep the cluster example **Kubernetes-only**. Its shared `PULSE_AGENT_ID` is
+not an identity for every host: enabling host reporting under that same ID can
+combine different nodes' host readings. Do not turn on `PULSE_ENABLE_HOST` or
+add privileged mode and host-root mounts to obtain Kubernetes CPU/memory usage.
+Use the metrics API and its read permissions instead.
 
-```yaml
-          env:
-            - name: PULSE_ENABLE_HOST
-              value: "true"
-            - name: HOST_PROC
-              value: "/host/proc"
-            - name: HOST_SYS
-              value: "/host/sys"
-            - name: HOST_ETC
-              value: "/host/etc"
-          securityContext:
-            privileged: true
-          volumeMounts:
-            - name: host-proc
-              mountPath: /host/proc
-              readOnly: true
-            - name: host-sys
-              mountPath: /host/sys
-              readOnly: true
-            - name: host-root
-              mountPath: /host/root
-              readOnly: true
-      volumes:
-        - name: host-proc
-          hostPath:
-            path: /proc
-        - name: host-sys
-          hostPath:
-            path: /sys
-        - name: host-root
-          hostPath:
-            path: /
-```
+Host-local disks, sensors and other host readings are a different collection
+path. If you deliberately need them, plan a separate node-local deployment
+through the [Unified Agent configuration](UNIFIED_AGENT.md#configuration),
+with only the access those collectors need, persistent agent state and a
+distinct, stable identity for each node. A Kubernetes-only `kubernetes:report`
+token does not authorise host reporting; that path also needs `agent:report`.
+It is not a reason to reuse an administrator token.
+
+For an existing installation, preserve the current IDs, credentials and state;
+do not rename, re-enrol or restart agents just to diagnose missing usage. Use
+the [identity checks](UNIFIED_AGENT.md#duplicate-agents) before repairing a
+confirmed host-identity collision. Read-only host mounts do not remove the
+security exposure of a privileged pod, and neither changes Kubernetes API RBAC.
 
 #### RBAC
 
-The Kubernetes agent uses the in-cluster API and needs read access to cluster resources (nodes, pods, deployments, etc.). Create a read-only `ClusterRole` and bind it to the `pulse-agent` service account.
+The Kubernetes module uses the pod's service account to read the cluster API.
+The minimal role below covers node, pod and Deployment inventory, their
+CPU/memory usage from `metrics.k8s.io`, and optional recovery records. It is
+not a complete role for every Kubernetes tab or resource type Pulse can collect.
+Other inventory needs its own explicit read permissions; a running pod or one
+populated tab does not establish complete collection.
+
+For a new deployment, create the service account, role and binding in the
+intended cluster before applying the agent workload. For an existing one,
+reconcile the exact denied API group/resource with its managed role through
+normal review, not by replacing a working binding or adding `cluster-admin`.
+The service account and binding must use the agent pod's actual namespace.
 
 ```yaml
 apiVersion: v1
@@ -381,6 +382,9 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
   # Optional (Recovery): VolumeSnapshots and Velero backups.
   # These rules are safe to include even if the APIs are not installed; the agent will
   # feature-detect and ignore 404/403 responses.
@@ -404,6 +408,17 @@ roleRef:
   name: pulse-agent-read
   apiGroup: rbac.authorization.k8s.io
 ```
+
+These permissions do not install a metrics provider. The cluster must already
+serve `metrics.k8s.io`; inventory can remain available when usage collection
+is unavailable, and missing usage is not measured zero.
+
+This role grants no Secret reads, `nodes/proxy`, writes or workload execution.
+The collector's additional kubelet-summary path uses `nodes/proxy`, so network
+and ephemeral-storage usage from that path can remain unavailable under this
+minimal role even when API CPU/memory works. Do not broaden access or enable
+host privileges merely to fill an empty field. Follow the
+[failure-specific checks](#4-troubleshooting) using existing observations.
 
 ## 3. Talos Linux Specifics
 

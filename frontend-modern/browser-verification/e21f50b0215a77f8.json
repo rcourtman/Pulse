@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "5b859dda3aa5eb55961bbd5c992d291cf0c9a9cd",
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "6c812a768505c01eb9248ab84e462e11c65851b236ee4c6711eb874a5042b7a8",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "af86cb69a430848f5d2cd026a414a17a827570ad5403c877d3e119075526d6d2"
+  },
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "routes": [
+    "Existing Workloads VM row, reading details dialog, GuestDrawer Overview and History through production useWorkloads; offline consuming fixture, no new product route."
+  ],
+  "states": [
+    "Unverified completion retains the original disk/memory observation and describes the existing cooldown, without declaring the agent stopped or absent.",
+    "An unfollowed redirect leaves original request completion uncertain; an unverifiable no-replay connection reports that this request was not sent.",
+    "Current versus retained filesystem reasons, empty/null carriers, a partial inventory, unknown fixed-vocabulary fallback and independent current memory remain distinct.",
+    "Available/deferred guest-agent state, historical readings and an OK backup are not independent thaw or covered-filesystem-write evidence."
+  ],
+  "interactions": [
+    "Desktop Enter and narrow touch open the existing reading dialog and drawer; Close, collapse and Details remain usable.",
+    "Same-identity changes between 18 recorded/adapted frames per viewport update row titles, drawer precautions, Filesystems Status and History explanations without any guest operation or retry.",
+    "Bars and sparklines preserve reading cues and independent CPU/memory; missing filesystem carriers use their existing unavailable row fallback and visible drawer guidance.",
+    "All twelve final dialog/drawer captures opened natively: readable distinct explanations and wrapping safety text, with no horizontal overflow at either viewport."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-14T19:07:48Z",
+  "engines": [
+    "Playwright 1.56.1 / desktop-chromium 141.0.7390.37",
+    "Playwright 1.56.1 / phone-webkit 26.0"
+  ],
+  "scope": "36 consuming states: nine unchanged collector/state/broadcast frames retained from exact Core source, plus nine labelled presentation controls, at two viewports. Supporting APIs/History are fixtures. No full-app authentication, native transport/thaw/writes, installed recovery, reporter resolution or release availability is established."
+}

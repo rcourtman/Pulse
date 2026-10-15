@@ -367,16 +367,11 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
           perDiskItems().length > 0
             ? compactDetailRows(
                 perDiskItems().map((disk) =>
-                  makeDetailRow(
-                    disk.label,
-                    `${Math.round(disk.percent)}% · ${formatBytes(disk.used)} / ${formatBytes(
-                      disk.total,
-                    )}`,
-                    {
-                      title: disk.device ? `${disk.label} · ${disk.device}` : disk.label,
-                      tone: getDetailTone(disk.textClass),
-                    },
-                  ),
+                  makeDetailRow(disk.label, disk.usageText, {
+                    title: disk.device ? `${disk.label} · ${disk.device}` : disk.label,
+                    tone: disk.percent === null ? 'muted' : getDetailTone(disk.textClass),
+                    wrap: true,
+                  }),
                 ),
               )
             : toDetailRows(storageRows()),
@@ -448,9 +443,6 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
             })
           : null,
       ]);
-    },
-    get footerContent() {
-      return updateEvidence()?.helpContentId ? updateAccessGuidance : undefined;
     },
   };
 
@@ -605,6 +597,8 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
           />
         </Suspense>
       </Show>
+
+      {updateAccessGuidance}
 
       <Show when={sensorSections().length > 0}>
         <TechnicalDetailsSection dataTestId="node-drawer-sensors" sections={sensorSections()} />

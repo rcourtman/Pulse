@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "29a8636037e801fff6536cbaef94d3b84ba57df8",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "da2faa0ffa15f32c80d44bcaedf573dc65557218038527e33c4cbe33cb820c6c",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "9c370f674e0982a46029442539758faa58f980f8b7771b3294f6176da29cf7bd"
+  },
+  "routes": [
+    "/browser-tests/backup-safety.html (canonical Resources API/useWorkloads to production Workloads row/backup disclosure)",
+    "/docs/VM_DISK_MONITORING"
+  ],
+  "states": [
+    "Fresh completed backup and reported QGA availability do not confirm thaw/writes",
+    "Current backup lock/running status over existing completed backup",
+    "Absent lock and fresh backup with uncertain QGA completion, alongside reporting Pulse Agent",
+    "Unknown raw read values, subsequent availability and original caution withdrawal",
+    "Same evidence via hidden Backup column shield",
+    "Independent healthy peer, LXC and vSphere controls",
+    "Primary resource removal"
+  ],
+  "interactions": [
+    "Desktop sequential Tab/Enter; narrow WebKit first tap on backup badge",
+    "Fine-pointer hover carries same precaution with no interactive link in tooltip",
+    "Same open disclosure responds to explicit synthetic API refresh without renewing completion",
+    "Escape/Close return focus; disclosure adds no API reads or guest commands",
+    "Actual keyboard/touch safety link opens shipped Docs and releases dialog isolation",
+    "Hidden-column shield discloses current safety context without opening enclosing row",
+    "Removal restores scroll/inertness; ordinary row action remains separate"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900,
+      "browser": "Chromium",
+      "color_scheme": "light"
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "browser": "WebKit",
+      "color_scheme": "dark",
+      "has_touch": true
+    }
+  ],
+  "verified_at": "2026-10-13T01:03:13.378294Z",
+  "playwright_version": "1.56.1",
+  "checks": 19,
+  "pixel_review": "All eleven final viewport captures opened with native view_image; completion/state/caution remain distinct and legible, tooltip and narrow dialog fit, and safety guidance wraps without horizontal overflow.",
+  "capture_sha256": {
+    "desktop-available.png": "2bd23f6bb249e65bbc901a1069376ef218bfd4e613aadbe93ac6f1a03b757db5",
+    "desktop-locked.png": "b856f207629fef98b24bf7376469027fadee3e60aa0eeb35886e1411b2bb218d",
+    "desktop-hover-locked.png": "0ed6672304a5cb1aa8c324c252b76018172051dc7b575a6896bfce19957582ea",
+    "desktop-guidance.png": "fe52c748d2473a951cfdd826317d1d0c81ea3a1b98f1f83966900d020fad3109",
+    "desktop-uncertain.png": "525a86bd903df72053a30a95c4a067b2d867a4fe527bd4c12dfb068c2f60e51a",
+    "desktop-hidden-column.png": "9fafaaec72013b9b2ff1d40fe2bacc5a0e00d38abda5a312f6e4a1ccda3f0655",
+    "phone-available.png": "c71eb742e10fc6165f347df102d6a2f46d9e96d80775300a0cf7f6723ee6224a",
+    "phone-locked.png": "440f1848d7209966caa248117b68b534ec0371dfe54f064e6a712f060611c9a6",
+    "phone-guidance.png": "bd6b4b3d65e3df647d8fcdd6c49377751fd77e3b4e544d798a6ad03fd5296982",
+    "phone-uncertain.png": "7a0b02a55f4252a0ebcf7e9ab2e691a9c9e47f2ba7b3df74571ebdc71ceb5445",
+    "phone-hidden-column.png": "f0ab46395100856514a6eb61014d5f406bf2058361a3a4d956de558259a707ff"
+  },
+  "scope_limit": "Synthetic frontend presentation, not native guest recovery, independent thaw, first-party provider or published/released availability."
+}

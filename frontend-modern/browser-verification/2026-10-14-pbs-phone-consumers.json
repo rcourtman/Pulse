@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "base_sha": "7d2c9b52581ec24e828dab6da9369621be79330d",
+  "verified_at": "2026-10-14T04:14:07.481847+00:00",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/browser-tests/pbs-host-history-correlation.html"
+  ],
+  "content_sha256": {
+    "frontend-modern/browser-tests/pbs-host-history-correlation.html": "1952533ab3b823c4204a50d13006520bf4608f308d980356a7d0d6e7c1573ec7",
+    "frontend-modern/browser-tests/pbs-host-history-correlation.tsx": "5817353310efc2b89e9219e3ce304c01ce53b81acd75843ab40c6e1e10b17e12",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "a9f6116d18eeb473aa86dd91c4b24b98fb1a2e59dda35347718bfb5dbb770f2b",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "11ffac0be9469fc1107e63c4e8c99fcd7df26fd401b76ac29664c29cde8a680a"
+  },
+  "routes": [
+    "/browser-tests/pbs-host-history-correlation.html?topology=guest",
+    "/browser-tests/pbs-host-history-correlation.html?topology=pbs-only",
+    "/browser-tests/pbs-host-history-correlation.html?topology=side-by-side"
+  ],
+  "states": [
+    "Three genuine390px dark phone topologies use the production PBS table/drawer/history. Previous three desktop results are retained separately,not repeated.",
+    "Transient correlated-host omission preserves selected series; target withdrawal removes charts; restoration retains7d and drawer owner."
+  ],
+  "interactions": [
+    "Real touch disclosure/range/phone charts; automatic/reordered snapshots; Overview/Manage switch and bounded5.5-second hidden-Overview polling control.",
+    "No guest action or external request. One unmatched read-only operator-state endpoint remains a404 safe-fixture limit."
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "webkit": "26.0"
+  },
+  "preview": {
+    "source": "6ced391ac3d4c832f2b7012a2397a6b9f76d990d",
+    "containing_source": "7d2c9b52581ec24e828dab6da9369621be79330d",
+    "archive_sha256": "0897dabec2bfdfb8beca6732fde7bbfd1e845985973ba7c5c543c0f617555719",
+    "source_input_validation": "All2819 original input hashes match except one unimported Docs test with explicit old/new containing bridge; all compiled inputs and176 artifact hashes match."
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "opened": [
+      {
+        "file": "pbs-phone-guest-host-history.png",
+        "bytes": 77417,
+        "sha256": "68a28ae6229484c1cab52054441386077ed4ca1ad52731ca1636335974beb5fa",
+        "pixel_observation": "History and identity are readable within genuine390px; target withdrawal leaves no chart or measured zero."
+      },
+      {
+        "file": "pbs-phone-guest-target-withdrawn.png",
+        "bytes": 24848,
+        "sha256": "9ffacbebadf8e0e0f2931abe5f8b60a3f2675ccf0763a844a52b095b391ea72c",
+        "pixel_observation": "History and identity are readable within genuine390px; target withdrawal leaves no chart or measured zero."
+      },
+      {
+        "file": "pbs-phone-pbs-only-host-history.png",
+        "bytes": 88074,
+        "sha256": "1c46cee85e04d9e8e80d9cb28ac23b2ce3265510a9bebdc0a875e06b56a4b956",
+        "pixel_observation": "History and identity are readable within genuine390px; target withdrawal leaves no chart or measured zero."
+      },
+      {
+        "file": "pbs-phone-pbs-only-target-withdrawn.png",
+        "bytes": 25264,
+        "sha256": "7aa87cff8397a1b3236e2bbe1fd52e38678e969397ca3f0f808b5f0be9a64a19",
+        "pixel_observation": "History and identity are readable within genuine390px; target withdrawal leaves no chart or measured zero."
+      },
+      {
+        "file": "pbs-phone-side-by-side-host-history.png",
+        "bytes": 88092,
+        "sha256": "0269916f805f80f0dfc5d9191614c5907693c9493afb906b596ad61c40930f4b",
+        "pixel_observation": "History and identity are readable within genuine390px; target withdrawal leaves no chart or measured zero."
+      },
+      {
+        "file": "pbs-phone-side-by-side-target-withdrawn.png",
+        "bytes": 25264,
+        "sha256": "7aa87cff8397a1b3236e2bbe1fd52e38678e969397ca3f0f808b5f0be9a64a19",
+        "pixel_observation": "History and identity are readable within genuine390px; target withdrawal leaves no chart or measured zero."
+      }
+    ]
+  },
+  "proof_scope": "Completes missing phone PBS source-consumer proof only. Does not establish native PBS disappearance/restart/thaw,authentication golden acceptance,release inclusion or reporter resolution."
+}

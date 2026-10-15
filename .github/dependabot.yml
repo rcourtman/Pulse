@@ -67,6 +67,7 @@ updates:
   - package-ecosystem: "npm"
     directories:
       - "/"
+      - "/.github/scripts"
       - "/frontend-modern"
       - "/internal/cloudcp/portal/frontend"
       - "/tests/integration"

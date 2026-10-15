@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+func TestClusterRecoveryRequiresUsableSession(t *testing.T) {
+	testClusterRecoveryRequiresUsableSession(t)
+}
+
 func TestClusterClient_GetCephStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -657,15 +661,363 @@ func TestGuestAgentIPv4MappedTrustScope(t *testing.T) {
 		if !okA || !okB || a == b {
 			t.Error("admission equivalence broadened the existing TLS trust identity")
 		}
-		if _, known := cc.knownEndpointFingerprintLocked(pair[1]); known || cc.getEndpointFingerprint(pair[1]) != "primary-pin" {
+		if _, known, trustErr := cc.knownEndpointFingerprintLocked(pair[1]); trustErr != nil || known || checkedClusterFingerprint(t, cc, pair[1]) != "primary-pin" {
 			t.Error("coordination shared another configured authority's saved pin")
 		}
 		if !cc.canTrustMemberOnFirstUseLocked(pair[1]) {
 			t.Error("unchanged declared-member first-use policy lost its distinct origin")
 		}
 		cc.endpointFingerprints[pair[1]] = "other-saved-pin"
-		if cc.getEndpointFingerprint(pair[0]) != "saved-pin" || cc.getEndpointFingerprint(pair[1]) != "other-saved-pin" || cc.canTrustMemberOnFirstUseLocked(pair[1]) {
+		if checkedClusterFingerprint(t, cc, pair[0]) != "saved-pin" || checkedClusterFingerprint(t, cc, pair[1]) != "other-saved-pin" || cc.canTrustMemberOnFirstUseLocked(pair[1]) {
 			t.Error("distinct established pins or no-replacement policy changed")
+		}
+	}
+}
+
+// A local TLS barrier holds only the unauthenticated first-use capture. A
+// caller cancellation must release the probe without waiting for that peer;
+// returning later without a pin is not enough to bound polling shutdown.
+func TestClusterClientFirstUseCaptureCancellation(t *testing.T) {
+	for _, mode := range []string{"cancel", "deadline"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newClusterTrustFixture(t)
+			primaryPin := clusterTrustPin(clusterTrustCertificate(t))
+			cc := NewClusterClient("cancelled-capture", clusterTrustConfig("https://primary.trust.invalid", primaryPin), []string{f.server.URL}, nil)
+			lastErr := clusterTrustMismatch(t, f, primaryPin)
+			ctx, cancel := context.WithCancel(context.Background())
+			if mode == "deadline" {
+				cancel()
+				ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+			}
+			defer cancel()
+			type result struct {
+				client  *Client
+				err     error
+				retried bool
+			}
+			done := make(chan result, 1)
+			f.capture.Store(true)
+			released := false
+			release := func() {
+				if !released {
+					close(f.resume)
+					released = true
+				}
+			}
+			defer release()
+			go func() {
+				client, err, retried := cc.refreshTOFUFingerprintAndRetry(ctx, f.server.URL, time.Second, lastErr)
+				done <- result{client, err, retried}
+			}()
+			select {
+			case <-f.entered:
+			case got := <-done:
+				t.Fatalf("probe did not reach the owned TLS barrier: %v", got.err)
+			case <-time.After(10 * time.Second):
+				t.Fatal("probe did not reach the owned TLS barrier")
+			}
+			if mode == "cancel" {
+				cancel()
+			}
+			<-ctx.Done()
+			var got result
+			select {
+			case got = <-done:
+			case <-time.After(time.Second):
+				t.Error("cancelled capture still waits for the peer's TLS handshake")
+				release() // Join even the adverse parent without leaving a blocked peer.
+				got = <-done
+			}
+			if got.client != nil {
+				got.client.httpClient.CloseIdleConnections()
+			}
+			if got.client != nil || got.retried || !errors.Is(got.err, lastErr) || len(cc.endpointFingerprints) != 0 || f.requests.Load() != 0 {
+				t.Errorf("cancelled capture changed trust or sent authentication: retried=%t pins=%d requests=%d err=%v", got.retried, len(cc.endpointFingerprints), f.requests.Load(), got.err)
+			}
+			release()
+			// Ending this caller is not a revocation of ordinary declared-member
+			// first use. A fresh caller must still establish the same owned leaf
+			// and make exactly one pin-verified authenticated request.
+			client, err, retried := cc.refreshTOFUFingerprintAndRetry(context.Background(), f.server.URL, time.Second, lastErr)
+			if client != nil {
+				defer client.httpClient.CloseIdleConnections()
+			}
+			if err != nil || !retried || client == nil || checkedClusterFingerprint(t, cc, f.server.URL) != clusterTrustPin(f.active.Load()) || f.requests.Load() != 1 {
+				t.Errorf("ordinary first use after cancelled probe failed: retried=%t requests=%d err=%v", retried, f.requests.Load(), err)
+			}
+		})
+	}
+}
+
+// Startup, ordinary recovery and first selection share the same declared-member
+// boundary for password and token authentication, not just post-construction I/O.
+func TestClusterFirstUseSessionAdmission(t *testing.T) {
+	testClusterFirstUseSessionAdmission(t)
+}
+
+// A nodes/login failure is not a per-guest failure, even when the provider's
+// body mentions QGA. Exercise the real constructors/probes in all three phases;
+// none of these handlers can enqueue a guest command or perform a backup.
+func TestClusterNodeProbeRequiresSuccess(t *testing.T) {
+	for _, phase := range []string{"startup", "recovery", "selection"} {
+		for _, mode := range []string{"token", "json", "form"} {
+			for _, stage := range []string{"nodes", "login"} {
+				if stage == "login" && mode == "token" {
+					continue
+				}
+				for i, message := range []string{"QEMU guest agent is not running", "VM 105 qmp command 'guest-get-fsinfo' failed", "proxy: guest-get-osinfo unavailable"} {
+					t.Run(fmt.Sprintf("%s/%s/%s/body-%d", phase, mode, stage, i), func(t *testing.T) {
+						f := newNodeProbeFixture(t, mode, stage, message)
+						cfg := f.config()
+						saved := map[string]string{f.server.URL: cfg.Fingerprint}
+						f.reject.Store(true)
+						var cc *ClusterClient
+						if phase == "startup" {
+							sibling := newNodeProbeFixture(t, mode, "nodes", "")
+							saved[sibling.server.URL] = sibling.config().Fingerprint
+							cc = NewClusterClient("node-probe", cfg, []string{f.server.URL, sibling.server.URL}, saved)
+							if !cc.GetHealthStatus()[sibling.server.URL] {
+								t.Fatal("failed peer blocked accepted sibling")
+							}
+						} else {
+							cc = NewClusterClient("node-probe", cfg, []string{f.server.URL}, saved)
+							if phase == "recovery" {
+								cc.nodeHealth[f.server.URL] = false
+								cc.lastError[f.server.URL] = "previous failed observation"
+								cc.recoverUnhealthyNodes(context.Background())
+							} else {
+								c, err := cc.getHealthyClient(context.Background())
+								if c != nil || err == nil {
+									t.Error("failed nodes probe installed a polling client")
+								}
+							}
+						}
+						t.Cleanup(func() {
+							cc.mu.RLock()
+							defer cc.mu.RUnlock()
+							for _, c := range cc.clients {
+								if c != nil {
+									c.httpClient.CloseIdleConnections()
+								}
+							}
+						})
+						health := cc.GetHealthStatusWithErrors()[f.server.URL]
+						if health.Healthy || health.LastError == "" || health.LastCheck.IsZero() {
+							t.Errorf("failed probe published healthy or lost its reason/time: %+v", health)
+						}
+						if cc.clients[f.server.URL] != nil {
+							t.Error("failed probe installed a full polling client")
+						}
+						wantNodes := int32(1)
+						if stage == "login" {
+							wantNodes = 0
+						}
+						if f.logins.Load() != f.loginAttempts() || f.nodes.Load() != wantNodes {
+							t.Errorf("failed probe was retried/advanced: logins=%d want=%d nodes=%d want=%d", f.logins.Load(), f.loginAttempts(), f.nodes.Load(), wantNodes)
+						}
+						if checkedClusterFingerprint(t, cc, f.server.URL) != cfg.Fingerprint || saved[f.server.URL] != cfg.Fingerprint || cc.config.VerifySSL != true {
+							t.Error("failed probe changed saved trust")
+						}
+						// A distinct later recovery uses this fixture's normal accepted reply.
+						// Only endpoint recovery eligibility advances, never a guest fence.
+						f.reject.Store(false)
+						cc.mu.Lock()
+						delete(cc.lastHealthCheck, f.server.URL)
+						cc.mu.Unlock()
+						cc.recoverUnhealthyNodes(context.Background())
+						if c := cc.clients[f.server.URL]; c == nil || c.config.Timeout != cfg.Timeout {
+							t.Fatal("accepted later recovery has no full-timeout polling client")
+						}
+						cc.mu.Lock()
+						for ep := range cc.nodeHealth {
+							if ep != f.server.URL {
+								cc.nodeHealth[ep] = false
+								cc.lastHealthCheck[ep] = time.Now()
+							}
+						}
+						cc.mu.Unlock()
+						nodes, err := cc.GetNodes(context.Background())
+						health = cc.GetHealthStatusWithErrors()[f.server.URL]
+						if err != nil || len(nodes) != 1 || nodes[0].CPU != 0.25 || !health.Healthy || health.LastError != "" || f.nodes.Load() != wantNodes+2 || f.logins.Load() != 3*f.loginAttempts() {
+							t.Errorf("separate ordinary recovery did not restore coherent readings: err=%v health=%+v logins=%d nodes=%d", err, health, f.logins.Load(), f.nodes.Load())
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
+// Keep the existing single-endpoint last-resort read, but do not publish
+// recovery simply for selecting its cached client. A failed read is still a
+// failure; only a later successful ordinary read clears the observed error.
+func TestClusterSingleEndpointFallbackKeepsFailedHealth(t *testing.T) {
+	f := newNodeProbeFixture(t, "token", "nodes", "QEMU guest agent is not running")
+	cc := NewClusterClient("single-probe", f.config(), []string{f.server.URL}, nil)
+	if _, err := cc.GetNodes(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	original := cc.clients[f.server.URL]
+	defer original.httpClient.CloseIdleConnections()
+	f.reject.Store(true)
+	cc.markUnhealthyWithError(f.server.URL, "previous connection failure")
+	c, err := cc.getHealthyClient(context.Background())
+	if err != nil || c != original {
+		t.Fatal("last-resort selection lost the existing client")
+	}
+	if h := cc.GetHealthStatusWithErrors()[f.server.URL]; h.Healthy || h.LastError == "" {
+		t.Errorf("selection invented endpoint recovery: %+v", h)
+	}
+	before := f.nodes.Load()
+	if _, err := cc.GetNodes(context.Background()); err == nil || !strings.Contains(err.Error(), "API error 500") {
+		t.Errorf("failed ordinary read was hidden: %v", err)
+	}
+	if h := cc.GetHealthStatusWithErrors()[f.server.URL]; h.Healthy || h.LastError == "" || f.nodes.Load() != before+1 {
+		t.Errorf("failed fallback read published recovery or replayed: %+v reads=%d", h, f.nodes.Load())
+	}
+	f.reject.Store(false)
+	if nodes, err := cc.GetNodes(context.Background()); err != nil || len(nodes) != 1 {
+		t.Fatalf("accepted later read did not recover: %+v %v", nodes, err)
+	}
+	if h := cc.GetHealthStatusWithErrors()[f.server.URL]; !h.Healthy || h.LastError != "" || f.nodes.Load() != before+2 || cc.clients[f.server.URL] != original {
+		t.Errorf("accepted fallback did not restore health with the same client: %+v", h)
+	}
+}
+
+// A genuine temporary nodes rate limit retains the established lazy-selection
+// route: the actual ordinary read, not the failed probe, supplies its readings.
+func TestClusterNodeProbeRateLimitKeepsOrdinaryRead(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/nodes" {
+			t.Errorf("unexpected request: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			fmt.Fprint(w, "fixture busy")
+			return
+		}
+		fmt.Fprint(w, `{"data":[{"node":"member","status":"online","cpu":0.25}]}`)
+	}))
+	defer server.Close()
+	cc := NewClusterClient("probe-rate-limit", ClientConfig{Host: server.URL, TokenName: "fixture@pam!pulse", TokenValue: "fixture-token"}, []string{server.URL}, nil)
+	nodes, err := cc.GetNodes(context.Background())
+	if c := cc.clients[server.URL]; c != nil {
+		defer c.httpClient.CloseIdleConnections()
+	}
+	if err != nil || len(nodes) != 1 || nodes[0].CPU != 0.25 || calls.Load() != 2 || !cc.GetHealthStatus()[server.URL] {
+		t.Fatalf("temporary probe rate limit blocked ordinary read: %+v err=%v calls=%d", nodes, err, calls.Load())
+	}
+}
+
+// Existing non-conflicting trust controls explicitly require resolution to
+// succeed. A resolution failure must never fall back to an unpinned client.
+func checkedClusterFingerprint(t *testing.T, cc *ClusterClient, endpoint string) string {
+	t.Helper()
+	fingerprint, err := cc.getEndpointFingerprint(endpoint)
+	if err != nil {
+		t.Fatalf("unexpected saved-trust ambiguity: %v", err)
+	}
+	return fingerprint
+}
+
+func TestClusterSavedPinResolutionRejectsConflicts(t *testing.T) {
+	pairs := [][2]string{
+		{"https://MEMBER.example.invalid:0443/tenant/", "https://member.example.invalid/tenant"},
+		{"https://[2001:db8:0:0::1]:8006/tenant/", "https://[2001:db8::1]:08006/tenant"},
+		{"member.example.invalid:8006/tenant/./", "https://member.example.invalid:8006/tenant"},
+	}
+	for _, pair := range pairs {
+		pins := map[string]string{pair[0]: "saved-pin", pair[1]: "other-pin"}
+		if err := CheckEndpointFingerprintConflicts(pins); !errors.Is(err, errConflictingEndpointFingerprints) {
+			t.Errorf("refresh check lost contradictory saved trust: %v", err)
+		}
+		cc := NewClusterClient("resolution", ClientConfig{Host: "https://primary.example.invalid", Fingerprint: "base-pin"}, nil, pins)
+		for _, endpoint := range pair {
+			fingerprint, err := cc.getEndpointFingerprint(endpoint)
+			if fingerprint != "" || !errors.Is(err, errConflictingEndpointFingerprints) {
+				t.Errorf("exact spelling selected contradictory trust: pin=%q err=%v", fingerprint, err)
+			}
+			cc.mu.RLock()
+			_, known, trustErr := cc.knownEndpointFingerprintLocked(endpoint)
+			mayCapture := cc.canTrustMemberOnFirstUseLocked(endpoint)
+			cc.mu.RUnlock()
+			if !known || !errors.Is(trustErr, errConflictingEndpointFingerprints) || mayCapture {
+				t.Error("conflicting saved trust became unknown first-use trust")
+			}
+		}
+	}
+	// Invalid nonempty pin presentation cannot turn into unpinned CA/opt-out
+	// admission, even when every saved spelling agrees after normalization.
+	for _, pin := range []string{":", "::", " ", "not-a-pin"} {
+		pins := map[string]string{"https://member.example.invalid:443/": pin, "https://MEMBER.example.invalid": pin}
+		if err := CheckEndpointFingerprintConflicts(pins); err != nil {
+			t.Errorf("refresh check refused agreeing nonempty pins: %v", err)
+		}
+		cc := NewClusterClient("invalid-pin", ClientConfig{Host: "https://primary.example.invalid", Fingerprint: "base-pin", VerifySSL: false}, nil, pins)
+		got, err := cc.getEndpointFingerprint("https://member.example.invalid")
+		if err != nil || got != pin || got == "" {
+			t.Errorf("invalid saved pin became absent trust: %q %v", got, err)
+		}
+	}
+}
+
+func TestClusterFirstUseCaptureDoesNotReconcileConflictingPins(t *testing.T) {
+	f := newClusterTrustFixture(t)
+	cc := NewClusterClient("capture-conflict", clusterTrustConfig("https://primary.capture.invalid", clusterTrustPin(clusterTrustCertificate(t))), []string{f.server.URL}, nil)
+	lastErr := clusterTrustMismatch(t, f, cc.config.Fingerprint)
+	f.capture.Store(true)
+	done := make(chan error, 1)
+	go func() {
+		client, err, retried := cc.refreshTOFUFingerprintAndRetry(context.Background(), f.server.URL, time.Second, lastErr)
+		if client != nil {
+			client.httpClient.CloseIdleConnections()
+			err = fmt.Errorf("conflicting capture constructed an authenticated client")
+		}
+		if retried {
+			err = fmt.Errorf("conflicting capture attempted a pinned retry")
+		}
+		done <- err
+	}()
+	select {
+	case <-f.entered:
+	case <-time.After(5 * time.Second):
+		close(f.resume)
+		t.Fatal("capture did not reach fixture handshake")
+	}
+	cc.mu.Lock()
+	cc.endpointFingerprints[f.server.URL] = clusterTrustPin(f.active.Load())
+	cc.endpointFingerprints[f.server.URL+"/./"] = strings.Repeat("0", 64)
+	cc.mu.Unlock()
+	close(f.resume)
+	if err := <-done; !errors.Is(err, errConflictingEndpointFingerprints) {
+		t.Errorf("completed capture chose a conflicting pin: %v", err)
+	}
+	if f.requests.Load() != 0 || len(cc.endpointFingerprints) != 2 {
+		t.Error("capture authenticated or reconciled contradictory saved trust")
+	}
+}
+
+func TestClusterProducerPinConflictsAreOwnedAndScoped(t *testing.T) {
+	const original = "https://member.example.invalid:443/tenant/"
+	input := []string{original}
+	if err := CheckEndpointFingerprintConflicts(map[string]string{original: "saved-pin"}, input...); !errors.Is(err, errConflictingEndpointFingerprints) {
+		t.Errorf("refresh check discarded producer's duplicate-row conflict: %v", err)
+	}
+	cc := NewClusterClient("producer-conflict", ClientConfig{Host: "https://primary.example.invalid", Fingerprint: "primary-pin"}, nil, map[string]string{original: "saved-pin"}, input...)
+	input[0] = "https://other.example.invalid/tenant"
+	for _, endpoint := range []string{original, "https://MEMBER.example.invalid/tenant"} {
+		fingerprint, err := cc.getEndpointFingerprint(endpoint)
+		if fingerprint != "" || !errors.Is(err, errConflictingEndpointFingerprints) {
+			t.Errorf("producer's copied conflict was lost: %q %v", fingerprint, err)
+		}
+	}
+	for _, endpoint := range []string{"https://other.example.invalid/tenant", "https://member.example.invalid/other", "http://member.example.invalid/tenant", "https://member.example.invalid:8006/tenant"} {
+		fingerprint, err := cc.getEndpointFingerprint(endpoint)
+		if err != nil || fingerprint != "primary-pin" {
+			t.Errorf("producer conflict refused an independent authority/path: %q %v", fingerprint, err)
 		}
 	}
 }

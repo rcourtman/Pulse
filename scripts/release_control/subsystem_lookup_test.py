@@ -4320,7 +4320,12 @@ class SubsystemLookupTest(unittest.TestCase):
             )
             self.assertEqual(
                 match["verification_requirement"]["exact_files"],
-                ["pkg/pbs/client_http_test.go", "pkg/pbs/client_test.go"],
+                [
+                    "pkg/pbs/auth_session_concurrency_test.go",
+                    "pkg/pbs/client_http_test.go",
+                    "pkg/pbs/client_test.go",
+                    "pkg/pbs/host_diagnostics_regression_test.go",
+                ],
             )
 
     def test_lookup_paths_assigns_monitoring_metrics_history_runtime(self) -> None:

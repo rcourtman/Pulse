@@ -1314,7 +1314,13 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"The rollback target is stable `v"+previous+"`",
 	)
 	assertFileDoesNotContain(t, releaseNotesPath, "## Fixes")
-	if version == "6.4.0-rc.10" {
+	if version == "6.6.0-beta.2" {
+		// Preserve this already-reviewed packet's exact recorded cumulative list.
+		assertFileContainsAllNormalized(t, changelogPath,
+			"This cumulative changelog describes the changes included in `v"+version+"` since stable `v"+previous+"`",
+			"## Changes since v"+previous,
+		)
+	} else if version == "6.4.0-rc.10" {
 		assertFileContainsAllNormalized(t, changelogPath,
 			"The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly.")
 	} else {
@@ -2107,9 +2113,10 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		`chart_version:`,
 		`source_release_run_id:`,
 		`target_commitish:`,
-		`Require activated GitHub release and source run`,
+		`Require authenticated activated release packet`,
 		`release-activation.json`,
-		`.github/workflows/create-release.yml`,
+		`./scripts/verify-github-release-integrity.sh`,
+		`"${TARGET_COMMITISH}" "${marker}"`,
 		`"${GITHUB_REPOSITORY}" "${CHART_DIGEST}" "${CHART_PATH}"`,
 		`qualified chart metadata does not match the activated release`,
 		`name: Publish chart release and merge Pages index`,
@@ -4332,6 +4339,19 @@ func TestFrontendCIRequiresSameCheckoutRealEmbedBackend(t *testing.T) {
 	}
 }
 
+// The issue-event check runs after publication. Its real parser tests and
+// silent-mutation policy also need credential-free PR/main admission, without
+// relaxing product runtime, dependency audit or receipt-only boundaries.
+func TestCIIssueMetadataUsesSourceOnlyTriageChecks(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_ci_browser_proof_only.py"), "-v")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("issue metadata CI admission and failure controls: %v\n%s", err, out)
+	}
+}
+
 // The post-build root transaction receives only an exact-source identity and
 // synthetic binaries; native failure cannot hide or skip the existing audit.
 func TestFrontendCINativeUpdaterKeepsSecretFreeRequiredVerification(t *testing.T) {
@@ -4900,8 +4920,6 @@ func TestReleaseRollbackGuidanceUsesServerUpdateHelper(t *testing.T) {
 		repoFile("scripts", "trigger-release.sh"),
 		repoFile("scripts", "release_control", "resolve_release_promotion.py"),
 		repoFile("scripts", "release_control", "render_release_body.py"),
-		repoFile("docs", "UPGRADE_v6.md"),
-		repoFile("frontend-modern", "public", "docs", "UPGRADE_v6.md"),
 		repoFile("docs", "releases", "RELEASE_NOTES_v6.4.0.md"),
 		repoFile("docs", "releases", "V6_CHANGELOG_v6.4.0.md"),
 	} {
@@ -4915,6 +4933,29 @@ func TestReleaseRollbackGuidanceUsesServerUpdateHelper(t *testing.T) {
 		}
 		if strings.Contains(text, "./scripts/install.sh --version") {
 			t.Fatalf("%s routes server rollback through the Unified Agent installer", path)
+		}
+	}
+
+	// The current migration guide deliberately does not offer a generic
+	// exact-version command for an unverified helper or migrated data. Keep
+	// its deployment-owned update/recovery routes, not the historical shortcut.
+	for _, path := range []string{
+		repoFile("docs", "UPGRADE_v6.md"),
+		repoFile("frontend-modern", "public", "docs", "UPGRADE_v6.md"),
+	} {
+		assertFileContainsAll(t, path,
+			"INSTALL.md#manual-update", "helper's ownership",
+			"Do not execute an absent or unknown helper",
+			"AUTO_UPDATE.md#manual-rollback", "not a generic `/bin/update` downgrade",
+		)
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		for _, shortcut := range []string{"/bin/update --version", "./scripts/install.sh --version"} {
+			if strings.Contains(string(content), shortcut) {
+				t.Fatalf("%s must not restore an unqualified migration shortcut %q", path, shortcut)
+			}
 		}
 	}
 
@@ -5105,7 +5146,7 @@ func TestReleaseNodeSetupKeepsExplicitCacheIsolation(t *testing.T) {
 				blocks = blocks[4:]
 			}
 			for _, block := range blocks {
-				for _, want := range []string{"actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", "node-version: '24'", "package-manager-cache: false"} {
+				for _, want := range []string{"actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1", "node-version: '24'", "package-manager-cache: false"} {
 					if !strings.Contains(block, want) {
 						t.Fatalf("Node setup lost %s: %s", want, block)
 					}
@@ -5188,19 +5229,23 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 		{name: "manifest", files: "frontend-modern/package.json\n", code: "true", dependencies: "true"},
 		{name: "lock", files: "frontend-modern/package-lock.json\n", code: "true", dependencies: "true"},
 		{name: "audit_runner", files: "scripts/npm-audit-retry.sh\n", code: "true", dependencies: "true"},
+		{name: "audit_process", files: "scripts/npm_audit_process.py\n", code: "true", dependencies: "true"},
 		{name: "large_manifest_first", files: "frontend-modern/package.json\n" + docs, code: "true", dependencies: "true"},
 		{name: "large_lock_first", files: "frontend-modern/package-lock.json\n" + docs, code: "true", dependencies: "true"},
 		{name: "large_runner_first", files: "scripts/npm-audit-retry.sh\n" + docs, code: "true", dependencies: "true"},
+		{name: "large_process_first", files: "scripts/npm_audit_process.py\n" + docs, code: "true", dependencies: "true"},
+		{name: "large_process_last", files: docs + "scripts/npm_audit_process.py\n", code: "true", dependencies: "true"},
 		{name: "large_lock_last", files: docs + "frontend-modern/package-lock.json\n", code: "true", dependencies: "true"},
 		{name: "large_docs_only", files: docs, code: "false", dependencies: "false"},
 		{name: "large_unrelated_code", goCompile: true, files: docs + "internal/config/config.go\n", code: "true", dependencies: "false"},
-		{name: "exact_path_lookalikes", files: "frontend-modern/package.json.extra\nother/frontend-modern/package-lock.json\nscripts/npm-audit-retry.sh.extra\n", code: "true", dependencies: "false"},
+		{name: "exact_path_lookalikes", files: "frontend-modern/package.json.extra\nother/frontend-modern/package-lock.json\nscripts/npm-audit-retry.sh.extra\nscripts/npm_audit_process.py.extra\n", code: "true", dependencies: "false"},
 		{name: "pull_request_docs", files: "docs/FAQ.md\n", event: "pull_request", code: "false", dependencies: "false"},
 		{name: "zero_push_base", goCompile: true, base: strings.Repeat("0", 40), code: "true", dependencies: "true"},
 		{name: "missing_base", goCompile: true, missingBase: true, code: "true", dependencies: "true"},
 		{name: "manual_dispatch", goCompile: true, event: "workflow_dispatch", base: "empty", code: "true", dependencies: "true"},
 		{name: "failed_diff", diffStatus: 42},
 		{name: "large_changed_graph_critical_blocks", files: "frontend-modern/package-lock.json\n" + docs, code: "true", dependencies: "true", audit: true, auditStatus: 1},
+		{name: "process_critical_blocks", files: "scripts/npm_audit_process.py\n", code: "true", dependencies: "true", audit: true, auditStatus: 1},
 		{name: "unchanged_graph_critical_warns", goCompile: true, files: "internal/config/config.go\n", code: "true", dependencies: "false", audit: true, auditStatus: 0},
 	}
 	for _, tc := range cases {

@@ -11,12 +11,13 @@ from pathlib import Path
 import shlex
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get("PULSE_AGENT_UPSTART_SOURCE", ROOT / "scripts/install.sh"))
-FUNCTIONS = ("truenas_scale_agent_removal_present", "cleanup", "portable_path_uid", "portable_path_mode", "trusted_lifecycle_regular_file",
+FUNCTIONS = ("nas_agent_removal_platform", "truenas_scale_agent_removal_present", "cleanup", "portable_path_uid", "portable_path_mode", "trusted_lifecycle_regular_file",
              "read_legacy_agent_removal_processes", "legacy_agent_processes_absent",
              "read_upstart_agent_removal_status", "upstart_agent_removal_paths_safe",
              "read_upstart_agent_removal_enablement", "quiesce_upstart_agent_for_removal",
@@ -113,6 +114,32 @@ save(); sys.exit(0)
 '''
 
 
+LINK_MODEL = r'''
+import os, pathlib, sys
+args = sys.argv[1:]
+if len(args) == 4 and args[:2] == ['-T', '--']:
+    no_target_directory, source, target = True, args[2], args[3]
+elif len(args) == 3 and args[0] == '--':
+    no_target_directory, source, target = False, args[1], args[2]
+else:
+    sys.exit(98)
+root = pathlib.Path(os.environ['FIXTURE']).resolve()
+for name in (source, target):
+    path = pathlib.Path(name)
+    if not path.is_absolute() or '..' in path.parts or not path.parent.resolve().is_relative_to(root):
+        sys.exit(97)
+# Exercise the real exclusive link operation, not a simulated successful exit.
+# DSM's ln -T must not follow a raced target directory. The old flagless form
+# deliberately retains directory-following semantics for adverse source checks.
+if not no_target_directory and os.path.isdir(target):
+    target = os.path.join(target, os.path.basename(source))
+try:
+    os.link(source, target, follow_symlinks=False)
+except OSError:
+    sys.exit(1)
+'''
+
+
 class AgentUpstartTeardown(unittest.TestCase):
     source = SOURCE.read_text()
 
@@ -123,6 +150,12 @@ class AgentUpstartTeardown(unittest.TestCase):
             tools = root / "tools"; tools.mkdir()
             for name in ("ps", "initctl"):
                 p = tools / name; p.write_text(MODEL); p.chmod(0o700)
+            link = tools / "fixture-link.py"; link.write_text(LINK_MODEL)
+            # Native macOS ln lacks -T. No host ln implementation may determine
+            # whether these closed DSM semantics or restoration controls pass.
+            external_link = tools / "ln"
+            external_link.write_text("#!/bin/sh\nprintf 'unexpected external ln\\n' >&2\nexit 96\n")
+            external_link.chmod(0o700)
             if fault == "missing-initctl": (tools / "initctl").unlink()
             init = root / "init"; init.mkdir()
             config = init / "pulse-agent.conf"
@@ -160,7 +193,7 @@ class AgentUpstartTeardown(unittest.TestCase):
             values = dict(FIXTURE=root, EVENTS=root / "events", STATE_DIR=root / "state",
                           PRIVILEGED_HELPER_STATE_DIR=root / "helper", SAFE_PROFILE_STATE_DIR=root / "profile",
                           PRIVILEGE_SUDOERS_FILE=root / "absent-sudoers", PRIVILEGE_HELPER_DIR=root / "absent-helper",
-                          REPLY=reply, FAULT=fault)
+                          REPLY=reply, FAULT=fault, FIXTURE_PYTHON=sys.executable, FIXTURE_LINK=link)
             setup = "\n".join(k + "=" + shlex.quote(str(v)) for k, v in values.items()) + "\n"
             shell = r'''
 set -euo pipefail
@@ -213,8 +246,9 @@ ln() {
         race_restore_config "$target"
     fi
     printf 'file:link\n' >> "$EVENTS"
-    # Preserve the actual external command exit for the production handler.
-    if builtin command ln "$@"; then return 0; else return $?; fi
+    # A portable private link model preserves the actual syscall exit, including
+    # raced files/directories. Never fall back to success or weaken production -T.
+    if "$FIXTURE_PYTHON" "$FIXTURE_LINK" "$@"; then return 0; else return $?; fi
 }
 mv() {
     local arg
@@ -231,7 +265,13 @@ remove_privileged_helper_state_dir() { builtin command rm -r -- "$PRIVILEGED_HEL
 remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_DIR"; }
 '''
             if flow == "caller":
-                entry = self.source.split("# --- Uninstall Logic ---\n", 1)[1].split("    # Unraid\n", 1)[0] + "fi\n"
+                # Preserve the existing DSM caller window. Its old next-platform
+                # sentinel was retired by the NAS repair; without rebinding it,
+                # the confined fixture reaches an unrelated runtime cleanup and
+                # correctly refuses a non-fixture path. Never weaken that guard.
+                entry = self.source.split("# --- Uninstall Logic ---\n", 1)[1].split("# --- Validation ---\n", 1)[0]
+                sentinel = "    # NAS boot/watchdog retirement completed above." if "    # NAS boot/watchdog retirement completed above." in entry else "    # Unraid\n"
+                entry = entry.split(sentinel, 1)[0] + "fi\n"
                 invoke = "main() {\n" + redirect(entry) + "}\nmain\n"
             elif flow == "status":
                 invoke = "read_upstart_agent_removal_status\n"
@@ -266,6 +306,40 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
         added = set(after) - set(before)
         self.assertTrue(added <= {"init/pulse-agent.override"}, added)
         if added: self.assertEqual(after["init/pulse-agent.override"][2], b"manual\n")
+
+    def test_link_fixture_preserves_exclusive_no_target_directory_semantics(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"; source.write_bytes(b"original recovery\n")
+            target = root / "target"
+            env = dict(os.environ, FIXTURE=str(root))
+            def link(*args):
+                return subprocess.run([sys.executable, "-c", LINK_MODEL, *map(str, args)],
+                                      env=env, capture_output=True, timeout=5).returncode
+            self.assertEqual(link('-T', '--', source, target), 0)
+            self.assertEqual(target.stat().st_ino, source.stat().st_ino)
+            target.unlink(); target.write_bytes(b"concurrent recovery\n")
+            self.assertEqual(link('-T', '--', source, target), 1)
+            self.assertEqual(target.read_bytes(), b"concurrent recovery\n")
+            target.unlink(); target.mkdir()
+            self.assertEqual(link('-T', '--', source, target), 1)
+            self.assertEqual(list(target.iterdir()), [])
+            self.assertEqual(link('--', source, target), 0)
+            self.assertEqual((target / source.name).stat().st_ino, source.stat().st_ino)
+            self.assertEqual(link('-f', '--', source, target), 98)
+            self.assertEqual(link('-T', '--', source, root / '..' / 'foreign'), 97)
+
+    def test_link_fixture_exposes_the_old_directory_restore_race(self):
+        # The portable model must not launder the unsafe old argv into -T.
+        self.source = self.source.replace('ln -T --', 'ln --')
+        r, events, before, after, _ = self.exercise(fault="concurrent-restore-directory")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("remote:remove", events)
+        self.assertNotIn("state:remove", events)
+        nested = [n for n in after if n.startswith('init/pulse-agent.conf/')]
+        self.assertEqual(len(nested), 1)
+        self.assertEqual(after[nested[0]], before['init/pulse-agent.conf'])
+        self.assertFalse(any(n.startswith('init/pulse-agent.conf.removal.') for n in after))
 
     def test_refused_manager_precedes_remote_and_state_erasure(self):
         for fault in ("refused-stop", "refused-reload", "ignored-stop", "ignored-manual"):
@@ -424,7 +498,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
         self.assertLess(admission, remote)
         self.assertLess(remote, retirement)
         self.assertLess(retirement, erase)
-        self.assertIn('[[ "$uninstall_upstart" != true ]]', entry)
+        self.assertIn('[[ "$uninstall_upstart" != true && -z "$uninstall_nas_platform" ]]', entry)
         self.assertFalse('initctl stop' in entry)
         self.assertNotIn('initctl start', definitions(self.source))
 

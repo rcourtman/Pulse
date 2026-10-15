@@ -216,7 +216,13 @@ func (i *operatorIntentIdentity) build(generation unifiedresources.RegistryGener
 }
 
 func (m *Monitor) resolveBackupIntentContext(_ string, instance, node string, vmid int, now time.Time) (alerts.BackupIntentContext, bool) {
-	if m == nil || m.state == nil || vmid <= 0 {
+	if m == nil || vmid <= 0 {
+		return alerts.BackupIntentContext{}, false
+	}
+	m.mu.RLock()
+	state := m.state
+	m.mu.RUnlock()
+	if state == nil {
 		return alerts.BackupIntentContext{}, false
 	}
 	instance = strings.TrimSpace(instance)
@@ -225,7 +231,9 @@ func (m *Monitor) resolveBackupIntentContext(_ string, instance, node string, vm
 		now = time.Now().UTC()
 	}
 
-	for _, task := range m.state.GetSnapshot().PVEBackups.BackupTasks {
+	// Policy needs only these primary task records, not every guest, sensor,
+	// backup artifact and Kubernetes object in the monitored estate.
+	for _, task := range state.GetBackupTasks() {
 		if task.VMID != vmid || (instance != "" && task.Instance != instance) || (node != "" && task.Node != "" && task.Node != node) {
 			continue
 		}

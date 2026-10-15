@@ -188,6 +188,11 @@ describe('RelaySettingsPanel runtime', () => {
       expect(screen.getByText(RELAY_LICENSE_REQUIRED_MESSAGE)).toBeInTheDocument();
     });
 
+    const retirementNotice = screen.getByRole('note', { name: 'Pulse Mobile retirement' });
+    expect(retirementNotice).toHaveTextContent(RELAY_LICENSE_REQUIRED_MESSAGE);
+    expect(retirementNotice.querySelector('[class*="line-clamp"]')).toBeNull();
+    expect(retirementNotice.querySelector('a, button')).toBeNull();
+
     expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('retired on 31 March 2027');
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Remote Access/)).not.toBeInTheDocument();

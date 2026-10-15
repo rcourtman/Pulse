@@ -1,6 +1,6 @@
 # Pulse v6.6.0-beta.2
 
-This changelog describes the changes since `v6.6.0-beta.1`. Stable `v6.5.0` remains the rollback target.
+This cumulative changelog describes the changes included in `v6.6.0-beta.2` since stable `v6.5.0`, not just the changes since `v6.6.0-beta.1`. Stable `v6.5.0` remains the rollback target.
 
 ## Changes since v6.5.0
 

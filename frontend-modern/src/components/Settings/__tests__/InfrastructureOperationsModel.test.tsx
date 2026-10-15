@@ -8,6 +8,7 @@ import useInfrastructureInstallStateSource from '../useInfrastructureInstallStat
 import { resolveAgentCommandPlatform } from '@/utils/agentInstallCommand';
 import {
   INSTALL_PROFILE_OPTIONS,
+  buildCommandsByPlatform,
   getCapabilityManagementPath,
   getCapabilitySurfaceLabel,
   getPlatformConnectionsViewForCapability,
@@ -18,6 +19,41 @@ import {
 } from '../infrastructureOperationsModel';
 
 describe('infrastructure operations model', () => {
+  it('keeps the complete optional signing settings wrappable without changing their values', () => {
+    const note = infrastructureInstallerSectionSource
+      .split('Config signing (optional)')[1]
+      .split('</div>')[0];
+    for (const value of [
+      'PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true',
+      'PULSE_AGENT_CONFIG_SIGNING_KEY',
+      'PULSE_AGENT_CONFIG_PUBLIC_KEYS',
+    ]) {
+      expect(note).toContain(`<code class="wrap-anywhere">${value}</code>`);
+    }
+  });
+
+  it('offers the existing private-file alternative on Linux/NAS and FreeBSD only when supplied', () => {
+    const cards = buildCommandsByPlatform(
+      'prompt-command',
+      'windows',
+      'windows-args',
+      'file-command',
+    );
+    for (const platform of ['linux', 'freebsd'] as const) {
+      expect(cards[platform].snippets.map((snippet) => snippet.command)).toEqual([
+        'prompt-command',
+        'file-command',
+      ]);
+      expect(cards[platform].snippets[1].label).toBe(
+        'Install from a private token file (no terminal)',
+      );
+    }
+    const tokenless = buildCommandsByPlatform('no-token', 'windows', 'windows-args');
+    expect(tokenless.linux.snippets).toHaveLength(1);
+    expect(tokenless.freebsd.snippets).toHaveLength(1);
+    // Do not silently point a macOS administrator at Linux's /root path.
+    expect(cards.macos.snippets).toHaveLength(1);
+  });
   it('builds unified rows from connected infrastructure surfaces', () => {
     const item: ConnectedInfrastructureItem = {
       id: 'agent-1',

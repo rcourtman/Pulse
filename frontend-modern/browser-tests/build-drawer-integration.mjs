@@ -1,0 +1,123 @@
+// Prepare a static production-component preview before bounded browser use.
+// This is not the production build or browser proof. All served bytes and
+// Tailwind inputs are bound; no compiler runs in the browser process tree.
+import { build } from 'vite';
+import solid from 'vite-plugin-solid';
+import tailwindcss from '@tailwindcss/vite';
+import { stop } from 'esbuild';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import sourceIdentity from './publication-fixture-source.cjs';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const variant = process.argv[2];
+if (!['parent', 'final'].includes(variant)) throw new Error('Expected parent or final');
+const outDir = path.resolve(root, `../tmp/drawer-integration/${variant}-static`);
+const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+const binding = {
+  ...sourceIdentity.publicationSourceIdentity(process.argv.slice(3), () =>
+    execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }),
+  ),
+  variant,
+  graph: hash(fs.readFileSync(path.join(root, 'package-lock.json'))),
+  sources: {},
+  artifacts: {},
+};
+try {
+  await build({
+    root,
+    base: '/',
+    configFile: false,
+    publicDir: false,
+    plugins: [
+      {
+        name: 'notice-action-source-binding',
+        generateBundle() {
+          for (const id of this.getModuleIds()) {
+            const file = id.split('?')[0];
+            if (
+              file.startsWith(root + '/') &&
+              !file.includes('/node_modules/') &&
+              fs.existsSync(file) &&
+              fs.statSync(file).isFile()
+            )
+              binding.sources[path.relative(root, file)] = hash(fs.readFileSync(file));
+          }
+          for (const file of [
+            'src/components/Workloads/GuestDrawerOverview.tsx',
+            'src/components/Workloads/NodeDrawerOverview.tsx',
+            'src/components/Workloads/guestDrawerModel.ts',
+            'src/utils/proxmoxUpdateEvidence.ts',
+          ])
+            if (!binding.sources[file]) throw new Error(`Required consumer not compiled: ${file}`);
+        },
+      },
+      tailwindcss(),
+      solid(),
+    ],
+    resolve: {
+      alias: { '@': path.join(root, 'src') },
+      conditions: ['import', 'browser', 'default'],
+    },
+    build: {
+      target: 'esnext',
+      outDir,
+      emptyOutDir: true,
+      rollupOptions: { input: path.join(root, 'browser-tests/drawer-integration.html') },
+    },
+  });
+  const bind = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) bind(file);
+      else if (/\.(css|js|jsx|ts|tsx|html|mjs|cjs)$/.test(file))
+        binding.sources[path.relative(root, file)] = hash(fs.readFileSync(file));
+    }
+  };
+  bind(path.join(root, 'src'));
+  for (const file of [
+    'browser-tests/drawer-integration.tsx',
+    'browser-tests/drawer-integration.html',
+    'browser-tests/build-drawer-integration.mjs',
+    'browser-tests/drawer-integration.cjs',
+  ])
+    binding.sources[file] = hash(fs.readFileSync(path.join(root, file)));
+  for (const file of [
+    'index.html',
+    'package.json',
+    'package-lock.json',
+    'tsconfig.json',
+    'public/docs/VM_DISK_MONITORING.md',
+  ])
+    binding.sources[file] = hash(fs.readFileSync(path.join(root, file)));
+  fs.mkdirSync(path.join(outDir, 'docs'), { recursive: true });
+  for (const doc of ['VM_DISK_MONITORING.md', 'TROUBLESHOOTING.md'])
+    fs.copyFileSync(path.join(root, 'public/docs', doc), path.join(outDir, 'docs', doc));
+  const producer = path.join(process.env.PULSE_PROOF_INPUTS ?? '', 'temperature.json');
+  if (!fs.existsSync(producer))
+    throw new Error('Exact containing temperature producer input missing');
+  fs.copyFileSync(producer, path.join(outDir, 'temperature-producer.json'));
+  binding.temperatureProducer = hash(fs.readFileSync(producer));
+  const artifacts = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) artifacts(file);
+      else binding.artifacts[path.relative(outDir, file)] = hash(fs.readFileSync(file));
+    }
+  };
+  artifacts(outDir);
+  fs.writeFileSync(path.join(outDir, 'binding.json'), JSON.stringify(binding, null, 2) + '\n');
+  console.log(
+    JSON.stringify({
+      variant,
+      source: binding.source_sha,
+      source_inputs: Object.keys(binding.sources).length,
+      artifacts: Object.keys(binding.artifacts).length,
+    }),
+  );
+} finally {
+  stop();
+}

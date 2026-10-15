@@ -169,7 +169,7 @@ PROTECTED_CHECKOUT_PINS = frozenset(
 # an action runtime that the release path can no longer execute.
 REVIEWED_NODE24_ACTION_PINS = {
     "actions/download-artifact@": frozenset(
-        {"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"}
+        {"9000827ccba6bdab643e8b6fd33ac0654aef8333"}
     ),
     "actions/github-script@": frozenset(
         {"3a2844b7e9c422d3c10d287c895573f7108da1b3"}

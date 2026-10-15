@@ -6,10 +6,12 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -946,6 +948,97 @@ func TestCheckVMDiskMonitoring_BackupAdmission(t *testing.T) {
 			}
 			if tc.wantPermission && result.TestResult != "Permission denied accessing guest agent" {
 				t.Fatalf("completed permission refusal lost: %q", result.TestResult)
+			}
+		})
+	}
+}
+
+// Only target-free diagnostics runtime state and a pinned synthetic TLS peer.
+// No native ACL, credential, backup, guest-agent or installed target is changed.
+func newDiagnosticsAPIRejectionFixture(t *testing.T, pveStatus, pbsStatus int) (*Router, *atomic.Int32, *atomic.Int32, *atomic.Bool) {
+	t.Helper()
+	var pveReads, pbsReads atomic.Int32
+	var recovered atomic.Bool
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet || strings.Contains(r.URL.Path, "/agent/") || strings.HasSuffix(r.URL.Path, "/access/ticket") {
+			t.Errorf("diagnostic made unexpected guest or credential request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(500)
+			return
+		}
+		status := pveStatus
+		wantAuth := "PVEAPIToken=fixture@pve!reader=fixture-token"
+		payload := `{"data":[]}`
+		if r.URL.Path == "/api2/json/version" {
+			pbsReads.Add(1)
+			status = pbsStatus
+			wantAuth = "PBSAPIToken=fixture@pbs!reader:fixture-token"
+			payload = `{"data":{"version":"3.4.2","release":"fixture"}}`
+		} else {
+			pveReads.Add(1)
+		}
+		if r.Header.Get("Authorization") != wantAuth {
+			t.Error("diagnostic changed the fixture credential")
+			w.WriteHeader(401)
+			return
+		}
+		if recovered.Load() {
+			io.WriteString(w, payload)
+		} else {
+			w.WriteHeader(status)
+			io.WriteString(w, "API error 401: permission denied; private-fixture-body")
+		}
+	}))
+	t.Cleanup(server.Close)
+	pin := sha256.Sum256(server.Certificate().Raw)
+	cfg := &config.Config{DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{{Name: "private-pve-fixture", Host: server.URL, TokenName: "fixture@pve!reader", TokenValue: "fixture-token", VerifySSL: true, Fingerprint: hex.EncodeToString(pin[:])}},
+		PBSInstances: []config.PBSInstance{{Name: "private-pbs-fixture", Host: server.URL, TokenName: "fixture@pbs!reader", TokenValue: "fixture-token", VerifySSL: true, Fingerprint: hex.EncodeToString(pin[:])}},
+	}
+	monitor := newMonitorForDiagnostics(t, &config.Config{DataPath: t.TempDir()})
+	return &Router{config: cfg, monitor: monitor}, &pveReads, &pbsReads, &recovered
+}
+
+func TestComputeDiagnosticsAPIRejectionsPreserveCredentials(t *testing.T) {
+	for _, status := range []int{401, 403, 502} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			router, pveReads, pbsReads, recovered := newDiagnosticsAPIRejectionFixture(t, status, status)
+			originalPVE := append([]config.PVEInstance(nil), router.config.PVEInstances...)
+			originalPBS := append([]config.PBSInstance(nil), router.config.PBSInstances...)
+			diag := router.computeDiagnostics(context.Background())
+			wantKind := map[int]string{401: "proxmox_auth_rejected", 403: "proxmox_permission_denied", 502: "proxmox_api_error"}[status]
+			if len(diag.Nodes) != 1 || len(diag.PBS) != 1 || diag.Nodes[0].ErrorKind != wantKind || diag.PBS[0].Probe.ErrorKind != wantKind || diag.Nodes[0].Connected || diag.PBS[0].Probe.Connected {
+				t.Fatalf("diagnostic refusal lost at producer: nodes=%+v PBS=%+v", diag.Nodes, diag.PBS)
+			}
+			if pveReads.Load() != 1 || pbsReads.Load() != 1 {
+				t.Fatalf("token diagnostics repeated rejected requests: PVE=%d PBS=%d", pveReads.Load(), pbsReads.Load())
+			}
+			if len(diag.Errors) != 2 || !strings.HasPrefix(diag.Errors[0], "PVE connection 1 check:") || !strings.HasPrefix(diag.Errors[1], "PBS connection 1 live check:") {
+				t.Fatalf("existing displayed summary omits/misattributes safe API guidance: %+v", diag.Errors)
+			}
+			for _, summary := range diag.Errors {
+				for _, private := range []string{"private-fixture-body", "private-pve-fixture", "private-pbs-fixture", router.config.PVEInstances[0].Host, "fixture-token", "fixture@"} {
+					if strings.Contains(summary, private) {
+						t.Errorf("display/share summary introduced private identity %q: %s", private, summary)
+					}
+				}
+			}
+			rec := httptest.NewRecorder()
+			writeDiagnosticsResponse(rec, diag, time.Time{})
+			var wire DiagnosticsInfo
+			if err := json.Unmarshal(rec.Body.Bytes(), &wire); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(wire.Errors, diag.Errors) || wire.Nodes[0].Troubleshooting != diag.Nodes[0].Troubleshooting || wire.PBS[0].Probe.ErrorKind != wantKind {
+				t.Fatal("actual HTTP serializer lost guidance or source attribution")
+			}
+			recovered.Store(true) // Change only this synthetic server's ACL outcome.
+			current := router.computeDiagnostics(context.Background())
+			if !current.Nodes[0].Connected || !current.PBS[0].Probe.Connected || current.PBS[0].Connected || len(current.Errors) != 0 {
+				t.Fatalf("normal read recovery/independent scheduler state lost: nodes=%+v PBS=%+v errors=%+v", current.Nodes, current.PBS, current.Errors)
+			}
+			if !reflect.DeepEqual(router.config.PVEInstances, originalPVE) || !reflect.DeepEqual(router.config.PBSInstances, originalPBS) {
+				t.Fatal("diagnostics changed saved TLS trust, credentials or target configuration")
 			}
 		})
 	}
