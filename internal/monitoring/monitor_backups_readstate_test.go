@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
@@ -1203,7 +1204,9 @@ func ptrBackupTime(at time.Time) *time.Time { return &at }
 // The actual detector and served-state projection feed the consuming browser
 // fixture. No guest, snapshot, backup, clock or installed service is changed.
 func TestSnapshotPartialEvidenceServedState(t *testing.T) {
-	t.Setenv("PULSE_MOCK", "false")
+	if mock.IsMockEnabled() {
+		t.Fatal("snapshot producer proof requires ordinary served state, not mock mode")
+	}
 	manager := alerts.NewManagerWithDataDir(t.TempDir())
 	t.Cleanup(manager.Stop)
 	cfg := manager.GetConfig()

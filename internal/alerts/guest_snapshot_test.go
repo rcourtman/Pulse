@@ -429,7 +429,8 @@ func TestSnapshotPartialEvidenceScopeDoesNotTransferHeldMetrics(t *testing.T) {
 	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
 	original := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
 	peer := snapshot
-	peer.Instance, peer.ID, peer.VMID = "other", "other-node-101-weekly", 101
+	// Even a colliding legacy alias cannot lend evidence across connections.
+	peer.Instance, peer.VMID = "other", 101
 	peer.Time, peer.SizeBytes = time.Time{}, 0
 	m.CheckSnapshotsForInstance("other", []models.GuestSnapshot{peer}, nil)
 	remaining := requireSnapshotPartialAlert(t, m, AlertLevelWarning)

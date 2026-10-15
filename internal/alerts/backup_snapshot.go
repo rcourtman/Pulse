@@ -419,6 +419,11 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		if previous == nil {
 			previous, _ = m.getActiveAlertNoLock(alertID)
 		}
+		if previous != nil && (previous.Type != "snapshot-age" || previous.ResourceID != resourceID || previous.Instance != snapshot.Instance || previous.Node != snapshot.Node) {
+			// A legacy alias alone is not authority to transfer evidence
+			// across resources or configured connections.
+			previous = nil
+		}
 		previous = previous.Clone()
 		m.mu.RUnlock()
 		evidence := resolveSnapshotAlertEvidence(snapshot, previous, now)
