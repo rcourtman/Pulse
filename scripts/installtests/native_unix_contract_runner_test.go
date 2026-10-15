@@ -39,7 +39,7 @@ assert tuple(runner.GROUPS) == ("nas-preflight", "truenas-retirement", "update-s
 assert [len(group) for group in groups] == [1, 1, 1, 250, 250, 2]
 assert sorted(sum(groups, [])) == sorted(names + reset + preflight + fixtures)
 assert len(set(sum(groups, []))) == 505
-assert groups[:3] == [preflight, fixtures[:1], fixtures[1:]] and groups[-1] == sorted(reset)
+assert list(groups[:3]) == [preflight, fixtures[:1], fixtures[1:]] and groups[-1] == sorted(reset)
 legacy_general = sorted(names + preflight + fixtures)
 for actual, previous in zip(groups[3:5], [legacy_general[::2], legacy_general[1::2]]):
     assert actual == [name for name in previous if name not in preflight + fixtures]
