@@ -281,6 +281,82 @@ test("syncLabels adds newly declared topics but respects a completed disposition
   }
 });
 
+test("material edits to an already populated topic field restore its review task", async () => {
+  const previousBody = "### Additional actionable topics\nHistory is also empty.\n\n" +
+    "### Additional context\nExisting observations.\n";
+  for (const value of [
+    "History is also empty.\n\nBackups also identify the wrong host.",
+    "Backups also identify the wrong host.",
+    "History is also empty, and backups identify the wrong host.",
+  ]) {
+    const issue = { number: 2926, title: "Mixed report", labels:
+      ["enhancement", "needs-human", "needs-retest-on-latest", "operator-reviewed"].map(name => ({ name })),
+    body: previousBody.replace("History is also empty.", value) };
+    const { github, calls } = createGithub();
+    await syncLabels({ github, core: createCore(),
+      context: createContext({ action: "edited", issue, previousBody }) });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]], value);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2);
+  }
+});
+
+test("unchanged visible topics cannot restore a completed task on unrelated or presentation edits", async () => {
+  const previousBody = "### Additional actionable topics\nHistory is also empty.\n\n" +
+    "### Additional context\nExisting observations.\n";
+  for (const body of [
+    previousBody,
+    previousBody.replace("Existing observations.", "New logs outside the topic field."),
+    previousBody.replace("History is also empty.", "HISTORY  is\nalso empty."),
+    previousBody.replace("History is also empty.", "History is also empty.\n\n<!-- Backups identify the wrong host. -->"),
+    previousBody.replace("### Additional actionable topics", "  ## Additional actionable topics ##"),
+    previousBody.replaceAll("\n", "\r\n"),
+  ]) {
+    const issue = { number: 2927, title: "Mixed report", body, labels: [{ name: "enhancement" }] };
+    const { github, calls } = createGithub();
+    await syncLabels({ github, core: createCore(),
+      context: createContext({ action: "edited", issue, previousBody }) });
+    assert.deepEqual(calls.addLabels, [], body);
+    assert.deepEqual(calls.removeLabel, [], body);
+    assert.deepEqual(calls.getLabel, [], body);
+    assert.deepEqual(calls.createComment, [], body);
+    assert.equal(calls.getIssue.length, 1);
+  }
+});
+
+test("a populated-field edit still requires a current event and a fresh pre-write read", async () => {
+  const previousBody = "### Additional actionable topics\nHistory is also empty.\n";
+  const issue = { number: 2928, title: "Mixed report", state: "open", labels: [{ name: "enhancement" }],
+    updated_at: "2026-10-15T20:30:00Z",
+    body: previousBody + "\nBackups also identify the wrong host.\n" };
+  for (const scenario of ["reopened", "missing previous body", "superseded event", "closed during preparation", "already queued"]) {
+    const current = structuredClone(issue);
+    if (scenario === "superseded event") current.updated_at = "2026-10-15T20:31:00Z";
+    if (scenario === "already queued") current.labels.push({ name: "needs-decomposition" });
+    const { github, calls } = createGithub({ currentIssue: current });
+    if (scenario === "closed during preparation") {
+      github.rest.issues.getLabel = async () => {
+        github.currentIssue = { ...current, state: "closed" };
+        return { data: {} };
+      };
+    }
+    await syncLabels({ github, core: createCore(), context: createContext({
+      action: scenario === "reopened" ? "reopened" : "edited", issue: current,
+      previousBody: scenario === "missing previous body" ? undefined : previousBody,
+      // A delayed event is distinct from the live read even if its body matches.
+      ...(scenario === "superseded event" ? { issue } : {}),
+    }) });
+    assert.deepEqual(calls.addLabels, [], scenario);
+    assert.deepEqual(calls.removeLabel, [], scenario);
+    assert.deepEqual(calls.createComment, [], scenario);
+    assert.deepEqual(calls.getLatestRelease, [], scenario);
+    assert.deepEqual(calls.paginate, [], scenario);
+  }
+});
+
 test("additional topic classification is explicit and fail-quiet for legacy forms", () => {
   const { classifyAdditionalActionableTopics } = triage.internals;
 

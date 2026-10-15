@@ -107,7 +107,7 @@ function extractSectionValue(body, heading, followingHeadings = []) {
   return lines.slice(start + 1, end).map((line) => line.text).join("\n").trim();
 }
 
-function classifyAdditionalActionableTopics(body) {
+function normalizedTopicField(body) {
   const value = extractSectionValue(body, "Additional actionable topics", [
     "Pulse version",
     "Additional context",
@@ -116,10 +116,16 @@ function classifyAdditionalActionableTopics(body) {
   ]);
   if (value === null) return null;
 
-  const normalized = value
+  return value
     .trim()
     .toLowerCase()
+    .replace(/\s+/g, " ")
     .replace(/[.!]+$/g, "");
+}
+
+function classifyAdditionalActionableTopics(body) {
+  const normalized = normalizedTopicField(body);
+  if (normalized === null) return null;
   if (!normalized || !/[\p{L}\p{N}]/u.test(normalized)) return false;
 
   return !new Set([
@@ -389,9 +395,12 @@ async function syncLabels({ github, context, core }) {
     isBugLike,
   } = buildTriageState(issue, core, null);
 
-  // A form declaration creates a review task only when it is new. A later
-  // empty field cannot prove that comment topics were dispositioned, and an
-  // unrelated or superseded event must not restore a label Community cleared.
+  // A new or materially edited nonempty field needs review even if the old
+  // declaration already had topics. Comparing only its boolean classification
+  // loses an added symptom after Community disposed of the earlier topics.
+  // Ignore case/whitespace and hidden comments; unrelated and superseded edits
+  // must not restore a cleared task. This flags review, not a new issue or an
+  // automatic judgment about whether two descriptions are the same problem.
   const previousBody = context.payload.changes?.body?.from;
   const eventIsCurrent = typeof issue.updated_at === "string" &&
     issue.body === eventIssue.body &&
@@ -399,7 +408,7 @@ async function syncLabels({ github, context, core }) {
   const newlyDeclared = eventIsCurrent && hasAdditionalActionableTopics === true && (
     context.payload.action === "opened" ||
     (context.payload.action === "edited" && previousBody !== undefined &&
-      classifyAdditionalActionableTopics(previousBody) !== true)
+      normalizedTopicField(previousBody) !== normalizedTopicField(issue.body))
   );
   if (newlyDeclared) {
     core.info("Issue newly declares additional actionable topics; decomposition is required.");
