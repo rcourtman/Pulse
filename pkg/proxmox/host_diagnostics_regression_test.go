@@ -5,14 +5,107 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+// Non-parallel, like the other diagnostic tests in this file. Large/additive
+// replies must not copy guest data into logs even when Debug is enabled.
+func TestGuestFilesystemResponseDiagnosticsNoPayload(t *testing.T) {
+	const marker = "synthetic-private-filesystem-metadata"
+	row := `{"name":"` + marker + `","mountpoint":"/data","type":"ext4","total-bytes":1000,"used-bytes":0}`
+	unrecognized := `{"unused":"` + marker + `"}`
+	largeUnrecognized := `{"unused":"` + marker + strings.Repeat("x", 128*1024) + `"}`
+	for _, tc := range []struct {
+		name, payload string
+		wantRows      int
+		wantError     bool
+		resultBytes   int
+	}{
+		{"array", `{"data":{"result":[` + row + `]}}`, 1, false, 0},
+		{"object", `{"data":{"result":` + row + `}}`, 1, false, 0},
+		{"large-additive", `{"data":{"result":[` + row + `],"unused":"` + marker + strings.Repeat("x", 128*1024) + `"}}`, 1, false, 0},
+		{"incomplete", `{"data":{"result":[` + row + `,{"mountpoint":"/other","type":"ext4","total-bytes":9000}],"unused":"` + marker + `"}}`, 1, true, 0},
+		{"empty", `{"data":{"result":[],"unused":"` + marker + `"}}`, 0, false, 0},
+		{"null", `{"data":{"result":null,"unused":"` + marker + `"}}`, 0, false, 0},
+		{"unrecognized-object", `{"data":{"result":` + unrecognized + `}}`, 0, false, len(unrecognized)},
+		{"large-unrecognized-object", `{"data":{"result":` + largeUnrecognized + `}}`, 0, false, len(largeUnrecognized)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var commands atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/config"):
+					fmt.Fprint(w, `{"data":{}}`)
+				case strings.HasSuffix(r.URL.Path, "/agent/get-fsinfo"):
+					commands.Add(1)
+					fmt.Fprint(w, tc.payload)
+				default:
+					t.Error("unexpected diagnostic fixture request")
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			client := backupTestClient(t, server.URL)
+			var captured bytes.Buffer
+			prior, priorLevel := log.Logger, zerolog.GlobalLevel()
+			log.Logger = zerolog.New(zerolog.SyncWriter(&captured)).Level(zerolog.DebugLevel)
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
+			defer func() { log.Logger = prior; zerolog.SetGlobalLevel(priorLevel) }()
+			rows, err := client.GetVMFSInfo(context.Background(), "node", 105)
+			if (err != nil) != tc.wantError || len(rows) != tc.wantRows || commands.Load() != 1 {
+				t.Fatal("diagnostic filtering changed decoding, completeness or command count")
+			}
+			if len(rows) > 0 && (rows[0].Name != marker || rows[0].UsedBytes != 0 || rows[0].TotalBytes != 1000 || rows[0].Mountpoint != "/data") {
+				t.Fatal("diagnostic filtering changed a measured zero or guest metadata")
+			}
+			if strings.Contains(captured.String(), marker) || strings.Contains(captured.String(), `"response":`) || strings.Contains(captured.String(), `"result":`) {
+				t.Fatal("filesystem reply contents escaped into diagnostics")
+			}
+			if captured.Len() > 2048 {
+				t.Fatal("filesystem diagnostics grew with unused response data")
+			}
+			decoder := json.NewDecoder(&captured)
+			found := false
+			foundUnrecognized := false
+			logBytes := captured.Len()
+			for decoder.More() {
+				var event map[string]interface{}
+				if err := decoder.Decode(&event); err != nil {
+					t.Fatal("diagnostic is not a complete JSON event")
+				}
+				if event["message"] == "Received guest agent filesystem response" {
+					found = true
+					if event["response_bytes"] != float64(len(tc.payload)) || event["node"] != "node" || event["vmid"] != float64(105) {
+						t.Fatal("diagnostic lost useful response size or guest attribution")
+					}
+				}
+				if event["message"] == "GetVMFSInfo received unrecognized result instead of filesystem array" {
+					foundUnrecognized = true
+					if event["result_bytes"] != float64(tc.resultBytes) || event["node"] != "node" || event["vmid"] != float64(105) {
+						t.Fatal("unrecognized-result diagnostic lost useful size or guest attribution")
+					}
+				}
+			}
+			if !found {
+				t.Fatal("bounded filesystem diagnostic is absent")
+			}
+			if foundUnrecognized != (tc.resultBytes > 0) {
+				t.Fatal("unrecognized-result diagnostic does not match the decoded shape")
+			}
+			t.Logf("response_bytes=%d log_bytes=%d rows=%d incomplete=%t commands=%d", len(tc.payload), logBytes, len(rows), err != nil, commands.Load())
+		})
+	}
+}
 
 // Non-parallel: temporarily replace the package logger, then restore it before
 // parallel tests can run. Only synthetic URLs/credentials enter this fixture.

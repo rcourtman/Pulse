@@ -2088,12 +2088,14 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		return nil, err
 	}
 
-	// Log the raw response for debugging
+	// The reply can include private guest paths, device identifiers and arbitrary
+	// unused metadata. Keep diagnostics independent of its contents and size:
+	// these events also reach log files, the live viewer and support bundles.
 	log.Debug().
 		Str("node", node).
 		Int("vmid", vmid).
-		Str("response", string(bodyBytes)).
-		Msg("Raw response from guest agent get-fsinfo")
+		Int("response_bytes", len(bodyBytes)).
+		Msg("Received guest agent filesystem response")
 
 	// Decode entry-by-entry to retain valid peers, but never mistake that
 	// remainder for a complete inventory after dropping a malformed record.
@@ -2156,8 +2158,8 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		log.Debug().
 			Str("node", node).
 			Int("vmid", vmid).
-			Interface("result", objectResult.Data.Result).
-			Msg("GetVMFSInfo received object instead of array")
+			Int("result_bytes", len(rawFS)).
+			Msg("GetVMFSInfo received unrecognized result instead of filesystem array")
 		return []VMFileSystem{}, nil
 	}
 
