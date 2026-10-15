@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "97663e1e37a8fc2475325b488ef65e3dbe5e2d73",
+  "verified_at": "2026-10-15T05:31:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/SettingsDialogs.tsx",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "3fd06b8727f971ad5bc3f5b1f5ae8e1e818d30f55a862ccc5bc92cd77d85bfb9",
+    "frontend-modern/src/components/Settings/Settings.tsx": "26a784f2d1f240dca3a84a7605238fae453820c2404c87e889eaccbc5d6e019e",
+    "frontend-modern/src/components/Settings/SettingsDialogs.tsx": "020aaae17ed3a866874669d2e6dc2778adff237083eebe7b43efbe32741ce9ca",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts": "f47ede2e52eb1f2cca782b12a0317136744f64b0840f7ca1a236e79677c73dea"
+  },
+  "routes": [
+    "/settings/system-recovery"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual compiled Settings, SettingsDialogs, BackupTransferDialogs, transfer hook and API client with synthetic security/configuration endpoints. Chromium 141.0.7390.37 / Playwright 1.56.1; desktop light and narrow touch dark. No installed restore or Safari claim.",
+    "Pending file read retains the reviewed file/passphrase with disabled controls and visible reading status; dispatched import explains that it cannot be cancelled or rolled back here.",
+    "A synthetic 403 with API_TOKEN text yields safe unconfirmed-import feedback without echoing its detail, automatic retry or a token prompt.",
+    "Pending export locks controls; login-password mode enforces the 12-character minimum and the actual browser download preserves the synthetic encrypted response.",
+    "Confirmed import clears its passphrase, keeps its pending/reloading status and performs a real page reload; token cancellation releases the prior intent and authentication sends the newly reviewed draft exactly once.",
+    "All 12 settled desktop/phone captures were opened with the native image tool. Labels, migration scope warnings/links, pending/error feedback and actions are readable without horizontal overflow. Initial in-animation frames were retained separately and do not serve as final pixel proof."
+  ],
+  "interactions": [
+    "Opened Recovery and Restore Backup, selected a delayed File.text fixture, entered a synthetic passphrase and submitted; attempted Escape and duplicate clicks, then released the original file read and checked the sole request body.",
+    "Returned a 403, read the unconfirmed result and verified no automatic mutation replay or credential-prompt fallback; closed the dialog.",
+    "Opened Create Backup, tried a short login password then a valid synthetic passphrase, inspected pending state and saved the actual encrypted JSON download.",
+    "Submitted another synthetic import, returned success and observed the real reload and clean recovery view.",
+    "In a token-required security fixture, cancelled the first token prompt, changed the passphrase, re-submitted, authenticated once and checked the exact reviewed body and API-token header.",
+    "Repeated through the actual consuming Settings composition at both viewports: 40 checks, eight synthetic requests and two downloads; no consuming-page exceptions. Waited for finite animations before final captures."
+  ]
+}
