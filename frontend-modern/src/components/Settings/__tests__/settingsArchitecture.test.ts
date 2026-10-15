@@ -1362,6 +1362,9 @@ describe('settings architecture guardrails', () => {
     expect(normalize(networkBoundarySettingsSectionSource)).not.toContain('Dashboard URL');
     expect(normalize(nodeModalBasicInfoSectionSource)).toContain('monitoring views');
     expect(normalize(nodeModalBasicInfoSectionSource)).not.toContain('dashboards');
+    // The server names an unnamed node from its host and disambiguates
+    // duplicates, so the form must not claim either is the user's job.
+    expect(normalize(nodeModalBasicInfoSectionSource)).not.toContain('must be unique');
     expect(normalize(nodeModalMonitoringSectionSource)).toContain('trim workload noise');
     expect(normalize(nodeModalMonitoringSectionSource)).toContain('Existing monitoring readings');
     expect(normalize(nodeModalMonitoringSectionSource)).not.toContain('dashboard readings');

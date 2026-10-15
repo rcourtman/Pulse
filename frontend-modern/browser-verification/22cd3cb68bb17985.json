@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "159803974f55ac3fe651f07a9d7cfede3d7978e6",
+  "verified_at": "2026-10-15T19:05:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx": "b3acd71eb39706382e547be502f0ab1755ad08522d888100bdd5a4c1c8a66924"
+  },
+  "routes": [
+    "/settings/infrastructure?add=pve"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): Add Proxmox VE asked for Node Name first, marked it required with a red asterisk, and its help said Required and must be unique while also offering to auto-fill it if left blank",
+    "After: Endpoint URL is the first field (required); Node Name follows, labelled (Optional), not required, with help saying an empty name is named after the host",
+    "Typing https://pve-lab.local:8006 into Endpoint URL filled Node Name with pve-lab.local; at 1024px the fields sit side by side, endpoint left",
+    "At 375px Endpoint URL stacks above Node Name and the page has no sideways scroll (scrollWidth 375)"
+  ],
+  "interactions": [
+    "Signed in to a private mock stack, opened Add infrastructure, chose Proxmox VE",
+    "Typed an endpoint with real keystrokes and read the filled name, label text and required state from the DOM",
+    "Resized to the mobile preset and checked field order and page width"
+  ]
+}
