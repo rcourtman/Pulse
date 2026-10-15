@@ -467,7 +467,10 @@ describe('ProxmoxBackupsTable', () => {
     };
     await within(table).findByText('Unavailable');
     await waitFor(() => expect(backupCount()).toBe('1'));
-    await screen.findAllByText('Protected');
+    // Point retention remains visible without hiding its verification result;
+    // neither depends on whether datastore capacity was readable.
+    await screen.findByText('Prune protected');
+    expect(screen.getByText('Verified')).toHaveAttribute('data-backup-artifact-state');
     expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_ERROR_SENTINEL');
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
 
