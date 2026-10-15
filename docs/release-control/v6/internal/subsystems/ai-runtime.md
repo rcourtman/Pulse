@@ -8727,6 +8727,15 @@ explicit renderer fixtures at 1440, 900 and 390 pixel widths.
 
 ### Monitoring identity without command access
 
+An ambiguous target returns `STRICT_RESOLUTION` with the tool error bit and
+guidance to select an exact canonical resource ID. It cannot be described as a
+missing command connection or fall back to a connected hostname. Docker children
+inherit placement, not their reporting host's identity aliases, through the
+shared canonical identity owner. `TestDockerLogReadRoutesToHostWithCollectedChildren`
+checks registered read dispatch with host/child ingestion and real-collision
+refusal; `TestAmbiguousResourceNameCannotFallBackToConnectedHostname` checks the
+failure envelope without dispatch.
+
 Command routing resolves monitored topology independently of agent connection
 availability. A missing connection must preserve the known target kind and
 parent node, cannot fall back to a different agent with a colliding name or ID,

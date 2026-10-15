@@ -23,6 +23,22 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Docker object aliases do not identify their reporting host
+
+Containers and other Docker child objects own their native IDs, names and
+subject-typed discovery/metrics targets. Reporting-agent IDs, Docker host IDs,
+hostnames and task placement nodes remain routing metadata, not child aliases.
+Canonical hostname/platform presentation must not reintroduce those parent
+identities. Missing child targets cannot promote the parent to primary identity.
+Host aliases and same-entity host facets retain their existing semantics.
+
+`TestDockerChildIdentityDoesNotClaimItsCommandHost` covers all nine child kinds,
+owned aliases and missing-target boundaries. The registered Docker log-read
+control in `internal/ai/tools/internal_routing_identity_test.go` consumes actual
+registry ingestion with collected containers, images and networks. Genuine
+duplicate names must still fail closed. Source controls alone do not establish
+installed command transport or autonomous recovery.
+
 ### Shared interpretation of selected guest memory
 
 `GuestMemoryEvidenceForResource` and the VM/container `MemoryEvidence` accessors
