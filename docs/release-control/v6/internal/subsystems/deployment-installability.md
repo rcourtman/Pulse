@@ -33,7 +33,9 @@ add TLS to the local container hop or change Proxmox HTTPS trust.
 The complete caller in `pve_auto_register_response.py` uses real curl and private
 HTTP peers for both successful methods, ambient config/proxy exclusion, redirect
 and exact-status refusal, server-error non-replay, dropped/partial responses and
-both actual total deadlines. Its Go wrapper requires all eighteen methods;
+both actual total deadlines. Two gating Go wrappers require all eighteen methods
+(ten confirmation, eight transport), each keeping the existing ninety-second
+process budget so the intentional network waits cannot starve confirmation;
 `root_install_sh_test.go` also checks the shared helper and producer ordering.
 The connection limit is checked in observed curl arguments, not claimed as a
 separately induced TCP-connect timeout. These are source controls, not installed

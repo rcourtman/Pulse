@@ -130,7 +130,7 @@ def confirmation(request, **changes):
     return json.dumps(reply)
 
 
-class RegistrationResponse(unittest.TestCase):
+class RegistrationFixture(unittest.TestCase):
     def exercise(self, response=confirmation, *, accepted=False, name=CANONICAL_NAME, legacy=False, rotate=False,
                  fault_path="", status=200, redirect="", stall=False, disconnect=False, partial=False,
                  ambient=False, proxy=""):
@@ -258,6 +258,7 @@ printf 'RESULT=%s\nNAME=%s\nERROR=%s\n' "$AUTO_NODE_REGISTERED" "$AUTO_NODE_REGI
         finally:
             peer.close()
 
+class RegistrationResponse(RegistrationFixture):
     def test_valid_modern_and_legacy_confirmation_retains_registration_without_private_output(self):
         for legacy in (False, True):
             with self.subTest(legacy=legacy):
@@ -341,6 +342,7 @@ caller
             return json.dumps(data)
         self.exercise(reply, accepted=True)
 
+class BootstrapTransport(RegistrationFixture):
     def test_ambient_config_and_proxy_cannot_observe_either_bootstrap_request(self):
         proxy = RegistrationPeer(confirmation, capture_only=True)
         try:
