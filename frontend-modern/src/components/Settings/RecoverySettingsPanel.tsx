@@ -54,8 +54,8 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
             Backup polling
           </h4>
           <p class="text-xs text-muted">
-            Read Proxmox/PBS backup records and guest snapshots. Pulse does not create, run or
-            restore backup jobs. Longer polling intervals reduce API load but delay backup evidence
+            Read Proxmox/PBS backup records and guest snapshots. Polling does not create, run or
+            restore backups. Longer polling intervals reduce API load but delay backup evidence
             refresh.
           </p>
 
@@ -107,7 +107,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
             >
               <Show
                 when={props.backupPollingEnabled()}
-                fallback="Selected: polling off. Backup records will not be refreshed. Previously collected rows can remain visible; they are not current observations."
+                fallback="Selected: polling off. Backup records will not be refreshed. Previously collected rows can remain visible. They are not current observations."
               >
                 Selected: polling on. Backup evidence follows the selected interval.
               </Show>
