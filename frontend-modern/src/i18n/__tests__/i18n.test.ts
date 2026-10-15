@@ -471,6 +471,17 @@ describe('i18n foundation', () => {
     expect(I18N_MESSAGES.es['alerts.activation.toast.deactivated']).toContain('seguira');
   });
 
+  // The Schedule page sets how alerts are delivered; maintenance windows are a
+  // separate per-resource feature, so no locale may title it as maintenance.
+  it('titles the alerts Schedule page for delivery, not maintenance', () => {
+    expect(I18N_MESSAGES.en['alerts.page.schedule.title']).toBe('Delivery Schedule');
+    for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      expect(I18N_MESSAGES[locale]['alerts.page.schedule.title']).not.toMatch(
+        /maintenance|wartung|mantenimiento/i,
+      );
+    }
+  });
+
   it('keeps machine-facing identifiers unchanged in alerts overview catalog copy', () => {
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
       expect(I18N_MESSAGES[locale]['alerts.assistant.button.full']).toContain('Pulse Assistant');

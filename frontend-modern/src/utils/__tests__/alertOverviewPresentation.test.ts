@@ -200,7 +200,7 @@ describe('alertOverviewPresentation', () => {
     expect(ALERTS_PAGE_OVERVIEW_TITLE).toBe('Alerts Overview');
     expect(ALERTS_PAGE_THRESHOLDS_TITLE).toBe('Alert Thresholds');
     expect(ALERTS_PAGE_DESTINATIONS_TITLE).toBe('Notifications');
-    expect(ALERTS_PAGE_SCHEDULE_TITLE).toBe('Maintenance Schedule');
+    expect(ALERTS_PAGE_SCHEDULE_TITLE).toBe('Delivery Schedule');
     expect(ALERTS_PAGE_HISTORY_TITLE).toBe('Alert History');
     expect(ALERTS_PAGE_DEFAULT_DESCRIPTION).toBe(
       'Review active incidents, inspect alert history, and manage thresholds, notifications, and schedules.',
@@ -237,7 +237,7 @@ describe('alertOverviewPresentation', () => {
           'Route alert notifications to email, Apprise, webhook, and mobile push destinations.',
       },
       schedule: {
-        title: 'Maintenance Schedule',
+        title: 'Delivery Schedule',
         description:
           'Define quiet hours, grouping, cooldowns, recovery, and escalation behavior for alert delivery.',
       },

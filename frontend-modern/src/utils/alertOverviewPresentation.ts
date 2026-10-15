@@ -22,7 +22,10 @@ export const ALERTS_PAGE_DEFAULT_TITLE = 'Alerts';
 export const ALERTS_PAGE_OVERVIEW_TITLE = 'Alerts Overview';
 export const ALERTS_PAGE_THRESHOLDS_TITLE = 'Alert Thresholds';
 export const ALERTS_PAGE_DESTINATIONS_TITLE = 'Notifications';
-export const ALERTS_PAGE_SCHEDULE_TITLE = 'Maintenance Schedule';
+// The page sets how alerts are delivered (quiet hours, cooldown, grouping,
+// recovery, escalation). Maintenance windows are a separate per-resource
+// feature, so the title must not promise them.
+export const ALERTS_PAGE_SCHEDULE_TITLE = 'Delivery Schedule';
 export const ALERTS_PAGE_HISTORY_TITLE = 'Alert History';
 export const ALERTS_PAGE_DEFAULT_DESCRIPTION =
   'Review active incidents, inspect alert history, and manage thresholds, notifications, and schedules.';

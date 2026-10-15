@@ -175,7 +175,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.page.overview.title': 'Warnmeldungsuebersicht',
   'alerts.page.schedule.description':
     'Definieren Sie Ruhezeiten, Gruppierung, Abklingzeiten, Wiederherstellung und Eskalation fuer Warnmeldungen.',
-  'alerts.page.schedule.title': 'Wartungszeitplan',
+  'alerts.page.schedule.title': 'Zustellplan',
   'alerts.page.thresholds.description':
     'Passen Sie Schwellwerte und gezielte Ausnahmen fuer Infrastruktur, Workloads und Integrationen an.',
   'alerts.page.thresholds.title': 'Warnungsschwellwerte',

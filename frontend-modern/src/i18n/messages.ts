@@ -268,7 +268,7 @@ export const EN_MESSAGES = {
   'alerts.page.overview.title': 'Alerts Overview',
   'alerts.page.schedule.description':
     'Define quiet hours, grouping, cooldowns, recovery, and escalation behavior for alert delivery.',
-  'alerts.page.schedule.title': 'Maintenance Schedule',
+  'alerts.page.schedule.title': 'Delivery Schedule',
   'alerts.page.thresholds.description':
     'Tune thresholds and scoped overrides for infrastructure, workloads, and integrations.',
   'alerts.page.thresholds.title': 'Alert Thresholds',

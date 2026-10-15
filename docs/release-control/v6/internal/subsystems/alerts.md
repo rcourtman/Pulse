@@ -3576,6 +3576,14 @@ that the overview itself owns installation-wide alert activation controls.
 The exported English fallback in `alertOverviewPresentation.ts`, localized
 message catalog, and header metadata proof must remain textually aligned.
 
+The Schedule tab's header title is "Delivery Schedule" (`ALERTS_PAGE_SCHEDULE_TITLE`,
+`alerts.page.schedule.title`; de "Zustellplan", es "Programacion de entregas").
+The page sets how alerts are delivered (quiet hours, cooldown, grouping,
+delivery channels, recovery and escalation); it was titled "Maintenance
+Schedule", which promised maintenance windows, a separate per-resource
+feature this page does not hold (`alertOverviewPresentation.test.ts`,
+`i18n.test.ts`).
+
 Alert threshold and schedule surfaces must now also treat
 `discoveryTarget` as optional frontend input and keep grouping-card state on
 the canonical `node` group-header contract. Frontend alert pages may not
