@@ -530,7 +530,7 @@ not run Patrol or recover missing history.
 | **Issues resolved** | Recorded automatic resolutions plus manual resolutions still retained. Dismissed and muted findings are described separately. A cleared finding does not establish that an action ran or was independently verified. |
 | **Investigated** | Recorded investigation outcomes on retained findings. “Fix run, result unknown” is not a verified fix; open the finding for its result and remaining work. |
 | **Fixes run** | Actions recorded as successfully executed. “Verified afterwards” is a separate count; review failed actions and waiting approvals in **Actions**. Do not run an action again merely to increase the count. |
-| **Estimated spend** | Recorded Patrol model calls and their estimated USD cost, not an invoice or all Assistant usage. If some calls have no known price, the displayed amount is incomplete, not a zero-cost result. Check [Cost Tracking](AI.md#cost-tracking). |
+| **Estimated spend** | Recorded Patrol model calls and their estimated USD cost, not an invoice or all Assistant usage. If some calls have no known price, the displayed amount is incomplete, not a zero-cost result. Check [Cost Tracking](#cost-tracking). |
 
 The displayed mode is Patrol's **current** mode, not a history of mode changes.
 Watch-only mode can explain why investigations or fixes were not performed,
@@ -947,11 +947,58 @@ Alerts are threshold-based and narrow. Patrol gives the selected model a broader
 
 ## Cost Tracking
 
-Pulse tracks token usage and costs:
+Pulse estimates the cost of recorded Assistant and Patrol provider calls. This
+is **not a provider invoice or a guaranteed spending cap**: account-wide usage,
+provider discounts and unpriced calls can differ from Pulse's estimate. Use a
+provider-side spending limit, where supported, for independent cost control.
 
-- View usage summary: `GET /api/ai/cost/summary`
-- Reset counters: `POST /api/ai/cost/reset` (admin)
-- Set monthly budget limits in AI settings
+### Read the same window before changing anything
+
+Open **Settings → Pulse Intelligence → Provider & Models** and find **Provider
+Usage & Spend**. Select **30d** when comparing it with the **30-day Budget**.
+The runtime checks retained usage in the preceding 30 days, not a calendar
+month. Other chart ranges show a **pro-rated** comparison; changing the chart
+range does not change the runtime budget or reset its window.
+
+Keep the selected range, any shorter-retention notice, provider/model rows,
+unknown-pricing warning and **Prices as of** date with an existing observation.
+The date identifies Pulse's price table, not verified billing accuracy. Retained
+token events are estimated using the table shipped with the running server;
+a pricing correction does not require deleting those events. Input, output and
+cache token buckets have different rates: total tokens alone cannot establish
+the expected cost or whether prompt caching saved money.
+
+### A budget refusal is not a provider failure
+
+| Existing observation | What it means and the safe next step |
+|----------------------|-------------------------------------|
+| Budget exceeded or Patrol paused for budget | Pulse has declined analysis against its estimated 30-day usage. Check that window and model pricing first; repeatedly testing credentials or resetting a circuit breaker does not repair a budget refusal. |
+| Estimated spend is partial, unknown pricing or a dash | Some cost is unavailable, not free. Known rows can contribute a partial total; missing prices do not guarantee that budget enforcement covers every call. |
+| Pulse and the provider show different totals | Compare the same period, account scope, model and token buckets using existing records. A newer server's table can change retained estimates; a smaller number alone does not prove billing or Patrol recovery. |
+| Provider authentication, connectivity or circuit-breaker error | Keep the exact redacted error separate from a budget refusal. A budget change does not repair provider access, and a cooldown ending does not prove analysis succeeded. |
+
+If the estimate and configured budget are intentional, the administrator can
+wait for older usage to leave the rolling window, or deliberately review the
+model, Patrol schedule or budget. A cheaper model or slower schedule affects
+future calls; it does not erase past usage. Raising or disabling the budget
+permits more spend, so do not use it merely to diagnose a discrepancy or run a
+test. A successful provider Test is not proof of a completed ordinary Patrol run.
+
+### Preserve usage history and keep exports private
+
+**Reset usage history clears retained events used by the budget check.** It
+does not refund provider charges, correct prices or verify recovery. Do not
+reset history, edit `ai_usage_history.json`, delete backups or replay model calls
+to investigate a cost discrepancy. An authorised, deliberate reset is an admin
+data-removal operation, not routine troubleshooting.
+
+Use the existing panel or read-only summary (`GET /api/ai/cost/summary`) first.
+Exports and backup files can identify tasks, resources and sessions even without
+prompts or API keys; keep them private. For an
+[existing report](TROUBLESHOOTING.md#-getting-help), share only the relevant,
+locally reviewed and redacted observation, running server version and original
+time/window. Unknown details are valid; no raw usage history, invoice, full
+export, credential, new diagnostic run or paid model call is required.
 
 ---
 
@@ -959,6 +1006,7 @@ Pulse tracks token usage and costs:
 
 | Issue | Solution |
 |-------|----------|
+| Budget exceeded or an unexpected cost estimate | Use [Cost Tracking](#cost-tracking) before changing a budget, resetting usage or testing the provider |
 | Assistant or Patrol not responding | Verify provider credentials in **Settings → Pulse Intelligence → Provider & Models** |
 | No execution capability | Confirm at least one agent is connected |
 | Findings not persisting | Check Pulse has write access to `ai_findings.json` in the config directory |
