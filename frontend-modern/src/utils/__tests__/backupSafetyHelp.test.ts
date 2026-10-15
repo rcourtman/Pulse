@@ -155,7 +155,10 @@ describe('manual backup safety help', () => {
         section.appendChild(next.cloneNode(true));
       }
       const links = section.querySelectorAll('a[href="/docs/VM_DISK_MONITORING#backup-safety"]');
-      expect([...links].map((link) => link.textContent), headingText).toEqual([label]);
+      expect(
+        [...links].map((link) => link.textContent),
+        headingText,
+      ).toEqual([label]);
     }
     const target = render(guide, 'VM_DISK_MONITORING');
     expect(target.querySelector('#backup-safety')?.textContent).toBe('Backup safety');

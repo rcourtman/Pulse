@@ -55,10 +55,7 @@ const workflowDestinations = [
   ],
   [
     'Update failed or its result is uncertain:',
-    [
-      '/docs/AUTO_UPDATE#update-failed',
-      '/docs/DOCKER#check-a-failed-or-pending-workload-update',
-    ],
+    ['/docs/AUTO_UPDATE#update-failed', '/docs/DOCKER#check-a-failed-or-pending-workload-update'],
   ],
   [
     'Agent host is missing or reporting is rejected:',
