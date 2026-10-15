@@ -43,6 +43,9 @@ the monitor-owned history selector. Responses contain usage percentages with
 timestamps and source provenance, including `mock_synthetic`, rather than
 invented zero CPU/memory observations. Retained read errors remain errors and an
 empty requested window cannot be filled with older chart samples.
+History downsampling covers every observation in the returned window, including
+the newest remainder samples when the count is not a multiple of the tool limit.
+`TestDownsampleMetrics_IncludesNewestRemainder` covers dense retained series.
 `TestStoragePerformanceReadsRetainedHistoryAcrossRestart`,
 `TestStorageInvestigationHistoryKeepsRequestedWindowAndStoreErrors` and
 `TestInvestigationStorageHistoryUsesCommunityMonitoringSource` cover retained
