@@ -143,6 +143,9 @@ export const EN_MESSAGES = {
   'alerts.assistant.subject': '{level} {alertType} on {resourceName}',
   'alerts.assistant.title': 'Alert investigation attached',
   'alerts.assistant.unlockedTitle': 'Ask Pulse Assistant about this alert',
+  'alerts.assistant.iconLabel': 'Ask Pulse Assistant about {alertType} on {resourceName}',
+  'alerts.assistant.iconLabelAt':
+    'Ask Pulse Assistant about {alertType} on {resourceName}, {startedAt}',
   'alerts.assistant.explain.menuLabel': 'Explain with Assistant',
   'alerts.assistant.explain.menuHint': 'Use this alert as read-only context',
   'alerts.assistant.patrol.chevron': 'More alert actions',
@@ -769,6 +772,8 @@ export const ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS = [
   'alerts.assistant.subject',
   'alerts.assistant.title',
   'alerts.assistant.unlockedTitle',
+  'alerts.assistant.iconLabel',
+  'alerts.assistant.iconLabelAt',
   'alerts.assistant.explain.menuLabel',
   'alerts.assistant.explain.menuHint',
   'alerts.assistant.patrol.chevron',

@@ -29,6 +29,14 @@ interface InvestigateAlertButtonProps {
    * single-purpose regardless.
    */
   patrolOption?: boolean;
+  /**
+   * The alert's display name (for example "Container Health"). The icon
+   * variant names the alert and its resource with it, because a table repeats
+   * the button on every row and a shared name tells the rows apart for no one.
+   */
+  subjectLabel?: string;
+  /** When the alert started, as the host shows it; tells repeated alerts apart. */
+  subjectTime?: string;
 }
 
 /**
@@ -66,6 +74,16 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
       : usesPatrolPrimary()
         ? t('alerts.assistant.patrol.title')
         : t('alerts.assistant.unlockedTitle');
+
+  const iconLabel = () => {
+    const resourceName = props.alert.resourceName?.trim();
+    if (isLocked() || !resourceName) return buttonTitle();
+    const alertType = props.subjectLabel?.trim() || props.alert.type;
+    const startedAt = props.subjectTime?.trim();
+    return startedAt
+      ? t('alerts.assistant.iconLabelAt', { alertType, resourceName, startedAt })
+      : t('alerts.assistant.iconLabel', { alertType, resourceName });
+  };
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -224,6 +242,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
           ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-surface' : ''}
           ${props.class || ''}`}
         title={buttonTitle()}
+        aria-label={iconLabel()}
         aria-disabled={isLocked()}
       >
         <svg
