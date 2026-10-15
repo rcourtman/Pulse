@@ -89,6 +89,13 @@ const workflowDestinations = [
     ['/docs/PBS#pbs-is-active-but-missing-from-monitoring'],
   ],
   [
+    'Mail Gateway Test succeeds but collection fails:',
+    [
+      '/docs/MAIL_GATEWAY#troubleshooting-without-changing-the-gateway',
+      '/docs/MAIL_GATEWAY#cluster-response-or-backup-lookup-errors',
+    ],
+  ],
+  [
     'RAID is reported degraded despite a spare:',
     ['/docs/TROUBLESHOOTING#raid-array-is-degraded-with-a-spare'],
   ],
@@ -201,6 +208,27 @@ describe('troubleshooting workflow entry', () => {
       expect(link.hasAttribute('data-doc-link'), href).toBe(true);
       expect(link.hasAttribute('target'), href).toBe(false);
     }
+  });
+
+  it('routes PMG collection failures to safe existing guidance, not agent or SMTP setup', () => {
+    const row = [...entry().querySelectorAll('li')].find((element) =>
+      prose(element).startsWith('Mail Gateway Test succeeds but collection fails:'),
+    );
+    expect(row).toBeDefined();
+    expect(prose(row!)).toContain('before changing credentials, DNS or TLS');
+    expect(prose(row!)).toContain('Missing queue data is not an empty queue');
+    expect(row!.querySelectorAll('a')).toHaveLength(2);
+    const guide = renderGuide('MAIL_GATEWAY');
+    const errorHeading = guide.querySelector('#cluster-response-or-backup-lookup-errors');
+    expect(errorHeading).not.toBeNull();
+    const detail = document.createElement('section');
+    for (let next = errorHeading!.nextElementSibling; next; next = next.nextElementSibling) {
+      if (/^H[1-3]$/.test(next.tagName)) break;
+      detail.appendChild(next.cloneNode(true));
+    }
+    expect(prose(detail)).toContain('Use PMG\'s own web interface');
+    expect(prose(detail)).toContain('no new Test, backup, mail traffic or diagnostic run');
+    expect(detail.querySelector('pre')).toBeNull();
   });
 
   it('keeps the source and shipped entry identical and preserves existing anchors', () => {

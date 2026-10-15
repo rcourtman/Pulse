@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "e661facc64b042eafece22889fe5901171b49436",
+  "source_sha": "e661facc64b042eafece22889fe5901171b49436",
+  "implementation_parent": "312e4976c8624804093d34a93ff73ae0c36de076",
+  "changed_paths": [
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/browser-tests/build-doc-command-help.mjs",
+    "frontend-modern/browser-tests/pmg-help-entry.cjs",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md",
+    "frontend-modern/src/features/docs/__tests__/troubleshootingEntryGuide.test.ts"
+  ],
+  "content_sha256": {
+    "docs/TROUBLESHOOTING.md": "4c0e9bc56d6be2237168c3aaa594f98a8f099105b762cc15afa9dd94f0a69e1d",
+    "frontend-modern/browser-tests/build-doc-command-help.mjs": "4bc5eed4d8030c5533a7afa36a4b33ad048b2386c40ad8490a31c231d6ca60cc",
+    "frontend-modern/browser-tests/pmg-help-entry.cjs": "24e4b4cf046fddc9d3e44c15beca6bf75fc0ab99f7043d0705c978c1846769ac",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "4c0e9bc56d6be2237168c3aaa594f98a8f099105b762cc15afa9dd94f0a69e1d",
+    "frontend-modern/src/features/docs/__tests__/troubleshootingEntryGuide.test.ts": "60b4848075ca16d3b55901d2d03cdbaa2cd8ad800125c12982430e9fa1feafdc"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING#choose-the-affected-workflow",
+    "/docs/MAIL_GATEWAY#troubleshooting-without-changing-the-gateway",
+    "/docs/MAIL_GATEWAY#cluster-response-or-backup-lookup-errors",
+    "/docs/MAIL_GATEWAY#read-the-mail-gateway-view"
+  ],
+  "states": [
+    "Actual shipped Markdown, real Docs renderer/router/CSS; 2932 source inputs and 20 built artifacts hash-matched.",
+    "PMG symptom entry, five read-failure rows, direct textual-ID/backup-lookup error guidance and safe native-view fallback.",
+    "No page overflow; table scroll extents are zero in both cases. Existing collection-limits link works."
+  ],
+  "interactions": [
+    "1360px Chromium/light: keyboard Enter on both new links, history back, existing collection-limits link.",
+    "320px WebKit/dark: touch on both new links, history back, existing collection-limits link."
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-15T22:55:36.498193+00:00",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "presented_to_model": true,
+    "source": "e661facc64b042eafece22889fe5901171b49436",
+    "opened": [
+      {
+        "file": "captures/desktop-light-entry.png",
+        "sha256": "da13ad76f95573eebce3008678d463ccfe4f63fb8c625d966c31bed3a44f5e81",
+        "observations": "PMG row and both underlined links are visible alongside the existing PBS/RAID entries. Error identifiers wrap and the missing-versus-empty queue warning is readable; no page clipping."
+      },
+      {
+        "file": "captures/desktop-light-read-failures.png",
+        "sha256": "888aa1fcc9ef9c37f5035ce8125c691d5fa5f660e5946d67068a69c7549196a9",
+        "observations": "Keyboard navigation lands on the PMG troubleshooting heading with a visible focus outline. Both table columns and all five observations are readable; cluster-error explanation and native-view fallback are present below."
+      },
+      {
+        "file": "captures/desktop-light-cluster-errors.png",
+        "sha256": "82dad81ae3834a078e61a1ad0e03a49f7f1284d01baca4e9664fcea68e68320d",
+        "observations": "Direct error link focuses the correct heading. Text distinguishes a textual cluster ID and display-name backup lookup from DNS/credential faults, and shows the PMG native-view fallback without a collection/recovery claim."
+      },
+      {
+        "file": "captures/phone-dark-entry.png",
+        "sha256": "b71f01f8393029181f8e0357af64803fa4861ae695d76d30f7bce61bfca53e34",
+        "observations": "At 320px, both underlined PMG links, long inline identifiers and the unknown-versus-empty warning wrap within the viewport. The row remains distinct from RAID, guest, performance and notification topics."
+      },
+      {
+        "file": "captures/phone-dark-read-failures.png",
+        "sha256": "2e9c4d30f0e2dec17a177f770b844d2e8db19cd401160ebadabb89a6508bffe9",
+        "observations": "At 320px, the existing two-column table wraps all five rows in view without horizontal overflow; observation and first-check headers remain readable. No native table scroll is needed (zero extent), not an unperformed swipe claim."
+      },
+      {
+        "file": "captures/phone-dark-cluster-errors.png",
+        "sha256": "e28ded715f0cfbb3a342212a629ec85f55f3c8b2df03398823da7a452266661c",
+        "observations": "At 320px, the targeted heading, textual-ID/display-name explanation, no DNS/password/TLS changes, PMG native-view fallback and no-new-Test/backup/diagnostic caveat are readable. Collection-limits link is visibly underlined; no long-code overflow."
+      }
+    ],
+    "remaining": null,
+    "scope": "Actual rendered existing Docs help only; no PMG form/gateway, collector, native recovery or published acceptance."
+  },
+  "browser_cleanup": {
+    "browser_closed": true,
+    "server_closed": true
+  },
+  "evidence": "PI RECEIPTS.md, SOURCE-PROOF.json (source-rueykvik), BROWSER-VERIFICATION.json, BROWSER-RESULT.json, PIXELS.json and all six current worker-owned captures. Browser client exits 0 with no page/console/request/resource errors. This is help/navigation proof, not collector recovery, source landing or published availability."
+}
