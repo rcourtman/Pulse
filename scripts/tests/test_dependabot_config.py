@@ -156,6 +156,7 @@ class DependabotConfigTest(unittest.TestCase):
                 "@playwright/test",
                 "typescript",
                 "eslint",
+                "@eslint/js",
                 "lucide-solid",
                 "vitest",
                 "@vitest/coverage-v8",
@@ -168,6 +169,7 @@ class DependabotConfigTest(unittest.TestCase):
         for dependency in (
             "typescript",
             "eslint",
+            "@eslint/js",
             "lucide-solid",
             "vitest",
             "@vitest/coverage-v8",

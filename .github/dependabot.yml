@@ -126,6 +126,11 @@ updates:
       - dependency-name: "eslint"
         update-types:
           - "version-update:semver-major"
+      # @eslint/js 10 requires eslint ^10.0.0. Reserve the companion ruleset's
+      # major for that same migration; an isolated proposal retains ESLint 9.
+      - dependency-name: "@eslint/js"
+        update-types:
+          - "version-update:semver-major"
       # lucide-solid 1.x removes an icon subpath still imported by the app.
       # Keep majors explicit until the icon imports and frontend proof migrate.
       - dependency-name: "lucide-solid"
