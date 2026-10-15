@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "7e74f084a01c36cbbc0f2405160bf563b14a4f4b",
+  "verified_at": "2026-10-15T11:42:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "76845c3169d5e94425e5bab7d1604504ff73cde20e590ec438b9d993fc5e7713"
+  },
+  "routes": [
+    "/truenas",
+    "/truenas/storage",
+    "/truenas/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Production-compiled TrueNAS page, shared resource hook, system table and full drawer consume safe real-client/provider HTTP and native-History projections in complete/rejected/partial/measured-zero/recovered phases on desktop Chromium 141 and phone WebKit 26. Playwright 1.56.1 matches the integration lock.",
+    "Holding the resource response leaves a seven-section phone rail: its right arrow scrolls the rail. After inventory arrives, the three remaining labels fit, padding returns to zero and unnecessary arrows disappear.",
+    "Missing CPU/memory are dashes/no reading; measured zero remains numeric. Known CPU 12%, memory 37.5%, I/O, thermals and independent pool capacity survive the scheduling correction.",
+    "Phone secondary History charts open and close for complete and measured-zero data; four chart cards are contained and readable. Fifteen actual captures inspected at desktop, phone and 320px. No page or console error, including ResizeObserver warnings, across these bounded phases.",
+    "Local isolated shell and safe fixtures are not installed appliance, persisted/full-range History, every-field 320px readability or whole-application acceptance."
+  ],
+  "interactions": [
+    "Expand the production drawer via desktop disclosure or phone name tap, inspect every data phase, then collapse it.",
+    "Tap the phone right-arrow control while inventory is pending and verify scrollLeft advances; release the producing response and compare both arrow states against actual overflow.",
+    "Open and close Show Network I/O, Disk I/O, Thermals for known and measured-zero phone data.",
+    "Navigate to Storage and back to Overview at both viewports, narrow the phone to 320px, and verify the selected destination remains inside the rail without page overflow."
+  ]
+}

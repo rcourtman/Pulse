@@ -6,10 +6,86 @@ import { PlatformSectionTabs } from '../sharedPlatformPage';
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   window.history.replaceState({}, '', '/');
 });
 
 describe('PlatformSectionTabs', () => {
+  it('defers and coalesces observer-driven padding changes and cancels them on disposal', async () => {
+    const observers: Array<{ resize: () => void; disconnect: ReturnType<typeof vi.fn> }> = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(resize: () => void) {
+          observers.push({ resize, disconnect: this.disconnect });
+        }
+        observe() {}
+        disconnect = vi.fn();
+      },
+    );
+    const frames: FrameRequestCallback[] = [];
+    const requestFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    const { unmount } = render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <PlatformSectionTabs
+              tabs={[
+                { id: 'overview', label: 'Overview', path: '/example/overview' },
+                { id: 'storage', label: 'Storage', path: '/example/storage' },
+              ]}
+              active="overview"
+              ariaLabel="Example sections"
+            />
+          )}
+        />
+      </Router>
+    ));
+    // Settle the initial route update before simulating observer delivery.
+    await Promise.resolve();
+    const navigation = screen.getByRole('navigation', { name: 'Example sections' });
+    let scrollWidth = 520;
+    Object.defineProperties(navigation, {
+      clientWidth: { configurable: true, value: 220 },
+      scrollWidth: { configurable: true, get: () => scrollWidth },
+    });
+    const resize = () => observers.forEach((observer) => observer.resize());
+    expect(observers).toHaveLength(2);
+    resize();
+    resize();
+    // No layout-affecting write during ResizeObserver delivery, and one frame
+    // even if several notifications arrive before the next paint.
+    expect(navigation).toHaveClass('pr-0');
+    expect(screen.queryByRole('button', { name: 'Example sections: scroll right' })).toBeNull();
+    expect(requestFrame).toHaveBeenCalledTimes(1);
+    frames[0](0);
+    expect(navigation).toHaveClass('pr-10');
+    expect(screen.getByRole('button', { name: 'Example sections: scroll right' })).toBeVisible();
+
+    resize();
+    // Inventory may remove destinations before the frame runs. Measure the
+    // current layout then, rather than caching obsolete overflow in the callback.
+    scrollWidth = 200;
+    expect(navigation).toHaveClass('pr-10');
+    frames[1](16);
+    expect(navigation).toHaveClass('pr-0');
+    expect(screen.queryByRole('button', { name: 'Example sections: scroll right' })).toBeNull();
+
+    resize();
+    expect(requestFrame).toHaveBeenCalledTimes(3);
+    unmount();
+    expect(cancelFrame).toHaveBeenCalledWith(3);
+    observers.forEach((observer) => expect(observer.disconnect).toHaveBeenCalledOnce());
+  });
+
   it('does not recenter an active tab that is already visible', () => {
     expect(
       getHorizontalRailScrollLeft({
