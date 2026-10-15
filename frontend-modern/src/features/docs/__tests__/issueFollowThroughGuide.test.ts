@@ -6,7 +6,10 @@ import { renderDocMarkdown, stripLeadingTitle } from '../docMarkdown';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const shippedDocs = path.join(repoRoot, 'frontend-modern/public/docs');
-const source = readFileSync(path.join(shippedDocs, 'AI_TRANSPARENCY.md'), 'utf8');
+const source = readFileSync(
+  process.env.PULSE_ISSUE_GUIDE_TEST_INPUT ?? path.join(shippedDocs, 'AI_TRANSPARENCY.md'),
+  'utf8',
+);
 
 function renderGuide(name: string, markdown: string): HTMLElement {
   const article = document.createElement('article');
@@ -32,18 +35,52 @@ const prose = (element: HTMLElement): string =>
 describe('public issue follow-through guidance', () => {
   it('keeps resolution, stable-release retest and timeout distinct in rendered paragraphs', () => {
     const paragraphs = followThrough().querySelectorAll('p');
-    expect(paragraphs).toHaveLength(4);
+    expect(paragraphs).toHaveLength(5);
     expect(prose(paragraphs[0])).toContain('no reported symptom left unresolved');
     expect(prose(paragraphs[1])).toContain('start with that stable-release retest reply');
-    expect(prose(paragraphs[1])).toContain('not the fix commit, a beta or a release candidate');
-    const emphasis = paragraphs[2].querySelector('strong');
+    expect(prose(paragraphs[1])).toContain('not the fix commit');
+    const emphasis = paragraphs[3].querySelector('strong');
     expect(emphasis).not.toBeNull();
     expect(prose(emphasis!)).toBe('not confirmed resolution');
-    expect(prose(paragraphs[2])).toContain('at least 14 days without any reply from the reporter');
-    expect(prose(paragraphs[2])).toContain(
+    expect(prose(paragraphs[3])).toContain('at least 14 days without any reply from the reporter');
+    expect(prose(paragraphs[3])).toContain(
       'no other person reporting the same problem since that retest request',
     );
-    expect(prose(paragraphs[2])).toContain('an unfixed or unexplained symptom');
+    expect(prose(paragraphs[3])).toContain('an unfixed or unexplained symptom');
+  });
+
+  it('gives earlier preview requests a stable-bound clock without another reminder', () => {
+    const paragraph = followThrough().querySelectorAll('p')[2];
+    expect(prose(paragraph)).toContain('earlier retest request named a beta or release candidate');
+    expect(prose(paragraph)).toContain('carrying the same fix');
+    expect(prose(paragraph)).toContain('repeated unanswered follow-ups');
+    expect(prose(paragraph.querySelector('strong')!)).toBe(
+      "later of that request and the stable release's publication",
+    );
+    expect(prose(paragraph)).toContain(
+      'stable release contains the fix for every reported symptom',
+    );
+    expect(prose(paragraph)).toContain(
+      'A beta or release candidate alone never starts this period',
+    );
+    expect(prose(paragraph)).toContain('another unanswered reminder is not required');
+  });
+
+  it('keeps the weekly target, early eligibility and delay consistent with release help', () => {
+    const article = renderGuide('AI_TRANSPARENCY', source);
+    const releaseHelp = renderGuide(
+      'RELEASE_PROCESS',
+      readFileSync(path.join(shippedDocs, 'RELEASE_PROCESS.md'), 'utf8'),
+    );
+    for (const guide of [article, releaseHelp]) {
+      const text = prose(guide);
+      expect(text).toContain('seven days after the last stable release');
+      expect(text).toContain('one day earlier');
+      expect(text).toContain('full 24-hour soak');
+      expect(text).toContain('Preparation and qualification can move publication later');
+      expect(text).not.toContain('Every 14 days after the last stable release');
+    }
+    expect(article.querySelector('a[href="/docs/RELEASE_PROCESS"]')).not.toBeNull();
   });
 
   it('keeps the existing issue and safe evidence route usable without new collection', () => {
