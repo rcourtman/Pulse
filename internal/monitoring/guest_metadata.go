@@ -629,12 +629,16 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	return ipAddresses, networkIfaces, osName, osVersion, agentVersion, false
 }
 
-func guestMetadataCacheKey(instanceName, nodeName string, vmid int) string {
-	return fmt.Sprintf("%s|%s|%d", instanceName, nodeName, vmid)
+// VMIDs are cluster-wide. Moving a VM cannot reset its unsupported-command
+// suppression, refresh backoff or outstanding metadata owner. The node remains
+// a request coordinate, not the identity of this in-memory guest lifecycle.
+// Disk/memory observations keep their separate node-bound keys and origins.
+func guestMetadataCacheKey(instanceName, _ string, vmid int) string {
+	return fmt.Sprintf("%s|%d", instanceName, vmid)
 }
 
-// PVE node names and VM IDs cannot contain '|', but connection labels can.
-// Read the two fixed suffixes from the right: "site|other" is not owned by
+// VM IDs cannot contain '|', but connection labels can.
+// Read the fixed suffix from the right: "site|other" is not owned by
 // "site". Retirement must never erase another connection's command-safety
 // state, cancel its fetch, or discard its refresh/backoff deadline.
 func guestMetadataCacheBelongsToInstance(key, instanceName string) bool {
@@ -642,8 +646,7 @@ func guestMetadataCacheBelongsToInstance(key, instanceName string) bool {
 	if end < 0 {
 		return false
 	}
-	end = strings.LastIndexByte(key[:end], '|')
-	return end >= 0 && key[:end] == instanceName
+	return key[:end] == instanceName
 }
 
 func (m *Monitor) clearGuestMetadataCache(instanceName, nodeName string, vmid int) {
