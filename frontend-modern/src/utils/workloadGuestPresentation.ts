@@ -152,7 +152,7 @@ export function getWorkloadGuestDiskStatusMessage(reason?: string): string {
       case 'agent-completion-unverified':
         return 'Guest reads paused because completion of the earlier request could not be verified. Pulse will check again after the cooldown. Defer live diagnostics and guest-agent restarts during backups or a guest incident.';
       case 'agent-redirect':
-        return 'Guest reads paused because the endpoint returned a redirect. Pulse did not follow it; completion of the original guest request is uncertain. Defer live diagnostics and guest-agent restarts during backups or a guest incident.';
+        return 'Guest reads paused because the endpoint returned a redirect. Pulse did not follow it. Completion of the original guest request is uncertain. Defer live diagnostics and guest-agent restarts during backups or a guest incident.';
       case 'agent-transport-unverified':
         return 'Guest reads deferred because Pulse cannot verify that the configured connection avoids resending guest requests. This guest request was not sent. Defer connection changes and live probes during backups or a guest incident.';
       case 'agent-capacity':

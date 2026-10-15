@@ -26,7 +26,7 @@ export const guestDiskDeferrals = [
   ],
   [
     'agent-redirect',
-    'Guest reads paused because the endpoint returned a redirect. Pulse did not follow it; completion of the original guest request is uncertain. Defer live diagnostics and guest-agent restarts during backups or a guest incident.',
+    'Guest reads paused because the endpoint returned a redirect. Pulse did not follow it. Completion of the original guest request is uncertain. Defer live diagnostics and guest-agent restarts during backups or a guest incident.',
   ],
   [
     'agent-transport-unverified',

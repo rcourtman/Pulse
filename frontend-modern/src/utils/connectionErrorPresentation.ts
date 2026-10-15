@@ -32,7 +32,7 @@ const TLS_HINT =
 const AUTH_HINT =
   'Check the configured user, realm and token ID, and whether the credential has expired or been revoked. Replace it only if invalidity is confirmed.';
 const DENIED_HINT =
-  'Check read permissions for the intended resource and any proxy policy. Keep intentional access limits; do not replace credentials or broaden access just to test.';
+  'Check read permissions for the intended resource and any proxy policy. Keep intentional access limits. Do not replace credentials or broaden access just to test.';
 
 const HTTP_STATUS_PRESENTATIONS: Record<number, HumanizedConnectionError> = {
   401: { headline: 'Authentication failed', hint: AUTH_HINT },

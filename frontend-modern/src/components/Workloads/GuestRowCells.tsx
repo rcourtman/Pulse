@@ -416,22 +416,22 @@ function BackupStatusCell(props: {
               {completion().dateLabel}
             </time>
             <div class="text-base-content">{info().ageFormatted}</div>
-          <Show when={ageRule()}>
-            {(rule) => (
-              <p class="text-muted" data-backup-age-rule>
-                {rule()}
-              </p>
-            )}
-          </Show>
-          <Show when={evidenceProps.ruleLink && ageRule()}>
-            <a
-              href={ALERT_BACKUP_THRESHOLDS_PATH}
-              class={`${EXTERNAL_TEXT_LINK_BASE_CLASS} ${EXTERNAL_TEXT_LINK_VARIANT_CLASSES.compactAction} -mx-1`}
-              onClick={() => setDetailsOpen(false)}
-            >
-              Change when backups count as old
-            </a>
-          </Show>
+            <Show when={ageRule()}>
+              {(rule) => (
+                <p class="text-muted" data-backup-age-rule>
+                  {rule()}
+                </p>
+              )}
+            </Show>
+            <Show when={evidenceProps.ruleLink && ageRule()}>
+              <a
+                href={ALERT_BACKUP_THRESHOLDS_PATH}
+                class={`${EXTERNAL_TEXT_LINK_BASE_CLASS} ${EXTERNAL_TEXT_LINK_VARIANT_CLASSES.compactAction} -mx-1`}
+                onClick={() => setDetailsOpen(false)}
+              >
+                Change when backups count as old
+              </a>
+            </Show>
           </div>
         )}
       </Show>
