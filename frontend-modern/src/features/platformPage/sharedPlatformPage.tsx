@@ -145,8 +145,19 @@ function PlatformSectionTabRail<TabId extends string>(props: PlatformSectionTabs
 
     rail.addEventListener('scroll', updateScrollControls, { passive: true });
     window.addEventListener('resize', updateScrollControls, { passive: true });
+    let resizeFrame: number | undefined;
+    const scheduleScrollControls = () => {
+      if (resizeFrame !== undefined) return;
+      // Showing the phone arrows changes the rail's padding and content box.
+      // Do not resize that box inside its own ResizeObserver delivery: WebKit
+      // reports undelivered notifications when inventory changes the tab set.
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = undefined;
+        updateScrollControls();
+      });
+    };
     const resizeObserver =
-      typeof ResizeObserver === 'function' ? new ResizeObserver(updateScrollControls) : undefined;
+      typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleScrollControls) : undefined;
     resizeObserver?.observe(rail);
     updateScrollControls();
 
@@ -154,6 +165,7 @@ function PlatformSectionTabRail<TabId extends string>(props: PlatformSectionTabs
       rail.removeEventListener('scroll', updateScrollControls);
       window.removeEventListener('resize', updateScrollControls);
       resizeObserver?.disconnect();
+      if (resizeFrame !== undefined) window.cancelAnimationFrame(resizeFrame);
     });
   });
 
