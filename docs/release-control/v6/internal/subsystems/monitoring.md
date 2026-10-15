@@ -4134,6 +4134,35 @@ service-history reads plus denial/recovery without fabricated samples.
 
 ## Current State
 
+### Detailed guest status is a complete observation
+
+QEMU and LXC `status/current` reads require the entire bounded HTTP 200 body to
+finish and close successfully before assigning `ObservedAt`. A valid JSON prefix
+on a short, stalled or oversized body cannot supply current memory, counters,
+metadata, lock or agent evidence. One complete, unambiguous `data` object with a
+nonempty canonical `status` is required; duplicate/case-variant consumed fields,
+competing errors and missing/null status are rejected without copying response
+contents into diagnostics. Sparse stopped replies, unknown future status strings,
+unique additive metadata, optional metrics and measured zero/presence semantics
+remain compatible. Nested metric decoding and normal read authentication/failover
+are unchanged; this does not alter the QGA single-attempt or lock boundaries.
+
+A rejected container snapshot is explicitly prefetched absence for both counters
+and enrichment. Enrichment does not issue a second status request in that poll;
+direct enrichment without a prefetched snapshot still owns its ordinary read.
+Independent listing data remains usable. Rejected VM status cannot renew prior
+guest memory or turn it into a new History point; a later complete ordinary reply
+recovers, including a real zero-availability observation.
+
+`pkg/proxmox/guest_status_response_test.go` covers both client paths and guest
+kinds, complete-body/deadline/close/HTTP boundaries, ambiguous envelopes, sparse
+and additive compatibility and resumption. `guest_status_observation_test.go`
+crosses the real clients and both QEMU collectors through canonical state,
+broadcast projection and in-memory History, and exercises ordinary LXC counter
+and metadata recovery without a duplicate read. These are synthetic source
+controls, not installed recovery, native thaw, backup safety or a reported cause.
+
+
 ### AI Discovery removed (2026-10-11)
 
 The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)
