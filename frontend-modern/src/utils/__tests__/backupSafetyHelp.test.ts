@@ -136,17 +136,30 @@ describe('manual backup safety help', () => {
     expect(read('frontend-modern/public/docs/VM_DISK_MONITORING.md')).toBe(guide);
     const troubleshooting = read('docs/TROUBLESHOOTING.md');
     expect(read('frontend-modern/public/docs/TROUBLESHOOTING.md')).toBe(troubleshooting);
-    // The opening warning and later symptom guidance can both be labelled
-    // Backup safety. Check the warning in its own context, not global label
-    // uniqueness, while retaining the distinct manual-precaution destination.
-    const links = render(troubleshooting, 'TROUBLESHOOTING').querySelectorAll(
-      'a[href="/docs/VM_DISK_MONITORING#backup-safety"]',
-    );
-    const labels = [...links].map((link) => link.textContent);
-    expect(labels[0]).toBe('Backup safety');
-    const warning = links[0].closest('p')?.textContent?.replace(/\s+/g, ' ');
-    expect(warning).toContain("an earlier guest request's state is uncertain");
-    expect(labels.filter((text) => text === 'manual backup precaution')).toHaveLength(1);
+    const article = render(troubleshooting, 'TROUBLESHOOTING');
+    // Different workflows may use the same safety label. Each must retain its
+    // own link; a link elsewhere in the guide cannot satisfy that requirement.
+    for (const [headingText, label] of [
+      ['Choose the affected workflow', 'Backup safety'],
+      ['Cluster members and conflicting saved trust', 'Backup safety'],
+      ['VMs show "-" for disk usage', 'manual backup precaution'],
+    ]) {
+      const headings = [...article.querySelectorAll('h2, h3, h4')].filter(
+        (heading) => heading.textContent === headingText,
+      );
+      expect(headings, headingText).toHaveLength(1);
+      const heading = headings[0];
+      const section = document.createElement('section');
+      for (let next = heading.nextElementSibling; next; next = next.nextElementSibling) {
+        if (/^H[1-6]$/.test(next.tagName) && next.tagName <= heading.tagName) break;
+        section.appendChild(next.cloneNode(true));
+      }
+      const links = section.querySelectorAll('a[href="/docs/VM_DISK_MONITORING#backup-safety"]');
+      expect(
+        [...links].map((link) => link.textContent),
+        headingText,
+      ).toEqual([label]);
+    }
     const target = render(guide, 'VM_DISK_MONITORING');
     expect(target.querySelector('#backup-safety')?.textContent).toBe('Backup safety');
     for (const fragment of [

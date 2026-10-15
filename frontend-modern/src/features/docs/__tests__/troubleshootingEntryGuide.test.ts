@@ -11,7 +11,7 @@ const renderedGuides = new Map<string, HTMLElement>();
 
 function renderGuide(name: string): HTMLElement {
   // Several destinations share a long guide. Render each immutable document
-  // once, rather than making seventeen navigation checks parse it repeatedly.
+  // once, rather than making navigation checks parse it repeatedly.
   // entry() clones its section, so the cached article is never modified.
   const cached = renderedGuides.get(name);
   if (cached) return cached;
@@ -39,9 +39,9 @@ function entry(): HTMLElement {
 const prose = (element: HTMLElement): string =>
   (element.textContent ?? '').replace(/\s+/g, ' ').trim();
 
-// Keep the composed symptom inventory explicit. A row/link total alone cannot
-// distinguish a missing recovery route from an unrelated new help link.
-const workflowEntries: ReadonlyArray<readonly [string, readonly string[]]> = [
+// Name each shipped workflow and its destinations rather than accepting an
+// aggregate row/link count, which cannot detect a missing or misrouted entry.
+const workflowDestinations = [
   [
     'Not sure which version is affected:',
     ['/docs/TROUBLESHOOTING#find-the-running-server-and-agent-versions'],
@@ -111,14 +111,16 @@ const workflowEntries: ReadonlyArray<readonly [string, readonly string[]]> = [
     'Private information was posted:',
     ['/docs/TROUBLESHOOTING#if-you-already-posted-private-information'],
   ],
-];
+] as const;
 
 describe('troubleshooting workflow entry', () => {
   it('puts guest incident safety before the symptom links and any collection recipe', () => {
     const section = entry();
     const link = section.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/docs/VM_DISK_MONITORING#backup-safety');
-    expect(section.querySelectorAll('li')).toHaveLength(workflowEntries.length);
+    expect(
+      [...section.querySelectorAll('li')].map((row) => prose(row.querySelector('strong')!)),
+    ).toEqual(workflowDestinations.map(([label]) => label));
     expect(section.querySelector('pre')).toBeNull();
     const beforeList = [...section.children]
       .slice(
@@ -132,14 +134,6 @@ describe('troubleshooting workflow entry', () => {
       'Do not run Diagnostics, force guest-agent probes or repeat a backup',
     );
     expect(beforeList).toContain('responsive console alone does not establish safe recovery');
-  });
-
-  it('keeps every composed symptom and its own recovery routes exactly once', () => {
-    const rows = [...entry().querySelectorAll('li')].map((element) => [
-      prose(element.querySelector('strong') as HTMLElement),
-      [...element.querySelectorAll('a[href]')].map((link) => link.getAttribute('href')),
-    ]);
-    expect(rows).toEqual(workflowEntries);
   });
 
   it('keeps server updates, workload updates and reporting acceptance distinct', () => {
@@ -180,10 +174,21 @@ describe('troubleshooting workflow entry', () => {
   });
 
   it('routes every entry to an existing shipped heading in the production viewer', () => {
-    const links = [...entry().querySelectorAll('a[href]')];
+    const section = entry();
+    for (const [label, destinations] of workflowDestinations) {
+      const rows = [...section.querySelectorAll('li')].filter(
+        (row) => prose(row.querySelector('strong')!) === label,
+      );
+      expect(rows, label).toHaveLength(1);
+      expect(
+        [...rows[0].querySelectorAll('a[href]')].map((link) => link.getAttribute('href')),
+        label,
+      ).toEqual(destinations);
+    }
+    const links = [...section.querySelectorAll('a[href]')];
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/docs/VM_DISK_MONITORING#backup-safety',
-      ...workflowEntries.flatMap(([, routes]) => routes),
+      ...workflowDestinations.flatMap(([, destinations]) => [...destinations]),
       '/docs/TROUBLESHOOTING#-getting-help',
     ]);
     for (const link of links) {
