@@ -122,6 +122,15 @@ describe('renderDocMarkdown', () => {
     expect(html).not.toContain('target="_blank"');
   });
 
+  it('marks bare fragments for the same shared activation path as file-qualified links', () => {
+    const container = document.createElement('div');
+    container.innerHTML = renderDocMarkdown('[Cost](#cost-tracking)', 'AI');
+    const anchor = container.querySelector('a');
+    expect(anchor).toHaveAttribute('href', '#cost-tracking');
+    expect(anchor).toHaveAttribute('data-doc-link');
+    expect(anchor).not.toHaveAttribute('target');
+  });
+
   it('opens external links in a new tab', () => {
     const html = renderDocMarkdown('[Site](https://example.com)', 'README');
     expect(html).toContain('target="_blank"');

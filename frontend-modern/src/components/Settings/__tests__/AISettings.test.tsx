@@ -305,6 +305,32 @@ describe('AISettings model loading error states', () => {
     expect(screen.queryByText(/Set how much Patrol can do/i)).not.toBeInTheDocument();
   });
 
+  it('explains the rolling budget refusal at zero, empty and positive values without a provider call', async () => {
+    renderComponent();
+    const budget = await screen.findByRole('spinbutton', { name: '30-day Budget' });
+    const helper = () => document.getElementById(budget.getAttribute('aria-describedby') ?? '');
+    const assertMeaning = () => {
+      expect(helper()).toHaveTextContent('refuses new AI calls, including Patrol');
+      expect(helper()).toHaveTextContent('preceding 30 days');
+      expect(helper()).toHaveTextContent('Set 0 or leave empty to disable this check');
+      expect(helper()).toHaveTextContent('Missing pricing or untracked usage');
+      expect(helper()).toHaveTextContent('not a provider spending cap');
+      expect(screen.queryByText('Set a budget to receive usage alerts')).not.toBeInTheDocument();
+    };
+    assertMeaning();
+    fireEvent.input(budget, { target: { value: '0' } });
+    assertMeaning();
+    fireEvent.input(budget, { target: { value: '60' } });
+    assertMeaning();
+    expect(screen.getByText('≈ $2.00/day')).toBeInTheDocument();
+    fireEvent.input(budget, { target: { value: '' } });
+    assertMeaning();
+    expect(screen.queryByText('≈ $2.00/day')).not.toBeInTheDocument();
+    expect(testConnectionMock).not.toHaveBeenCalled();
+    expect(testProviderMock).not.toHaveBeenCalled();
+    expect(updateSettingsMock).not.toHaveBeenCalled();
+  });
+
   it('keeps model identifiers and provider secrets out of login credential autofill', async () => {
     renderComponent();
 
