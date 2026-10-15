@@ -399,6 +399,9 @@ describe('GuestDrawer', () => {
     render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
     const precaution = () => screen.getByTestId('guest-read-precaution');
     expect(precaution()).toBeVisible();
+    // The expanded drawer lives in a first table cell, whose nowrap style
+    // otherwise clips both the reason and the independent-thaw precaution.
+    expect(precaution()).toHaveClass('whitespace-normal', 'wrap-break-word');
     expect(precaution()).toHaveTextContent(
       'Do not run live diagnostics or restart the guest agent during a backup, freeze/thaw or an unresponsive-guest incident.',
     );

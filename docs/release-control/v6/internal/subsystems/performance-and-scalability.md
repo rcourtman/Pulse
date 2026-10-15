@@ -29,6 +29,13 @@ The `backup-coverage` browser fixture consumes producing canonical snapshots
 through `useWorkloads`, the real row and full drawer. Desktop/narrow pixels and
 interactions remain required, not native backup recovery or release evidence.
 
+The guest-read safety notice explicitly resets inherited table no-wrap styling.
+Its reason, independent-thaw/write precaution and guidance link must remain
+readable across Overview/Manage and same-open reason changes. Component proof
+keeps this containment class; browser proof measures the actual text line boxes
+inside the notice at desktop and phone widths. Text presence alone cannot prove
+that the safety advice is visible.
+
 
 
 ### Workloads aggregate disk readings keep their units and presence (14 October 2026)

@@ -44,6 +44,15 @@ const cases: Record<string, Resource> = {
       guestAgentStatus: 'deferred',
     },
   },
+  'pve-timeout': {
+    ...pve,
+    proxmox: {
+      ...pve.proxmox,
+      lastBackup: completed,
+      diskStatusReason: 'prev-agent-timeout',
+      guestAgentStatus: 'expected-unreachable',
+    },
+  },
 };
 
 function Fixture() {

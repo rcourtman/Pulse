@@ -89,6 +89,7 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
         {(message) => (
           <InlineNotice
             tone="warning"
+            class="whitespace-normal wrap-break-word"
             role="status"
             data-testid="guest-read-precaution"
             actionHref={getShippedDocUrl('VM_DISK_MONITORING.md')}
