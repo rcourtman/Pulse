@@ -81,6 +81,10 @@ async function noOverflow(page) {
     }
     if (url.pathname === '/api/runtime/branding') return json({ enabled: false, displayName: '', logoDataUrl: '' });
     if (url.pathname === '/api/version') return json({ version: '6.6.0', channel: 'stable', build: 'community', isDevelopment: false });
+    if (url.pathname === '/api/updates/check') return json({
+      available: false, currentVersion: '6.6.0', latestVersion: '6.6.0',
+      releaseNotes: '', downloadUrl: '', isPrerelease: false,
+    });
     const file = url.pathname.startsWith('/docs/') && !url.pathname.endsWith('.md')
       ? '/browser-tests/recovery-backup-polling.html' : url.pathname;
     const bytes = assets.get(file);
