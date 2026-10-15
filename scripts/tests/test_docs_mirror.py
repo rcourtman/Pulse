@@ -156,6 +156,41 @@ class DocsMirrorStagedTest(unittest.TestCase):
         self.assertIn("must not link to", errors[0])
 
 
+    def test_index_gallery_exception_is_exact_in_staged_and_worktree_checks(self) -> None:
+        gallery = docs_mirror.GALLERY_LINK
+        for target in ("README.md", "GUIDE.md", "nested/README.md"):
+            for url in (
+                gallery, gallery + "?view=1", gallery + "#other", gallery + ".extra",
+                gallery.replace("/main/", "/master/"),
+                gallery.replace("SCREENSHOTS.md", "CONFIGURATION.md"),
+            ):
+                with self.subTest(target=target, url=url):
+                    content = f"[Product screenshots on GitHub]({url})\n"
+                    write(self.root, f"docs/{target}", content)
+                    write(self.root, f"frontend-modern/public/docs/{target}", content)
+                    run_git(self.root, "add", f"docs/{target}", f"frontend-modern/public/docs/{target}")
+                    expected = target == "README.md" and url == gallery
+                    # master is outside this check's existing main-only rule;
+                    # the repository-wide drift guard still rejects it.
+                    expected = expected or "/master/" in url
+                    self.assertEqual(not docs_mirror.check_staged(self.root)[0], expected)
+                    self.assertEqual(not docs_mirror.check_worktree(self.root)[0], expected)
+                    write(self.root, f"docs/{target}", "# Restored\n")
+                    write(self.root, f"frontend-modern/public/docs/{target}", "# Restored\n")
+                    run_git(self.root, "add", f"docs/{target}", f"frontend-modern/public/docs/{target}")
+
+    def test_gallery_cannot_hide_another_branch_tip_help_link(self) -> None:
+        content = (
+            f"[Gallery]({docs_mirror.GALLERY_LINK})\n"
+            f"[Setup]({docs_mirror.FORBIDDEN_LINK}docs/CONFIGURATION.md)\n"
+        )
+        write(self.root, "docs/README.md", content)
+        write(self.root, "frontend-modern/public/docs/README.md", content)
+        run_git(self.root, "add", "docs/README.md", "frontend-modern/public/docs/README.md")
+        self.assertTrue(docs_mirror.check_staged(self.root)[0])
+        self.assertTrue(docs_mirror.check_worktree(self.root)[0])
+
+
 class DocsMirrorWorktreeTest(unittest.TestCase):
     def test_worktree_drift_and_sync(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:

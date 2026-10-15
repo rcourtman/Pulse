@@ -27,6 +27,11 @@ ALLOWED_BRANCH_TIP_DOC_URLS = {
 TEMPLATE_GUIDANCE_PATH = ".github/PULL_REQUEST_TEMPLATE.md"
 TEMPLATE_GUIDANCE_URL = "https://github.com/rcourtman/Pulse/blob/main/CONTRIBUTING.md#sharing-a-tested-patch"
 
+# This unshipped gallery is an explicitly external/current GitHub destination,
+# not installed-version operational help. Its browser fixture checks that link.
+INDEX_GALLERY_URL = "https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md"
+INDEX_GALLERY_PATHS = {"docs/README.md", "frontend-modern/browser-tests/docs-index-links.cjs"}
+
 SKIP_DIR_NAMES = {
     ".claude",
     ".git",
@@ -83,6 +88,10 @@ def link_offenders(rel_path: str, content: str) -> list[str]:
         content = re.sub(
             re.escape(TEMPLATE_GUIDANCE_URL) + r"(?=$|[\s\"')>\]])", "", content
         )
+    if rel_path in INDEX_GALLERY_PATHS:
+        content = re.sub(
+            re.escape(INDEX_GALLERY_URL) + r"(?=$|[\s\"')>\]])", "", content
+        )
     return [
         f"{rel_path}: {match.group(0)}"
         for pattern in FORBIDDEN_PATTERNS
@@ -91,6 +100,23 @@ def link_offenders(rel_path: str, content: str) -> list[str]:
 
 
 class RepoDocsLinkDriftTest(unittest.TestCase):
+    def test_current_gallery_exception_is_exact_and_index_bound(self) -> None:
+        link = f"[Product screenshots on GitHub]({INDEX_GALLERY_URL})"
+        for path in INDEX_GALLERY_PATHS:
+            self.assertEqual(link_offenders(path, link), [])
+            for url in (
+                INDEX_GALLERY_URL + "?view=1", INDEX_GALLERY_URL + "#other",
+                INDEX_GALLERY_URL + ".extra", INDEX_GALLERY_URL.replace("main", "master"),
+                INDEX_GALLERY_URL.replace("SCREENSHOTS.md", "CONFIGURATION.md"),
+            ):
+                with self.subTest(path=path, url=url):
+                    self.assertTrue(link_offenders(path, f"[Gallery]({url})"))
+            self.assertTrue(link_offenders(
+                path, link + " [Setup](https://github.com/rcourtman/Pulse/blob/main/docs/CONFIGURATION.md)"
+            ))
+        for path in ("docs/CONFIGURATION.md", "frontend-modern/src/help.ts", "install.sh"):
+            self.assertTrue(link_offenders(path, link))
+
     def test_current_contribution_link_is_limited_to_the_submission_template(self) -> None:
         link = f"[Sharing a tested patch]({TEMPLATE_GUIDANCE_URL})."
         self.assertEqual(link_offenders(TEMPLATE_GUIDANCE_PATH, link), [])
