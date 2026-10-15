@@ -441,7 +441,17 @@ describe('docsLinks', () => {
       const rootDoc = readFileSync(source, 'utf8');
       const publicDoc = readFileSync(path.join(frontendRoot, 'public', 'docs', target), 'utf8');
       expect(publicDoc).toBe(rootDoc);
-      expect(publicDoc).not.toContain('https://github.com/rcourtman/Pulse/blob/main/');
+      // Screenshots are deliberately not shipped. The reviewed Help index
+      // links to their source on GitHub instead of an unavailable local page.
+      // No other source-tree blob link is an allowed shipped-guide escape.
+      const sourceLinks = [
+        ...publicDoc.matchAll(/https:\/\/github\.com\/rcourtman\/Pulse\/blob\/main\/[^\s)]+/g),
+      ].map(([url]) => url);
+      expect(sourceLinks).toEqual(
+        target === 'README.md'
+          ? ['https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md']
+          : [],
+      );
     }
   });
 
