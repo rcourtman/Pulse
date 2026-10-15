@@ -2671,6 +2671,12 @@ payload shape change when the portal presents compact client rows.
     source/development builds, and keeps missing releases distinct from
     upstream failures. `frontend-modern/src/api/updates.ts` must preserve that
     payload without creating a frontend-authored changelog shape.
+    `GET /api/updates/release-notes/assets/{tag}/{name}` uses the same
+    authentication and monitoring-read scope, accepts only the running
+    published tag and PNG sidecars referenced by that release body, and
+    distinguishes missing assets from upstream failures. The server bounds
+    payload size, PNG dimensions and GitHub redirect hosts. Versioned private
+    browser caching keeps images inside the existing same-origin CSP boundary.
 86. `pkg/aicontracts/action_broker.go` shared with `ai-runtime`: the public typed action-proposal broker contract is both an AI runtime proposal boundary (the only sanctioned Patrol route to an infrastructure mutation) and a canonical API dependency contract over the shared action lifecycle service.
     The updater registry behind `GET /api/updates/plan` is a plan-provider
     seam only (`SupportsApply`, `PrepareUpdate`, `GetDeploymentType`); apply

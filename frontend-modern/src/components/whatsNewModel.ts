@@ -1,4 +1,6 @@
 // Model logic for the release preview and post-update changelog.
+import { marked, type Tokens } from 'marked';
+import { normalizeReleaseVersion } from './updateVersion';
 
 type Heading = {
   index: number;
@@ -8,11 +10,20 @@ type Heading = {
 
 const headingMatch = (line: string) => line.trim().match(/^(#{1,6})\s+(.*)$/);
 
-const headingsIn = (lines: string[]): Heading[] =>
-  lines.flatMap((line, index) => {
+const headingsIn = (lines: string[]): Heading[] => {
+  let fence: string | undefined;
+  return lines.flatMap((line, index) => {
+    const marker = line.trim().match(/^(`{3,}|~{3,})/);
+    if (marker) {
+      if (!fence) fence = marker[1];
+      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = undefined;
+      return [];
+    }
+    if (fence) return [];
     const match = headingMatch(line);
     return match ? [{ index, level: match[1].length, title: match[2].trim() }] : [];
   });
+};
 
 const sectionBody = (lines: string[], headings: Heading[], headingIndex: number): string => {
   const heading = headings[headingIndex];
@@ -27,8 +38,8 @@ const sectionBody = (lines: string[], headings: Heading[], headingIndex: number)
 
 /**
  * Extract the compact pre-update summary from a GitHub release body. Current
- * customer-facing notes use `What's improved`; historical releases may still
- * carry `Highlights`.
+ * customer-facing notes use `Highlights`; older packets may carry only
+ * `What's improved`.
  */
 export const extractHighlights = (markdown: string): string | null => {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
@@ -61,22 +72,128 @@ const CHANGELOG_SECTION_LABELS: Readonly<Record<string, string>> = {
   'breaking changes': 'Breaking changes',
   deprecated: 'Deprecated',
   removed: 'Removed',
+  'alerts and notifications': 'Alerts and notifications',
+  'disks and storage': 'Disks and storage',
+  'proxmox, pbs and backups': 'Proxmox, PBS and backups',
+  'truenas, vsphere and docker': 'TrueNAS, vSphere and Docker',
+  'install, updates and agents': 'Install, updates and agents',
+  'updates and agents': 'Updates and agents',
+  'pulse pro, ai and hosted': 'Pulse Pro, AI and hosted',
+  'monitoring and service health': 'Monitoring and service health',
+  'other improvements': 'Other improvements',
+};
+
+export type ReleaseVisual = {
+  title: string;
+  description: string;
+  before?: string;
+  after: string;
+};
+
+export type WhatsNewContent = {
+  highlights: string[];
+  changes: string | null;
+  important: string | null;
+  visuals: ReleaseVisual[];
+};
+
+// Only published screenshot sidecars for this exact running release may load.
+// PR images are copied into these assets by the release pipeline first.
+const releaseImage = (href: string, version: string): RegExpMatchArray | null => {
+  const base = `https://github.com/rcourtman/Pulse/releases/download/v${normalizeReleaseVersion(version)}/`;
+  if (!isReleaseVersion(version) || !href.startsWith(base)) return null;
+  return href
+    .slice(base.length)
+    .match(/^release-note-([a-z0-9]+(?:-[a-z0-9]+)*)-(before|now)\.png$/);
+};
+
+export const extractReleaseVisuals = (markdown: string, version: string): ReleaseVisual[] => {
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  const headings = headingsIn(lines);
+  const visualIndex = headings.findIndex((heading) => /^see the difference$/i.test(heading.title));
+  if (visualIndex === -1) return [];
+  const visualLines = sectionBody(lines, headings, visualIndex).split('\n');
+  const visualHeadings = headingsIn(visualLines);
+  return visualHeadings.flatMap((heading, index) => {
+    if (heading.level !== headings[visualIndex].level + 1) return [];
+    const body = sectionBody(visualLines, visualHeadings, index);
+    const tokens = marked.lexer(body);
+    const images: { href: string; id: string; state: string }[] = [];
+    marked.walkTokens(tokens, (token) => {
+      if (token.type !== 'image') return;
+      const match = releaseImage(token.href, version);
+      if (match) images.push({ href: token.href, id: match[1], state: match[2] });
+    });
+    const after = images.find((image) => image.state === 'now');
+    if (!after) return [];
+    const before = images.find((image) => image.state === 'before' && image.id === after.id);
+    const description = tokens.find(
+      (token) =>
+        token.type === 'paragraph' && !token.tokens?.some((child) => child.type === 'image'),
+    );
+    return [
+      {
+        title: heading.title,
+        description: description?.type === 'paragraph' ? description.text : '',
+        before: before?.href,
+        after: after.href,
+      },
+    ];
+  });
+};
+
+/** Read the same authored release body used by GitHub and the update preview. */
+export const extractWhatsNew = (markdown: string, version: string): WhatsNewContent | null => {
+  const summary = extractHighlights(markdown);
+  const summaryTokens = summary ? marked.lexer(summary) : [];
+  const highlights = summaryTokens
+    .flatMap((token) =>
+      token.type === 'list' ? token.items.map((item: Tokens.ListItem) => item.text) : [],
+    )
+    .slice(0, 3);
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  const headings = headingsIn(lines);
+  const importantTitles = new Set(['before you upgrade', 'known issues', 'breaking changes']);
+  const important =
+    headings
+      .flatMap((heading, index) => {
+        if (!importantTitles.has(heading.title.toLowerCase())) return [];
+        const body = sectionBody(lines, headings, index);
+        return body ? [`### ${heading.title}\n\n${body}`] : [];
+      })
+      .join('\n\n') || null;
+  const changes = extractChangelog(markdown);
+  const visuals = extractReleaseVisuals(markdown, version);
+  return highlights.length || changes || important || visuals.length
+    ? { highlights, changes, important, visuals }
+    : null;
 };
 
 /**
  * Build the post-update changelog from the user-facing change categories in a
- * published release body. Highlights are intentionally excluded: they remain
- * a compact pre-update preview, while this view tells users what actually
- * changed under recognizable changelog headings.
+ * published release body. Highlights and visuals are rendered separately by
+ * the post-update view, while this is its expandable detailed changelog.
  */
 export const extractChangelog = (markdown: string): string | null => {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const headings = headingsIn(lines);
   const sections: string[] = [];
+  let coveredThrough = -1;
 
   headings.forEach((heading, headingIndex) => {
+    if (heading.index <= coveredThrough) return;
     const normalizedTitle = heading.title.replace(/\s+/g, ' ').toLowerCase();
     const label = CHANGELOG_SECTION_LABELS[normalizedTitle];
+    const separateSection = [
+      'highlights',
+      'see the difference',
+      'before you upgrade',
+      'known issues',
+    ].includes(normalizedTitle);
+    if (label || separateSection) {
+      const boundary = headings.slice(headingIndex + 1).find((next) => next.level <= heading.level);
+      coveredThrough = (boundary?.index ?? lines.length) - 1;
+    }
     if (!label) return;
 
     const content = sectionBody(lines, headings, headingIndex);

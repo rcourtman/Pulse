@@ -18,3 +18,19 @@ and the requested scope below. The maintainer owes it a reply and disposition
 in this thread; do not recreate the PR or refile its evidence. Include the
 source version, tests actually run and known limits. A source change or passing
 test does not establish release availability.
+
+## Visual evidence
+
+For a visible interface change, attach a screenshot using safe demo data.
+Include before and after views when a comparison helps explain the change.
+For changes without a useful visible difference, state that here briefly.
+
+- What changed and why it helps:
+- Route, viewport and steps needed to reach the view:
+- Before and after screenshots, or a single current view for a new feature:
+
+Keep screenshots free of customer data, hostnames, tokens and private logs.
+Use GitHub image attachments or immutable raw.githubusercontent.com links to
+committed screenshots with the full source commit SHA. Release tooling can select useful images from
+merged PRs, check them against the final release and copy them into versioned
+release assets. Images can be omitted when text explains the change better.

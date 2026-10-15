@@ -2295,6 +2295,10 @@ recovery scope, or a storage/recovery-owned secret source.
     route remains deployment-installability and API-contract owned; storage
     and recovery must not treat release-note availability or publication time
     as protection freshness, recovery evidence, or restore state.
+    Its authenticated exact-version PNG screenshot route is presentation of
+    that same release body only. Even when an image depicts backup coverage,
+    the screenshot is illustrative release evidence and must never supply
+    live protection state, restore readiness or storage mutation authority.
 27. Keep VMware datastore projection on the shared unified-resource and storage-source contracts. When `frontend-modern/src/hooks/useUnifiedResources.ts` or shared `internal/api/router.go` wiring starts surfacing VMware-backed canonical `storage` resources, storage and recovery may expose those datastores through the owned `vmware-vsphere` source/platform vocabulary for inventory, capacity, and handoff flows only; they must not reinterpret that projection as VMware recovery support, restore semantics, or a provider-local protection surface.
     The same shared unified-resource boundary also covers canonical
     Resource.Uptime fallback on the consumer side. When

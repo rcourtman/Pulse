@@ -5,13 +5,47 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
+
+func TestReleaseNoteImageRouteAuthorization(t *testing.T) {
+	const endpoint = "/api/updates/release-notes/assets/v6.6.0/release-note-backups-now.png"
+	for _, tc := range []struct {
+		name, token string
+		scope       string
+		status      int
+	}{
+		{name: "anonymous", status: http.StatusUnauthorized},
+		{name: "agent-only token", token: "screenshot-agent-token.12345678", scope: config.ScopeAgentReport, status: http.StatusForbidden},
+		{name: "monitoring reader", token: "screenshot-monitor-token.12345678", scope: config.ScopeMonitoringRead, status: http.StatusNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newTestConfigWithTokens(t, newTokenRecord(t, "configured-token.12345678", []string{config.ScopeMonitoringRead}, nil))
+			if tc.token != "" {
+				cfg = newTestConfigWithTokens(t, newTokenRecord(t, tc.token, []string{tc.scope}, nil))
+			}
+			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+			req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+			if tc.token != "" {
+				req.Header.Set("X-API-Token", tc.token)
+			}
+			w := httptest.NewRecorder()
+			router.Handler().ServeHTTP(w, req)
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.status, w.Body.String())
+			}
+		})
+	}
+}
 
 func TestRouterRouteInventory(t *testing.T) {
 	literalRoutes, dynamicRoutes, bareLiteralRoutes := parseRouterRoutes(t)
@@ -462,6 +496,7 @@ var allRouteAllowlist = []string{
 	"/api/updates/rollback",
 	"/api/updates/status",
 	"/api/updates/release-notes",
+	"/api/updates/release-notes/assets/",
 	"/api/updates/stream",
 	"/api/updates/plan",
 	"/api/updates/pro-runtime",
