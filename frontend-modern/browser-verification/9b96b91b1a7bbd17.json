@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "2ce3bc8edeeb34ba00152f09e291a0668b66bd1e",
+  "changed_paths": [
+    "frontend-modern/public/docs/MAIL_GATEWAY.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/MAIL_GATEWAY.md": "7baefb0cd5a7a5e940fd99a802790dde131f255bed2739fafb8ca7980d3ed52f"
+  },
+  "routes": [
+    "/docs/README",
+    "/docs/MAIL_GATEWAY",
+    "/docs/MAIL_GATEWAY#read-the-mail-gateway-view"
+  ],
+  "states": [
+    "The production Docs page/router loads the real shipped guide; only the app-auth probe is synthetic.",
+    "Cluster-ID decoding and display-name versus native-node backup lookup errors, native PMG fallback and unchanged DNS/credentials/TLS guidance are rendered. No gateway, mail, diagnostic or release recovery is exercised."
+  ],
+  "interactions": [
+    "Keyboard Enter from the shipped index opens the PMG guide at desktop and phone widths.",
+    "Keyboard activation of collection limits focuses and scrolls the existing reading section; Back preserves the guide. No document overflow, page/console errors or failed HTTP responses."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "webkit",
+      "version": "26.0"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "pmg-desktop.png",
+      "sha256": "016f2551663ad4bf93582a3800e34642d88e771cecb38a9dede348c2c027e712",
+      "native_pixel_review": true,
+      "observations": "Desktop: full new explanation and native fallback are readable with the existing failure-class table and reporting precautions; the native name/display-name distinction is explicit."
+    },
+    {
+      "path": "pmg-phone-errors.png",
+      "sha256": "e5b57c96dce3bdae8651939f5f8a791bae9039675304b3503daa9f3e5d24044a",
+      "native_pixel_review": true,
+      "observations": "Phone: wrapped heading, exact decoder field, both identity forms, hostname error and complete native fallback/no-DNS-or-credential-change guidance are readable without horizontal clipping."
+    }
+  ],
+  "proof_command": "pulse-worker-browser scripts/check-pmg-reader-help.cjs",
+  "verified_at": "2026-10-15T12:13:48.390239+00:00",
+  "playwright": "1.56.1",
+  "script_sha256": "22c6366ac7187d032a8835973a7c8c969ebde818ecfe0d6b26637678ec1df83c",
+  "source_proofs": {
+    "DOCS": {
+      "receipt_id": "source-eymrwbyo",
+      "source_sha": "2ce3bc8edeeb34ba00152f09e291a0668b66bd1e",
+      "exitcode": 0,
+      "guest_stop_completed": true
+    },
+    "FRONTEND": {
+      "receipt_id": "source-6v2du5io",
+      "source_sha": "2ce3bc8edeeb34ba00152f09e291a0668b66bd1e",
+      "exitcode": 0,
+      "guest_stop_completed": true
+    }
+  },
+  "limits": [
+    "Existing-guide help only, not collector repair, protected publication, installed PMG recovery or a release-availability claim.",
+    "The additional phone fallback capture was opened natively and is redundant with the complete new section visible in the retained phone error capture. Its hash and observation remain in the private receipt."
+  ]
+}
