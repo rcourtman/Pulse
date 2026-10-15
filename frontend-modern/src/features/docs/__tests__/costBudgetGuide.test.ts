@@ -2,17 +2,17 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { renderDocMarkdown, stripLeadingTitle } from '../docMarkdown';
+import { stripLeadingTitle } from '../docMarkdown';
+import { createGuideFixture } from './guideFixture';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const shipped = path.join(root, 'frontend-modern/public/docs/AI.md');
 const source = readFileSync(process.env.PULSE_COST_GUIDE_INPUT ?? shipped, 'utf8');
 const prose = (element: Element) => (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+const renderGuide = createGuideFixture(() => stripLeadingTitle(source));
 
 function guide(): HTMLElement {
-  const article = document.createElement('article');
-  article.innerHTML = renderDocMarkdown(stripLeadingTitle(source), 'AI');
-  return article;
+  return renderGuide('AI');
 }
 
 function costSection(): HTMLElement {
