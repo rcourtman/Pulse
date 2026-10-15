@@ -1,4 +1,4 @@
-package chat
+package api
 
 import (
 	"context"
@@ -13,12 +13,15 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 // Issue #2350's streaming path must survive the actual Anthropic SSE decoder,
-// AgenticLoop, chat cost recorder and disk reload, not just an injected DoneEvent.
+// AgenticLoop, API adapter, Patrol cost recorder and disk reload, not just an
+// injected DoneEvent or a mock ChatServiceProvider result.
 func TestAnthropicUsageSSEToPersistedBudget(t *testing.T) {
 	for _, tc := range []struct {
 		name              string
@@ -83,7 +86,7 @@ func TestAnthropicUsageSSEToPersistedBudget(t *testing.T) {
 			persistence := config.NewConfigPersistence(t.TempDir())
 			cfg := &config.AIConfig{
 				Enabled: true, AnthropicAPIKey: "fixture-key", ChatModel: "anthropic:claude-sonnet-5",
-				Model: "anthropic:claude-sonnet-5", CostBudgetUSD30d: 0.0008,
+				Model: "anthropic:claude-sonnet-5", PatrolModel: "anthropic:claude-sonnet-5", CostBudgetUSD30d: 0.0008,
 			}
 			if err := persistence.SaveAIConfig(*cfg); err != nil {
 				t.Fatal(err)
@@ -93,44 +96,34 @@ func TestAnthropicUsageSSEToPersistedBudget(t *testing.T) {
 			if err := owner.LoadConfig(); err != nil {
 				t.Fatal(err)
 			}
-			svc := NewService(Config{AIConfig: cfg, DataDir: t.TempDir(), CostStore: owner.CostStore()})
-			svc.providerFactory = func(model string) (providers.StreamingProvider, error) {
-				if model != cfg.ChatModel {
-					return nil, fmt.Errorf("unexpected route %q", model)
-				}
-				return providers.NewAnthropicClientWithBaseURL("fixture-key", "claude-sonnet-5", server.URL, 2*time.Second), nil
-			}
-			svc.SetBudgetChecker(func() error { return owner.CheckBudget("chat") })
+			svc := chat.NewService(chat.Config{AIConfig: cfg, DataDir: t.TempDir(), CostStore: owner.CostStore()})
 			if err := svc.Start(context.Background()); err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = svc.Stop(context.Background()) })
-			session, err := svc.CreateSession(context.Background())
-			if err != nil {
-				t.Fatal(err)
-			}
-			// A user-named session prevents the unrelated, separately billed
-			// automatic title-generation request after the first exchange.
-			if _, err := svc.sessions.Rename(session.ID, "Cache accounting fixture"); err != nil {
-				t.Fatal(err)
-			}
-			var done DoneData
-			doneCount := 0
-			if err := svc.ExecuteStream(context.Background(), ExecuteRequest{
-				Prompt: "Return the fixture response.", SessionID: session.ID,
-			}, func(event StreamEvent) {
-				if event.Type == "done" {
-					doneCount++
-					if err := json.Unmarshal(event.Data, &done); err != nil {
-						t.Errorf("decode done event: %v", err)
-					}
+			owner.SetChatService(&chatServiceAdapter{svc: svc})
+			// Change only the HTTP endpoint through the existing Patrol factory
+			// seam. Decoder, loop, adapter and ledger are production code.
+			svc.SetPatrolProviderFactory(func(model string) (providers.StreamingProvider, error) {
+				if model != cfg.PatrolModel {
+					return nil, fmt.Errorf("unexpected route %q", model)
 				}
-			}); err != nil {
-				t.Fatalf("ExecuteStream: %v", err)
-			}
-			if doneCount != 1 || done.InputTokens != tc.input || done.OutputTokens != tc.output ||
-				math.Abs(done.SessionCostUSD-tc.usd) > 1e-12 || calls.Load() != 1 {
-				t.Fatalf("stream completion/accounting changed: done=%+v count=%d HTTP calls=%d", done, doneCount, calls.Load())
+				return providers.NewAnthropicClientWithBaseURL("fixture-key", "claude-sonnet-5", server.URL, 2*time.Second), nil
+			})
+			svc.SetBudgetChecker(func() error { return owner.CheckBudget("chat") })
+			owner.SetStateProvider(&scopedPatrolStateProvider{state: models.StateSnapshot{
+				Nodes: []models.Node{{ID: "fixture-node", Name: "fixture", Status: "online"}},
+			}})
+			patrol := owner.GetPatrolService()
+			patrol.SetConfig(ai.PatrolConfig{Enabled: true, AnalyzeNodes: true})
+			patrol.TriggerScopedPatrol(context.Background(), ai.PatrolScope{
+				ResourceIDs: []string{"fixture-node"}, Reason: ai.TriggerReasonManual,
+				Depth: ai.PatrolDepthQuick, NoStream: true,
+			})
+			runs := patrol.GetRunHistory(1)
+			if len(runs) != 1 || runs[0].ErrorCount != 0 || runs[0].InputTokens != tc.input || runs[0].OutputTokens != tc.output ||
+				runs[0].CacheCreationInputTokens != tc.creation || runs[0].CacheReadInputTokens != tc.read || calls.Load() != 1 {
+				t.Fatalf("stream/adapter/Patrol accounting changed: runs=%+v HTTP calls=%d", runs, calls.Load())
 			}
 			if err := owner.CostStore().Flush(); err != nil {
 				t.Fatal(err)
@@ -142,7 +135,7 @@ func TestAnthropicUsageSSEToPersistedBudget(t *testing.T) {
 				t.Fatal(err)
 			}
 			events := restarted.ListCostEvents(30)
-			if len(events) != 1 || events[0].Provider != "anthropic" || events[0].UseCase != "chat" ||
+			if len(events) != 1 || events[0].Provider != "anthropic" || events[0].UseCase != "patrol" ||
 				events[0].InputTokens != tc.input || events[0].OutputTokens != tc.output ||
 				events[0].CacheCreationInputTokens != tc.creation || events[0].CacheReadInputTokens != tc.read {
 				t.Fatalf("persisted stream ledger lost attribution or usage: %+v", events)
@@ -152,11 +145,11 @@ func TestAnthropicUsageSSEToPersistedBudget(t *testing.T) {
 				totals.TotalTokens != int64(tc.input+tc.output) {
 				t.Fatalf("persisted stream totals/rates changed: %+v, want USD %.7f", totals, tc.usd)
 			}
-			err = restarted.CheckBudget("chat")
+			err := restarted.CheckBudget("patrol")
 			if tc.blocked && !errors.Is(err, ai.ErrCostBudgetExceeded) || !tc.blocked && err != nil {
 				t.Fatalf("reloaded stream spend gave wrong budget decision: %v", err)
 			}
-			t.Logf("SSE -> AgenticLoop -> chat recorder -> persisted ledger: input=%d output=%d creation=%d read=%d Total=%d USD=%.7f; reloaded budget blocked=%t HTTP calls=%d",
+			t.Logf("SSE -> AgenticLoop -> API adapter -> Patrol -> persisted ledger: input=%d output=%d creation=%d read=%d Total=%d USD=%.7f; reloaded budget blocked=%t HTTP calls=%d",
 				tc.input, tc.output, tc.creation, tc.read, totals.TotalTokens, totals.EstimatedUSD, tc.blocked, calls.Load())
 		})
 	}
