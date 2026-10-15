@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Backup activity calendar-day presentation
+
+Backups renders one activity column per local calendar date, including
+seasonal clock changes, rather than stepping through fixed 24-hour durations.
+Counts, byte volumes and the existing clickable date filter use the same
+keys. Exact-now observations remain eligible and future activity remains
+excluded. The calendar matrix and production-table desktop/narrow browser
+proof cover date order, both boundaries, range changes, volume and clearing
+the day filter. This changes no route, posture, provider completion judgment
+or native recovery authority.
+
+
 ### Aggregate disk bars preserve percentage-only evidence (14 October 2026)
 
 The shared stacked-disk primitive keeps independently supplied aggregate

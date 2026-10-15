@@ -54,14 +54,20 @@ for (const [year, month, day] of dates) {
       );
 
       for (const volume of [false, true]) {
-        const timeline = buildBackupActivityTimeline(days, items, (item) => item.ts, () => 'pbs', {
-          now,
-          getValue: volume ? (item) => item.bytes : undefined,
-        });
+        const timeline = buildBackupActivityTimeline(
+          days,
+          items,
+          (item) => item.ts,
+          () => 'pbs',
+          { now, getValue: volume ? (item) => item.bytes : undefined },
+        );
+        expect(now.getTime()).toBe(new Date(year, month, day, 23, 45).getTime());
         expect(timeline.points.map((point) => point.key)).toEqual(keys);
         expect(new Set(timeline.points.map((point) => point.key)).size).toBe(days);
         for (const [index, point] of timeline.points.entries()) {
-          const expected = (volume ? 5 : 2) + (index === 0 ? volume ? 5 : 1 : 0) + (index === days - 1 ? volume ? 7 : 1 : 0);
+          const start = index === 0 ? (volume ? 5 : 1) : 0;
+          const end = index === days - 1 ? (volume ? 7 : 1) : 0;
+          const expected = (volume ? 5 : 2) + start + end;
           expect(point.total, `${point.key} ${volume ? 'volume' : 'count'}`).toBe(expected);
           expect(point.counts.pbs).toBe(expected);
           expect(point.counts.archive).toBe(0);
