@@ -187,10 +187,11 @@ describe('shipped TrueNAS error diagnosis', () => {
       'a[href="/docs/VM_DISK_MONITORING#backup-safety"]',
     );
     expect(backup?.textContent).toBe('backup safety');
-    expect(renderGuide('VM_DISK_MONITORING').querySelector(new URL(backup!.href).hash)).not.toBeNull();
+    expect(
+      renderGuide('VM_DISK_MONITORING').querySelector(new URL(backup!.href).hash),
+    ).not.toBeNull();
     expect(readFileSync(path.join(repoRoot, 'docs/TRUENAS.md'), 'utf8')).toBe(
       readFileSync(path.join(repoRoot, 'frontend-modern/public/docs/TRUENAS.md'), 'utf8'),
     );
   });
-
 });
