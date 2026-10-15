@@ -76,7 +76,7 @@ func newPBSPosturePollFixture(t *testing.T, count int, backupTypes ...string) *p
 				http.Error(w, "denied", http.StatusForbidden)
 				return
 			}
-			var groups []map[string]any
+			groups := []map[string]any{}
 			if mode != 1 {
 				for i := 0; i < count; i++ {
 					groups = append(groups, map[string]any{"backup-type": backupType, "backup-id": strconv.Itoa(100 + i), "last-backup": f.backupAt, "backup-count": 1})

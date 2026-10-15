@@ -7881,3 +7881,29 @@ HTTP boundary, unknown-not-zero memory and resumed CPU/memory with the same
 credential. `TestComputeDiagnosticsAPIRejectionsPreserveCredentials` covers
 pinned PVE/PBS fixture use and preserves the separate PBS scheduler state.
 Native scoped-fleet recovery, QGA/thaw and installed trust remain separate.
+
+### Complete PBS backup history reads (15 October 2026)
+
+PBS group and snapshot listings consume and close their whole existing
+8 MiB-bounded response before publishing rows. An authoritative read requires
+HTTP 200, complete UTF-8 JSON, an explicit canonical `data` array and no
+conflicting errors. Missing/null data, duplicate or case-variant supported
+fields, trailing values, truncated/oversized bodies, failed closes and invalid
+rows are errors, not empty inventories or completed snapshot reads. Groups
+require unique type/ID, an explicit nonnegative count and a positive latest
+time when nonempty. Snapshots require unique positive times and the requested
+group identity; conflicting nested verification states cannot establish
+verification. Additive metadata, genuine empty arrays, zero-count groups,
+version-dependent verification and manifestless in-progress snapshots remain.
+
+The existing collector retains historical rows/points and their original cache
+read times on these failures. Its provider observation marks history partial
+or unavailable, rather than renewing verified protection or authoritatively
+deleting missing points. Ordinary complete reads resume refresh and protection;
+complete empty arrays still remove deleted history only for their connection.
+`TestPBSBackupInventoryAdmission` in `pkg/pbs/client_http_test.go` covers both
+real client readers and complete-body boundaries;
+`TestPBSBackupInventoryAdmissionPreservesHistoryAndResumes` covers ordinary
+HTTP collection, cache age, stored points, protection and recovery/deletion.
+These are controlled source proofs, not appliance backup/restore acceptance,
+native guest thaw, installed recovery or release availability.

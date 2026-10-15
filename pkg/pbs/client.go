@@ -1970,28 +1970,16 @@ func (c *Client) ListBackupGroups(ctx context.Context, datastore string, namespa
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result struct {
-		Data []BackupGroup `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode backup groups: %w", err)
+	groups, err := readBackupGroups(resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read backup groups: %w", err)
 	}
 
 	log.Debug().
 		Str("namespace", namespace).
-		Int("count", len(result.Data)).
+		Int("count", len(groups)).
 		Msg("PBS API: Backup groups found")
-	return result.Data, nil
+	return groups, nil
 }
 
 // ListBackupSnapshots lists all snapshots for a specific backup group
@@ -2012,24 +2000,11 @@ func (c *Client) ListBackupSnapshots(ctx context.Context, datastore string, name
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+	snapshots, err := readBackupSnapshots(resp, backupType, backupID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read snapshots: %w", err)
 	}
-
-	var result struct {
-		Data []BackupSnapshot `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode snapshots: %w", err)
-	}
-
-	return result.Data, nil
+	return snapshots, nil
 }
 
 // ListAllBackups fetches all backups from all namespaces concurrently
