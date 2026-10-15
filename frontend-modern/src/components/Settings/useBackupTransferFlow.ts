@@ -155,7 +155,7 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
         transferStatus()?.phase === 'reading'
           ? 'Could not read the backup file. Choose a readable configuration backup.'
           : current.kind === 'import'
-            ? 'Could not confirm the import. Settings may already have changed. Check the current configuration before trying again; verify the backup and passphrase if it was rejected.'
+            ? 'Could not confirm the import. Settings may already have changed. Check the current configuration before trying again. Verify the backup and passphrase if it was rejected.'
             : 'Could not export the configuration. Check your access and try again.',
       );
     } finally {
