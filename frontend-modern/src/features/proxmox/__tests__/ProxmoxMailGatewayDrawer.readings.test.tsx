@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Alert } from '@/types/api';
@@ -21,22 +21,23 @@ const resource = {
 } as Resource;
 
 function serve(nodes: unknown[]) {
-  vi.mocked(apiFetch).mockResolvedValue(
-    new Response(
-      JSON.stringify({
-        data: [
-          {
-            id: 'pmg-gateway',
-            name: 'gateway',
-            status: 'online',
-            connectionHealth: 'healthy',
-            nodes,
-          },
-        ],
-        meta: { total: 1 },
-      }),
-      { status: 200 },
-    ),
+  vi.mocked(apiFetch).mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 'pmg-gateway',
+              name: 'gateway',
+              status: 'online',
+              connectionHealth: 'healthy',
+              nodes,
+            },
+          ],
+          meta: { total: 1 },
+        }),
+        { status: 200 },
+      ),
   );
 }
 
@@ -92,6 +93,6 @@ describe('PMG detail preserves missing readings and resource health', () => {
     expect(screen.getByRole('img', { name: 'Degraded' })).toBeInTheDocument();
     setState({ ...resource, status: 'online' });
     expect(screen.getByRole('img', { name: 'Healthy' })).toBeInTheDocument();
-    expect(apiFetch).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(3));
   });
 });
