@@ -38,6 +38,7 @@ var infrastructureRouteCatalog = map[string]routeClassification{
 	"/api/updates/history":                 {},
 	"/api/updates/history/entry":           {},
 	"/api/updates/release-notes":           {},
+	"/api/updates/release-notes/assets/":   {},
 	"/api/ai/run-command":                  {MutationID: "legacy.api.run-command"},
 	"/api/ai/remediation/plans":            {},
 	"/api/ai/remediation/plan":             {},
