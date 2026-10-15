@@ -414,6 +414,8 @@ describe('docsLinks', () => {
       'ARCHITECTURE.md',
       'CONTRIBUTING.md',
     ]);
+    const indexScreenshotUrl =
+      'https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md';
 
     function collectShippedDocs(dir: string, prefix = ''): string[] {
       return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -441,7 +443,12 @@ describe('docsLinks', () => {
       const rootDoc = readFileSync(source, 'utf8');
       const publicDoc = readFileSync(path.join(frontendRoot, 'public', 'docs', target), 'utf8');
       expect(publicDoc).toBe(rootDoc);
-      expect(publicDoc).not.toContain('https://github.com/rcourtman/Pulse/blob/main/');
+      // Screenshots are intentionally repository-only. The index's explicit
+      // external destination is checked by documentationIndexLinks.test.ts;
+      // every other source-file escape remains forbidden, including in README.
+      const repositoryLinks =
+        publicDoc.match(/https:\/\/github\.com\/rcourtman\/Pulse\/blob\/main\/[^\s)]+/g) ?? [];
+      expect(repositoryLinks).toEqual(target === 'README.md' ? [indexScreenshotUrl] : []);
     }
   });
 

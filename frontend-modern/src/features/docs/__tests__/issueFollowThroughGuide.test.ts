@@ -49,7 +49,7 @@ describe('public issue follow-through guidance', () => {
     expect(prose(paragraphs[3])).toContain('an unfixed or unexplained symptom');
   });
 
-  it('gives earlier preview requests a stable-bound clock, not an early timeout or extra reminder', () => {
+  it('gives earlier preview requests a stable-bound clock without another reminder', () => {
     const paragraph = followThrough().querySelectorAll('p')[2];
     expect(prose(paragraph)).toContain('earlier retest request named a beta or release candidate');
     expect(prose(paragraph)).toContain('carrying the same fix');
@@ -57,12 +57,16 @@ describe('public issue follow-through guidance', () => {
     expect(prose(paragraph.querySelector('strong')!)).toBe(
       "later of that request and the stable release's publication",
     );
-    expect(prose(paragraph)).toContain('stable release contains the fix for every reported symptom');
-    expect(prose(paragraph)).toContain('A beta or release candidate alone never starts this period');
+    expect(prose(paragraph)).toContain(
+      'stable release contains the fix for every reported symptom',
+    );
+    expect(prose(paragraph)).toContain(
+      'A beta or release candidate alone never starts this period',
+    );
     expect(prose(paragraph)).toContain('another unanswered reminder is not required');
   });
 
-  it('keeps the weekly target, earlier candidate eligibility and delay consistent with release help', () => {
+  it('keeps the weekly target, early eligibility and delay consistent with release help', () => {
     const article = renderGuide('AI_TRANSPARENCY', source);
     const releaseHelp = renderGuide(
       'RELEASE_PROCESS',
