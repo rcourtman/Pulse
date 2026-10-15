@@ -2,6 +2,8 @@ import { Show, createMemo } from 'solid-js';
 
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { getPlatformTableHeadClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRows';
 import {
@@ -19,6 +21,13 @@ interface AlertHistoryTableSectionProps {
   state: AlertHistoryState;
 }
 
+/**
+ * The narrowest card the history table is sized for. Below it the three row
+ * actions stack, rows lose the single height the windowed rows need, and
+ * names and messages break mid-word, so the history shows as cards instead.
+ */
+export const ALERT_HISTORY_TABLE_MIN_WIDTH = 800;
+
 type AlertHistoryGroup = ReturnType<AlertHistoryState['groupedAlerts']>[number];
 type AlertHistoryAlert = AlertHistoryGroup['alerts'][number];
 type AlertHistoryRenderItem =
@@ -26,6 +35,16 @@ type AlertHistoryRenderItem =
   | { kind: 'alert'; key: string; alert: AlertHistoryAlert };
 
 export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
+  // The card's own width decides, not the viewport: a laptop window with the
+  // Alerts rail open leaves the table far less room than the screen suggests.
+  // Until the card is measured, the phone breakpoint decides as before.
+  const cardWidth = useObservedElementWidth();
+  const { isMobile } = useBreakpoint();
+  // A memo, so readers hear about a change of layout, not every resized pixel.
+  const showCards = createMemo(() => {
+    const width = cardWidth.width();
+    return width === null ? isMobile() : width < ALERT_HISTORY_TABLE_MIN_WIDTH;
+  });
   const renderItems = createMemo<AlertHistoryRenderItem[]>(() => {
     const items: AlertHistoryRenderItem[] = [];
     for (const [groupIndex, group] of props.state.groupedAlerts().entries()) {
@@ -52,9 +71,12 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
             </Show>
           }
         >
-          <>
-            <AlertHistoryMobileList state={props.state} />
-            <TableCard class="mb-2 hidden md:block">
+          <div
+            ref={cardWidth.setElement}
+            data-alert-history-layout={showCards() ? 'cards' : 'table'}
+          >
+            <AlertHistoryMobileList state={props.state} active={showCards} />
+            <TableCard class={showCards() ? 'mb-2 hidden' : 'mb-2'}>
               <Table class="alert-history-responsive-table table-fixed min-w-0 text-[11px] sm:text-sm">
                 {/* Each track pairs its density visibility with its own width (index.css). */}
                 <colgroup>
@@ -130,7 +152,7 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
                 </TableBody>
               </Table>
             </TableCard>
-          </>
+          </div>
         </Show>
       }
     >

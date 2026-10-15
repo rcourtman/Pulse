@@ -1,4 +1,4 @@
-import { Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, on, type Accessor } from 'solid-js';
 import { aiChatStore } from '@/stores/aiChat';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
@@ -20,6 +20,11 @@ import type { AlertHistoryState } from './useAlertHistoryState';
 
 interface AlertHistoryMobileListProps {
   state: AlertHistoryState;
+  /**
+   * Whether the cards are the history layout on show. The table section
+   * decides from its card's width; a list rendered on its own is active.
+   */
+  active?: Accessor<boolean>;
 }
 
 type AlertHistoryGroup = ReturnType<AlertHistoryState['groupedAlerts']>[number];
@@ -47,13 +52,16 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
     return items;
   });
 
+  // Only a change of layout may move expansions into the drawer: an accessor
+  // that reads a width would otherwise rerun this on every resized pixel and
+  // reopen a drawer the operator just closed.
+  const active = createMemo(() => props.active?.() ?? true);
+
   // The shared expansion state survives layout changes. Project it into the
-  // phone's single drawer instead of leaving a hidden desktop expansion open.
-  onMount(() => {
-    if (typeof window.matchMedia !== 'function') return;
-    const viewport = window.matchMedia('(min-width: 768px)');
-    const synchronizeLayout = () => {
-      if (viewport.matches || aiChatStore.isOpen) {
+  // cards' single drawer instead of leaving a hidden table expansion open.
+  createEffect(
+    on(active, (isActive) => {
+      if (!isActive || aiChatStore.isOpen) {
         setInvestigation(null);
         return;
       }
@@ -76,11 +84,8 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
         }
       }
       setInvestigation(null);
-    };
-    synchronizeLayout();
-    viewport.addEventListener('change', synchronizeLayout);
-    onCleanup(() => viewport.removeEventListener('change', synchronizeLayout));
-  });
+    }),
+  );
 
   const getInvestigationReturnFocusTarget = (
     current: MobileAlertHistoryInvestigation,
@@ -177,7 +182,12 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
 
   return (
     <>
-      <div class="space-y-3 md:hidden" data-testid="alert-history-mobile-list" tabindex="-1">
+      <div
+        class="space-y-3"
+        classList={{ hidden: !active() }}
+        data-testid="alert-history-mobile-list"
+        tabindex="-1"
+      >
         <PlatformWindowedList
           items={mobileItems}
           estimatedItemHeight={260}
