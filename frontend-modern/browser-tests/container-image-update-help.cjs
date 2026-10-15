@@ -101,8 +101,16 @@ const fragment = 'image-update-disagrees-with-the-runtime';
       else { await receipts.focus(); await page.keyboard.press('Enter'); }
       await page.waitForURL('**#check-a-failed-or-pending-workload-update');
       await page.getByRole('heading', { name: 'Check a failed or pending workload update', exact: true }).waitFor();
+      await page.goto(`${origin}/docs/ISSUE_TRIAGE#intake-contract`);
+      await page.getByRole('heading', { name: 'Intake contract', exact: true }).waitFor();
+      await jump(page.locator('#intake-contract'));
+      const intake = (await page.locator('article').innerText()).replace(/\s+/g, ' ');
+      for (const phrase of ['Materially editing an already populated field also surfaces it for review',
+        'Case, whitespace and hidden-comment-only changes do not restart that review'])
+        assert.ok(intake.includes(phrase), phrase);
+      await capture('topic-intake');
       result.cases.push({ ...state, browser: browser.version(), entryLink: state.width < 500 ? 'touch' : 'keyboard',
-        receiptLink: true, fourComparisonRows: true, scrollResult, noDocumentOverflow: true });
+        receiptLink: true, fourComparisonRows: true, scrollResult, topicIntakeMirror: true, noDocumentOverflow: true });
       await browser.close(); browser = undefined;
     }
     assert.deepEqual(result.errors, []);
