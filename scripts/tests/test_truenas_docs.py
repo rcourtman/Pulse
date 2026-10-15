@@ -243,6 +243,39 @@ class TrueNASDocsTest(unittest.TestCase):
             self.assertIn(boundary, text)
         self.assertNotIn("Export for GitHub (sanitized)", text)
 
+    def test_core_reporting_rejection_has_a_passive_recovery_route(self):
+        section = DOC.read_text().split(
+            "### Inventory works but CPU, memory or History is missing", 1
+        )[1].split("If a maintainer requests", 1)[0]
+        prose = " ".join(section.split())
+        for boundary in (
+            "TrueNAS's own **Reporting** graphs for CPU, memory and I/O",
+            "zeros displayed after a rejected request, are not measured idle values",
+            "**CORE 13 using legacy REST**", "HTTP 400", "`/reporting/get_data`",
+            "The following attributes are not expected: query",
+            "before graph data is returned", "advancing snapshot time does not establish",
+            "does not call for another graph capture, a replacement API key or weaker TLS",
+            "Do not restart, reinstall or clear stored History",
+            "[ordinary polling checks](#stale-truenas-data)",
+            "observations you already have, not to repeat the failing action",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, prose)
+        self.assertNotIn("```", section, "known request rejection needs no new diagnostic command")
+
+    def test_reporting_recovery_does_not_claim_pool_capacity_recovery(self):
+        section = DOC.read_text().split("**Disk I/O and storage capacity are separate.**", 1)[1]
+        prose = " ".join(section.split("If a maintainer requests", 1)[0].split())
+        for boundary in (
+            "Read/write rates come from reporting; pool used/free bytes come from inventory",
+            "Working I/O does not establish a missing pool's capacity",
+            "working pool capacity does not prove that I/O or History recovered",
+            "affected pool distinct from its datasets",
+            "do not sum dataset sizes or substitute zero for unknown pool bytes",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, prose)
+
     def test_core_graph_guidance_distinguishes_request_from_reply(self):
         text = DOC.read_text().split("### Inventory works but CPU, memory or History is missing", 1)[1]
         text = text.split("### Stale TrueNAS data", 1)[0]

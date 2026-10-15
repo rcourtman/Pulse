@@ -343,11 +343,30 @@ does not establish a live reading; check the CPU/memory usage columns and
 History series separately. A disk-utilisation line does not establish that
 CPU, memory or network History is available.
 
-Check whether the corresponding graphs work in the TrueNAS web UI. If Pulse
-still shows missing readings, report the affected panels, running Pulse and
-TrueNAS versions, and the relevant sanitized evidence above. Do not replace
-an otherwise working key or clear stored History merely because a graph is
-empty.
+Use TrueNAS's own **Reporting** graphs for CPU, memory and I/O while those
+readings are unavailable in Pulse. Missing readings, or zeros displayed after
+a rejected request, are not measured idle values.
+
+For **CORE 13 using legacy REST**, an existing HTTP 400 from
+`/reporting/get_data` saying **“The following attributes are not expected:
+query”** identifies a reporting-request format rejection, before graph data
+is returned. Inventory, a successful connection test or an advancing snapshot
+time does not establish that this request recovered. Keep the original error
+and time; this error does not call for another graph capture, a replacement
+API key or weaker TLS verification. Do not restart, reinstall or clear stored
+History to obtain more evidence. Use the [ordinary polling checks](#stale-truenas-data)
+to interpret observations you already have, not to repeat the failing action.
+
+**Disk I/O and storage capacity are separate.** Read/write rates come from
+reporting; pool used/free bytes come from inventory. Working I/O does not
+establish a missing pool's capacity, and working pool capacity does not prove
+that I/O or History recovered. Keep the affected pool distinct from its
+datasets; do not sum dataset sizes or substitute zero for unknown pool bytes.
+
+For other missing readings, use existing observations of the affected panels,
+running Pulse and TrueNAS versions, and the relevant sanitised error. Check
+what the corresponding TrueNAS graph already shows before collecting more;
+do not replace an otherwise working key merely because a Pulse graph is empty.
 
 If a maintainer requests a **CORE 13 native graph response**, use your existing
 signed-in **TrueNAS** browser session, not the Pulse page:
