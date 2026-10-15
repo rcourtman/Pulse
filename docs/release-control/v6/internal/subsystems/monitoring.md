@@ -4216,6 +4216,30 @@ service-history reads plus denial/recovery without fabricated samples.
 
 ## Current State
 
+### LXC runtime observations own running-only work
+
+Both the cluster/resources and per-node LXC collectors apply the nonempty
+runtime state from their already-fetched complete `status/current` before
+selecting memory, optional interfaces, Docker admission, alerts and History.
+An accepted newer non-running status cannot be overwritten by an older running
+listing or linked-agent memory. Absent or rejected detail leaves the independent
+listing fallback intact; no second status request or guest command is added.
+
+Non-running LXC CPU, memory and I/O follow the existing off-state policy, with
+memory unavailable from `powered-off`. Observed platform storage capacity and
+usage remain available: stopping a container does not empty its filesystems.
+The alert engine still suppresses metric alerts and History still admits only
+running guest observations. Config/OS/autostart metadata remain available and
+an ordinary subsequent running poll selects its own current readings.
+
+`TestLXCStoppedDetailedStatusTransition` in `monitor_pve_guest_lxc_test.go`
+crosses both real clients and both collectors through cold/repeated stops,
+ordinary running/resume, an explicitly stopped listing, a rejected short-body
+stopped reply and another non-running state. It checks work/request counts,
+linked-memory rejection, storage preservation, canonical/broadcast state and
+in-memory History. These synthetic controls are not native shutdown, thaw,
+filesystem-write/liveness or installed recovery acceptance.
+
 ### Detailed guest status is a complete observation
 
 QEMU and LXC `status/current` reads require the entire bounded HTTP 200 body to

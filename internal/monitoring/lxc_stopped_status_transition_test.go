@@ -21,7 +21,7 @@ import (
 
 // Ordinary synthetic HTTP observations through both clients and collectors.
 // No container, guest agent, backup, SSH command or native restart is exercised.
-func TestLXCStoppedDetailedStatusTransition(t *testing.T) {
+func testLXCStoppedDetailedStatusTransition(t *testing.T) {
 	wasMock := mock.IsMockEnabled()
 	mustSetMockEnabled(t, false)
 	t.Cleanup(func() { mustSetMockEnabled(t, wasMock) })
@@ -130,7 +130,7 @@ func TestLXCStoppedDetailedStatusTransition(t *testing.T) {
 						if p == 7 {
 							wantStatus = "paused"
 						}
-						if ct.Status != wantStatus || ct.CPU != 0 || ct.Memory.Used != 0 || ct.Memory.Observation.Source != "powered-off" || ct.Memory.Observation.State != "unavailable" || ct.Disk.Usage != 0 || ct.NetworkIn != 0 || ct.NetworkOut != 0 || ct.DiskRead != 0 || ct.DiskWrite != 0 {
+						if ct.Status != wantStatus || ct.CPU != 0 || ct.Memory.Used != 0 || ct.Memory.Observation.Source != "powered-off" || ct.Memory.Observation.State != "unavailable" || ct.Disk.Used != int64(res.Disk) || ct.Disk.Usage != 40 || ct.NetworkIn != 0 || ct.NetworkOut != 0 || ct.DiskRead != 0 || ct.DiskWrite != 0 {
 							t.Errorf("%s newer non-running container lost to stale running inventory: %+v", label, ct)
 						}
 						if interfaces.Load() != beforeInterfaces || checker.callCount() != beforeChecks {

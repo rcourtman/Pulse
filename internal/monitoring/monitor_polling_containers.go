@@ -292,11 +292,11 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					sampleTime,
 				)
 
-				// Zero out metrics for non-running containers
+				// Zero runtime usage, not independent platform storage usage.
+				// The alert engine handles non-running metric suppression.
 				if container.Status != "running" {
 					modelContainer.CPU = 0
 					modelContainer.Memory.Usage = 0
-					modelContainer.Disk.Usage = 0
 					modelContainer.NetworkIn = 0
 					modelContainer.NetworkOut = 0
 					modelContainer.DiskRead = 0
