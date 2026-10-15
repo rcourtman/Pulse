@@ -8849,6 +8849,15 @@ a neighbouring feature: the alerts Schedule page is "Delivery Schedule" in
 every locale, and `i18n.test.ts` refuses a maintenance word in any locale's
 title because maintenance windows live elsewhere.
 
+### A refused setting reports the state the server kept
+
+When a write is refused because the server owns the value (an environment
+lock), the surface reads the effective value before speaking: no message when
+the server already holds what the operator chose, a message naming the
+variable when it holds the opposite, and the generic failure only when the
+state cannot be read. The setup wizard's usage-statistics opt-out follows
+this, and catalog copy keeps the variable name untranslated (`i18n.test.ts`).
+
 ### Alert overview rows place Investigate by the shared breakpoint
 
 `AlertOverviewAlertCard` reads the shared `useBreakpoint()` hook to decide

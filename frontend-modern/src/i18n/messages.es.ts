@@ -288,6 +288,8 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.security.error.passwordRequired': 'Ingresa una contraseña',
   'setup.security.error.passwordTooShort': 'La contraseña debe tener al menos 12 caracteres',
   'setup.security.error.setupFailed': 'La configuración falló: {error}',
+  'setup.security.error.telemetryLockedOn':
+    'Tu cuenta de administrador se creó. Las estadísticas de uso siguen activadas porque este servidor define PULSE_TELEMETRY=true. Define PULSE_TELEMETRY=false y reinicia Pulse para desactivarlas.',
   'setup.security.error.telemetryDisableFailed':
     'Tu cuenta de administrador se creó, pero las estadísticas de uso no se pudieron desactivar. Puedes desactivarlas en Ajustes → Sistema → General.',
   'setup.security.generatedPasswordHelp':

@@ -296,6 +296,8 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.security.error.passwordRequired': 'Bitte geben Sie ein Passwort ein',
   'setup.security.error.passwordTooShort': 'Das Passwort muss mindestens 12 Zeichen haben',
   'setup.security.error.setupFailed': 'Einrichtung fehlgeschlagen: {error}',
+  'setup.security.error.telemetryLockedOn':
+    'Ihr Admin-Konto wurde erstellt. Die Nutzungsstatistiken bleiben eingeschaltet, weil dieser Server PULSE_TELEMETRY=true setzt. Setzen Sie PULSE_TELEMETRY=false und starten Sie Pulse neu, um sie auszuschalten.',
   'setup.security.error.telemetryDisableFailed':
     'Ihr Admin-Konto wurde erstellt, aber die Nutzungsstatistiken konnten nicht ausgeschaltet werden. Sie koennen sie unter Einstellungen → System → Allgemein ausschalten.',
   'setup.security.generatedPasswordHelp':

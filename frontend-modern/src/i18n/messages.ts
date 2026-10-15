@@ -86,6 +86,8 @@ export const EN_MESSAGES = {
   'setup.security.error.setupFailed': 'Setup failed: {error}',
   'setup.security.error.telemetryDisableFailed':
     'Your admin account was created, but usage statistics could not be turned off. You can turn them off in Settings → System → General.',
+  'setup.security.error.telemetryLockedOn':
+    'Your admin account was created. Usage statistics stay on because this server sets PULSE_TELEMETRY=true. Set PULSE_TELEMETRY=false and restart Pulse to turn them off.',
   'setup.security.generatedPasswordHelp':
     'A secure 20-character password will be generated and shown on the next screen.',
   'setup.security.label.confirmPassword': 'Confirm password',
@@ -684,6 +686,7 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
   'setup.security.error.passwordTooShort',
   'setup.security.error.setupFailed',
   'setup.security.error.telemetryDisableFailed',
+  'setup.security.error.telemetryLockedOn',
   'setup.security.generatedPasswordHelp',
   'setup.security.label.confirmPassword',
   'setup.security.label.password',
