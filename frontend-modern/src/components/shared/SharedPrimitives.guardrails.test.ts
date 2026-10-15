@@ -2106,6 +2106,8 @@ describe('shared primitive guardrails', () => {
     expect(statusBadgeSource).not.toContain('cursor-not-allowed');
     expect(statusBadgeSource).not.toContain('props.onToggle?.()');
     expect(statusBadgeSource).not.toContain('labelEnabled ??');
+    // Pages of alike On/Off badges name each one for assistive tech.
+    expect(statusBadgeSource).toContain('aria-label={getStatusBadgeAriaLabel(props)}');
 
     expect(statusBadgeStateSource).toContain('export function useStatusBadgeState');
     expect(statusBadgeStateSource).toContain('Boolean(props.disabled)');

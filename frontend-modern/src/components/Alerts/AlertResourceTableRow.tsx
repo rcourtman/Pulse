@@ -155,6 +155,11 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
     });
   };
 
+  // The value a metric cell shows, which its accessible name repeats so a
+  // screen reader hears the current threshold and voice control can say it.
+  const metricValueText = (metric: string, value: number) =>
+    value <= 0 ? 'Off' : props.formatMetricValue(metric, value);
+
   const MetricValueWithHeat = (metricProps: {
     resourceId: string;
     metric: string;
@@ -162,9 +167,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
     isOverridden: boolean;
   }) => {
     const isDisabledMetric = metricProps.value <= 0;
-    const displayText = isDisabledMetric
-      ? 'Off'
-      : props.formatMetricValue(metricProps.metric, metricProps.value);
+    const displayText = metricValueText(metricProps.metric, metricProps.value);
 
     return (
       <div
@@ -199,6 +202,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
     titleEnabled?: string;
     titleDisabled?: string;
     titleWhenDisabled?: string;
+    ariaLabel?: string;
   }) => <StatusBadge {...config} />;
 
   const nextOfflineState = (state: OfflineState): OfflineState => {
@@ -211,6 +215,8 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
     state: OfflineState,
     disabled: boolean,
     onToggle: () => void,
+    // What the button sets; its visible state word ends the accessible name.
+    name: string,
   ) => {
     const config = getAlertResourceTableOfflineStatePresentation(state);
 
@@ -224,6 +230,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
           onToggle();
         }}
         title={config.title}
+        aria-label={`${name}: ${config.label}`}
       >
         {config.label}
       </button>
@@ -280,11 +287,8 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                         ? 'Click to enable alerts'
                         : 'Click to disable alerts'
                   }
-                  ariaLabel={
-                    isChecked
-                      ? 'Alerts enabled for this resource'
-                      : 'Alerts disabled for this resource'
-                  }
+                  // The switch role carries on/off; the name says whose alerts.
+                  ariaLabel={`Alerts for ${resourceLabel()}`}
                 />
               </div>
             );
@@ -398,6 +402,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                       onToggle={() => onToggle?.(props.resource.id)}
                       titleEnabled={`${titlePrefix} alerts enabled. Click to disable for this resource.`}
                       titleDisabled={`${titlePrefix} alerts disabled. Click to enable for this resource.`}
+                      ariaLabel={`${titlePrefix} alerts for ${resourceLabel()}`}
                     />
                   </div>
                 </Show>
@@ -436,7 +441,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                       }}
                       class="cursor-pointer hover:bg-surface-hover rounded-sm px-1 py-0.5 transition-colors"
                       title={getAlertResourceTableEditMetricTitle()}
-                      aria-label={getAlertResourceTableEditMetricTitle()}
+                      aria-label={`Edit ${column} threshold for ${resourceLabel()}: ${metricValueText(metric, displayValue(metric))}`}
                     >
                       <MetricValueWithHeat
                         resourceId={props.resource.id}
@@ -505,6 +510,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                       layout="table"
                       value={getThresholds()?.[metric]}
                       inheritedDefault={props.resource.defaults?.[metric]}
+                      resourceName={resourceLabel()}
                       onFocus={() =>
                         props.setActiveMetricInput({ resourceId: props.resource.id, metric })
                       }
@@ -546,11 +552,16 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                 state = defaultSeverity === 'critical' ? 'critical' : 'warning';
               }
 
-              return renderOfflineStateButton(state, disabledGlobally, () => {
-                if (disabledGlobally) return;
-                const next = nextOfflineState(state);
-                props.onSetOfflineState?.(props.resource.id, next);
-              });
+              return renderOfflineStateButton(
+                state,
+                disabledGlobally,
+                () => {
+                  if (disabledGlobally) return;
+                  const next = nextOfflineState(state);
+                  props.onSetOfflineState?.(props.resource.id, next);
+                },
+                `Offline alerts for ${resourceLabel()}`,
+              );
             }
 
             if (!props.onToggleNodeConnectivity) {
@@ -572,6 +583,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
               titleEnabled: 'Offline alerts enabled. Click to disable for this resource.',
               titleDisabled: 'Offline alerts disabled. Click to enable for this resource.',
               titleWhenDisabled: 'Offline alerts controlled globally',
+              ariaLabel: `Offline alerts for ${resourceLabel()}`,
             });
           })()}
         </TableCell>

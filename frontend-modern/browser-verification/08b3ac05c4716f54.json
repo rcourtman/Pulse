@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "21732ef252a631510e6f021c8e80b14b88871067",
+  "verified_at": "2026-10-14T23:52:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/AlertResourceMetricEditor.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx",
+    "frontend-modern/src/components/shared/StatusBadge.tsx",
+    "frontend-modern/src/components/shared/statusBadgeModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/AlertResourceMetricEditor.tsx": "e5de869f7a32a934df4f21955bcf4a809073bf3c08754e9d210632985185472d",
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx": "24399ab16fa3485e79f0259a37a0cf6f1587871090be147925851519418c2cd9",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "a5af1c582a1b9cf1e73a2b795c94de14cc07b799449f37320b049939bec777c2",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx": "94d932de202cd7632c5e95ab9b8da86863a9dedcd425c9750f9bb80db7f59696",
+    "frontend-modern/src/components/shared/StatusBadge.tsx": "7bbe8227e0ebb76473833106f772ec1b4cf9c7aef3a54e3da4db3fd9c1fef0fc",
+    "frontend-modern/src/components/shared/statusBadgeModel.ts": "43b6848a4fa28ca3e09b28d1bac775de87bce9f62d977b58a9251812430bb8a2"
+  },
+  "routes": [
+    "/alerts/thresholds/proxmox",
+    "/alerts/thresholds/docker",
+    "/alerts/thresholds/kubernetes",
+    "/alerts/thresholds/truenas",
+    "/alerts/thresholds/vmware",
+    "/alerts/thresholds/systems"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main, Proxmox tab, sections expanded): 39 threshold inputs shared two generic names from their title, 42 metric On/Off badges were named only \"On\"/\"Off\", value cells were all \"Click to edit this metric\"",
+    "After: every threshold input named \"<column> default\" or \"<column> for <resource>\"; On/Off badges \"<column> default alerts: On\"; Offline, Backup and Snapshot toggles and Warn/Crit/Off controls \"<kind> alerts for <resource>: <state>\"; value buttons \"Edit <column> threshold for <resource>: <value>\"; alert switches \"Alerts for <resource>\"",
+    "Sweep of all six thresholds tabs with every section expanded at 1280 and 375: 0 threshold inputs or state buttons without a name, 0 named buttons whose name omits their visible text",
+    "No visual change: names are accessible-name only; card and table layouts render as before"
+  ],
+  "interactions": [
+    "Expanded all sections on each thresholds tab and enumerated inputs, buttons and switches with their computed names",
+    "Started editing a resource: focus lands on \"CPU % for Automation\" and its badges read \"... for Automation alerts: On\"",
+    "Repeated the sweep on a 375x812 phone viewport, including the mobile global and per-resource alert toggles"
+  ]
+}

@@ -1,5 +1,6 @@
 import { JSX } from 'solid-js';
 import {
+  getStatusBadgeAriaLabel,
   getStatusBadgeClass,
   getStatusBadgeLabel,
   getStatusBadgeTitle,
@@ -19,6 +20,7 @@ export function StatusBadge(props: StatusBadgeProps): JSX.Element {
       onClick={state.handleClick}
       disabled={props.disabled}
       aria-pressed={props.isEnabled}
+      aria-label={getStatusBadgeAriaLabel(props)}
       title={getStatusBadgeTitle(props, state.isDisabled())}
     >
       {getStatusBadgeLabel(props)}
