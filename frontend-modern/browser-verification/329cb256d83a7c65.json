@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "base_sha": "c338f4e674dc3bbcddf24327240338ef9482295a",
+  "verified_at": "2026-10-15T23:08:44.884564Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/public/docs/ISSUE_TRIAGE.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/ISSUE_TRIAGE.md": "f61ca7611dba8c5dc1f6075160c89f2ddfabeb34f7464c05ce31ea75067088a2"
+  },
+  "routes": [
+    "/docs/ISSUE_TRIAGE#intake-contract",
+    "/docs/README"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "The shipped Issue Triage guide now includes the canonical populated-topic edit rule omitted from its public copy. Actual production Docs/router/Markdown/CSS reads the real asset, not a substitute renderer.",
+    "Materially editing populated additional topics surfaces the report for review; earlier topic disposition cannot erase a later symptom. Case, whitespace and hidden-comment-only changes do not restart review."
+  ],
+  "interactions": [
+    "Direct asynchronous fragment navigation focuses Intake contract in both browsers. The changed paragraph is fully visible within each capture without horizontal overflow.",
+    "Keyboard Enter on the existing documentation index at desktop and WebKit touch tap at phone width navigate to the real index. Browser Back restores fragment focus without replacing the fixture shell.",
+    "Both browsers fetch the actual guide and verify identical SHA-256 bytes. No page errors, failed requests or HTTP error responses were observed. Browser and preview server closed normally."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "preview": "Vite JavaScript API, exact project config and production component fixture"
+  },
+  "input_hashes": {
+    "frontend-modern/public/docs/ISSUE_TRIAGE.md": "f61ca7611dba8c5dc1f6075160c89f2ddfabeb34f7464c05ce31ea75067088a2",
+    "frontend-modern/public/docs/README.md": "e3eec5bc458546110c3014711751078663134a7c8db10b13965a84f034bca38d",
+    "frontend-modern/package.json": "8d8da916d45b0aaf90d256787ea294b45c4aec89ee9fa3cab773bb8368c8da97",
+    "frontend-modern/package-lock.json": "927b6fd356ececa0de2d44bd68a62a7733a6bf2a93314bb24cc66d1c120e3915",
+    "frontend-modern/vite.config.ts": "de649c3466c8369b7ceff630b72f3733d1123417d6ef1964903450d64d796fb2",
+    "frontend-modern/src/pages/Docs.tsx": "e1d181803722b38ed211517d12495d201c299cc8ebb0a14131c58ac91c7e3a6a",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "213b6216dca650aab7d3ea4c8a66af6ee128f829ba455b5f53cd00a27e62d4cb",
+    "frontend-modern/src/components/shared/PageHeader.tsx": "428d4c02380ba13a38d1ee7404c56b538562df904aecb66f11786ef0dbb8d259",
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c",
+    "frontend-modern/browser-tests/doc-command-help.html": "136202c937d750c014141938d591694552558f6fb91619ebaab9e59bb0605e85",
+    "frontend-modern/browser-tests/doc-command-help.tsx": "81005ed6de41f32d7a581d1115e8c52be974a41ae421eab893ffe0a3a59a42f5",
+    "docs/ISSUE_TRIAGE.md": "f61ca7611dba8c5dc1f6075160c89f2ddfabeb34f7464c05ce31ea75067088a2",
+    "tmp/triage-topic-edit-help.cjs": "899525fd8f0902337ae10eceed8beaac187c47dfc6e93eda37c00abff61bf5f3"
+  },
+  "pixel_review": {
+    "tool": "native view_image; both original PNG contents presented to the model",
+    "captures": [
+      {
+        "file": "desktop-chromium.png",
+        "sha256": "1095752bc837f6488b009b4cf9350cfa7afcdd422f7dc15f6477c6a778422efe",
+        "bytes": 250185
+      },
+      {
+        "file": "phone-webkit.png",
+        "sha256": "aae0592d2bdcefb5b048f2b6b80d2af4dc0201f2c7abaf741fb1c9b537240286",
+        "bytes": 151100
+      }
+    ],
+    "observations": [
+      "Desktop light theme: the complete changed intake paragraph and keyboard focus outline are readable inside the centred guide.",
+      "390px WebKit dark theme: the complete changed paragraph wraps within the phone width, including later-symptom and case/whitespace/hidden-comment distinctions. The long document continues vertically; this is not a claim that the full guide fits the viewport."
+    ]
+  },
+  "scope": "First consuming receipt for mirror repair506d9e01f1 in containing c338f4e6, bound to this receipt commit own parent. Previous browser attempt stopped busy before execution and was not retried that turn. Existing PVE31-method/docs45/mirror62 proof is unchanged; this proves local documentation consumption only, not native installer recovery, live intake, protected publication or reporter resolution."
+}
