@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "68d0f8e4fb9c6324abe6b50abd0d005220f07487",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx",
+    "frontend-modern/src/features/proxmox/pmgPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "6f002a2386067df3d0a94c1448b2fbd98ee67ba35d749f7992c08e605a061093",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx": "e49d0a50ce9412153c185a91dca162415c2c323434c72084184052322c5f9249",
+    "frontend-modern/src/features/proxmox/pmgPresentation.ts": "93170a4eec544086cc425e9111df6834e45fdf4fc28a1e7a9ee66e250c8db14c"
+  },
+  "routes": [
+    "/proxmox/mail-gateway (offline composed consuming shell, not an app-route navigation proof)"
+  ],
+  "states": [
+    "Actual compiled PMG table/drawer/page model, Infrastructure source manager and alert overview, API detail fetch and production CSS. Unchanged Core source-x6az05_a synthetic HTTP projections and timestamps; no live backend, appliance or notification.",
+    "Original invalid CID, string CID, backup failure, recovered and scope-off phases: fetched online detail cannot erase stale/warning resource state, row counters preserve producer values and absent node queues are dashes.",
+    "Explicit-key, recovery and measured-zero controls are labelled synthetic inputs, not repaired producer output. Explicit typed connection aliases match only their own gateway despite duplicate names/host aliases; critical attention, visible-open disclosure recovery and measured zero are preserved.",
+    "Original configured connection alias pmg:gateway is still absent from canonical producer identities. No name/hostname/generated-prefix join, original-issue resolution, current collection-health acceptance or full-surface recovery is claimed."
+  ],
+  "interactions": [
+    "Desktop disclosure clicks and narrow visible-row touch taps open/collapse actual drawer detail. Collapse restores focus to the disclosure. Original summary values and node queue cells are inspected from rendered tables.",
+    "All sixteen unique viewport phases complete across three retained attempts. Completed desktop phases were not replayed: an outer-row XPath error and then tapping a screen-reader-only phone control were corrected only in the driver.",
+    "Same visible disclosure transitions from explicitly scoped critical attention to synthetic resource recovery without a close/open action. All fixture service operations are local GETs; no acknowledgement, notification, provider or customer mutation."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-15T10:47:42.692066Z",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "source": "68d0f8e4fb9c6324abe6b50abd0d005220f07487",
+    "opened_final_captures": [
+      "desktop-invalid-cid.png",
+      "desktop-scope-off.png",
+      "desktop-explicit-key-control.png",
+      "desktop-measured-zero-control.png",
+      "phone-invalid-cid.png",
+      "phone-scope-off.png",
+      "phone-explicit-key-control.png",
+      "phone-measured-zero-control.png"
+    ],
+    "opened_adverse_captures": [
+      "BROWSER-FIRST.tar.xz:desktop-failure.png",
+      "BROWSER-SECOND.tar.xz:phone-failure.png"
+    ],
+    "opened_original_captures": [
+      "ORIGINAL-PIXELS.tar.xz:desktop-invalid-cid.png",
+      "ORIGINAL-PIXELS.tar.xz:narrow-scope-off.png"
+    ],
+    "image_content_presented_to_model": true,
+    "observations": [
+      "Desktop light / original invalid-CID: both row and drawer dots are amber. The connection failure and critical Connection Degraded card remain visible and readable. Its absent scoped resource identity still prevents a drawer attention match; no whole-health recovery is claimed.",
+      "Desktop and dark 390px phone / original scope-off: both cluster node Queue cells are dashes, matching the absent producer queueStatus and summary dashes; no zero is invented. The resource remains amber despite the full endpoint reporting online.",
+      "Explicit-key control: only the first of two identically labelled gateways carries the red critical dot and the drawer Needs attention text with the backup read failure. The second gateway stays unassociated. This alias was supplied only by a labelled synthetic contract input, never inferred in the consumer.",
+      "Measured-zero control: real node totals display zero rather than unknown, with zero subcounts. The existing narrow breakdown truncates, while totals and missing-reading dashes remain legible. The fixture changes only resource/alert state, so its unchanged connection ledger is not evidence of composite recovery.",
+      "Phone dark/touch: the actual visible subject row opens the drawer; long connection/alert text wraps inside the cards. Original-case expanded page overflow checks pass. The current captures do not establish full-app route navigation, live PMG freshness, appliance recovery or all-engine coverage.",
+      "Retained driver failures: the desktop zero frame visibly contains measured zero; its XPath selected an outer inline-detail table row. The first phone attempt remained collapsed after tapping a deliberately screen-reader-only button, not the visible interactive row. Neither required a product edit, a forced action or replay of completed desktop phases."
+    ],
+    "remaining": "Core must return an authoritative connection-to-resource identity and actual consuming projection. Refreshed producer/ordinary-use proof, protected delivery and release availability remain separate."
+  },
+  "source_proof": {
+    "receipt": "source-o7dl1t8o",
+    "source": "68d0f8e4fb9c6324abe6b50abd0d005220f07487",
+    "all_2510_compiled_inputs_match_final_tree": true
+  },
+  "cleanup": "All three browser attempts closed browser and server; source proof guest stop completed.",
+  "evidence": "Web lane RECEIPTS.md, BROWSER.json, PIXELS.json, original HTTP projection and hashes, source-o7dl1t8o archive/binding, all three exact drivers/results/client exits, eight final captures and two adverse captures."
+}
