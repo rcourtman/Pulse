@@ -348,3 +348,34 @@ func TestGuestInventoryAcceptedScopedAndExtendedResponses(t *testing.T) {
 		}
 	})
 }
+
+// Task discovery is independent of current guest telemetry. Refusing a partial
+// task set must not withdraw a valid zero counter or change its observation.
+func TestIncompleteBackupTasksLeaveIndependentGuestCountersUsable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/nodes":
+			fmt.Fprint(w, `{"data":[{"node":"node","status":"online"}]}`)
+		case "/api2/json/nodes/node/tasks":
+			fmt.Fprint(w, `{"data":[]}trailing`)
+		case "/api2/json/nodes/node/qemu/100/status/current":
+			fmt.Fprint(w, `{"data":{"status":"running","diskread":0,"netin":42,"lock":"backup"}}`)
+		default:
+			t.Errorf("unexpected operation %s", r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+	c := backupTestClient(t, server.URL)
+	if tasks, err := c.GetBackupTasks(context.Background()); err == nil || tasks != nil {
+		t.Fatalf("partial tasks accepted: %+v %v", tasks, err)
+	}
+	status, err := c.GetVMStatus(context.Background(), "node", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := status.IOCounters.Effective()
+	if status.Lock != "backup" || status.DiskRead != 0 || status.NetIn != 42 || !p.DiskRead || !p.NetworkIn || p.DiskWrite || status.ObservedAt.IsZero() {
+		t.Fatalf("task failure contaminated independent status: %+v", status)
+	}
+}

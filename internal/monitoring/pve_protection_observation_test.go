@@ -1,9 +1,18 @@
 package monitoring
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -206,5 +215,91 @@ func TestPersistGuestIdentitySkipsUnchangedIdentities(t *testing.T) {
 	}
 	if !firstWrite.ModTime().Equal(secondWrite.ModTime()) {
 		t.Error("unchanged identity triggered a redundant write")
+	}
+}
+
+// A skipped/unreadable non-final log supplies no new guest observation. In
+// particular, it cannot extend the retained running task's alert-intent age.
+func TestPVELogRetryDoesNotRenewRetainedEvidence(t *testing.T) {
+	for _, cancelled := range []bool{false, true} {
+		t.Run(fmt.Sprint(cancelled), func(t *testing.T) {
+			observed := time.Now().Add(-time.Hour).UTC()
+			task := models.BackupTask{ID: "proof-job-100", Instance: "proof", Node: "pve1", VMID: 100, Status: "running", ObservedAt: observed}
+			m := &Monitor{state: models.NewState(), vzdumpJobTaskCache: map[string]vzdumpJobTaskCacheEntry{"proof|job": {tasks: []models.BackupTask{task}}}}
+			client := &unreadableJobLogClient{}
+			ctx := context.Background()
+			if cancelled {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			got := m.synthesizeVzdumpJobGuestTasks(ctx, "proof", client, []models.BackupTask{{ID: "parent", Node: "pve1"}}, map[string]string{"parent": "job"})
+			if !reflect.DeepEqual(got, []models.BackupTask{task}) {
+				t.Fatalf("retained log observation renewed or lost: %+v", got)
+			}
+		})
+	}
+}
+
+type unreadableJobLogClient struct{ PVEClientInterface }
+
+func (*unreadableJobLogClient) GetTaskLog(context.Context, string, string) ([]proxmox.TaskLogLine, error) {
+	return nil, errors.New("fixture unavailable")
+}
+
+func TestPVERunningLogCacheKeepsActualSuccessfulReceipt(t *testing.T) {
+	var failed atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api2/json/nodes":
+			fmt.Fprint(w, `{"data":[{"node":"pve1","status":"online"}]}`)
+		case r.URL.Path == "/api2/json/nodes/pve1/tasks":
+			fmt.Fprint(w, `{"data":[{"upid":"running-job","node":"pve1","type":"vzdump","starttime":1792028280}]}`)
+		case strings.HasSuffix(r.URL.Path, "/log"):
+			if failed.Load() {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			fmt.Fprint(w, `{"data":[{"n":1,"t":"INFO: Starting Backup of VM 100 (qemu)"}]}`)
+		default:
+			t.Errorf("unexpected operation %s", r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Monitor{state: models.NewState()}
+	m.pollBackupTasks(context.Background(), "proof", client)
+	guestTask := func() models.BackupTask {
+		tasks := m.state.GetSnapshot().PVEBackups.BackupTasks
+		if len(tasks) != 2 {
+			t.Fatalf("expected parent and guest tasks: %+v", tasks)
+		}
+		for _, task := range tasks {
+			if task.VMID == 100 {
+				return task
+			}
+		}
+		t.Fatalf("guest100 task absent: %+v", tasks)
+		return models.BackupTask{}
+	}
+	initial := guestTask()
+	if initial.ObservedAt.IsZero() {
+		t.Fatalf("initial running guest observation missing: %+v", initial)
+	}
+	failed.Store(true)
+	m.pollBackupTasks(context.Background(), "proof", client)
+	retained := guestTask()
+	if !reflect.DeepEqual(retained, initial) {
+		t.Fatalf("unreadable running log lost/renewed the successful receipt: %+v -> %+v", initial, retained)
+	}
+	failed.Store(false)
+	m.pollBackupTasks(context.Background(), "proof", client)
+	resumed := guestTask()
+	if !resumed.ObservedAt.After(initial.ObservedAt) {
+		t.Fatalf("ordinary successful running log did not resume: %+v", resumed)
 	}
 }

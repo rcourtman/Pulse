@@ -17,6 +17,32 @@
 
 ## Purpose
 
+### PVE task evidence requires completed collection
+
+PVE node/backup task lists and task logs consume the complete bounded HTTP
+response before publishing rows. Explicit empty arrays remain valid; missing,
+null, invalid UTF-8, error-bearing or ambiguous envelopes/consumed fields do
+not become successful empty or completed task observations. Additive metadata,
+running tasks without status/endtime, filtering and offline-node scope remain.
+If any online node fails, the instance task read fails atomically; the monitor
+retains its prior tasks and original observation times rather than dropping
+running/failed peers. This does not claim the retained tasks are still current.
+
+A task log at the existing line cap is incomplete evidence, not an immutable
+finished-job log. Failed/cancelled/skipped log reads cannot renew a non-final
+cached guest observation. The cache itself stores the original successful read
+time, not merely the published copy; a later complete ordinary read can populate the
+cache, and completed immutable logs remain reusable. Independent guest status,
+zero/presence counters, operation-lock checks and every QGA safety fence are
+unchanged. Source/consumer proof establishes no backup success, guest thaw,
+writes/liveness, native recovery or published availability.
+
+`task_response_test.go`, `pve_backup_task_completion_test.go`,
+`TestIncompleteBackupTasksLeaveIndependentGuestCountersUsable` and
+`TestPVELogRetryDoesNotRenewRetainedEvidence` cover real HTTP failures,
+complete/empty recovery, retained producer timestamps, cache poisoning and the
+independent status boundary.
+
 ### Conflicting saved endpoint pins cannot select certificate trust
 
 For equivalent Proxmox endpoint URL spellings, all nonempty saved member pins
