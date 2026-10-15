@@ -210,7 +210,7 @@ test.describe("VMware alert history resource incidents", () => {
     await expect(historyItem).toContainText(
       "VM vm-201 has VMware alarm VM replication fault (red)",
     );
-    await historyItem.getByRole("button", { name: "Resource" }).click();
+    await historyItem.getByRole("button", { name: /^Resource incidents for / }).click();
 
     const incidentsHeading = page.getByRole("heading", {
       name: "Resource incidents",
