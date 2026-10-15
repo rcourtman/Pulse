@@ -34,7 +34,10 @@ describe('the shipped documentation index', () => {
 
   it.each([
     ['Published release notes on GitHub', 'https://github.com/rcourtman/Pulse/releases'],
-    ['Product screenshots on GitHub', 'https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md'],
+    [
+      'Product screenshots on GitHub',
+      'https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md',
+    ],
   ])('%s explicitly leaves the installed viewer', (label, href) => {
     const link = [...index.querySelectorAll('a')].find((item) => item.textContent === label);
     expect(link?.getAttribute('href')).toBe(href);
