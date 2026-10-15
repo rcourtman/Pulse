@@ -4,7 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
 const root = '/workspace/frontend-modern';
-const output = '/workspace/tmp/guest-metadata-migration-proof';
+const output = '/workspace/tmp/guest-metadata-migration-proof-final';
 const input = '/workspace/tmp/guest-metadata-migration-projections.json';
 const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
@@ -54,11 +54,13 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
     'internal/monitoring/guest_metadata.go',
     'internal/monitoring/guest_metadata_migration_test.go',
     'frontend-modern/browser-tests/guest-metadata-migration.tsx',
+    'frontend-modern/browser-tests/guest-metadata-migration.cjs',
     'frontend-modern/src/hooks/useWorkloads.ts',
     'frontend-modern/src/utils/resourceStateAdapters.ts',
     'frontend-modern/src/components/Workloads/GuestRow.tsx',
     'frontend-modern/src/components/Workloads/GuestDrawer.tsx',
     'frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx',
+    'frontend-modern/src/components/Workloads/useGuestDrawerState.ts',
     'frontend-modern/src/index.css',
     'frontend-modern/package-lock.json',
   ])
@@ -174,7 +176,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         );
         await drawer
           .getByTestId('guest-drawer-facts')
-          .getByText('OpenBSD 7.8', { exact: true })
+          .getByText('OpenBSD • 7.8', { exact: true })
           .waitFor();
         await drawer.getByTestId('guest-drawer-facts').getByText(ip, { exact: true }).waitFor();
         const model = await page.evaluate(() => {
