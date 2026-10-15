@@ -22,6 +22,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Keep the real-client/two-collector transition matrix with the LXC contract
+// entry point, including independent storage while runtime use is unavailable.
+func TestLXCStoppedDetailedStatusTransition(t *testing.T) {
+	testLXCStoppedDetailedStatusTransition(t)
+}
+
 // Both canonical collectors consume complete status observations; a rejected
 // LXC snapshot stays absent for enrichment instead of repeating it in the poll.
 func TestGuestDetailedStatusObservationContract(t *testing.T) {

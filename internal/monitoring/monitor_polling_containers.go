@@ -127,6 +127,11 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 						int(container.VMID),
 					)
 					currentMetrics = mergeContainerRuntimeCounters(currentMetrics, statusSnapshot)
+					// As on the cluster/resources path, the later complete status
+					// owns a stop observed between inventory and detail collection.
+					if statusSnapshot != nil && statusSnapshot.Status != "" {
+						container.Status = statusSnapshot.Status
+					}
 				}
 				diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(
 					makeGuestRateKey(instanceName, "lxc", int(container.VMID)),
@@ -287,11 +292,11 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					sampleTime,
 				)
 
-				// Zero out metrics for non-running containers
+				// Zero runtime usage, not independent platform storage usage.
+				// The alert engine handles non-running metric suppression.
 				if container.Status != "running" {
 					modelContainer.CPU = 0
 					modelContainer.Memory.Usage = 0
-					modelContainer.Disk.Usage = 0
 					modelContainer.NetworkIn = 0
 					modelContainer.NetworkOut = 0
 					modelContainer.DiskRead = 0

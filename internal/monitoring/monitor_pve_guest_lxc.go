@@ -76,6 +76,12 @@ func (m *Monitor) buildContainerFromClusterResource(
 			res.VMID,
 		)
 		currentMetrics = mergeContainerRuntimeCounters(currentMetrics, statusSnapshot)
+		// The container may have stopped after the listing was sampled. Use the
+		// already-fetched complete status before selecting running-only readings
+		// or enrichment; an older listing is not evidence it is still running.
+		if statusSnapshot != nil && statusSnapshot.Status != "" {
+			res.Status = statusSnapshot.Status
+		}
 	}
 	diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(
 		makeGuestRateKey(instanceName, "lxc", res.VMID),
@@ -202,8 +208,10 @@ func (m *Monitor) buildContainerFromClusterResource(
 	// unknown usage (#1477).
 	m.enrichContainerWithAgentLXCFilesystems(instanceName, res.Node, &container, sampleTime)
 
-	// For non-running containers, zero out resource usage metrics to prevent false alerts.
-	// Proxmox may report stale or residual metrics for stopped containers.
+	// Non-running containers have no current runtime CPU/memory/I/O usage.
+	// Platform storage usage remains an independent observation; a stopped
+	// container still occupies its filesystems. Alerting already excludes
+	// metric alerts for non-running guests, so do not invent an empty disk.
 	if container.Status != "running" {
 		log.Debug().
 			Str("container", container.Name).
@@ -214,7 +222,6 @@ func (m *Monitor) buildContainerFromClusterResource(
 
 		container.CPU = 0
 		container.Memory.Usage = 0
-		container.Disk.Usage = 0
 		container.NetworkIn = 0
 		container.NetworkOut = 0
 		container.DiskRead = 0
