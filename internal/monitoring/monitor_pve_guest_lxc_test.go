@@ -22,6 +22,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Both canonical collectors consume complete status observations; a rejected
+// LXC snapshot stays absent for enrichment instead of repeating it in the poll.
+func TestGuestDetailedStatusObservationContract(t *testing.T) {
+	t.Run("qemu-memory-history-and-projection", testGuestDetailedStatusObservationRecovery)
+	t.Run("lxc-counter-and-metadata-recovery", testGuestDetailedContainerStatusRejectsPrefixOncePerPoll)
+}
+
 func TestGuestMemoryCarryForwardExpiryContract(t *testing.T) {
 	t.Run("original-age", testGuestMemoryCarryForwardOriginalAge)
 	t.Run("repeated-polls", testGuestMemoryCarryForwardRepeatedPollsDoNotExtendAge)

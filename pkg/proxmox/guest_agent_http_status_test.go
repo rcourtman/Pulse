@@ -56,13 +56,16 @@ func TestGuestAgentHTTPFailureDefersEveryRead(t *testing.T) {
 						}
 					}))
 					defer server.Close()
-					c := backupTestClient(t, server.URL)
+					// These cases intentionally leave uncertainty alive. A later
+					// fixture may reuse this port, but is not the same guest channel.
+					endpoint := lockEvidenceFixtureEndpoint(t, server.URL)
+					c := backupTestClient(t, endpoint)
 					err := first(context.Background(), c, 105)
 					if !errors.Is(err, ErrGuestAgentDeferred) || GuestAgentDeferredReason(err) != "agent-completion-unverified" {
 						t.Errorf("unknown completion = %v, want completion-unverified deferral", err)
 					}
 					// A separately constructed diagnostic cannot follow with any command.
-					diagnostic := backupTestClient(t, server.URL)
+					diagnostic := backupTestClient(t, endpoint)
 					for later, read := range backupAgentReads() {
 						if err := read(context.Background(), diagnostic, 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
 							t.Errorf("next %s = %v, want VM-wide cooldown", later, err)
@@ -104,7 +107,7 @@ func TestGuestAgentUnrecognisedHTTPStatusDefersEveryRead(t *testing.T) {
 						}
 					}))
 					defer server.Close()
-					c := backupTestClient(t, server.URL)
+					c := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
 					err := first(context.Background(), c, 105)
 					var response *apiResponseError
 					if GuestAgentDeferredReason(err) != "agent-completion-unverified" || !errors.As(err, &response) || response.statusCode != status {
@@ -112,7 +115,7 @@ func TestGuestAgentUnrecognisedHTTPStatusDefersEveryRead(t *testing.T) {
 					}
 					before := configs.Load()
 					for later, read := range backupAgentReads() {
-						if err := read(context.Background(), backupTestClient(t, server.URL), 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+						if err := read(context.Background(), backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL)), 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
 							t.Errorf("next %s bypassed uncertainty: %v", later, err)
 						}
 					}
@@ -154,14 +157,14 @@ func TestGuestAgentUnrecognisedHTTPStatusSharesAliasesAndResumes(t *testing.T) {
 			defer a.Close()
 			defer b.Close()
 			defer independent.Close()
-			cc := NewClusterClient("unrecognised-http", ClientConfig{Host: a.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture"}, []string{a.URL, b.URL}, nil)
+			cc := NewClusterClient("unrecognised-http", ClientConfig{Host: lockEvidenceFixtureEndpoint(t, a.URL), TokenName: "fixture@pve!pulse", TokenValue: "fixture"}, []string{lockEvidenceFixtureEndpoint(t, a.URL), lockEvidenceFixtureEndpoint(t, b.URL)}, nil)
 			if _, err := cc.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
 				t.Errorf("cluster cleared unverified completion: %v", err)
 			}
 			if commands.Load() != 1 {
 				t.Errorf("cluster failed over the guest command: %d", commands.Load())
 			}
-			for _, endpoint := range []string{a.URL, b.URL} {
+			for _, endpoint := range []string{lockEvidenceFixtureEndpoint(t, a.URL), lockEvidenceFixtureEndpoint(t, b.URL)} {
 				for name, read := range backupAgentReads() {
 					if err := read(context.Background(), backupTestClient(t, endpoint), 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
 						t.Errorf("alias %s bypassed uncertainty: %v", name, err)
@@ -171,16 +174,16 @@ func TestGuestAgentUnrecognisedHTTPStatusSharesAliasesAndResumes(t *testing.T) {
 			if commands.Load() != 1 {
 				t.Errorf("aliases sent extra commands: %d", commands.Load())
 			}
-			if _, err := backupTestClient(t, b.URL).GetVMAgentInfo(context.Background(), "node", 106); err != nil {
+			if _, err := backupTestClient(t, lockEvidenceFixtureEndpoint(t, b.URL)).GetVMAgentInfo(context.Background(), "node", 106); err != nil {
 				t.Errorf("independent VM was blocked: %v", err)
 			}
-			if _, err := backupTestClient(t, independent.URL).GetVMAgentInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
+			if _, err := backupTestClient(t, lockEvidenceFixtureEndpoint(t, independent.URL)).GetVMAgentInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
 				t.Errorf("independent endpoint inherited another endpoint's cooldown: %v", err)
 			}
 			// Expire only this fixture's existing cooldown. This is not a
 			// native recovery or a replay of an uncertain provider command.
 			guestAgentGuards.Lock()
-			for _, endpoint := range []string{a.URL, b.URL} {
+			for _, endpoint := range []string{lockEvidenceFixtureEndpoint(t, a.URL), lockEvidenceFixtureEndpoint(t, b.URL)} {
 				key := guestAgentGuardKey{endpoint: endpoint + "/api2/json", vmid: 105}
 				entry := guestAgentGuards.entries[key]
 				entry.until = time.Now().Add(-time.Second)
@@ -189,7 +192,7 @@ func TestGuestAgentUnrecognisedHTTPStatusSharesAliasesAndResumes(t *testing.T) {
 			guestAgentGuards.Unlock()
 			healthy.Store(true)
 			for name, read := range backupAgentReads() {
-				if err := read(context.Background(), backupTestClient(t, b.URL), 105); err != nil {
+				if err := read(context.Background(), backupTestClient(t, lockEvidenceFixtureEndpoint(t, b.URL)), 105); err != nil {
 					t.Errorf("known healthy admission did not resume %s: %v", name, err)
 				}
 			}
@@ -222,11 +225,11 @@ func TestGuestAgentHTTPFailureDoesNotFailOver(t *testing.T) {
 	a, b := httptest.NewServer(handler), httptest.NewServer(handler)
 	defer a.Close()
 	defer b.Close()
-	cc := NewClusterClient("http-uncertainty", ClientConfig{Host: a.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture"}, []string{a.URL, b.URL}, nil)
+	cc := NewClusterClient("http-uncertainty", ClientConfig{Host: lockEvidenceFixtureEndpoint(t, a.URL), TokenName: "fixture@pve!pulse", TokenValue: "fixture"}, []string{lockEvidenceFixtureEndpoint(t, a.URL), lockEvidenceFixtureEndpoint(t, b.URL)}, nil)
 	if _, err := cc.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
 		t.Errorf("first command not deferred: %v", err)
 	}
-	for _, endpoint := range []string{a.URL, b.URL} {
+	for _, endpoint := range []string{lockEvidenceFixtureEndpoint(t, a.URL), lockEvidenceFixtureEndpoint(t, b.URL)} {
 		if _, err := backupTestClient(t, endpoint).GetVMAgentInfo(context.Background(), "migrated", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
 			t.Errorf("alias escaped cooldown: %v", err)
 		}
@@ -277,7 +280,7 @@ func TestGuestAgentHTTPExplicitRefusalsRemainErrors(t *testing.T) {
 				backupAgentPayload(w, r)
 			}))
 			defer server.Close()
-			c := backupTestClient(t, server.URL)
+			c := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
 			if _, err := c.GetVMAgentInfo(context.Background(), "node", 105); err == nil || errors.Is(err, ErrGuestAgentDeferred) || !strings.Contains(err.Error(), fmt.Sprintf("API error %d", tc.status)) {
 				t.Fatalf("explicit refusal lost: %v", err)
 			}
@@ -322,7 +325,7 @@ func TestGuestAgentHTTPAmbiguousFailuresDoNotClearAdmission(t *testing.T) {
 				fmt.Fprint(w, tc.body)
 			}))
 			defer server.Close()
-			c := backupTestClient(t, server.URL)
+			c := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
 			if _, err := c.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
 				t.Errorf("ambiguous error released admission: %v", err)
 			}
@@ -361,7 +364,7 @@ func TestGuestAgentHTTPTerminalFailuresRemainCommandBound(t *testing.T) {
 				backupAgentPayload(w, r)
 			}))
 			defer server.Close()
-			c := backupTestClient(t, server.URL)
+			c := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
 			if _, err := c.get(context.Background(), "/nodes/node/qemu/105/agent/"+tc.command); err == nil || errors.Is(err, ErrGuestAgentDeferred) {
 				t.Fatalf("known terminal failure lost: %v", err)
 			}
@@ -381,7 +384,7 @@ func TestGuestAgentHTTPOrdinaryRequestPreservesStatusAndError(t *testing.T) {
 		fmt.Fprint(w, "API error 403: permission denied")
 	}))
 	defer server.Close()
-	c := backupTestClient(t, server.URL)
+	c := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
 	_, err := c.get(context.Background(), "/nodes")
 	var response *apiResponseError
 	if !errors.As(err, &response) || response.statusCode != 502 || response.guestCommandRejected || err.Error() != "API error 502: API error 403: permission denied" {
@@ -407,7 +410,7 @@ func TestGuestAgentHTTPUncertaintyExpiresAndKeepsOtherVMsIndependent(t *testing.
 		backupAgentPayload(w, r)
 	}))
 	defer server.Close()
-	c := backupTestClient(t, server.URL)
+	c := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
 	if _, err := c.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
 		t.Fatal(err)
 	}
@@ -440,5 +443,49 @@ func TestGuestAgentHTTPUncertaintyExpiresAndKeepsOtherVMsIndependent(t *testing.
 	}
 	if calls.Load() != 3 {
 		t.Errorf("wire commands = %d, want uncertain/other/resumed", calls.Load())
+	}
+}
+
+// Keep an older uncertainty fence on the same listener while this HTTP-error
+// fixture runs. Listener/port reuse cannot identify an independent test guest.
+func TestGuestAgentHTTPFailureFixtureRetainsIndependentUncertainty(t *testing.T) {
+	var commands atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
+		commands.Add(1)
+		w.WriteHeader(http.StatusConflict)
+		fmt.Fprint(w, "upstream API error 403: permission denied")
+	}))
+	defer server.Close()
+	previous := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL)+"/earlier")
+	release, err := acquireGuestAgent(previous.baseURL, 105)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release(true)
+	key, _ := guestAgentEndpointKey(previous.baseURL)
+	guestAgentGuards.Lock()
+	prior := guestAgentGuards.entries[guestAgentGuardKey{endpoint: key, vmid: 105}]
+	guestAgentGuards.Unlock()
+	current := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
+	if _, err := current.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
+		t.Fatalf("HTTP fixture bypassed its own command or trusted the quoted refusal: %v", err)
+	}
+	for name, read := range backupAgentReads() {
+		if err := read(context.Background(), current, 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+			t.Errorf("%s bypassed this fixture's uncertainty: %v", name, err)
+		}
+	}
+	if _, err := previous.GetVMAgentInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+		t.Fatal("fixture isolation cleared an existing uncertainty fence")
+	}
+	guestAgentGuards.Lock()
+	unchanged := guestAgentGuards.entries[guestAgentGuardKey{endpoint: key, vmid: 105}] == prior
+	guestAgentGuards.Unlock()
+	if !unchanged || commands.Load() != 1 {
+		t.Fatal("fixture isolation changed earlier work or sent follow-up commands")
 	}
 }

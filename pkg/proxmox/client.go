@@ -2500,18 +2500,12 @@ func (c *Client) GetVMStatus(ctx context.Context, node string, vmid int) (*VMSta
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data VMStatus `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	status, err := readGuestStatus[VMStatus](resp)
+	if err != nil {
 		return nil, err
 	}
-
-	result.Data.ObservedAt = time.Now().UTC()
-	return &result.Data, nil
+	status.ObservedAt = time.Now().UTC()
+	return status, nil
 }
 
 // GetContainerStatus returns detailed container status using real-time endpoint
@@ -2520,18 +2514,12 @@ func (c *Client) GetContainerStatus(ctx context.Context, node string, vmid int) 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data Container `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	status, err := readGuestStatus[Container](resp)
+	if err != nil {
 		return nil, err
 	}
-
-	result.Data.ObservedAt = time.Now().UTC()
-	return &result.Data, nil
+	status.ObservedAt = time.Now().UTC()
+	return status, nil
 }
 
 // ClusterResource represents a resource from /cluster/resources

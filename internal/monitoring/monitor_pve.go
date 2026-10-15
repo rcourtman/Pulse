@@ -122,7 +122,10 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 	if len(prefetchedStatus) > 0 {
 		status = prefetchedStatus[0]
 	}
-	if isRunning && status == nil {
+	// An explicitly prefetched nil records a failed snapshot, not an unread
+	// one. Keep the same absence for counters and metadata instead of sending a
+	// second status request within this poll after rejecting its first reply.
+	if isRunning && len(prefetchedStatus) == 0 {
 		status = m.fetchContainerStatusSnapshot(
 			ctx,
 			client,
