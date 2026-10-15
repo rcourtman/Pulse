@@ -41,6 +41,11 @@ whole-HTTP-fetch reservation test also rejects a migrated duplicate, including
 after its scheduling hold expires. Consuming desktop/narrow browser proof uses
 the actual final producer projections through the production Workloads adapter,
 row and drawer; it is controlled surface proof, not native migration acceptance.
+The existing Windows bootstrap identity control uses distinct connection/VMID
+identities for Linux and unknown-OS peers. A same-VMID node move instead preserves
+the observed Windows metadata and sends no optional Linux read; the destination
+gets independent status memory, not a copy of the source node's memory cache.
+Its existing expired-OS/reinstalled-Linux and measured-zero controls still apply.
 
 ### Filesystem diagnostics exclude reply payloads
 
