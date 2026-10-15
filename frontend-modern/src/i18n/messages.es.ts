@@ -41,6 +41,9 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.assistant.subject': '{level} {alertType} en {resourceName}',
   'alerts.assistant.title': 'Investigacion de alerta adjunta',
   'alerts.assistant.unlockedTitle': 'Preguntar a Pulse Assistant sobre esta alerta',
+  'alerts.assistant.iconLabel': 'Preguntar a Pulse Assistant sobre {alertType} en {resourceName}',
+  'alerts.assistant.iconLabelAt':
+    'Preguntar a Pulse Assistant sobre {alertType} en {resourceName}, {startedAt}',
   'alerts.assistant.explain.menuLabel': 'Explicar con Assistant',
   'alerts.assistant.explain.menuHint': 'Usar esta alerta como contexto de solo lectura',
   'alerts.assistant.patrol.chevron': 'Mas acciones para esta alerta',

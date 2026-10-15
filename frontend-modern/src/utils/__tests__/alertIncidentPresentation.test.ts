@@ -48,6 +48,8 @@ import {
   getAlertResourceIncidentToggleButtonClass,
   getAlertResourceIncidentTruncatedEventsLabel,
   normalizeAlertIncidentStatus,
+  getAlertHistoryResourceActionLabel,
+  getAlertHistoryTimelineActionLabel,
 } from '@/utils/alertIncidentPresentation';
 
 describe('alertIncidentPresentation', () => {
@@ -244,5 +246,22 @@ describe('alertIncidentPresentation', () => {
     expect(getAlertResourceIncidentTruncatedEventsLabel(6)).toBe('Showing last 6 events');
     expect(getAlertResourceIncidentTruncatedEventsLabel(6, 6)).toBe('Showing 6 events');
     expect(getAlertResourceIncidentTruncatedEventsLabel(6, 9)).toBe('Showing last 6 of 9 events');
+  });
+});
+
+describe('alert history row action names', () => {
+  it('names the alert, resource and start time, led by the visible label', () => {
+    const base = { alertTitle: 'CPU usage', resourceName: 'db-01', startedAt: '15 Oct, 11:44' };
+    expect(getAlertHistoryTimelineActionLabel({ ...base, open: false })).toBe(
+      'Timeline for CPU usage on db-01, 15 Oct, 11:44',
+    );
+    expect(getAlertHistoryTimelineActionLabel({ ...base, open: true })).toBe(
+      'Hide timeline for CPU usage on db-01, 15 Oct, 11:44',
+    );
+    expect(getAlertHistoryTimelineActionLabel({ ...base, resourceName: '', open: false })).toBe(
+      'Timeline for CPU usage, 15 Oct, 11:44',
+    );
+    expect(getAlertHistoryResourceActionLabel('db-01')).toBe('Resource incidents for db-01');
+    expect(getAlertHistoryResourceActionLabel(' ')).toBe('Resource incidents for this resource');
   });
 });

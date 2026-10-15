@@ -480,6 +480,14 @@ describe('i18n foundation', () => {
       expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.menuLabel']).toContain('Patrol');
       expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.title']).toContain('Patrol');
       expect(I18N_MESSAGES[locale]['alerts.assistant.explain.menuLabel']).toContain('Assistant');
+      // History rows name each Assistant button after its alert, resource
+      // and start time; every locale must keep all three placeholders.
+      for (const key of ['alerts.assistant.iconLabel', 'alerts.assistant.iconLabelAt'] as const) {
+        expect(I18N_MESSAGES[locale][key]).toContain('Pulse Assistant');
+        expect(I18N_MESSAGES[locale][key]).toContain('{alertType}');
+        expect(I18N_MESSAGES[locale][key]).toContain('{resourceName}');
+      }
+      expect(I18N_MESSAGES[locale]['alerts.assistant.iconLabelAt']).toContain('{startedAt}');
       expect(
         t(
           'alerts.assistant.action.investigate',

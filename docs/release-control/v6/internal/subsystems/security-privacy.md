@@ -741,6 +741,12 @@ command, prompt, or remediation payload into the model beyond the existing
 scoped-investigation context, so it adds no new disclosure surface and the
 existing resource-policy redaction still governs any model-bound context.
 
+The Alerts > History Assistant label keys (`alerts.assistant.iconLabel`,
+`alerts.assistant.iconLabelAt`) render the alert type, resource name and start
+time into the operator's own browser as accessible names. They are local UI
+copy: they add nothing to the Assistant handoff, the model-bound context or
+any request, so resource-policy redaction is unaffected.
+
 Docker and Podman container CPU normalization may expose numeric raw per-core
 CPU percent, normalized capacity percent, and reporting host CPU count in
 resource or alert metadata. Those fields are operational usage telemetry only;

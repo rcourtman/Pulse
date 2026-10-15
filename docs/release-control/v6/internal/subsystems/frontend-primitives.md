@@ -9029,6 +9029,16 @@ Spanish catalogs. `AlertIncidentSynthesisSummary.test.tsx`,
 `useAlertOverviewState.test.tsx`, and `i18n.test.ts` pin inspectability,
 uncertainty wording, and additive group behavior at the frontend boundary.
 
+### Repeated row controls carry row-specific names
+
+A control repeated on every row of a table or card list (Timeline, Resource,
+an icon-only action) gets an accessible name that says which row it acts on,
+starting with its visible label so speech input still matches it, and a
+toggle reports `aria-expanded`. Localized names go through catalog keys with
+placeholders for the row subject (`alerts.assistant.iconLabel`,
+`alerts.assistant.iconLabelAt`); every locale keeps those placeholders
+(`i18n.test.ts`).
+
 ### Mobile destinations are links and update evidence stays explicit
 
 Fixed mobile destinations and menu destinations that navigate are anchors with

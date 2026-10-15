@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "c509bbc31450ae659dab04d0b08ce1914d061c86",
+  "verified_at": "2026-10-15T12:02:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx",
+    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/utils/alertIncidentPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx": "c4458120850efa088a9187fb1c088879da5171144f450b09b0f4a8ef87a1aea1",
+    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx": "d3c7190ec951693d9ae658161c65efc87bcd39cd707302cada7c87eb960eccb0",
+    "frontend-modern/src/i18n/messages.de.ts": "f81943c20a804f8b2eb9f29733dbb8819e8872df54a0b731ca7e8db8d2f62857",
+    "frontend-modern/src/i18n/messages.es.ts": "6478e3164c61261b6336f1b6ace948a86cc5f00e0d3e0fa05a3fd1b58ed374e9",
+    "frontend-modern/src/i18n/messages.ts": "308e3785b51f3ce6995ff1ce995eb0ba0f65ab8721573f2fdf3e425b59213aca",
+    "frontend-modern/src/utils/alertIncidentPresentation.ts": "de64c875d77ef7fca28c2ab4a5bf5a2bec1102604b3ad308cb980743219dfda2"
+  },
+  "routes": [
+    "/alerts/history"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): 91 buttons named \"Timeline\", 91 \"Resource\" and 45 \"Ask Pulse Assistant about this alert\" on the mock estate history",
+    "After (desktop 1280): 75 rendered Timeline and Assistant buttons carry 75 distinct names, e.g. \"Timeline for Memory Limit on inventory-api, Thursday, 15 October 2026 at 12:56:37\" and \"Ask Pulse Assistant about Resource Health on esxi-07.lab.local, ...\"; Resource buttons repeat only for rows on the same resource",
+    "After (phone 375): 44 card controls with 44 distinct names; an open timeline reads \"Hide timeline for ...\" with aria-expanded true; no horizontal overflow",
+    "Visible labels and the Assistant hover title are unchanged"
+  ],
+  "interactions": [
+    "Counted accessible names of every rendered history row control at 1280px and 375px",
+    "Opened a phone card timeline and read its name and aria-expanded"
+  ]
+}
