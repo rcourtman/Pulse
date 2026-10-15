@@ -144,9 +144,8 @@ describe('manual backup safety help', () => {
     );
     const labels = [...links].map((link) => link.textContent);
     expect(labels[0]).toBe('Backup safety');
-    expect(links[0].closest('p')?.textContent).toContain(
-      "an earlier guest request's state is uncertain",
-    );
+    const warning = links[0].closest('p')?.textContent?.replace(/\s+/g, ' ');
+    expect(warning).toContain("an earlier guest request's state is uncertain");
     expect(labels.filter((text) => text === 'manual backup precaution')).toHaveLength(1);
     const target = render(guide, 'VM_DISK_MONITORING');
     expect(target.querySelector('#backup-safety')?.textContent).toBe('Backup safety');
