@@ -832,7 +832,7 @@ func (m *Monitor) pollGuestsWithFallback(
 	// Always try the efficient cluster/resources endpoint first
 	// This endpoint works on both clustered and standalone nodes
 	// Testing confirmed it works on standalone nodes like pimox
-	useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodeEffectiveStatus)
+	useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodes, nodeEffectiveStatus)
 
 	if !useClusterEndpoint {
 		if ctx.Err() != nil {

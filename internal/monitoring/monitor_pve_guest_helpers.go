@@ -10,99 +10,74 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Only a node missing/offline in the current provider inventory can need the
+// existing offline grace policy. An actually online node with no guests is an
+// authoritative empty result, not a gap to fill with deleted workloads.
 func (m *Monitor) preserveGuestsForGracePeriod(
 	instanceName string,
 	resources []proxmox.ClusterResource,
-	prevVMs []models.VM,
-	prevContainers []models.Container,
+	previous previousGuestContext,
+	nodes []proxmox.Node,
 	nodeEffectiveStatus map[string]string,
 	allVMs []models.VM,
 	allContainers []models.Container,
 ) ([]models.VM, []models.Container) {
-	// Preserve VMs and containers from nodes within grace period
-	// The cluster/resources endpoint doesn't return VMs/containers from nodes Proxmox considers offline,
-	// but we want to keep showing them if the node is within grace period
-	// Count previous resources for this instance
-	prevVMCount := len(prevVMs)
-	prevContainerCount := len(prevContainers)
-
-	// Build map of which nodes are covered by current resources
+	onlineNodes := make(map[string]bool, len(nodes))
+	for _, node := range nodes {
+		onlineNodes[node.Node] = strings.EqualFold(strings.TrimSpace(node.Status), "online")
+	}
 	nodesWithResources := make(map[string]bool)
+	observedGuests := make(map[int]bool, len(resources))
 	for _, res := range resources {
 		nodesWithResources[res.Node] = true
+		// VMIDs are cluster-wide. A migration or conversion to a template is
+		// positive inventory evidence even when the old node is in grace.
+		observedGuests[res.VMID] = true
 	}
 
-	log.Debug().
-		Str("instance", instanceName).
-		Int("nodesInResources", len(nodesWithResources)).
-		Int("totalVMsFromResources", len(allVMs)).
-		Int("totalContainersFromResources", len(allContainers)).
-		Int("prevVMs", prevVMCount).
-		Int("prevContainers", prevContainerCount).
-		Msg("Cluster resources received, checking for grace period preservation")
-
-	// If we got ZERO resources but had resources before, and we have no node data,
-	// this likely means the cluster health check failed. Preserve everything.
-	if len(allVMs) == 0 && len(allContainers) == 0 &&
-		(prevVMCount > 0 || prevContainerCount > 0) &&
-		len(nodeEffectiveStatus) == 0 {
-		log.Warn().
-			Str("instance", instanceName).
-			Int("prevVMs", prevVMCount).
-			Int("prevContainers", prevContainerCount).
-			Msg("Cluster returned zero resources but had resources before - likely cluster health issue, preserving all previous resources")
-
-		// Preserve all previous VMs and containers for this instance
-		allVMs = append(allVMs, prevVMs...)
-		allContainers = append(allContainers, prevContainers...)
-	}
-
-	// Check for nodes that are within grace period but not in cluster/resources response
-	preservedVMCount := 0
-	preservedContainerCount := 0
-	for nodeName, effectiveStatus := range nodeEffectiveStatus {
-		if effectiveStatus == "online" && !nodesWithResources[nodeName] {
-			// This node is within grace period but Proxmox didn't return its resources
-			// Preserve previous VMs and containers from this node
-			vmsBefore := len(allVMs)
-			containersBefore := len(allContainers)
-
-			// Preserve VMs from this node
-			for _, vm := range prevVMs {
-				if vm.Node == nodeName {
-					allVMs = append(allVMs, vm)
-				}
-			}
-
-			// Preserve containers from this node
-			for _, container := range prevContainers {
-				if container.Node == nodeName {
-					allContainers = append(allContainers, container)
-				}
-			}
-
-			vmsPreserved := len(allVMs) - vmsBefore
-			containersPreserved := len(allContainers) - containersBefore
-			preservedVMCount += vmsPreserved
-			preservedContainerCount += containersPreserved
-
-			log.Info().
-				Str("instance", instanceName).
-				Str("node", nodeName).
-				Int("vmsPreserved", vmsPreserved).
-				Int("containersPreserved", containersPreserved).
-				Msg("Preserved VMs/containers from node in grace period")
+	retainedNodes := make(map[string]struct{})
+	for node, effectiveStatus := range nodeEffectiveStatus {
+		if effectiveStatus == "online" && !onlineNodes[node] && !nodesWithResources[node] {
+			retainedNodes[node] = struct{}{}
 		}
 	}
-
-	if preservedVMCount > 0 || preservedContainerCount > 0 {
-		log.Info().
-			Str("instance", instanceName).
-			Int("totalPreservedVMs", preservedVMCount).
-			Int("totalPreservedContainers", preservedContainerCount).
-			Msg("Grace period preservation complete")
+	// Preserve the existing unknown-node-data fallback, without treating an
+	// explicit empty inventory from known online nodes as an unknown outage.
+	if len(nodes) == 0 && len(nodeEffectiveStatus) == 0 && len(allVMs) == 0 && len(allContainers) == 0 {
+		for _, vm := range previous.vms {
+			retainedNodes[vm.Node] = struct{}{}
+		}
+		for _, ct := range previous.containers {
+			retainedNodes[ct.Node] = struct{}{}
+		}
+	}
+	if len(retainedNodes) == 0 {
+		return allVMs, allContainers
 	}
 
+	// Read-state projections omit some counters and may contain linked-agent
+	// readings. Retain the complete source-owned tuples and original times,
+	// just as the failed per-node enumeration path does.
+	vms, containers := m.retainedGuestsForFailedNodes(instanceName, retainedNodes, previous)
+	preservedVMs, preservedContainers := 0, 0
+	for _, vm := range vms {
+		if !observedGuests[vm.VMID] {
+			allVMs = append(allVMs, vm)
+			preservedVMs++
+		}
+	}
+	for _, ct := range containers {
+		if !observedGuests[ct.VMID] {
+			allContainers = append(allContainers, ct)
+			preservedContainers++
+		}
+	}
+	if preservedVMs > 0 || preservedContainers > 0 {
+		log.Info().Str("instance", instanceName).
+			Int("preservedVMs", preservedVMs).
+			Int("preservedContainers", preservedContainers).
+			Msg("Retained guest observations for nodes without current enumeration")
+	}
 	return allVMs, allContainers
 }
 

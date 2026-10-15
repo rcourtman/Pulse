@@ -17,6 +17,33 @@
 
 ## Purpose
 
+### Efficient guest inventory distinguishes deletion from node grace
+
+A completed cluster guest inventory with no guests on a currently online node
+is authoritative removal, including the last VM/container and template-only
+results. Effective Online alone is not evidence of a current node sighting:
+the efficient collector also carries the raw `/nodes` generation. Only nodes
+missing/offline there, still Online under the existing node grace policy and
+absent from the guest inventory retain prior guests. The existing fallback
+when no node data is available remains conservative; expired/never-online nodes
+retain their previous removal policy.
+
+Grace retention uses complete Proxmox-owned tuples, not reduced or linked-agent
+read-state enrichment. Values and original observation times remain unchanged
+and contribute no new History samples. A cluster-wide guest ID positively
+observed at new coordinates or as a template cannot be resurrected at an old
+node by grace retention. Other connections with the same node/VMID are not
+changed. Normal recovery on the same live connection advances observations;
+no cache, extra request, guest command, safety interval, TLS or schema changes.
+
+`efficient_guest_inventory_lifecycle_test.go` exercises real node/resource HTTP
+reads and ordinary owned publication for accepted emptiness, offline/omitted
+grace, expiry, unknown node data, templates, moves and subsequent recovery.
+Consuming desktop/narrow Workloads table/drawer verification uses actual final
+producer projections. These controlled source/surface checks are not native
+thaw, filesystem writes/liveness, restart/fresh-install or installed recovery.
+
+
 ### PVE task evidence requires completed collection
 
 PVE node/backup task lists and task logs consume the complete bounded HTTP
