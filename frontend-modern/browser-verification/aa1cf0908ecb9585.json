@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "c39a8aeee2e1dc103d94a5429c547f9435d0922a",
+  "verified_at": "2026-10-15T06:24:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts": "cda396adc1a33f2c210cfd8fd89b8a1b0124f6273a09174fdc46e50d6b0d6c1e"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual production Backups table, calendar producer, activity chart, router, API client and shipped CSS compiled from the containing source, using the existing committed backup-inventory fixture and synthetic PVE/PBS inventories. Playwright 1.56.1; Chromium desktop light and WebKit narrow touch dark.",
+    "London spring window includes 29 March; autumn day includes its final hour, exact-now and both repeated-hour records; the autumn-crossing window includes the early first date. Lord Howe preserves the half-hour transition date. Every chart range has one column per local date.",
+    "Count/volume and selected-day URL/table agree. Future and prior-window items do not enter the chart, while clear-filter restores all inventory rows. Provider posture and future/unknown-age warnings remain independent.",
+    "All eight retained desktop/phone captures were opened through native view_image and inspected: selected date, nonzero bar, matching 2/4/3/2 table rows, warnings and controls are legible without document horizontal overflow. Synthetic presentation evidence, not native backup/guest/installed recovery or release acceptance."
+  ],
+  "interactions": [
+    "In four clock-change scenarios at both widths, select the seven-day range, focus the target column and activate it by desktop Enter or phone touch; verify selected aria state, day URL and matching rows.",
+    "Switch Count to Volume and verify the same local-day byte total; change to 30d, 90d, 1y and back to 7d while keeping the selected local date. Clear its filter and verify all inventory rows return.",
+    "152 successful checks across eight cases, including exact-now/future boundaries, unique calendar columns, read-only single inventory requests and no page errors. Eight captures natively reviewed.",
+    "Two earlier fixture-only failures are retained: Node/browser date punctuation mismatch, then an incorrect expected byte-unit label. Browser-local labels and the existing formatBytes vocabulary corrected the driver only; source and compiled assets did not change."
+  ]
+}
