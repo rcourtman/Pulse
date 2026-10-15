@@ -57,7 +57,7 @@ integration against their own vCenter before production use.
 - [Automatic updates](AUTO_UPDATE.md)
 - [Centralized agent management](CENTRALIZED_MANAGEMENT.md) (Pro)
 - [Operational trust model](OPERATIONAL_TRUST.md)
-- [Current product screenshots](SCREENSHOTS.md)
+- [Product screenshots on GitHub](https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md)
 
 ## Pulse Intelligence
 
@@ -100,8 +100,12 @@ paths rather than defaults in self-hosted setup.
 - [REST API](API.md)
 - [Architecture](../ARCHITECTURE.md)
 - [Contributing](../CONTRIBUTING.md)
-- [Release notes index](RELEASE_NOTES.md)
+- [Published release notes on GitHub](https://github.com/rcourtman/Pulse/releases)
 - [Development transparency disclosure](AI_TRANSPARENCY.md)
+
+Release notes and screenshots open on GitHub, not in this installation's
+shipped documentation. A release packet in the source repository can be an
+unpublished draft; use the published release's notes before choosing an update.
 
 Detailed design notes and dated migration specifications may remain in this
 directory for maintainers, but they are not operator setup guides unless they
