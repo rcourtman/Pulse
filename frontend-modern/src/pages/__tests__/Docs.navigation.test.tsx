@@ -37,6 +37,7 @@ describe('Docs fragment activation through the router', () => {
       setTimeout(() => callback(0), 0),
     );
     vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+    vi.stubGlobal('scrollTo', vi.fn());
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
       configurable: true,
       value: scroll,
