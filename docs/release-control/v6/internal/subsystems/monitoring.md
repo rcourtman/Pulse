@@ -8095,3 +8095,16 @@ preservation. Consumer/HTTP and desktop/narrow evidence remains separate from
 native appliance recovery and release availability.
 
 The full PMG detail handler consumes the same canonical view reference as the slim resource. It preserves degraded collection health and optional configured attribution without an extra collection request; `TestContract_PMGConfiguredReferenceInFullDetail` covers both legacy absence and explicit reference.
+
+### Future-dated backup evidence and alert evaluation
+
+The shared PVE/PBS/mock backup-age evaluator retains an existing affected
+condition when its only reported success is in the future. A usable success
+for that subject can still be evaluated, and unrelated guests continue normally.
+Unusable evidence is surfaced via the existing system-scoped backup-evaluation
+warning with stable identity, deduplication and clock guidance; a successful
+rollup read alone cannot clear it. Deliberate disablement still clears it.
+`TestBackupFutureSuccessWarningThroughReadState` exercises persisted point
+replacement, independent guest alerts, repeated evidence, served-state output
+and genuine fresh recovery. This does not alter stored timestamps, rollup
+aggregation, backup-server clocks or native guest/backup operations.

@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -171,18 +172,23 @@ func BuildGuestKey(instance, node string, vmID int) string {
 }
 
 type backupRecord struct {
-	key          string
-	vmID         string
-	lookup       GuestLookup
-	fallbackName string
-	instance     string
-	node         string
-	subjectType  string
-	source       string
-	rollupID     string
-	providers    []recovery.Provider
-	lastTime     time.Time
+	key           string
+	vmID          string
+	lookup        GuestLookup
+	fallbackName  string
+	instance      string
+	node          string
+	subjectType   string
+	source        string
+	rollupID      string
+	providers     []recovery.Provider
+	lastTime      time.Time
+	futureSuccess bool
 }
+
+// ErrBackupSuccessTimeInFuture marks unusable age evidence, not a failed backup.
+// Other subjects and any usable success for this subject are still evaluated.
+var ErrBackupSuccessTimeInFuture = errors.New("backup success time is in the future")
 
 // BackupInventoryScope carries monitoring-owned inventory readiness into backup
 // alert evaluation. It keeps orphan detection from racing ahead of Proxmox
@@ -633,8 +639,8 @@ func (m *Manager) CheckBackups(
 	rollups []recovery.ProtectionRollup,
 	guestsByKey map[string]GuestLookup,
 	guestsByVMID map[string][]GuestLookup,
-) {
-	m.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, nil)
+) error {
+	return m.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, nil)
 }
 
 // CheckBackupsWithInventory evaluates backup rollups with optional monitoring
@@ -644,7 +650,7 @@ func (m *Manager) CheckBackupsWithInventory(
 	guestsByKey map[string]GuestLookup,
 	guestsByVMID map[string][]GuestLookup,
 	inventoryScope *BackupInventoryScope,
-) {
+) error {
 	m.mu.RLock()
 	enabled := m.config.Enabled
 	backupCfg := m.config.BackupDefaults
@@ -657,31 +663,37 @@ func (m *Manager) CheckBackupsWithInventory(
 
 	if !enabled || !backupCfg.Enabled {
 		m.clearBackupAlerts()
-		return
+		return nil
 	}
 
 	if backupCfg.WarningDays <= 0 && backupCfg.CriticalDays <= 0 {
 		m.clearBackupAlerts()
-		return
+		return nil
 	}
 
+	now := time.Now()
 	records := make(map[string]*backupRecord)
 
 	updateRecord := func(key string, candidate backupRecord) {
 		if key == "" {
 			return
 		}
+		candidate.futureSuccess = candidate.lastTime.After(now)
 		if existing, ok := records[key]; ok {
-			if candidate.lastTime.After(existing.lastTime) {
+			futureSuccess := existing.futureSuccess || candidate.futureSuccess
+			// A timestamp ahead of this evaluator's clock cannot establish
+			// recovery or displace a usable backup from another provider.
+			existingFuture := existing.lastTime.After(now)
+			if (existingFuture && !candidate.futureSuccess) ||
+				(existingFuture == candidate.futureSuccess && candidate.lastTime.After(existing.lastTime)) {
 				*existing = candidate
 			}
+			existing.futureSuccess = futureSuccess
 			return
 		}
 		record := candidate
 		records[key] = &record
 	}
-
-	now := time.Now()
 
 	for _, rollup := range rollups {
 		if rollup.LastSuccessAt == nil || rollup.LastSuccessAt.IsZero() {
@@ -842,23 +854,13 @@ func (m *Manager) CheckBackupsWithInventory(
 
 	if len(records) == 0 {
 		m.clearBackupAlerts()
-		return
+		return nil
 	}
 
 	validAlerts := make(map[string]struct{})
+	futureSuccess := false
 
 	for key, record := range records {
-		age := now.Sub(record.lastTime)
-		if age < 0 {
-			continue
-		}
-
-		ageDays := age.Hours() / 24
-		if ageDays < 0 {
-			continue
-		}
-		ageDaysRounded := math.Round(ageDays*10) / 10
-
 		// A PBS subject without a guest VMID is a host/config backup
 		// (PBS backup-type "host", keyed by the node name), not a guest
 		// workload. The Backups overview already keeps these out of guest
@@ -916,6 +918,20 @@ func (m *Manager) CheckBackupsWithInventory(
 		if !currentBackupCfg.Enabled {
 			continue
 		}
+
+		futureSuccess = futureSuccess || record.futureSuccess
+		if record.lastTime.After(now) {
+			// Retain this subject's existing condition without refreshing its
+			// evidence, severity or age. Explicit disablement/ignore/suppression
+			// above still applies, and other subjects continue to evaluate.
+			alertKey := sanitizeAlertKey(key)
+			resourceID := canonicalBackupSubjectResourceID(alertKey, *record)
+			validAlerts[buildCanonicalStateID(resourceID, resourceID+"-backup-age")] = struct{}{}
+			validAlerts["backup-age-"+alertKey] = struct{}{}
+			continue
+		}
+		ageDays := now.Sub(record.lastTime).Hours() / 24
+		ageDaysRounded := math.Round(ageDays*10) / 10
 
 		var threshold int
 		switch {
@@ -1056,6 +1072,10 @@ func (m *Manager) CheckBackupsWithInventory(
 		m.clearAlertNoLock(storageKey)
 	}
 	m.mu.Unlock()
+	if futureSuccess {
+		return ErrBackupSuccessTimeInFuture
+	}
+	return nil
 }
 
 func slicesContainsProvider(providers []recovery.Provider, target recovery.Provider) bool {

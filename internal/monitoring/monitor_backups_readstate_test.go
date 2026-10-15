@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -1113,3 +1115,87 @@ func TestPollPBSBackups_PreservesCacheOnTransientDatastoreError(t *testing.T) {
 		})
 	}
 }
+
+// Ordinary persisted rollups, canonical guest lookup, alert manager and served
+// state: a future success must be visible as lost age evidence, not recovery.
+func TestBackupFutureSuccessWarningThroughReadState(t *testing.T) {
+	m, _ := backupEvaluationMonitor(t)
+	m.resourceStore = backupReadStateResourceStore([]unifiedresources.Resource{
+		{ID: "vm-100", Name: "database", Type: unifiedresources.ResourceTypeVM, Status: unifiedresources.StatusOnline, Proxmox: &unifiedresources.ProxmoxData{Instance: "pve1", NodeName: "node1", VMID: 100}},
+		{ID: "vm-101", Name: "archive", Type: unifiedresources.ResourceTypeVM, Status: unifiedresources.StatusOnline, Proxmox: &unifiedresources.ProxmoxData{Instance: "pve1", NodeName: "node1", VMID: 101}},
+	})
+	store, err := m.recoveryManager.StoreForOrg("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	now := time.Now().UTC()
+	point := backupEvaluationPoint(now.Add(-4 * 24 * time.Hour))
+	put := func(points ...recovery.RecoveryPoint) {
+		if err := store.UpsertPoints(context.Background(), points); err != nil {
+			t.Fatal(err)
+		}
+	}
+	project := func(phase string) {
+		wire, err := json.Marshal(struct {
+			Phase        string         `json:"phase"`
+			ActiveAlerts []alerts.Alert `json:"activeAlerts"`
+		}{phase, m.GetState().ActiveAlerts})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("BACKUP_TIMESTAMP_PROJECTION=%s", wire)
+	}
+	put(point)
+	m.checkBackupAlerts(context.Background())
+	project("stale")
+	before := m.alertManager.GetActiveAlerts()
+	if len(before) != 1 {
+		t.Fatal("missing initial stale backup")
+	}
+	point.CompletedAt = ptrBackupTime(now.Add(24 * time.Hour))
+	peer := backupEvaluationPoint(now.Add(-3 * 24 * time.Hour))
+	peer.ID, peer.SubjectResourceID = "pve-backup:fixture-101", "vm-101"
+	peer.SubjectRef = &recovery.ExternalRef{Type: "proxmox-vm", ID: "pve1:node1:101", Name: "archive"}
+	put(point, peer)
+	m.checkBackupAlerts(context.Background())
+	project("future")
+	warning, ages := backupEvaluationAlerts(t, m)
+	if warning == nil || ages != 2 {
+		t.Fatalf("future success was silent recovery or blocked a peer: warning=%v ages=%d", warning != nil, ages)
+	}
+	if warning.ResourceID != "" || warning.Level != alerts.AlertLevelWarning || warning.Metadata["systemAlert"] != true || !strings.Contains(warning.Message, "future") || !strings.Contains(warning.Message, "clocks") {
+		t.Fatal("clock warning has incorrect scope, severity or guidance")
+	}
+	for _, a := range m.alertManager.GetActiveAlerts() {
+		if a.ID == before[0].ID && (!a.StartTime.Equal(before[0].StartTime) || !a.LastSeen.Equal(before[0].LastSeen) || a.Value != before[0].Value) {
+			t.Error("future time renewed the retained backup condition")
+		}
+	}
+	m.checkBackupAlerts(context.Background())
+	repeated, ages := backupEvaluationAlerts(t, m)
+	if repeated == nil || ages != 2 || !repeated.StartTime.Equal(warning.StartTime) || repeated.Metadata["systemAlertFingerprint"] != warning.Metadata["systemAlertFingerprint"] {
+		t.Fatal("unchanged invalid evidence replaced the warning")
+	}
+	project("repeated")
+	point.CompletedAt = ptrBackupTime(now)
+	put(point)
+	m.checkBackupAlerts(context.Background())
+	if self, ages := backupEvaluationAlerts(t, m); self != nil || ages != 1 {
+		t.Fatal("usable fresh evidence did not clear only its condition and evaluator warning")
+	}
+	project("recovered")
+	point.CompletedAt = ptrBackupTime(now.Add(24 * time.Hour))
+	put(point)
+	m.checkBackupAlerts(context.Background())
+	cfg := m.alertManager.GetConfig()
+	cfg.BackupDefaults.Enabled = false
+	m.alertManager.UpdateConfig(cfg)
+	m.checkBackupAlerts(context.Background())
+	if self, ages := backupEvaluationAlerts(t, m); self != nil || ages != 0 {
+		t.Fatal("deliberate disablement did not clear the warning and age conditions")
+	}
+	project("disabled")
+}
+
+func ptrBackupTime(at time.Time) *time.Time { return &at }

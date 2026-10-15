@@ -135,7 +135,15 @@ func (m *Monitor) checkBackupAlerts(ctx context.Context) {
 	}
 	guestsByKey, guestsByVMID := buildGuestLookupsFromReadState(m.currentModeReadState(), m.guestMetadataStore)
 	scope.run(func() {
-		m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())
+		if err := m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts()); err != nil {
+			m.alertManager.RaiseSystemAlert(alerts.SystemAlertInput{
+				Type:        alerts.BackupEvaluationAlertType,
+				Level:       alerts.AlertLevelWarning,
+				Fingerprint: "backup-success-time-in-future",
+				Message:     "A reported backup success time is in the future and was not used to establish backup freshness. Existing backup-age alerts without other usable evidence have been kept. Check the clocks on Pulse and the backup servers.",
+			})
+			return
+		}
 		// Only a complete read/evaluation (including a genuinely empty result)
 		// resolves the outage. In-flight checks are coalesced, not queued, so an
 		// older successful read cannot later erase a newer failure.
