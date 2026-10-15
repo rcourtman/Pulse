@@ -4333,6 +4333,31 @@ func TestInstallSHCurlTokenTransportKeepsSecretOutOfArgv(t *testing.T) {
 	}
 }
 
+// Exercise the generated command, real curl HTTPS/protocol/time limits and SSH
+// verification against an inert private listener, never an installed service.
+func TestManualUpdateTransportRemainsBoundedAndAuthenticated(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "manual_update_transport.py"), "-v")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("generated manual update transport controls: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_real_https_ignores_ambient_curl_config",
+		"test_http_failures_never_execute_the_installer",
+		"test_partial_transfers_never_execute_the_installer",
+		"test_http_downgrades_never_reach_the_destination",
+		"test_stalled_tls_handshakes_obey_each_connect_budget",
+		"test_real_signature_verification_still_refuses_unknown_content",
+		"test_allocation_failures_leave_no_download_or_staged_file",
+	} {
+		if !strings.Contains(string(out), name+" (__main__.ManualUpdateTransport."+name+")") {
+			t.Fatalf("missing manual update transport control %s:\n%s", name, out)
+		}
+	}
+}
+
 func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	tmpDir := t.TempDir()
 	updatePath := filepath.Join(tmpDir, "update")
