@@ -8543,3 +8543,10 @@ The canonical PMG view also exposes the explicit connection reference unchanged
 (or empty for legacy/nil data), allowing full-instance consumers to retain the
 same attribution as the slim resource. `TestPMGViewConfiguredConnectionReference`
 covers this boundary without inferring a value from the runtime ID or label.
+
+Canonical PMG health matches a connection alert through that same explicit
+configured `PMG.ConnectionID`, not arbitrary canonical/name/hostname aliases.
+A critical connection failure therefore survives actual Resources HTTP health
+projection without colouring a sibling sharing its presentation data.
+`TestPMGConnectionHealthUsesOnlyConfiguredReference` covers critical precedence,
+collision negatives, absent references, degraded collection and recovery.
