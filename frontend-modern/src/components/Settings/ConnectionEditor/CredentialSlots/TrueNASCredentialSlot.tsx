@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, onMount } from 'solid-js';
+import { Component, Show, createEffect, onCleanup, onMount } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import {
@@ -46,6 +46,9 @@ const describeTransport = (transport: NonNullable<TrueNASConnection['transport']
 
 export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (props) => {
   let primed = false;
+  // Settings owns the state longer than this slot. Leaving the consuming
+  // editor retires feedback even if its request cannot be cancelled.
+  onCleanup(() => props.state.retireFormEvidence());
 
   onMount(() => {
     if (!props.state.dialogOpen()) {
@@ -418,6 +421,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             disabled={
               props.state.saving() ||
               props.state.testing() ||
+              props.state.previewing() ||
               props.togglePending ||
               props.deletePending
             }
