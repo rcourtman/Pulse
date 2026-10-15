@@ -20,10 +20,10 @@ describe('agent token-file help in the shipped Markdown renderer', () => {
     const link = Array.from(article.querySelectorAll('a')).find(
       (anchor) => anchor.textContent === 'token-file format guidance',
     );
-    // Same-document fragments stay native; .md links alone are rewritten by
-    // resolveDocLink. The real-browser test verifies the Docs focus handler.
+    // Keep the native fragment href, but use the same explicit re-activation
+    // path as file-qualified links. Docs navigation tests cover repeat focus.
     expect(link?.getAttribute('href')).toBe(`#${id}`);
-    expect(link?.hasAttribute('data-doc-link')).toBe(false);
+    expect(link?.hasAttribute('data-doc-link')).toBe(true);
     expect(link?.hasAttribute('target')).toBe(false);
     expect(article.querySelector(`#${id}`)?.textContent).toBe(
       'Token-file format is not shell syntax',

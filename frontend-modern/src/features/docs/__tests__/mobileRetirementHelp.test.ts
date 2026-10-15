@@ -72,8 +72,9 @@ describe('existing phone recovery and retirement help', () => {
           render(cross ? cross[1] : 'RELAY').querySelector(`[id="${cross ? cross[2] : same![1]}"]`),
           href,
         ).not.toBeNull();
-        // Cross-document links use the router; same-page fragments use native anchors.
-        expect(link.hasAttribute('data-doc-link'), href).toBe(Boolean(cross));
+        // Both link forms use shared explicit activation. Bare fragments keep
+        // their native href so modified/new-tab clicks still work.
+        expect(link.hasAttribute('data-doc-link'), href).toBe(true);
       }
     }
     for (const fragment of [

@@ -47,9 +47,9 @@ describe('backup polling safety help', () => {
       expect(cell, key).toBeDefined();
       const link = cell!.parentElement?.querySelector(`a[href="#${fragment}"]`);
       expect(link?.textContent, key).toBe('Backup polling and guest safety');
-      // Same-document fragments use the viewer's native fragment handler,
-      // not its cross-document route marker.
-      expect(link?.hasAttribute('data-doc-link'), key).toBe(false);
+      // Preserve the native fragment href while sharing explicit re-activation
+      // with file-qualified links, including a repeated current fragment.
+      expect(link?.hasAttribute('data-doc-link'), key).toBe(true);
     }
     expect(article.querySelector(`#${fragment}`)).not.toBeNull();
   });
