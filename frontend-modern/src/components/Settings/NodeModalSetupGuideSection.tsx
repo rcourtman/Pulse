@@ -1102,29 +1102,24 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
       </Show>
 
       <Show when={modalProps.nodeType === 'pmg'}>
-        <div class="space-y-3 text-xs text-base-content">
+        <div
+          role="note"
+          aria-label="Mail Gateway account guidance"
+          class="space-y-2 text-xs leading-5 text-base-content"
+        >
           <p>
-            Generate a dedicated API token in <strong>Configuration → API Tokens</strong> on your
-            Mail Gateway. We recommend creating a service user such as{' '}
-            <code class="font-mono">pulse-monitor@pmg</code>
-            with <em>Auditor</em> privileges.
+            This form connects to Mail Gateway using <strong>Username &amp; Password</strong>, not
+            the PVE/PBS API-token setup.
           </p>
-          <ol class="list-decimal ml-4 space-y-1">
-            <li>
-              Click <em>Add</em> and choose the service user (or create one if needed).
-            </li>
-            <li>
-              Enable <em>Privilege Separation</em> and assign the <em>Auditor</em> role.
-            </li>
-            <li>
-              Copy the generated Token ID (e.g.{' '}
-              <code class="font-mono">pulse-monitor@pmg!pulse-edge</code>) and the secret value into
-              the fields below.
-            </li>
-          </ol>
-          <p class="text-xs text-muted">
-            Pulse only requires read-only access. Avoid granting administrator permissions to the
-            token.
+          <p>
+            Use a dedicated service account, such as{' '}
+            <code class="font-mono">pulse-monitor@pmg</code>, with the minimum read permissions your
+            PMG version supports for the data you need. Use that version's account-management tools;
+            do not grant administrator access just to populate a panel.
+          </p>
+          <p>
+            Enter the account name including its realm and its password in this private form. Keep
+            passwords out of commands, URLs and issue reports.
           </p>
         </div>
       </Show>

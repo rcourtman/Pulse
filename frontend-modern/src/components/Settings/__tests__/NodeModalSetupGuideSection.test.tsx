@@ -72,6 +72,21 @@ const renderSetupGuide = (
 describe('NodeModalSetupGuideSection', () => {
   afterEach(() => cleanup());
 
+  it('gives PMG version-specific minimum-read account guidance, without token commands', () => {
+    const { copyCommand, copyQuickSetupCommand } = renderSetupGuide('pmg');
+    const guidance = screen.getByRole('note', { name: 'Mail Gateway account guidance' });
+    expect(guidance).toHaveTextContent('Username & Password');
+    expect(guidance).toHaveTextContent('minimum read permissions your PMG version supports');
+    expect(guidance).toHaveTextContent('do not grant administrator access');
+    expect(guidance).toHaveTextContent('Keep passwords out of commands, URLs and issue reports');
+    expect(guidance).not.toHaveTextContent(
+      /Configuration → API Tokens|Privilege Separation|Auditor/,
+    );
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(copyCommand).not.toHaveBeenCalled();
+    expect(copyQuickSetupCommand).not.toHaveBeenCalled();
+  });
+
   it.each(['pve', 'pbs'] as const)(
     'blocks all %s issuance actions while one is pending',
     (type) => {

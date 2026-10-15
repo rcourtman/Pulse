@@ -27,6 +27,59 @@ describe('NodeCredentialSlot', () => {
     vi.restoreAllMocks();
   });
 
+  it.each([false, true])(
+    'shows truthful PMG account guidance in the real password form (editing: %s)',
+    (editing) => {
+      const settings = createSettings();
+      const formTest = vi.spyOn(NodesAPI, 'testConnection');
+      const savedTest = vi.spyOn(NodesAPI, 'testExistingNode');
+      render(() => (
+        <NodeCredentialSlot
+          nodeType="pmg"
+          settings={settings}
+          editingNode={
+            editing
+              ? ({
+                  id: 'pmg-fixture',
+                  type: 'pmg',
+                  name: 'Fixture',
+                  host: 'https://saved.example.invalid',
+                  user: 'existing@pmg',
+                  hasPassword: true,
+                  verifySSL: true,
+                  status: 'connected',
+                } as NodeConfigWithStatus)
+              : undefined
+          }
+          onCancel={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      ));
+
+      expect(screen.getByText('Username and password')).toBeInTheDocument();
+      expect(screen.getAllByRole('radio')).toHaveLength(1);
+      expect(screen.getByRole('radio', { name: 'Username & Password' })).toBeChecked();
+      expect(screen.getAllByRole('note', { name: 'Mail Gateway account guidance' })).toHaveLength(
+        1,
+      );
+      expect(screen.queryByLabelText(/Token ID|Token Value/)).not.toBeInTheDocument();
+      const username = screen.getByRole('textbox', { name: /^Username/ });
+      expect(username).toHaveAttribute('placeholder', 'pulse-monitor@pmg');
+      expect(username).toHaveValue(editing ? 'existing@pmg' : '');
+      const password = screen.getByLabelText(/^Password/);
+      expect(password).toHaveValue('');
+      expect(password).toHaveAttribute('type', 'password');
+      expect(password.hasAttribute('required')).toBe(!editing);
+      fireEvent.input(username, { target: { value: 'pulse-monitor@pmg' } });
+      fireEvent.input(password, { target: { value: 'fixture-only-secret' } });
+      expect(username).toHaveValue('pulse-monitor@pmg');
+      expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).toBeChecked();
+      expect(formTest).not.toHaveBeenCalled();
+      expect(savedTest).not.toHaveBeenCalled();
+      expect(settings.saveNode).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(['pve', 'pbs', 'pmg'] as const)(
     'discloses a saved %s check beside edited trust, then removes obsolete success',
     async (nodeType) => {
