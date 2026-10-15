@@ -46,6 +46,24 @@ and narrow browser proof must drive actual synthetic GET responses through the
 production reader and tables, preserving view state and inspecting current,
 pending, changed, failed and successful-empty pixels.
 
+### Node-fallback History preserves missing filesystem evidence
+
+When the cluster guest endpoint is unavailable, ordinary node fallback uses the
+same VM disk-History admission as the efficient collector. Retained usage and
+allocation-only tuples with a disk-status reason remain display continuity,
+not new samples. Complete current readings, including measured zero and genuine
+volume removal, still append History and clear the corresponding disk alerts.
+Independent CPU/memory/counter recording, poll ownership, original disk age,
+unknown metrics and QGA/backup safety fences are unchanged. Existing History is
+not rewritten or deleted.
+
+`TestVMFilesystemIncompletePollingPreservesHistoryAndBreach/fallback` drives the
+actual client and owned fallback dispatch through complete, partial, expired and
+complete-zero recovery, checking persisted/in-memory History, canonical/served
+metrics, original observation times and filesystem breach continuity. This is
+controlled source/surface evidence, not native backup completion, guest thaw,
+every-filesystem writes/liveness, fresh-install or installed recovery.
+
 ### Efficient guest inventory distinguishes deletion from node grace
 
 A completed cluster guest inventory with no guests on a currently online node
