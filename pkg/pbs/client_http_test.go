@@ -925,3 +925,129 @@ func TestClient_GetNodeStatus_MetricCompleteness(t *testing.T) {
 		})
 	}
 }
+
+type backupInventoryTestBody struct {
+	io.Reader
+	tailErr, closeErr error
+	closed            bool
+}
+
+func (b *backupInventoryTestBody) Read(p []byte) (int, error) {
+	n, err := b.Reader.Read(p)
+	if err == io.EOF && b.tailErr != nil {
+		return n, b.tailErr
+	}
+	return n, err
+}
+
+func (b *backupInventoryTestBody) Close() error { b.closed = true; return b.closeErr }
+
+// Exercise both real HTTP readers, including errors delivered after a complete
+// JSON prefix. A JSON decoder alone can return success without seeing EOF.
+func TestPBSBackupInventoryAdmission(t *testing.T) {
+	type inventoryCase struct {
+		name, body        string
+		status            int
+		tailErr, closeErr error
+		want              int
+		valid             bool
+	}
+	const group = `{"backup-type":"vm","backup-id":"100","backup-count":1,"last-backup":1792028400}`
+	const snapshot = `{"backup-type":"vm","backup-id":"100","backup-time":1792028400,"size":1024,"files":["index.json.blob"],"verification":{"state":"ok"}}`
+	for _, endpoint := range []string{"groups", "snapshots"} {
+		t.Run(endpoint, func(t *testing.T) {
+			row := group
+			if endpoint == "snapshots" {
+				row = snapshot
+			}
+			good := `{"data":[` + row + `]}`
+			cases := []inventoryCase{
+				{name: "complete", body: good, valid: true, want: 1},
+				{name: "empty", body: `{"data":[]}`, valid: true},
+				{name: "extended", body: `{"extra":{"count":3},"errors":null,"data":[` + strings.TrimSuffix(row, "}") + `,"extra":"supported"}]}`, valid: true, want: 1},
+				{name: "whitespace", body: good + " \r\n\t", valid: true, want: 1},
+				{name: "exact-size-limit", body: good + strings.Repeat(" ", int(maxResponseBodyBytes)-len(good)), valid: true, want: 1},
+				{name: "missing-data", body: `{}`},
+				{name: "null-data", body: `{"data":null}`},
+				{name: "null-envelope", body: `null`},
+				{name: "case-data", body: strings.Replace(good, `"data"`, `"Data"`, 1)},
+				{name: "duplicate-data", body: `{"data":[],"data":[` + row + `]}`},
+				{name: "conflicting-errors", body: strings.TrimSuffix(good, "}") + `,"errors":{"fixture":"private-provider-marker"}}`},
+				{name: "trailing-value", body: good + ` {"data":[]}`},
+				{name: "trailing-garbage", body: good + ` private-provider-marker`},
+				{name: "incomplete", body: strings.TrimSuffix(good, "}")},
+				{name: "read-failure-after-json", body: good, tailErr: io.ErrUnexpectedEOF},
+				{name: "close-failure", body: good, closeErr: errors.New("fixture close failed")},
+				{name: "over-limit-after-json", body: good + strings.Repeat(" ", int(maxResponseBodyBytes))},
+				{name: "partial-http-status", body: good, status: http.StatusPartialContent},
+				{name: "null-row", body: `{"data":[` + row + `,null]}`},
+				{name: "empty-row", body: `{"data":[` + row + `,{}]}`},
+				{name: "duplicate-row", body: `{"data":[` + row + `,` + row + `]}`},
+				{name: "invalid-utf8", body: strings.TrimSuffix(good, "}") + `,"comment":"` + string([]byte{0xff}) + `"}`},
+				{name: "duplicate-id", body: `{"data":[` + strings.TrimSuffix(row, "}") + `,"backup-id":"101"}]}`},
+				{name: "case-id", body: strings.Replace(good, `"backup-id"`, `"Backup-Id"`, 1)},
+				{name: "blank-id", body: strings.Replace(good, `"100"`, `" "`, 1)},
+				{name: "null-id", body: strings.Replace(good, `"100"`, `null`, 1)},
+			}
+			if endpoint == "groups" {
+				cases = append(cases,
+					inventoryCase{name: "missing-count", body: `{"data":[{"backup-type":"vm","backup-id":"100","last-backup":1792028400}]}`},
+					inventoryCase{name: "negative-count", body: strings.Replace(good, `"backup-count":1`, `"backup-count":-1`, 1)},
+					inventoryCase{name: "missing-last-backup", body: strings.Replace(good, `,"last-backup":1792028400`, "", 1)},
+					inventoryCase{name: "empty-group", body: `{"data":[{"backup-type":"host","backup-id":"server","backup-count":0}]}`, valid: true, want: 1},
+				)
+			} else {
+				cases = append(cases,
+					inventoryCase{name: "wrong-group", body: strings.Replace(good, `"100"`, `"101"`, 1)},
+					inventoryCase{name: "missing-time", body: strings.Replace(good, `,"backup-time":1792028400`, "", 1)},
+					inventoryCase{name: "duplicate-verification-state", body: strings.Replace(good, `"state":"ok"`, `"state":"failed","state":"ok"`, 1)},
+					inventoryCase{name: "string-verification", body: strings.Replace(good, `{"state":"ok"}`, `"ok"`, 1), valid: true, want: 1},
+					inventoryCase{name: "object-files", body: strings.Replace(good, `["index.json.blob"]`, `[{"filename":"index.json.blob","size":100}]`, 1), valid: true, want: 1},
+					inventoryCase{name: "in-progress", body: `{"data":[{"backup-type":"vm","backup-id":"100","backup-time":1792028400}]}`, valid: true, want: 1},
+				)
+			}
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					body := &backupInventoryTestBody{Reader: strings.NewReader(tc.body), tailErr: tc.tailErr, closeErr: tc.closeErr}
+					status := tc.status
+					if status == 0 {
+						status = http.StatusOK
+					}
+					calls := 0
+					c, err := NewClient(ClientConfig{Host: "https://pbs-inventory.invalid", TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+					if err != nil {
+						t.Fatal(err)
+					}
+					c.httpClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+						calls++
+						if r.Method != http.MethodGet || !strings.HasSuffix(r.URL.Path, "/"+endpoint) || r.URL.Query().Get("ns") != "department" {
+							t.Errorf("unexpected request: %s %s", r.Method, r.URL)
+						}
+						return &http.Response{StatusCode: status, Header: make(http.Header), Body: body}, nil
+					})
+					var count int
+					if endpoint == "groups" {
+						v, e := c.ListBackupGroups(context.Background(), "main", "department")
+						count, err = len(v), e
+					} else {
+						v, e := c.ListBackupSnapshots(context.Background(), "main", "department", "vm", "100")
+						count, err = len(v), e
+					}
+					if tc.valid {
+						if err != nil || count != tc.want {
+							t.Fatalf("complete inventory count=%d err=%v, want %d", count, err, tc.want)
+						}
+					} else if err == nil || count != 0 {
+						t.Errorf("unsafe inventory admitted: count=%d err=%v", count, err)
+					}
+					if err != nil && strings.Contains(err.Error(), "private-provider-marker") {
+						t.Error("provider body escaped into error")
+					}
+					if calls != 1 || !body.closed {
+						t.Errorf("requests=%d closed=%t", calls, body.closed)
+					}
+				})
+			}
+		})
+	}
+}
