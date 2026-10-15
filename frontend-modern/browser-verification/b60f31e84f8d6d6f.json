@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "d0d1561ee5f19234107a27581b0d590a2fb85585",
+  "verified_at": "2026-10-15T21:16:12Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "b2205aacd6893843764586fdca7c394c621f086036a90caabc54f1f86080ed13"
+  },
+  "routes": [
+    "/browser-tests/backup-coverage.html: production snapshot mapper, workload row and full GuestDrawer Manage tab"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Saved default overrides and long unbroken attribution; all actual text-line boxes contained without overlap.",
+    "Remediation confirmation and cancellation, recurring descendant maintenance scope and cancellation.",
+    "Retired draft, disabled monitoring/lock controls, synthetic save and restoration with note and policy preserved.",
+    "15 final states across Chromium desktop and WebKit390/320; no document overflow, page errors or off-origin requests."
+  ],
+  "interactions": [
+    "Desktop keyboard expansion; touch-phone row expansion; Overview to Manage.",
+    "Expected-offline draft discarded without mutation. Lock and maintenance confirmations cancelled without mutation.",
+    "Two local synthetic operator-state PUTs per viewport only: retirement and restoration. Real API client and read-after-write hydration.",
+    "All twelve final captures opened with native view_image; baseline clipping/overlap and both initial harness errors retained."
+  ],
+  "proof_source_sha": "544ad5a1237b307d0e9445127b1ebbc1accf8d81",
+  "proof_source_tree": "32736b76706a4bdc9ddf62dfaac21bb797612763",
+  "notes": [
+    "Executed source and receipt parent have identical trees: only the new unshared commit message was repaired with a Contract-Neutral trailer. No source/history rebind or proof replay.",
+    "This is the first receipt for these changed bytes. Source-suite results remain separate in the lane dossier.",
+    "Synthetic metadata and local preview only; no native thaw, filesystem writes, installed recovery or release availability established."
+  ]
+}
