@@ -9075,6 +9075,14 @@ cover desktop, intermediate, phone and short landscape layouts. These checks
 establish presentation and interaction, not installed Proxmox permissions or
 released acceptance.
 
+### Time axes label round times
+
+A chart axis built from fixed-width buckets anchored at "now minus the range"
+labels its inner ticks at the next round local time at their true positions,
+not at the raw bucket edges, and any label that shows an hour shows its
+minutes, so 24-hour locales never print a bare hour after a date
+(`nextAlertAxisBoundary` in `alertHistoryModel.ts`).
+
 ### Docker drawers expose reduced helper coverage without actions
 
 The Docker host drawer consumes the canonical optional `collectionMode` field.

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "e669e825d4a34f8979d60eec7962561bd6927bef",
+  "verified_at": "2026-10-15T11:00:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/alertHistoryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/alertHistoryModel.ts": "83da081f99c2b5c0f64aecbd8c73813a38d2388f88117c8f5109c27b2b68a6ed"
+  },
+  "routes": [
+    "/alerts/history"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main, en-GB): the default 7-day axis read \"8 Oct, 11 | 10 Oct, 05 | 11 Oct, 23\" and the range line \"8 Oct, 11 -> Now\"; 30-day ticks sat at bucket edges near noon",
+    "After: 7d \"8 Oct, 11:54 | 10 Oct, 06:00 | 12 Oct, 00:00 | 13 Oct, 18:00 | Now\"; 24h ticks on the hour; 30d \"15 Sept | 24 Sept | 2 Oct | 10 Oct | Now\" at local midnights; all time dated with the year",
+    "No label overlap at 640px or 1280px (the chart keeps a minimum width and scrolls); US-length labels measured at the same positions keep 75px or more apart",
+    "Phone 375px shows three ticks (8 Oct, 11:55 | 12 Oct, 00:00 | Now) with no page-level horizontal overflow",
+    "A clock change that repeats an hour no longer stacks two ticks on one boundary (unit test under Europe/London)"
+  ],
+  "interactions": [
+    "Switched Last 24h, Last 7d, Last 30d and All time and read every visible axis label and its bounds",
+    "Resized to 640px and 375px and re-read the labels"
+  ]
+}
