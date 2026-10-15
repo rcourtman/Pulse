@@ -248,8 +248,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
       if (!bootstrap || !bootstrapActive(generation)) return;
       const data = await NodesAPI.downloadProxmoxSetupScript(bootstrap);
       if (!bootstrapActive(generation)) return;
-      showSetupToken(bootstrap);
-
       const blob = new Blob([data.content], {
         type: data.contentType,
       });
@@ -257,10 +255,14 @@ export const useNodeModalState = (props: NodeModalProps) => {
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = data.fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      URL.revokeObjectURL(url);
+      try {
+        document.body.appendChild(anchor);
+        anchor.click();
+      } finally {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }
+      showSetupToken(bootstrap);
 
       notificationStore.success(
         `Script downloaded! Upload it to your server and run: ${setupScriptRunHint(data.fileName)}`,

@@ -26,6 +26,7 @@ const setup = (type: Platform) => ({
   type,
   host: `https://${type}.example.invalid`,
   command: 'fixture-setup-command',
+  commandWithEnv: 'fixture-setup-command',
   url: '/api/setup-script',
   downloadURL: '/api/setup-script',
   scriptFileName: `pulse-setup-${type}.sh`,
@@ -319,6 +320,52 @@ describe.each(['pve', 'pbs'] as const)(
         expect(showTokenReveal).toHaveBeenCalledTimes(1);
       },
     );
+    it('keeps current download errors actionable without revealing a token', async () => {
+      const { state } = mount(type);
+      vi.mocked(NodesAPI.downloadProxmoxSetupScript).mockRejectedValueOnce(
+        new Error('Synthetic transport error'),
+      );
+      await download(state, type);
+      expect(notificationStore.error).toHaveBeenCalledExactlyOnceWith(
+        'Failed to download script. Please check your connection.',
+      );
+      expect(showTokenReveal).not.toHaveBeenCalled();
+      expect(state.isPreparingSetup()).toBe(false);
+      await download(state, type);
+      expect(showTokenReveal).toHaveBeenCalledTimes(1);
+      expect(NodesAPI.getProxmoxSetupCommand).toHaveBeenCalledTimes(1);
+    });
+    it('reclaims the blob and withholds its token when the download handoff fails', async () => {
+      const { state } = mount(type);
+      vi.mocked(HTMLAnchorElement.prototype.click).mockImplementationOnce(() => {
+        throw new Error('Synthetic browser download refusal');
+      });
+      await download(state, type);
+      expect(URL.revokeObjectURL).toHaveBeenCalledExactlyOnceWith('blob:fixture');
+      expect(document.querySelector('a[download]')).toBeNull();
+      expect(showTokenReveal).not.toHaveBeenCalled();
+      expect(notificationStore.error).toHaveBeenCalledTimes(1);
+      expect(state.isPreparingSetup()).toBe(false);
+    });
+    it('keeps the original busy owner through departure and drops late agent errors', async () => {
+      const hook = mount(type),
+        { state } = hook;
+      state.updateField('setupMode', 'agent');
+      const pending = deferred<typeof agent>();
+      vi.mocked(NodesAPI.getAgentInstallCommand).mockReturnValueOnce(pending.promise);
+      const running = copyAgent(state, type);
+      hook.setOpen(false);
+      hook.setOpen(true);
+      expect(state.loadingAgentCommand()).toBe(true);
+      expect(state.isPreparingSetup()).toBe(true);
+      await copyAgent(state, type);
+      expect(NodesAPI.getAgentInstallCommand).toHaveBeenCalledTimes(1);
+      pending.reject(new Error('Obsolete agent error'));
+      await running;
+      noOutput();
+      expect(state.loadingAgentCommand()).toBe(false);
+      expect(state.isPreparingSetup()).toBe(false);
+    });
     it('enforces the existing setup review boundary in the handlers', async () => {
       const hook = mount(type);
       hook.setBlocked(true);

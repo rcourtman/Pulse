@@ -246,7 +246,7 @@ let browser;
         await agentCopy.click();
         await waitForHold();
         const tls = page.getByRole('checkbox', {
-          name: 'Skip TLS certificate verification when downloading the installer (insecure)',
+          name: /Skip TLS certificate verification when downloading the installer/,
         });
         await tls.check();
         await tls.uncheck();
