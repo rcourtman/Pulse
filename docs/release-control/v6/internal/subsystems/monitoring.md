@@ -17,6 +17,20 @@
 
 ## Purpose
 
+### Filesystem diagnostics exclude reply payloads
+
+The Proxmox filesystem reader logs response byte count and node/VM attribution,
+not the raw QGA reply. Additive or rejected guest metadata must not be copied
+into persistent logs, the live log stream or support-bundle logs by that reader,
+even at Debug. Existing decoding, measured zero, partial-inventory errors and
+shared guest-command admission remain unchanged. Other diagnostic events may
+still contain guest names and paths: this is not whole-log sanitisation.
+Unrecognized object results retain only their byte count and node/VM attribution,
+never their raw contents, without changing the existing empty-result outcome.
+`TestGuestFilesystemResponseDiagnosticsNoPayload` covers array/object, large
+additive, incomplete, empty, null and small/large unrecognized object responses
+through the real HTTP client.
+
 ### Backups can reread healthy inventory without leaving the view
 
 The existing Backups surface discloses that its restore points reflect the last
