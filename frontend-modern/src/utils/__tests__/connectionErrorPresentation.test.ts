@@ -98,7 +98,7 @@ describe('humanizeConnectionError', () => {
       expect(result?.hint).toContain('intended resource');
       expect(result?.hint).toContain('any proxy policy');
       expect(result?.hint).toContain('Keep intentional access limits');
-      expect(result?.hint).toContain('do not replace credentials or broaden access just to test');
+      expect(result?.hint).toContain('Do not replace credentials or broaden access just to test');
       expect(result?.hint).not.toMatch(/credentials connected|logged in|Administrator/);
     });
 

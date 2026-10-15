@@ -67,7 +67,7 @@ describe('workloadGuestPresentation', () => {
     expect(completion).toContain('after the cooldown');
     const redirect = getWorkloadGuestDiskStatusMessage('agent-redirect');
     expect(redirect).toContain('Pulse did not follow it');
-    expect(redirect).toContain('completion of the original guest request is uncertain');
+    expect(redirect).toContain('Completion of the original guest request is uncertain');
     for (const message of [completion, redirect]) {
       expect(message).not.toContain('This guest request was not sent');
     }

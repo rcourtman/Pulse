@@ -3593,7 +3593,10 @@ describe('backup disclosures keep completion separate from guest safety', () => 
       expect(dialog).toHaveTextContent('Last completed backup');
       expect(dialog).toHaveTextContent('Guest-agent reads: Reported available');
       expect(dialog).toHaveTextContent('does not independently confirm thaw or filesystem writes');
-      expect(within(dialog).queryByRole('link')).toBeNull();
+      expect(within(dialog).queryByRole('link', { name: 'Backup safety guidance' })).toBeNull();
+      expect(
+        within(dialog).getByRole('link', { name: 'Change when backups count as old' }),
+      ).toHaveAttribute('href', '/alerts/thresholds/proxmox#backups');
 
       setGuest({
         ...guest(),
@@ -3634,7 +3637,10 @@ describe('backup disclosures keep completion separate from guest safety', () => 
       expect(dialog).toHaveTextContent('Guest-agent reads: Reported available');
       expect(dialog).not.toHaveTextContent('timed out');
       expect(dialog).not.toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
-      expect(within(dialog).queryByRole('link')).toBeNull();
+      expect(within(dialog).queryByRole('link', { name: 'Backup safety guidance' })).toBeNull();
+      expect(
+        within(dialog).getByRole('link', { name: 'Change when backups count as old' }),
+      ).toHaveAttribute('href', '/alerts/thresholds/proxmox#backups');
       expect(onClick).not.toHaveBeenCalled();
     },
   );
