@@ -79,6 +79,9 @@ func newEfficientInventoryFixture(t *testing.T) *efficientInventoryFixture {
 	f.other = (models.VM{ID: "other:member:105", VMID: 105, Type: "qemu", Instance: "other", Node: "member", Name: "independent-vm", Status: "running", Memory: memory, LastSeen: at}).NormalizeCollections()
 	f.m.state.UpdateGuestsForInstance("efficient", []models.VM{f.vm}, []models.Container{f.ct})
 	f.m.state.UpdateGuestsForInstance("other", []models.VM{f.other}, nil)
+	// Seed the same canonical membership the production poller's previous-state
+	// read uses; an allocated but empty registry is not the accepted generation.
+	f.m.updateResourceStore(f.m.currentStateWithScope())
 	return f
 }
 
