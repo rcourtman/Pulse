@@ -611,6 +611,15 @@ Renaming the alerts Schedule page title (`alerts.page.schedule.title`) changes
 local presentation copy only; it carries no resource data and changes no
 request, handoff or model-bound context.
 
+First-run setup reports the usage-statistics choice truthfully when the server
+owns it. An opt-out written after the admin account exists is refused with
+409 `env_locked` on a server started with `PULSE_TELEMETRY`; the security step
+then reads `/api/system/settings` and says nothing when statistics are already
+off, tells the operator to set `PULSE_TELEMETRY=false` and restart
+(`setup.security.error.telemetryLockedOn`) when the server keeps them on,
+because removing the variable would restore the default (on), and keeps the
+generic failure only when it cannot tell. It never claims statistics are off without reading that they are.
+
 Docker and Podman container CPU normalization may expose numeric raw per-core
 CPU percent, normalized capacity percent, and reporting host CPU count in
 resource or alert metadata. Those fields are operational usage telemetry only;

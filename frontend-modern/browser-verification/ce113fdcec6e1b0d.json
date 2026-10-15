@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "3043244d74a2f62229d2f1a43753b66ecdf28cc6",
+  "verified_at": "2026-10-15T16:02:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx": "76afc60ef63865b342d84ce13a0ec8c5c9cc96f1ed7185fd163ee7c7b8e0b916",
+    "frontend-modern/src/i18n/messages.de.ts": "48144a30fde27fa14c57926195eb81c4d5619e1334c79d3acf3110364043049d",
+    "frontend-modern/src/i18n/messages.es.ts": "4047738cd720d4f3cd522560ac42c003207aa8c42130e2d39972c2ff3a6af689",
+    "frontend-modern/src/i18n/messages.ts": "792b0760680347aaba627c3eb302af93554817f633a499465aa3bd69bb181417"
+  },
+  "routes": [
+    "/",
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): a fresh server started with PULSE_TELEMETRY=false, setup with Usage statistics switched off, showed \"Your admin account was created, but usage statistics could not be turned off\" after the 409 env_locked reply",
+    "After: the same setup gets the 409, reads /api/system/settings (telemetryEnabled false), shows no message and continues to Connect your first system",
+    "The locked-on and unreadable cases are covered by SecurityStep tests; the step layout is unchanged at phone width"
+  ],
+  "interactions": [
+    "Started a fresh data directory, verified the bootstrap token, switched Usage statistics off, created the admin account",
+    "Read the network calls: settings update 409, settings read 200, no error toast"
+  ]
+}

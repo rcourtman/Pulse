@@ -42,6 +42,8 @@ describe('SecurityStep', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    // Drop queued one-off responses so a test cannot hand its leftovers on.
+    apiFetchJSONMock.mockReset();
     apiFetchJSONMock.mockResolvedValue({ success: true });
     stubCryptoRandom();
   });
@@ -150,6 +152,64 @@ describe('SecurityStep', () => {
     expect(settingsInit.method).toBe('POST');
     expect(JSON.parse(String(settingsInit.body))).toEqual({ telemetryEnabled: false });
     expect(showErrorMock).not.toHaveBeenCalled();
+  });
+
+  // A server started with PULSE_TELEMETRY refuses the write (409 env_locked).
+  // When it already keeps statistics off, reporting a failure told the
+  // operator Pulse was still sending data.
+  it('reports nothing when the server already keeps usage statistics off', async () => {
+    const onComplete = vi.fn();
+    apiFetchJSONMock
+      .mockResolvedValueOnce({ success: true })
+      .mockRejectedValueOnce(
+        new Error('telemetryEnabled is locked by the PULSE_TELEMETRY environment variable'),
+      )
+      .mockResolvedValueOnce({ telemetryEnabled: false, envOverrides: { PULSE_TELEMETRY: true } });
+
+    render(() => (
+      <SecurityStep
+        state={baseState}
+        updateState={vi.fn()}
+        bootstrapToken="bootstrap-token"
+        onComplete={onComplete}
+        onBack={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Usage statistics' }));
+    fireEvent.click(screen.getByRole('button', { name: /Create Account & Continue/i }));
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+    expect(apiFetchJSONMock.mock.calls[2][0]).toBe('/api/system/settings');
+    expect(showErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('names the server setting when it keeps usage statistics on', async () => {
+    const onComplete = vi.fn();
+    apiFetchJSONMock
+      .mockResolvedValueOnce({ success: true })
+      .mockRejectedValueOnce(
+        new Error('telemetryEnabled is locked by the PULSE_TELEMETRY environment variable'),
+      )
+      .mockResolvedValueOnce({ telemetryEnabled: true, envOverrides: { PULSE_TELEMETRY: true } });
+
+    render(() => (
+      <SecurityStep
+        state={baseState}
+        updateState={vi.fn()}
+        bootstrapToken="bootstrap-token"
+        onComplete={onComplete}
+        onBack={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Usage statistics' }));
+    fireEvent.click(screen.getByRole('button', { name: /Create Account & Continue/i }));
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+    expect(showErrorMock).toHaveBeenCalledWith(
+      'Your admin account was created. Usage statistics stay on because this server sets PULSE_TELEMETRY=true. Set PULSE_TELEMETRY=false and restart Pulse to turn them off.',
+    );
   });
 
   it('keeps the account when the opt-out write fails and says so', async () => {
