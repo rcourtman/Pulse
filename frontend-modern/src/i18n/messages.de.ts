@@ -42,6 +42,9 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.assistant.subject': '{level} {alertType} auf {resourceName}',
   'alerts.assistant.title': 'Warnungsanalyse angehaengt',
   'alerts.assistant.unlockedTitle': 'Pulse Assistant zu dieser Warnmeldung fragen',
+  'alerts.assistant.iconLabel': 'Pulse Assistant zu {alertType} auf {resourceName} fragen',
+  'alerts.assistant.iconLabelAt':
+    'Pulse Assistant zu {alertType} auf {resourceName} ({startedAt}) fragen',
   'alerts.assistant.explain.menuLabel': 'Mit Assistant erklaeren',
   'alerts.assistant.explain.menuHint': 'Diese Warnmeldung als reinen Kontext verwenden',
   'alerts.assistant.patrol.chevron': 'Weitere Aktionen fuer diese Warnmeldung',

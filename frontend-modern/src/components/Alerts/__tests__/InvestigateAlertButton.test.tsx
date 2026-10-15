@@ -225,6 +225,41 @@ describe('InvestigateAlertButton', () => {
       expect(button).not.toHaveTextContent('Investigate');
     });
 
+    // History repeats the icon on every row, so its name says which alert.
+    it('names the alert and its resource on the icon variant', () => {
+      render(() => (
+        <InvestigateAlertButton alert={makeAlert()} variant="icon" subjectLabel="CPU usage" />
+      ));
+      expect(
+        screen.getByRole('button', { name: 'Ask Pulse Assistant about CPU usage on test-vm' }),
+      ).toHaveAttribute('title', 'Ask Pulse Assistant about this alert');
+    });
+
+    it('adds the start time when the host gives one', () => {
+      render(() => (
+        <InvestigateAlertButton
+          alert={makeAlert()}
+          variant="icon"
+          subjectLabel="CPU usage"
+          subjectTime="15 Oct, 11:44"
+        />
+      ));
+      expect(
+        screen.getByRole('button', {
+          name: 'Ask Pulse Assistant about CPU usage on test-vm, 15 Oct, 11:44',
+        }),
+      ).toBeInTheDocument();
+    });
+
+    it('keeps the locked explanation as the icon name when locked', () => {
+      render(() => (
+        <InvestigateAlertButton alert={makeAlert()} variant="icon" licenseLocked={true} />
+      ));
+      expect(
+        screen.getByRole('button', { name: 'Pro required to ask Pulse Assistant about alerts' }),
+      ).toBeInTheDocument();
+    });
+
     it('renders text variant with "Ask Pulse Assistant" label', () => {
       render(() => <InvestigateAlertButton alert={makeAlert()} variant="text" />);
       const button = screen.getByRole('button');

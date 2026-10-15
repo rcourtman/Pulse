@@ -260,6 +260,25 @@ message, so search and the Assistant handoff still read the record, and
 attaches the source alert as `liveAlert` only to active, non-system rows.
 Closed rows, and open ones without a live status, keep their recorded message.
 
+### History row controls name the alert they act on
+
+Every Alerts > History row, in the desktop table and the phone cards, repeats
+Timeline, Resource and an icon-only Assistant button, and each used to share
+one name ("Timeline", "Resource", "Ask Pulse Assistant about this alert"), so
+a screen-reader or speech-input user could not tell rows apart.
+`AlertHistoryItemActions` now names Timeline with
+`getAlertHistoryTimelineActionLabel` (alert title, resource and the row's full
+start time, since history repeats one alert over time; "Hide timeline for
+..." while open, with `aria-expanded`) and Resource with
+`getAlertHistoryResourceActionLabel` (rows on one resource share it because
+they open the same panel). The Assistant icon names its alert through the
+`alerts.assistant.iconLabel` and `alerts.assistant.iconLabelAt` catalog keys
+from the host's `subjectLabel` and `subjectTime`; a locked button keeps its
+locked explanation and the hover title is unchanged. Each name begins with
+the visible label (`AlertHistoryItemActions.test.tsx`,
+`AlertHistoryMobileList.test.tsx`, `InvestigateAlertButton.test.tsx`,
+`alertIncidentPresentation.test.ts`).
+
 ### Retained guest observations are not alert evidence
 
 Guest memory marked `last-known`, `unavailable` or an unknown observation state

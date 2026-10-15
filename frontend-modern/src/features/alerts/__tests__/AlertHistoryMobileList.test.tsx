@@ -117,10 +117,12 @@ describe('AlertHistoryMobileList', () => {
     expect(screen.getByText('warning')).toBeVisible();
     expect(screen.getByText('resolved')).toBeVisible();
 
-    expect(screen.getByRole('button', { name: 'Timeline' })).toHaveClass('min-h-11');
-    expect(screen.getByRole('button', { name: 'Resource' })).toHaveClass('min-h-11');
+    expect(screen.getByRole('button', { name: /^Timeline for / })).toHaveClass('min-h-11');
+    expect(screen.getByRole('button', { name: /^Resource incidents for / })).toHaveClass(
+      'min-h-11',
+    );
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Timeline for / }));
     expect(toggleIncidentTimeline).toHaveBeenCalledWith(
       'alert-1-row',
       'alert-1',
@@ -131,7 +133,7 @@ describe('AlertHistoryMobileList', () => {
     ).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Close incident timeline' }));
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Resource' }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Resource incidents for / }));
     expect(openResourceIncidentPanel).toHaveBeenCalledWith(
       'node-1',
       'pve-production-01',
@@ -200,7 +202,7 @@ describe('AlertHistoryMobileList', () => {
     const { state } = createState();
 
     const { container } = render(() => <AlertHistoryMobileList state={state} />);
-    await fireEvent.click(screen.getByRole('button', { name: 'Resource' }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Resource incidents for / }));
 
     const card = container.querySelector('article');
     const dialog = screen.getByRole('dialog', {
@@ -221,7 +223,7 @@ describe('AlertHistoryMobileList', () => {
     const { closeResourceIncidentPanel, state } = createState();
 
     render(() => <AlertHistoryMobileList state={state} />);
-    const resourceButton = screen.getByRole('button', { name: 'Resource' });
+    const resourceButton = screen.getByRole('button', { name: /^Resource incidents for / });
     resourceButton.focus();
     await fireEvent.click(resourceButton);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -231,7 +233,7 @@ describe('AlertHistoryMobileList', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(closeResourceIncidentPanel).toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Resource' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: /^Resource incidents for / })).toHaveFocus();
   });
 });
 
@@ -255,7 +257,7 @@ describe('AlertHistoryMobileList changing history', () => {
       const assistantOpen = vi.spyOn(aiChatStore, 'isOpen', 'get').mockReturnValue(false);
       try {
         expect(screen.queryByRole('dialog')).toBeNull();
-        expect(screen.getByRole('button', { name: 'Timeline' })).toBeVisible();
+        expect(screen.getByRole('button', { name: /^Timeline for / })).toBeVisible();
         assistantOpen.mockReturnValue(true);
         viewport.matches = false;
         resize();
@@ -308,7 +310,7 @@ describe('AlertHistoryMobileList changing history', () => {
     const { closeResourceIncidentPanel, setGroupedAlerts, state } = createState();
     render(() => <AlertHistoryMobileList state={state} />);
 
-    const resourceButton = screen.getByRole('button', { name: 'Resource' });
+    const resourceButton = screen.getByRole('button', { name: /^Resource incidents for / });
     resourceButton.focus();
     await fireEvent.click(resourceButton);
     expect(
@@ -353,7 +355,7 @@ describe('history handoff focus ownership', () => {
     const open = vi.spyOn(aiChatStore, 'open').mockImplementation(() => composer.focus());
     try {
       render(() => <AlertHistoryMobileList state={state} />);
-      await fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+      await fireEvent.click(screen.getByRole('button', { name: /^Timeline for / }));
       await fireEvent.click(
         screen.getByRole('button', {
           name: 'Discuss incident incident-focus with Pulse Assistant',
