@@ -343,6 +343,31 @@ persisted stale/fresh data and failures through this helper. No new route,
 navigation entry, destination or monitored-resource health signal is added.
 
 
+### Future backup success times cannot establish recovery
+
+Backup-age evaluation prefers usable success times over future-dated times for
+the same subject, regardless of provider/input order. If no usable success is
+available, it keeps only that subject's existing condition without renewing its
+age, severity or observation. Other subjects continue to evaluate. Deliberate
+ignore, suppression and disablement still take effect. Future evidence alone
+creates no invented backup-age alert.
+
+The evaluator reports unusable future success evidence through the existing
+`pulse-system-backup-evaluation` warning, with a stable fingerprint and guidance
+to check Pulse/backup-server clocks. Usable evidence may resolve an age alert;
+only an evaluation without unusable monitored evidence (or deliberate global
+policy disablement) clears this warning. No timestamps, stored points or server
+clocks are rewritten. This is age-alert integrity, not independent backup
+verification, native guest recovery or a change to protection rollup display.
+
+`TestBackupFutureSuccessPreservesOnlyUnprovenSubjects`,
+`TestBackupFutureSuccessCannotHideUsableProviders` and
+`TestBackupFutureSuccessStillHonoursDeliberatePolicy` cover retention,
+provider/input order, fresh recovery and policy controls. Monitoring's
+`TestBackupFutureSuccessWarningThroughReadState` connects persisted rollups,
+canonical guest lookup, the live alert manager and the served state for consuming
+browser checks.
+
 ### RAID spare-count lifecycle — issue #2369
 
 Canonical host RAID alerts use the shared required-member health assessment,

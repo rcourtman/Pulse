@@ -23054,3 +23054,141 @@ func TestZFSAlertsNameTheirStorage(t *testing.T) {
 		}
 	}
 }
+
+// A future timestamp is not a fresh backup. Keep only the affected subject's
+// prior condition, without stopping ordinary evaluation or policy changes.
+func TestBackupFutureSuccessPreservesOnlyUnprovenSubjects(t *testing.T) {
+	m := NewManagerWithDataDir(t.TempDir())
+	defer m.Stop()
+	cfg := m.GetConfig()
+	cfg.Enabled, cfg.ActivationState = true, ActivationActive
+	cfg.BackupDefaults.Enabled = true
+	cfg.BackupDefaults.WarningDays, cfg.BackupDefaults.CriticalDays = 1, 2
+	m.UpdateConfig(cfg)
+	now := time.Now().UTC()
+	guests := map[string]GuestLookup{}
+	byVMID := map[string][]GuestLookup{}
+	for _, id := range []int{100, 101, 102, 103} {
+		g := GuestLookup{ResourceID: fmt.Sprintf("vm-%d", id), Instance: "pve", Node: "node", VMID: id, Type: "qemu", Name: fmt.Sprintf("guest-%d", id)}
+		guests[BuildGuestKey(g.Instance, g.Node, id)] = g
+		byVMID[fmt.Sprint(id)] = []GuestLookup{g}
+	}
+	point := func(id int, at time.Time) recovery.ProtectionRollup {
+		return recovery.ProtectionRollup{RollupID: fmt.Sprintf("rollup-%d", id), LastSuccessAt: ptrTime(at), Providers: []recovery.Provider{recovery.ProviderProxmoxPVE}, SubjectRef: &recovery.ExternalRef{Type: "proxmox-vm", ID: BuildGuestKey("pve", "node", id)}}
+	}
+	active := func() map[string]Alert {
+		out := map[string]Alert{}
+		for _, a := range m.GetActiveAlerts() {
+			if a.Type == "backup-age" {
+				out[fmt.Sprint(a.Metadata["guestVmid"])] = a
+			}
+		}
+		return out
+	}
+	m.CheckBackups([]recovery.ProtectionRollup{point(100, now.Add(-4*24*time.Hour)), point(101, now.Add(-4*24*time.Hour))}, guests, byVMID)
+	before := active()
+	if len(before) != 2 {
+		t.Fatalf("initial stale subjects = %d", len(before))
+	}
+	m.CheckBackups([]recovery.ProtectionRollup{point(100, now.Add(24*time.Hour)), point(101, now), point(102, now.Add(-3*24*time.Hour)), point(103, now.Add(24*time.Hour))}, guests, byVMID)
+	after := active()
+	if len(after) != 2 || after["100"].ID == "" || after["102"].ID == "" {
+		t.Fatalf("future evidence erased a condition, blocked a peer, or invented an alert: subjects=%v", after)
+	}
+	if !reflect.DeepEqual(after["100"], before["100"]) {
+		t.Error("future evidence renewed or changed the retained alert")
+	}
+	m.CheckBackups([]recovery.ProtectionRollup{point(100, now), point(102, now.Add(-3*24*time.Hour))}, guests, byVMID)
+	if got := active(); len(got) != 1 || got["102"].ID == "" {
+		t.Error("genuine freshness did not resolve only the recovered subject")
+	}
+}
+
+func TestBackupFutureSuccessCannotHideUsableProviders(t *testing.T) {
+	for _, order := range []string{"future-first", "future-last"} {
+		for _, usable := range []string{"stale", "fresh"} {
+			t.Run(order+"/"+usable, func(t *testing.T) {
+				m := NewManagerWithDataDir(t.TempDir())
+				defer m.Stop()
+				cfg := m.GetConfig()
+				cfg.Enabled, cfg.ActivationState = true, ActivationActive
+				cfg.BackupDefaults.Enabled = true
+				cfg.BackupDefaults.WarningDays, cfg.BackupDefaults.CriticalDays = 1, 2
+				m.UpdateConfig(cfg)
+				now := time.Now().UTC()
+				g := GuestLookup{ResourceID: "vm-100", Instance: "pve", Node: "node", VMID: 100, Type: "qemu", Name: "database"}
+				key := BuildGuestKey("pve", "node", 100)
+				guests, byVMID := map[string]GuestLookup{key: g}, map[string][]GuestLookup{"100": {g}}
+				point := func(provider recovery.Provider, at time.Time) recovery.ProtectionRollup {
+					return recovery.ProtectionRollup{RollupID: string(provider), Providers: []recovery.Provider{provider}, LastSuccessAt: ptrTime(at), SubjectRef: &recovery.ExternalRef{Type: "proxmox-vm", ID: key}}
+				}
+				old := now.Add(-4 * 24 * time.Hour)
+				m.CheckBackups([]recovery.ProtectionRollup{point(recovery.ProviderProxmoxPVE, old)}, guests, byVMID)
+				at := now.Add(-3 * 24 * time.Hour)
+				if usable == "fresh" {
+					at = now
+				}
+				points := []recovery.ProtectionRollup{point(recovery.ProviderProxmoxPVE, now.Add(24*time.Hour)), point(recovery.ProviderProxmoxPBS, at)}
+				if order == "future-last" {
+					points[0], points[1] = points[1], points[0]
+				}
+				m.CheckBackups(points, guests, byVMID)
+				active := m.GetActiveAlerts()
+				if usable == "fresh" {
+					if len(active) != 0 {
+						t.Fatal("usable fresh evidence failed to resolve the stale condition")
+					}
+				} else if len(active) != 1 || active[0].Metadata["lastBackupTime"] != at || active[0].Metadata["source"] != "PBS" {
+					t.Fatal("future timestamp displaced usable stale evidence or its provider")
+				}
+			})
+		}
+	}
+}
+
+func TestBackupFutureSuccessStillHonoursDeliberatePolicy(t *testing.T) {
+	for _, policy := range []string{"global-disabled", "backup-disabled", "zero-thresholds", "guest-disabled", "guest-backup-disabled", "no-alerts-tag", "ignored-vmid"} {
+		t.Run(policy, func(t *testing.T) {
+			m := NewManagerWithDataDir(t.TempDir())
+			defer m.Stop()
+			cfg := m.GetConfig()
+			cfg.Enabled, cfg.ActivationState = true, ActivationActive
+			cfg.BackupDefaults.Enabled = true
+			cfg.BackupDefaults.WarningDays, cfg.BackupDefaults.CriticalDays = 1, 2
+			m.UpdateConfig(cfg)
+			now := time.Now().UTC()
+			key := BuildGuestKey("pve", "node", 100)
+			g := GuestLookup{ResourceID: "vm-100", Instance: "pve", Node: "node", VMID: 100, Type: "qemu", Name: "database"}
+			guests, byVMID := map[string]GuestLookup{key: g}, map[string][]GuestLookup{"100": {g}}
+			point := recovery.ProtectionRollup{RollupID: "subject", Providers: []recovery.Provider{recovery.ProviderProxmoxPVE}, LastSuccessAt: ptrTime(now.Add(-4 * 24 * time.Hour)), SubjectRef: &recovery.ExternalRef{Type: "proxmox-vm", ID: key}}
+			m.CheckBackups([]recovery.ProtectionRollup{point}, guests, byVMID)
+			if len(m.GetActiveAlerts()) != 1 {
+				t.Fatal("missing initial stale alert")
+			}
+			cfg = m.GetConfig()
+			switch policy {
+			case "global-disabled":
+				cfg.Enabled = false
+			case "backup-disabled":
+				cfg.BackupDefaults.Enabled = false
+			case "zero-thresholds":
+				cfg.BackupDefaults.WarningDays, cfg.BackupDefaults.CriticalDays = 0, 0
+			case "guest-disabled":
+				cfg.Overrides["vm-100"] = ThresholdConfig{Disabled: true}
+			case "guest-backup-disabled":
+				cfg.Overrides["vm-100"] = ThresholdConfig{Backup: &BackupAlertConfig{Enabled: false}}
+			case "no-alerts-tag":
+				g.Tags = []string{"pulse-no-alerts"}
+				guests[key], byVMID["100"] = g, []GuestLookup{g}
+			case "ignored-vmid":
+				cfg.BackupDefaults.IgnoreVMIDs = []string{"100"}
+			}
+			m.UpdateConfig(cfg)
+			point.LastSuccessAt = ptrTime(now.Add(24 * time.Hour))
+			m.CheckBackups([]recovery.ProtectionRollup{point}, guests, byVMID)
+			if len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("future evidence overrode deliberate alert policy")
+			}
+		})
+	}
+}
