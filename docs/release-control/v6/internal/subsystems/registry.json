@@ -2245,6 +2245,7 @@
               "internal/agentcapabilities/invocation_test.go",
               "internal/agentcapabilities/manifest_test.go",
               "internal/agentcapabilities/mcp_test.go",
+              "internal/agentcapabilities/patrol_scope_tools_test.go",
               "internal/agentcapabilities/schema_test.go",
               "internal/agentcapabilities/types_test.go",
               "internal/api/agent_capabilities_test.go",
@@ -2911,6 +2912,7 @@
               "internal/agentcapabilities/invocation_test.go",
               "internal/agentcapabilities/manifest_test.go",
               "internal/agentcapabilities/mcp_test.go",
+              "internal/agentcapabilities/patrol_scope_tools_test.go",
               "internal/agentcapabilities/schema_test.go",
               "internal/agentcapabilities/types_test.go",
               "internal/api/agent_capabilities_test.go",
@@ -3134,6 +3136,7 @@
             "exact_files": [
               "frontend-modern/src/hooks/__tests__/useProtectionPostures.test.ts",
               "frontend-modern/src/types/recovery.ts",
+              "internal/api/investigation_evidence_parity_test.go",
               "internal/api/recovery_handlers_test.go",
               "internal/api/route_inventory_test.go"
             ]
@@ -3247,6 +3250,7 @@
               "internal/api/docker_container_action_executor_test.go",
               "internal/api/docker_container_action_result_test.go",
               "internal/api/host_agent_removal_lifecycle_integration_test.go",
+              "internal/api/investigation_evidence_parity_test.go",
               "internal/api/issue1640_readiness_gate_test.go",
               "internal/api/issue1640_readiness_transport_test.go",
               "internal/api/metadata_handlers_test.go",
@@ -6229,7 +6233,8 @@
               "internal/api/truenas_disk_history_integration_test.go",
               "internal/monitoring/disk_drawer_native_history_test.go",
               "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
-              "internal/monitoring/monitor_metrics_slo_test.go"
+              "internal/monitoring/monitor_metrics_slo_test.go",
+              "internal/monitoring/storage_history_test.go"
             ]
           },
           {

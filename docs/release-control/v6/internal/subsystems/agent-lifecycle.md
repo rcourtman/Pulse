@@ -101,6 +101,15 @@ Unraid/QNAP/Linux/PowerShell, TLS/identity/repetition/cleanup and containing
 publication remain separate obligations; this source proof does not resolve
 #1099 or claim installed restoration.
 
+### Collected backup evidence does not require command-agent access
+
+Guest investigation manifests include the existing read-only storage tool for
+collected backup attempts. The org-scoped recovery reader preserves task error
+text independently of PVE command clients and connected agents. Missing command
+access remains an execution boundary; reading a failure or a successful task
+does not grant a lifecycle action or prove a restorable artifact. Manifest,
+persisted-task and API/tool parity regressions cover this separation.
+
 ### Patrol maintenance coverage adds no agent authority
 
 The Patrol operator-state projection in `internal/api/router.go` now reads the

@@ -1381,6 +1381,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/api/docker_container_action_executor_test.go",
                         "internal/api/docker_container_action_result_test.go",
                         "internal/api/host_agent_removal_lifecycle_integration_test.go",
+                        "internal/api/investigation_evidence_parity_test.go",
                         "internal/api/issue1640_readiness_gate_test.go",
                         "internal/api/issue1640_readiness_transport_test.go",
                         "internal/api/metadata_handlers_test.go",
@@ -2845,6 +2846,7 @@ None yet.
                         "internal/monitoring/disk_drawer_native_history_test.go",
                         "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
                         "internal/monitoring/monitor_metrics_slo_test.go",
+                        "internal/monitoring/storage_history_test.go",
                     ],
                 }
             ],

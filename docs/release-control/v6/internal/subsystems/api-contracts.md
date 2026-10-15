@@ -33,6 +33,20 @@ boundary; full configapi PTY/tool/privacy/caller tests exercise the commands.
 Browser acceptance must use the actual producer fields through their existing
 setup/agent consumers, not a frontend-file guard skip or fabricated commands.
 
+### Recovery point reads stay coherent between HTTP and investigations
+
+The points endpoint and investigation adapter use the same org-scoped manager
+reader. Demo composition reads the canonical fixture graph through the recovery
+query helpers; ordinary tenants read their persisted store. Moving the existing
+in-memory filters into recovery preserves point, series and facet query semantics
+and pagination bounds. The API/tool parity regression checks that a collected
+backup failure remains readable without a PVE client or command agent. The
+investigation backup inventory uses the same `KindBackup` and canonical subject
+query as the points endpoint, retaining point identity, repository references,
+tri-state verification and evidence provenance in real and demo modes. Tool
+pagination translates global offsets into the shared source's bounded pages.
+No route, entitlement, recovery mutation or action approval is added.
+
 ### Patrol setup panel reuses existing AI endpoints
 
 The Patrol page setup panel adds no endpoint or payload field. It calls

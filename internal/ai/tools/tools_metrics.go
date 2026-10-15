@@ -20,7 +20,7 @@ func (e *PulseToolExecutor) registerMetricsTools() {
 			Description: `Get performance metrics, baselines, and sensor data.
 
 Types:
-- performance: Historical CPU/memory/disk metrics over 24h or 7d
+- performance: Historical CPU/memory/disk metrics, or storage usage percentages, over 24h or 7d. Accepts the canonical resource_id from pulse_query. Storage responses retain the history source; mock_synthetic is demo data, not observed infrastructure history.
 - temperatures: CPU, disk, and sensor temperatures from hosts
 - network: Network interface statistics (rx/tx bytes, speed)
 - diskio: Disk I/O statistics (read/write bytes, ops)
@@ -51,7 +51,7 @@ Examples:
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Filter by resource type: agent, vm, system-container (performance). The node alias is also accepted. Baselines accept vm, system-container, node.",
+						Description: "Filter by resource type: agent, vm, system-container, storage, ceph (performance). The node alias is also accepted. Baselines accept vm, system-container, node.",
 					},
 					"host": {
 						Type:        "string",
@@ -143,9 +143,9 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use agent, vm, or system-container (node is an alias)", resourceType)), nil
 		}
 		resourceType = canonicalMetricsResourceType(resourceType)
-		validTypes := map[string]bool{"agent": true, "vm": true, "system-container": true, "node": true}
+		validTypes := map[string]bool{"agent": true, "vm": true, "system-container": true, "node": true, "storage": true, "ceph": true}
 		if !validTypes[resourceType] {
-			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use agent, vm, or system-container (node is an alias)", resourceType)), nil
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use agent, vm, system-container, storage, or ceph (node is an alias)", resourceType)), nil
 		}
 	}
 
@@ -189,6 +189,9 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 			}
 			metricsID = target.ResourceID
 			metricsTarget = target
+		}
+		if metricsTarget != nil && metricsTarget.ResourceType == "storage" {
+			return e.storageMetricsHistory(response.ResourceID, *metricsTarget, period, duration)
 		}
 		var metrics []MetricPoint
 		var err error
@@ -800,7 +803,7 @@ func (e *PulseToolExecutor) executeListPhysicalDisks(_ context.Context, args map
 const maxMetricPoints = 120
 
 // downsampleMetrics reduces a slice of MetricPoints to targetCount points
-// by bucket-averaging. Each bucket covers an equal time span and the output
+// by bucket-averaging. Each bucket covers consecutive observations and the output
 // point uses the bucket's midpoint timestamp with averaged metric values.
 func downsampleMetrics(points []MetricPoint, targetCount int) []MetricPoint {
 	if len(points) <= targetCount || targetCount <= 0 {
@@ -812,18 +815,13 @@ func downsampleMetrics(points []MetricPoint, targetCount int) []MetricPoint {
 		return points[i].Timestamp.Before(points[j].Timestamp)
 	})
 
-	bucketSize := len(points) / targetCount
-	if bucketSize < 1 {
-		bucketSize = 1
-	}
-
 	result := make([]MetricPoint, 0, targetCount)
-	for i := 0; i < len(points); i += bucketSize {
-		end := i + bucketSize
-		if end > len(points) {
-			end = len(points)
-		}
-		bucket := points[i:end]
+	for i := 0; i < targetCount; i++ {
+		// Proportional boundaries cover every observation. Fixed-size buckets
+		// followed by an output cap discarded the newest remainder samples.
+		start := i * len(points) / targetCount
+		end := (i + 1) * len(points) / targetCount
+		bucket := points[start:end]
 
 		var sumCPU, sumMem, sumDisk float64
 		hasDisk := false
@@ -849,9 +847,6 @@ func downsampleMetrics(points []MetricPoint, targetCount int) []MetricPoint {
 		}
 		result = append(result, avg)
 
-		if len(result) >= targetCount {
-			break
-		}
 	}
 
 	return result

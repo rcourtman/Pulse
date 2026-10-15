@@ -158,6 +158,18 @@ userinfo/query/fragment and malformed URLs. Accepted-host and
 routing and diagnostics. This bounds client diagnostics, not arbitrary provider
 error text, previously saved logs, native trust recovery or an installed service.
 
+### Investigation evidence retains tenant and runtime-source boundaries
+
+Recovery HTTP and tool reads share `Manager.ListPointsForOrg`: a nonblank tenant
+is required, cancellation and read failures remain errors, and ordinary reads
+use that tenant's cached store. The optional demo source follows the current
+fixture graph and never merges persisted tenant rows into demo evidence. The
+real-to-demo-to-real regression checks both consumers and retained store data;
+the persisted task regression excludes another tenant and another guest with
+the same provider VM ID. Historical storage reads preserve source labels and
+requested time bounds. These read paths add no credential, execution or approval
+authority.
+
 ### Patrol maintenance coverage widens no authority
 
 Patrol inherits only maintenance from an ancestor window scoped

@@ -59,6 +59,19 @@ separate native outcome; source PTYs and publishing an incoming updater do
 not establish it. `portable_bootstrap_test.go` and the serialized API contract
 cover these producer boundaries without touching stored monitoring data.
 
+### Recovery APIs and investigations share the org-scoped point reader
+
+`Manager.ListPointsForOrg` selects the composed recovery evidence source for
+both the HTTP points API and investigation tools. Real installations retain
+tenant-scoped SQLite reads, including errors; demo composition projects the
+current canonical fixture graph through shared recovery filters and pagination.
+It does not seed a second store or grant recovery execution. Source selection is
+bound before consumers share the manager and follows runtime demo-mode changes
+without exposing persisted rows through demo reads. Manager boundary tests preserve tenant
+validation, cancellation and read failures; the API/tool parity regression in
+`internal/api/investigation_evidence_parity_test.go` reads actual graph-owned
+failure text without a PVE command connection.
+
 ### Patrol maintenance coverage adds no recovery execution
 
 Patrol's operator-state projection now projects the active recurring

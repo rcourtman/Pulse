@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -15,6 +16,21 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+// RecoveryPointsSource projects the canonical demo graph through the same
+// filters and pagination for API and investigation reads. It does not seed or
+// consult a second store, and cannot supply evidence outside demo mode.
+type RecoveryPointsSource struct{}
+
+func (RecoveryPointsSource) Active() bool { return IsMockEnabled() }
+
+func (RecoveryPointsSource) ListPoints(ctx context.Context, _ string, opts recovery.ListPointsOptions) ([]recovery.RecoveryPoint, int, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
+	points := recovery.FilterPoints(CurrentFixtureGraph().RecoveryPoints(), opts)
+	return recovery.PaginatePoints(points, opts.Page, opts.Limit), len(points), nil
+}
 
 func (g FixtureGraph) RecoveryPoints() []recovery.RecoveryPoint {
 	resources, _ := g.UnifiedResourceSnapshot()

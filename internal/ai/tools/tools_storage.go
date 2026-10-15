@@ -19,7 +19,7 @@ func (e *PulseToolExecutor) registerStorageTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseStorageToolName,
-			Description: `Query storage pools, backups, snapshots, Ceph, replication, RAID, and disk health. Use the "type" parameter to select what to query.`,
+			Description: `Query storage pools, backups, snapshots, Ceph, replication, RAID, and disk health. Use the "type" parameter to select what to query. backups returns collected backup artifact records from the canonical recovery inventory, including repository references and verification evidence when collected. backup_tasks returns collected backup attempt status, timestamps and failure error text without requiring host command access. Neither an artifact record nor task success alone proves a restorable backup exists.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -34,7 +34,7 @@ func (e *PulseToolExecutor) registerStorageTools() {
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "Filter by VM/container ID (for backups, snapshots, resource_disks)",
+						Description: "Filter by resource ID (canonical subject ID for backups and backup_tasks; VM/container ID for snapshots, resource_disks)",
 					},
 					"guest_id": {
 						Type:        "string",
@@ -137,96 +137,52 @@ func (e *PulseToolExecutor) executeStorage(ctx context.Context, args map[string]
 	}
 }
 
-func (e *PulseToolExecutor) executeListBackups(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+func (e *PulseToolExecutor) executeListBackups(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	resourceID, _ := args["resource_id"].(string)
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
-
-	if e.backupProvider == nil {
-		return NewTextResult("Backup information not available."), nil
+	if limit <= 0 {
+		limit = recovery.DefaultListPageLimit
 	}
-
-	backups := e.backupProvider.GetBackups()
-	pbsInstances := e.backupProvider.GetPBSInstances()
+	if limit > recovery.MaxListPageLimit {
+		limit = recovery.MaxListPageLimit
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if e.recoveryPointsProvider == nil {
+		return NewErrorResult(fmt.Errorf("backup inventory unavailable: recovery points provider not configured")), nil
+	}
 
 	response := EmptyBackupsResponse()
+	response.Pagination = &PaginationInfo{Limit: limit, Offset: offset}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
-	// PBS Backups
-	count := 0
-	for _, b := range backups.PBS {
-		if resourceID != "" && b.VMID != resourceID {
-			continue
+	// Translate the tool's global offset into the canonical store's pages.
+	// At most two pages are needed, even for offsets beyond the first 4,000
+	// records. Do not scan or paginate each provider's legacy lists separately.
+	const pageLimit = recovery.MaxListPageLimit
+	page, skip := offset/pageLimit+1, offset%pageLimit
+	for len(response.Points) < limit {
+		points, total, err := e.recoveryPointsProvider.ListPoints(ctx, recovery.ListPointsOptions{
+			Kind: recovery.KindBackup, SubjectResourceID: strings.TrimSpace(resourceID),
+			Page: page, Limit: pageLimit,
+		})
+		if err != nil {
+			return NewErrorResult(err), nil
 		}
-		if count < offset {
-			count++
-			continue
-		}
-		if len(response.PBS) >= limit {
+		response.Pagination.Total = total
+		if skip >= len(points) {
 			break
 		}
-		response.PBS = append(response.PBS, PBSBackupSummary{
-			VMID:       b.VMID,
-			BackupType: b.BackupType,
-			BackupTime: b.BackupTime,
-			Instance:   b.Instance,
-			Datastore:  b.Datastore,
-			SizeGB:     float64(b.Size) / (1024 * 1024 * 1024),
-			Verified:   b.Verified,
-			Protected:  b.Protected,
-		})
-		count++
-	}
-
-	// PVE Backups
-	count = 0
-	for _, b := range backups.PVE.StorageBackups {
-		if resourceID != "" && string(rune(b.VMID)) != resourceID {
-			continue
-		}
-		if count < offset {
-			count++
-			continue
-		}
-		if len(response.PVE) >= limit {
+		end := skip + min(limit-len(response.Points), len(points)-skip)
+		response.Points = append(response.Points, points[skip:end]...)
+		if end < len(points) || len(points) < pageLimit {
 			break
 		}
-		response.PVE = append(response.PVE, PVEBackupSummary{
-			VMID:       b.VMID,
-			BackupTime: b.Time,
-			SizeGB:     float64(b.Size) / (1024 * 1024 * 1024),
-			Storage:    b.Storage,
-		})
-		count++
-	}
-
-	// PBS Servers
-	for _, pbs := range pbsInstances {
-		server := PBSServerSummary{
-			Name:   pbs.Name,
-			Host:   pbs.Host,
-			Status: pbs.Status,
-		}
-		for _, ds := range pbs.Datastores {
-			server.Datastores = append(server.Datastores, DatastoreSummary{
-				Name:         ds.Name,
-				UsagePercent: ds.Usage,
-				FreeGB:       float64(ds.Free) / (1024 * 1024 * 1024),
-			})
-		}
-		response.PBSServers = append(response.PBSServers, server)
-	}
-
-	// Recent tasks
-	for _, t := range backups.PVE.BackupTasks {
-		if len(response.RecentTasks) >= 20 {
-			break
-		}
-		response.RecentTasks = append(response.RecentTasks, BackupTaskSummary{
-			VMID:      t.VMID,
-			Node:      t.Node,
-			Status:    t.Status,
-			StartTime: t.StartTime,
-		})
+		page++
+		skip = 0
 	}
 
 	return NewJSONResult(response.NormalizeCollections()), nil
@@ -780,6 +736,20 @@ func recoveryPointCanonicalTaskError(p recovery.RecoveryPoint) string {
 	return ""
 }
 
+func backupTaskMatchesStatus(filter, status string, outcome recovery.Outcome) bool {
+	if filter == "" || strings.EqualFold(filter, status) {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(filter)) {
+	case "ok", "success":
+		return outcome == recovery.OutcomeSuccess
+	case "error", "failed":
+		return outcome == recovery.OutcomeFailed
+	default:
+		return false
+	}
+}
+
 func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.backupProvider == nil && e.recoveryPointsProvider == nil {
 		return NewTextResult("State provider not available."), nil
@@ -1104,6 +1074,7 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 
 	instanceFilter, _ := args["instance"].(string)
 	guestIDFilter, _ := args["guest_id"].(string)
+	resourceIDFilter, _ := args["resource_id"].(string)
 	statusFilter, _ := args["status"].(string)
 	limit := intArg(args, "limit", 50)
 
@@ -1140,9 +1111,11 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 		for page := 1; page <= maxPages; page++ {
 			points, _, err := e.recoveryPointsProvider.ListPoints(ctx, recovery.ListPointsOptions{
 				Provider: recovery.ProviderProxmoxPVE,
-				Kind:     recovery.KindBackup,
-				Page:     page,
-				Limit:    pageLimit,
+				// Task rows are execution evidence (KindOther), not backup
+				// artifacts. The prefix below also accepts older stored task kinds.
+				SubjectResourceID: resourceIDFilter,
+				Page:              page,
+				Limit:             pageLimit,
 			})
 			if err != nil {
 				return NewErrorResult(err), nil
@@ -1153,6 +1126,9 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 
 			for _, p := range points {
 				if !strings.HasPrefix(strings.TrimSpace(p.ID), "pve-task:") {
+					continue
+				}
+				if resourceIDFilter != "" && p.SubjectResourceID != resourceIDFilter {
 					continue
 				}
 				totalCount++
@@ -1171,7 +1147,7 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 				if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
 					continue
 				}
-				if statusFilter != "" && !strings.EqualFold(status, statusFilter) {
+				if !backupTaskMatchesStatus(statusFilter, status, p.Outcome) {
 					continue
 				}
 
@@ -1223,6 +1199,9 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 			if !strings.HasPrefix(strings.TrimSpace(p.ID), "pve-task:") {
 				continue
 			}
+			if resourceIDFilter != "" && p.SubjectResourceID != resourceIDFilter {
+				continue
+			}
 
 			instance := recoveryPointCanonicalInstance(p)
 			node := recoveryPointCanonicalNode(p)
@@ -1238,7 +1217,7 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 			if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
 				continue
 			}
-			if statusFilter != "" && !strings.EqualFold(status, statusFilter) {
+			if !backupTaskMatchesStatus(statusFilter, status, p.Outcome) {
 				continue
 			}
 
