@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "f08265557598e0e4bd738e83bb17c9d042375c0a",
+  "verified_at": "2026-10-15T12:33:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/utils/status.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "6f3e7f237f7e075c92c56f7cdfbc4999558bc082479a83deb2ea9f5e326ca886",
+    "frontend-modern/src/utils/status.ts": "e9b233352cab5a521534b16eef384258d92c6544c7a68f0575296afd88d3c5d9"
+  },
+  "routes": [
+    "/base/tmp/guest-state/fixture.html",
+    "/final/tmp/guest-state/fixture.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Production useWorkloads HTTP adapter, GuestRow, full GuestDrawer and stylesheet consume safe synthetic unified-resource responses. This is an isolated consuming fixture, not the App shell or native appliance/recovery acceptance.",
+    "Paused, suspended, starting and unknown runtime states retain their own labels rather than Stopped; both row and header use amber for paused/suspended/unknown. A reported stopped guest stays red and labelled Stopped.",
+    "Both indicators retain the existing failed-attached-probe warning, offline-parent precedence and green recovery. Stable canonical identity keeps the same row, status dot and open drawer header mounted through replacement.",
+    "Independent missing and retained readings and backup safety guidance survive the status correction. No guest/diagnostic or mutation request is made; safe GET responses and empty stored History are not native producer, guest liveness, thaw or backup proof.",
+    "Nineteen final semantic/reopen phases at desktop Chromium 141 and phone WebKit 26 with Playwright 1.56.1 matching the integration lock. Thirteen final captures opened with native view_image; no page/console error or horizontal page overflow; context/browser/server closure completed.",
+    "Exact-base phone control independently showed Stopped in the row versus Paused in the drawer; its capture and an initial driver-selector failure capture were also inspected. The completed control was not replayed when resuming final desktop/phone phases."
+  ],
+  "interactions": [
+    "Expand the real row using its desktop Expand backup-guest disclosure or a phone name tap; inspect its full drawer and safety notice.",
+    "Replace resource HTTP responses for paused, suspended, unknown, starting, stopped, running, attached-probe failure and recovery while verifying mounted identities and matching accessible status labels/colours.",
+    "Change the existing parent-online input without a guest operation and confirm Node offline in both indicators, then restore it and the probe response.",
+    "Collapse the drawer through its real header button, narrow the phone to 320px, and reopen it by tapping the workload name; no page overflow."
+  ]
+}
