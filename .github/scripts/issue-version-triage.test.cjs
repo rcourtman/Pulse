@@ -1630,7 +1630,7 @@ test("a report with no label delta needs no additional pre-write read", async ()
   assert.equal(calls.removeLabel.length, 0);
 });
 
-test("unknown current versions retire only managed exact-version labels", async () => {
+test("explicit unknown current versions retire only managed exact-version labels", async () => {
   const preserved = ["bug", "needs-retest-on-latest", "needs-decomposition",
     "needs-human", "operator-reviewed", "affects-main", "affects-storage"];
   for (const body of [
@@ -1639,7 +1639,6 @@ test("unknown current versions retire only managed exact-version labels", async 
     "### Pulse version\n6.5\n### Agent version\n6.5.0",
     "### Pulse version\n_No response_\n",
     "### Pulse version\n\n### Agent version\n6.5.0",
-    "The running version is unavailable.",
   ]) {
     const { github, calls } = createGithub();
     const issue = { number: 2916, title: "Upgrade from v6.4.5", body,
@@ -1651,6 +1650,69 @@ test("unknown current versions retire only managed exact-version labels", async 
     assert.equal(calls.getLatestRelease.length, 0);
     assert.equal(calls.createComment.length, 0);
   }
+});
+
+test("free-form reports preserve established version metadata without a form declaration", async () => {
+  for (const [title, body, versions] of [
+    ["Windows guest reads stop after restart", "**Environment**\n- Pulse Pro 6.5.0 (Docker), upgraded from 6.4.5\n- Guest agent 110.0.2", ["6.5.0"]],
+    ["Telegram rejects ordinary alerts", "## Environment\n\n- Pulse server v6.5.0-rc.1 (LXC), upgraded from v6.4.5", ["6.4.5", "6.5.0-rc.1"]],
+    ["ARM temperature is missing", "## Environment\n\n* Pulse v6.4.1 (Docker)\n* Unified agent v6.4.1", ["6.4.1"]],
+    ["Upgrade from v6.4.5", "The running version is unavailable.", ["6.4.5"]],
+    ["TrueNAS CORE 13.0.6 readings", "Version evidence is in an earlier comment or screenshot.", ["6.5.0"]],
+    ["Bug on v6.6.0-beta.3", "An unrelated edit to a free-form report.", ["6.5.0"]],
+  ]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2922, title, body,
+      labels: ["bug", ...versions.map(version => `affects-${version}`),
+        "needs-retest-on-latest", "needs-human", "operator-reviewed"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ action: "edited", issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels, [], title);
+    assert.deepEqual(calls.removeLabel, [], title);
+    assert.deepEqual(calls.getLabel, [], title);
+    assert.deepEqual(calls.createLabel, [], title);
+    assert.equal(calls.getIssue.length, 1, title);
+    assert.deepEqual(calls.getLatestRelease, [], title);
+    assert.deepEqual(calls.createComment, [], title);
+    assert.deepEqual(calls.paginate, [], title);
+  }
+});
+
+test("absent version declarations do not invent evidence from unrelated labels", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2923, title: "Bug", body: "Version is unavailable.",
+    labels: ["bug", "affects-main", "affects-storage", "needs-human"].map(name => ({ name })) };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-version-info"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
+test("free-form version preservation still applies other current metadata deltas", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2924, title: "Guest reads stop after restart",
+    body: "## Environment\n\n- Pulse Pro 6.5.0\n\n### Additional actionable topics\n\nHistory is also missing.\n\n### Confirmations\n\nDone.",
+    labels: ["bug", "affects-6.5.0", "needs-human"].map(name => ({ name })) };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.getLabel, ["needs-decomposition"]);
+  assert.equal(calls.getIssue.length, 2);
+  assert.deepEqual(calls.createComment, []);
+});
+
+test("free-form version preservation cannot apply an unrelated stale metadata delta", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2925, title: "Bug",
+    body: "### Additional actionable topics\n\nHistory is missing too.\n\n### Confirmations\n\nDone.",
+    labels: ["bug", "affects-6.5.0"].map(name => ({ name })) };
+  github.rest.issues.getLabel = async () => {
+    github.currentIssue = { ...github.currentIssue, state: "closed" };
+    return { data: {} };
+  };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.equal(calls.getIssue.length, 2);
 });
 
 test("a delayed known-version event cleans metadata from the current unknown report", async () => {

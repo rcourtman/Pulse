@@ -160,7 +160,7 @@ function normalizeLegacyVersionValue(value) {
     ? normalizeVersion(visible) : null;
 }
 
-function extractPulseVersion(title, body) {
+function pulseVersionEvidence(title, body) {
   if (body) {
     const lines = declarationLines(body);
     const versionHeading = lines.findIndex((line) =>
@@ -170,7 +170,10 @@ function extractPulseVersion(title, body) {
       // The explicit running-version field is authoritative, even when it is
       // incomplete. A title may name the old image in an upgrade report, and
       // neighbouring fields may contain an unrelated agent version.
-      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(versionHeading + 1)));
+      return {
+        version: normalizeLegacyVersionValue(firstFieldValue(lines.slice(versionHeading + 1))),
+        declared: true,
+      };
     }
     for (let i = 0; i < lines.length; i += 1) {
       if (!lines[i].declaration) continue;
@@ -190,17 +193,26 @@ function extractPulseVersion(title, body) {
         /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
       );
       const inlineValue = visibleField ? visibleField[1].trim() : "";
-      if (inlineValue) return normalizeLegacyVersionValue(inlineValue);
+      if (inlineValue) {
+        return { version: normalizeLegacyVersionValue(inlineValue), declared: true };
+      }
       // A declared value may itself be fenced; that does not turn headings
       // elsewhere in a fenced log into declarations.
-      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(i + 1)));
+      return {
+        version: normalizeLegacyVersionValue(firstFieldValue(lines.slice(i + 1))),
+        declared: true,
+      };
     }
   }
 
   // A starting version named in an upgrade title is not a running-version
   // declaration. Copied examples may leave no usable body field at all.
-  if (/\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing))\b[^\n]*\bfrom\b/i.test(String(title || ""))) return null;
-  return normalizeVersion(title);
+  const upgradeFrom = /\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing))\b[^\n]*\bfrom\b/i.test(String(title || ""));
+  return { version: upgradeFrom ? null : normalizeVersion(title), declared: false };
+}
+
+function extractPulseVersion(title, body) {
+  return pulseVersionEvidence(title, body).version;
 }
 
 function classifyV6FeedbackType(body) {
@@ -276,7 +288,8 @@ function buildTriageState(issue, core, latestVersion) {
 
   const hasAdditionalActionableTopics = classifyAdditionalActionableTopics(issue.body);
 
-  const reportedVersion = extractPulseVersion(issue.title, issue.body);
+  const { version: reportedVersion, declared: hasDeclaredPulseVersion } =
+    pulseVersionEvidence(issue.title, issue.body);
   core.info(`Reported Pulse version: ${reportedVersion || "not found"}`);
   if (latestVersion) core.info(`Latest stable release: ${latestVersion}`);
 
@@ -284,6 +297,7 @@ function buildTriageState(issue, core, latestVersion) {
     labelNames,
     nextLabels,
     reportedVersion,
+    hasDeclaredPulseVersion,
     v6FeedbackClass,
     hasAdditionalActionableTopics,
     isBugLike: nextLabels.has(BUG_LABEL),
@@ -292,11 +306,15 @@ function buildTriageState(issue, core, latestVersion) {
   };
 }
 
+function isExactVersionLabel(label) {
+  return /^affects-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(label);
+}
+
 function keepOnlyReportedVersionLabel(nextLabels, reportedVersion) {
   const keep = reportedVersion ? `${VERSION_LABEL_PREFIX}${reportedVersion}` : null;
   for (const label of [...nextLabels]) {
     if (
-      /^affects-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(label) &&
+      isExactVersionLabel(label) &&
       label !== keep
     ) {
       nextLabels.delete(label);
@@ -366,6 +384,7 @@ async function syncLabels({ github, context, core }) {
     labelNames,
     nextLabels,
     reportedVersion,
+    hasDeclaredPulseVersion,
     hasAdditionalActionableTopics,
     isBugLike,
   } = buildTriageState(issue, core, null);
@@ -400,6 +419,17 @@ async function syncLabels({ github, context, core }) {
     return;
   }
 
+  // Community can establish versions from free-form prose, comments and
+  // screenshots that this form parser deliberately does not interpret. An
+  // absent declaration cannot contradict those labels, nor can a title's
+  // incidental platform/upgrade version. Explicit fields still supersede old
+  // version metadata, including a correction to unknown or incomplete.
+  if (!hasDeclaredPulseVersion && [...labelNames].some(isExactVersionLabel)) {
+    core.info("No explicit Pulse version field; preserving established version metadata for Community review.");
+    await applyLabelDelta(github, context, issue, labelNames, nextLabels, core);
+    return;
+  }
+
   if (reportedVersion) {
     await ensureLabel(
       github,
@@ -421,7 +451,7 @@ async function syncLabels({ github, context, core }) {
     nextLabels.add(NEEDS_VERSION_LABEL);
   }
 
-  // A correction to unknown, incomplete or absent version evidence retires
+  // A correction to unknown or incomplete declared version evidence retires
   // this synchronizer's old exact-version assertions too. It must not leave
   // a known affected version beside its missing-version classification.
   keepOnlyReportedVersionLabel(nextLabels, reportedVersion);
