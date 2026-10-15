@@ -5,10 +5,12 @@ import type { ThresholdsTableProps } from '@/features/alerts/thresholds/types';
 import { useThresholdsTableState } from '../useThresholdsTableState';
 
 let mockPathname = '/alerts/thresholds/systems';
+let mockHash = '';
+const setCollapsedSpy = vi.fn();
 const navigateSpy = vi.fn();
 
 vi.mock('@solidjs/router', () => ({
-  useLocation: () => ({ pathname: mockPathname }),
+  useLocation: () => ({ pathname: mockPathname, hash: mockHash }),
   useNavigate: () => navigateSpy,
 }));
 
@@ -21,6 +23,7 @@ vi.mock('@/components/Alerts/Thresholds/hooks/useCollapsedSections', () => ({
     collapseAll: vi.fn(),
     expandAll: vi.fn(),
     isCollapsed: () => false,
+    setCollapsed: setCollapsedSpy,
     toggleSection: vi.fn(),
   }),
 }));
@@ -182,6 +185,8 @@ const buildProps = (): ThresholdsTableProps =>
 
 beforeEach(() => {
   mockPathname = '/alerts/thresholds/systems';
+  mockHash = '';
+  setCollapsedSpy.mockReset();
   navigateSpy.mockReset();
   localStorage.clear();
 });
@@ -237,5 +242,24 @@ describe('useThresholdsTableState', () => {
         total: 1,
       }),
     );
+  });
+  // The backup shield's dialog links here, so a user can change when a backup
+  // counts as old (#2858): the Recovery section opens and scrolls into view.
+  it('opens and scrolls to the Recovery section from a #backups link', () => {
+    mockPathname = '/alerts/thresholds/proxmox';
+    mockHash = '#backups';
+    let captured: ReturnType<typeof useThresholdsTableState> | undefined;
+
+    const Harness = () => {
+      captured = useThresholdsTableState(buildProps());
+      return null;
+    };
+
+    render(() => <Harness />);
+    expect(setCollapsedSpy).toHaveBeenCalledWith('backups', false);
+
+    const section = { scrollIntoView: vi.fn() } as unknown as HTMLDivElement;
+    captured!.registerSection('backups')(section);
+    expect(section.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
   });
 });

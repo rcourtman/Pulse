@@ -53,6 +53,7 @@ vi.mock('../useAlertOverridesState', () => ({
   }),
 }));
 
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { useAlertsConfigurationState } from '../useAlertsConfigurationState';
 
 describe('useAlertsConfigurationState', () => {
@@ -149,5 +150,40 @@ describe('useAlertsConfigurationState', () => {
     );
     expect(mockSaveDestinations).toHaveBeenCalledTimes(1);
     expect(setHasUnsavedChanges).toHaveBeenLastCalledWith(false);
+  });
+  // A user who raised Fresh Hours for a three-day backup cycle (#2858) went
+  // back to their guests and still saw amber until a reload: the shields read
+  // the shared activation config, which the save did not refresh.
+  it('refreshes the shared activation config once a save lands', async () => {
+    mockGetConfig.mockResolvedValueOnce({ overrides: {} });
+    const { result } = renderHook(() =>
+      useAlertsConfigurationState({
+        activeTab: () => 'thresholds',
+        allResources: () => [],
+        byType: () => [],
+        children: () => [],
+        activeAlerts: {},
+        removeAlerts: vi.fn(),
+        setOverviewOverrides: vi.fn(),
+        hasUnsavedChanges: () => true,
+        setHasUnsavedChanges: vi.fn(),
+        alertsActivationState: () => 'active',
+        alertsActivationConfig: () => ({ enabled: true }),
+      }),
+    );
+    await waitFor(() => expect(result.isReloadingConfig()).toBe(false));
+
+    mockGetConfig.mockResolvedValue({
+      overrides: {},
+      backupDefaults: { freshHours: 72, staleHours: 96 },
+    });
+    await result.saveAlertConfiguration();
+
+    await waitFor(() =>
+      expect(useAlertsActivation().getBackupThresholds()).toEqual({
+        freshHours: 72,
+        staleHours: 96,
+      }),
+    );
   });
 });

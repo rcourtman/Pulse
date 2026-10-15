@@ -1397,6 +1397,12 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     than converting missing evidence into "never backed up." Legacy workload
     rows without platform metadata retain the Proxmox-compatible behavior at
     the migration boundary.
+
+    A backup shield's hover card and dialog name the limit that coloured it
+    through `getWorkloadsGuestBackupAgeRule` (Fresh Hours decides amber for stale
+    and overdue alike; overdue also names Stale Hours), read from the same
+    configured thresholds the row already holds, so the row adds no request. The
+    dialog links to the Recovery thresholds (`ALERT_BACKUP_THRESHOLDS_PATH`).
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
     The selected resource owns its drawer tab and History range. Regrouping the
     same resource under a new parent or node retains both even if its drawer

@@ -2,6 +2,7 @@ import { createSignal, onCleanup, onMount } from 'solid-js';
 import type { Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import type { Alert } from '@/types/api';
@@ -45,6 +46,7 @@ export interface AlertsConfigurationSurfaceProps {
 }
 
 export function useAlertsConfigurationState(props: AlertsConfigurationSurfaceProps) {
+  const alertsActivation = useAlertsActivation();
   const [isReloadingConfig, setIsReloadingConfig] = createSignal(false);
   const [isConfigLoaded, setIsConfigLoaded] = createSignal(false);
   const [configLoadError, setConfigLoadError] = createSignal<string | null>(null);
@@ -146,8 +148,10 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
     const savedVersion = configurationVersion;
     const ownsSave = () => savedVersion === configurationVersion;
     setIsSavingConfig(true);
+    let configSaved = false;
     try {
       await AlertsAPI.updateConfig(result.alertConfig!);
+      configSaved = true;
       if (!ownsSave()) return;
       await destinationsState.saveDestinations(destinationsSnapshot, ownsSave);
       if (!ownsSave()) return;
@@ -159,6 +163,10 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
       if (ownsSave()) throw error;
     } finally {
       if (ownsSave()) setIsSavingConfig(false);
+      // Backup shields and metric bars on every page colour by the shared
+      // activation config; re-read it so a saved limit shows without a
+      // reload, even when a later destinations write fails.
+      if (configSaved && ownsSave()) void alertsActivation.refreshConfig();
     }
   };
 

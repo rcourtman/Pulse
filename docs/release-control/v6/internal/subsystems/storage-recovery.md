@@ -291,6 +291,10 @@ server posture policy (`freshnessWindowSeconds`) using the causes
 `internal/recovery/posture.go` evaluates, and renders no rule until that policy
 has loaded rather than a guessed window.
 
+The workload backup shield explains its colour from the configured Fresh and
+Stale Hours and links to the Recovery thresholds through the shared
+`ALERT_BACKUP_THRESHOLDS_PATH`; it reads no recovery evidence of its own.
+
 Phone pool/disk rows preserve health and identity while using weighted widths,
 consistent gutters and compact capacity/health labels. Full disk risk reasons
 move into the existing expanded header; the ZFS activity badge uses supplied

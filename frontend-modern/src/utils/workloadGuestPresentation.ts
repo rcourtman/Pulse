@@ -1,4 +1,4 @@
-import type { BackupStatus } from '@/utils/format';
+import { resolveBackupThresholds, type BackupStatus, type BackupThresholds } from '@/utils/format';
 
 // The age-derived BackupStatus plus the overlay state for a backup that is
 // running right now. 'running' never comes from getBackupInfo (which only
@@ -56,6 +56,36 @@ export function getWorkloadsGuestBackupStatusPresentation(
   status: WorkloadsGuestBackupDisplayStatus,
 ): WorkloadsGuestBackupStatusPresentation {
   return BACKUP_STATUS_PRESENTATION[status];
+}
+
+const formatBackupAgeLimit = (hours: number): string => {
+  if (hours >= 24 && hours % 24 === 0) {
+    const days = hours / 24;
+    return `${days} day${days === 1 ? '' : 's'}`;
+  }
+  return `${hours} hour${hours === 1 ? '' : 's'}`;
+};
+
+// Which of the operator's own age limits coloured a completed backup, so an
+// amber shield says why instead of leaving the user to find the Recovery
+// thresholds (#2858). Amber starts after Fresh Hours for stale and overdue
+// alike, so both name that field; Stale Hours only marks overdue on top.
+// Statuses without an age have no rule to name.
+export function getWorkloadsGuestBackupAgeRule(
+  status: BackupStatus,
+  thresholds?: BackupThresholds,
+): string | null {
+  const { freshHours, staleHours } = resolveBackupThresholds(thresholds);
+  switch (status) {
+    case 'fresh':
+      return `Fresh: no more than ${formatBackupAgeLimit(freshHours)} old (Fresh Hours).`;
+    case 'stale':
+      return `Shown amber: more than ${formatBackupAgeLimit(freshHours)} old (Fresh Hours).`;
+    case 'overdue':
+      return `Shown amber: more than ${formatBackupAgeLimit(freshHours)} old (Fresh Hours). Also past Stale Hours (${formatBackupAgeLimit(staleHours)}).`;
+    default:
+      return null;
+  }
 }
 
 export function getWorkloadsGuestBackupTooltip(

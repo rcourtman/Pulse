@@ -8,6 +8,10 @@ import {
   getGuestDrawerGuestReadPresentation,
   type GuestDrawerGuestReadEvidence,
 } from './guestDrawerModel';
+import {
+  EXTERNAL_TEXT_LINK_BASE_CLASS,
+  EXTERNAL_TEXT_LINK_VARIANT_CLASSES,
+} from '@/components/shared/ExternalTextLink';
 
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useTooltip } from '@/hooks/useTooltip';
@@ -20,9 +24,11 @@ import {
   getBackupInfo,
   type BackupInfo,
 } from '@/utils/format';
+import { ALERT_BACKUP_THRESHOLDS_PATH } from '@/routing/resourceLinks';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { AvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
 import {
+  getWorkloadsGuestBackupAgeRule,
   getWorkloadsGuestBackupStatusPresentation,
   getWorkloadsGuestBackupTooltip,
   getWorkloadsGuestNetworkEmptyState,
@@ -357,6 +363,9 @@ function BackupStatusCell(props: {
   // table row on each shared-clock tick. Unknown/future evidence has no time.
   const completionTime = () =>
     hasCompletedBackup() ? formatBackupCompletionTime(props.lastBackup!) : null;
+  const ageRule = createMemo(() =>
+    getWorkloadsGuestBackupAgeRule(info().status, alertsActivation.getBackupThresholds()),
+  );
   const ariaLabel = createMemo(() => {
     const currentInfo = info();
     if (props.indicator) {
@@ -388,7 +397,7 @@ function BackupStatusCell(props: {
     props.guestReadEvidence ? getGuestDrawerGuestReadPresentation(props.guestReadEvidence) : null;
   const guestReadPrecaution = () =>
     props.guestReadEvidence ? getGuestDrawerGuestReadPrecaution(props.guestReadEvidence) : null;
-  const Evidence = (evidenceProps: { dialog?: boolean }) => (
+  const Evidence = (evidenceProps: { dialog?: boolean; ruleLink?: boolean }) => (
     <div class="space-y-2 text-xs">
       <Show when={props.guestName}>
         <p class="font-medium text-base-content wrap-break-word">{props.guestName}</p>
@@ -407,6 +416,22 @@ function BackupStatusCell(props: {
               {completion().dateLabel}
             </time>
             <div class="text-base-content">{info().ageFormatted}</div>
+          <Show when={ageRule()}>
+            {(rule) => (
+              <p class="text-muted" data-backup-age-rule>
+                {rule()}
+              </p>
+            )}
+          </Show>
+          <Show when={evidenceProps.ruleLink && ageRule()}>
+            <a
+              href={ALERT_BACKUP_THRESHOLDS_PATH}
+              class={`${EXTERNAL_TEXT_LINK_BASE_CLASS} ${EXTERNAL_TEXT_LINK_VARIANT_CLASSES.compactAction} -mx-1`}
+              onClick={() => setDetailsOpen(false)}
+            >
+              Change when backups count as old
+            </a>
+          </Show>
           </div>
         )}
       </Show>
@@ -519,7 +544,7 @@ function BackupStatusCell(props: {
             </button>
           </div>
           <div class="overflow-y-auto p-4">
-            <Evidence dialog />
+            <Evidence dialog ruleLink />
           </div>
         </Dialog>
       </Show>
