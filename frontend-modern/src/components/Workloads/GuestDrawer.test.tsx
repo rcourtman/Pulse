@@ -86,6 +86,7 @@ vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
 
 // After mocks, import the component under test
 import { GuestDrawer } from './GuestDrawer';
+import { createGuestDrawerViewState } from './useGuestDrawerState';
 // Overview loads its charts lazily; warm the module so a cold transform does
 // not outlast the tests' waits.
 import './GuestDrawerHistory';
@@ -192,8 +193,15 @@ describe('GuestDrawer', () => {
   it('keeps drawer health consistent with the row through runtime, probe and parent changes', () => {
     const [guest, setGuest] = createSignal(makeGuest());
     const [parentOnline, setParentOnline] = createSignal(true);
-    render(() => (
-      <GuestDrawer guest={guest()} parentNodeOnline={parentOnline()} onClose={vi.fn()} />
+    const viewState = createGuestDrawerViewState();
+    viewState.setActiveTab('manage');
+    solidRender(() => (
+      <GuestDrawer
+        guest={guest()}
+        parentNodeOnline={parentOnline()}
+        viewState={viewState}
+        onClose={vi.fn()}
+      />
     ));
     const heading = screen.getByRole('heading', { name: 'test-vm' });
     const status = () => heading.parentElement!.querySelector('[role="img"]')!;
@@ -231,6 +239,7 @@ describe('GuestDrawer', () => {
     setGuest({ ...guest(), availability: undefined });
     expect(dot).toHaveAttribute('aria-label', 'Running');
     expect(dot).toHaveClass('bg-emerald-500');
+    expect(chartsApiMocks.getMetricsHistory).not.toHaveBeenCalled();
   });
 
   it('keeps the shared memory provenance policy in the full guest drawer after live replacement', async () => {
@@ -258,7 +267,9 @@ describe('GuestDrawer', () => {
         },
       }),
     );
-    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    // This test consumes Overview directly; the legacy helper opens Manage
+    // and would abort the initial History read before reopening it.
+    solidRender(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1));
     const chart = screen.getAllByTestId('guest-history-group-chart')[0];
@@ -300,7 +311,9 @@ describe('GuestDrawer', () => {
     const [guest, setGuest] = createSignal(
       makeGuest({ lock: 'backup', diskStatusReason: 'prev-vm-locked' }),
     );
-    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    // This test consumes Overview directly; the legacy helper opens Manage
+    // and would abort the initial History read before reopening it.
+    solidRender(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await screen.findByRole('slider', { name: 'Inspect Utilization history' });
     const chart = screen.getAllByTestId('guest-history-group-chart')[0];
@@ -443,7 +456,9 @@ describe('GuestDrawer', () => {
         lock: 'backup',
       }),
     );
-    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    // This test consumes Overview directly; the legacy helper opens Manage
+    // and would abort the initial History read before reopening it.
+    solidRender(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await waitFor(() =>
       expect(screen.getAllByText('No stored history in this range')).toHaveLength(3),
@@ -1110,7 +1125,9 @@ describe('GuestDrawer', () => {
         balloon: 2147483648,
       };
       render(() => <GuestDrawer guest={makeGuest({ memory })} onClose={vi.fn()} />);
-      expect(screen.getByText('Memory')).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('guest-technical-details')).getByText('Memory', { exact: true }),
+      ).toBeInTheDocument();
       expect(screen.getByText(/Balloon/)).toBeInTheDocument();
     });
 
@@ -1137,7 +1154,9 @@ describe('GuestDrawer', () => {
       render(() => <GuestDrawer guest={makeGuest({ memory })} onClose={vi.fn()} />);
       // Row-level usage is not repeated; capacity and optional balloon/swap
       // facts remain visible in the compact drawer section.
-      expect(screen.getByText('Memory')).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('guest-technical-details')).getByText('Memory', { exact: true }),
+      ).toBeInTheDocument();
       expect(screen.queryByText(/Balloon/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Swap/)).not.toBeInTheDocument();
     });
