@@ -27,8 +27,12 @@ reader. Demo composition reads the canonical fixture graph through the recovery
 query helpers; ordinary tenants read their persisted store. Moving the existing
 in-memory filters into recovery preserves point, series and facet query semantics
 and pagination bounds. The API/tool parity regression checks that a collected
-backup failure remains readable without a PVE client or command agent. No route,
-entitlement, recovery mutation or action approval is added.
+backup failure remains readable without a PVE client or command agent. The
+investigation backup inventory uses the same `KindBackup` and canonical subject
+query as the points endpoint, retaining point identity, repository references,
+tri-state verification and evidence provenance in real and demo modes. Tool
+pagination translates global offsets into the shared source's bounded pages.
+No route, entitlement, recovery mutation or action approval is added.
 
 ### Patrol setup panel reuses existing AI endpoints
 

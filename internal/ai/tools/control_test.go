@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -22,34 +22,24 @@ func mustParseJSONMapControl(t *testing.T, text string) map[string]interface{} {
 }
 
 func TestPulseToolExecutor_ExecuteListBackups(t *testing.T) {
-	backupProv := &mockBackupProvider{}
+	resourceID := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "west", 101)
+	point := recovery.RecoveryPoint{ID: "backup-artifact", Provider: recovery.ProviderProxmoxPBS, Kind: recovery.KindBackup, SubjectResourceID: resourceID}
 	exec := NewPulseToolExecutor(ExecutorConfig{
-		BackupProvider: backupProv,
-		ControlLevel:   ControlLevelReadOnly,
+		RecoveryPointsProvider: inventoryPointsProviderFunc(func(ctx context.Context, opts recovery.ListPointsOptions) ([]recovery.RecoveryPoint, int, error) {
+			assert.Equal(t, recovery.KindBackup, opts.Kind)
+			assert.Equal(t, resourceID, opts.SubjectResourceID)
+			return []recovery.RecoveryPoint{point}, 1, nil
+		}),
+		ControlLevel: ControlLevelReadOnly,
 	})
-
-	expectedBackups := models.Backups{
-		PBS: []models.PBSBackup{
-			{VMID: "101", BackupType: "vm", BackupTime: time.Now(), Instance: "pbs1", Datastore: "ds1", Size: 1024 * 1024 * 1024},
-		},
-		PVE: models.PVEBackups{
-			StorageBackups: []models.StorageBackup{
-				{VMID: 102, Time: time.Now(), Size: 2 * 1024 * 1024 * 1024, Storage: "local"},
-			},
-			BackupTasks: []models.BackupTask{
-				{VMID: 101, Node: "node1", Status: "OK", StartTime: time.Now()},
-			},
-		},
-	}
-	backupProv.On("GetBackups").Return(expectedBackups)
-	backupProv.On("GetPBSInstances").Return([]models.PBSInstance{})
-
-	// Use pulse_storage tool with type: "backups"
 	result, err := exec.ExecuteTool(context.Background(), "pulse_storage", map[string]interface{}{
-		"type": "backups",
+		"type": "backups", "resource_id": resourceID,
 	})
 	assert.NoError(t, err)
 	assert.False(t, result.IsError)
+	var response BackupsResponse
+	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &response))
+	assert.Equal(t, []recovery.RecoveryPoint{point}, response.Points)
 }
 
 func TestPulseToolExecutor_ExecuteControlGuest(t *testing.T) {

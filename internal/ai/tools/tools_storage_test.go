@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -71,75 +70,8 @@ func (s *stubUpdatesProvider) IsUpdateActionsEnabled() bool {
 	return s.enabled
 }
 
-func TestExecuteListBackupsAndStorage(t *testing.T) {
+func TestExecuteListStorage(t *testing.T) {
 	executor := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{}})
-	executor.backupProvider = &stubBackupProvider{
-		backups: models.Backups{
-			PBS: []models.PBSBackup{
-				{
-					VMID:       "100",
-					BackupType: "vm",
-					BackupTime: time.Unix(1000, 0),
-					Instance:   "pbs1",
-					Datastore:  "ds1",
-					Size:       1024 * 1024 * 1024,
-					Verified:   true,
-					Protected:  true,
-				},
-			},
-			PVE: models.PVEBackups{
-				StorageBackups: []models.StorageBackup{
-					{
-						VMID:    101,
-						Time:    time.Unix(1100, 0),
-						Size:    2 * 1024 * 1024 * 1024,
-						Storage: "local",
-					},
-				},
-				BackupTasks: []models.BackupTask{
-					{
-						VMID:      101,
-						Node:      "node1",
-						Status:    "OK",
-						StartTime: time.Unix(1200, 0),
-					},
-				},
-			},
-		},
-		pbs: []models.PBSInstance{
-			{
-				Name:   "pbs1",
-				Host:   "10.0.0.1",
-				Status: "online",
-				Datastores: []models.PBSDatastore{
-					{
-						Name:  "ds1",
-						Usage: 50.0,
-						Free:  1024 * 1024 * 1024,
-					},
-				},
-			},
-		},
-	}
-
-	result, _ := executor.executeListBackups(context.Background(), map[string]interface{}{})
-	var backupsResp BackupsResponse
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &backupsResp); err != nil {
-		t.Fatalf("decode backups response: %v", err)
-	}
-	if len(backupsResp.PBS) != 1 || backupsResp.PBS[0].SizeGB != 1 {
-		t.Fatalf("unexpected PBS backups: %+v", backupsResp.PBS)
-	}
-	if len(backupsResp.PVE) != 1 || backupsResp.PVE[0].SizeGB != 2 {
-		t.Fatalf("unexpected PVE backups: %+v", backupsResp.PVE)
-	}
-	if len(backupsResp.PBSServers) != 1 || len(backupsResp.PBSServers[0].Datastores) != 1 {
-		t.Fatalf("unexpected PBS servers: %+v", backupsResp.PBSServers)
-	}
-	if len(backupsResp.RecentTasks) != 1 {
-		t.Fatalf("unexpected recent tasks: %+v", backupsResp.RecentTasks)
-	}
-
 	// Storage pools and Ceph data come from the unified resource provider.
 	storageUsedBytes := int64(1024 * 1024 * 1024)
 	storageTotalBytes := int64(4 * 1024 * 1024 * 1024)
@@ -192,7 +124,7 @@ func TestExecuteListBackupsAndStorage(t *testing.T) {
 		},
 	}
 
-	result, _ = executor.executeListStorage(context.Background(), map[string]interface{}{})
+	result, _ := executor.executeListStorage(context.Background(), map[string]interface{}{})
 	var storageResp StorageResponse
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &storageResp); err != nil {
 		t.Fatalf("decode storage response: %v", err)
@@ -213,32 +145,6 @@ func TestStorageUsagePercentNotDoubled(t *testing.T) {
 	// Regression test: Usage is already 0-100 from safePercentage().
 	// The bug was multiplying by 100 again, turning 25% into 2500%.
 	executor := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{}})
-
-	// PBS datastore path
-	executor.backupProvider = &stubBackupProvider{
-		pbs: []models.PBSInstance{
-			{
-				Name:   "pbs1",
-				Host:   "10.0.0.1",
-				Status: "online",
-				Datastores: []models.PBSDatastore{
-					{Name: "ds1", Usage: 12.3, Free: 1024 * 1024 * 1024},
-				},
-			},
-		},
-	}
-	result, _ := executor.executeListBackups(context.Background(), map[string]interface{}{})
-	var backupsResp BackupsResponse
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &backupsResp); err != nil {
-		t.Fatalf("decode backups response: %v", err)
-	}
-	if len(backupsResp.PBSServers) != 1 || len(backupsResp.PBSServers[0].Datastores) != 1 {
-		t.Fatalf("unexpected PBS servers: %+v", backupsResp.PBSServers)
-	}
-	got := backupsResp.PBSServers[0].Datastores[0].UsagePercent
-	if got != 12.3 {
-		t.Errorf("PBS datastore UsagePercent = %v, want 12.3 (double-multiplied = %v)", got, 12.3*100)
-	}
 
 	// Storage pool path
 	storageUsedBytes := int64(1024 * 1024 * 1024)
@@ -346,7 +252,7 @@ func TestStorageResponsesUseCanonicalEmptyCollections(t *testing.T) {
 	if err := json.Unmarshal(backupsPayload, &backupsMap); err != nil {
 		t.Fatalf("decode empty backups response: %v", err)
 	}
-	for _, key := range []string{"pbs", "pve", "pbs_servers", "recent_tasks"} {
+	for _, key := range []string{"points"} {
 		values, ok := backupsMap[key].([]any)
 		if !ok || len(values) != 0 {
 			t.Fatalf("expected %s to serialize as an empty array, got %T (%v)", key, backupsMap[key], backupsMap[key])

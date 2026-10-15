@@ -91,6 +91,58 @@ func TestInvestigationBackupTasksUseCommunityRecoverySource(t *testing.T) {
 	}
 }
 
+func TestInvestigationBackupInventoryMatchesCommunityPoints(t *testing.T) {
+	testutil.SetMockMode(t, true)
+	manager := newRecoveryReadManager(config.NewMultiTenantPersistence(t.TempDir()))
+	var selected recovery.RecoveryPoint
+	for _, point := range mock.CurrentFixtureGraph().RecoveryPoints() {
+		if point.Kind == recovery.KindBackup && point.SubjectResourceID != "" {
+			selected = point
+			break
+		}
+	}
+	require.NotEmpty(t, selected.ID)
+	store, err := manager.StoreForOrg("default")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	require.NoError(t, store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{selected}))
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{RecoveryPointsProvider: tools.NewRecoveryPointsToolAdapter(manager, "default")})
+	for _, demo := range []bool{true, false, true} {
+		require.NoError(t, mock.SetEnabled(demo))
+		for _, resourceID := range []string{selected.SubjectResourceID, "vm-missing"} {
+			recorder := httptest.NewRecorder()
+			NewRecoveryHandlers(manager).HandleListPoints(recorder, httptest.NewRequest(http.MethodGet,
+				"/api/recovery/points?kind=backup&limit=500&itemResourceId="+url.QueryEscape(resourceID), nil))
+			require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+			var apiResponse struct {
+				Data []recovery.RecoveryPoint `json:"data"`
+				Meta struct {
+					Total int `json:"total"`
+				} `json:"meta"`
+			}
+			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &apiResponse))
+			result, err := executor.ExecuteTool(context.Background(), "pulse_storage", map[string]interface{}{
+				"type": "backups", "resource_id": resourceID, "limit": 500,
+			})
+			require.NoError(t, err)
+			require.False(t, result.IsError, result.Content)
+			var toolResponse struct {
+				Points     []recovery.RecoveryPoint `json:"points"`
+				Pagination tools.PaginationInfo     `json:"pagination"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &toolResponse))
+			require.Equal(t, apiResponse.Meta.Total, toolResponse.Pagination.Total)
+			require.Equal(t, apiResponse.Data, toolResponse.Points, "inventory identity, repository, verification and provenance must match HTTP")
+			if resourceID == selected.SubjectResourceID {
+				require.NotEmpty(t, toolResponse.Points)
+			} else {
+				require.NotNil(t, toolResponse.Points)
+				require.Empty(t, toolResponse.Points)
+			}
+		}
+	}
+}
+
 type investigationHistoryResources struct{ resource unifiedresources.Resource }
 
 func (p investigationHistoryResources) GetByType(kind unifiedresources.ResourceType) []unifiedresources.Resource {
