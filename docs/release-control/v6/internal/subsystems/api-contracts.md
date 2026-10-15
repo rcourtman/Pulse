@@ -12251,3 +12251,14 @@ Routes, caller scope/token filtering, cache policy and probe count are unchanged
 `TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization` cover real
 HTTP statuses, private-body controls, same-credential fixture recovery and wire
 attribution. They are not installed permission or guest-recovery acceptance.
+
+### Proxmox setup output consumption
+
+The existing PVE/PBS setup URL, credential-free script and agent-install client
+payloads are unchanged. The consuming frontend serializes preparation and
+accepts output only for its current editor revision through every asynchronous
+mint, download and clipboard boundary. Endpoint/name/target, setup/authentication
+mode, installer TLS, import review and editor lifetime changes retire output,
+including reversals. Same-target health polling preserves an unexpired cache.
+A late result is not a retry, cancellation, token revocation or installed
+platform acceptance. Separate-token and least-privilege handoffs still apply.

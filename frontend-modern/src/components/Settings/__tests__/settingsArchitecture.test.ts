@@ -1844,7 +1844,11 @@ describe('settings architecture guardrails', () => {
       'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true',
     );
     expect(nodeModalSetupGuideSectionSource).toContain('setupCommandButtonTitle');
-    expect(nodeModalSetupGuideSectionSource).toContain('disabled={setupHandoffDisabled()}');
+    expect(nodeModalSetupGuideSectionSource).toContain(
+      'disabled={state.isPreparingSetup() || setupHandoffDisabled()}',
+    );
+    expect(nodeModalSetupGuideSectionSource).toContain('Preparing setup output');
+    expect(nodeModalStateSource).toContain('!props.setupHandoffDisabled?.()');
     expect(nodeModalSetupGuideSectionSource).toContain('Credential-free command ready');
     expect(nodeModalSetupGuideSectionSource).toContain('one-time setup token is shown separately');
     expect(nodeModalStateSource).toContain('copyToClipboard(data.command)');
