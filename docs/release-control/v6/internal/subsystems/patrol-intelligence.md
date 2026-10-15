@@ -2808,6 +2808,26 @@ intermediate and narrow linked journey is exercised by
 rule reason requirement, the remembered-decision path, the alert-only
 guidance, and the flapping collapse.
 
+### Open resource goes to the page that shows the resource
+
+The attention detail's `Open resource` link sent every subject to
+`/standalone/machines?resource=`, which lists only standalone agent hosts and
+does not read `?resource=`, so Docker, Proxmox, vSphere, TrueNAS and
+Mail Gateway decisions opened a page without their resource. The workbench
+now resolves `subjectResourceId` through `ResourceAPI.getResource` and builds
+the link with `buildResourcePagePath`
+(`frontend-modern/src/features/platformNavigation/resourcePagePath.ts`): the
+platform comes from the registry resource's own platform evidence, or, while
+that lookup runs or when the registry cannot resolve the record, from the
+item's `subjectResourceType` hint in the alert display vocabulary. The page
+then selects the resource where it can (`?resource=` on Proxmox and vSphere
+workloads and Proxmox storage, the owning storage for `<storage>/zfs-pool:...`
+records), filters by name where that is the page's only selection (Docker
+containers, Kubernetes, Machines, Proxmox physical disks), and otherwise opens
+the owning tab. A subject that names no platform hides the link rather than
+opening a page without it (`resourcePagePath.test.ts`,
+`PatrolAttentionWorkbench.test.tsx`).
+
 ### A used-up cost budget pauses Patrol visibly
 
 Patrol distinguishes "Pulse declined to spend" from "the provider failed".
