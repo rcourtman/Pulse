@@ -25,6 +25,25 @@ rows, change count/volume and 7/30/90/365-day ranges, then clear the filter.
 Inspect actual captured pixels for legible selected-date feedback, totals and
 rows. No native backup, thaw or installed recovery acceptance follows.
 
+## Efficient Proxmox guest inventory continuity
+
+Automated: `TestEfficientGuestInventoryEmptyAndGrace`,
+`TestEfficientGuestInventoryRecoveryAndDeletion` and
+`TestEfficientGuestInventoryMoveDoesNotResurrectOldCoordinates`.
+Exercise real `/nodes` and `/cluster/resources?type=vm` reads through the normal
+owned guest cycle. An actually online empty node removes its last guests;
+offline/omitted nodes still in grace retain complete source tuples and times,
+without new History. Expired/never-online nodes keep the existing removal
+policy. Migration/template evidence excludes old coordinates; independent
+connections with equal native identifiers remain unchanged.
+
+Consume actual producer resources through the production Workloads table and
+full drawer on desktop and narrow touch. Inspect retained values and the open
+drawer during a genuine grace gap, advancing ordinary recovery, then removal
+and drawer closure after an accepted online empty result. Inspect pixels as
+well as membership and errors. Synthetic source/surface proof is not native
+guest/thaw/backup, installed recovery or release acceptance; no new gate follows.
+
 ## Workloads guest interface source selection — issue #2757
 
 Automated: `useWorkloads.test.ts` (both REST and owning-snapshot VM/LXC

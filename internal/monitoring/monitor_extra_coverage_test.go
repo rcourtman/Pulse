@@ -650,7 +650,7 @@ func TestMonitor_PollVMsAndContainersEfficient_Extra(t *testing.T) {
 	}
 
 	nodeStatus := map[string]string{"node1": "online"}
-	success := m.pollVMsAndContainersEfficient(context.Background(), "pve1", "", false, client, nodeStatus)
+	success := m.pollVMsAndContainersEfficient(context.Background(), "pve1", "", false, client, []proxmox.Node{{Node: "node1", Status: "online"}}, nodeStatus)
 
 	if !success {
 		t.Error("pollVMsAndContainersEfficient failed")
@@ -1458,6 +1458,7 @@ func TestPollVMsAndContainersEfficient_ContinuesGuestAgentQueriesAfterTransientS
 		"",
 		false,
 		client,
+		[]proxmox.Node{{Node: "node1", Status: "online"}},
 		map[string]string{"node1": "online"},
 	); !ok {
 		t.Fatal("expected efficient polling path to succeed")

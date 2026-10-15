@@ -39,7 +39,7 @@ func pveGuestEnrichmentContext(ctx context.Context) (context.Context, context.Ca
 // This works on both clustered and standalone nodes for efficient polling
 // When the instance is part of a cluster, the cluster name is used for guest IDs to prevent duplicates
 // when multiple cluster nodes are configured as separate PVE instances.
-func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodeEffectiveStatus map[string]string) bool {
+func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) bool {
 	log.Debug().
 		Str("instance", instanceName).
 		Str("clusterName", clusterName).
@@ -72,7 +72,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		prevGuests.hostAgentsByVMID,
 	)
 
-	allVMs, allContainers = m.preserveGuestsForGracePeriod(instanceName, resources, prevGuests.vms, prevGuests.containers, nodeEffectiveStatus, allVMs, allContainers)
+	allVMs, allContainers = m.preserveGuestsForGracePeriod(instanceName, resources, prevGuests, nodes, nodeEffectiveStatus, allVMs, allContainers)
 
 	// Check Docker presence for containers that need it (new, restarted, started)
 	allContainers = m.CheckContainersForDocker(enrichmentCtx, allContainers)
