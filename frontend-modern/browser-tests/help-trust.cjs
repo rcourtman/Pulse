@@ -18,7 +18,7 @@ const result = { result: 'incomplete', source_sha: binding.source_sha,
   limits: 'Synthetic offline settings only. No real provider, backend budget check, usage deletion, customer save, Patrol execution or published recovery.' };
 
 (async () => {
-  let server, browser;
+  let server, browser, releaseSave;
   try {
     fs.mkdirSync(output, { recursive: true });
     assert.equal(result.playwright, '1.56.1');
@@ -53,7 +53,7 @@ const result = { result: 'incomplete', source_sha: binding.source_sha,
       deepseek_configured: false, gemini_configured: false, ollama_configured: false,
       ollama_base_url: 'http://localhost:11434', ollama_keep_alive: '',
       cost_budget_usd_30d: 0, request_timeout_seconds: 300, patrol_auto_fix: false,
-      control_level: 'read_only' });
+      control_level: 'read_only', alert_triggered_analysis: true });
     const capabilities = { capabilities: ['ai_patrol'], limits: [], max_history_days: 7,
       runtime: { build: 'community', label: 'Pulse Community runtime' } };
     server = http.createServer(async (req, res) => {
@@ -73,7 +73,9 @@ const result = { result: 'incomplete', source_sha: binding.source_sha,
             assert.equal(payload.model, '');
             assert([0, 60].includes(payload.cost_budget_usd_30d));
             result.requests[result.requests.length - 1].payload = payload;
-            await new Promise(resolve => setTimeout(resolve, 250));
+            // Hold only this synthetic response until the consuming UI proves
+            // it is saving. Do not rely on a timing guess or a paid provider.
+            await new Promise(resolve => { releaseSave = resolve; });
             settings = { ...settings, ...payload }; return json(settings);
           }
           assert.equal(req.method, 'GET', 'no model, reset or diagnostic mutation');
@@ -244,14 +246,19 @@ const result = { result: 'incomplete', source_sha: binding.source_sha,
       const save = () => page.getByRole('button', { name: 'Save provider settings', exact: true });
       const savePositive = page.waitForResponse(response => response.url().endsWith('/api/settings/ai/update') && response.request().method() === 'PUT');
       await activate(save());
+      await page.waitForFunction(() => document.getElementById('ai-cost-budget').disabled);
       assert.equal(await budget.isDisabled(), true);
+      assert.equal(typeof releaseSave, 'function'); releaseSave(); releaseSave = null;
       assert.equal((await savePositive).ok(), true);
       await save().waitFor(); await page.waitForFunction(() => !document.getElementById('ai-cost-budget').disabled);
       await page.reload({ waitUntil: 'domcontentloaded' }); await budget.waitFor();
       assert.equal(await budget.inputValue(), '60'); await checkHelper();
       await budget.fill(''); await checkHelper();
       const saveEmpty = page.waitForResponse(response => response.url().endsWith('/api/settings/ai/update') && response.request().method() === 'PUT');
-      await activate(save()); assert.equal((await saveEmpty).ok(), true);
+      await activate(save());
+      await page.waitForFunction(() => document.getElementById('ai-cost-budget').disabled);
+      assert.equal(typeof releaseSave, 'function'); releaseSave(); releaseSave = null;
+      assert.equal((await saveEmpty).ok(), true);
       await save().waitFor();
       await page.reload({ waitUntil: 'domcontentloaded' }); await budget.waitFor();
       assert.equal(await budget.inputValue(), ''); await checkHelper();
@@ -262,6 +269,7 @@ const result = { result: 'incomplete', source_sha: binding.source_sha,
     assert.equal(result.errors.length, 0); result.result = 'passed';
   } catch (error) { result.failure = String(error.stack).slice(0, 5000); throw error; }
   finally {
+    if (releaseSave) { releaseSave(); releaseSave = null; }
     if (browser) await browser.close(); result.cleanup.browser_closed = true;
     if (server) await new Promise((resolve, reject) => {
       server.close(error => error ? reject(error) : resolve()); server.closeAllConnections();
