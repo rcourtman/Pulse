@@ -192,7 +192,7 @@ class PMGDocsTest(unittest.TestCase):
 
     def test_cluster_decoder_and_backup_target_errors_are_not_dns_advice(self):
         section = plain(self.text.split("### Cluster response or backup lookup errors", 1)[1])
-        for phrase in ("cannot unmarshal string", "ClusterStatus.cid",
+        for phrase in ("cannot unmarshal string", "ClusterStatusEntry.data.cid",
                        "Pulse rejected a cluster ID returned as text",
                        "not a PMG cluster setting to change",
                        "Pulse connection's display name",

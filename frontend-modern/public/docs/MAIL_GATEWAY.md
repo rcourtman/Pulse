@@ -135,7 +135,7 @@ or permissions:
 
 ### Cluster response or backup lookup errors
 
-An existing error mentioning `cannot unmarshal string` and `ClusterStatus.cid`
+An existing error mentioning `cannot unmarshal string` and `ClusterStatusEntry.data.cid`
 means Pulse rejected a cluster ID returned as text. It is not a PMG cluster
 setting to change, nor evidence that the gateway is unreachable. In affected
 builds, that failed cluster read can also make a configuration-backup request

@@ -51,7 +51,7 @@ const { chromium, webkit } = require('playwright');
       const text = await heading.evaluate((node) =>
         [node.nextElementSibling, node.nextElementSibling.nextElementSibling]
           .map((paragraph) => paragraph.textContent).join(' ').replace(/\s+/g, ' '));
-      for (const phrase of ['cannot unmarshal string', 'ClusterStatus.cid',
+      for (const phrase of ['cannot unmarshal string', 'ClusterStatusEntry.data.cid',
         "Pulse connection's display name", 'native PMG node name', 'hostname lookup failed',
         'Do not rename the connection or gateway, change DNS',
         "PMG's own web interface", 'not proof of an empty queue or no backups',
