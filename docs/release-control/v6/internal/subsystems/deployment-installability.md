@@ -297,6 +297,24 @@ matrix and smoke controls retain their cryptographic, metadata and return-trap
 coverage. These are source/fixture controls, not native systemd/LXC recovery,
 published installer trust, #2785's stop cause or installed acceptance.
 
+### Verified unattended update completion stays local
+
+After `perform_update` succeeds, the helper records success and completes its
+check without an HTTP notification request. The current server exposes no
+`/api/internal/notification` route. Legacy webhook-file presence cannot prove
+notification delivery or justify an unbounded, unauthenticated POST to a fixed
+local port, where it could wait on an unrelated or unresponsive service.
+This removes only that obsolete request; consent, edition/channel admission,
+signatures, transaction verification and recovery remain unchanged. It adds no
+replacement notification surface or destination-delivery claim.
+
+`TestAutoUpdateCompletionStaysLocal` runs the actual shell `main` with confined
+prerequisite/update callbacks and a private, deliberately stalled loopback
+listener. It requires prompt successful completion without any HTTP request,
+preserves both legacy configuration files, and retains failed-update and no-work
+outcomes. These are entry-flow/termination controls, not signed installation,
+native systemd/LXC recovery, #2785's stop cause or customer delivery acceptance.
+
 The helper records the installer and log collector's separate observed exit
 statuses immediately after their pipeline, before logging or recovery can
 overwrite them. The collector drains installer output even after a log-write

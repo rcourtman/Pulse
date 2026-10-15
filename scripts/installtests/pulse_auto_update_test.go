@@ -140,6 +140,32 @@ func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {
 	}
 }
 
+// main's completion path must not wait on a retired unauthenticated local
+// notification endpoint after the signed transaction has already succeeded.
+// This checks the real shell entry flow with private update callbacks, not
+// native installation or actual destination delivery.
+func TestAutoUpdateCompletionStaysLocal(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_completion.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("unattended local completion controls: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_verified_update_finishes_with_a_stalled_local_listener",
+		"test_each_legacy_webhook_file_and_absence_leave_completion_local",
+		"test_failed_update_is_not_relabelled_as_success",
+		"test_no_update_keeps_the_existing_no_work_completion",
+	} {
+		if !strings.Contains(string(out), fmt.Sprintf("%s (__main__.UpdateCompletion.%s) ... ok", name, name)) {
+			t.Fatalf("required local completion control %s did not pass:\n%s", name, out)
+		}
+	}
+	t.Logf("%s", out)
+}
+
 func TestAutoUpdateDownloadFailures(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
