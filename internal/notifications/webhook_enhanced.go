@@ -40,15 +40,19 @@ type WebhookFilterRules struct {
 // WebhookPayloadData contains all data available for templates
 type WebhookPayloadData struct {
 	// Alert fields
-	ID                 string
-	MessageKey         string
-	Level              string
-	Type               string
-	ResourceName       string
-	ResourceID         string
-	Node               string
-	NodeDisplayName    string
-	Instance           string
+	ID              string
+	MessageKey      string
+	Level           string
+	Type            string
+	ResourceName    string
+	ResourceID      string
+	Node            string
+	NodeDisplayName string
+	Instance        string
+	// AlertURL opens this alert in Pulse's Alert History, or the Alerts page
+	// for a grouped notification; it falls back to Instance when no public
+	// URL is configured.
+	AlertURL           string
 	Message            string
 	Value              float64
 	Threshold          float64
