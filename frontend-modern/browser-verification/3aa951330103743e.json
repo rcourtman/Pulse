@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "a994313722e4a4fb46854a63df9b16dccb4b061a",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "aa79e64b503b53d6e8220a3fa4dcc4b9ffbb328fb4cf8e4cc32702449f38a7d8",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "9fb6fb46cd3d0dfde491b9d6b3eebf7419d7e7f07efaf0d444cb3e5848de33f0"
+  },
+  "routes": [
+    "/settings/infrastructure?type=pve (offline actual consuming sections)",
+    "/settings/infrastructure?type=pbs (offline actual consuming sections)"
+  ],
+  "states": [
+    "pending script with revised connection name and disabled copy/download",
+    "obsolete mint after endpoint A → B → A produces no token/copy/notification",
+    "obsolete downloaded script after name edit produces no download or token",
+    "obsolete optional-agent result after TLS A → B → A is retired",
+    "late clipboard completion does not reveal a token or revive feedback",
+    "current error remains visible; next explicit setup action succeeds",
+    "current setup cache reuse, fresh script download and separate-token copy remain usable"
+  ],
+  "interactions": [
+    "Real basic-information and authentication/setup sections, hook, API clients, token dialog, notifications and production CSS with synthetic APIs/CSRF/clipboard only",
+    "Desktop keyboard activation and narrow touch for both platforms",
+    "36 explicit synthetic HTTP operations; four script download events; no unexpected API, page error or horizontal overflow",
+    "All 12 retained captures opened with native view_image original detail and visually inspected; real notification dismissals and successful token Copy/Dismiss exercised"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 940
+    },
+    {
+      "width": 390,
+      "height": 940
+    }
+  ],
+  "verified_at": "2026-10-15T02:49:17Z",
+  "browser_source_sha": "c29627d7b2ece1c381339d9579088b024d941ef7",
+  "browser": "Chromium 141.0.7390.37",
+  "playwright": "1.56.1",
+  "build_receipt": "source-_f5tfeje",
+  "driver": "frontend-modern/browser-tests/setup-output-lifecycle.cjs",
+  "consumer_inputs_unchanged_since_browser": true,
+  "post_browser_changes": "Only two test-fixture typing corrections; no compiled consumer or product input changed.",
+  "limits": [
+    "Synthetic browser flow, not full-app authentication, installed platform/TLS/agent setup, guest recovery or release availability.",
+    "Chromium only; no WebKit/Safari claim. Already dispatched clipboard writes and issued server tokens cannot be retracted by this UI change."
+  ]
+}
