@@ -39,6 +39,7 @@ For generic webhooks, use Go templates to format the JSON payload.
 - `{{.ResourceName}}`, `{{.ResourceID}}`, `{{.ResourceType}}`, `{{.Node}}`, `{{.NodeDisplayName}}`
 - `{{.Message}}`, `{{.Value}}`, `{{.Threshold}}`, `{{.Duration}}`, `{{.Timestamp}}`
 - `{{.Instance}}` (Pulse public URL if configured)
+- `{{.AlertURL}}` (opens the alert in Pulse's Alert History, or the Alerts page for a grouped notification; falls back to `{{.Instance}}` when no public URL is configured)
 - `{{.TenantID}}`, `{{.TenantName}}` (tenant identity in multi-tenant orgs and MSP client runtimes; empty on plain single-tenant installs)
 - `{{.CustomFields.<name>}}` (user-defined fields in the UI)
 - `{{.Metadata}}` (alert metadata map)

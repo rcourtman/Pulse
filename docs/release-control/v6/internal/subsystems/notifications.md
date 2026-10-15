@@ -1424,6 +1424,28 @@ Literal ASCII encoded-word syntax in supplied names is itself MIME-encoded,
 so decoding the subject once preserves the name rather than interpreting it as
 another identity. The literal-encoded-word control covers both MIME builders.
 
+### Notifications link to the alert they report
+
+With a public URL configured, a notification links to the alert itself rather
+than to Pulse's front page: `alertHistoryURL` builds
+`/alerts/history?alert=<id>`, the address the frontend opens one alert at
+(`buildAlertHistoryAlertPath`); a Patrol finding, which reaches notifications
+as a synthetic alert History never stores, links to the Patrol page
+(`alertLinkURL`), as does a batch made only of findings; and `alertsPageURL`
+links any other grouped
+notification to the Alerts overview while its alerts fire and to Alert
+History once they resolve. Single emails end with "View this alert in
+Pulse"; grouped emails link each alert's name and point their footer at the
+overview. Apprise and resolved text add a "View in Pulse" line per alert next
+to the existing Dashboard line. Webhook templates get `{{.AlertURL}}` (the
+alert link, the grouped page link, or the existing `{{.Instance}}` fallback
+without a public URL); the built-in Telegram, Slack, Teams, PagerDuty, Teams
+Adaptive Card, Gotify, ntfy and Mattermost templates link it and say "View in
+Pulse" where they said "View in Proxmox", and the default JSON payloads add
+`alertUrl`. `{{.Instance}}` keeps its meaning, so custom templates are
+unchanged. The link carries only the alert id already present in every
+payload (`alert_links_test.go`).
+
 ### SMTP editor settings follow the public configuration
 
 The existing Email notification form offers only settings accepted by its

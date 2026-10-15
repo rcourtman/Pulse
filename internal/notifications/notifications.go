@@ -2195,7 +2195,7 @@ func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*
 	// by using the From address as the recipient
 
 	// Generate email using template
-	subject, htmlBody, textBody := EmailTemplate(alertList, false)
+	subject, htmlBody, textBody := EmailTemplate(alertList, false, n.publicURL)
 
 	// Send using HTML-aware method
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID(alertList), config)
@@ -2287,6 +2287,9 @@ func buildApprisePayload(alertList []*alerts.Alert, publicURL string) (string, s
 		if alert.Instance != "" && alert.Instance != alert.Node {
 			bodyBuilder.WriteString(fmt.Sprintf("Instance: %s\n", alert.Instance))
 		}
+		if link := alertLinkURL(publicURL, alert); link != "" {
+			bodyBuilder.WriteString("View in Pulse: " + link + "\n")
+		}
 		bodyBuilder.WriteString("\n")
 	}
 
@@ -2362,6 +2365,11 @@ func buildResolvedNotificationContent(alertList []*alerts.Alert, resolvedAt time
 		}
 		if alert.Threshold != 0 || alert.Value != 0 {
 			bodyBuilder.WriteString(fmt.Sprintf("Last value %.2f (threshold %.2f)\n", alert.Value, alert.Threshold))
+		}
+		if link := alertLinkURL(publicURL, alert); link != "" {
+			bodyBuilder.WriteString("View in Pulse: ")
+			bodyBuilder.WriteString(link)
+			bodyBuilder.WriteString("\n")
 		}
 		bodyBuilder.WriteString("\n")
 	}
@@ -2580,7 +2588,7 @@ func (n *NotificationManager) sendResolvedApprise(config AppriseConfig, alertLis
 
 // sendEmail sends an email notification
 func (n *NotificationManager) sendSingleEmailWithError(alert *alerts.Alert, config EmailConfig) error {
-	subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true)
+	subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true, n.publicURL)
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID([]*alerts.Alert{alert}), config)
 }
 
@@ -2967,6 +2975,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 	data := n.prepareWebhookData(primaryAlert, customFields)
 	data.AlertCount = len(alertList)
 	data.Alerts = alertList
+	data.AlertURL = firstNonEmpty(alertsPageURL(n.publicURL, alertList, false), data.Instance)
 	data.Mention = webhook.Mention
 	if webhook.Service == "ntfy" {
 		webhook = withNtfyAlertHeaders(webhook, alertList)
@@ -2985,6 +2994,9 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			"timestamp": time.Now().Unix(),
 			"source":    "pulse-monitoring",
 			"grouped":   true,
+		}
+		if link := alertsPageURL(n.publicURL, alertList, false); link != "" {
+			payload["alertUrl"] = link
 		}
 		return json.Marshal(payload)
 	})
@@ -3044,6 +3056,7 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	data.NotRecovered = resolvedAlertsIncludeNotRecovered(alertList)
 	data.AlertCount = len(alertList)
 	data.Alerts = alertList
+	data.AlertURL = firstNonEmpty(alertsPageURL(n.publicURL, alertList, true), data.Instance)
 	if len(alertList) > 1 {
 		names := make([]string, 0, len(alertList))
 		for _, a := range alertList {
@@ -3076,6 +3089,9 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 
 		if len(alertList) == 1 {
 			payload["alertIdentifier"] = alert.ID
+		}
+		if link := alertsPageURL(n.publicURL, alertList, true); link != "" {
+			payload["alertUrl"] = link
 		}
 		return json.Marshal(payload)
 	})
@@ -3512,6 +3528,7 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		Node:               alert.Node,
 		NodeDisplayName:    alertNodeDisplay(alert),
 		Instance:           instance,
+		AlertURL:           firstNonEmpty(alertLinkURL(n.publicURL, alert), instance),
 		Message:            alert.Message,
 		Value:              roundedValue,
 		Threshold:          roundedThreshold,
