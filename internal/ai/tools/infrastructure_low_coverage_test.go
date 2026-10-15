@@ -472,21 +472,8 @@ func TestSharedToolSummaryOwnersUseCanonicalEmptyCollections(t *testing.T) {
 		})
 	}
 
-	payload, err := json.Marshal(BackupsResponse{
-		PBSServers: []PBSServerSummary{{Name: "pbs-1"}},
-	}.NormalizeCollections())
-	require.NoError(t, err)
-
 	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(payload, &decoded))
-	servers := decoded["pbs_servers"].([]any)
-	server := servers[0].(map[string]any)
-	datastores, ok := server["datastores"].([]any)
-	if !ok || len(datastores) != 0 {
-		t.Fatalf("expected pbs_servers[0].datastores to be an empty array, got %T (%v)", server["datastores"], server["datastores"])
-	}
-
-	payload, err = json.Marshal(StorageResponse{
+	payload, err := json.Marshal(StorageResponse{
 		Pools: []StoragePoolSummary{{ID: "pool-1", Name: "local"}},
 	}.NormalizeCollections())
 	require.NoError(t, err)

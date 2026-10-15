@@ -36,7 +36,13 @@ The API and tool adapter share `Manager.ListPointsForOrg`, including the
 canonical graph source in demo mode, rather than presenting fixture evidence
 through HTTP alone while tools consult an empty store.
 `TestInvestigationReadsCanonicalBackupFailureWithoutAgent` uses mapped, persisted
-task evidence and checks subject and tenant isolation.
+task evidence and checks subject and tenant isolation. The `backups` inventory
+also reads this org-scoped source with `KindBackup` and canonical subject IDs.
+It returns canonical points with repository references, provenance and optional
+verification fields, rather than VM-ID-filtered PBS/PVE summary lists or an
+unscoped recent-task cache. Global offset pagination preserves source ordering
+across providers and does not scan earlier pages. Read failures remain errors;
+an artifact record alone is not proof of restorability.
 
 Storage performance reads resolve the canonical registry metrics target and use
 the monitor-owned history selector. Responses contain usage percentages with

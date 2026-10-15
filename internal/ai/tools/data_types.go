@@ -3,6 +3,7 @@ package tools
 import (
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 )
@@ -1028,13 +1029,12 @@ func (r PatternsResponse) NormalizeCollections() PatternsResponse {
 	return r
 }
 
-// BackupsResponse is returned by pulse_list_backups
+// BackupsResponse is the canonical artifact inventory returned by pulse_storage backups.
+// RecoveryPoint preserves provider identity, repository references and unknown
+// verification instead of collapsing them into vendor-specific summary lists.
 type BackupsResponse struct {
-	PBS         []PBSBackupSummary  `json:"pbs"`
-	PVE         []PVEBackupSummary  `json:"pve"`
-	PBSServers  []PBSServerSummary  `json:"pbs_servers"`
-	RecentTasks []BackupTaskSummary `json:"recent_tasks"`
-	Pagination  *PaginationInfo     `json:"pagination,omitempty"`
+	Points     []recovery.RecoveryPoint `json:"points"`
+	Pagination *PaginationInfo          `json:"pagination"`
 }
 
 func EmptyBackupsResponse() BackupsResponse {
@@ -1042,72 +1042,10 @@ func EmptyBackupsResponse() BackupsResponse {
 }
 
 func (r BackupsResponse) NormalizeCollections() BackupsResponse {
-	if r.PBS == nil {
-		r.PBS = []PBSBackupSummary{}
-	}
-	if r.PVE == nil {
-		r.PVE = []PVEBackupSummary{}
-	}
-	if r.PBSServers == nil {
-		r.PBSServers = []PBSServerSummary{}
-	}
-	for i := range r.PBSServers {
-		r.PBSServers[i] = r.PBSServers[i].NormalizeCollections()
-	}
-	if r.RecentTasks == nil {
-		r.RecentTasks = []BackupTaskSummary{}
+	if r.Points == nil {
+		r.Points = []recovery.RecoveryPoint{}
 	}
 	return r
-}
-
-// PBSBackupSummary is a summarized PBS backup
-type PBSBackupSummary struct {
-	VMID       string    `json:"vmid"`
-	BackupType string    `json:"backup_type"`
-	BackupTime time.Time `json:"backup_time"`
-	Instance   string    `json:"instance"`
-	Datastore  string    `json:"datastore"`
-	SizeGB     float64   `json:"size_gb"`
-	Verified   bool      `json:"verified"`
-	Protected  bool      `json:"protected"`
-}
-
-// PVEBackupSummary is a summarized PVE backup
-type PVEBackupSummary struct {
-	VMID       int       `json:"vmid"`
-	BackupTime time.Time `json:"backup_time"`
-	SizeGB     float64   `json:"size_gb"`
-	Storage    string    `json:"storage"`
-}
-
-// PBSServerSummary is a summarized PBS server
-type PBSServerSummary struct {
-	Name       string             `json:"name"`
-	Host       string             `json:"host"`
-	Status     string             `json:"status"`
-	Datastores []DatastoreSummary `json:"datastores"`
-}
-
-func (s PBSServerSummary) NormalizeCollections() PBSServerSummary {
-	if s.Datastores == nil {
-		s.Datastores = []DatastoreSummary{}
-	}
-	return s
-}
-
-// DatastoreSummary is a summarized datastore
-type DatastoreSummary struct {
-	Name         string  `json:"name"`
-	UsagePercent float64 `json:"usage_percent"`
-	FreeGB       float64 `json:"free_gb"`
-}
-
-// BackupTaskSummary is a summarized backup task
-type BackupTaskSummary struct {
-	VMID      int       `json:"vmid"`
-	Node      string    `json:"node"`
-	Status    string    `json:"status"`
-	StartTime time.Time `json:"start_time"`
 }
 
 // StorageResponse is returned by pulse_list_storage
