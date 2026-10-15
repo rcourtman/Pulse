@@ -2310,24 +2310,24 @@ create_pve_auto_register_token() {
     local token_name="$1"
     local token_output_var="$2"
     local token_status_var="$3"
-    local token_output=""
-    local token_status=0
+    local created_token_output=""
+    local created_token_status=0
 
     set +e
-    token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 --output-format json 2>&1)
-    token_status=$?
+    created_token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 --output-format json 2>&1)
+    created_token_status=$?
     set -e
 
     # Older pveum builds reject --output-format; fall back to the legacy table form.
-    if [[ $token_status -ne 0 ]] && printf '%s\n' "$token_output" | grep -Eqi 'unknown option|unknown command|no such option|unable to parse option|output-format'; then
+    if [[ $created_token_status -ne 0 ]] && printf '%s\n' "$created_token_output" | grep -Eqi 'unknown option|unknown command|no such option|unable to parse option|output-format'; then
         set +e
-        token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)
-        token_status=$?
+        created_token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)
+        created_token_status=$?
         set -e
     fi
 
-    printf -v "$token_output_var" '%s' "$token_output"
-    printf -v "$token_status_var" '%s' "$token_status"
+    printf -v "$token_output_var" '%s' "$created_token_output"
+    printf -v "$token_status_var" '%s' "$created_token_status"
 }
 
 pve_auto_register_api_status() {
@@ -2773,39 +2773,38 @@ PY
         return
     fi
 
-    local register_status
-    local register_action
-    local register_type
-    local register_source
-    local register_host
-    local register_token_id
-    local register_token_value
-    local register_node_id
+    # Both objects contain credentials. Keep them off process arguments and
+    # validate the entire confirmation before returning only a safe node name.
     local register_node_name
-    IFS=$'\t' read -r register_status register_action register_type register_source register_host register_token_id register_token_value register_node_id register_node_name <<<"$(python3 - "$register_response" <<'PY'
-import json, sys
+    if ! register_node_name=$(python3 - 3<<<"$register_response" 4<<<"$register_payload" <<'PY_REGISTER'
+import json, os, sys
 try:
-    data = json.loads(sys.argv[1])
+    data = json.load(os.fdopen(3))
+    request = json.load(os.fdopen(4))
+    if not isinstance(data, dict) or not isinstance(request, dict):
+        sys.exit(1)
+    expected = {
+        "status": "success", "action": "use_token", "type": "pve", "source": "script",
+        "host": request["host"], "tokenId": request["tokenId"], "tokenValue": request["tokenValue"],
+    }
+    if not all(isinstance(data.get(field), str) and data[field] == value
+               for field, value in expected.items()):
+        sys.exit(1)
+    node_name = data.get("nodeName")
+    if (not isinstance(node_name, str) or not node_name.strip()
+            or data.get("nodeId") != node_name
+            or not all(c.isprintable() for c in node_name)
+            or any(secret and secret in node_name
+                   for secret in (request["tokenValue"], request["authToken"]))):
+        sys.exit(1)
+    print(node_name)
 except Exception:
-    print("\t\t\t\t\t\t\t\t")
-    sys.exit(0)
-print("\t".join([
-    str(data.get("status", "")),
-    str(data.get("action", "")),
-    str(data.get("type", "")),
-    str(data.get("source", "")),
-    str(data.get("host", "")),
-    str(data.get("tokenId", "")),
-    str(data.get("tokenValue", "")),
-    str(data.get("nodeId", "")),
-    str(data.get("nodeName", "")),
-]))
-PY
-)" || register_status=""
-
-    if [[ "$register_status" != "success" ]] || [[ "$register_action" != "use_token" ]] || [[ "$register_type" != "pve" ]] || [[ "$register_source" != "script" ]] || [[ "$register_host" != "$normalized_host_url" ]] || [[ "$register_token_id" != "$token_id" ]] || [[ "$register_token_value" != "$token_value" ]] || [[ -z "$register_node_id" ]] || [[ -z "$register_node_name" ]] || [[ "$register_node_id" != "$register_node_name" ]]; then
+    # Malformed/unexpected replies must not become Python or shell diagnostics.
+    sys.exit(1)
+PY_REGISTER
+); then
         AUTO_NODE_REGISTER_ERROR="auto-register unsuccessful"
-        print_warn "Pulse auto-registration reported an error: $register_response"
+        print_warn "Pulse auto-registration could not be confirmed; check the node in Pulse before trying again"
         return
     fi
 

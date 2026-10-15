@@ -16,6 +16,34 @@
 
 ## Purpose
 
+### Credential-free diagnostics for install-time registration confirmation
+
+The optional PVE installer treats the Pulse registration reply and expected
+request as credential-bearing objects. Python receives both over private file
+descriptors, never process arguments. It validates the whole success/action,
+type/source, host and exact token pair before returning only the canonical node
+name. A stored disambiguated name remains valid; absent or mismatched identity,
+non-string fields, control characters, secret-echo names and malformed/non-object
+replies fail without a traceback or raw response in the installer diagnostic.
+An unconfirmed POST is not reported as absent or safe to replay: the operator
+is directed to check the node in Pulse before trying again.
+
+The token-creation helper returns both data and the real exit status to its
+actual caller variables; helper-local names must not shadow those outputs.
+JSON success, explicit legacy fallback, failure and deterministic-token rotation
+remain executable controls, not merely source-shape assertions. No request,
+token ownership/rotation, ACL, TLS or API response contract changes.
+This is not installed cluster recovery or a correction for #2980.
+
+`scripts/installtests/pve_auto_register_response.py` runs the complete actual
+installer caller with real curl to private HTTP fixtures and a closed synthetic
+PVE boundary. It checks success/rejection, canonical names, exact token binding,
+malformed replies and every child Python/curl argv for fixture secrets. Its Go
+wrapper keeps those controls in normal installer CI, and
+`root_install_sh_test.go` pins the descriptor-only/diagnostic contract. The
+existing real-HTTPS transport controls remain independently required. Neither
+suite establishes native PVE installation, protected landing or released use.
+
 ### Install-time Proxmox API trust before credential changes
 
 The root installer's optional PVE auto-registration accepts an HTTPS API origin,
