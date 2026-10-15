@@ -10,6 +10,8 @@ export interface StatusBadgeProps {
   titleEnabled?: string;
   titleDisabled?: string;
   titleWhenDisabled?: string;
+  /** What the toggle switches, for a page with many alike On/Off badges. */
+  ariaLabel?: string;
 }
 
 const STATUS_BADGE_BASE_CLASS =
@@ -45,6 +47,15 @@ export function getStatusBadgeClass(
 
 export function getStatusBadgeLabel(props: StatusBadgeProps): string {
   return props.isEnabled ? (props.labelEnabled ?? 'Enabled') : (props.labelDisabled ?? 'Disabled');
+}
+
+/**
+ * A badge's accessible name: what it switches, then the visible state word,
+ * so voice control can still say what is on screen (WCAG 2.5.3).
+ */
+export function getStatusBadgeAriaLabel(props: StatusBadgeProps): string | undefined {
+  const context = props.ariaLabel?.trim();
+  return context ? `${context}: ${getStatusBadgeLabel(props)}` : undefined;
 }
 
 export function getStatusBadgeTitle(props: StatusBadgeProps, disabled: boolean): string {
