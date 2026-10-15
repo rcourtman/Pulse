@@ -202,6 +202,12 @@ export function rewriteDocLinks(html: string, currentDocPath: string): string {
       anchor.removeAttribute('rel');
       return;
     }
+    // Bare fragments need the same explicit re-activation handling as rewritten
+    // file links. Keep the href native so modified/new-tab clicks still work.
+    if (href.startsWith('#')) {
+      anchor.setAttribute('data-doc-link', '');
+      return;
+    }
     if (/^https?:/i.test(href)) {
       anchor.setAttribute('target', '_blank');
       anchor.setAttribute('rel', 'noopener noreferrer');

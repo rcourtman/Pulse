@@ -8,7 +8,7 @@ const markdown = `# Fixture help
 ## Cost Tracking
 
 [Bare return](#cost-tracking)
-[File return](AI.md#cost-tracking)
+[File **return**](AI.md#cost-tracking)
 [Other section](#other-section)
 [Other document](FAQ.md#answer)
 [External](https://example.invalid/help)
@@ -71,7 +71,7 @@ describe('Docs fragment activation through the router', () => {
       link.focus();
       const historyLength = window.history.length;
 
-      fireEvent.click(link);
+      fireEvent.click(link.querySelector('strong') ?? link);
 
       await waitFor(() => expect(document.activeElement).toBe(heading));
       expect(scroll).toHaveBeenCalledWith({ block: 'start' });
@@ -95,6 +95,14 @@ describe('Docs fragment activation through the router', () => {
     expect(window.location.pathname).toBe('/docs/FAQ');
     expect(window.location.hash).toBe('#answer');
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a bare fragment relative to the current query as well as document', async () => {
+    window.history.replaceState(null, '', '/docs/AI?view=fixture#cost-tracking');
+    await mount();
+    fireEvent.click(screen.getByRole('link', { name: 'Other section' }));
+    await waitFor(() => expect(window.location.hash).toBe('#other-section'));
+    expect(window.location.search).toBe('?view=fixture');
   });
 
   it.each(['ctrlKey', 'metaKey', 'shiftKey', 'altKey'])(
