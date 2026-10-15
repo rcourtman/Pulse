@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "30121c2bb872d4bdbf426f231b4716ff0f2e2ab3",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx",
+    "frontend-modern/src/components/Settings/createConnectionEvidenceScope.ts",
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts",
+    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx": "36eabba769bcfb949a85c760519f81d030117852ddad7df2aa66eab17936d02d",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx": "5721ceaacaf15ea190cb30149aa5e6b820d7613f3f79015f030c3e9425f08441",
+    "frontend-modern/src/components/Settings/createConnectionEvidenceScope.ts": "7790759036d155d394a847f7caeecedbf055de4975d3bb74dd654a317c8aa934",
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts": "c763553df0124ae88712cbe07fb6b579109a0da557352b0aaf30f085a7c5869b",
+    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts": "5924a2b1e981641e498ffa4ceeba6306997278a08fc0940d18e97f828c664d21"
+  },
+  "routes": [
+    "Offline /settings/infrastructure fixture: real ConnectionEditor, TrueNAS/VMware credential slots, persistent hooks, API clients, notifications and production CSS; synthetic HTTP only"
+  ],
+  "states": [
+    "A-B-A edits retire late successes/degraded warnings/errors and impact previews",
+    "Cancelled preview/reopened editor retains busy ownership until settlement",
+    "Departing consumer cannot publish old feedback into its remount",
+    "Selected target identity changes initialise the real consuming slot; same-ID polling preserves drafts",
+    "Earlier save completes once without closing or overwriting the newer draft; notification names its earlier host",
+    "Fresh current failures and monitored-system impact remain usable, and edits retire completed impact"
+  ],
+  "interactions": [
+    "Keyboard desktop and touch-phone explicit tests, edits, preview, Cancel/reopen, leave/remount, target switch and synthetic save",
+    "Four final journeys: 32 synthetic POST reads and four PUT saves, zero unexpected API/page errors; browser/server closed",
+    "16 final captures opened natively after interactions; current messages, attribution and wrapping inspected",
+    "Initial interaction pass retained separately; final screenshot framing and finite-animation end-state avoid transient blur"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-15T01:46:15Z",
+  "source_proof_receipt": "source-ojsknc9t",
+  "playwright": "1.56.1",
+  "browser": "141.0.7390.37",
+  "source_sha": "30121c2bb872d4bdbf426f231b4716ff0f2e2ab3",
+  "driver_sha256": "ebcc105e51b03ac8e674e543b21cd5b730a85d49d164ea9e04e23bfe47644b76",
+  "limits": "Synthetic frontend/HTTP proof only; no live appliance, TLS trust establishment, deployment, release, full-app authentication or native recovery."
+}
