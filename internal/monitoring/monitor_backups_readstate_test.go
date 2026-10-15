@@ -1139,7 +1139,7 @@ func TestBackupFutureSuccessWarningThroughReadState(t *testing.T) {
 	project := func(phase string) {
 		wire, err := json.Marshal(struct {
 			Phase        string         `json:"phase"`
-			ActiveAlerts []alerts.Alert `json:"activeAlerts"`
+			ActiveAlerts []models.Alert `json:"activeAlerts"`
 		}{phase, m.GetState().ActiveAlerts})
 		if err != nil {
 			t.Fatal(err)
