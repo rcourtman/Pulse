@@ -611,6 +611,11 @@ collapse evidence, protection posture, and lifecycle history, but it must not
 drop those typed fields or replace their server-authored trust state. Decision,
 finding, and approval counts remain distinct API projections and must not be
 presented as interchangeable totals.
+`subjectResourceId` and `subjectResourceType` also decide the browser's
+`Open resource` destination: the browser resolves the id through
+`GET /api/resources/{id}` for the subject's platform and falls back to the
+type hint, so both fields must keep naming the subject the alert or finding
+is about (an alert's `unifiedAlertType` display words are accepted as hints).
 The attention list's authenticated read contract is independent of Patrol's
 model-readiness and on/off state. `PatrolIntelligenceSurface.tsx` must not gate
 the attention transport or its canonical list on `shouldShowPatrolSetupOnly`;

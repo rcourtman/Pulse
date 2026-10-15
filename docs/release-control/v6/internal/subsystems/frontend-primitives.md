@@ -4588,6 +4588,9 @@ confirmation note or rule reason is a `FormTextarea`, and the alert-only
 guidance link is a `ButtonLink`. `PatrolIntelligenceSurface.tsx` passes the
 Patrol findings accessor into the workbench; the workbench does not fetch or
 poll findings itself.
+`Open resource` in the attention detail is a `ButtonLink` whose destination
+comes from `buildResourcePagePath`; the workbench hides it when no platform
+page can show the subject instead of linking to a page that cannot.
 The feature shell keeps the independent attention workbench mounted when
 Patrol is off or its model needs setup, while retaining the existing setup task
 above it. Desktop and narrow browser checks must show the task and attention
