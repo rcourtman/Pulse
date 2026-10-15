@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -1285,4 +1287,62 @@ func TestSnapshotPartialEvidenceServedState(t *testing.T) {
 		}
 		t.Logf("SNAPSHOT_PARTIAL_PROJECTION=%s", wire)
 	}
+}
+
+func TestSnapshotPartialEvidenceClockCorrectionServedState(t *testing.T) {
+	if mock.IsMockEnabled() {
+		t.Fatal("clock-correction proof requires ordinary served state")
+	}
+	makeManager := func(dir string) *alerts.Manager {
+		manager := alerts.NewManagerWithDataDir(dir)
+		cfg := manager.GetConfig()
+		cfg.Enabled = true
+		cfg.SnapshotDefaults = alerts.SnapshotAlertConfig{Enabled: true, WarningDays: 7, CriticalDays: 14, WarningSizeGiB: 50, CriticalSizeGiB: 100}
+		manager.UpdateConfig(cfg)
+		return manager
+	}
+	manager := makeManager(t.TempDir())
+	snapshot := models.GuestSnapshot{ID: "pve1-node1-100-weekly", Name: "weekly", Instance: "pve1", Node: "node1", VMID: 100, Type: "qemu", Time: time.Now().UTC().Add(-10 * 24 * time.Hour), SizeBytes: 1 << 30}
+	guests := map[string]alerts.GuestLookup{"pve1:node1:100": {ResourceID: "pve1:node1:100", Name: "database", Instance: "pve1", Node: "node1", VMID: 100, Type: "qemu"}}
+	manager.CheckSnapshotsForInstance("pve1", []models.GuestSnapshot{snapshot}, guests)
+	active := manager.GetActiveAlerts()
+	manager.Stop()
+	if len(active) != 1 {
+		t.Fatal("missing initial clock-correction condition")
+	}
+	// Persist a real accepted alert with the old clock's dates, then restart
+	// through the ordinary JSON restoration seam in a fresh temporary profile.
+	shift := 30 * 24 * time.Hour
+	active[0].Metadata["snapshotCreatedAt"] = snapshot.Time.Add(shift)
+	active[0].Metadata["snapshotAgeObservedAt"] = active[0].LastSeen.Add(shift)
+	active[0].Metadata["snapshotSizeObservedAt"] = active[0].LastSeen.Add(shift)
+	active[0].LastSeen = active[0].LastSeen.Add(shift)
+	data, err := json.Marshal(active)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "alerts"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "alerts", "active-alerts.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager = makeManager(dir)
+	t.Cleanup(manager.Stop)
+	snapshot.Time, snapshot.SizeBytes = snapshot.Time.Add(shift), 0
+	manager.CheckSnapshotsForInstance("pve1", []models.GuestSnapshot{snapshot}, guests)
+	m := &Monitor{state: models.NewState(), alertManager: manager}
+	state := m.GetState()
+	if len(state.ActiveAlerts) != 1 || state.ActiveAlerts[0].Level != "warning" || state.ActiveAlerts[0].Metadata["snapshotAgeHeld"] != true || !strings.Contains(state.ActiveAlerts[0].Message, "clocks") {
+		t.Fatal("restored old-clock evidence became false served recovery")
+	}
+	wire, err := json.Marshal(struct {
+		Phase        string         `json:"phase"`
+		ActiveAlerts []models.Alert `json:"activeAlerts"`
+	}{"clock-correction-held", state.ActiveAlerts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("SNAPSHOT_PARTIAL_PROJECTION=%s", wire)
 }

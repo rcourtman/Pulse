@@ -475,3 +475,32 @@ func TestSnapshotPartialEvidenceRestoredAliasCacheIsSerialized(t *testing.T) {
 		}
 	}
 }
+
+func TestSnapshotPartialEvidenceClockCorrectionCannotEstablishRecovery(t *testing.T) {
+	m, snapshot, guests := snapshotPartialFixture(t)
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	original := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	// Model an accepted observation made before a correction of Pulse's own
+	// clock. No system clock, guest, backup or executable is changed.
+	shift := 30 * 24 * time.Hour
+	original.Metadata["snapshotCreatedAt"] = snapshot.Time.Add(shift)
+	original.Metadata["snapshotAgeObservedAt"] = original.LastSeen.Add(shift)
+	original.Metadata["snapshotSizeObservedAt"] = original.LastSeen.Add(shift)
+	original.LastSeen = original.LastSeen.Add(shift)
+	m.mu.Lock()
+	m.activeAlerts[original.CanonicalState] = original
+	m.mu.Unlock()
+	snapshot.Time, snapshot.SizeBytes = snapshot.Time.Add(shift), 0
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	held := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	if held.Metadata["snapshotAgeHeld"] != true || held.Metadata["snapshotSizeHeld"] != true || held.Value != original.Value || !held.LastSeen.Equal(original.LastSeen) || !strings.Contains(held.Message, "clocks") {
+		t.Fatal("a backwards clock correction cleared or renewed accepted evidence")
+	}
+	// An independent current size can still recover while the age stays held.
+	snapshot.SizeBytes = 1 << 30
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	held = requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	if held.Metadata["snapshotAgeObservedAt"] != original.Metadata["snapshotAgeObservedAt"] || held.Metadata["snapshotAgeDays"] != original.Metadata["snapshotAgeDays"] {
+		t.Fatal("clock correction changed the original age evidence")
+	}
+}

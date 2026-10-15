@@ -32,15 +32,15 @@ func snapshotMetadataTime(metadata map[string]interface{}, key string) time.Time
 	}
 }
 
-func snapshotObservationTime(previous *Alert, key string, now time.Time) time.Time {
+func snapshotObservationTime(previous *Alert, key string) time.Time {
 	observed := snapshotMetadataTime(previous.Metadata, key)
 	if observed.IsZero() {
 		// Older persisted alerts predate per-metric observation times.
 		observed = previous.LastSeen
 	}
-	if observed.IsZero() || observed.After(now) {
-		return time.Time{}
-	}
+	// A clock correction can put an already accepted observation ahead of
+	// this evaluation. Keep its original time, rather than turning the clock
+	// change into recovery or relabelling the old value as a fresh reading.
 	return observed
 }
 
@@ -67,9 +67,9 @@ func resolveSnapshotAlertEvidence(snapshot models.GuestSnapshot, previous *Alert
 		// permission to transfer the old snapshot's missing size evidence.
 		return evidence
 	}
-	if !ageKnown && oldCreatedAt.After(time.Unix(0, 0)) && !oldCreatedAt.After(now) {
+	if !ageKnown && oldCreatedAt.After(time.Unix(0, 0)) {
 		age, ok := metadataFloatValue(previous.Metadata, "snapshotAgeDays")
-		observed := snapshotObservationTime(previous, "snapshotAgeObservedAt", now)
+		observed := snapshotObservationTime(previous, "snapshotAgeObservedAt")
 		if ok && age >= 0 && !math.IsNaN(age) && !math.IsInf(age, 0) && !observed.IsZero() {
 			evidence.createdAt, evidence.ageDays = oldCreatedAt, age
 			evidence.ageObservedAt, evidence.ageHeld = observed, true
@@ -77,7 +77,7 @@ func resolveSnapshotAlertEvidence(snapshot models.GuestSnapshot, previous *Alert
 	}
 	if evidence.sizeBytes == 0 {
 		size, ok := metadataFloatValue(previous.Metadata, "snapshotSizeBytes")
-		observed := snapshotObservationTime(previous, "snapshotSizeObservedAt", now)
+		observed := snapshotObservationTime(previous, "snapshotSizeObservedAt")
 		if ok && size > 0 && size < float64(math.MaxInt64) && !observed.IsZero() {
 			evidence.sizeBytes = int64(size)
 			evidence.sizeObservedAt, evidence.sizeHeld = observed, true

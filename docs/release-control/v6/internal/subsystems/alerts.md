@@ -5122,7 +5122,8 @@ frozen at its original value and observation time; it never ages held evidence
 or invents zero-day/zero-byte recovery. Messages name last-known values and
 unavailable readings, with clock guidance for future creation times. Metadata
 omits never-observed metrics and records original per-metric observation times
-and held flags. The primary breach's observation time is not renewed by a
+and held flags. A backwards correction of Pulse’s clock does not discard
+already accepted values or rewrite their original timestamps. The primary breach's observation time is not renewed by a
 missing reading, even while the independent metric can change severity.
 
 Complete readings resume normal evaluation. A new valid creation time under a

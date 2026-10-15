@@ -8118,3 +8118,8 @@ The served array preserves metric observation times/held flags and fixed
 explanations, without changing snapshot collection or issuing guest/backup
 commands. Its exact payloads feed desktop/narrow browser verification; source
 and browser proof do not establish installed/native guest or restore recovery.
+
+`TestSnapshotPartialEvidenceClockCorrectionServedState` restores a real alert
+with old-clock dates through the ordinary temporary-profile JSON seam and
+checks that a clock correction cannot establish recovery. It changes no system
+clock and emits the actual served frame for additional consuming proof.
