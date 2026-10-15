@@ -421,6 +421,20 @@ evidence change and remains recorded in the customer-journey qualification.
 
 Action reconciliation refreshes the durable product investigation record from
 the authoritative session/action even when the finding outcome already matches.
+Action truth is authoritative for its originating investigation, not for every
+later occurrence sharing the finding ID. Finding outcome and record writes
+check the current session and persisted regression boundary under the findings
+store lock. Historical callbacks and review hydration retain their original
+action result without resolving, queuing, or replacing a newer occurrence,
+including after restart and before its next investigation starts. A verified
+action from the new occurrence can still resolve that occurrence normally.
+Finding-scoped investigation and transcript reads return no current
+investigation while only an older occurrence's session exists. Explicit
+session and action history retains that older evidence.
+The canonical Patrol handler suite in
+`internal/api/ai_handlers_patrol_actions_additional_test.go` exercises three
+occurrences with a persisted restart and historical action replay; findings
+store controls also exercise concurrent re-detection and reconciliation.
 The same builder owns initial completion and later refresh. Completion replaces
 an early action projection with the final investigation evidence. Later action
 refresh preserves original prose, impact, confidence, evidence and rollback. Unchanged hydration is a no-op, and a

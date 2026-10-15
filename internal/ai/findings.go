@@ -2460,6 +2460,10 @@ func (s *FindingsStore) UpdateInvestigationRecord(id string, record *aicontracts
 		s.mu.Unlock()
 		return false
 	}
+	if record != nil && !f.acceptsInvestigationResult(record.SessionID, record.StartedAt) {
+		s.mu.Unlock()
+		return false
+	}
 
 	f.InvestigationRecord = record
 	meta := map[string]string{}
@@ -2561,6 +2565,56 @@ func (s *FindingsStore) UpdateInvestigationOutcome(id, outcome string) bool {
 		return false
 	}
 
+	s.updateInvestigationOutcomeLocked(f, outcome)
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// ReconcileInvestigationOutcome projects an authoritative session result only
+// onto the occurrence that owns it. A finding ID survives regressions, while
+// the investigation session and regression boundary identify the current work.
+// Check and mutation share the store lock so a concurrent re-detection cannot
+// be closed by a result accepted against its previous occurrence.
+func (s *FindingsStore) ReconcileInvestigationOutcome(id string, session *aicontracts.InvestigationSession, outcome string) (applied, changed bool) {
+	if session == nil || session.FindingID != id {
+		return false, false
+	}
+	s.mu.Lock()
+	f := s.findings[id]
+	if f == nil || !f.IsCurrentInvestigation(session) {
+		s.mu.Unlock()
+		return false, false
+	}
+	changed = f.InvestigationOutcome != outcome
+	if changed {
+		s.updateInvestigationOutcomeLocked(f, outcome)
+	}
+	s.mu.Unlock()
+	if changed {
+		s.scheduleSave()
+	}
+	return true, changed
+}
+
+// IsCurrentInvestigation distinguishes current finding work from historical
+// sessions retained under the same finding ID.
+func (f *Finding) IsCurrentInvestigation(session *aicontracts.InvestigationSession) bool {
+	return f != nil && session != nil && session.FindingID == f.ID &&
+		f.acceptsInvestigationResult(session.SessionID, session.StartedAt)
+}
+
+func (f *Finding) acceptsInvestigationResult(sessionID string, startedAt time.Time) bool {
+	if f.InvestigationSessionID != "" && f.InvestigationSessionID != sessionID {
+		return false
+	}
+	// Re-detection clears the session reference. Its persisted regression time
+	// still excludes old sessions during the gap before a new one starts, and
+	// after a process restart. Missing historical time cannot prove ownership.
+	return f.LastRegressionAt == nil || (!startedAt.IsZero() && !startedAt.Before(*f.LastRegressionAt))
+}
+
+func (s *FindingsStore) updateInvestigationOutcomeLocked(f *Finding, outcome string) {
 	prevOutcome := f.InvestigationOutcome
 	f.InvestigationOutcome = outcome
 	// Replaying a persisted result must not invent a later recovery event.
@@ -2577,9 +2631,6 @@ func (s *FindingsStore) UpdateInvestigationOutcome(id, outcome string) bool {
 		})
 	}
 	s.syncLoopStateLocked(f)
-	s.mu.Unlock()
-	s.scheduleSave()
-	return true
 }
 
 // UpdateInvestigation updates all investigation fields on a finding
