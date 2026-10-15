@@ -164,20 +164,27 @@ let browser;
         const copy = () => page.getByRole('button', { name: 'Copy command', exact: true });
         const dialog = page.getByRole('dialog', { name: 'API token ready' });
         const checkNoNewOutput = async (copies, downloadCount) => {
-          await page.waitForTimeout(100);
-          await expect(dialog).toHaveCount(0);
-          assert.equal(await page.evaluate(() => window.__copies.length), copies);
-          assert.equal(downloads.length, downloadCount);
           await expect(
             page.getByRole('status').filter({ hasText: 'Preparing setup output' }),
           ).toHaveCount(0);
+          await expect(dialog).toHaveCount(0);
+          assert.equal(await page.evaluate(() => window.__copies.length), copies);
+          assert.equal(downloads.length, downloadCount);
+          await expect(page.getByRole('region', { name: 'Notifications' })).toHaveCount(0);
         };
         const dismiss = async () => {
           await dialog.getByRole('button', { name: 'Dismiss', exact: true }).click();
           await expect(dialog).toHaveCount(0);
         };
+        const clearNotifications = async () => {
+          for (const button of await page
+            .getByRole('button', { name: 'Dismiss notification' })
+            .all())
+            await button.click();
+          await expect(page.getByRole('region', { name: 'Notifications' })).toHaveCount(0);
+        };
         const capture = async (label) => {
-          await page.waitForTimeout(400);
+          await page.waitForTimeout(600);
           const file = `${type}-${width}-${label}.png`;
           await page.screenshot({
             path: path.join(output, file),
@@ -214,6 +221,7 @@ let browser;
         await expect(dialog).toBeVisible();
         assert.equal(counter, 2);
         await dismiss();
+        await clearNotifications();
         // Retire the script download after the name changes, not just minting.
         await page.getByText('Alternative: Download script manually', { exact: true }).click();
         held = { path: '/api/setup-script' };
@@ -236,6 +244,7 @@ let browser;
         assert.deepEqual(downloads, [`pulse-setup-${type}.sh`]);
         assert.equal(counter, 3);
         await dismiss();
+        await clearNotifications();
         // Independent optional-agent path shares single-flight and revision ownership.
         await page.getByRole('button', { name: 'Host Telemetry Agent', exact: true }).click();
         const agentCopy = page.getByRole('button', {
@@ -267,6 +276,7 @@ let browser;
           page.getByText('Synthetic current setup failure', { exact: true }).first(),
         ).toBeVisible();
         await capture('current-failure');
+        await clearNotifications();
         responseMode = 'success';
         await agentCopy.focus();
         if (width === 1360) await page.keyboard.press('Enter');
