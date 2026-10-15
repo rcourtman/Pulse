@@ -480,13 +480,14 @@ func isReportingGraphFailure(err error) bool {
 }
 
 // getReportingDataREST issues reporting.get_data over the REST v2.0 transport.
-// The middleware method takes positional parameters (graphs, query); REST
-// serves it as a POST body keyed by parameter name.
+// WebSocket parameters are positional, but REST v2.0 binds top-level keys to
+// the middleware schema names: graphs and reporting_query, not the Go/RPC
+// variable name query. CORE rejects an unknown query key before reading graphs.
 func (c *Client) getReportingDataREST(ctx context.Context, graphs []map[string]any, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
 	var response []trueNASReportingGetDataResponse
 	err := c.postJSON(ctx, "/reporting/get_data", map[string]any{
-		"graphs": graphs,
-		"query":  query,
+		"graphs":          graphs,
+		"reporting_query": query,
 	}, &response)
 	if err != nil {
 		return nil, err

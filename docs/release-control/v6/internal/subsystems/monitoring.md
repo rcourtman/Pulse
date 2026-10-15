@@ -1890,8 +1890,8 @@ are not native appliance or containing-release acceptance.
 A connection proven to run a recognized legacy CORE/FreeNAS release has no
 `reporting.realtime` JSON-RPC subscription, so live system telemetry and
 host-chart history are reconstructed from the REST reporting API
-(`reporting.get_data`, served as a POST endpoint keyed by its `graphs` and
-`query` parameters). The reporting `memory` and `arcsize` graphs supply the
+(`reporting.get_data`, served as a POST endpoint keyed by the middleware
+schema names `graphs` and `reporting_query`). The reporting `memory` and `arcsize` graphs supply the
 available and ARC readings that the JSON-RPC realtime subscription otherwise
 provides. When no available-memory reading can be established, the provider
 must not derive usage from an absent available value: the system memory metric is
@@ -1907,6 +1907,26 @@ and projection proofs, not native CORE appliance acceptance or reporter
 confirmation.
 
 
+
+### CORE REST reporting envelope — issues #2964 and #2077
+
+Legacy REST `POST /reporting/get_data` sends exactly `graphs` and
+`reporting_query`. WebSocket's positional second argument is not a REST key
+named `query`: CORE 13.0-U6.8 rejects that unknown attribute before collecting
+any graph. Both short live reads and full History use this same envelope and
+unchanged aggregate/start/end range. The graph catalogue, per-device selection,
+optional-graph isolation, transport gate, TLS, authentication and zero/unknown
+semantics are unchanged; no guessed-key or transport retry is added.
+
+The request-validating CORE and REST aggregation fixtures bind the corrected
+schema name. `TestCORE13RESTReportingQueryResourceJourney` in
+`internal/api/resourceapi/truenas_core_reporting_test.go` exercises a pinned-TLS
+CORE bridge, real client/provider, resource-list HTTP response and native History
+through complete, rejected, partial, observed-zero and recovered readings. It
+rejects the former key with the reported HTTP 400 before the normal path, retains
+inventory/capacity on telemetry failure and does not invent sibling metrics.
+These are synthetic protocol/consumption controls, not appliance acceptance,
+reporter confirmation, a data-pool capacity repair or release availability.
 
 ### TrueNAS partial samples and nonblocking telemetry diagnostics — issue #2077
 
