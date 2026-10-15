@@ -9039,6 +9039,14 @@ placeholders for the row subject (`alerts.assistant.iconLabel`,
 `alerts.assistant.iconLabelAt`); every locale keeps those placeholders
 (`i18n.test.ts`).
 
+### Layouts that swap a table for cards follow the container
+
+A surface that swaps a table for a card list decides from the width of the
+element that holds them (`useObservedElementWidth`), with the viewport
+breakpoint only as the fallback before the first measurement, because side
+rails and panels leave a table far less room than the screen width suggests.
+Alerts > History switches below an 800px card (`ALERT_HISTORY_TABLE_MIN_WIDTH`).
+
 ### Mobile destinations are links and update evidence stays explicit
 
 Fixed mobile destinations and menu destinations that navigate are anchors with

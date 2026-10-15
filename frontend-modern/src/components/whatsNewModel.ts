@@ -69,7 +69,6 @@ const CHANGELOG_SECTION_LABELS: Readonly<Record<string, string>> = {
   fixes: 'Fixed',
   'bug fixes': 'Fixed',
   security: 'Security',
-  'breaking changes': 'Breaking changes',
   deprecated: 'Deprecated',
   removed: 'Removed',
   'alerts and notifications': 'Alerts and notifications',
@@ -94,6 +93,7 @@ export type WhatsNewContent = {
   highlights: string[];
   changes: string | null;
   important: string | null;
+  upgradeNotes: string | null;
   visuals: ReleaseVisual[];
 };
 
@@ -153,26 +153,29 @@ export const extractWhatsNew = (markdown: string, version: string): WhatsNewCont
     .slice(0, 3);
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const headings = headingsIn(lines);
-  const importantTitles = new Set(['before you upgrade', 'known issues', 'breaking changes']);
-  const important =
+  const sectionMarkdown = (titles: ReadonlySet<string>, includeTitles = true) =>
     headings
       .flatMap((heading, index) => {
-        if (!importantTitles.has(heading.title.toLowerCase())) return [];
+        if (!titles.has(heading.title.toLowerCase())) return [];
         const body = sectionBody(lines, headings, index);
-        return body ? [`### ${heading.title}\n\n${body}`] : [];
+        return body ? [includeTitles ? `### ${heading.title}\n\n${body}` : body] : [];
       })
       .join('\n\n') || null;
+  // Authored warning sections stay open. Routine upgrade instructions have
+  // their own disclosure, without inferring severity from individual words.
+  const important = sectionMarkdown(new Set(['known issues', 'breaking changes']));
+  const upgradeNotes = sectionMarkdown(new Set(['before you upgrade', 'upgrade notes']), false);
   const changes = extractChangelog(markdown);
   const visuals = extractReleaseVisuals(markdown, version);
-  return highlights.length || changes || important || visuals.length
-    ? { highlights, changes, important, visuals }
+  return highlights.length || changes || important || upgradeNotes || visuals.length
+    ? { highlights, changes, important, upgradeNotes, visuals }
     : null;
 };
 
 /**
  * Build the post-update changelog from the user-facing change categories in a
- * published release body. Highlights and visuals are rendered separately by
- * the post-update view, while this is its expandable detailed changelog.
+ * published release body. Highlights, warnings, upgrade notes and visuals
+ * render separately, while this is its expandable detailed changelog.
  */
 export const extractChangelog = (markdown: string): string | null => {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
@@ -188,7 +191,9 @@ export const extractChangelog = (markdown: string): string | null => {
       'highlights',
       'see the difference',
       'before you upgrade',
+      'upgrade notes',
       'known issues',
+      'breaking changes',
     ].includes(normalizedTitle);
     if (label || separateSection) {
       const boundary = headings.slice(headingIndex + 1).find((next) => next.level <= heading.level);

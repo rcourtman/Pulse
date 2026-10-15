@@ -1635,6 +1635,21 @@ locale. Cards narrower than 600px, which a window of about 900px with
 the rail open produces, are still cramped; a container-driven switch to the
 card list is the remaining fix.
 
+The history card's own width now chooses between the table and the cards,
+not the viewport. `AlertHistoryTableSection` measures its wrapper with
+`useObservedElementWidth` and shows the cards whenever the card is narrower
+than `ALERT_HISTORY_TABLE_MIN_WIDTH` (800px, the width from which the three
+row actions share one line); until the card is measured, the phone
+breakpoint decides as before. A 1024px to roughly 1240px window with the
+Alerts rail open, which gave the table a 600px to 800px card with stacked
+actions and names broken mid-word, now shows the cards; a 1280px window
+(an 837px card) keeps the table. The 600px density and the stacked-action
+rule above therefore serve only a card that has not been measured. The cards
+take `active` from that decision instead of a 768px media query, so an open
+timeline or resource view moves into the cards' drawer when the cards take
+over and back to the inline expansion when the table returns
+(`AlertHistoryTableSection.test.tsx`, `AlertHistoryMobileList.test.tsx`).
+
 Alert history row timestamps render clock time in the viewer's own locale and
 must carry the absolute date and time as a title. The date otherwise lives
 only in the day group header, which scrolls out of sight, and a hardcoded

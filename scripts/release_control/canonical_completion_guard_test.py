@@ -2489,6 +2489,8 @@ None yet.
                         "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertDeadManDestinationSection.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertHistoryFrequencyCard.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/AlertHistoryMobileList.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/AlertHistoryTableSection.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertIncidentSynthesisSummary.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertIntentPolicyPanel.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertOverviewAlertCard.system-scope.test.tsx",
