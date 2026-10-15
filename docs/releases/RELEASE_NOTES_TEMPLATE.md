@@ -46,6 +46,17 @@ receives both. The models decide what to inspect, what matters, and how to tell
 the release story. The harness owns the release boundary, public format, safety
 constraints, and optional per-pass traces.
 
+The post-update modal shows Highlights first, followed by optional screenshots
+and expandable grouped changes. Keep the highlights useful without images.
+The visual investigation also reads the Visual evidence sections and images
+from merged PRs in this release range. It may reuse a public GitHub image
+attachment or immutable committed screenshot when inspected, safe and still
+accurate for the release, or capture
+fresh before and after views using identical demo data. Selected PR images are
+copied into versioned release PNG assets. A before view must match the actual
+comparison tag. A new feature may use one current view. No images is a valid
+outcome when screenshots do not explain anything useful.
+
 Do not add a separate `Fixes` section. That shape encourages the same change to
 be described twice as both an improvement and a fix.
 

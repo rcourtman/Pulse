@@ -9,8 +9,12 @@ import { Dialog } from '@/components/shared/Dialog';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { buildReleaseNotesUrl, normalizeReleaseVersion } from '@/components/updateVersion';
-import { extractChangelog, isReleaseVersion } from '@/components/whatsNewModel';
-import { renderMarkdown } from '@/components/AI/aiChatUtils';
+import {
+  extractWhatsNew,
+  isReleaseVersion,
+  type WhatsNewContent as ReleaseContent,
+} from '@/components/whatsNewModel';
+import { WhatsNewContent } from '@/components/WhatsNewContent';
 import { logger } from '@/utils/logger';
 
 const readLastSeenVersion = (): string | null => {
@@ -31,8 +35,8 @@ const markVersionSeen = (version: string) => {
 
 /**
  * Post-update "What's New" notice. A compact non-blocking notice appears once
- * after the running version changes and only when that release has categorized
- * user-facing changelog entries. The detailed dialog opens only after an
+ * after the running version changes and only when that release has user-facing
+ * notes. The detailed dialog opens only after an
  * explicit action. Preparing the notice (or finding no categorized entries)
  * records the version so reloads stay quiet until the next update.
  *
@@ -44,7 +48,7 @@ export function WhatsNewCard() {
   const [noticeVisible, setNoticeVisible] = createSignal(false);
   const [dialogVisible, setDialogVisible] = createSignal(false);
   const [version, setVersion] = createSignal('');
-  const [changelogHtml, setChangelogHtml] = createSignal('');
+  const [content, setContent] = createSignal<ReleaseContent | null>(null);
   let checked = false;
 
   const loadNotes = async (currentVersion: string, noticeSlotReserved: boolean) => {
@@ -55,12 +59,12 @@ export function WhatsNewCard() {
       if (normalizeReleaseVersion(notes.version) !== currentVersion) {
         return;
       }
-      const changelog = extractChangelog(notes.releaseNotes);
-      if (!changelog) {
+      const releaseContent = extractWhatsNew(notes.releaseNotes, currentVersion);
+      if (!releaseContent) {
         markVersionSeen(currentVersion);
         return;
       }
-      setChangelogHtml(renderMarkdown(changelog));
+      setContent(releaseContent);
       setVersion(currentVersion);
       // The compact notice is the only automatic release UI. Record the
       // version immediately so reloads cannot turn it into a recurring prompt.
@@ -147,8 +151,9 @@ export function WhatsNewCard() {
         <Dialog
           isOpen={dialogVisible()}
           onClose={dismissChangelog}
-          panelClass="max-w-xl"
+          panelClass="max-w-4xl"
           ariaLabelledBy="whats-new-title"
+          returnFocus={() => document.getElementById('main')}
         >
           <div class="w-full" data-testid="whats-new-modal">
             <div class="px-6 py-4 border-b border-border">
@@ -173,11 +178,11 @@ export function WhatsNewCard() {
                   <div class="min-w-0">
                     <h2
                       id="whats-new-title"
-                      class="text-lg font-semibold text-base-content truncate"
+                      class="text-base font-semibold text-base-content sm:text-lg"
                     >
-                      Pulse v{version()} changelog
+                      What's new in Pulse v{version()}
                     </h2>
-                    <p class="text-xs text-muted">What changed in this release</p>
+                    <p class="text-xs text-muted">What changed and why it matters</p>
                   </div>
                 </div>
                 <ActionIconButton
@@ -193,11 +198,11 @@ export function WhatsNewCard() {
               </div>
             </div>
 
-            <div
-              class="px-6 py-4 max-h-[60vh] overflow-y-auto text-sm text-base-content [&_h3]:mt-5 [&_h3:first-child]:mt-0 [&_h3]:mb-2 [&_h3]:text-base [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-2 [&_p]:mt-2 [&_a]:underline [&_code]:font-mono [&_code]:text-xs"
-              // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown sanitizes via DOMPurify
-              innerHTML={changelogHtml()}
-            />
+            <div class="max-h-[60vh] overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
+              <Show when={content()}>
+                {(releaseContent) => <WhatsNewContent content={releaseContent()} />}
+              </Show>
+            </div>
 
             <div class="px-6 py-4 bg-surface-alt border-t border-border flex items-center justify-between gap-3">
               <ExternalTextLink

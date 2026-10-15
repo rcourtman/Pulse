@@ -97,6 +97,38 @@ def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> d
 
 class SubsystemLookupTest(unittest.TestCase):
 
+    def test_release_presentation_proofs_do_not_widen_promotion_metadata(self):
+        paths = [
+            ".github/PULL_REQUEST_TEMPLATE.md",
+            "docs/releases/RELEASE_NOTES_TEMPLATE.md",
+            "frontend-modern/src/components/WhatsNewCard.tsx",
+            "frontend-modern/src/components/WhatsNewContent.tsx",
+            "frontend-modern/src/components/whatsNewModel.ts",
+            "scripts/capture-release-note-visuals.sh",
+            "scripts/generate-release-notes.sh",
+            "VERSION",
+        ]
+        result = lookup_paths(paths)
+        self.assertEqual(result["unowned_runtime_files"], [])
+        for entry in result["files"]:
+            requirement = next(
+                match["verification_requirement"]
+                for match in entry["matches"]
+                if match["subsystem"] == "deployment-installability"
+            )
+            if entry["path"] == "VERSION":
+                self.assertEqual(requirement["id"], "release-promotion-metadata-runtime")
+                self.assertNotIn(
+                    "scripts/release_control/capture_release_note_visuals.test.mjs",
+                    requirement["exact_files"],
+                )
+            else:
+                self.assertEqual(requirement["id"], "release-note-presentation")
+                self.assertIn(
+                    "scripts/release_control/capture_release_note_visuals.test.mjs",
+                    requirement["exact_files"],
+                )
+
     def test_demo_transaction_sources_have_connected_proof_without_widening_release_metadata(self):
         for path in (".github/scripts/demo-runtime-transaction.py", ".github/scripts/dispatch-demo-runtime.py",
                      ".github/scripts/tests/demo_runtime_native.py", ".github/workflows/demo-runtime-native.yml"):

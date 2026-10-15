@@ -2877,6 +2877,12 @@ updates a bounded aggregate tally; it does not identify, register, authorize,
 configure, update, or report a Pulse agent and must not consume agent tokens,
 agent inventory, registration state, or command-channel readiness.
 
+The authenticated running-release screenshot route under
+`/api/updates/release-notes/assets/` is adjacent deployment presentation.
+It uses monitoring-read authority and exact published PNG references. It must
+not accept agent-report credentials as image authority or reinterpret release
+screenshots as enrollment, update readiness or lifecycle verification.
+
 1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.
    Canonical `/api/auto-register` auth is split by intent: when the setup-token
    bootstrap path succeeds, lifecycle clients must complete registration with

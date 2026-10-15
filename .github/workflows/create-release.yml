@@ -857,6 +857,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - name: Checkout repository
         if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
@@ -869,11 +870,14 @@ jobs:
         if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
         run: |
           npm ci --ignore-scripts
+          python3 scripts/release_control/release_note_visuals_test.py
+          node --test scripts/release_control/capture_release_note_visuals.test.mjs
           npx playwright install --with-deps chromium
 
       - name: Capture comparison and candidate views
         if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
         env:
+          GH_TOKEN: ${{ github.token }}
           WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.visual_comparison_tag }}
         run: |
           set -euo pipefail

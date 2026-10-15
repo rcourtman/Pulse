@@ -86,7 +86,7 @@ class ReleaseNoteVisualPlanTest(unittest.TestCase):
         self.assertEqual(captures["maxItems"], visuals.MAX_CAPTURES)
         self.assertEqual(capture["description"]["maxLength"], 240)
         self.assertEqual(
-            capture["after"]["properties"]["steps"]["maxItems"],
+            capture["after"]["anyOf"][0]["properties"]["steps"]["maxItems"],
             visuals.MAX_STEPS,
         )
 
@@ -115,6 +115,55 @@ class ReleaseNoteVisualPlanTest(unittest.TestCase):
             ["release-note-responsive-settings-now.png"],
         )
 
+    def test_reuses_pr_images_without_building_either_runtime(self):
+        raw = valid_plan()
+        source = {
+            "image_url": "https://github.com/user-attachments/assets/f3e1870e-7f12-4ab6-8961-cab68e1f1725",
+            "pull_request_url": "https://github.com/rcourtman/Pulse/pull/1194",
+        }
+        raw["captures"][0]["before"] = source.copy()
+        raw["captures"][0]["after"] = source.copy()
+        plan = visuals.validate_plan(raw)
+        self.assertEqual(visuals.runtime_count(plan, "before"), 0)
+        self.assertEqual(visuals.runtime_count(plan, "after"), 0)
+        self.assertEqual(len(visuals.asset_names(plan)), 2)
+        markdown = visuals.render_markdown(plan, "rcourtman/Pulse", "v6.6.0")
+        self.assertIn("releases/download/v6.6.0/release-note-responsive-settings-now.png", markdown)
+        self.assertNotIn("user-attachments", markdown)
+
+    def test_can_mix_a_reused_before_image_and_a_fresh_current_capture(self):
+        raw = valid_plan()
+        raw["captures"][0]["before"] = {
+            "image_url": "https://github.com/user-attachments/assets/f3e1870e-7f12-4ab6-8961-cab68e1f1725",
+            "pull_request_url": "https://github.com/rcourtman/Pulse/pull/1194",
+        }
+        plan = visuals.validate_plan(raw)
+        self.assertEqual(visuals.runtime_count(plan, "before"), 0)
+        self.assertEqual(visuals.runtime_count(plan, "after"), 1)
+
+    def test_reuses_a_screenshot_at_an_immutable_repository_revision(self):
+        raw = valid_plan()
+        raw["captures"][0]["after"] = {
+            "image_url": "https://raw.githubusercontent.com/rcourtman/Pulse/" + "a" * 40 + "/frontend-modern/browser-verification/screenshots/release-highlights-desktop.png",
+            "pull_request_url": "https://github.com/rcourtman/Pulse/pull/1194",
+        }
+        plan = visuals.validate_plan(raw)
+        self.assertEqual(visuals.runtime_count(plan, "after"), 0)
+        raw["captures"][0]["after"]["image_url"] = raw["captures"][0]["after"]["image_url"].replace("a" * 40, "main")
+        with self.assertRaises(visuals.PlanError):
+            visuals.validate_plan(raw)
+
+    def test_reused_images_require_public_attachments_and_pulse_pr_provenance(self):
+        for image_url, pr_url in [
+            ("https://example.com/screenshot.png", "https://github.com/rcourtman/Pulse/pull/1194"),
+            ("https://github.com/user-attachments/assets/f3e1870e-7f12-4ab6-8961-cab68e1f1725?token=private", "https://github.com/rcourtman/Pulse/pull/1194"),
+            ("https://github.com/user-attachments/assets/f3e1870e-7f12-4ab6-8961-cab68e1f1725", "https://github.com/other/repo/pull/1194"),
+        ]:
+            with self.subTest(image_url=image_url):
+                raw = valid_plan()
+                raw["captures"][0]["after"] = {"image_url": image_url, "pull_request_url": pr_url}
+                with self.assertRaises(visuals.PlanError):
+                    visuals.validate_plan(raw)
     def test_rejects_external_routes_and_arbitrary_selectors(self):
         raw = valid_plan()
         raw["captures"][0]["after"]["route"] = "https://example.com/"

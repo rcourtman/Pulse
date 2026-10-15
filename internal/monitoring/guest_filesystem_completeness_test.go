@@ -119,6 +119,8 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 			}
 			build := func() models.VM {
 				t.Helper()
+				// A slow poll still belongs to the cycle that started before collection.
+				cycleStart := time.Now()
 				previous := m.previousGuestContextForInstance("partial-filesystems").vmsByID[id]
 				var vm models.VM
 				if tc.collector == "node" {
@@ -136,7 +138,7 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 					m.checkGuestAlertsForVM("partial-filesystems", vm)
 				}
 				publish(vm)
-				m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+				m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 				view := m.currentModeReadState().VMs()[0]
 				if view.DiskStatusReason() != vm.DiskStatusReason || view.DiskObservation() != vm.DiskObservation || !reflect.DeepEqual(previousVMFromView(view).Disks, vm.Disks) {
 					t.Fatalf("canonical projection changed completeness, original age or mount rows: vm=%+v view=%+v", vm, previousVMFromView(view))
