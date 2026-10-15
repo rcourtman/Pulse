@@ -190,6 +190,29 @@ class PMGDocsTest(unittest.TestCase):
         self.assertIn("does not guarantee a notification was routed or received", self.guide)
         self.assertIn("TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing", self.text)
 
+    def test_cluster_decoder_and_backup_target_errors_are_not_dns_advice(self):
+        section = plain(self.text.split("### Cluster response or backup lookup errors", 1)[1])
+        for phrase in ("cannot unmarshal string", "ClusterStatus.cid",
+                       "Pulse rejected a cluster ID returned as text",
+                       "not a PMG cluster setting to change",
+                       "Pulse connection's display name",
+                       "native PMG node name", "hostname lookup failed"):
+            self.assertIn(phrase, section)
+        for phrase in ("Do not rename the connection or gateway, change DNS",
+                       "replace the password or disable certificate verification",
+                       "no new Test, backup, mail traffic or diagnostic run"):
+            self.assertIn(phrase, section)
+
+    def test_known_reader_failure_has_a_native_read_only_fallback_not_a_fix_claim(self):
+        section = plain(self.text.split("### Cluster response or backup lookup errors", 1)[1])
+        for phrase in ("successful Test or some populated statistics can coexist",
+                       "PMG's own web interface", "queues and configuration-backup status",
+                       "not proof of an empty queue or no backups",
+                       "Keep the original error and time"):
+            self.assertIn(phrase, section)
+        self.assertIn("[collection limits](#read-the-mail-gateway-view)", self.text)
+        self.assertNotRegex(section, r"(?i)(?:fixed|resolved) in|upgrade to|pull .+:|retest on")
+
 
 if __name__ == "__main__":
     unittest.main()
