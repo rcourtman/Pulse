@@ -102,12 +102,18 @@ const checkpoint = () => fs.writeFileSync(path.join(output, 'result.json'), JSON
       await capture('recipe');
       const extent = await recipe.evaluate(el => el.scrollWidth - el.clientWidth);
       await recipe.hover();
-      if (extent > 1) await page.mouse.wheel(extent + 100, 0);
+      const scrollMethod = extent <= 1 ? 'not-needed' : state.engine === 'webkit' && state.width < 500
+        ? 'native-scroll-position' : 'mouse-wheel';
+      if (scrollMethod === 'native-scroll-position') {
+        // Playwright does not expose mouse wheels in mobile WebKit. Check its
+        // native scroll position and actual pixels, without claiming a swipe.
+        await recipe.evaluate(el => { el.scrollLeft = el.scrollWidth; });
+      } else if (scrollMethod === 'mouse-wheel') await page.mouse.wheel(extent + 100, 0);
       await page.waitForFunction(() => {
         const el = [...document.querySelectorAll('article pre')].find(node => node.textContent.includes('image_id=$(docker inspect'));
         return el && el.scrollWidth - el.clientWidth - el.scrollLeft <= 1;
       }, undefined, { timeout: 5000 });
-      caseResult.recipeScroll = await recipe.evaluate(el => ({ extent: el.scrollWidth - el.clientWidth, reached: el.scrollLeft }));
+      caseResult.recipeScroll = { method: scrollMethod, ...await recipe.evaluate(el => ({ extent: el.scrollWidth - el.clientWidth, reached: el.scrollLeft })) };
       if (extent > 1) await capture('recipe-right-edge');
       const text = (await page.locator('article').innerText()).replace(/\s+/g, ' ');
       for (const phrase of ['does not contact a registry or pull an image',
