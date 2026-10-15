@@ -303,7 +303,7 @@ export function alertTypeDisplayLabel(type: string): string {
 
     // Infrastructure alert types
     case 'host-offline':
-      return 'Host Offline';
+      return 'Agent Not Reporting';
     case 'offline':
       return 'Offline';
     case 'powered-off':

@@ -2784,6 +2784,15 @@ health handling, host cleanup, and host offline lifecycle handling; future host
 agent alert behavior should extend that resource checker owner while shared
 health-assessment evaluation remains package-level until all storage-health
 callers can be separated behind a narrower owner.
+The host offline lifecycle is raised only by a lapsed agent report, and
+Pulse cannot tell a dead host from an agent that lost its route to Pulse.
+Its message therefore names the silent agent ("Pulse agent on '<name>'
+stopped reporting", using the agent's own name without the linked
+`(Host Agent)` qualifier) and never claims the host is offline, because a
+linked Proxmox node keeps reporting through its API while its agent is
+silent. The `host-offline` type, alert identity and lifecycle stay
+unchanged. `TestHandleHostOfflineNamesSilentAgentNotHostOutage` in
+`internal/alerts/alerts_test.go` pins this wording.
 Host long-running storage-operation alerts require fresh operation evidence.
 An accepted Unraid cancellation/completion or terminal Linux RAID report
 resolves the corresponding operation alert immediately. A normal polling gap

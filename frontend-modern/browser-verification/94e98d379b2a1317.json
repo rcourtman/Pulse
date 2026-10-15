@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "65e3fa6f24a866dcee4ba9bf3d6a239ac846abcb",
+  "verified_at": "2026-10-15T08:16:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/helpers.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/helpers.ts": "d13d4b6f013a9de2f2e39a382f885b147b431148a09755d67edd239d5b1d6053"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/alerts"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production frontend build of this branch served by the preview server on pulse-dev, proxied to this branch's mock backend with a build overlay that keeps the first Proxmox-linked mock agent silent (agent West Production A linked to node pve1)",
+    "Node drawer Needs attention lists 'West Production A (Host Agent) - Agent Not Reporting' with 'Pulse agent on 'West Production A' stopped reporting', CRITICAL badge, while the node row stays online with live metrics",
+    "Alerts page lists the same alert labelled (Agent Not Reporting); no 'Host Offline' label remains for the agent alert, Docker host offline alerts keep their own label",
+    "Phone width wraps the drawer attention row without clipping the label or message"
+  ],
+  "interactions": [
+    "Signed in, opened Proxmox overview, expanded the West Production A node row with its chevron, scrolled Needs attention into view",
+    "Opened the Alerts page and scrolled the agent alert into view at both widths"
+  ]
+}

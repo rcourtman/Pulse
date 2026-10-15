@@ -4991,6 +4991,10 @@ bounds, including provider-backed alert-history wording. `frontend-modern/src/fe
 backed host and VM incidents with the shared `resource-incident` vocabulary
 and existing alert-history shells instead of introducing VMware-only labels,
 badges, or panel copy just because the underlying signal came from vSphere.
+The same helper labels the `host-offline` alert type `Agent Not Reporting`:
+that alert only means an agent's reports lapsed, so drawers and the alerts
+page must not call it a host outage beside a node row that is still online.
+`docker-host-offline` keeps its own `Host Offline` label.
 That same shared settings and modal boundary now also owns the public usage-data
 vocabulary. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts`, and
