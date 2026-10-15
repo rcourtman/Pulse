@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "bc2ae0ec1c6d1a6ab6cc82925368530837cb4ca7",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts",
+    "frontend-modern/src/utils/nodeModalPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx": "a6469b49e7ed2e30a6328a1589e6872d175e1dc96eae0f76bd0125c4762ecd6c",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "39e1f1b8a86c1c3b7aa75382abe9d9c8f3fa0ab3f31e2f1642a77745af0ed331",
+    "frontend-modern/src/utils/nodeModalPresentation.ts": "383ae0a6a4dc2e79b7a0d6e13075bb2faff01d9db86d8a4eaba242480339cf16"
+  },
+  "routes": [
+    "/settings/infrastructure?fixtureType=pve",
+    "/settings/infrastructure?fixtureType=pbs",
+    "/settings/infrastructure?fixtureType=pmg"
+  ],
+  "states": [
+    "Saved record check beside edited endpoint/TLS, with explicit saved-only scope",
+    "Completed success retired on a trust edit",
+    "Late saved success after A-B-A discarded; mounted action stays busy until settlement",
+    "Newly entered password tests exact form endpoint and TLS",
+    "Late entered-settings failure discarded",
+    "Current entered-settings warning remains visible",
+    "Clearing the secret retires form evidence and restores saved-only scope"
+  ],
+  "interactions": [
+    "Desktop keyboard activation and narrow touch taps through the real NodeCredentialSlot, state hook, footer and NodesAPI client",
+    "Endpoint/fingerprint/account/secret edits and scope changes",
+    "24 explicit synthetic POST checks; no automatic test, save, pause or delete",
+    "Associated scope description and announced result; 44px test target; all action bounds checked for horizontal overflow",
+    "All14 retained final captures inspected with native view_image"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-14T23:28:17Z",
+  "evidence": {
+    "producer_test_source": "d782c73078afe2532b7fc8e5871dcd4171733aa7",
+    "containing_build_source": "bc2ae0ec1c6d1a6ab6cc82925368530837cb4ca7",
+    "source_receipts": [
+      "source-ox_txb6n",
+      "source-hekg_x_f"
+    ],
+    "browser": "Chromium141.0.7390.37",
+    "playwright": "1.56.1",
+    "driver": "frontend-modern/browser-tests/node-connection-test.cjs",
+    "browser_result_sha256": "eb07dbe70b441d57aba673a58f8567aeb1f6a636fd92439ac0cef0ab59240894",
+    "scope": "Offline existing-editor consumer/API fixtures, not full-app authentication, native or installed trust, guest recovery, physical Safari or release acceptance."
+  }
+}

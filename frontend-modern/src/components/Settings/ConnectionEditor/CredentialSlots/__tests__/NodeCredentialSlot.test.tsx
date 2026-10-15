@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InfrastructurePlatformSettingsProps } from '@/components/Settings/proxmoxSettingsModel';
 import type { NodeConfigWithStatus } from '@/types/nodes';
 import { MonitoredSystemLedgerAPI } from '@/api/monitoredSystemLedger';
+import { NodesAPI } from '@/api/nodes';
 import { NodeCredentialSlot } from '../NodeCredentialSlot';
 
 const importApprovalRequiredMessage =
@@ -24,6 +25,106 @@ describe('NodeCredentialSlot', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it.each(['pve', 'pbs', 'pmg'] as const)(
+    'discloses a saved %s check beside edited trust, then removes obsolete success',
+    async (nodeType) => {
+      const savedTest = vi.spyOn(NodesAPI, 'testExistingNode').mockResolvedValue({
+        status: 'success',
+        message: 'Fixture saved connection responds',
+      });
+      const formTest = vi.spyOn(NodesAPI, 'testConnection');
+      const settings = createSettings();
+      render(() => (
+        <NodeCredentialSlot
+          nodeType={nodeType}
+          settings={settings}
+          editingNode={
+            {
+              id: `${nodeType}-fixture`,
+              type: nodeType,
+              name: 'Fixture',
+              host: 'https://saved.example.invalid',
+              user: 'fixture@pam',
+              tokenName: 'fixture@pam!read',
+              hasPassword: nodeType === 'pmg',
+              verifySSL: true,
+              status: 'connected',
+            } as NodeConfigWithStatus
+          }
+          onCancel={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      ));
+      fireEvent.input(screen.getByLabelText(/^Endpoint URL/), {
+        target: { value: 'https://entered.example.invalid' },
+      });
+      fireEvent.input(screen.getByLabelText('SSL Fingerprint (optional)'), {
+        target: { value: 'ab'.repeat(32) },
+      });
+      const testButton = screen.getByRole('button', { name: 'Test saved connection' });
+      expect(testButton).toHaveAccessibleDescription(/Unsaved changes are not tested/);
+      fireEvent.click(testButton);
+      const result = await screen.findByRole('status', { name: 'Connection test result' });
+      expect(result).toHaveTextContent('Saved connection test');
+      expect(result).toHaveTextContent('Fixture saved connection responds');
+      expect(result).toHaveTextContent('Unsaved changes are not tested');
+      expect(savedTest).toHaveBeenCalledExactlyOnceWith(`${nodeType}-fixture`);
+      expect(formTest).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Verify SSL certificate' }));
+      expect(
+        screen.queryByRole('status', { name: 'Connection test result' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/^Endpoint URL/)).toHaveValue('https://entered.example.invalid');
+      expect(settings.saveNode).not.toHaveBeenCalled();
+    },
+  );
+
+  it('discloses and retires an entered-password test through the real form', async () => {
+    const formTest = vi.spyOn(NodesAPI, 'testConnection').mockResolvedValue({
+      status: 'success',
+      message: 'Fixture entered connection responds',
+    });
+    const savedTest = vi.spyOn(NodesAPI, 'testExistingNode');
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pmg"
+        settings={createSettings()}
+        editingNode={
+          {
+            id: 'pmg-fixture',
+            type: 'pmg',
+            name: 'Fixture',
+            host: 'https://saved.example.invalid',
+            user: 'fixture@pam',
+            hasPassword: true,
+            verifySSL: true,
+            status: 'connected',
+          } as NodeConfigWithStatus
+        }
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+    fireEvent.input(screen.getByLabelText('Password'), {
+      target: { value: 'fixture-only-secret' },
+    });
+    const button = screen.getByRole('button', { name: 'Test entered settings' });
+    expect(button).toHaveAccessibleDescription(/No settings are saved/);
+    fireEvent.click(button);
+    const result = await screen.findByRole('status', { name: 'Connection test result' });
+    expect(result).toHaveTextContent('Entered settings test');
+    expect(result).toHaveTextContent('No settings are saved');
+    expect(formTest).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ password: 'fixture-only-secret' }),
+    );
+    expect(savedTest).not.toHaveBeenCalled();
+    fireEvent.input(screen.getByLabelText('Password'), { target: { value: '' } });
+    expect(
+      screen.queryByRole('status', { name: 'Connection test result' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Test saved connection' })).toBeEnabled();
   });
 
   it('syncs an untouched mounted editor to a refreshed node snapshot', async () => {

@@ -4300,6 +4300,23 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Connection-test evidence follows its tested settings (2026-10-14)
+
+The existing Proxmox/PBS/PMG editor names its live test scope before dispatch:
+without a newly entered secret an existing record uses **Test saved connection**,
+not the unsaved endpoint or TLS policy. A newly entered secret (or a new record)
+uses **Test entered settings**. Results repeat that scope; warnings remain
+warnings. Neither test saves settings or establishes ongoing collection, guest
+thaw or filesystem writes. No test runs automatically after an edit.
+Connection input changes, available saved connection-config changes, target
+changes, reset, close and disposal retire completed/in-flight UI evidence,
+including A-to-B-to-A edits. Retirement does not cancel a live request or permit
+an overlapping probe: the action remains busy until that request settles.
+Health-only polls and unrelated name/coverage/member-display edits preserve
+valid evidence and unsaved input. Actual guest and installed trust recovery
+remain separate from this frontend correction.
+
+
 ### AI Discovery removed (2026-10-11)
 
 Agent resource context retains the backend-authored `discoveryTarget` coordinates.
