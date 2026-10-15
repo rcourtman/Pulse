@@ -137,6 +137,19 @@ describe('getNodeStatusIndicator', () => {
 });
 
 describe('getGuestPowerIndicator', () => {
+  it.each([
+    ['paused', 'Paused', 'warning'],
+    ['suspended', 'Suspended', 'warning'],
+    ['starting', 'Starting', 'warning'],
+    ['migrating', 'Migrating', 'muted'],
+    ['unknown', 'Unknown', 'warning'],
+    ['', 'Unknown', 'muted'],
+    [undefined, 'Unknown', 'muted'],
+    ['error', 'Error', 'danger'],
+  ] as const)('preserves %s without inventing Stopped', (status, label, variant) => {
+    expect(getGuestPowerIndicator({ status })).toEqual({ label, variant });
+  });
+
   it('returns muted for null/undefined', () => {
     expect(getGuestPowerIndicator(null)).toEqual({ variant: 'muted', label: 'Unknown' });
   });
@@ -228,6 +241,15 @@ describe('getGuestHealthIndicator', () => {
         .label,
     ).toBe('Node offline');
   });
+
+  it.each(['paused', 'suspended', 'unknown', 'starting'])(
+    'does not let a failed probe replace the reported %s state',
+    (status) => {
+      expect(getGuestHealthIndicator({ status, availability: failedAttachedProbe })).toEqual(
+        getGuestPowerIndicator({ status }),
+      );
+    },
+  );
 
   it('degrades when any one of several projected checks has failed', () => {
     const result = getGuestHealthIndicator(

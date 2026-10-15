@@ -268,6 +268,33 @@ describe('GuestRow', () => {
       expect(dot).toBeTruthy();
     });
 
+    it('keeps the reported runtime state in the same row through pause, uncertainty and recovery', () => {
+      const [guest, setGuest] = createSignal(makeGuest());
+      const { container } = renderGuestRow({
+        get guest() {
+          return guest();
+        },
+        visibleColumnIds: ['name'],
+      });
+      const row = container.querySelector('tr');
+      const dot = screen.getByTestId('status-dot');
+      for (const [status, label, variant] of [
+        ['running', 'Running', 'success'],
+        ['paused', 'Paused', 'warning'],
+        ['suspended', 'Suspended', 'warning'],
+        ['unknown', 'Unknown', 'warning'],
+        ['', 'Unknown', 'muted'],
+        ['stopped', 'Stopped', 'danger'],
+        ['running', 'Running', 'success'],
+      ]) {
+        setGuest({ ...guest(), status });
+        expect(container.querySelector('tr')).toBe(row);
+        expect(screen.getByTestId('status-dot')).toBe(dot);
+        expect(dot).toHaveAttribute('title', label);
+        expect(dot).toHaveAttribute('data-variant', variant);
+      }
+    });
+
     it('renders CPU bar with correct usage percentage', () => {
       renderGuestRow({ guest: makeGuest({ cpu: 0.75 }) });
       const cpuBar = screen.getByTestId('cpu-bar');

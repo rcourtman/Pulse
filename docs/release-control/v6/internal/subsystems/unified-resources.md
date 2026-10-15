@@ -823,6 +823,11 @@ at the adapter boundary; a mutation that arrives during a rebuild must apply to
 the newly published registry rather than a superseded pointer. Authoritative
 snapshot omissions still remove resources and emit the normal canonical
 history change.
+Workload rows and their expanded drawer preserve reported paused, suspended,
+transitional and unknown states instead of treating every non-running guest
+as stopped. Both use the same parent-online and attached-availability-probe
+presentation, without deriving filesystem health or guest liveness from
+power state. This display does not initiate guest reads or recovery actions.
 Proxmox guest I/O projection preserves the monitoring-owned rate validity
 contract. A valid idle interval publishes an explicit zero-valued `bytes/s`
 metric; an unknown first, missing, partial, or out-of-order observation leaves

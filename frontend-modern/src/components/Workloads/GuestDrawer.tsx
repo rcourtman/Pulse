@@ -5,7 +5,7 @@ import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { WebInterfaceLink } from '@/components/shared/WebInterfaceLink';
-import { getSimpleStatusIndicator } from '@/utils/status';
+import { getGuestHealthIndicator } from '@/utils/status';
 import {
   GUEST_DRAWER_BACKUP_PRECAUTION,
   getGuestDrawerGuestReadPrecaution,
@@ -54,7 +54,9 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
 
   const guestReadPrecaution = createMemo(() => getGuestDrawerGuestReadPrecaution(props.guest));
 
-  const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.guest.status));
+  const headerIndicator = createMemo(() =>
+    getGuestHealthIndicator(props.guest, props.parentNodeOnline !== false),
+  );
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
