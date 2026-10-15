@@ -54,6 +54,31 @@ func TestRestrictInvestigationProviderToolsForResourceType(t *testing.T) {
 	}
 }
 
+func TestGuestInvestigationProjectionRetainsBackupTool(t *testing.T) {
+	providerTools := []providers.Tool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PulseMetricsToolName},
+		{Name: agentcapabilities.PulseStorageToolName},
+		{Name: agentcapabilities.PulseDockerToolName},
+		{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
+		{Name: agentcapabilities.PatrolProposeActionToolName},
+	}
+	filtered, err := restrictInvestigationProviderToolsForResourceType(providerTools, "vm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, tool := range filtered {
+		found = found || tool.Name == agentcapabilities.PulseStorageToolName
+		if tool.Name == agentcapabilities.PulseDockerToolName {
+			t.Fatal("guest backup evidence should not expose unrelated platform tools")
+		}
+	}
+	if !found {
+		t.Fatal("investigation filtered out collected backup evidence")
+	}
+}
+
 func TestRestrictInvestigationProviderToolsAllowsUnavailableOptionalDeepRead(t *testing.T) {
 	providerTools := []providers.Tool{
 		{Name: agentcapabilities.PulseQueryToolName},

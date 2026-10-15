@@ -19,7 +19,7 @@ func (e *PulseToolExecutor) registerStorageTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseStorageToolName,
-			Description: `Query storage pools, backups, snapshots, Ceph, replication, RAID, and disk health. Use the "type" parameter to select what to query.`,
+			Description: `Query storage pools, backups, snapshots, Ceph, replication, RAID, and disk health. Use the "type" parameter to select what to query. backup_tasks returns collected backup attempt status, timestamps and failure error text without requiring host command access. Task success alone does not prove a restorable backup exists.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -34,7 +34,7 @@ func (e *PulseToolExecutor) registerStorageTools() {
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "Filter by VM/container ID (for backups, snapshots, resource_disks)",
+						Description: "Filter by resource ID (canonical subject ID for backup_tasks; VM/container ID for backups, snapshots, resource_disks)",
 					},
 					"guest_id": {
 						Type:        "string",
@@ -780,6 +780,20 @@ func recoveryPointCanonicalTaskError(p recovery.RecoveryPoint) string {
 	return ""
 }
 
+func backupTaskMatchesStatus(filter, status string, outcome recovery.Outcome) bool {
+	if filter == "" || strings.EqualFold(filter, status) {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(filter)) {
+	case "ok", "success":
+		return outcome == recovery.OutcomeSuccess
+	case "error", "failed":
+		return outcome == recovery.OutcomeFailed
+	default:
+		return false
+	}
+}
+
 func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.backupProvider == nil && e.recoveryPointsProvider == nil {
 		return NewTextResult("State provider not available."), nil
@@ -1104,6 +1118,7 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 
 	instanceFilter, _ := args["instance"].(string)
 	guestIDFilter, _ := args["guest_id"].(string)
+	resourceIDFilter, _ := args["resource_id"].(string)
 	statusFilter, _ := args["status"].(string)
 	limit := intArg(args, "limit", 50)
 
@@ -1140,9 +1155,11 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 		for page := 1; page <= maxPages; page++ {
 			points, _, err := e.recoveryPointsProvider.ListPoints(ctx, recovery.ListPointsOptions{
 				Provider: recovery.ProviderProxmoxPVE,
-				Kind:     recovery.KindBackup,
-				Page:     page,
-				Limit:    pageLimit,
+				// Task rows are execution evidence (KindOther), not backup
+				// artifacts. The prefix below also accepts older stored task kinds.
+				SubjectResourceID: resourceIDFilter,
+				Page:              page,
+				Limit:             pageLimit,
 			})
 			if err != nil {
 				return NewErrorResult(err), nil
@@ -1153,6 +1170,9 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 
 			for _, p := range points {
 				if !strings.HasPrefix(strings.TrimSpace(p.ID), "pve-task:") {
+					continue
+				}
+				if resourceIDFilter != "" && p.SubjectResourceID != resourceIDFilter {
 					continue
 				}
 				totalCount++
@@ -1171,7 +1191,7 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 				if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
 					continue
 				}
-				if statusFilter != "" && !strings.EqualFold(status, statusFilter) {
+				if !backupTaskMatchesStatus(statusFilter, status, p.Outcome) {
 					continue
 				}
 
@@ -1223,6 +1243,9 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 			if !strings.HasPrefix(strings.TrimSpace(p.ID), "pve-task:") {
 				continue
 			}
+			if resourceIDFilter != "" && p.SubjectResourceID != resourceIDFilter {
+				continue
+			}
 
 			instance := recoveryPointCanonicalInstance(p)
 			node := recoveryPointCanonicalNode(p)
@@ -1238,7 +1261,7 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 			if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
 				continue
 			}
-			if statusFilter != "" && !strings.EqualFold(status, statusFilter) {
+			if !backupTaskMatchesStatus(statusFilter, status, p.Outcome) {
 				continue
 			}
 

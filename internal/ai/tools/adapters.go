@@ -205,11 +205,7 @@ func (a *RecoveryPointsToolAdapter) ListPoints(ctx context.Context, opts recover
 	ctx, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
 
-	store, err := a.manager.StoreForOrg(a.orgID)
-	if err != nil {
-		return nil, 0, err
-	}
-	return store.ListPoints(ctx, opts)
+	return a.manager.ListPointsForOrg(ctx, a.orgID, opts)
 }
 
 // DiskHealthToolAdapter adapts unified read-state hosts to DiskHealthProvider.
@@ -235,8 +231,8 @@ func (a *DiskHealthToolAdapter) GetHosts() []*unifiedresources.HostView {
 
 // RawMetricPoint represents a single metric value at a point in time
 type RawMetricPoint struct {
-	Value     float64
-	Timestamp time.Time
+	Value     float64   `json:"value"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // MetricsSource provides access to historical metrics data

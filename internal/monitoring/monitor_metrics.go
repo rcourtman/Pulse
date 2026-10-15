@@ -222,27 +222,53 @@ func (m *Monitor) GetDiskMetricsForChart(resourceID string, metricType string, d
 // GetStorageMetricsForChart returns storage metrics, falling back to SQLite +
 // LTTB for longer ranges.
 func (m *Monitor) GetStorageMetricsForChart(storageID string, duration time.Duration) map[string][]MetricPoint {
+	series, _, _ := m.readStorageMetricHistory(storageID, duration, true)
+	return series
+}
+
+// ReadStorageMetricHistory uses the same storage history selection as charts,
+// but never fills an empty requested window with older observations. Analytical
+// consumers must see store errors and synthetic provenance rather than treating
+// an empty, failed or generated read as current operational evidence.
+func (m *Monitor) ReadStorageMetricHistory(storageID string, duration time.Duration) (map[string][]MetricPoint, string, error) {
+	return m.readStorageMetricHistory(storageID, duration, false)
+}
+
+func (m *Monitor) readStorageMetricHistory(storageID string, duration time.Duration, allowGapFill bool) (map[string][]MetricPoint, string, error) {
 	inMemoryResult := map[string][]MetricPoint{}
 	if m != nil && m.metricsHistory != nil {
 		inMemoryResult = m.metricsHistory.GetAllStorageMetrics(storageID, duration)
 	}
+	if m == nil {
+		return inMemoryResult, "unavailable", nil
+	}
 	if mock.IsMockEnabled() {
-		return m.mockStorageMetricsForChartCached(storageID, duration, inMemoryResult, m.GetUnifiedReadStateOrSnapshot)
+		return m.mockStorageMetricsForChartCached(storageID, duration, inMemoryResult, m.GetUnifiedReadStateOrSnapshot), "mock_synthetic", nil
 	}
 	if m.metricsStore == nil {
-		return inMemoryResult
+		return inMemoryResult, "memory", nil
 	}
-	if hasSufficientChartMapCoverageForMetrics(inMemoryResult, duration, storageChartMetricTypes) {
-		return inMemoryResult
+	if allowGapFill && hasSufficientChartMapCoverageForMetrics(inMemoryResult, duration, storageChartMetricTypes) {
+		return inMemoryResult, "memory", nil
 	}
 
 	// inMemoryResult is a fresh map from GetAllStorageMetrics; merge mutates
 	// in place.
 	best := inMemoryResult
-	if converted, ok := m.queryStoreMetricMapWithGapFill("storage", storageID, duration); ok {
-		best = mergeMetricHistory(best, converted, duration)
+	hadMemorySamples := monitorMetricMapPointCount(inMemoryResult) > 0
+	converted, ok, err := m.queryStoreMetricHistory("storage", storageID, duration, allowGapFill)
+	if err != nil {
+		return best, "", err
 	}
-	return best
+	if ok {
+		best = mergeMetricHistory(best, converted, duration)
+		source := "store"
+		if hadMemorySamples {
+			source = "store+memory"
+		}
+		return best, source, nil
+	}
+	return best, "memory", nil
 }
 
 // DiskChartEntry holds temperature chart data and display metadata for a
@@ -834,23 +860,28 @@ func convertSeriesAndDownsample(points []metrics.MetricPoint, target int) []Metr
 }
 
 func (m *Monitor) queryStoreMetricMapWithGapFill(resourceType, resourceID string, duration time.Duration) (map[string][]MetricPoint, bool) {
+	result, ok, _ := m.queryStoreMetricHistory(resourceType, resourceID, duration, true)
+	return result, ok
+}
+
+func (m *Monitor) queryStoreMetricHistory(resourceType, resourceID string, duration time.Duration, allowGapFill bool) (map[string][]MetricPoint, bool, error) {
 	if m == nil || m.metricsStore == nil {
-		return nil, false
+		return nil, false, nil
 	}
 
 	end := time.Now()
 	start := end.Add(-duration)
 
-	query := func(from time.Time) (map[string][]MetricPoint, bool) {
+	query := func(from time.Time) (map[string][]MetricPoint, bool, error) {
 		sqlResult, err := m.metricsStore.QueryAll(resourceType, resourceID, from, end, 0)
 		if err != nil || len(sqlResult) == 0 {
-			return nil, false
+			return nil, false, err
 		}
-		return convertAndDownsample(sqlResult, chartDownsampleTarget), true
+		return convertAndDownsample(sqlResult, chartDownsampleTarget), true, nil
 	}
 
-	if result, ok := query(start); ok {
-		return result, true
+	if result, ok, err := query(start); ok || err != nil || !allowGapFill {
+		return result, ok, err
 	}
 
 	return query(end.Add(-chartGapFillLookbackWindow(duration)))
