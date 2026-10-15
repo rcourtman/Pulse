@@ -853,6 +853,16 @@ See [container CPU readings](DOCKER.md#container-cpu-readings) for worked
 examples, rounding and alert limits, and a passive comparison. Do not restart
 workloads, create CPU load or lower alert thresholds to test this.
 
+#### Container image update disagrees with the runtime
+
+Different **Current digest** and **Target digest** values do not alone prove
+that a container needs an update: one local image can carry several RepoDigests,
+and its local ImageID is not a registry manifest digest. Use the
+[image-update comparison guide](DOCKER.md#image-update-disagrees-with-the-runtime)
+to compare the same host, running image and observation time without pulling or
+recreating the workload. If an update action was already sent or its result is
+unknown, follow its existing receipt and state checks instead of retrying it.
+
 #### Docker hosts appearing/disappearing
 
 Cloned hosts can share a **saved Pulse agent ID**, not just an OS machine ID.

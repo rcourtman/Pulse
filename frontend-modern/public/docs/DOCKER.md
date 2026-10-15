@@ -262,9 +262,62 @@ execution disabled when you only need monitoring.
 
 ### How It Works
 
-1. **Update Detection**: Pulse compares the local image digest with the latest digest from the container registry
+1. **Update Detection**: Pulse compares the running image's local RepoDigests with the registry's tag and platform-manifest digests. A match with any applicable local digest means that comparison found no update; the displayed **Current digest** is only the primary local digest.
 2. **Visual Indicator**: Containers with available updates show a blue upward arrow icon
 3. **Reviewed Update**: Review the target and approve the action, then verify the application yourself
+
+### Image update disagrees with the runtime
+
+An **Image update: Available** reading is not a reason to pull or recreate a
+container as a test. Start with existing observations of the **same host,
+container and time**, and keep detection separate from an update action's
+outcome. If an action was already sent or its result is uncertain, use
+[the existing receipt and workload-state checks](#check-a-failed-or-pending-workload-update)
+instead of sending it again.
+
+In the container details, retain **Current digest**, **Target digest** and any
+displayed error. Keep the original observation time and any available check
+time; unavailable is valid. A page refresh or an
+unchanged tag such as `latest` does not establish a new registry check or an
+unchanged running image.
+
+| Existing observation | Interpretation |
+| --- | --- |
+| Current and target digests differ, but both belong to the same running image's RepoDigests | One image can have several manifest digests. Comparing only the displayed pair can invent an update; Pulse must compare the applicable local set. |
+| A tag/manifest-list digest differs from a platform-manifest digest | These identify different layers of a multi-platform image. Compare the matching repository and platform, not arbitrary `sha256:` strings. |
+| The runtime's local ImageID differs from Pulse's target digest | ImageID is not a registry manifest digest. This difference alone establishes neither an update nor a detection fault. |
+| Registry read failed, no RepoDigests are available, or the observation is old | The comparison is incomplete. An empty list is not proof that the image is current, and an earlier successful check is not current recovery. |
+
+Existing runtime evidence is enough to start a report. If a local check is safe
+and needed, use your normal administration shell **on the affected runtime
+host**, with the same account and Docker context or rootless Podman connection
+that owns the workload. Do not use a shell inside Pulse or change socket access.
+This optional Bash recipe reads only the running container's image ID and that
+exact local image's RepoDigests; it does not contact a registry or pull an image:
+
+```bash
+container='affected-container'
+image_id=$(docker inspect --type container --format '{{.Image}}' "$container") &&
+docker image inspect --format '{{json .RepoDigests}}' "$image_id"
+```
+
+For Podman, replace both `docker` commands with `podman` in the existing owning
+connection; do not switch to root's separate image store. Inspect the running
+container's ImageID, not just the image currently stored under its tag: a tag
+may have moved since that container started. If inspection fails, retain the
+error and stop; do not substitute a full inspection or pull, restart or recreate
+anything to make it succeed. A matching digest is not application or data-health
+proof.
+
+For help, give the Pulse server and affected agent versions, runtime version,
+original time, displayed status/error and whether the target matches one of the
+running image's applicable RepoDigests, if already known. Keep the local image
+references, names and raw inspection private; use consistent aliases and only
+the relevant comparison. Never share registry credentials, environment variables
+or a full inspection. Do not change registry logins, enable command execution,
+clear alerts or retry an update just to diagnose the disagreement. A daily
+resolve/reopen cycle with unchanged image evidence is a separate symptom;
+retain its times rather than forcing another cycle.
 
 ### Updating a Container
 
