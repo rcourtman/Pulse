@@ -76,6 +76,12 @@ func (m *Monitor) buildContainerFromClusterResource(
 			res.VMID,
 		)
 		currentMetrics = mergeContainerRuntimeCounters(currentMetrics, statusSnapshot)
+		// The container may have stopped after the listing was sampled. Use the
+		// already-fetched complete status before selecting running-only readings
+		// or enrichment; an older listing is not evidence it is still running.
+		if statusSnapshot != nil && statusSnapshot.Status != "" {
+			res.Status = statusSnapshot.Status
+		}
 	}
 	diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(
 		makeGuestRateKey(instanceName, "lxc", res.VMID),
