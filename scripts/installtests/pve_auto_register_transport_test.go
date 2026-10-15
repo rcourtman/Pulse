@@ -1,3 +1,5 @@
+//go:build linux
+
 package installtests
 
 import (
@@ -24,7 +26,7 @@ func TestPVEAutoRegisterTransportAuthenticatesBeforeCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PVE installer transport controls: %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "Ran 12 tests") || !strings.Contains(string(out), "\nOK\n") || strings.Contains(string(out), "skipped") {
+	if !strings.Contains(string(out), "Ran 13 tests") || !strings.Contains(string(out), "\nOK\n") || strings.Contains(string(out), "skipped") {
 		t.Fatalf("incomplete PVE installer transport controls:\n%s", out)
 	}
 	t.Logf("%s", out)

@@ -28,10 +28,16 @@ PROVIDER_TEXT = "provider-body-must-not-be-logged " + TOKEN_VALUE
 
 
 def function(name):
-    match = re.search(r"(?ms)^" + re.escape(name) + r"\(\) \{\n.*?^\}", SOURCE)
+    match = re.search(r"(?m)^" + re.escape(name) + r"\(\) \{\n", SOURCE)
     if not match:
         raise AssertionError("missing installer function: " + name)
-    return match.group()
+    # A Python dictionary inside a shell heredoc can also have a bare '}'.
+    # Stop at the next shell function definition, then its last closing brace,
+    # rather than truncating the real caller at a heredoc dictionary.
+    following = re.search(r"(?m)^[a-zA-Z_][a-zA-Z0-9_]*\(\) \{", SOURCE[match.end():])
+    end = match.end() + following.start() if following else len(SOURCE)
+    block = SOURCE[match.start():end]
+    return block[:block.rindex("\n}") + 2]
 
 
 class Peer:
@@ -107,8 +113,10 @@ class PVEAutoRegisterTransport(unittest.TestCase):
             cls.certificates[name] = cert, key
         cls.system_ca = cls.root / "system-ca"
         cls.system_ca.mkdir()
-        shutil.copyfile(cls.certificates["public"][0], cls.system_ca / "public.pem")
-        subprocess.run(["openssl", "rehash", str(cls.system_ca)], check=True, capture_output=True, timeout=5)
+        public_ca = cls.certificates["public"][0]
+        ca_hash = subprocess.run(["openssl", "x509", "-hash", "-noout", "-in", str(public_ca)],
+                                 check=True, capture_output=True, text=True, timeout=5).stdout.strip()
+        shutil.copyfile(public_ca, cls.system_ca / (ca_hash + ".0"))
 
     def peer(self, name="cluster", **kwargs):
         peer = Peer(*self.certificates[name], **kwargs) if name else Peer(**kwargs)
@@ -201,14 +209,16 @@ class PVEAutoRegisterTransport(unittest.TestCase):
                 peer = self.peer(name)
                 # Trust the wrong-name certificate to isolate hostname checks.
                 ca = "wrong-name" if name == "wrong-name" else "cluster"
-                code, output, _, _ = self.exercise(peer.url, cluster_ca=ca, ambient=True)
+                code, output, argv, _ = self.exercise(peer.url, cluster_ca=ca, ambient=True)
                 self.assertNotEqual(code, 0, output)
+                self.assertEqual(len(argv), 1)
                 self.assertEqual(peer.requests, [])
 
     def test_http_never_receives_the_token(self):
         peer = self.peer(None)
-        code, output, _, _ = self.exercise(peer.url, ambient=True)
+        code, output, argv, _ = self.exercise(peer.url, ambient=True)
         self.assertNotEqual(code, 0, output)
+        self.assertEqual(len(argv), 1)
         self.assertEqual(peer.requests, [])
 
     def test_redirects_and_non_200_responses_fail_without_disclosing_bodies(self):
@@ -313,6 +323,14 @@ class PVEAutoRegisterTransport(unittest.TestCase):
         for action in ('"$pulse_url/api/setup-script-url"', 'pveum user add',
                        'create_pve_auto_register_token "$token_name"', 'pveum user token remove'):
             self.assertLess(preflight, source.index(action))
+
+    def test_extracted_functions_are_complete_bash(self):
+        for name in ("pve_auto_register_api_status", "preflight_pve_auto_register_api",
+                     "smoke_test_pve_auto_register_token", "auto_register_pve_node"):
+            with self.subTest(function=name):
+                result = subprocess.run(["bash", "-n"], input=function(name), text=True,
+                                        capture_output=True, timeout=5)
+                self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":
