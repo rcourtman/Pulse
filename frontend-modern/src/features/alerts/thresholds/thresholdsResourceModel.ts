@@ -38,6 +38,19 @@ export const uniqueIds = (...values: unknown[]): string[] => {
   return ids;
 };
 
+// A row matches the resource search by the name it shows or the full name it
+// stands for: host rows shorten `titan.example.com` to `titan`, and a link
+// that searches for the full name must still find the row.
+export const matchesThresholdResourceSearch = (
+  resource: { name?: string; displayName?: string; rawName?: string },
+  search: string,
+): boolean => {
+  if (!search) return true;
+  return [resource.name, resource.displayName, resource.rawName].some((value) =>
+    value?.toLowerCase().includes(search),
+  );
+};
+
 export const createOverridesMap = (overrides: Override[] | undefined) =>
   new Map((overrides ?? []).map((override) => [override.id, override]));
 

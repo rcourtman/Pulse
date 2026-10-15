@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
+import { ALERT_THRESHOLDS_QUERY_PARAMS } from '@/routing/resourceLinks';
 
 import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -111,7 +112,25 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     }
   };
 
-  const [searchTerm, setSearchTerm] = createSignal('');
+  // The resource search is route-owned (`?q=`) so a link can open the
+  // thresholds already narrowed to one resource, and a narrowed view survives
+  // reload, tab switches and sharing.
+  const searchTerm = (): string =>
+    new URLSearchParams(location.search ?? '').get(ALERT_THRESHOLDS_QUERY_PARAMS.query) ?? '';
+  const setSearchTerm = (value: string): void => {
+    const params = new URLSearchParams(location.search ?? '');
+    if (value === '') params.delete(ALERT_THRESHOLDS_QUERY_PARAMS.query);
+    else params.set(ALERT_THRESHOLDS_QUERY_PARAMS.query, value);
+    const query = params.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ''}${location.hash ?? ''}`, {
+      replace: true,
+    });
+  };
+  const withSearch = (path: string): string => {
+    const query = location.search ?? '';
+    const [route, hash] = path.split('#');
+    return `${route}${query}${hash ? `#${hash}` : ''}`;
+  };
   const [overrideFilter, setOverrideFilter] = createSignal('all');
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [editingThresholds, setEditingThresholds] = createSignal<
@@ -186,17 +205,17 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
 
   createEffect(() => {
     if (location.pathname === '/alerts/thresholds') {
-      navigate('/alerts/thresholds/proxmox', { replace: true });
+      navigate(withSearch('/alerts/thresholds/proxmox'), { replace: true });
       return;
     }
 
     if (location.pathname === '/alerts/thresholds/infrastructure') {
-      navigate('/alerts/thresholds/proxmox', { replace: true });
+      navigate(withSearch('/alerts/thresholds/proxmox'), { replace: true });
       return;
     }
 
     if (location.pathname === '/alerts/thresholds/containers') {
-      navigate('/alerts/thresholds/docker', { replace: true });
+      navigate(withSearch('/alerts/thresholds/docker'), { replace: true });
       return;
     }
 
@@ -204,17 +223,17 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
       location.pathname === '/alerts/thresholds/mail-gateway' ||
       location.pathname === '/alerts/thresholds/pmg'
     ) {
-      navigate('/alerts/thresholds/proxmox#pmg', { replace: true });
+      navigate(withSearch('/alerts/thresholds/proxmox#pmg'), { replace: true });
       return;
     }
 
     if (location.pathname === '/alerts/thresholds/pbs') {
-      navigate('/alerts/thresholds/proxmox#pbs', { replace: true });
+      navigate(withSearch('/alerts/thresholds/proxmox#pbs'), { replace: true });
       return;
     }
 
     if (location.pathname === '/alerts/thresholds/agents') {
-      navigate('/alerts/thresholds/systems', { replace: true });
+      navigate(withSearch('/alerts/thresholds/systems'), { replace: true });
     }
   });
 
@@ -227,7 +246,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
       vmware: '/alerts/thresholds/vmware',
       systems: '/alerts/thresholds/systems',
     };
-    navigate(tabRoutes[tab]);
+    navigate(withSearch(tabRoutes[tab]));
   };
 
   const handleDockerIgnoredChange = (value: string) => {

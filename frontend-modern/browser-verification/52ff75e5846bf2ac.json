@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "cca418cc8a64e3a7a374c26d83e4f3e3f88098fc",
+  "verified_at": "2026-10-15T09:52:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsHostData.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts",
+    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts",
+    "frontend-modern/src/pages/Alerts.tsx",
+    "frontend-modern/src/routing/resourceLinks.ts",
+    "frontend-modern/src/utils/alertConfigPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts": "4654f132e57efb71bd38a9d252924d513a25d9a16643e37b19a4f5968f19b94a",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsHostData.ts": "e408196118ebb049de342ce7d237f4e6eb0456d12f49eb33f95e887cba9812ff",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts": "97d6bddbc81b42dd1f2cd121e7c9045cd8a786cd0995cef3031089484ca33bf0",
+    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts": "9a3b58efd273c189eca6d8526d519b5219c67a4a05e4c91926a14fcad4e78cc5",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "75a31a38c42c9a0b7f0b1532b9d57aa691627a605eba5cf0f21e0794f2b701df",
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts": "e68f42e30aaf624982ec9c7f57d593436025ac35b133c4f6f83f577660ed4a01",
+    "frontend-modern/src/pages/Alerts.tsx": "baf922754878022cb1895c7a421e49171c404974634fd3d21944293027f7bb73",
+    "frontend-modern/src/routing/resourceLinks.ts": "73fb1a734d8347866dc68f7886b7bb7dc907210eb8672a0e789fa779432e5c86",
+    "frontend-modern/src/utils/alertConfigPresentation.ts": "bcafc0973871f68b381a1e38cfe97c781d250dec1691d0b2c6aaae9bed8c7611"
+  },
+  "routes": [
+    "/patrol",
+    "/alerts/thresholds/vmware",
+    "/alerts/thresholds/truenas",
+    "/alerts/thresholds/docker",
+    "/alerts/thresholds/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): every Patrol alert-only decision linked \"Adjust alert thresholds\" to /alerts/thresholds, the top of the Proxmox tab, whatever its resource",
+    "After: each decision links to its platform tab searched to the resource display name (esxi-07.lab.local, Utility Network, Edge Stateful, archive-tier, edge-cold-iscsi on vSphere, archive and tank/projects on TrueNAS, grafana-agent and inventory-api on Docker); every searched page shows that row",
+    "A physical disk and composed ZFS labels open the Proxmox tab unsearched instead of a search that hides every row",
+    "With an unsaved threshold edit, typing in the search updates ?q= without a leave prompt and keeps the edit; leaving for Docker still asks"
+  ],
+  "interactions": [
+    "Opened every listed Patrol decision and read its Adjust alert thresholds href",
+    "Followed each distinct thresholds link and confirmed the resource row is listed",
+    "Edited CPU default to 81, retyped the search, then clicked Docker in the navigation menu and declined the prompt",
+    "At 375px followed the archive-tier link: vSphere tab, Datastores group with archive-tier only, no horizontal overflow"
+  ]
+}

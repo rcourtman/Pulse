@@ -33,7 +33,10 @@ import {
   getAlertOverviewHydrationState,
   getAlertsPageHeaderMeta,
 } from '@/utils/alertOverviewPresentation';
-import { getAlertConfigLeaveConfirmation } from '@/utils/alertConfigPresentation';
+import {
+  getAlertConfigLeaveConfirmation,
+  shouldConfirmAlertsLeave,
+} from '@/utils/alertConfigPresentation';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
 import History from 'lucide-solid/icons/history';
@@ -181,12 +184,13 @@ export function Alerts() {
     });
   });
 
-  // Warn when navigating within the app
+  // Warn when navigating within the app. Narrowing the same page (the
+  // thresholds search lives in `?q=`, sections in `#`) keeps the edits, so it
+  // must not ask on every keystroke.
   useBeforeLeave((e) => {
-    if (hasUnsavedChanges()) {
-      if (!confirm(getAlertConfigLeaveConfirmation())) {
-        e.preventDefault();
-      }
+    if (!shouldConfirmAlertsLeave(e.to, e.from.pathname, hasUnsavedChanges())) return;
+    if (!confirm(getAlertConfigLeaveConfirmation())) {
+      e.preventDefault();
     }
   });
 

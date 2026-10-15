@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  shouldConfirmAlertsLeave,
   ALERT_CONFIG_COOLDOWN_DESCRIPTION,
   ALERT_CONFIG_COOLDOWN_MAX_ALERTS_HELP,
   ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL,
@@ -246,5 +247,16 @@ describe('alertConfigPresentation', () => {
     expect(getAlertConfigSummaryAllDisabled()).toBe(
       '• All notification controls are disabled - alerts will be sent immediately',
     );
+  });
+  // The thresholds search lives in the route, so every keystroke navigates
+  // within the page; only leaving the page should ask about unsaved edits.
+  it('asks before leaving unsaved settings for another page, not for same-page narrowing', () => {
+    const page = '/alerts/thresholds/proxmox';
+    expect(shouldConfirmAlertsLeave(`${page}?q=web`, page, true)).toBe(false);
+    expect(shouldConfirmAlertsLeave(`${page}#backups`, page, true)).toBe(false);
+    expect(shouldConfirmAlertsLeave('/alerts/thresholds/docker?q=web', page, true)).toBe(true);
+    expect(shouldConfirmAlertsLeave('/proxmox/overview', page, true)).toBe(true);
+    expect(shouldConfirmAlertsLeave(-1, page, true)).toBe(true);
+    expect(shouldConfirmAlertsLeave('/proxmox/overview', page, false)).toBe(false);
   });
 });
