@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Existing backup-location filter consumes storage provenance
+
+PVE local archives append their explicit storage host to the existing location
+label and give that dimension its own filter key. Shared/legacy rows keep the
+old labels and keys, and saved store-wide selections retain their original
+aggregate scope. No route, control or navigation entry is added. The same
+production table, responsive layout and native filter select remain the
+desktop and touch consumers. Connected table and model tests protect distinct
+copied locations, selection and ordinary inventory refresh without changing
+the guest's current placement or granting recovery execution.
+
 ### Workload backup evidence applicability (15 October 2026)
 
 `supportsWorkloadBackupEvidence` is shared by workload rows and the full guest

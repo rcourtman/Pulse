@@ -46,6 +46,9 @@ export interface RecoverableArtifact {
   locationKey?: string;
   /** Operator-facing source/repository label used by the backup-location filter. */
   locationLabel?: string;
+  /** Existing saved store-wide filters remain valid for local-node locations. */
+  locationGroupKey?: string;
+  locationGroupLabel?: string;
   detail: string;
   /** Full provider identifier behind a shortened `detail`, shown on hover. */
   detailTitle?: string;
@@ -182,7 +185,11 @@ function artifactLocationScope(
   sourceKind: RecoverableSourceKind,
   instance: string | undefined,
   repository: string | undefined,
-): Pick<RecoverableArtifact, 'locationKey' | 'locationLabel'> {
+  storageNode?: string,
+): Pick<
+  RecoverableArtifact,
+  'locationKey' | 'locationLabel' | 'locationGroupKey' | 'locationGroupLabel'
+> {
   const parts = [instance?.trim(), repository?.trim()].filter((part): part is string =>
     Boolean(part),
   );
@@ -191,9 +198,23 @@ function artifactLocationScope(
       parts.findIndex((candidate) => normalizeKey(candidate) === normalizeKey(part)) === index,
   );
   if (distinctParts.length === 0) return {};
+  const localNode = storageNode?.trim();
   return {
-    locationKey: [sourceKind, ...distinctParts.map(normalizeKey)].join(':'),
-    locationLabel: distinctParts.join(' / '),
+    locationKey: localNode
+      ? JSON.stringify([
+          sourceKind,
+          normalizeKey(instance),
+          normalizeKey(repository),
+          normalizeKey(localNode),
+        ])
+      : [sourceKind, ...distinctParts.map(normalizeKey)].join(':'),
+    locationLabel: [...distinctParts, ...(localNode ? [localNode] : [])].join(' / '),
+    ...(localNode
+      ? {
+          locationGroupKey: [sourceKind, ...distinctParts.map(normalizeKey)].join(':'),
+          locationGroupLabel: distinctParts.join(' / '),
+        }
+      : {}),
   };
 }
 
@@ -689,8 +710,14 @@ export function buildProxmoxBackupRecoveryModel(
       createdAt: archive.time,
       createdMs,
       size: archive.size,
-      location: archive.storage || archive.node || '—',
-      ...artifactLocationScope('archive', archive.instance, archive.storage || archive.node),
+      location:
+        [archive.storage || archive.node, archive.storageNode].filter(Boolean).join(' / ') || '—',
+      ...artifactLocationScope(
+        'archive',
+        archive.instance,
+        archive.storage || archive.node,
+        archive.storageNode,
+      ),
       // The volid repeats the storage, guest type, VMID, and timestamp the row
       // already shows in their own columns and clips at every width; the
       // archive format is the one fact it adds, so that is the cell and the

@@ -20,6 +20,16 @@
 
 ## Purpose
 
+### PVE archive location remains distinct from guest placement
+
+The existing PVE backup response and frontend `StorageBackup` type support
+optional `storageNode` for a node-local archive's host. The guest's current
+`node`, endpoint, auth, filters and response envelope are unchanged. Omission
+keeps shared and older rows compatible. The consuming inventory reader accepts
+only a string when this field is present; malformed location evidence remains
+an explicit source-read error, not an empty backup inventory.
+`proxmoxBackupInventory.test.ts` covers typed provenance and legacy absence.
+
 ### Copied backend bootstrap commands have one portable private reader
 
 Existing setup artifact aliases and Proxmox/container command fields retain

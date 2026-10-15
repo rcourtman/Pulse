@@ -1480,6 +1480,58 @@ describe('backup-date-evidence connected inventory', () => {
 });
 
 describe('backup-identity: connected Coverage and By date', () => {
+  it('selects a local archive location without pooling same-volume copies or losing the filter on refresh', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(BACKUP_IDENTITY_NOW);
+    let archives = [
+      identityArchive({ id: 'local-a', storageNode: 'node-a' }),
+      identityArchive({ id: 'local-b', storageNode: 'node-b' }),
+    ];
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse({
+          data:
+            url === '/api/backups/pve'
+              ? { storageBackups: archives, guestSnapshots: [], backupTasks: [] }
+              : { backups: [] },
+        }),
+      ),
+    );
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
+    window.history.replaceState({}, '', '/proxmox/backups/date?location=archive%3Aeast%3Alocal');
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[identityGuest('east-100', 'east', 'pve-1')]}
+      />
+    ));
+    const rows = () => container.querySelectorAll('[data-proxmox-backup-row="recoverable"]');
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(
+      screen.getByRole('button', { name: 'Backup location: east / local' }),
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Backup location filter' }));
+    const select = screen.getByRole('combobox', { name: 'Filter' }) as HTMLSelectElement;
+    const option = Array.from(select.options).find(
+      (item) => item.textContent === 'Backup location: east / local / node-b',
+    );
+    expect(option).toBeDefined();
+    await fireEvent.change(select, { target: { value: option!.value } });
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(rows()[0]).toHaveTextContent('local / node-b');
+    archives = [archives[1]];
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Refresh backups' })).toBeEnabled(),
+    );
+    expect(rows()).toHaveLength(1);
+    expect(
+      screen.getByRole('button', { name: 'Backup location: east / local / node-b' }),
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Backup location filter' }));
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(rows()[0]).toHaveTextContent('local / node-b');
+  });
+
   const mockIdentityAPIs = () => {
     apiFetchMock.mockImplementation((url: string) =>
       Promise.resolve(
