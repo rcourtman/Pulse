@@ -25,10 +25,10 @@ import (
 )
 
 func TestPVEBackupStorageIdentityRequiresExplicitSharedScope(t *testing.T) {
-	localA := pveStorageBackupScope(proxmox.Storage{Storage: "archive"}, "node-a")
-	localB := pveStorageBackupScope(proxmox.Storage{Storage: "archive"}, "node-b")
-	sharedA := pveStorageBackupScope(proxmox.Storage{Storage: "archive", Shared: 1}, "node-a")
-	sharedB := pveStorageBackupScope(proxmox.Storage{Storage: "archive", Shared: 1}, "node-b")
+	localA := pveStorageBackupScope(pveapi.Storage{Storage: "archive"}, "node-a")
+	localB := pveStorageBackupScope(pveapi.Storage{Storage: "archive"}, "node-b")
+	sharedA := pveStorageBackupScope(pveapi.Storage{Storage: "archive", Shared: 1}, "node-a")
+	sharedB := pveStorageBackupScope(pveapi.Storage{Storage: "archive", Shared: 1}, "node-b")
 	if localA == localB || sharedA != sharedB || localA == sharedA || localB == sharedB {
 		t.Fatal("storage name replaced explicit shared/local ownership")
 	}
