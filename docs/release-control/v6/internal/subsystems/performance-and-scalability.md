@@ -4274,3 +4274,18 @@ controls. `browser-tests/host-disk-usage.cjs` exercises the actual resource
 HTTP/table/summary/drawer flow at desktop and touch widths. Disclosure adds no
 measurement or storage operation. This is truthful presentation, not native
 collector recovery or an installed performance result.
+
+### Guest state presentation remains snapshot-local (15 October 2026)
+
+Workload rows and their open drawer use the same guest status presentation.
+Paused, suspended, transitional and unknown runtime states do not imply
+`Stopped`. The existing attached availability failure degrades a running
+guest in both places; an offline parent still takes precedence. Live
+replacement updates the mounted status indicators without another query,
+timer, guest-agent request or recovery operation. The runtime state and
+independent memory/disk provenance are unchanged.
+
+`status.test.ts`, `GuestRow.test.tsx`, `GuestDrawer.test.tsx` and
+`useWorkloads.test.ts` cover state preservation, both resource adapters,
+mounted replacement and recovery. Browser proof uses safe resource responses
+through the real hook, row and full drawer, not native pause/thaw acceptance.

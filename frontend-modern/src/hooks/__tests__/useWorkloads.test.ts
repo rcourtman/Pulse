@@ -5,6 +5,7 @@ import { guestDiskDeferrals } from '@/components/Workloads/__fixtures__/guestDis
 import type { VM } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
+import { getGuestHealthIndicator } from '@/utils/status';
 import { getDiskUsagePercent, getWorkloadGroupKey } from '@/components/Workloads/workloadSelectors';
 
 type UseWorkloadsModule = typeof import('@/hooks/useWorkloads');
@@ -82,6 +83,61 @@ describe('useWorkloads', () => {
 
     resetWorkloadsCacheForTests();
   });
+
+  it.each(['api', 'snapshot'] as const)(
+    'preserves reported non-running states through the %s adapter and status presentation',
+    async (transport) => {
+      const [snapshot, setSnapshot] = createSignal<Resource[]>([]);
+      let dispose = () => {};
+      let result!: ReturnType<UseWorkloadsModule['useWorkloads']>;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(
+          () => true,
+          transport === 'snapshot' ? { resourceSnapshot: snapshot } : {},
+        );
+      });
+      try {
+        await flushAsync();
+        for (const [runtimeStatus, label] of [
+          ['paused', 'Paused'],
+          ['suspended', 'Suspended'],
+          ['unknown', 'Unknown'],
+          ['stopped', 'Stopped'],
+          ['running', 'Running'],
+        ]) {
+          const raw = {
+            ...sampleResource,
+            status: 'online',
+            proxmox: { runtimeStatus, vmid: 101, nodeName: 'pve1', instance: 'cluster-a' },
+          };
+          if (transport === 'api') {
+            apiFetchJSONMock.mockResolvedValue({ data: [raw] });
+            await result.refetch();
+          } else {
+            setSnapshot([
+              {
+                ...raw,
+                lastSeen: Date.parse(raw.lastSeen),
+                memory: { current: 50, used: 2048, total: 4096 },
+              } as unknown as Resource,
+            ]);
+          }
+          await flushAsync();
+          const row = result.workloads()[0];
+          expect(row).toMatchObject({
+            id: sampleResource.id,
+            status: runtimeStatus,
+            resourceStatus: 'online',
+          });
+          expect(getGuestHealthIndicator(row).label).toBe(label);
+          expect(row.memory.usage).toBe(50);
+        }
+      } finally {
+        dispose();
+      }
+    },
+  );
 
   it.each(['api', 'snapshot'] as const)(
     'preserves aggregate disk presence and percentage points through %s refreshes',

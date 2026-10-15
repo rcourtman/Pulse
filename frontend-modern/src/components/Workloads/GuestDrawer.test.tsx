@@ -189,6 +189,50 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────
 
 describe('GuestDrawer', () => {
+  it('keeps drawer health consistent with the row through runtime, probe and parent changes', () => {
+    const [guest, setGuest] = createSignal(makeGuest());
+    const [parentOnline, setParentOnline] = createSignal(true);
+    render(() => (
+      <GuestDrawer guest={guest()} parentNodeOnline={parentOnline()} onClose={vi.fn()} />
+    ));
+    const heading = screen.getByRole('heading', { name: 'test-vm' });
+    const status = () => heading.parentElement!.querySelector('[role="img"]')!;
+    const dot = status();
+    for (const [state, label, color] of [
+      ['running', 'Running', 'bg-emerald-500'],
+      ['paused', 'Paused', 'bg-amber-500'],
+      ['suspended', 'Suspended', 'bg-amber-500'],
+      ['unknown', 'Unknown', 'bg-amber-500'],
+      ['', 'Unknown', 'bg-slate-400'],
+      ['stopped', 'Stopped', 'bg-red-500'],
+    ]) {
+      setGuest({ ...guest(), status: state });
+      expect(status()).toBe(dot);
+      expect(dot).toHaveAttribute('aria-label', label);
+      expect(dot).toHaveClass(color);
+    }
+    setGuest({
+      ...guest(),
+      status: 'running',
+      availability: {
+        enabled: true,
+        available: false,
+        correlationState: 'attached',
+        consecutiveFailures: 3,
+        failureThreshold: 2,
+      },
+    });
+    expect(dot).toHaveAttribute('aria-label', 'Running, not responding to probe');
+    expect(dot).toHaveClass('bg-amber-500');
+    setParentOnline(false);
+    expect(dot).toHaveAttribute('aria-label', 'Node offline');
+    expect(dot).toHaveClass('bg-red-500');
+    setParentOnline(true);
+    setGuest({ ...guest(), availability: undefined });
+    expect(dot).toHaveAttribute('aria-label', 'Running');
+    expect(dot).toHaveClass('bg-emerald-500');
+  });
+
   it('keeps the shared memory provenance policy in the full guest drawer after live replacement', async () => {
     chartsApiMocks.getMetricsHistory.mockResolvedValue({
       resourceType: 'vm',
