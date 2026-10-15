@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "7d71ec0b135608984898b557c18a3f5fe1131c08",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx",
+    "frontend-modern/src/features/docs/docMarkdown.ts",
+    "frontend-modern/src/pages/Docs.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx": "807578b08a121c5d479c42f4c5c14fdb97aaa993ce3865d28c282e7518090d9b",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "213b6216dca650aab7d3ea4c8a66af6ee128f829ba455b5f53cd00a27e62d4cb",
+    "frontend-modern/src/pages/Docs.tsx": "e1d181803722b38ed211517d12495d201c299cc8ebb0a14131c58ac91c7e3a6a"
+  },
+  "routes": [
+    "/docs/AI#cost-tracking",
+    "/docs/TROUBLESHOOTING#-getting-help",
+    "/settings?section=system-ai"
+  ],
+  "states": [
+    "Actual compiled Docs/router/sanitised Markdown and Provider & Models/state/API/CSS. Shell, navigation matrix and server data are offline fixtures. Production source has not changed since the completed types/audits/build proof.",
+    "Default/direct/late-loaded fragments, repeated bare and file-qualified fragments, cross-document help, Back/reload, encoded and absent/malformed targets; no duplicate history entry or document fetch on repeats.",
+    "Budget helper remains associated with the actual input at empty, zero and positive values; rolling refusal, missing-pricing allowance and provider spending-cap limits are visible without changing enforcement."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and narrow touch restore scroll and heading focus through the existing source-generated links; no corrective scroll/focus injection after activation.",
+    "Native modifiers/middle click are observed unprevented; an inert intercepted external tab retains noopener/noreferrer. Sanitiser allowlist is unchanged.",
+    "Actual settings state/parser/save sends only model plus budget 60 or 0 to a synthetic local API. Pending inputs disable, the real follow-up availability read completes, and values survive reload. No provider call, usage reset, paid work, customer save or native budget-enforcement claim."
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-15T10:08:58.733441Z",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "lock_parity": "Playwright 1.56.1 equals the integration lock"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "opened": [
+      "desktop-chromium-repeated-cost-link.png",
+      "desktop-chromium-repeated-file-link.png",
+      "desktop-chromium-budget-disabled.png",
+      "desktop-chromium-budget-positive.png",
+      "phone-chromium-repeated-cost-link.png",
+      "phone-chromium-repeated-file-link.png",
+      "phone-chromium-budget-disabled.png",
+      "phone-chromium-budget-positive.png"
+    ],
+    "observations": [
+      "Desktop: the actual repeated Cost Tracking link leaves its heading visible at about 80 px, with a clear keyboard focus outline. The unchanged guide paragraphs and decision table are readable and contained.",
+      "Desktop synthetic file-link case: Target is visible/focused, followed by the Unicode heading and wrapped fixture text. This is a sanitised authored-link matrix, not a shipped new document.",
+      "Desktop Provider & Models: empty and positive budget cards show the full rolling-refusal, disabled-check and unknown-pricing/provider-cap explanation. The positive input and daily estimate fit together; timeout and existing save/reset controls remain separate.",
+      "390 px dark/touch: both repeated-link destinations are legible at the top of the viewport, not left at the lower source link. The budget helper wraps fully inside its card in empty and positive states. Numeric input and daily estimate remain contained. The save action is reached by scrolling and exercised, not falsely claimed visible in the retained budget frames."
+    ],
+    "remaining": "Separate retained WebKit reload crash is unproved and not replayed. Completed receipt scope is Chromium desktop/narrow."
+  },
+  "browser_cleanup": {
+    "browser_closed": true,
+    "server_closed": true
+  },
+  "evidence": "Web lane RECEIPTS.md, browser-result.json, PIXELS.json, complete client output, source-1a1qcs43 compiled binding and eight current captures. Prior adverse attempts remain separately retained. No publication, native pricing, Patrol recovery or all-engine acceptance."
+}
