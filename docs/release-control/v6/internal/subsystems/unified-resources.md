@@ -8525,3 +8525,16 @@ retained/unavailable source classifications preserve their existing semantics.
 The connected stacked-model controls retain explicit aggregate fallback tests;
 the browser fixture checks mixed and all-unknown lists in the actual summaries
 as well as both drawers, including live replacement at narrow widths.
+
+### PMG explicit connection-alert reference (15 October 2026)
+
+PMG `connectionId` is an optional scoped reference supplied by the poller from
+configuration. The adapter preserves it in PMG data; canonical aliases include
+only that explicit reference, never one inferred by stripping a generated ID
+or joining presentation names/hostnames. Existing resource IDs, primary
+identities, metrics targets and aliases remain. Legacy absence stays absent.
+`TestPMGConfiguredConnectionIdentity` exercises colliding labels/hosts, exact
+alias resolution and degraded-to-online replacement without merging siblings.
+`TestPMGConnectionAliasRequiresExplicitReference` rejects inferred references.
+The reference is attribution, not permission, a health override or proof of
+native monitoring/release recovery.

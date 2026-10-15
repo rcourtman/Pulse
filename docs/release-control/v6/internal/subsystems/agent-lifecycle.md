@@ -9989,3 +9989,11 @@ TLS preference changes also retire output, including an A → B → A reversal.
 Successful current actions retain monitoring-only command scope and separate
 token entry; the frontend never cancels, replays or revokes a dispatched action
 and makes no installed enrolment/recovery claim from these checks.
+
+### PMG-only configured reference boundary (15 October 2026)
+
+The shared model adds an optional PMG `connectionId`; cloned state and JSON
+preserve its explicit value or legacy absence (`TestPMGConfiguredConnectionSnapshotWire`).
+It does not enter host-agent reports, stable host identity, deletion,
+re-enrolment or continuity decisions. PMG runtime IDs remain independent of
+the scoped connection-alert reference; no agent identity is re-created from it.

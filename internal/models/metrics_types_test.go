@@ -594,3 +594,32 @@ func TestMetricAlertStatusBreachTimeWireAndClone(t *testing.T) {
 		})
 	}
 }
+
+// PMG's optional scoped connection identity travels with cloned state and JSON
+// while legacy snapshots retain absence, never guessing from display/runtime IDs.
+func TestPMGConfiguredConnectionSnapshotWire(t *testing.T) {
+	for _, connectionID := range []string{"", "pmg:configured-key"} {
+		state := NewState()
+		state.UpdatePMGInstance(PMGInstance{ID: "pmg-generated-id", Name: "different display", ConnectionID: connectionID, Status: "degraded", ConnectionHealth: "degraded"})
+		snapshot := state.GetSnapshot()
+		encoded, err := json.Marshal(snapshot.PMGInstances[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wire map[string]any
+		if err := json.Unmarshal(encoded, &wire); err != nil {
+			t.Fatal(err)
+		}
+		got, present := wire["connectionId"]
+		if present != (connectionID != "") || present && got != connectionID {
+			t.Fatalf("connection ref lost or inferred: %s", encoded)
+		}
+		if wire["id"] != "pmg-generated-id" || wire["status"] != "degraded" || wire["connectionHealth"] != "degraded" {
+			t.Fatalf("legacy identity/health changed: %s", encoded)
+		}
+		snapshot.PMGInstances[0].ConnectionID = "pmg:changed-clone"
+		if state.GetSnapshot().PMGInstances[0].ConnectionID != connectionID {
+			t.Fatal("snapshot identity aliases mutable collector state")
+		}
+	}
+}

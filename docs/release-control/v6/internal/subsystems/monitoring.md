@@ -8007,3 +8007,17 @@ real client readers and complete-body boundaries;
 HTTP collection, cache age, stored points, protection and recovery/deletion.
 These are controlled source proofs, not appliance backup/restore acceptance,
 native guest thaw, installed recovery or release availability.
+
+### PMG collection health and configured identity (15 October 2026)
+
+The PMG poller carries `connectionId` from the exact saved config key (`pmg:`
+plus that key), independently of its generated runtime ID, display and host.
+A successful version request proves reachability only: any failed selected
+read makes the resulting instance `degraded` and the provider health false.
+Offline version failures remain offline. Complete ordinary collection restores
+online/healthy; scope-off data remains absent and pause retains the observation.
+No request, credential, TLS, backup replacement or scope rule changes.
+`TestPMGCollectionFailureEvidence`, `TestPMGNodeDiscoveryFailurePreservesAcceptedBackups`
+and `TestPMGConfiguredConnectionSnapshotWire` cover failure/recovery and snapshot
+preservation. Consumer/HTTP and desktop/narrow evidence remains separate from
+native appliance recovery and release availability.

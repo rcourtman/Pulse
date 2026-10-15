@@ -423,6 +423,30 @@ func TestRefreshCanonicalIdentityUsesPMGInstanceIdentity(t *testing.T) {
 	}
 }
 
+func TestPMGConnectionAliasRequiresExplicitReference(t *testing.T) {
+	for _, connectionID := range []string{"", "pmg:configured-not-the-label"} {
+		resource := Resource{
+			ID: "existing-resource", Type: ResourceTypePMG, Name: "gateway",
+			PMG: &PMGData{InstanceID: "pmg-gateway", Hostname: "gateway", ConnectionID: connectionID},
+		}
+		RefreshCanonicalIdentity(&resource)
+		for _, alias := range resource.Canonical.Aliases {
+			if alias == "pmg:gateway" {
+				t.Fatalf("connection inferred from presentation/runtime prefix: %+v", resource.Canonical)
+			}
+		}
+		if connectionID != "" {
+			found := false
+			for _, alias := range resource.Canonical.Aliases {
+				found = found || alias == connectionID
+			}
+			if !found {
+				t.Fatalf("explicit connection alias missing: %+v", resource.Canonical)
+			}
+		}
+	}
+}
+
 func TestRefreshCanonicalIdentityUsesAvailabilityTargetIdentity(t *testing.T) {
 	resource := Resource{
 		ID:   "availability:energy-meter",

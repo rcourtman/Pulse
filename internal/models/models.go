@@ -3087,7 +3087,10 @@ type PBSJobHealthFreshness struct {
 
 // PMGInstance represents a Proxmox Mail Gateway connection
 type PMGInstance struct {
-	ID               string               `json:"id"`
+	ID string `json:"id"`
+	// ConnectionID is the configured connection's scoped alert identity, not a
+	// display name or a value inferred from the generated runtime ID.
+	ConnectionID     string               `json:"connectionId,omitempty"`
 	Name             string               `json:"name"`
 	Host             string               `json:"host"`
 	GuestURL         string               `json:"guestURL,omitempty"` // Optional guest-accessible URL (for navigation)

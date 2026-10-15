@@ -505,8 +505,8 @@ func TestPMGCollectionFailureEvidence(t *testing.T) {
 				}
 				return
 			}
-			if v.Status != "online" || v.ConnectionHealth != "healthy" || !m.state.GetSnapshot().ConnectionHealth["pmg-gateway"] {
-				t.Fatal("downstream failure mislabeled as version connection failure")
+			if v.Status != "degraded" || v.ConnectionHealth != "degraded" || m.state.GetSnapshot().ConnectionHealth["pmg-gateway"] {
+				t.Fatal("successful version read masked incomplete collection")
 			}
 			if (op == "quarantine/spam" || op == "quarantine/virus") && v.Quarantine != nil {
 				t.Fatal("partial quarantine reported as zero/complete")
@@ -519,7 +519,8 @@ func TestPMGCollectionFailureEvidence(t *testing.T) {
 			}
 			f.fail = ""
 			m.pollPMGInstance(context.Background(), "gateway", f)
-			if status.ConsecutiveFailures != 0 || status.LastErrorMessage != "" {
+			recovered := m.state.GetSnapshot()
+			if status.ConsecutiveFailures != 0 || status.LastErrorMessage != "" || recovered.PMGInstances[0].Status != "online" || recovered.PMGInstances[0].ConnectionHealth != "healthy" || !recovered.ConnectionHealth["pmg-gateway"] {
 				t.Fatal("next complete poll did not recover")
 			}
 		})
