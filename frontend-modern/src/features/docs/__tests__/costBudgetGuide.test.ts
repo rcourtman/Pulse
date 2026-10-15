@@ -96,7 +96,9 @@ describe('shipped AI cost and budget guidance', () => {
     const costLinks = [...article.querySelectorAll('a[href="#cost-tracking"]')];
     expect(costLinks.length).toBeGreaterThan(0);
     for (const costLink of costLinks) {
-      expect(costLink.hasAttribute('data-doc-link')).toBe(false);
+      // Native bare anchors alone did not restore the current hash. Keep their
+      // authored href while using Docs' shared explicit re-activation handler.
+      expect(costLink.hasAttribute('data-doc-link')).toBe(true);
     }
     expect(article.querySelector('a[href="/docs/AI#cost-tracking"]')).toBeNull();
   });

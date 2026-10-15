@@ -76,15 +76,35 @@ export default function Docs() {
 
   // Intra-documentation links are rewritten to viewer routes by the renderer.
   // Delegate their clicks to the router so following one does not reload the
-  // application shell.
+  // application shell. Re-activating the current fragment is still a request
+  // to return to it, but changes no reactive URL state for the effect above.
   const handleClick = (event: MouseEvent) => {
     if (event.defaultPrevented || event.button !== 0) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    const anchor = (event.target as Element | null)?.closest?.('a[data-doc-link]');
+    const anchor = (event.target as Element | null)?.closest?.<HTMLAnchorElement>(
+      'a[data-doc-link]',
+    );
     const href = anchor?.getAttribute('href');
-    if (!href) return;
+    if (!href || anchor?.hasAttribute('download') || (anchor?.target && anchor.target !== '_self'))
+      return;
+    let destination: URL;
+    try {
+      destination = new URL(href, window.location.href);
+    } catch {
+      return;
+    }
+    if (destination.origin !== window.location.origin) return;
     event.preventDefault();
-    navigate(href);
+    if (
+      destination.pathname === location.pathname &&
+      destination.search === location.search &&
+      destination.hash === location.hash &&
+      destination.hash
+    ) {
+      if (article) scrollToDocFragment(article, destination.hash);
+      return;
+    }
+    navigate(`${destination.pathname}${destination.search}${destination.hash}`);
   };
 
   return (
