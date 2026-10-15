@@ -885,15 +885,6 @@ main() {
         # Perform update
         if perform_update "$latest_version"; then
             log info "Update completed successfully to $latest_version"
-            
-            # Send notification if webhooks are configured
-            if [[ -f "$CONFIG_DIR/webhooks.enc" ]] || [[ -f "$CONFIG_DIR/webhooks.json" ]]; then
-                # Create a simple notification via the Pulse API
-                curl -s -X POST "http://localhost:7655/api/internal/notification" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"type\":\"update\",\"message\":\"Pulse automatically updated from $current_version to $latest_version\"}" \
-                    2>/dev/null || true
-            fi
         else
             log error "Update failed"
             exit 1
