@@ -2134,7 +2134,7 @@ func (s *isolatedReportingTransport) RoundTrip(r *http.Request) (*http.Response,
 	s.calls++
 	var request struct {
 		Graphs []map[string]any `json:"graphs"`
-		Query  map[string]any   `json:"query"`
+		Query  map[string]any   `json:"reporting_query"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		return nil, err
@@ -2300,7 +2300,7 @@ func (s *nativeShapeReportingTransport) RoundTrip(r *http.Request) (*http.Respon
 	}
 	var request struct {
 		Graphs []map[string]any `json:"graphs"`
-		Query  map[string]any   `json:"query"`
+		Query  map[string]any   `json:"reporting_query"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		return nil, err
