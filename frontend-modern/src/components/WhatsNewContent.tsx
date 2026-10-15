@@ -75,6 +75,16 @@ function Screenshot(props: { src: string; title: string; label: string }) {
 export function WhatsNewContent(props: { content: ReleaseContent }) {
   return (
     <div class="space-y-6">
+      <Show when={props.content.important}>
+        {(important) => (
+          <section
+            aria-label="Important release information"
+            class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4"
+          >
+            <ReleaseText markdown={important()} />
+          </section>
+        )}
+      </Show>
       <Show when={props.content.highlights.length > 0}>
         <section aria-label="Release highlights">
           <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Highlights</h3>
@@ -88,16 +98,6 @@ export function WhatsNewContent(props: { content: ReleaseContent }) {
             </For>
           </ul>
         </section>
-      </Show>
-      <Show when={props.content.important}>
-        {(important) => (
-          <section
-            aria-label="Important release information"
-            class="rounded-lg border border-border p-4"
-          >
-            <ReleaseText markdown={important()} />
-          </section>
-        )}
       </Show>
       <For each={props.content.visuals}>
         {(visual) => (
@@ -119,6 +119,18 @@ export function WhatsNewContent(props: { content: ReleaseContent }) {
           </section>
         )}
       </For>
+      <Show when={props.content.upgradeNotes}>
+        {(upgradeNotes) => (
+          <details class="group rounded-lg border border-border">
+            <summary class="cursor-pointer rounded-lg px-4 py-3 text-sm font-medium text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500">
+              Before you upgrade
+            </summary>
+            <div class="border-t border-border p-4">
+              <ReleaseText markdown={upgradeNotes()} />
+            </div>
+          </details>
+        )}
+      </Show>
       <Show when={props.content.changes}>
         {(changes) => (
           <details

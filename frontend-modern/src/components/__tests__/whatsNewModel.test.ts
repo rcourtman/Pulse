@@ -290,7 +290,36 @@ describe('post-update release content', () => {
     expect(content?.changes).toContain('Proxmox, PBS and backups');
     expect(content?.changes).toContain('Acknowledgements persist');
     expect(content?.changes).not.toContain('Internal evidence');
-    expect(content?.important).toContain('Update older agents.');
+    expect(content?.upgradeNotes).toBe('Update older agents.');
+    expect(content?.important).toBeNull();
+  });
+
+  it('separates authored warnings from collapsible upgrade instructions', () => {
+    const content = extractWhatsNew(
+      [
+        '## Known issues',
+        '- Do not restart monitoring on an affected guest.',
+        '## Before you upgrade',
+        '- Verify the published checksums.',
+        '## Breaking changes',
+        '- Older configuration needs migration.',
+      ].join('\n'),
+      '6.6.0',
+    );
+    expect(content?.important).toContain('Do not restart monitoring');
+    expect(content?.important).toContain('Older configuration needs migration.');
+    expect(content?.important).not.toContain('published checksums');
+    expect(content?.upgradeNotes).toBe('- Verify the published checksums.');
+    expect(content?.changes).toBeNull();
+  });
+
+  it('preserves upgrade-only releases and historical upgrade headings', () => {
+    for (const heading of ['Before you upgrade', 'Upgrade Notes']) {
+      const content = extractWhatsNew(`## ${heading}\nUse the documented rollback.`, '6.6.0');
+      expect(content?.upgradeNotes).toBe('Use the documented rollback.');
+      expect(content?.important).toBeNull();
+      expect(content?.changes).toBeNull();
+    }
   });
 
   it('reads the release tooling before/now Markdown without losing table images', () => {

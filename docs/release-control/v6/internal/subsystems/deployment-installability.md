@@ -2801,9 +2801,12 @@ artifact-selection behaviour.
    `frontend-modern/src/utils/localStorage.ts` owns that browser-session notice
    reservation boundary so the release notice and the GitHub gratitude prompt
    cannot create a one-two sequence. The post-update
-   surface leads with the authored Highlights, keeps important operator
-   information visible, offers current grouped or historical categorized
-   details in an expansion, and renders optional `See the difference` images.
+   surface keeps authored Known issues and historical Breaking changes open
+   before the Highlights, with optional `See the difference` images directly
+   after the Highlights. Routine Before-you-upgrade instructions have their own
+   initially collapsed disclosure, separate from the grouped change expansion.
+   Release authors must put critical risks and required safety actions in Known
+   issues so those warnings remain visible without expanding upgrade notes.
    Screenshot URLs must be exact-version public release PNG sidecars, never
    arbitrary remote images or raw PR attachment URLs. Before/now comparisons
    load through the authenticated exact-version release-asset endpoint, which
