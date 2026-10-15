@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
-import { buildResourcePagePath } from '../resourcePagePath';
+import { buildResourcePagePath, buildResourceThresholdsPath } from '../resourcePagePath';
 
 const resource = (overrides: Partial<Resource>): Resource =>
   ({ id: 'res-1', name: 'res-1', status: 'online', ...overrides }) as Resource;
@@ -223,5 +223,70 @@ describe('buildResourcePagePath', () => {
         }),
       }),
     ).toBe('/standalone/availability');
+  });
+  it('opens the thresholds tab that holds a resource, searched to its name', () => {
+    expect(buildResourceThresholdsPath({ id: 'c-1', name: 'nginx', type: 'app-container' })).toBe(
+      '/alerts/thresholds/docker?q=nginx',
+    );
+    expect(
+      buildResourceThresholdsPath({
+        id: 'mock-1-105',
+        name: 'postgres-replica-01',
+        resource: resource({
+          id: 'vm-2e08',
+          type: 'vm',
+          name: 'postgres-replica-01',
+          platformScopes: ['proxmox-pve'],
+        }),
+      }),
+    ).toBe('/alerts/thresholds/proxmox?q=postgres-replica-01');
+    expect(
+      buildResourceThresholdsPath({
+        id: 'agent-1',
+        resource: resource({
+          id: 'agent-1',
+          type: 'agent',
+          name: 'Apollo-114',
+          platformScopes: ['agent'],
+        }),
+      }),
+    ).toBe('/alerts/thresholds/systems?q=Apollo-114');
+    // Threshold rows are built from the display label, not the registry name.
+    expect(
+      buildResourceThresholdsPath({
+        id: 'node-1',
+        resource: resource({
+          id: 'node-1',
+          type: 'agent',
+          name: 'titan.example.com',
+          displayName: 'Primary',
+          platformScopes: ['proxmox-pve'],
+        }),
+      }),
+    ).toBe('/alerts/thresholds/proxmox?q=Primary');
+    // A composed record label would match no row and hide them all.
+    expect(
+      buildResourceThresholdsPath({
+        id: 'pve1-local-zfs/zfs-pool:rpool',
+        name: 'west-a-service-pool (local-zfs, sdb2)',
+        type: 'storage',
+      }),
+    ).toBe('/alerts/thresholds/proxmox');
+    // Physical disks have no threshold rows of their own to search for.
+    expect(
+      buildResourceThresholdsPath({
+        id: 'disk-1',
+        type: 'proxmox-disk',
+        resource: resource({
+          id: 'physical_disk-1',
+          type: 'physical_disk' as Resource['type'],
+          name: 'Samsung SSD',
+          sources: ['proxmox'],
+        }),
+      }),
+    ).toBe('/alerts/thresholds/proxmox');
+    expect(buildResourceThresholdsPath({ id: 'x', type: 'something-new' })).toBe(
+      '/alerts/thresholds',
+    );
   });
 });

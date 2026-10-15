@@ -1,5 +1,6 @@
 import type { Resource } from '@/types/resource';
 import {
+  buildAlertThresholdsPath,
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
@@ -11,7 +12,9 @@ import {
   DOCKER_QUERY_PARAMS,
   KUBERNETES_QUERY_PARAMS,
   STANDALONE_QUERY_PARAMS,
+  type AlertThresholdsTab,
 } from '@/routing/resourceLinks';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import {
   collectResourcePlatformEvidence,
   type PrimaryPlatformNavId,
@@ -167,6 +170,51 @@ const withQuery = (path: string, key: string, value: string | undefined): string
   return trimmed ? `${path}?${new URLSearchParams({ [key]: trimmed }).toString()}` : path;
 };
 
+/** The primary platform whose pages show a resource, or null. */
+export function resolveResourcePlatform(subject: ResourcePageSubject): PrimaryPlatformNavId | null {
+  const resource = subject.resource ?? null;
+  const hintType = normalizeType(subject.type);
+  const type = normalizeType(resource?.type) || hintType;
+  return resource
+    ? (platformFromResource(resource, type) ?? platformFromTypeHint(hintType))
+    : platformFromTypeHint(type);
+}
+
+const THRESHOLDS_TAB_BY_PLATFORM: Record<PrimaryPlatformNavId, AlertThresholdsTab> = {
+  proxmox: 'proxmox',
+  docker: 'docker',
+  kubernetes: 'kubernetes',
+  truenas: 'truenas',
+  vmware: 'vmware',
+  standalone: 'systems',
+};
+
+/**
+ * The alert thresholds tab that holds a resource's rows, searched to the
+ * resource's name. A registry resource is searched by its display name, the
+ * label its thresholds row is built from (`getAlertResourceDisplayLabel`),
+ * which can differ from its registry name. Otherwise a record name that is
+ * not a composed label such as `pool (local-zfs, sda2)` is used, and physical
+ * disks (which have no rows of their own there) get none: a search that
+ * matches nothing would hide every row.
+ */
+export function buildResourceThresholdsPath(subject: ResourcePageSubject): string {
+  const platform = resolveResourcePlatform(subject);
+  const recordName = subject.name?.trim();
+  const isDisk =
+    DISK_TYPES.has(normalizeType(subject.resource?.type)) ||
+    DISK_TYPES.has(normalizeType(subject.type));
+  const shownName = subject.resource
+    ? getPreferredInfrastructureDisplayName(subject.resource) || subject.resource.name?.trim()
+    : '';
+  const query = isDisk
+    ? ''
+    : shownName || (recordName && !/[()]/.test(recordName) ? recordName : '');
+  return buildAlertThresholdsPath(platform ? THRESHOLDS_TAB_BY_PLATFORM[platform] : undefined, {
+    query,
+  });
+}
+
 /**
  * The page that shows a resource, selecting or filtering to it where that
  * page can: `?resource=` on workload and Proxmox storage tables (resolved
@@ -180,9 +228,7 @@ export function buildResourcePagePath(subject: ResourcePageSubject): string | nu
   const type = normalizeType(resource?.type) || hintType;
   const id = (resource?.id ?? subject.id).trim();
   const name = (resource?.name ?? subject.name)?.trim();
-  const platform = resource
-    ? (platformFromResource(resource, type) ?? platformFromTypeHint(hintType))
-    : platformFromTypeHint(type);
+  const platform = resolveResourcePlatform(subject);
   // A resolved type can be generic (`storage`, `agent`) where the hint is
   // specific (`truenas-disk`, `vmware-host`); either may name the kind.
   const isGuest = GUEST_TYPES.has(type);

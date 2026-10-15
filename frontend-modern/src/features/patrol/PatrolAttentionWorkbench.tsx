@@ -60,7 +60,11 @@ import {
   parsePatrolAttentionItemId,
 } from '@/routing/resourceLinks';
 import { ResourceAPI } from '@/api/resources';
-import { buildResourcePagePath } from '@/features/platformNavigation/resourcePagePath';
+import {
+  buildResourcePagePath,
+  buildResourceThresholdsPath,
+  type ResourcePageSubject,
+} from '@/features/platformNavigation/resourcePagePath';
 import type { Resource } from '@/types/resource';
 import type { EvidenceEnvelope } from '@/types/operationalTrust';
 import type { ActionDetailResponse } from '@/types/actionAudit';
@@ -928,16 +932,26 @@ function AttentionDetail(props: {
       });
     onCleanup(() => controller.abort());
   });
-  const resourceHref = () => {
+  const pageSubject = (): ResourcePageSubject | null => {
     const value = item();
     if (!value) return null;
     const resolved = resolvedSubject();
-    return buildResourcePagePath({
+    return {
       id: value.subjectResourceId,
       name: value.subjectResourceName,
       type: value.subjectResourceType,
       resource: resolved?.id === value.subjectResourceId.trim() ? resolved.resource : null,
-    });
+    };
+  };
+  const resourceHref = () => {
+    const subject = pageSubject();
+    return subject ? buildResourcePagePath(subject) : null;
+  };
+  // A bare alert's lasting control is its thresholds: open the subject's
+  // platform tab already searched to it, not the top of every threshold.
+  const thresholdsHref = () => {
+    const subject = pageSubject();
+    return subject ? buildResourceThresholdsPath(subject) : ALERT_THRESHOLDS_PATH;
   };
   const openAssistant = () => {
     const value = detail();
@@ -1202,6 +1216,7 @@ function AttentionDetail(props: {
               item={loaded().item}
               linkedFindings={linkedFindings()}
               onOpenFindings={props.onOpenFindings}
+              thresholdsHref={thresholdsHref()}
             />
 
             <details class="rounded-lg border border-border-subtle">
@@ -1556,6 +1571,7 @@ function AttentionLastingDecisions(props: {
   item: AttentionItem;
   linkedFindings: UnifiedFinding[];
   onOpenFindings?: (item: AttentionItem) => void;
+  thresholdsHref: string;
 }) {
   const [pending, setPending] = createSignal<PatrolLastingDecision | null>(null);
   const [note, setNote] = createSignal('');
@@ -1654,6 +1670,7 @@ function AttentionLastingDecisions(props: {
                 <AttentionAlertOnlyGuidance
                   item={props.item}
                   onOpenFindings={props.onOpenFindings}
+                  thresholdsHref={props.thresholdsHref}
                 />
               }
             >
@@ -1783,6 +1800,7 @@ function AttentionLastingDecisions(props: {
 function AttentionAlertOnlyGuidance(props: {
   item: AttentionItem;
   onOpenFindings?: (item: AttentionItem) => void;
+  thresholdsHref: string;
 }) {
   return (
     <div>
@@ -1793,7 +1811,7 @@ function AttentionAlertOnlyGuidance(props: {
       </p>
       <div class="mt-2 flex flex-wrap gap-2">
         <ButtonLink
-          href={ALERT_THRESHOLDS_PATH}
+          href={props.thresholdsHref}
           variant="secondary"
           size="sm"
           class="min-h-11 sm:min-h-0"

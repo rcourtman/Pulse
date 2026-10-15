@@ -2828,6 +2828,21 @@ the owning tab. A subject that names no platform hides the link rather than
 opening a page without it (`resourcePagePath.test.ts`,
 `PatrolAttentionWorkbench.test.tsx`).
 
+### Alert-only guidance links to the subject's thresholds
+
+A decision about a bare alert tells the operator to adjust when the alert
+fires or turn it off under alert thresholds. Its `Adjust alert thresholds`
+link used to open `/alerts/thresholds`, the top of the Proxmox tab, whatever
+the subject was. The workbench now builds it with
+`buildResourceThresholdsPath`
+(`frontend-modern/src/features/platformNavigation/resourcePagePath.ts`) from
+the same resolved subject as `Open resource`: the platform picks the
+thresholds tab (standalone agents open Systems) and the resource's display
+label, the one its thresholds row is built from, fills the thresholds search. A composed label such as `Disk (node)` and a physical
+disk, which has no thresholds row of its own, open the tab unsearched rather
+than a search that hides every row (`resourcePagePath.test.ts`,
+`PatrolAttentionWorkbench.test.tsx`).
+
 ### A used-up cost budget pauses Patrol visibly
 
 Patrol distinguishes "Pulse declined to spend" from "the provider failed".

@@ -1334,9 +1334,11 @@ describe('PatrolAttentionWorkbench', () => {
       /turn it off for Database VM under alert thresholds/i,
     );
     expect(screen.queryByRole('list', { name: 'Lasting decisions' })).not.toBeInTheDocument();
+    // The thresholds open on the subject's platform tab, searched to it,
+    // instead of the top of every threshold section.
     expect(screen.getByRole('link', { name: 'Adjust alert thresholds' })).toHaveAttribute(
       'href',
-      '/alerts/thresholds',
+      '/alerts/thresholds/proxmox?q=Database+VM',
     );
     fireEvent.click(
       screen.getByRole('button', { name: 'Browse Patrol findings for this resource' }),

@@ -5,6 +5,7 @@ import type { Resource } from '@/types/resource';
 import {
   agentDiskResourceId,
   hostOverrideIdCandidates,
+  matchesThresholdResourceSearch,
   normalizeStorageStatus,
   uniqueIds,
 } from '../thresholdsResourceModel';
@@ -56,5 +57,15 @@ describe('thresholdsResourceModel', () => {
     expect(normalizeStorageStatus('running')).toBe('available');
     expect(normalizeStorageStatus('offline')).toBe('offline');
     expect(normalizeStorageStatus(undefined)).toBe('offline');
+  });
+
+  // A resource search opened from elsewhere carries the registry name, which
+  // for hosts can be the full hostname rather than the shown label.
+  it('matches a resource search against its shown, display and raw names', () => {
+    const host = { name: 'pve1', displayName: 'Primary node', rawName: 'pve1.lab.example' };
+    expect(matchesThresholdResourceSearch(host, '')).toBe(true);
+    expect(matchesThresholdResourceSearch(host, 'pve1.lab')).toBe(true);
+    expect(matchesThresholdResourceSearch(host, 'primary')).toBe(true);
+    expect(matchesThresholdResourceSearch(host, 'pve2')).toBe(false);
   });
 });

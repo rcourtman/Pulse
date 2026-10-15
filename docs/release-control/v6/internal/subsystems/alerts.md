@@ -2999,6 +2999,22 @@ the active app locale.
 
 The Recovery section is a thresholds deep link: `/alerts/thresholds/proxmox#backups`
 expands and scrolls to it like `#pbs` and `#pmg` (`useThresholdsTableState.test.tsx`).
+
+The thresholds resource search is route state: `useThresholdsTableState`
+reads and writes `?q=` (`ALERT_THRESHOLDS_QUERY_PARAMS.query`) with replace
+navigation, keeps it across platform tab clicks, section hashes and the
+legacy-path redirects, so a link from elsewhere can open a tab already
+searched to one resource (`buildAlertThresholdsPath`). Host and Docker host
+rows match the search on their shown, display and raw names
+(`matchesThresholdResourceSearch`), because a link carries the full display
+label while those rows show a shortened name and keep the label as their raw
+name. Because each search edit navigates within the
+page, the Alerts page's unsaved-changes guard asks only when the destination
+path differs (`shouldConfirmAlertsLeave` in `alertConfigPresentation.ts`):
+narrowing the list keeps an unsaved edit without a prompt, leaving the page
+still asks (`useThresholdsTableState.test.tsx`,
+`alertConfigPresentation.test.ts`, `Alerts.helpers.test.ts`).
+
 A successful Alerts page save re-reads the shared `alertsActivation` config in
 `useAlertsConfigurationState.ts` (only when the config write landed and the
 save still owns the editor), because backup shields and metric colours on
