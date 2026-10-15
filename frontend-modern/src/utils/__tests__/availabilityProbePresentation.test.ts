@@ -21,9 +21,41 @@ const makeAvailabilityResource = (overrides?: Partial<Resource>): Resource => ({
     available: true,
     latencyMillis: 7,
     lastChecked: '2026-05-06T13:00:06Z',
+    pollIntervalSeconds: 30,
   },
   platformData: { sources: ['availability'] },
   ...overrides,
+});
+
+describe('availability success is not a freshness guarantee', () => {
+  const now = new Date('2026-10-15T19:00:00Z');
+  it.each([
+    {},
+    { lastChecked: 'invalid', pollIntervalSeconds: 30 },
+    { lastChecked: now.toISOString() },
+    { lastChecked: now.toISOString(), pollIntervalSeconds: 0 },
+  ])('retains an undated or unleased result without success colour: %j', (evidence) => {
+    const presentation = getAvailabilityProbePresentation(
+      makeAvailabilityResource({
+        availability: { available: true, latencyMillis: 7, protocol: 'https', ...evidence },
+      }),
+      now,
+    );
+    expect(presentation).toMatchObject({
+      resultLabel: '7 ms',
+      freshnessLabel: 'freshness unknown',
+      toneClassName: 'text-muted',
+    });
+  });
+  it('keeps failure evidence and its severity rather than turning unknown freshness into success', () => {
+    const presentation = getAvailabilityProbePresentation(
+      makeAvailabilityResource({ availability: { available: false, lastError: 'HTTP 503' } }),
+      now,
+    );
+    expect(presentation?.resultLabel).toBe('503');
+    expect(presentation?.freshnessLabel).toBe('freshness unknown');
+    expect(presentation?.toneClassName).toContain('red');
+  });
 });
 
 describe('availabilityProbePresentation', () => {
@@ -176,6 +208,7 @@ describe('availabilityProbePresentation', () => {
           available: true,
           latencyMillis: 3,
           lastChecked: '2026-05-06T13:00:18Z',
+          pollIntervalSeconds: 30,
         },
         platformData: {},
       }),

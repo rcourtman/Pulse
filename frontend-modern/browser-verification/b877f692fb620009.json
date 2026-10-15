@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "base_sha": "a6ce5d1aaee51c86dd4173f096d594f43ca4d60b",
+  "verified_at": "2026-10-15T19:31:07.571648Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx": "8ff4b598452036b15bfeff8a4870beb54cc6d9ab0ab9cb23261cc82bb09cd148",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts": "990ef4ef9072c7d38d14c7d7dec910cd1c8ab9a8757366743b70d454141e2471"
+  },
+  "routes": [
+    "/browser-tests/availability-freshness.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Undated success is neutral and qualified, with no current-health assertion",
+    "Invalid checked time remains unknown, not healthy",
+    "A checked timestamp without a lease does not invent freshness",
+    "A fresh success still shows Up/responding normally and the collapsed passing summary",
+    "Same snapshot ages past two polls on the shared clock; all positive colours withdraw",
+    "Retained failure remains visible, qualified and without successful certificate/path colours",
+    "Same-open recovered snapshot restores a fresh result without replay or refresh"
+  ],
+  "interactions": [
+    "Keyboard Enter opens the real workload row and native Details disclosure on desktop; touch opens the visible guest name and Details on WebKit390/320.",
+    "Immutable same-ID resource snapshots pass through useWorkloads into GuestRow and the full GuestDrawer. Unknown, malformed and unleased successes keep evidence without positive availability colours; fresh evidence restores the passing summary, status and secondary colours.",
+    "Advance the shared clock90 seconds without replacing the snapshot: expiry withdraws green positive health and passing summary, while retaining labelled observations. A retained503 failure remains visible; a subsequent fresh snapshot recovers in the same open drawer. No non-GET request, external request or live availability/guest operation."
+  ],
+  "browsers": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "project_lock": "@playwright/test1.56.1 in tests/integration/package-lock.json matches runtime."
+  },
+  "proof_source_sha": "a6ce5d1aaee51c86dd4173f096d594f43ca4d60b",
+  "proof_source_tree": "cb4b649a103d7b6d15affef4310092a0da9986fa",
+  "capture_sha256": {
+    "desktop-undated.png": "2ec77cc3e2ea14c3598122ab4c82818d8605e217d3265bf53b1c3cf2b0015829",
+    "desktop-fresh.png": "717c6d76bbca124148680b24a5e0bb7d59c679478aec36acfcff3816590e0aae",
+    "desktop-expired.png": "26856a6f07ce1c4149194d539446e7802e1192a8dab1bd81b0c21dd77fe54eae",
+    "desktop-recovered.png": "9ea564c5122d31ae779de64e0d99fe89b6af6f2c3bff20040a9296e08485e5bd",
+    "phone-undated.png": "80a578fd77065781b3299bd248c1b564d13263a241c437bfd0788657b59f58ed",
+    "phone-fresh.png": "e211d7a6d83579379fbc01bd51d992fdfefe0a8895c88f03735d844f32d114d0",
+    "phone-expired.png": "a99940878c7c9ea8f3c40d87039fc1cffad731c9c4bd80dab3fa36e6430fa7ee",
+    "phone-recovered.png": "9efba1d740fa6a0f622eb25a8fcaff20e0fd314be031b5891018089c1eeededa",
+    "narrow-undated.png": "68dd231de4f0495663a81a9343ed5bc54dd01fd0a9b732531e2f6f804286a2cd",
+    "narrow-fresh.png": "cb11db1c6b7a75ec4827556fcc761a258492ac3e0fb8387812a143081d92c1e7",
+    "narrow-expired.png": "7aa5c21895b5d411c7fb261e9a528dc9985d4d6d54326562aae2dfcf2d7a41bc",
+    "narrow-recovered.png": "9e9ba23f59fe686c0ca7d8077c0f4f678c311b315fa589455acec2633cc22995"
+  },
+  "coverage_note": "21 completed states /12 final captures. The first executed repair attempt timed out at its row wait before any state/capture; preserved separately. Final navigation awaits DOMContentLoaded within the existing60000ms navigation bound before10000ms interactions; the180-second worker boundary is unchanged. All final cases pass with browser/server cleanup. Vite reports its HMR socket closed by the explicit fixture control; no pageerror, failed HTTP response/request, non-GET or off-origin request.",
+  "pixel_review": "All12 original captures were opened via native view_image in this repair turn: desktop light,390px WebKit dark,320px WebKit light, each unknown/fresh/expired/recovered. Unknown/expired qualifications are visible and uncut;320px text wraps within the card. Neutral retained application/certificate/path evidence has no green availability-success styling or normal-response footer. Fresh/recovered controls show the proper green result and footer. Not a script-generated viewed flag.",
+  "scope": "Actual production mapper, workload row and full guest drawer; synthetic service observations and read-only history/license fixtures. Not full-App navigation, native guest thaw/writes/liveness, live TLS validation, installed or released recovery."
+}
