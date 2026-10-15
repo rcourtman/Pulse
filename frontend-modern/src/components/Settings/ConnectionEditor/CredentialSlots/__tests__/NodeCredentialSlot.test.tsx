@@ -211,6 +211,7 @@ describe('NodeCredentialSlot', () => {
       />
     ));
 
+    expect(screen.getByText('API address and name')).toBeInTheDocument();
     const endpoint = screen.getByLabelText(/^Endpoint URL/);
     const name = screen.getByLabelText(/^Node Name/);
     expect(endpoint.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
