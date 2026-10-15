@@ -2391,6 +2391,23 @@ smoke_test_pve_auto_register_token() {
     return 0
 }
 
+pve_auto_register_pulse_post() {
+    local url="$1"
+    local response=""
+    # Both bootstrap calls mutate state; a lost/error response is not permission
+    # to replay them. This is the existing direct HTTP hop to the new local
+    # container, not the separate HTTPS Proxmox API probe. Ignore ambient curl
+    # configuration/proxies, never follow redirects and keep credentials on stdin.
+    if ! response=$(curl --disable --silent --show-error --proto '=http' \
+        --noproxy '*' --connect-timeout 5 --max-time 15 --retry 0 \
+        --request POST --header 'Content-Type: application/json' \
+        --data-binary @- --write-out $'\n%{http_code}' --url "$url" 2>/dev/null); then
+        return 1
+    fi
+    [[ "$response" == *$'\n200' ]] || return 1
+    printf '%s' "${response%$'\n200'}"
+}
+
 auto_register_pve_node() {
     local ctid="$1"
     local pulse_ip="$2"
@@ -2490,7 +2507,7 @@ PY
     set +xv
 
     local setup_response
-    if ! setup_response=$(curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"); then
+    if ! setup_response=$(printf %s "$setup_payload" | pve_auto_register_pulse_post "$pulse_url/api/setup-script-url"); then
         AUTO_NODE_REGISTER_ERROR="setup token request failed"
         print_warn "Unable to request setup token from Pulse (${pulse_url}); skipping automatic node registration"
         return
@@ -2767,9 +2784,9 @@ PY
 )
 
     local register_response
-    if ! register_response=$(printf %s "$register_payload" | curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-); then
+    if ! register_response=$(printf %s "$register_payload" | pve_auto_register_pulse_post "$pulse_url/api/auto-register"); then
         AUTO_NODE_REGISTER_ERROR="auto-register request failed"
-        print_warn "Pulse auto-registration request failed; skipping automatic node registration"
+        print_warn "Pulse auto-registration could not be confirmed; check the node in Pulse before trying again"
         return
     fi
 

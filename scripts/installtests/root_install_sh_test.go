@@ -675,8 +675,12 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		`for secret in (request["tokenValue"], request["authToken"])`,
 		`Pulse auto-registration could not be confirmed; check the node in Pulse before trying again`,
 		`AUTO_NODE_REGISTERED_NAME="$register_node_name"`,
-		`curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"`,
-		`printf %s "$register_payload" | curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-`,
+		`printf %s "$setup_payload" | pve_auto_register_pulse_post "$pulse_url/api/setup-script-url"`,
+		`printf %s "$register_payload" | pve_auto_register_pulse_post "$pulse_url/api/auto-register"`,
+		`pve_auto_register_pulse_post() {`,
+		`--noproxy '*' --connect-timeout 5 --max-time 15 --retry 0`,
+		`--data-binary @- --write-out $'\n%{http_code}' --url "$url" 2>/dev/null`,
+		`[[ "$response" == *$'\n200' ]] || return 1`,
 		`created_token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)`,
 		`pveum aclmod / -token "$token_id" -role PVEAuditor`,
 		`pveum aclmod / -token "$token_id" -role PulseMonitor`,
@@ -1280,7 +1284,7 @@ func TestRootInstallAutoRegisterSmokeTestsCreatedTokenBeforeRegistration(t *test
 	}
 
 	smokeCallIdx := strings.Index(script, `smoke_test_pve_auto_register_token "$normalized_host_url" "$token_id" "$token_value"`)
-	registerIdx := strings.Index(script, `curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-`)
+	registerIdx := strings.Index(script, `pve_auto_register_pulse_post "$pulse_url/api/auto-register"`)
 	if smokeCallIdx < 0 || registerIdx < 0 || smokeCallIdx > registerIdx {
 		t.Fatalf("expected token smoke check to run before /api/auto-register (smoke=%d register=%d)", smokeCallIdx, registerIdx)
 	}

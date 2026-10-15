@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -36,9 +37,12 @@ CANONICAL_NAME = "fixture-pve"
 
 
 class RegistrationPeer:
-    def __init__(self, response, *, legacy=False):
+    def __init__(self, response, *, legacy=False, fault_path="", status=200,
+                 redirect="", stall=False, disconnect=False, partial=False, capture_only=False):
         self.requests = []
         self.errors = []
+        self.ambient_headers = []
+        self.done = threading.Event()
         peer = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -49,7 +53,10 @@ class RegistrationPeer:
                 try:
                     body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                     peer.requests.append((self.path, body))
-                    if self.path == "/api/setup-script-url":
+                    peer.ambient_headers.extend(self.headers.get_all("X-Fixture-Ambient", []))
+                    if capture_only:
+                        payload = "{}"
+                    elif self.path == "/api/setup-script-url":
                         if body != {"type": "pve", "host": HOST, "backupPerms": True}:
                             raise ValueError("unexpected setup request")
                         url = (peer.url + "/api/setup-script?backup_perms=true&host="
@@ -78,10 +85,21 @@ class RegistrationPeer:
                         payload = response(body)
                     else:
                         raise ValueError("unexpected path")
+                    failed = self.path == fault_path
+                    if failed and stall:
+                        peer.done.wait(25)
+                        return
+                    if failed and disconnect:
+                        self.connection.shutdown(socket.SHUT_RDWR)
+                        self.connection.close()
+                        return
                     encoded = payload.encode()
-                    self.send_response(200)
+                    self.send_response(status if failed else 200)
                     self.send_header("Content-Type", "application/json")
-                    self.send_header("Content-Length", str(len(encoded)))
+                    self.send_header("Content-Length", str(len(encoded) + (20 if failed and partial else 0)))
+                    self.send_header("Connection", "close")
+                    if failed and redirect:
+                        self.send_header("Location", redirect)
                     self.end_headers()
                     self.wfile.write(encoded)
                 except Exception as error:
@@ -95,6 +113,7 @@ class RegistrationPeer:
         self.thread.start()
 
     def close(self):
+        self.done.set()
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=3)
@@ -112,8 +131,11 @@ def confirmation(request, **changes):
 
 
 class RegistrationResponse(unittest.TestCase):
-    def exercise(self, response=confirmation, *, accepted=False, name=CANONICAL_NAME, legacy=False, rotate=False):
-        peer = RegistrationPeer(response, legacy=legacy)
+    def exercise(self, response=confirmation, *, accepted=False, name=CANONICAL_NAME, legacy=False, rotate=False,
+                 fault_path="", status=200, redirect="", stall=False, disconnect=False, partial=False,
+                 ambient=False, proxy=""):
+        peer = RegistrationPeer(response, legacy=legacy, fault_path=fault_path, status=status,
+                                redirect=redirect, stall=stall, disconnect=disconnect, partial=partial)
         try:
             with tempfile.TemporaryDirectory(prefix="pulse-private-confirmation-") as directory:
                 root = Path(directory)
@@ -141,9 +163,13 @@ class RegistrationResponse(unittest.TestCase):
                 (tools / "pveum").chmod(0o700)
                 (tools / "hostname").write_text('#!/bin/sh\nprintf "fixture-pve\\n"\n')
                 (tools / "hostname").chmod(0o700)
+                # Parent-source adverse controls execute the original caller,
+                # without transplanting the new transport into it.
+                transport = (function("pve_auto_register_pulse_post")
+                             if "pve_auto_register_pulse_post() {" in installer.SOURCE else "")
                 source = "\n".join(function(name) for name in (
                     "extract_pve_token_value", "pve_token_already_exists_error",
-                    "create_pve_auto_register_token", "auto_register_pve_node"))
+                    "create_pve_auto_register_token", "auto_register_pve_node")) + "\n" + transport
                 script = """set -euo pipefail
 print_warn() { printf 'WARN=%s\n' "$*"; }
 print_info() { printf 'INFO=%s\n' "$*"; }
@@ -168,10 +194,17 @@ printf 'RESULT=%s\nNAME=%s\nERROR=%s\n' "$AUTO_NODE_REGISTERED" "$AUTO_NODE_REGI
                            REAL_PYTHON=sys.executable, REAL_CURL=shutil.which("curl"),
                            ARGV_LOG=str(root / "argv"), PULSE_PVE_HOST_URL=HOST,
                            PULSE_FIXTURE_PORT=str(peer.server.server_port), PULSE_AUTO_BACKUP_PERMS="true",
-                           PULSE_SKIP_AUTO_NODE="false", NO_PROXY="*", no_proxy="*",
-                           HTTP_PROXY="", http_proxy="", HTTPS_PROXY="", https_proxy="", ALL_PROXY="", all_proxy="")
+                           PULSE_SKIP_AUTO_NODE="false", NO_PROXY="", no_proxy="",
+                           HTTP_PROXY=proxy, http_proxy=proxy, HTTPS_PROXY=proxy, https_proxy=proxy,
+                           ALL_PROXY=proxy, all_proxy=proxy)
+                if ambient:
+                    (root / ".curlrc").write_text(
+                        'location\nretry = 3\nheader = "X-Fixture-Ambient: fixture-marker"\n'
+                        'trace-ascii = "' + str(root / "trace") + '"\n')
+                started = time.monotonic()
                 result = subprocess.run(["bash", "-c", script], env=env,
-                                        capture_output=True, text=True, timeout=12)
+                                        capture_output=True, text=True, timeout=22 if stall else 12)
+                elapsed = time.monotonic() - started
                 output = result.stdout + result.stderr
                 args = [json.loads(line) for line in (root / "argv").read_text().splitlines()]
                 observed = json.dumps(args)
@@ -181,26 +214,47 @@ printf 'RESULT=%s\nNAME=%s\nERROR=%s\n' "$AUTO_NODE_REGISTERED" "$AUTO_NODE_REGI
                 self.assertNotIn("Traceback", output)
                 self.assertEqual(result.returncode, 0, "optional registration must not abort installation")
                 self.assertEqual(peer.errors, [])
-                self.assertEqual([path for path, _ in peer.requests], ["/api/setup-script-url", "/api/auto-register"])
+                expected_paths = ["/api/setup-script-url"]
+                if fault_path != "/api/setup-script-url":
+                    expected_paths.append("/api/auto-register")
+                self.assertEqual([path for path, _ in peer.requests], expected_paths,
+                                 "bootstrap POST was repeated or did not reach its intended peer")
+                self.assertEqual(peer.ambient_headers, [], "ambient curl configuration affected the request")
+                self.assertFalse((root / "trace").exists(), "ambient tracing retained credential-bearing bytes")
                 curl_args = [argv[1:] for argv in args if argv[0] == "curl"]
-                self.assertEqual(len(curl_args), 2)
-                self.assertEqual(curl_args[1][-2:], ["-d", "@-"])
+                self.assertEqual(len(curl_args), len(expected_paths))
+                for argv, path in zip(curl_args, expected_paths):
+                    self.assertEqual(argv[0], "--disable")
+                    for flag, value in (("--proto", "=http"), ("--noproxy", "*"),
+                                        ("--connect-timeout", "5"), ("--max-time", "15"), ("--retry", "0"),
+                                        ("--request", "POST"), ("--data-binary", "@-"), ("--url", peer.url + path)):
+                        self.assertEqual(argv[argv.index(flag) + 1], value)
+                    for flag in ("--location", "-L", "--insecure", "-k", "--verbose", "--trace", "--config"):
+                        self.assertNotIn(flag, argv)
                 python_args = [argv[1:] for argv in args if argv[0] == "python3"]
-                self.assertGreaterEqual(len(python_args), 7)
                 self.assertTrue(all(argv[0] == "-" for argv in python_args))
-                self.assertEqual(python_args[-1], ["-"], "confirmation parser accepted a process argument")
-                calls = (root / "pve-calls").read_text().splitlines()
-                self.assertEqual(sum(call.startswith("user token add ") for call in calls), 2 if rotate else 1)
+                if not fault_path:
+                    self.assertGreaterEqual(len(python_args), 7)
+                    self.assertEqual(python_args[-1], ["-"], "confirmation parser accepted a process argument")
+                calls = (root / "pve-calls").read_text().splitlines() if (root / "pve-calls").exists() else []
+                created = 0 if fault_path == "/api/setup-script-url" else (2 if rotate else 1)
+                self.assertEqual(sum(call.startswith("user token add ") for call in calls), created)
                 self.assertEqual(sum(call.startswith("user token remove ") for call in calls), 1 if rotate else 0)
+                if fault_path == "/api/setup-script-url":
+                    self.assertEqual(calls, [], "failed bootstrap changed PVE state")
                 self.assertIn("RESULT=" + str(accepted).lower() + "\n", output)
                 if accepted:
                     self.assertIn("NAME=" + name + "\nERROR=\n", output)
                     self.assertIn("SUCCESS=Registered " + name + " with Pulse automatically", output)
                     self.assertNotIn("WARN=", output)
                 else:
-                    self.assertIn("NAME=\nERROR=auto-register unsuccessful\n", output)
-                    self.assertIn("WARN=Pulse auto-registration could not be confirmed; check the node in Pulse before trying again", output)
+                    error = ("setup token request failed" if fault_path == "/api/setup-script-url"
+                             else "auto-register request failed" if fault_path else "auto-register unsuccessful")
+                    self.assertIn("NAME=\nERROR=" + error + "\n", output)
+                    if fault_path != "/api/setup-script-url":
+                        self.assertIn("WARN=Pulse auto-registration could not be confirmed; check the node in Pulse before trying again", output)
                     self.assertNotIn("SUCCESS=", output)
+                return elapsed
         finally:
             peer.close()
 
@@ -286,6 +340,57 @@ caller
             data["message"] = {"private": [TOKEN, SETUP_TOKEN, PRIVATE_TEXT + "\n\x1b[31m"]}
             return json.dumps(data)
         self.exercise(reply, accepted=True)
+
+    def test_ambient_config_and_proxy_cannot_observe_either_bootstrap_request(self):
+        proxy = RegistrationPeer(confirmation, capture_only=True)
+        try:
+            self.exercise(accepted=True, ambient=True, proxy=proxy.url)
+            self.assertEqual(proxy.requests, [], "ambient proxy received bootstrap data")
+        finally:
+            proxy.close()
+
+    def test_redirects_never_receive_setup_or_registration_data(self):
+        destination = RegistrationPeer(confirmation, capture_only=True)
+        try:
+            for path in ("/api/setup-script-url", "/api/auto-register"):
+                for status in (301, 302, 303, 307, 308):
+                    with self.subTest(path=path, status=status):
+                        # Even a valid success body with a redirect status must
+                        # not create/rotate a PVE token or confirm registration.
+                        self.exercise(fault_path=path, status=status,
+                                      redirect=destination.url + "/redirected", ambient=True)
+                        self.assertEqual(destination.requests, [], "redirect received bootstrap data")
+        finally:
+            destination.close()
+
+    def test_only_exact_200_can_confirm_either_bootstrap_request(self):
+        for path in ("/api/setup-script-url", "/api/auto-register"):
+            for status in (201, 202, 204, 400, 401, 403, 404, 429, 500, 502, 504):
+                with self.subTest(path=path, status=status):
+                    self.exercise(fault_path=path, status=status)
+
+    def test_server_error_does_not_replay_registration(self):
+        self.exercise(fault_path="/api/auto-register", status=503)
+
+    def test_setup_failure_does_not_change_pve_or_replay(self):
+        self.exercise(fault_path="/api/setup-script-url", status=503)
+
+    def test_lost_response_is_not_replayed_or_reported_as_absent(self):
+        for path in ("/api/setup-script-url", "/api/auto-register"):
+            with self.subTest(path=path):
+                self.exercise(fault_path=path, disconnect=True)
+
+    def test_partial_response_cannot_confirm_registration_or_trigger_replay(self):
+        for path in ("/api/setup-script-url", "/api/auto-register"):
+            with self.subTest(path=path):
+                self.exercise(fault_path=path, partial=True)
+
+    def test_both_bootstrap_responses_have_real_total_deadlines(self):
+        for path in ("/api/setup-script-url", "/api/auto-register"):
+            with self.subTest(path=path):
+                elapsed = self.exercise(fault_path=path, stall=True)
+                self.assertGreater(elapsed, 13)
+                self.assertLess(elapsed, 20)
 
 
 if __name__ == "__main__":

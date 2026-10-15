@@ -16,6 +16,29 @@
 
 ## Purpose
 
+### Bounded, single-attempt install-time Pulse bootstrap
+
+The PVE root installer sends setup-token and auto-registration POSTs directly
+to the new local Pulse container over the existing HTTP transport. Both calls
+ignore ambient curl configuration and proxies, follow no redirects, carry JSON
+on stdin, and have five-second connection and fifteen-second total budgets.
+Only a complete HTTP 200 response reaches the existing response validators.
+No HTTP error, partial read, disconnected peer or timeout authorises a retry.
+A failed setup call changes no PVE credentials; an unconfirmed registration
+retains the created token and tells the operator to check the node in Pulse
+before trying again. It neither asserts absence nor rotates/reposts on failure.
+Request/response shapes, token ownership and ACLs are unchanged. This does not
+add TLS to the local container hop or change Proxmox HTTPS trust.
+
+The complete caller in `pve_auto_register_response.py` uses real curl and private
+HTTP peers for both successful methods, ambient config/proxy exclusion, redirect
+and exact-status refusal, server-error non-replay, dropped/partial responses and
+both actual total deadlines. Its Go wrapper requires all eighteen methods;
+`root_install_sh_test.go` also checks the shared helper and producer ordering.
+The connection limit is checked in observed curl arguments, not claimed as a
+separately induced TCP-connect timeout. These are source controls, not installed
+PVE recovery, protected publication, release inclusion or reporter acceptance.
+
 ### Credential-free diagnostics for install-time registration confirmation
 
 The optional PVE installer treats the Pulse registration reply and expected
@@ -31,8 +54,8 @@ is directed to check the node in Pulse before trying again.
 The token-creation helper returns both data and the real exit status to its
 actual caller variables; helper-local names must not shadow those outputs.
 JSON success, explicit legacy fallback, failure and deterministic-token rotation
-remain executable controls, not merely source-shape assertions. No request,
-token ownership/rotation, ACL, TLS or API response contract changes.
+remain executable controls, not merely source-shape assertions. Request shapes,
+token ownership/rotation, ACLs, TLS and API response contracts are unchanged.
 This is not installed cluster recovery or a correction for #2980.
 
 `scripts/installtests/pve_auto_register_response.py` runs the complete actual
@@ -59,8 +82,9 @@ fifteen-second total budgets. Existing local PVE cluster CA trust augments the
 system CA directory, preserving ACME-issued certificates. There is no insecure
 fallback. The authenticated probe requires HTTP 200, sends its header on stdin,
 and discards response bodies and stderr rather than printing provider text.
-Successful registration, existing token ownership/ACL policy and the separate
-Pulse setup-token/registration transport are otherwise unchanged.
+Successful registration and existing token ownership/ACL policy are otherwise
+unchanged; the separate Pulse bootstrap transport follows the single-attempt
+contract above.
 
 `scripts/installtests/pve_auto_register_transport.py` executes the real extracted
 functions with curl and private HTTPS peers: cluster/system trust, unknown CA,
