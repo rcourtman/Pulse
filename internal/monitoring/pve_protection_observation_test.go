@@ -273,20 +273,33 @@ func TestPVERunningLogCacheKeepsActualSuccessfulReceipt(t *testing.T) {
 	}
 	m := &Monitor{state: models.NewState()}
 	m.pollBackupTasks(context.Background(), "proof", client)
-	initial := m.state.GetSnapshot().PVEBackups.BackupTasks
-	if len(initial) != 2 || initial[1].VMID != 100 || initial[1].ObservedAt.IsZero() {
+	guestTask := func() models.BackupTask {
+		tasks := m.state.GetSnapshot().PVEBackups.BackupTasks
+		if len(tasks) != 2 {
+			t.Fatalf("expected parent and guest tasks: %+v", tasks)
+		}
+		for _, task := range tasks {
+			if task.VMID == 100 {
+				return task
+			}
+		}
+		t.Fatalf("guest100 task absent: %+v", tasks)
+		return models.BackupTask{}
+	}
+	initial := guestTask()
+	if initial.ObservedAt.IsZero() {
 		t.Fatalf("initial running guest observation missing: %+v", initial)
 	}
 	failed.Store(true)
 	m.pollBackupTasks(context.Background(), "proof", client)
-	retained := m.state.GetSnapshot().PVEBackups.BackupTasks
-	if len(retained) != 2 || !reflect.DeepEqual(retained[1], initial[1]) {
+	retained := guestTask()
+	if !reflect.DeepEqual(retained, initial) {
 		t.Fatalf("unreadable running log lost/renewed the successful receipt: %+v -> %+v", initial, retained)
 	}
 	failed.Store(false)
 	m.pollBackupTasks(context.Background(), "proof", client)
-	resumed := m.state.GetSnapshot().PVEBackups.BackupTasks
-	if len(resumed) != 2 || !resumed[1].ObservedAt.After(initial[1].ObservedAt) {
+	resumed := guestTask()
+	if !resumed.ObservedAt.After(initial.ObservedAt) {
 		t.Fatalf("ordinary successful running log did not resume: %+v", resumed)
 	}
 }

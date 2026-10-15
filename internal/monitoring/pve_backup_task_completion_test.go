@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -52,6 +53,7 @@ func TestPVEBackupTasksPublishOnlyCompletedEvidence(t *testing.T) {
 	m := &Monitor{state: models.NewState()}
 	m.pollBackupTasks(context.Background(), "proof", client)
 	initial := m.state.GetSnapshot().PVEBackups
+	sort.Slice(initial.BackupTasks, func(i, j int) bool { return initial.BackupTasks[i].ID < initial.BackupTasks[j].ID })
 	if len(initial.BackupTasks) != 2 {
 		t.Fatalf("initial tasks: %+v", initial.BackupTasks)
 	}
@@ -68,6 +70,7 @@ func TestPVEBackupTasksPublishOnlyCompletedEvidence(t *testing.T) {
 		phase.Store(p)
 		m.pollBackupTasks(context.Background(), "proof", client)
 		actual := m.state.GetSnapshot().PVEBackups
+		sort.Slice(actual.BackupTasks, func(i, j int) bool { return actual.BackupTasks[i].ID < actual.BackupTasks[j].ID })
 		if !reflect.DeepEqual(actual, initial) {
 			t.Errorf("incomplete phase %d replaced rows/original observation times: before=%+v after=%+v", p, initial, actual)
 		}
@@ -76,6 +79,7 @@ func TestPVEBackupTasksPublishOnlyCompletedEvidence(t *testing.T) {
 	phase.Store(0)
 	m.pollBackupTasks(context.Background(), "proof", client)
 	recovered := m.state.GetSnapshot().PVEBackups.BackupTasks
+	sort.Slice(recovered, func(i, j int) bool { return recovered[i].ID < recovered[j].ID })
 	if len(recovered) != 2 || !recovered[0].ObservedAt.After(initial.BackupTasks[0].ObservedAt) {
 		t.Fatalf("ordinary complete poll did not resume: %+v", recovered)
 	}
