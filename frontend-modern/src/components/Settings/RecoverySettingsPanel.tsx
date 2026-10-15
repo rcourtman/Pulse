@@ -2,6 +2,8 @@ import { Component, Show, For, Accessor, Setter, createUniqueId } from 'solid-js
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import { getShippedDocUrl } from '@/utils/docsLinks';
 import {
   BACKUP_INTERVAL_MAX_MINUTES,
   BACKUP_INTERVAL_OPTIONS,
@@ -31,13 +33,14 @@ export interface RecoverySettingsPanelProps {
 }
 
 export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (props) => {
-  const backupPollingTitleId = `settings-recovery-${createUniqueId()}-backup-polling-title`;
+  const backupPollingId = `settings-recovery-${createUniqueId()}-backup-polling`;
+  const backupPollingTitleId = `${backupPollingId}-title`;
 
   return (
     <SettingsPanel title="Recovery" noPadding bodyClass="divide-y divide-border">
       {/* Backup Polling Section */}
       <div class="p-4 sm:p-6">
-        <section class="space-y-3">
+        <section aria-label="Backup polling" class="space-y-3">
           <h4 class="flex items-center gap-2 text-sm font-medium text-base-content">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <circle cx="12" cy="12" r="9" stroke-width="2" />
@@ -51,8 +54,9 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
             Backup polling
           </h4>
           <p class="text-xs text-muted">
-            Control how often Pulse queries Proxmox backup tasks, datastore contents, and guest
-            snapshots. Longer intervals reduce disk activity and API load.
+            Read Proxmox/PBS backup records and guest snapshots. Polling does not create, run or
+            restore backups. Longer polling intervals reduce API load but delay backup evidence
+            refresh.
           </p>
 
           <div class="space-y-3">
@@ -62,17 +66,26 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                 <p id={backupPollingTitleId} class="text-sm font-medium text-base-content">
                   Enable backup polling
                 </p>
-                <p class="text-xs text-muted">
-                  Required for workload backup status, storage snapshots, and alerting.
+                <p id={`${backupPollingId}-help`} class="text-xs text-muted">
+                  Controls scheduled backup-record collection for workload backup status, snapshots
+                  and backup alerts.
                 </p>
               </div>
-              <label class="relative inline-flex items-center cursor-pointer">
+              <label class="relative inline-flex min-h-11 min-w-11 shrink-0 items-center cursor-pointer">
                 <input
                   type="checkbox"
                   class="sr-only peer"
                   checked={props.backupPollingEnabled()}
                   disabled={props.backupPollingEnvLocked()}
                   aria-labelledby={backupPollingTitleId}
+                  aria-describedby={[
+                    `${backupPollingId}-help`,
+                    `${backupPollingId}-selection`,
+                    `${backupPollingId}-scope`,
+                    props.backupPollingEnvLocked() ? `${backupPollingId}-environment` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   onChange={(e) => {
                     props.setBackupPollingEnabled(e.currentTarget.checked);
                     if (!props.backupPollingEnvLocked()) {
@@ -80,9 +93,42 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                     }
                   }}
                 />
-                <div class="w-11 h-6 bg-surface-alt peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
+                <div class="relative w-11 h-6 bg-border peer-focus-visible:outline-2 peer-focus-visible:outline-offset-4 peer-focus-visible:outline-blue-600 dark:peer-focus-visible:outline-blue-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
               </label>
             </div>
+
+            <p
+              id={`${backupPollingId}-selection`}
+              role="status"
+              aria-label="Backup polling selection"
+              aria-live="polite"
+              aria-atomic="true"
+              class="text-sm text-muted"
+            >
+              <Show
+                when={props.backupPollingEnabled()}
+                fallback="Selected: polling off. Backup records will not be refreshed. Previously collected rows can remain visible. They are not current observations."
+              >
+                Selected: polling on. Backup evidence follows the selected interval.
+              </Show>
+              <Show when={!props.backupPollingEnvLocked()}> Save changes to apply.</Show>
+            </p>
+
+            <InlineNotice
+              id={`${backupPollingId}-scope`}
+              tone="warning"
+              role="note"
+              aria-label="Backup polling scope"
+              actionHref={`${getShippedDocUrl('VM_DISK_MONITORING.md')}#backup-safety`}
+              actionLabel="Backup safety precaution"
+            >
+              <p class="font-medium">Not a guest-agent pause</p>
+              <p>
+                Turning backup polling off does not stop PVE monitoring or QEMU Guest Agent reads,
+                cancel in-flight requests or stop Proxmox/PBS backup jobs. It is not a freeze/thaw
+                safety precaution.
+              </p>
+            </InlineNotice>
 
             {/* Polling interval options */}
             <Show when={props.backupPollingEnabled()}>
@@ -178,7 +224,10 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
 
             {/* Env override warning */}
             <Show when={props.backupPollingEnvLocked()}>
-              <div class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/25 p-3 text-xs text-amber-700 dark:text-amber-200">
+              <div
+                id={`${backupPollingId}-environment`}
+                class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/25 p-3 text-xs text-amber-700 dark:text-amber-200"
+              >
                 <svg
                   class="w-4 h-4 shrink-0 mt-0.5"
                   fill="none"
@@ -197,7 +246,8 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                   <p class="mt-1">
                     The <code class="font-mono">ENABLE_BACKUP_POLLING</code> or{' '}
                     <code class="font-mono">BACKUP_POLLING_INTERVAL</code> environment variables are
-                    set. Remove them and restart Pulse to manage backup polling here.
+                    set. Schedule environment changes and any required restart outside backup or
+                    freeze/thaw windows, following the backup safety precaution above.
                   </p>
                 </div>
               </div>
