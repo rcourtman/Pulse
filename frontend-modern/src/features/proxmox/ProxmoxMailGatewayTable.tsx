@@ -2,9 +2,8 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { getAlertsForResource } from '@/utils/alerts';
-import { getResourceIdentityAliases } from '@/utils/resourceIdentity';
+import { getPMGAlertResourceIds, getPMGHealth } from './pmgPresentation';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -168,14 +167,8 @@ export const ProxmoxMailGatewayTable: Component<{
   // under its name, so "is mail flowing" is answered here, not only on Alerts.
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
-  // Alerts are keyed by the PMG instance id while the row carries the unified
-  // id, so match across the resource's identity aliases (alerts contract).
-  // There is deliberately no node-name fallback: PMG node alerts carry node
-  // names, and matching on them could pin one gateway's alert on another.
-  const alertIdsFor = (resource: Resource): string[] => [
-    resource.id,
-    ...getResourceIdentityAliases(resource),
-  ];
+  // Both instance and connection alerts need an explicit scoped identity.
+  // Never join by display name, hostname, node name or a stripped ID prefix.
   // One scan of the active-alert map per gateway, shared by the filter, the
   // status counts, the row and its drawer.
   const openAlertsById = createMemo(() => {
@@ -184,7 +177,7 @@ export const ProxmoxMailGatewayTable: Component<{
       byId.set(
         resource.id,
         getAlertsForResource(
-          alertIdsFor(resource),
+          getPMGAlertResourceIds(resource),
           activeAlerts,
           alertsActivation.detectionEnabled(),
         )
@@ -195,21 +188,18 @@ export const ProxmoxMailGatewayTable: Component<{
     return byId;
   });
   const openAlertsFor = (resource: Resource): Alert[] => openAlertsById().get(resource.id) ?? [];
-  // Filtering keeps the provider's buckets: an alerted, reachable gateway
-  // counts under attention (degraded), an unreachable one stays offline.
-  const effectiveStatus = (resource: Resource): string | undefined => {
-    if (openAlertsFor(resource).length === 0) return resource.status;
-    return getSimpleStatusIndicator(resource.status).variant === 'danger'
-      ? resource.status
-      : 'warning';
+  const baseHealth = (resource: Resource) =>
+    getPMGHealth([resource.status, resource.pmg?.connectionHealth]);
+  // A critical collection alert needs attention, not an invented offline
+  // appliance. Failed reachability still stays in the offline filter bucket.
+  const effectiveStatus = (resource: Resource): string => {
+    const base = baseHealth(resource);
+    if (base.variant === 'danger') return 'offline';
+    if (openAlertsFor(resource).length > 0 || base.variant === 'warning') return 'warning';
+    return base.variant === 'success' ? 'online' : 'unknown';
   };
-  // The dot follows the most severe open alert, so a critical one reads red.
-  const indicatorFor = (resource: Resource) => {
-    const base = getSimpleStatusIndicator(effectiveStatus(resource));
-    return openAlertsFor(resource)[0]?.level === 'critical'
-      ? { ...base, variant: 'danger' as const }
-      : base;
-  };
+  const indicatorFor = (resource: Resource) =>
+    getPMGHealth([resource.status, resource.pmg?.connectionHealth], openAlertsFor(resource));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
@@ -403,7 +393,7 @@ export const ProxmoxMailGatewayTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
-                                title={rowAlerts()[0]?.message || instance.status || 'unknown'}
+                                title={rowAlerts()[0]?.message || indicator().label}
                                 ariaHidden
                               />
                               <span

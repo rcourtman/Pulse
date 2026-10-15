@@ -5567,8 +5567,12 @@ disclosure rather than an inert hidden-count row. Aggregate drawers that include
 alerts from child resources must also preserve the affected resource identity
 and alert metric beside that text rather than collapsing them into generic VM
 or host labels. The Mail Gateway drawer receives its row's open alerts, matched
-across the gateway's identity aliases, and its header status follows them, so
-it never shows "Healthy" beside an active warning; its inline detail row sets
+by explicit instance/canonical IDs and typed `pmg:`/`agent:` aliases, never
+by display name, hostname or guessed ID-prefix removal. Its header retains the
+most adverse resource/detail/connection status and open-alert severity: a
+successful version or detail read cannot clear a stale/degraded resource.
+Absent cluster-node queues render an unknown dash, not zero; measured zero
+remains zero and missing queue subfields remain dashes. Its inline detail row sets
 `whitespace-normal` because platform table cells do not wrap. The row itself
 marks the metric an alert is about instead of stacking a reason under the
 name, so it keeps the shared single-line rhythm. Drawers for unified resources

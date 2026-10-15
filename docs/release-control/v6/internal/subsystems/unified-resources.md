@@ -1103,6 +1103,14 @@ remain; transport order must not decide whether mail counters or lifecycle
 refusal explanations are present. A replaced REST snapshot clears removed
 facets instead of retaining old counters or refusal reasons. Mapping does not
 invent capabilities or bypass planning, review, server authorisation or execution.
+PMG table/drawer consumers preserve adverse resource state even if the full
+instance still reports a successful version read. Queue absence is unknown,
+not a measured zero. Their alert keys are explicit instance/canonical IDs and
+typed connection aliases; display names, hostnames and generated-prefix guesses
+are not identity joins. An absent configured connection alias remains a producer
+gap, not permission for the consumer to infer it. `pmgPresentation.test.ts`,
+`ProxmoxMailGatewayDrawer.readings.test.tsx` and the PMG table alert tests cover
+these boundaries, including colliding labels and recovery.
 `useUnifiedResources.test.ts` checks actual lifecycle refusal consumers for stale,
 failed and server-denied observations alongside a no-invented-grant control.
 
