@@ -72,7 +72,8 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
       new Date(now()),
     );
   const isStale = () => presentation()?.freshnessLabel === 'stale';
-  const isFreshUp = () => isUp() && !isStale();
+  const isFresh = () => presentation()?.freshnessLabel === 'fresh';
+  const isFreshUp = () => isUp() && isFresh();
   const targetAddr = () => getAvailabilityProbeEndpointLabel(props.availability);
   const failureLabel = () => {
     const err = (props.availability.lastError ?? '').trim();
@@ -143,9 +144,12 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
     location.kind === 'pulse'
       ? 'This Pulse server'
       : location.probeAgentId || location.locationId.replace(/^agent:/, '') || 'Pulse Agent';
+  const locationHasEvidence = (
+    location: NonNullable<ResourceAvailabilityMeta['locations']>[number],
+  ) => Boolean(location.lastChecked && Number.isFinite(Date.parse(location.lastChecked)));
   const locationResult = (location: NonNullable<ResourceAvailabilityMeta['locations']>[number]) => {
     if (location.stale) return 'No recent report';
-    if (!location.lastChecked) return 'Awaiting evidence';
+    if (!locationHasEvidence(location)) return 'Awaiting evidence';
     if (location.outcome === 'reachable') {
       return location.latencyMillis ? `${Math.round(location.latencyMillis)} ms` : 'Reachable';
     }
@@ -169,7 +173,7 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
               isFreshUp(),
             'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300': isDown() && !isStale(),
             'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300':
-              isStale() || isDegraded(),
+              isStale() || isDegraded() || (isUp() && !isFresh()),
             'bg-base-200 text-muted': isUnknown() || (!isUp() && !isDown() && !isStale()),
           }}
         >
@@ -180,13 +184,23 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
               : isStale()
                 ? 'Stale'
                 : isUp()
-                  ? 'Up'
+                  ? isFresh()
+                    ? 'Up'
+                    : 'Freshness unknown'
                   : isDown()
                     ? 'Down'
                     : 'Not checked'}
         </span>
       </div>
       <div class="space-y-1.5 text-[11px]">
+        <Show when={!isFresh()}>
+          <p
+            class="whitespace-normal text-muted wrap-break-word"
+            data-testid="availability-retained-evidence"
+          >
+            These are last reported results, not evidence of current availability.
+          </p>
+        </Show>
         <InfoCardKeyValueRow
           label="Latency"
           value={
@@ -196,8 +210,9 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
             >
               <span
                 classList={{
-                  'text-emerald-600 dark:text-emerald-400': !isStale(),
+                  'text-emerald-600 dark:text-emerald-400': isFresh(),
                   'text-amber-600 dark:text-amber-300': isStale(),
+                  'text-muted': !isFresh() && !isStale(),
                 }}
               >
                 {latency()}
@@ -236,11 +251,20 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
                     class="shrink-0 font-medium"
                     classList={{
                       'text-emerald-600 dark:text-emerald-300':
-                        location.outcome === 'reachable' && !location.stale,
+                        location.outcome === 'reachable' &&
+                        !location.stale &&
+                        locationHasEvidence(location) &&
+                        isFresh(),
                       'text-red-600 dark:text-red-300':
-                        location.outcome === 'unreachable' && !location.stale,
+                        location.outcome === 'unreachable' &&
+                        !location.stale &&
+                        locationHasEvidence(location),
                       'text-amber-600 dark:text-amber-300': Boolean(location.stale),
-                      'text-muted': !location.outcome || location.outcome === 'indeterminate',
+                      'text-muted':
+                        !location.outcome ||
+                        location.outcome === 'indeterminate' ||
+                        (!location.stale && !locationHasEvidence(location)) ||
+                        (location.outcome === 'reachable' && !location.stale && !isFresh()),
                     }}
                   >
                     {locationResult(location)}
@@ -277,7 +301,9 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
               value={label()}
               valueClass={
                 props.availability.applicationOutcome === 'passed'
-                  ? 'text-emerald-600 dark:text-emerald-400'
+                  ? isFresh()
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-muted'
                   : 'text-red-600 dark:text-red-400'
               }
             />
@@ -300,7 +326,9 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
                 value={certificateTrust().label}
                 valueClass={
                   certificateTrust().tone === 'success'
-                    ? 'text-emerald-600 dark:text-emerald-300'
+                    ? isFresh()
+                      ? 'text-emerald-600 dark:text-emerald-300'
+                      : 'text-muted'
                     : certificateTrust().tone === 'danger'
                       ? 'text-red-600 dark:text-red-300'
                       : ''
@@ -329,7 +357,9 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
                 value={cert().hostnameValid ? 'Matches' : 'Mismatch'}
                 valueClass={
                   cert().hostnameValid
-                    ? 'text-emerald-600 dark:text-emerald-300'
+                    ? isFresh()
+                      ? 'text-emerald-600 dark:text-emerald-300'
+                      : 'text-muted'
                     : 'text-red-600 dark:text-red-300'
                 }
               />
