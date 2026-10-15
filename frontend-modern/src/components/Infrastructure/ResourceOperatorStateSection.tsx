@@ -564,11 +564,13 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
   return (
     <section
-      class="rounded-md border border-border bg-surface p-4 space-y-3"
+      class="min-w-0 whitespace-normal wrap-anywhere rounded-md border border-border bg-surface p-4 space-y-3"
       aria-label="Operator overrides"
     >
-      <header class="flex items-center justify-between">
-        <div>
+      {/* Drawers also live inside nowrap table cells. Consequences and saved
+          attribution must wrap here, not overlap the neighbouring control. */}
+      <header class="flex flex-wrap items-start justify-between gap-2">
+        <div class="min-w-0">
           <h3 class="text-sm font-semibold text-base-content">Operator overrides</h3>
           <p class="text-xs text-muted">
             How Pulse alerts on, prioritizes and acts on this resource.
