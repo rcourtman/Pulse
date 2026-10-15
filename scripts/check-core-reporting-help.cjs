@@ -77,7 +77,8 @@ function check(passed, message) {
       await page.screenshot({ path: capture });
       captures.push({ file: path.relative(root, capture), sha256: digest(capture) });
 
-      const link = page.getByRole('link', { name: 'ordinary polling checks', exact: true });
+      const link = page.locator('article p').filter({ hasText: 'before graph data is returned' })
+        .getByRole('link', { name: 'ordinary polling checks', exact: true });
       await link.focus();
       await page.keyboard.press('Enter');
       await page.waitForFunction(() => document.activeElement?.id === 'stale-truenas-data');
