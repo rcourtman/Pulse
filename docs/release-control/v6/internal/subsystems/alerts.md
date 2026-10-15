@@ -5111,3 +5111,29 @@ saved-override retention. `ResourceTable.test.tsx` covers visible/reactive text
 in both layouts. `browser-tests/guest-filesystem-thresholds.cjs` connects the
 production hook, table and editors on desktop Chromium and phone WebKit,
 including scoped refusal text, custom settings and same-VMID/mount separation.
+
+### Snapshot alerts distinguish partial age and size evidence
+
+A missing, epoch/nonpositive or future snapshot creation time cannot hide an
+independent size breach or establish recovery of an existing age condition.
+Missing/nonpositive optional size likewise cannot clear an observed size breach.
+The detector carries only the same active snapshot's last accepted metric,
+frozen at its original value and observation time; it never ages held evidence
+or invents zero-day/zero-byte recovery. Messages name last-known values and
+unavailable readings, with clock guidance for future creation times. Metadata
+omits never-observed metrics and records original per-metric observation times
+and held flags. The primary breach's observation time is not renewed by a
+missing reading, even while the independent metric can change severity.
+
+Complete readings resume normal evaluation. A new valid creation time under a
+reused snapshot name is a replacement and does not inherit the old size.
+Deliberate policy/suppression changes and authoritative snapshot deletion still
+clear conditions. Canonical identity, occurrence, acknowledgement, thresholds,
+notification routing and snapshot collection are unchanged. Controlled source
+proof is not native guest safety, snapshot/restore acceptance or availability.
+
+Verification: `guest_snapshot_test.go` covers independent sizes with every
+invalid time shape, held age/size, mixed escalation/recovery, repeated evidence,
+legacy JSON, replacement, scope, policy and deletion. Monitoring's
+`TestSnapshotPartialEvidenceServedState` binds actual detector results to the
+served alert array for desktop/narrow consuming proof.

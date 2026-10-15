@@ -368,22 +368,6 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		if instanceName != "" && snapshot.Instance != "" && snapshot.Instance != instanceName {
 			continue
 		}
-		if snapshot.Time.IsZero() {
-			continue
-		}
-
-		ageHours := now.Sub(snapshot.Time).Hours()
-		if ageHours < 0 {
-			continue
-		}
-		ageDays := ageHours / 24
-
-		const gib = 1024.0 * 1024 * 1024
-		sizeGiB := 0.0
-		if snapshot.SizeBytes > 0 {
-			sizeGiB = float64(snapshot.SizeBytes) / gib
-		}
-
 		// Determine thresholds for this snapshot
 		resourceID := BuildGuestKey(snapshot.Instance, snapshot.Node, snapshot.VMID)
 		lookup := guestsByKey[resourceID]
@@ -428,23 +412,37 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			continue
 		}
 
+		alertID := fmt.Sprintf("snapshot-age-%s", snapshot.ID)
+		specID := resourceID + "/snapshot:" + snapshot.ID
+		m.mu.RLock()
+		previous, _ := m.getActiveAlertNoLock(buildCanonicalStateID(resourceID, specID))
+		if previous == nil {
+			previous, _ = m.getActiveAlertNoLock(alertID)
+		}
+		previous = previous.Clone()
+		m.mu.RUnlock()
+		evidence := resolveSnapshotAlertEvidence(snapshot, previous, now)
+		ageDays := evidence.ageDays
+		const gib = 1024.0 * 1024 * 1024
+		sizeGiB := float64(evidence.sizeBytes) / gib
+
 		var ageLevel AlertLevel
 		var ageThreshold int
 		var sizeLevel AlertLevel
 		var sizeThreshold float64
 		var triggeredStats []string
 
-		if currentSnapshotCfg.CriticalDays > 0 && ageDays >= float64(currentSnapshotCfg.CriticalDays) {
+		if !evidence.ageObservedAt.IsZero() && currentSnapshotCfg.CriticalDays > 0 && ageDays >= float64(currentSnapshotCfg.CriticalDays) {
 			ageLevel = AlertLevelCritical
 			ageThreshold = currentSnapshotCfg.CriticalDays
 			triggeredStats = append(triggeredStats, "age")
-		} else if currentSnapshotCfg.WarningDays > 0 && ageDays >= float64(currentSnapshotCfg.WarningDays) {
+		} else if !evidence.ageObservedAt.IsZero() && currentSnapshotCfg.WarningDays > 0 && ageDays >= float64(currentSnapshotCfg.WarningDays) {
 			ageLevel = AlertLevelWarning
 			ageThreshold = currentSnapshotCfg.WarningDays
 			triggeredStats = append(triggeredStats, "age")
 		}
 
-		if snapshot.SizeBytes > 0 {
+		if evidence.sizeBytes > 0 {
 			if currentSnapshotCfg.CriticalSizeGiB > 0 && sizeGiB >= currentSnapshotCfg.CriticalSizeGiB {
 				sizeLevel = AlertLevelCritical
 				sizeThreshold = currentSnapshotCfg.CriticalSizeGiB
@@ -466,8 +464,6 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		} else if sizeLevel != "" && ageLevel == "" {
 			useSizePrimary = true
 		}
-
-		alertID := fmt.Sprintf("snapshot-age-%s", snapshot.ID)
 
 		guestKey := BuildGuestKey(snapshot.Instance, snapshot.Node, snapshot.VMID)
 
@@ -494,10 +490,18 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		sizeGiBRounded := math.Round(sizeGiB*10) / 10
 		reasons := make([]string, 0, 2)
 		if ageLevel != "" {
-			reasons = append(reasons, fmt.Sprintf("%.1f days old (threshold %d days)", ageDaysRounded, ageThreshold))
+			reason := fmt.Sprintf("%.1f days old (threshold %d days)", ageDaysRounded, ageThreshold)
+			if evidence.ageHeld {
+				reason = "last known " + reason
+			}
+			reasons = append(reasons, reason)
 		}
 		if sizeLevel != "" {
-			reasons = append(reasons, fmt.Sprintf("%.1f GiB (threshold %.1f GiB)", sizeGiBRounded, sizeThreshold))
+			reason := fmt.Sprintf("%.1f GiB (threshold %.1f GiB)", sizeGiBRounded, sizeThreshold)
+			if evidence.sizeHeld {
+				reason = "last known " + reason
+			}
+			reasons = append(reasons, reason)
 		}
 		reasonText := strings.Join(reasons, " and ")
 		message := fmt.Sprintf(
@@ -508,34 +512,52 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			reasonText,
 			snapshot.Node,
 		)
+		if snapshot.Time.After(now) {
+			message += ". Creation time is in the future; snapshot age was not re-evaluated. Check the clocks on Pulse and Proxmox."
+		} else if snapshot.Time.IsZero() || !snapshot.Time.After(time.Unix(0, 0)) {
+			message += ". Creation time is unavailable; snapshot age was not re-evaluated."
+		}
+		if evidence.sizeHeld {
+			message = strings.TrimSuffix(message, ".") + ". Current snapshot size is unavailable; the last known size has been kept."
+		}
 
 		alertValue := ageDays
 		alertThreshold := float64(ageThreshold)
 		thresholdTime := now
+		observedAt := evidence.ageObservedAt
 		if useSizePrimary {
 			alertValue = sizeGiB
 			alertThreshold = sizeThreshold
+			observedAt = evidence.sizeObservedAt
 		} else if ageThreshold > 0 {
-			thresholdTime = snapshot.Time.Add(time.Duration(ageThreshold) * 24 * time.Hour)
+			thresholdTime = evidence.createdAt.Add(time.Duration(ageThreshold) * 24 * time.Hour)
 			if thresholdTime.After(now) {
 				thresholdTime = now
 			}
 		}
 
 		metadata := map[string]interface{}{
-			"snapshotName":      snapshot.Name,
-			"snapshotCreatedAt": snapshot.Time,
-			"snapshotAgeDays":   ageDays,
-			"snapshotAgeHours":  ageHours,
-			"snapshotSizeBytes": snapshot.SizeBytes,
-			"snapshotSizeGiB":   sizeGiB,
-			"guestName":         guestName,
-			"guestType":         guestType,
-			"guestInstance":     snapshot.Instance,
-			"guestNode":         snapshot.Node,
-			"guestVmid":         snapshot.VMID,
-			"triggeredMetrics":  triggeredStats,
-			"primaryMetric":     "age",
+			"snapshotName":     snapshot.Name,
+			"guestName":        guestName,
+			"guestType":        guestType,
+			"guestInstance":    snapshot.Instance,
+			"guestNode":        snapshot.Node,
+			"guestVmid":        snapshot.VMID,
+			"triggeredMetrics": triggeredStats,
+			"primaryMetric":    "age",
+		}
+		if !evidence.ageObservedAt.IsZero() {
+			metadata["snapshotCreatedAt"] = evidence.createdAt
+			metadata["snapshotAgeDays"] = ageDays
+			metadata["snapshotAgeHours"] = ageDays * 24
+			metadata["snapshotAgeObservedAt"] = evidence.ageObservedAt
+			metadata["snapshotAgeHeld"] = evidence.ageHeld
+		}
+		if !evidence.sizeObservedAt.IsZero() {
+			metadata["snapshotSizeBytes"] = evidence.sizeBytes
+			metadata["snapshotSizeGiB"] = sizeGiB
+			metadata["snapshotSizeObservedAt"] = evidence.sizeObservedAt
+			metadata["snapshotSizeHeld"] = evidence.sizeHeld
 		}
 		if useSizePrimary {
 			metadata["primaryMetric"] = "size"
@@ -552,13 +574,21 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		guestResourceID := guestKey
 		sizeMetric := ""
 		var sizeValue *float64
-		if currentSnapshotCfg.WarningSizeGiB > 0 || currentSnapshotCfg.CriticalSizeGiB > 0 {
+		if !evidence.sizeObservedAt.IsZero() && (currentSnapshotCfg.WarningSizeGiB > 0 || currentSnapshotCfg.CriticalSizeGiB > 0) {
 			sizeMetric = "snapshot-size-gib"
 			sizeValue = &sizeGiB
 		}
 		ageMetric := ""
-		if currentSnapshotCfg.WarningDays > 0 || currentSnapshotCfg.CriticalDays > 0 {
+		if !evidence.ageObservedAt.IsZero() && (currentSnapshotCfg.WarningDays > 0 || currentSnapshotCfg.CriticalDays > 0) {
 			ageMetric = "snapshot-age-days"
+		}
+		warningAge, criticalAge := float64(currentSnapshotCfg.WarningDays), float64(currentSnapshotCfg.CriticalDays)
+		warningSize, criticalSize := currentSnapshotCfg.WarningSizeGiB, currentSnapshotCfg.CriticalSizeGiB
+		if ageMetric == "" {
+			warningAge, criticalAge = 0, 0
+		}
+		if sizeMetric == "" {
+			warningSize, criticalSize = 0, 0
 		}
 
 		spec, err := buildCanonicalPostureThresholdSpec(
@@ -567,11 +597,11 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			resourceName,
 			guestResourceType,
 			ageMetric,
-			float64(currentSnapshotCfg.WarningDays),
-			float64(currentSnapshotCfg.CriticalDays),
+			warningAge,
+			criticalAge,
 			sizeMetric,
-			currentSnapshotCfg.WarningSizeGiB,
-			currentSnapshotCfg.CriticalSizeGiB,
+			warningSize,
+			criticalSize,
 			false,
 		)
 		if err != nil {
@@ -587,7 +617,7 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		result, _ := m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
 			Spec: spec,
 			Evidence: alertspecs.AlertEvidence{
-				ObservedAt: now,
+				ObservedAt: observedAt,
 				PostureThreshold: &alertspecs.PostureThresholdEvidence{
 					AgeMetric:  ageMetric,
 					AgeValue:   ageDays,

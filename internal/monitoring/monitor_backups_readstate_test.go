@@ -1199,3 +1199,87 @@ func TestBackupFutureSuccessWarningThroughReadState(t *testing.T) {
 }
 
 func ptrBackupTime(at time.Time) *time.Time { return &at }
+
+// The actual detector and served-state projection feed the consuming browser
+// fixture. No guest, snapshot, backup, clock or installed service is changed.
+func TestSnapshotPartialEvidenceServedState(t *testing.T) {
+	t.Setenv("PULSE_MOCK", "false")
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	cfg := manager.GetConfig()
+	cfg.Enabled = true
+	cfg.SnapshotDefaults = alerts.SnapshotAlertConfig{Enabled: true, WarningDays: 7, CriticalDays: 14, WarningSizeGiB: 50, CriticalSizeGiB: 100}
+	manager.UpdateConfig(cfg)
+	m := &Monitor{state: models.NewState(), alertManager: manager}
+	birth := time.Now().UTC().Add(-10 * 24 * time.Hour)
+	snapshot := models.GuestSnapshot{ID: "pve1-node1-100-weekly", Name: "weekly", Instance: "pve1", Node: "node1", VMID: 100, Type: "qemu", Time: birth, SizeBytes: 1 << 30}
+	guest := alerts.GuestLookup{ResourceID: "pve1:node1:100", Name: "database", Instance: "pve1", Node: "node1", VMID: 100, Type: "qemu"}
+	guests := map[string]alerts.GuestLookup{guest.ResourceID: guest}
+	var projections []struct {
+		Phase        string         `json:"phase"`
+		ActiveAlerts []models.Alert `json:"activeAlerts"`
+	}
+	project := func(phase string, level string) models.Alert {
+		rows := []models.GuestSnapshot{snapshot}
+		if phase == "deleted" {
+			rows = nil
+		}
+		manager.CheckSnapshotsForInstance("pve1", rows, guests)
+		state := m.GetState()
+		if state.ActiveAlerts == nil {
+			state.ActiveAlerts = []models.Alert{}
+		}
+		projections = append(projections, struct {
+			Phase        string         `json:"phase"`
+			ActiveAlerts []models.Alert `json:"activeAlerts"`
+		}{phase, state.ActiveAlerts})
+		if level == "" {
+			if len(state.ActiveAlerts) != 0 {
+				t.Fatalf("%s invented an alert: %+v", phase, state.ActiveAlerts)
+			}
+			return models.Alert{}
+		}
+		if len(state.ActiveAlerts) != 1 || state.ActiveAlerts[0].Level != level {
+			t.Fatalf("%s lost condition: %+v", phase, state.ActiveAlerts)
+		}
+		return state.ActiveAlerts[0]
+	}
+	initial := project("age-warning", "warning")
+	snapshot.Time = time.Now().UTC().Add(24 * time.Hour)
+	snapshot.SizeBytes = 120 << 30
+	mixed := project("future-size-critical", "critical")
+	if mixed.Metadata["snapshotAgeHeld"] != true || mixed.Metadata["snapshotSizeHeld"] != false || !strings.Contains(mixed.Message, "clocks") || mixed.ID != initial.ID {
+		t.Fatal("mixed evidence not explicit in served state")
+	}
+	snapshot.Time, snapshot.SizeBytes = time.Time{}, 1<<30
+	held := project("missing-time-held-age", "warning")
+	if held.Metadata["snapshotAgeDays"] != initial.Metadata["snapshotAgeDays"] || held.Metadata["snapshotAgeObservedAt"] != initial.Metadata["snapshotAgeObservedAt"] {
+		t.Fatal("served held age was renewed")
+	}
+	project("repeated", "warning")
+	snapshot.Time = time.Now().UTC().Add(-time.Hour)
+	project("recovered", "")
+	// No old time is available for this new size condition.
+	snapshot.Time, snapshot.SizeBytes = time.Unix(0, 0), 120<<30
+	sizeOnly := project("epoch-size-only", "critical")
+	if _, invented := sizeOnly.Metadata["snapshotAgeDays"]; invented {
+		t.Fatal("epoch fabricated age")
+	}
+	snapshot.SizeBytes = 0
+	missingSize := project("missing-size-held", "critical")
+	if missingSize.Metadata["snapshotSizeHeld"] != true || !strings.Contains(missingSize.Message, "last known 120.0 GiB") {
+		t.Fatal("missing size fabricated recovery")
+	}
+	snapshot.SizeBytes = 1 << 30
+	project("size-recovered", "")
+	snapshot.SizeBytes = 120 << 30
+	project("size-returned", "critical")
+	project("deleted", "")
+	for _, projection := range projections {
+		wire, err := json.Marshal(projection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("SNAPSHOT_PARTIAL_PROJECTION=%s", wire)
+	}
+}
