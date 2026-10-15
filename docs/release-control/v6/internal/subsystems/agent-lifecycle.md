@@ -15,6 +15,14 @@
 
 ## Purpose
 
+### Archive storage identity is not agent or guest placement
+
+The shared server model's optional `StorageBackup.storageNode` retains the
+local archive host while guest `node` is normalized to current placement.
+It changes no agent report, identity, enrolment, removal or command contract.
+`TestStorageBackupLocationSurvivesGuestPlacementAndJSON` checks distinct local
+rows, placement normalization, JSON round trip and legacy/shared omission.
+
 ### Native CI tooling refresh (14 October 2026)
 
 The native agent matrix uses the exact setup-node v7.1.0 and upload-artifact

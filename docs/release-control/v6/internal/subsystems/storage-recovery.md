@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### Independent copies on node-local PVE storage
+
+Equal volume IDs on different non-shared storage nodes remain distinct
+archives and recovery points. Optional `storageNode` identifies the physical
+local archive location; `node` and subject references continue to follow guest
+placement. Recovery repository references use the explicit storage node when
+present and retain the old fallback for shared/legacy evidence. Shared archive
+IDs are unchanged. `TestPVEArchiveRepositoryKeepsStorageHostSeparateFromGuest`
+and `TestPVEBackupStorageScopeFailureAndRecovery` protect identity, partial
+failure, ordinary recovery, scoped empty inventories and other connections.
+No backup/restore execution or native recovery authority is added.
+
 ### Backup activity follows local calendar dates
 
 The existing Backups activity chart and its date filter share local date keys.
