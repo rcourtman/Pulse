@@ -1041,6 +1041,9 @@ describe('App architecture', () => {
 function collectFrontendSources(dir: string): Array<{ path: string; source: string }> {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = join(dir, entry.name);
+    // Tests are excluded below; do not traverse their trees just to discard
+    // every file. Keep the runtime scan bounded to the paths it actually reads.
+    if (entryPath.includes('__tests__')) return [];
     if (entry.isDirectory()) {
       return collectFrontendSources(entryPath);
     }
