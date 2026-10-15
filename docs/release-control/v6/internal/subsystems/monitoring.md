@@ -17,6 +17,36 @@
 
 ## Purpose
 
+### Guest metadata safety follows the VM across node migration
+
+Guest metadata, OS-command suppression, refresh/backoff and whole-fetch ownership
+are keyed by exact configured connection and cluster-wide VMID, not the current
+node coordinate. Migration and a move back cannot repeat a known-unsupported OS
+command, reset its failure counter, bypass an outstanding metadata fetch or
+renew retained observations. Eligible network/version refresh still works while
+the OS command remains suppressed. The node used on the wire and in the served
+resource remains the current node; node-bound disk/memory observations and their
+origins are not transferred by this metadata key.
+
+Independent VMIDs and connection labels (including delimiters) remain isolated.
+Explicit guest invalidation, connection retirement, late-result exclusion,
+idle cleanup and every lower-level lock/uncertainty/TLS fence remain effective.
+This in-memory state does not survive process restart or establish native guest
+thaw, backup success, writes/liveness or recovery of any reported guest.
+
+`TestGuestMetadataMigrationKeepsSuppression` learns suppression through real
+HTTP clients and both ordinary guest collectors, then checks migration, eligible
+refresh, return migration, cleanup and explicit invalidation. The existing
+whole-HTTP-fetch reservation test also rejects a migrated duplicate, including
+after its scheduling hold expires. Consuming desktop/narrow browser proof uses
+the actual final producer projections through the production Workloads adapter,
+row and drawer; it is controlled surface proof, not native migration acceptance.
+The existing Windows bootstrap identity control uses distinct connection/VMID
+identities for Linux and unknown-OS peers. A same-VMID node move instead preserves
+the observed Windows metadata and sends no optional Linux read; the destination
+gets independent status memory, not a copy of the source node's memory cache.
+Its existing expired-OS/reinstalled-Linux and measured-zero controls still apply.
+
 ### Filesystem diagnostics exclude reply payloads
 
 The Proxmox filesystem reader logs response byte count and node/VM attribution,

@@ -485,3 +485,18 @@ func TestGuestPollFailedEnumerationRetainsProducerOwnership(t *testing.T) {
 		t.Fatal("online empty inventory was replaced by stale linked/raw state")
 	}
 }
+
+func TestGuestMetadataMigrationIdentity(t *testing.T) {
+	for _, instance := range []string{"site", "site|branch", "région | zone"} {
+		key := guestMetadataCacheKey(instance, "node-a", 105)
+		if key != guestMetadataCacheKey(instance, "node-b", 105) {
+			t.Error("migration changed the guest metadata lifecycle")
+		}
+		if key == guestMetadataCacheKey(instance, "node-a", 106) || key == guestMetadataCacheKey(instance+"|other", "node-a", 105) {
+			t.Error("independent guest/connection identity collapsed")
+		}
+		if !guestMetadataCacheBelongsToInstance(key, instance) || guestMetadataCacheBelongsToInstance(key, instance+"|other") || guestMetadataCacheBelongsToInstance(guestMetadataCacheKey(instance+"|other", "node-a", 105), instance) {
+			t.Error("connection retirement ownership changed")
+		}
+	}
+}
