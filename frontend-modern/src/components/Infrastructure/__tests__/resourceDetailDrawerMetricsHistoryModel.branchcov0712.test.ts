@@ -25,6 +25,28 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('canonical drawer History honours selected guest observation provenance', () => {
+  it.each(['vm', 'system-container'] as const)(
+    'keeps non-running %s memory unavailable without claiming it is powered off',
+    (type) => {
+      for (const runtimeStatus of ['paused', 'suspended', 'stopped']) {
+        const value = baseResource({
+          type,
+          platformType: 'proxmox-pve',
+          status: 'online',
+          proxmox: { runtimeStatus },
+          memory: { current: 0, observation: { state: 'unavailable', source: 'powered-off' } },
+        });
+        const original = structuredClone(value);
+        expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBeUndefined();
+        expect(getResourceMetricsHistoryDeferredMetrics(value).memory).toEqual({
+          lastKnownValue: undefined,
+          message: 'Unavailable while the guest is not running.',
+        });
+        expect(value).toEqual(original);
+      }
+    },
+  );
+
   const resource = (
     state: string,
     value = 25,

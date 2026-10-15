@@ -210,10 +210,11 @@ describe('cache-inclusive Proxmox memory sources', () => {
     expect(presentation?.cacheNote).toBeUndefined();
   });
 
-  it('says a powered-off guest has no memory reading, without an unknown source', () => {
-    const presentation = getWorkloadMemoryObservationPresentation(
-      guest({
-        status: 'stopped',
+  it.each(['stopped', 'paused', 'suspended', 'prelaunch'])(
+    'does not infer power state from the unavailable source on a %s guest',
+    (status) => {
+      const input = guest({
+        status,
         memory: {
           total: 100,
           used: 0,
@@ -221,12 +222,21 @@ describe('cache-inclusive Proxmox memory sources', () => {
           usage: 0,
           observation: { state: 'unavailable', source: 'powered-off' },
         },
-      }),
-    )!;
-    expect(presentation.state).toBe('unavailable');
-    expect(presentation.message).toBe('Unavailable while the guest is powered off.');
-    expect(presentation.summary).toBe('Unavailable · guest powered off');
-  });
+      });
+      const original = structuredClone(input);
+      for (const type of ['qemu', 'lxc']) {
+        const reading = { ...input, type };
+        const presentation = getWorkloadMemoryObservationPresentation(reading)!;
+        expect(presentation.state).toBe('unavailable');
+        expect(presentation.message).toBe('Unavailable while the guest is not running.');
+        expect(presentation.summary).toBe('Unavailable · guest not running');
+        expect(presentation.mayIncludeCache).toBe(false);
+        expect(presentation.cacheNote).toBeUndefined();
+        expect(getCurrentWorkloadMemoryUsage(reading)).toBeNull();
+      }
+      expect(input).toEqual(original);
+    },
+  );
 
   it.each([
     [{ state: 'unavailable', source: 'unavailable' }, 'Unavailable.', 'Unavailable'],

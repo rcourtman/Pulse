@@ -101,6 +101,15 @@ identity or permission. AI query projections own their additional evidence field
 
 ### Selected guest memory observation in typed read state
 
+Web's shared memory presentation treats the historical `powered-off` source as
+non-running evidence, not proof of a power-off: paused and suspended guests use
+it too. Workloads row/drawer and canonical drawer History say the reading is
+unavailable while the guest is not running, without changing its wire source,
+runtime status, timestamps or withheld numbers. The non-running matrix in
+`frontend-modern/src/utils/__tests__/memoryObservation.test.ts` and the canonical
+drawer checks in `resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts`
+verify this distinction, unchanged input, and absence of a current zero.
+
 VM and system-container views expose a value-copy of the selected memory
 metric's observation and an explicit presence bit. A selected measured zero
 has presence; a missing selected metric does not. Empty metadata remains

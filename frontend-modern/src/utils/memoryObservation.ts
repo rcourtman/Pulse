@@ -189,18 +189,19 @@ export const getMemoryObservationPresentation = (
   const time = observed ? `Observed: ${observed}.` : 'Observation time unknown.';
   const cacheNote = mayIncludeCache ? getCacheNote(options.guestKind) : undefined;
   if (state === 'unavailable') {
-    // No number is shown, so say why when the producer knows (the guest is
-    // off) and otherwise name only what is known, never "Unknown source".
-    const poweredOff = observation?.source === 'powered-off';
+    // The historical "powered-off" source covers every non-running state,
+    // including paused/suspended guests. It does not establish power state.
+    // Keep that wire provenance and withhold the number; only broaden its copy.
+    const notRunning = observation?.source === 'powered-off';
     const knownSource = source !== 'Unknown source';
     return {
       state,
-      summary: poweredOff
-        ? 'Unavailable · guest powered off'
+      summary: notRunning
+        ? 'Unavailable · guest not running'
         : `Unavailable${knownSource ? ` · ${source}` : ''}${observed ? ` · ${observed}` : ''}`,
       // Consumers prefix their own metric name ("Memory reading: ...").
-      message: poweredOff
-        ? 'Unavailable while the guest is powered off.'
+      message: notRunning
+        ? 'Unavailable while the guest is not running.'
         : `Unavailable.${knownSource ? ` Source: ${source}.` : ''}${observed ? ` ${time}` : ''}`,
       mayIncludeCache,
     };
