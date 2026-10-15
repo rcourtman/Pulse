@@ -676,9 +676,11 @@ export const ProxmoxBackupsTable: Component<{
         </p>
         <button
           type="button"
-          class="min-h-10 shrink-0 rounded-md border border-border px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-60"
+          class="min-h-10 shrink-0 rounded-md border border-border px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 aria-disabled:cursor-wait aria-disabled:opacity-60"
           title="Read Pulse’s collected inventory and protection posture without starting a backup or contacting guests."
-          disabled={backupReadPending()}
+          // Keep keyboard focus during the read. refreshBackups still refuses
+          // every activation while any inventory/posture request is pending.
+          aria-disabled={backupReadPending()}
           onClick={refreshBackups}
         >
           {backupReadPending() ? 'Reading backups…' : 'Refresh backups'}

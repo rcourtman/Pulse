@@ -3298,6 +3298,14 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+The backup inventory Refresh button remains focusable while it announces its
+pending read with `aria-disabled`; its existing single-flight handler refuses
+repeated activations until both inventories and posture settle. This avoids
+native disabled-button focus loss without enabling duplicate reads. Connected
+controlled-response tests and the browser fixture cover pending and completed
+focus plus a second keyboard activation. No pending read is cancelled or replayed.
+
+
 
 ### Backup point pruning and verification are independent (15 October 2026)
 

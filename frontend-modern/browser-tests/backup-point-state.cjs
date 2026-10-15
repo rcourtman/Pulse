@@ -27,7 +27,7 @@ const mime = {
   '.css': 'text/css',
   '.md': 'text/markdown',
 };
-let browser, server, revision;
+let browser, server, revision, releasePBS;
 const backups = () =>
   [
     { id: 'verified', verified: true, protected: true },
@@ -110,9 +110,9 @@ const posture = {
     requireVerification: true,
   },
 };
-async function capture(page, name) {
+async function capture(page, name, fullPage = true) {
   const file = path.join(output, `${name}.png`);
-  await page.screenshot({ path: file, fullPage: true });
+  await page.screenshot({ path: file, fullPage });
   result.captures.push({ path: path.relative(root, file), sha256: hash(fs.readFileSync(file)) });
 }
 async function checkCells(page, target, expected, pruneCount) {
@@ -181,7 +181,16 @@ async function checkCells(page, target, expected, pruneCount) {
       res.statusCode = 405;
       return res.end();
     }
-    if (url.pathname === '/api/backups/pbs') return json({ data: { backups: backups() } });
+    if (url.pathname === '/api/backups/pbs') {
+      if (revision > 0) {
+        releasePBS = () => {
+          json({ data: { backups: backups() } });
+          releasePBS = undefined;
+        };
+        return;
+      }
+      return json({ data: { backups: backups() } });
+    }
     if (url.pathname === '/api/backups/pve') return json(pve);
     if (url.pathname === '/api/recovery/postures') return json(posture);
     const file =
@@ -274,9 +283,21 @@ async function checkCells(page, target, expected, pruneCount) {
     const coverageCells = await checkCells(page, evidence, expected, 6);
     await capture(page, `${spec.name}-coverage`);
     for (revision = 1; revision <= 2; revision++) {
+      const readCount = result.requests.filter((request) =>
+        request.path.startsWith('/api/'),
+      ).length;
       const refresh = page.getByRole('button', { name: 'Refresh backups', exact: true });
       await refresh.focus();
       await page.keyboard.press('Enter');
+      const pending = page.getByRole('button', { name: 'Reading backups…', exact: true });
+      await pending.waitFor();
+      assert.equal(await pending.getAttribute('aria-disabled'), 'true');
+      assert.equal(await pending.evaluate((el) => document.activeElement === el), true);
+      // A second keyboard activation while the controlled PBS response is
+      // pending must not enqueue another inventory or posture read.
+      await page.keyboard.press('Enter');
+      assert.equal(typeof releasePBS, 'function');
+      releasePBS();
       await page.waitForFunction(
         (count) => document.querySelectorAll('[data-backup-prune-protected]').length === count,
         revision === 1 ? 6 : 5,
@@ -289,8 +310,14 @@ async function checkCells(page, target, expected, pruneCount) {
         revision === 1 ? 3 : 2,
       );
       assert.equal(await evidence.isVisible(), true, 'Refresh must keep the evidence open');
+      await refresh.waitFor();
       assert(page.url().endsWith('/proxmox/backups/coverage'));
       assert.equal(await refresh.evaluate((el) => el === document.activeElement), true);
+      assert.equal(await refresh.getAttribute('aria-disabled'), 'false');
+      assert.equal(
+        result.requests.filter((request) => request.path.startsWith('/api/')).length,
+        readCount + 3,
+      );
       assert.match(
         await page.locator('[data-proxmox-backup-row="coverage"]').innerText(),
         /Attn\.|Attention/,
@@ -310,7 +337,7 @@ async function checkCells(page, target, expected, pruneCount) {
       /Prune protected does not change the verification result alongside it/,
     );
     assert.match(await article.innerText(), /Unknown on a PBS point means no verification/);
-    await capture(page, `${spec.name}-docs`);
+    await capture(page, `${spec.name}-docs`, false);
     result.cases.push({
       name: spec.name,
       browser: browser.version(),
@@ -335,6 +362,7 @@ async function checkCells(page, target, expected, pruneCount) {
     process.exitCode = 1;
   })
   .finally(async () => {
+    if (releasePBS) releasePBS();
     if (browser) await browser.close();
     result.cleanup.browserClosed = true;
     if (server) await new Promise((resolve) => server.close(resolve));
