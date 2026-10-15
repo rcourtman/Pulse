@@ -20,6 +20,31 @@
 
 ## Purpose
 
+### PMG same-open stored-detail lifecycle (15 October 2026)
+
+The existing Mail Gateway drawer refreshes stored full detail for a changed
+accepted PMG collection observation or health state; legacy rows use lastSeen
+when the collection timestamp is absent. Equal observations, unrelated alerts,
+object replacements and shared-clock ticks add no reads. Cached adverse detail
+cannot become healthy just because a newer slim row arrived: the accepted
+replacement must complete, and obsolete successful or rejected responses cannot
+replace it. These GETs read stored observations, not the appliance.
+
+A detail-read failure stays inside the drawer's existing error/Retry UI, with a
+resource-derived heading and independently open alerts preserved. Retry admits
+one pending request, exposes its busy/disabled state and becomes available again
+after failure. A later accepted observation may recover the same drawer without
+manual Retry. No diagnostic response text, fabricated queue value, timer,
+collection operation, new route or inferred identity is introduced.
+
+`ProxmoxMailGatewayTable.test.ts` covers the production drawer's
+observation changes, missing/zero readings, initial/repeated failures, bounded
+Retry and completed obsolete-response handling. Existing readings, alert-clock,
+table and presentation controls remain. Consuming acceptance still requires
+exact-source same-open desktop/narrow browser proof using the retained actual
+producer HTTP phases and native inspection of captures; component proof alone
+is not browser, native-appliance, protected-source or release acceptance.
+
 ### Backup activity calendar-day presentation
 
 Backups renders one activity column per local calendar date, including

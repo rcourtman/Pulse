@@ -34,8 +34,8 @@ import type { Resource } from '@/types/resource';
 // per-stat tile pattern in favor of stacked-bar diagrams that show the
 // SHAPE of mail flow + quarantine + spam-score distribution at a
 // glance, paired with proper info-dense tables for cluster nodes and
-// top domains. Fetches the full PMGInstance on first open from
-// /api/pmg/instances so the row keeps its slim payload.
+// top domains. Fetches the full PMGInstance on open and when its accepted
+// resource observation changes, so the row keeps its slim payload.
 
 interface PMGInstancesResponse {
   data: PMGInstance[];
@@ -220,20 +220,36 @@ export const ProxmoxMailGatewayDrawer: Component<{
     const meta = props.instanceRow.pmg;
     return asTrimmedString(meta?.instanceId) || props.instanceRow.id;
   };
-  const [instance, { refetch }] = createResource<PMGInstance | null, string>(id, fetchPMGInstance);
+  // Refresh only for this gateway's accepted observation, not object replacement,
+  // unrelated alerts or clock ticks. Legacy rows use lastSeen when the PMG
+  // collection timestamp is absent; health changes also work without a timestamp.
+  const observationKey = createMemo(() =>
+    JSON.stringify([
+      id(),
+      props.instanceRow.pmg?.lastUpdated ?? props.instanceRow.lastSeen,
+      props.instanceRow.status,
+      props.instanceRow.pmg?.connectionHealth,
+    ]),
+  );
+  const [instance, { refetch }] = createResource<PMGInstance | null, string>(observationKey, () =>
+    fetchPMGInstance(id()),
+  );
+  // Resource reads throw after a failed request. Keep the row-derived heading
+  // and the existing Retry UI usable rather than throwing outside that UI.
+  const detail = () => (instance.error ? undefined : instance());
 
   const now = useRelativeTimeNow();
-  const stats = createMemo(() => instance()?.mailStats);
-  const quarantine = createMemo(() => instance()?.quarantine);
-  const nodes = createMemo<PMGNodeStatus[]>(() => instance()?.nodes ?? []);
-  const spamBuckets = createMemo<PMGSpamBucket[]>(() => instance()?.spamDistribution ?? []);
+  const stats = createMemo(() => detail()?.mailStats);
+  const quarantine = createMemo(() => detail()?.quarantine);
+  const nodes = createMemo<PMGNodeStatus[]>(() => detail()?.nodes ?? []);
+  const spamBuckets = createMemo<PMGSpamBucket[]>(() => detail()?.spamDistribution ?? []);
   const topDomains = createMemo(() =>
-    (instance()?.domainStats ?? [])
+    (detail()?.domainStats ?? [])
       .slice()
       .sort((a, b) => (b.mailCount ?? 0) - (a.mailCount ?? 0))
       .slice(0, 8),
   );
-  const relayDomains = createMemo(() => instance()?.relayDomains ?? []);
+  const relayDomains = createMemo(() => detail()?.relayDomains ?? []);
 
   // The full instance can still report online after a partial collection
   // failure. Do not let it erase a stale/degraded resource or an open alert.
@@ -242,18 +258,18 @@ export const ProxmoxMailGatewayDrawer: Component<{
       [
         props.instanceRow.status,
         props.instanceRow.pmg?.connectionHealth,
-        instance()?.status,
-        instance()?.connectionHealth,
+        detail()?.status,
+        detail()?.connectionHealth,
       ],
       props.alerts,
     );
   const name = () =>
-    asTrimmedString(instance()?.name) ||
+    asTrimmedString(detail()?.name) ||
     asTrimmedString(props.instanceRow.name) ||
     props.instanceRow.id;
   const version = () =>
-    asTrimmedString(instance()?.version) || asTrimmedString(props.instanceRow.pmg?.version) || '—';
-  const hostname = () => asTrimmedString(instance()?.host);
+    asTrimmedString(detail()?.version) || asTrimmedString(props.instanceRow.pmg?.version) || '—';
+  const hostname = () => asTrimmedString(detail()?.host);
 
   const inboundSegments = createMemo<StackedSegment[]>(() => {
     const s = stats();
@@ -361,8 +377,12 @@ export const ProxmoxMailGatewayDrawer: Component<{
             </p>
             <button
               type="button"
-              onClick={() => void refetch()}
-              class="mt-2 inline-flex min-h-9 items-center rounded-md border border-border px-3 text-sm font-medium hover:bg-surface-hover"
+              disabled={instance.loading}
+              aria-busy={instance.loading}
+              onClick={() => {
+                if (!instance.loading) void refetch();
+              }}
+              class="mt-2 inline-flex min-h-9 items-center rounded-md border border-border px-3 text-sm font-medium hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               Retry
             </button>
@@ -370,11 +390,11 @@ export const ProxmoxMailGatewayDrawer: Component<{
         }
       >
         <Show
-          when={instance() !== undefined}
+          when={detail() !== undefined}
           fallback={<p class="text-xs text-muted">Loading Mail Gateway detail…</p>}
         >
           <Show
-            when={instance()}
+            when={detail()}
             fallback={<p class="text-xs text-muted">No detail available for this instance.</p>}
           >
             <Card padding="md">

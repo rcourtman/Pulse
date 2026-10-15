@@ -80,7 +80,10 @@ describe('Patrol weekly summary help', () => {
       ['API', '-authentication'],
       ['TROUBLESHOOTING', '-getting-help'],
     ]) {
-      const link = article.querySelector(`a[href="/docs/${slug}#${fragment}"]`);
+      // The cost section is in this same AI document; keep its bare fragment
+      // and shared activation marker rather than requiring a redundant route.
+      const href = slug === 'AI' ? `#${fragment}` : `/docs/${slug}#${fragment}`;
+      const link = article.querySelector(`a[href="${href}"]`);
       expect(link?.hasAttribute('data-doc-link')).toBe(true);
       const target = document.createElement('article');
       target.innerHTML = renderDocMarkdown(read(`docs/${slug}.md`), slug);

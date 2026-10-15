@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "base_sha": "5b209ae2a089487b26dddf5994e02d200fc429b1",
+  "verified_at": "2026-10-15T14:40:46Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "195385c26d8ce351a63967bd2642a70e5d0ca1ea8c87526c62900b1081bad4c4"
+  },
+  "routes": [
+    "/browser-tests/pmg-truth.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "The same mounted PMG drawer consumes the retained real-client/provider HTTP phases: strings, invalid CID, backup failure, queue denial, version denial, recovery, scope-off and paused collection. All original phase objects remain equal to the input JSON after every update.",
+    "Recovery keeps cached failed detail degraded while the replacement detail response is held, then accepts healthy detail without closing. A later recovery wins over an obsolete adverse response. Configured target alerts clear without affecting the colliding sibling.",
+    "A controlled detail 503 renders the existing error and Retry rather than a page crash or stale panels. Pending Retry is disabled/busy and cannot dispatch again; the accepted reply restores detail in the same drawer.",
+    "Unchanged observations and clock ticks trigger no extra stored-detail read. Missing scoped readings remain dashes, not invented zero. The 320px phone reopens healthy detail with no page overflow."
+  ],
+  "interactions": [
+    "Native desktop expand click and phone row tap; replay accepted producer responses and compare stored node queues, live alerts, identity and health in the actual consuming components.",
+    "Hold/release stored read-only detail responses to exercise pending recovery and obsolete-response ordering; introduce one controlled 503 per browser.",
+    "Click Retry, attempt a duplicate click while busy, accept the stored response, collapse and verify focus return; narrow the phone to 320px and reopen."
+  ],
+  "browsers": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "proof_source_sha": "5b209ae2a089487b26dddf5994e02d200fc429b1",
+  "producer_source": "add0f56b6040177d5d907f003c7ab17eff62f41d / source-d41l8hxk",
+  "producer_sha256": "a001fefb382bacf939514c60feb27c2bf35ef21c4f0bef0a44cc7810186ae5f9",
+  "scope": "Vite development preview of exact committed production consumers in an offline fixture shell. Not full App-route navigation, production-build, native-appliance, notification-delivery or released recovery acceptance.",
+  "pixel_review": "All 15 retained desktop/narrow capture files opened with the native view_image tool; error, disabled Retry, restored detail and missing readings inspected. Existing narrow node-detail breakdown truncation is not repaired by this change.",
+  "capture_sha256": {
+    "desktop-same-open-queue-denied.png": "8495c100f6a5dfc87fdb51fd7153e4d41ecad4d069d1a536cb640f8ca6d9d64e",
+    "desktop-same-open-recovered.png": "f10e8c9e616605f8437714aeb0f3d93b3155e86215bb59fda26c20c026ff9bd2",
+    "desktop-same-open-scope-off.png": "f12f90c8c0783899a27954f3f45416ad57f58153af507919e3604c92455cf3e3",
+    "desktop-original-recovery-completed.png": "f10e8c9e616605f8437714aeb0f3d93b3155e86215bb59fda26c20c026ff9bd2",
+    "desktop-detail-read-error.png": "e86536ba2b90971405118353bbdc60911bb6e3d09a4494b7827e65d01c111cf0",
+    "desktop-retry-pending.png": "6d848579c79b3fcb2a23cacb9443ba02cc42bf6ec4c443ce96af8ce11e2fd465",
+    "desktop-retry-recovered.png": "e0a2f1c2583c6a2662f711dd760c512b0ab994443a6226ed22805ab7a93f8505",
+    "phone-same-open-queue-denied.png": "8685094eccd30c7895de816eba6b3c4a6d826dd2632e379f9b60f4d2602e169f",
+    "phone-same-open-recovered.png": "995688552114cac8aa5e8cdc0fa518ca8e35502070736d290f81a1691fb80fb8",
+    "phone-same-open-scope-off.png": "d2a2f31e0c35f32af4ffb93ef8c9abb27d6adedd63b3db8443acd143642d125d",
+    "phone-original-recovery-completed.png": "995688552114cac8aa5e8cdc0fa518ca8e35502070736d290f81a1691fb80fb8",
+    "phone-detail-read-error.png": "74ac5d18fed1a3898665e444e873a12e0d2e5f4de4d12390eb380796899ccec0",
+    "phone-retry-pending.png": "34512ba5e581f603c26be8862397ac13a0bc9690f68546658aa1ec22a5c58c39",
+    "phone-retry-recovered.png": "d2a2f31e0c35f32af4ffb93ef8c9abb27d6adedd63b3db8443acd143642d125d",
+    "phone-320-reopen.png": "09e5ed97e572bccf7ced510870405f4b13f92496c255d0196fc24211f7aa1f7b"
+  }
+}
