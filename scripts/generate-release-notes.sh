@@ -208,12 +208,16 @@ Each full bullet must be 260 characters or fewer. No semicolons or em dashes.]
 ## Known issues
 
 [Only unresolved user symptoms with an actionable workaround or next step.
+Include critical risks and required safety actions here, even when they apply
+before upgrading. This section stays visible in the post-update modal.
 Omit this section when there are none.]
 
 ## Before you upgrade
 
 [Only compatibility, signing, companion-app or required operator information.
-Omit this section when there is none. No internal verification status.]
+Routine upgrade instructions are collapsed in the post-update modal. Put
+critical warnings in Known issues. Omit this section when there is none.
+No internal verification status.]
 EOF
 fi
 
