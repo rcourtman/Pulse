@@ -732,9 +732,23 @@ export const ProxmoxBackupsTable: Component<{
           <div class="space-y-3">
             <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
             <Show when={protectionPostures.response.error}>
-              <div role="status" class={BACKUP_READ_NOTICE_CLASS}>
-                Protection posture is unavailable. Pulse is showing restore evidence without
-                guessing whether workloads are protected.
+              <div class={`${BACKUP_READ_NOTICE_CLASS} flex flex-wrap items-center gap-2`}>
+                <p role="status" class="min-w-0 flex-1 basis-64">
+                  Protection posture is unavailable. Pulse is showing restore evidence without
+                  guessing whether workloads are protected.
+                </p>
+                <button
+                  type="button"
+                  class="min-h-8 rounded-md border border-current px-2 py-1 font-medium hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-60"
+                  disabled={protectionPostures.response.loading}
+                  onClick={() => {
+                    if (!protectionPostures.response.loading) void protectionPostures.refetch();
+                  }}
+                >
+                  {protectionPostures.response.loading
+                    ? 'Retrying protection posture…'
+                    : 'Retry protection posture'}
+                </button>
               </div>
             </Show>
 

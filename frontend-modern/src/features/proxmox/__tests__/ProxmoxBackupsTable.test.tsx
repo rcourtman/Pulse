@@ -364,7 +364,10 @@ describe('ProxmoxBackupsTable', () => {
     apiFetchJSONMock.mockClear();
     let poll: (() => void) | undefined;
     const originalSetInterval = globalThis.setInterval;
-    vi.spyOn(globalThis, 'setInterval').mockImplementation(((callback: () => void, delay?: number) => {
+    vi.spyOn(globalThis, 'setInterval').mockImplementation(((
+      callback: () => void,
+      delay?: number,
+    ) => {
       if (delay === 30_000) poll = callback;
       return originalSetInterval(callback, delay);
     }) as typeof setInterval);

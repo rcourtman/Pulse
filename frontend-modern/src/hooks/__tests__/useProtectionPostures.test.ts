@@ -122,7 +122,7 @@ const postureResponse = (resourceIDs: readonly string[], state = 'protected') =>
 const requestedIDs = (url: string) =>
   new URL(url, 'https://pulse.invalid').searchParams.getAll('resourceId');
 
-const deferred = <T,>() => {
+const deferred = <T>() => {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((resolvePromise) => (resolve = resolvePromise));
   return { promise, resolve };
@@ -133,7 +133,9 @@ describe('protection verdict ownership', () => {
     'withdraws every current verdict and its rule when a refresh of %i workloads fails',
     async (count) => {
       const ids = Array.from({ length: count }, (_, index) => `vm:${index}`);
-      apiFetchJSONMock.mockImplementation(async (url: string) => postureResponse(requestedIDs(url)));
+      apiFetchJSONMock.mockImplementation(async (url: string) =>
+        postureResponse(requestedIDs(url)),
+      );
       let dispose = () => {};
       const hook = createRoot((stop) => {
         dispose = stop;
@@ -190,10 +192,11 @@ describe('protection verdict ownership', () => {
   it('does not revive cached verdicts from a failed read when the tab remounts', async () => {
     apiFetchJSONMock.mockResolvedValue(postureResponse(['vm:1']));
     let dispose = () => {};
-    const mount = () => createRoot((stop) => {
-      dispose = stop;
-      return useProtectionPostures(() => ['vm:1']);
-    });
+    const mount = () =>
+      createRoot((stop) => {
+        dispose = stop;
+        return useProtectionPostures(() => ['vm:1']);
+      });
     const first = mount();
     try {
       await vi.waitFor(() => expect(first.postures()).toHaveLength(1));
