@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "e669e825d4a34f8979d60eec7962561bd6927bef",
+  "verified_at": "2026-10-15T10:08:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/platformNavigation/useResolvedResource.ts",
+    "frontend-modern/src/pages/Actions.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "30a59e74b00cc64f2803515127b0366a775c2c99c1d80a5017cfc1195c6dc6a2",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "0a6f7d6b4f5e3c2745113cbf58929f362b5f9aee4cc63edf4afdb5e4757cb7e2",
+    "frontend-modern/src/features/platformNavigation/useResolvedResource.ts": "c9cf25765b1c0257a28eb5f45eb939d29d8afbe3df55623aa5414a4144100fa9",
+    "frontend-modern/src/pages/Actions.tsx": "fc382d036d951008cd8a0161acb16916216eba2196c885eb1b78b99a08a563a5"
+  },
+  "routes": [
+    "/actions",
+    "/patrol",
+    "/docker/overview",
+    "/proxmox/overview",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): the action review header offered only Open Patrol; the resource it acts on (Apollo-114, analytics-batch-01, backup-coordinator) was plain text",
+    "After: each review shows Open resource beside Open Patrol: the agent opens Machines filtered to Apollo-114, the VM opens Proxmox overview with analytics-batch-01 expanded, the container opens Docker overview filtered to backup-coordinator (1 of 21 containers)",
+    "Patrol attention detail links are unchanged after moving its registry lookup into the shared hook",
+    "At 375px both links sit on one row as 44px targets with no horizontal overflow",
+    "The link is opt-in: reviews hosted by Patrol and the Docker container controls show no resource link"
+  ],
+  "interactions": [
+    "Opened each of the three demo action reviews via ?action= and read the header links",
+    "Clicked Open resource for the container, confirmed the filtered Docker list, then Back reopened the same review",
+    "Followed the VM and agent destinations and confirmed the resource row",
+    "Opened five Patrol decisions and read their Open resource and thresholds hrefs"
+  ]
+}

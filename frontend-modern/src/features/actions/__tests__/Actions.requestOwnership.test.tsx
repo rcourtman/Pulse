@@ -11,6 +11,8 @@ vi.mock('@/api/resourceActions', () => ({
 }));
 vi.mock('@/api/security', () => ({ SecurityAPI: { getStatus: vi.fn() } }));
 vi.mock('@/api/patrol', () => ({ getPatrolAutonomySettings: vi.fn().mockResolvedValue({}) }));
+const getResource = vi.hoisted(() => vi.fn());
+vi.mock('@/api/resources', () => ({ ResourceAPI: { getResource } }));
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -74,6 +76,7 @@ const renderActions = () =>
   ));
 
 beforeEach(() => {
+  getResource.mockRejectedValue(new Error('Resource not found'));
   window.history.replaceState(null, '', '/');
   vi.mocked(ResourceActionsAPI.listActions).mockResolvedValue({
     actions: [audit('edge-a'), audit('edge-b')],
@@ -185,5 +188,26 @@ describe('Actions request ownership', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Open' }));
     await waitFor(() => expect(window.location.pathname).toBe('/actions'));
     await waitFor(() => expect(ResourceActionsAPI.listActions).toHaveBeenLastCalledWith('pending'));
+  });
+
+  // The page keeps the review in ?action=, so Back from the resource returns
+  // to it; that is why the Actions page is the host that links the resource.
+  it('links the reviewed action to its resource page', async () => {
+    const withResource = detail('edge-a');
+    withResource.audit.resource = {
+      id: 'docker:container:edge-a',
+      name: 'edge-a',
+      type: 'app-container',
+    };
+    vi.mocked(ResourceActionsAPI.getAction).mockResolvedValue(withResource);
+    renderActions();
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Review Update on docker:container:edge-a/ }),
+    );
+    expect(await screen.findByRole('link', { name: 'Open resource' })).toHaveAttribute(
+      'href',
+      '/docker/overview?q=edge-a',
+    );
+    expect(window.location.search).toBe('?action=edge-a');
   });
 });

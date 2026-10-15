@@ -2828,6 +2828,14 @@ the owning tab. A subject that names no platform hides the link rather than
 opening a page without it (`resourcePagePath.test.ts`,
 `PatrolAttentionWorkbench.test.tsx`).
 
+### Registry lookups for page links share one hook
+
+The attention detail resolves `subjectResourceId` through
+`useResolvedResource`, the abortable registry lookup the action review also
+uses, so an answer for an earlier item is never applied to the current one
+(`useResolvedResource.test.ts`). `Open resource` and the alert-only
+thresholds link read the same resolved resource as before.
+
 ### Alert-only guidance links to the subject's thresholds
 
 A decision about a bare alert tells the operator to adjust when the alert

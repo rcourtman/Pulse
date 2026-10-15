@@ -367,6 +367,7 @@ export function Actions() {
       </Show>
       <ActionReviewDialog
         detail={selected()}
+        showResourceLink
         onClose={closeAction}
         onChanged={async (detail) => {
           // A read or mutation started in an earlier review must not replace

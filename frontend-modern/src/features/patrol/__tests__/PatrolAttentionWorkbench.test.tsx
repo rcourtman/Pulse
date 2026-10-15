@@ -77,10 +77,15 @@ vi.mock('@/features/actions/ActionReviewDialog', async () => {
       detail: { audit?: { id?: string } } | null;
       onClose: () => void;
       onChanged: (next: { audit?: { id?: string } }) => Promise<void> | void;
+      showResourceLink?: boolean;
     }) => (
       <Show when={props.detail}>
         {(value) => (
-          <div role="dialog" aria-label="Governed action review">
+          <div
+            role="dialog"
+            aria-label="Governed action review"
+            data-resource-link={props.showResourceLink ? 'shown' : 'hidden'}
+          >
             <span>{value().audit?.id}</span>
             <button type="button" onClick={() => void props.onChanged(value())}>
               Complete action
@@ -1496,9 +1501,12 @@ describe('PatrolAttentionWorkbench', () => {
       expect(apiMocks.planAction).toHaveBeenCalledWith('record-1', 'restart');
       expect(apiMocks.getAction).toHaveBeenCalledWith('act-attention-restart');
     });
-    expect(
-      await screen.findByRole('dialog', { name: 'Governed action review' }),
-    ).toBeInTheDocument();
+    // Patrol holds this review in memory and already links its subject, so
+    // the review must not offer a resource link that Back could not return from.
+    expect(await screen.findByRole('dialog', { name: 'Governed action review' })).toHaveAttribute(
+      'data-resource-link',
+      'hidden',
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Complete action' }));
     const currentTrigger = await screen.findByRole('button', { name: 'Review action' });
