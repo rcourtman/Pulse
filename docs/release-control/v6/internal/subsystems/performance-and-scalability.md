@@ -15,6 +15,29 @@
 
 ## Purpose
 
+### Truthful backup coverage in the shared workload drawer (15 October 2026)
+
+The drawer uses the row's shared backup-evidence applicability rule. Where the
+integration does not report that evidence, Details says `Backup coverage` /
+`Not reported by this integration` in a neutral tone; it does not raise a red
+missing-backup exception or show a retained completion/activity claim. A same-open
+source change rejudges coverage. Proxmox's actual absent, dated, running and
+deferred-read states retain their existing warning, age policy and independent
+thaw/write precautions. `GuestDrawer.test.tsx` checks non-reporting integrations
+and source transitions; existing `GuestRow.test.tsx` checks row applicability.
+The `backup-coverage` browser fixture consumes producing canonical snapshots
+through `useWorkloads`, the real row and full drawer. Desktop/narrow pixels and
+interactions remain required, not native backup recovery or release evidence.
+
+The guest-read safety notice explicitly resets inherited table no-wrap styling.
+Its reason, independent-thaw/write precaution and guidance link must remain
+readable across Overview/Manage and same-open reason changes. Component proof
+keeps this containment class; browser proof measures the actual text line boxes
+inside the notice at desktop and phone widths. Text presence alone cannot prove
+that the safety advice is visible.
+
+
+
 ### Workloads aggregate disk readings keep their units and presence (14 October 2026)
 
 Workload aggregate metrics are percentage points, including values from zero

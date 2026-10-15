@@ -20,6 +20,19 @@
 
 ## Purpose
 
+### Workload backup evidence applicability (15 October 2026)
+
+`supportsWorkloadBackupEvidence` is shared by workload rows and the full guest
+drawer. The completed-backup scalar is Proxmox vzdump/PBS evidence, not a
+cross-provider backup inventory. VM/system-container rows with Proxmox scope
+and legacy VM/LXC shapes without platform metadata retain their existing age
+policy. Other integrations and app containers/pods cannot infer missing or
+healthy backups from that scalar. `workloadGuestPresentation.test.ts` verifies
+the shared scope rule, including Docker nested under Proxmox. This changes no
+collector, access, alert evaluation or wire contract.
+
+
+
 ### PMG same-open stored-detail lifecycle (15 October 2026)
 
 The existing Mail Gateway drawer refreshes stored full detail for a changed

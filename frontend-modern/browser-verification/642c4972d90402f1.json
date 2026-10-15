@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "3366404a46a16b43156deb40fb38067b62302aaa",
+  "verified_at": "2026-10-15T20:32:25Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "08ea5334920a89b3f504e2445318bfa97f59b2d70060836f8b93a53a42743f35",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "0f2bda663b495932b63a091feaca2985b353701a3df52b7fba38509f9372d8c6",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "c86912be33a1439e01d7f5a3e05ce9a4af98c0d57690a789d104e5b0c1648946",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "3df3be17d19bb86f509b5d76825e2b58a3a38935d997e5d4a36f7821f02f1c32"
+  },
+  "routes": [
+    "/browser-tests/backup-coverage.html (production snapshot mapper, workload row and full drawer)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Non-reporting vSphere, Docker, Kubernetes and Incus coverage is neutral, not a missing or healthy backup (33 completed coverage states on23006e185d; unchanged coverage files match this parent).",
+    "Proxmox missing, dated, running and deferred states retain completion/activity distinctions and independent safety precautions.",
+    "Containing3366404a46 source:18 completed safety/coverage states. Actual locked and timed-out read paragraphs and independent-thaw/write text line boxes remain inside the warning at desktop and both phone widths.",
+    "A same-open source change removes unsupported completion/activity claims; existing drawer remains mounted."
+  ],
+  "interactions": [
+    "Desktop keyboard row expansion and native Details toggle; phone tap controls.",
+    "Same-open producing snapshot replacements; Overview/Manage switches preserve the complete safety notice.",
+    "Actual text-range geometry plus nine containing-source and twelve earlier coverage captures opened with native view_image.",
+    "Both harness assertion failures retained; only failed/unexecuted steps completed. No guest, monitoring or write requests."
+  ],
+  "notes": [
+    "Exact Playwright1.56.1 parity; Chromium141.0.7390.37 and WebKit26.0. Source-bound browser receipts and inspected captures retained in lane outcome RECEIPTS.md.",
+    "Browser proof is not a full source-suite pass, native backup recovery, installed availability or acceptance of unrelated Manage controls. Historical capture shows existing non-safety Manage help overlap; not changed by this correction."
+  ]
+}

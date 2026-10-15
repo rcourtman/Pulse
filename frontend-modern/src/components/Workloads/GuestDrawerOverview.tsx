@@ -22,6 +22,7 @@ import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import {
   getWorkloadGuestDiskRead,
   getWorkloadsGuestProtectionPresentation,
+  supportsWorkloadBackupEvidence,
 } from '@/utils/workloadGuestPresentation';
 
 import { buildWorkloadsDiskPresentation } from './diskListModel';
@@ -105,6 +106,7 @@ interface GuestDrawerOverviewProps {
 
 export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   const now = useRelativeTimeNow();
+  const supportsBackup = () => supportsWorkloadBackupEvidence(props.guest);
   const protectionPresentation = () =>
     getWorkloadsGuestProtectionPresentation({
       ageLabel: props.backupPresentation?.ageLabel,
@@ -174,29 +176,34 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           }),
           // Starting or ending an operation is not evidence of a completed
           // backup. Keep its activity separate from the last completed age.
-          makeDetailRow('Last completed backup', protectionPresentation().label, {
-            tone: protectionPresentation().tone,
-            layout: 'stacked',
-            wrap: true,
-            valueContent: (
-              <>
-                <span class="block whitespace-normal wrap-break-word text-left leading-snug">
-                  {protectionPresentation().label}
-                </span>
-                <Show when={props.backupPresentation?.completedAt}>
-                  <time
-                    class="mt-1 block whitespace-normal wrap-break-word text-left font-normal leading-snug text-muted"
-                    dateTime={props.backupPresentation?.completedAt}
-                  >
-                    {props.backupPresentation?.dateLabel}
-                  </time>
-                </Show>
-              </>
-            ),
-          }),
+          supportsBackup()
+            ? makeDetailRow('Last completed backup', protectionPresentation().label, {
+                tone: protectionPresentation().tone,
+                layout: 'stacked',
+                wrap: true,
+                valueContent: (
+                  <>
+                    <span class="block whitespace-normal wrap-break-word text-left leading-snug">
+                      {protectionPresentation().label}
+                    </span>
+                    <Show when={props.backupPresentation?.completedAt}>
+                      <time
+                        class="mt-1 block whitespace-normal wrap-break-word text-left font-normal leading-snug text-muted"
+                        dateTime={props.backupPresentation?.completedAt}
+                      >
+                        {props.backupPresentation?.dateLabel}
+                      </time>
+                    </Show>
+                  </>
+                ),
+              })
+            : makeDetailRow('Backup coverage', 'Not reported by this integration', {
+                tone: 'muted',
+                wrap: true,
+              }),
           makeDetailRow(
             'Backup activity',
-            props.guest.backupInProgress ? 'Running · not completed yet' : null,
+            supportsBackup() && props.guest.backupInProgress ? 'Running · not completed yet' : null,
             { tone: 'warning', wrap: true },
           ),
         ]),
@@ -435,7 +442,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       diskFact(),
       props.ipAddresses[0] ?? '',
       // A late or missing backup is listed under Worth checking instead.
-      protectionPresentation().tone === 'success'
+      supportsBackup() && protectionPresentation().tone === 'success'
         ? `Last completed backup ${protectionPresentation().label}`
         : '',
     ].filter((fact) => fact.trim().length > 0);
