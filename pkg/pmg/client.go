@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -133,6 +134,30 @@ type ClusterStatusEntry struct {
 	Type        string `json:"type"`
 	IP          string `json:"ip"`
 	Fingerprint string `json:"fingerprint"`
+}
+
+// PMG can encode cid as either an integer or a decimal integer string. Keep
+// the typed ID (and reject fractional/invalid IDs) without discarding the node
+// names needed to address queue and backup reads when PMG uses strings.
+func (e *ClusterStatusEntry) UnmarshalJSON(data []byte) error {
+	type entry ClusterStatusEntry
+	var wire struct {
+		*entry
+		CID json.Number `json:"cid"`
+	}
+	wire.entry = (*entry)(e)
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	e.CID = 0 // Preserve the existing absent/null ID behaviour.
+	if wire.CID != "" {
+		cid, err := strconv.Atoi(wire.CID.String())
+		if err != nil {
+			return fmt.Errorf("invalid PMG cluster cid: %w", err)
+		}
+		e.CID = cid
+	}
+	return nil
 }
 
 type QuarantineStatus struct {
