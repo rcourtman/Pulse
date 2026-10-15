@@ -27,7 +27,7 @@ const mime = {
   '.css': 'text/css',
   '.md': 'text/markdown',
 };
-let browser, server, revision, releasePBS;
+let browser, server, revision, releasePBS, observePBS;
 const backups = () =>
   [
     { id: 'verified', verified: true, protected: true },
@@ -187,6 +187,8 @@ async function checkCells(page, target, expected, pruneCount) {
           json({ data: { backups: backups() } });
           releasePBS = undefined;
         };
+        observePBS?.();
+        observePBS = undefined;
         return;
       }
       return json({ data: { backups: backups() } });
@@ -283,6 +285,9 @@ async function checkCells(page, target, expected, pruneCount) {
     const coverageCells = await checkCells(page, evidence, expected, 6);
     await capture(page, `${spec.name}-coverage`);
     for (revision = 1; revision <= 2; revision++) {
+      const heldResponseReady = new Promise((resolve) => {
+        observePBS = resolve;
+      });
       const readCount = result.requests.filter((request) =>
         request.path.startsWith('/api/'),
       ).length;
@@ -296,6 +301,7 @@ async function checkCells(page, target, expected, pruneCount) {
       // A second keyboard activation while the controlled PBS response is
       // pending must not enqueue another inventory or posture read.
       await page.keyboard.press('Enter');
+      await heldResponseReady;
       assert.equal(typeof releasePBS, 'function');
       releasePBS();
       await page.waitForFunction(
@@ -320,7 +326,7 @@ async function checkCells(page, target, expected, pruneCount) {
       );
       assert.match(
         await page.locator('[data-proxmox-backup-row="coverage"]').innerText(),
-        /Attn\.|Attention/,
+        /Attn\.|attention/i,
       );
     }
     await capture(page, `${spec.name}-refreshed`);
