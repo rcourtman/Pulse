@@ -125,12 +125,19 @@ let browser;
           if (url.pathname === base && request.method() === 'GET')
             return route.fulfill({
               contentType: 'application/json',
-              body: JSON.stringify([saved]),
+              body: JSON.stringify([
+                saved,
+                { ...saved, id: 'saved-beta', host: 'beta.example.invalid' },
+              ]),
             });
-          assert.equal(request.method(), 'POST', 'No save, mutation or other API');
+          assert(['POST', 'PUT'].includes(request.method()), 'Only explicit connection operations');
           assert(
-            [base + '/saved-alpha/test', base + '/saved-alpha/preview'].includes(url.pathname),
-            'Only explicit connection reads',
+            ['saved-alpha', 'saved-beta'].some((id) =>
+              [base + '/' + id + '/test', base + '/' + id + '/preview', base + '/' + id].includes(
+                url.pathname,
+              ),
+            ),
+            'Only explicit fixture connection operations',
           );
           const data = request.postDataJSON();
           assert.equal(data.insecureSkipVerify, false, 'Trust default preserved');
@@ -139,7 +146,7 @@ let browser;
             '********',
             'No saved secret in browser',
           );
-          requests.push({ path: url.pathname, body: data });
+          requests.push({ method: request.method(), path: url.pathname, body: data });
           await new Promise((resolve) =>
             pending.push(async (body, status = 200) => {
               await route.fulfill({
@@ -281,6 +288,37 @@ let browser;
         await activate(page.getByRole('button', { name: 'Reopen editor', exact: true }));
         await expect(test).toBeEnabled();
         await noFeedback();
+        // A target identity change updates the real slot even while an old
+        // connection check remains in flight; the response cannot revive it.
+        await activate(test);
+        await expect.poll(() => pending.length).toBe(1);
+        await activate(page.getByRole('button', { name: 'Switch to beta', exact: true }));
+        await expect(host).toHaveValue('beta.example.invalid');
+        await expect(page.getByRole('button', { name: 'Testing…', exact: true })).toBeDisabled();
+        await respond({ success: true });
+        await expect(test).toBeEnabled();
+        await noFeedback();
+        // An already-dispatched save still completes once. It must not close
+        // or erase the subsequently selected connection's newer draft.
+        const update = page.getByRole('button', { name: 'Update connection', exact: true });
+        await activate(update);
+        await expect.poll(() => pending.length).toBe(1);
+        assert.equal(requests.at(-1).method, 'PUT');
+        assert.equal(requests.at(-1).path, `/api/${platform}/connections/saved-beta`);
+        await activate(page.getByRole('button', { name: 'Switch to alpha', exact: true }));
+        await expect(host).toHaveValue(saved.host);
+        await host.fill('current.example.invalid');
+        await respond({ ...saved, id: 'saved-beta', host: 'beta.example.invalid' });
+        await expect(update).toBeEnabled();
+        await expect(host).toHaveValue('current.example.invalid');
+        await expect(
+          notifications.getByText(
+            `Saved earlier ${platform === 'truenas' ? 'TrueNAS' : 'VMware'} settings for beta.example.invalid.`,
+          ),
+        ).toBeVisible();
+        await activate(notifications.getByRole('button', { name: 'Dismiss notification' }));
+        await expect(notifications.getByRole('status')).toHaveCount(0);
+        await noFeedback();
         // Fresh explicit work still works, and the serialized endpoint and TLS
         // policy are those displayed in the actual consuming editor.
         await host.fill('current.example.invalid');
@@ -293,7 +331,7 @@ let browser;
         await host.fill('next.example.invalid');
         await expect(page.getByText(/Pulse currently counts/)).toHaveCount(0);
         const count = requests.length;
-        assert.equal(count, 7);
+        assert.equal(count, 9);
         result.journeys.push({
           platform,
           viewport,
@@ -306,6 +344,8 @@ let browser;
             'test/preview mutually busy',
             'cancel/reopen retains busy until settlement',
             'departed consumer retires feedback while Settings lives',
+            'target identity changes initialise the actual slot without accepting old work',
+            'old save completes once without closing or overwriting the newer draft',
             'fresh current error and impact remain usable',
             'edit clears completed impact',
             'no horizontal overflow',

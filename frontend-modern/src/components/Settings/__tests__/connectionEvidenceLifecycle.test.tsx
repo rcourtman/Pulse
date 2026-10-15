@@ -244,6 +244,91 @@ for (const platform of [
       );
     });
 
+    for (const outcome of ['success', 'failure'] as const) {
+      it(`does not close or overwrite a newer target after save ${outcome}`, async () => {
+        const { result } = await setup();
+        result.openEditDialog(saved);
+        const write = deferred();
+        vi.mocked(platform.api.updateConnection).mockReturnValueOnce(write.promise);
+        const pending = result.saveCurrentForm();
+        result.openEditDialog({ ...saved, id: 'saved-beta', host: 'beta.example.invalid' });
+        result.updateForm({ host: 'new-beta-draft.example.invalid' });
+        if (outcome === 'success') write.resolve(saved as never);
+        else write.reject(failure);
+        await pending;
+        expect(result.dialogOpen()).toBe(true);
+        expect(result.form().host).toBe('new-beta-draft.example.invalid');
+        expect(result.saving()).toBe(false);
+        expect(platform.api.updateConnection).toHaveBeenCalledTimes(1);
+        expect(platform.api.updateConnection).toHaveBeenCalledWith(
+          'saved-alpha',
+          expect.objectContaining({ host: saved.host }),
+        );
+        expect(result.monitoredSystemPreview()).toBeNull();
+        expect(result.monitoredSystemPreviewError()).toBeNull();
+        if (outcome === 'success') {
+          expect(notificationStore.success).toHaveBeenCalledWith(
+            `Saved earlier ${platform.name} settings for ${saved.host}.`,
+          );
+          expect(notificationStore.error).not.toHaveBeenCalled();
+        } else {
+          expect(notificationStore.error).toHaveBeenCalledWith(
+            `Earlier ${platform.name} save failed for ${saved.host}: ${failure.message}`,
+          );
+          expect(notificationStore.success).not.toHaveBeenCalled();
+        }
+      });
+    }
+
+    it('initialises the actual consuming target without clobbering a draft on same-ID polling', async () => {
+      const [target, setTarget] = createSignal(saved);
+      let state!: ReturnType<typeof platform.useState>;
+      const view = render(() => {
+        if (platform.name === 'TrueNAS') {
+          const nas = useTrueNASSettingsPanelState();
+          state = nas;
+          return (
+            <TrueNASCredentialSlot
+              state={nas}
+              editingConnection={target()}
+              onCancel={() => {}}
+              onSaved={() => {}}
+            />
+          );
+        }
+        const vmware = useVMwareSettingsPanelState();
+        state = vmware;
+        return (
+          <VMwareCredentialSlot
+            state={vmware}
+            editingConnection={target()}
+            onCancel={() => {}}
+            onSaved={() => {}}
+          />
+        );
+      });
+      await waitFor(() => expect(state.loading()).toBe(false));
+      state.updateForm({ host: 'alpha-draft.example.invalid' });
+      setTarget({ ...saved, name: 'Polled name' });
+      expect(state.form().host).toBe('alpha-draft.example.invalid');
+      const read = deferred();
+      vi.mocked(platform.api.testSavedConnection).mockReturnValueOnce(read.promise);
+      const pending = state.testCurrentForm();
+      setTarget({ ...saved, id: 'saved-beta', host: 'beta.example.invalid' });
+      expect(state.form().host).toBe('beta.example.invalid');
+      expect(state.testing()).toBe(true);
+      read.resolve({ success: true } as never);
+      expect(await pending).toBe(false);
+      feedbackCleared(state);
+      vi.mocked(platform.api.testSavedConnection).mockResolvedValueOnce({ success: true } as never);
+      expect(await state.testCurrentForm()).toBe(true);
+      expect(platform.api.testSavedConnection).toHaveBeenLastCalledWith(
+        'saved-beta',
+        expect.objectContaining({ host: 'beta.example.invalid' }),
+      );
+      view.unmount();
+    });
+
     it('retires a departing credential slot even while Settings keeps its hook alive', async () => {
       const read = deferred();
       vi.mocked(platform.api.previewConnection).mockReturnValueOnce(read.promise);

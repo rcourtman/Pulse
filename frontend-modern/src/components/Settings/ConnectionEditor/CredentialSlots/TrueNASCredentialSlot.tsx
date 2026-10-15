@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, onCleanup, onMount } from 'solid-js';
+import { Component, Show, createEffect, createMemo, on, onCleanup } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import {
@@ -50,16 +50,19 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
   // editor retires feedback even if its request cannot be cancelled.
   onCleanup(() => props.state.retireFormEvidence());
 
-  onMount(() => {
-    if (!props.state.dialogOpen()) {
+  // Only identity changes initialise a new target. A health-only poll may
+  // replace the connection object without permission to overwrite a draft.
+  const targetId = createMemo(() => props.editingConnection?.id ?? null);
+  createEffect(
+    on(targetId, () => {
       if (props.editingConnection) {
         props.state.openEditDialog(props.editingConnection);
       } else {
         props.state.openCreateDialog();
       }
-    }
-    primed = true;
-  });
+      primed = true;
+    }),
+  );
 
   createEffect(() => {
     const open = props.state.dialogOpen();

@@ -407,22 +407,34 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
 
   const saveCurrentForm = async () => {
     if (readPending()) return;
+    const isCurrent = evidenceScope.capture();
+    const submittedHost = form().host.trim();
     setSaving(true);
     try {
       const payload = buildConnectionInput(form());
       if (editingConnectionId()) {
         await VMwareAPI.updateConnection(editingConnectionId()!, payload);
-        notificationStore.success('VMware connection updated');
+        if (isCurrent()) notificationStore.success('VMware connection updated');
       } else {
         await VMwareAPI.createConnection(payload);
-        notificationStore.success('VMware connection added');
+        if (isCurrent()) notificationStore.success('VMware connection added');
       }
-      resetDialogState();
+      if (!isCurrent()) {
+        notificationStore.success(`Saved earlier VMware settings for ${submittedHost}.`);
+      }
+      // A save still completes once after departure or editing, but must not
+      // close a different target or discard a newer draft. Refresh the saved
+      // list independently; no old result is evidence for the current form.
+      if (isCurrent()) resetDialogState();
       await loadConnections();
     } catch (error) {
-      setMonitoredSystemPreviewUnavailableState(null);
       const message = getErrorMessage(error, 'Failed to save VMware connection');
-      notificationStore.error(message);
+      if (isCurrent()) {
+        setMonitoredSystemPreviewUnavailableState(null);
+        notificationStore.error(message);
+      } else {
+        notificationStore.error(`Earlier VMware save failed for ${submittedHost}: ${message}`);
+      }
       logger.error('[VMware Settings] Save failed', error);
     } finally {
       setSaving(false);

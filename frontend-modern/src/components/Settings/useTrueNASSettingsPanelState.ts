@@ -399,22 +399,34 @@ export function useTrueNASSettingsPanelState({ canLoad }: { canLoad?: () => bool
 
   const saveCurrentForm = async () => {
     if (readPending()) return;
+    const isCurrent = evidenceScope.capture();
+    const submittedHost = form().host.trim();
     setSaving(true);
     try {
       const payload = buildConnectionInput(form());
       if (editingConnectionId()) {
         await TrueNASAPI.updateConnection(editingConnectionId()!, payload);
-        notificationStore.success('TrueNAS connection updated');
+        if (isCurrent()) notificationStore.success('TrueNAS connection updated');
       } else {
         await TrueNASAPI.createConnection(payload);
-        notificationStore.success('TrueNAS connection added');
+        if (isCurrent()) notificationStore.success('TrueNAS connection added');
       }
-      resetDialogState();
+      if (!isCurrent()) {
+        notificationStore.success(`Saved earlier TrueNAS settings for ${submittedHost}.`);
+      }
+      // A save still completes once after departure or editing, but must not
+      // close a different target or discard a newer draft. Refresh the saved
+      // list independently; no old result is evidence for the current form.
+      if (isCurrent()) resetDialogState();
       await loadConnections();
     } catch (error) {
-      setMonitoredSystemPreviewUnavailableState(null);
       const message = getErrorMessage(error, 'Failed to save TrueNAS connection');
-      notificationStore.error(message);
+      if (isCurrent()) {
+        setMonitoredSystemPreviewUnavailableState(null);
+        notificationStore.error(message);
+      } else {
+        notificationStore.error(`Earlier TrueNAS save failed for ${submittedHost}: ${message}`);
+      }
       logger.error('[TrueNAS Settings] Save failed', error);
     } finally {
       setSaving(false);
