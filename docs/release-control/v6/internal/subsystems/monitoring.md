@@ -1185,6 +1185,19 @@ keep distinct saved pins and the existing declared-member/no-replacement policy.
 Before each command and before returning its fully received bounded payload,
 Pulse reads the operation lock from VM config. Any nonempty lock (not just
 backup), missing/malformed config or an unverifiable lock defers the command.
+Only an absent `lock` or an exactly empty string establishes lock clearance.
+A nonempty whitespace-only value, including escaped and Unicode whitespace,
+is malformed evidence and returns `lock-unverified`, not an invented unlocked
+state or a named backup lock. It cannot dispatch a guest command or publish an
+already completed command's payload. A later complete, genuinely unlocked
+config resumes ordinary reads without clearing a transport-uncertainty fence.
+The lock-evidence matrix covers all six readers at both admission boundaries;
+the collector projection control retains known disk evidence without renewing
+it, leaves independent status memory usable, and resumes the same guest normally.
+These synthetic controls do not establish native thaw or installed recovery.
+Rooted and unrooted DNS names retain distinct admission and saved-trust keys:
+resolver search suffixes can give them different destinations. No DNS lookup
+or automatic alias inference is added to solve lock admission.
 Known locks in node inventory, cluster resources or detailed status suppress
 polling enrichment even when status fails and recent agent evidence exists.
 

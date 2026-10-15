@@ -36,6 +36,9 @@ func TestGuestAgentEndpointKeyIdentity(t *testing.T) {
 		{"https://pve.example.invalid/api2/json", "http://pve.example.invalid/api2/json"},
 		{"https://pve.example.invalid/api2/json", "https://pve.example.invalid:8006/api2/json"},
 		{"https://pve.example.invalid/api2/json", "https://other.example.invalid/api2/json"},
+		// An absolute DNS name skips resolver search suffixes. Do not infer
+		// that it reaches the same cluster as the unrooted configured name.
+		{"https://pve.example.invalid/api2/json", "https://pve.example.invalid./api2/json"},
 		{"https://pve.example.invalid/tenantA/api2/json", "https://pve.example.invalid/tenanta/api2/json"},
 		{"https://pve.example.invalid/tenantA/api2/json", "https://pve.example.invalid/tenantB/api2/json"},
 		{"https://[fe80::1%25ZoneA]/api2/json", "https://[fe80::1%25zonea]/api2/json"},
