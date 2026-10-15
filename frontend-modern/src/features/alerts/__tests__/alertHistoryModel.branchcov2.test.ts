@@ -780,11 +780,9 @@ describe('formatAlertAxisTickLabel', () => {
       locale: 'en-US',
     });
     expect(label).toContain('Mar 22');
-    // The mid-range branch sets only `hour` (no `minute`), so the time-of-day
-    // token is a bare hour like "09 AM" with no colon.
-    expect(label).toMatch(/09/);
+    // The hour carries its minutes so it reads as a time in every locale.
     expect(label).toMatch(/AM|PM/);
-    expect(label).not.toMatch(/\d{1,2}:\d{2}/);
+    expect(label).toMatch(/\d{1,2}:\d{2}/);
   });
 
   it('omits the hour for a mid-range total with a large bucket and long span', () => {

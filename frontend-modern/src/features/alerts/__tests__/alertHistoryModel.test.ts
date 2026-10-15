@@ -5,6 +5,7 @@ import type { Resource } from '@/types/resource';
 
 import {
   applyAlertHistoryWindow,
+  buildAlertAxisTicks,
   buildAlertHistoryItems,
   buildAlertHistoryParams,
   buildAlertTrends,
@@ -12,6 +13,7 @@ import {
   formatAlertHistoryDuration,
   getAlertBucketDurationLabel,
   getAlertHistoryRowCopy,
+  nextAlertAxisBoundary,
   type HistoryItem,
 } from '../alertHistoryModel';
 
@@ -252,5 +254,86 @@ describe('alert history rows for held threshold alerts', () => {
     expect(item.systemAlert).toBe(true);
     expect(item.liveAlert).toBeUndefined();
     expect(getAlertHistoryRowCopy(item, () => NOW).text).toBe('Node temperature at 95.0°C');
+  });
+});
+
+// The frequency axis labelled raw bucket edges, which follow the window start
+// (now minus the range): the default week read "8 Oct, 11" in 24-hour locales
+// and a 30-day bar dated "1 Oct" began at 1 Oct 11:50.
+describe('alert frequency axis', () => {
+  const at = (month: number, day: number, hour: number, minute = 0) =>
+    new Date(2026, month - 1, day, hour, minute).getTime();
+
+  it('finds the next round local time an axis label can name exactly', () => {
+    expect(nextAlertAxisBoundary(at(10, 8, 11, 50), 6, 168)).toBe(at(10, 8, 12));
+    expect(nextAlertAxisBoundary(at(10, 8, 12), 6, 168)).toBe(at(10, 8, 12));
+    expect(nextAlertAxisBoundary(at(10, 8, 23, 50), 6, 168)).toBe(at(10, 9, 0));
+    expect(nextAlertAxisBoundary(at(10, 14, 18, 50), 1, 24)).toBe(at(10, 14, 19));
+    expect(nextAlertAxisBoundary(at(10, 1, 11, 50), 24, 720)).toBe(at(10, 2, 0));
+  });
+
+  it('labels inner ticks with round times at their true positions', () => {
+    vi.useFakeTimers();
+    const now = at(10, 15, 11, 50);
+    vi.setSystemTime(now);
+    try {
+      for (const [range, expectTime] of [
+        ['24h', true],
+        ['7d', true],
+        ['30d', false],
+      ] as const) {
+        const trends = buildAlertTrends([], range, now);
+        const ticks = buildAlertAxisTicks(trends, 'en-GB');
+        const start = trends.bucketTimes[0];
+        const total = trends.buckets.length * trends.bucketSize * 60 * 60 * 1000;
+        expect(ticks.at(-1)?.label).toBe('Now');
+        const inner = ticks.slice(1, -1);
+        expect(inner.length).toBeGreaterThan(0);
+        for (const tick of inner) {
+          const time = new Date(Math.round(start + tick.position * total));
+          expect(time.getMinutes()).toBe(0);
+          if (expectTime) {
+            expect(tick.label).toMatch(/\d{2}:00$/);
+          } else {
+            expect(time.getHours()).toBe(0);
+            expect(tick.label).not.toMatch(/:/);
+          }
+        }
+      }
+      // The first tick is the window start the range line names.
+      const week = buildAlertAxisTicks(buildAlertTrends([], '7d', now), 'en-GB');
+      expect(week[0]).toMatchObject({ position: 0, label: '8 Oct, 11:50' });
+      expect(week[1].label).toBe('10 Oct, 06:00');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // When clocks go back, 01:30 happens twice and both bucket edges snap to
+  // 02:00; the axis must not draw two ticks on top of each other.
+  it('keeps ticks apart across a repeated hour', () => {
+    const previousTz = process.env.TZ;
+    process.env.TZ = 'Europe/London';
+    vi.useFakeTimers();
+    const now = Date.parse('2026-10-25T04:30:00Z');
+    vi.setSystemTime(now);
+    try {
+      const earliest: HistoryItem = {
+        id: 'a-1',
+        startTime: '2026-10-24T23:30:00Z',
+      } as HistoryItem;
+      const trends = buildAlertTrends([earliest], 'all', now);
+      expect(trends.bucketSize).toBe(1);
+      const ticks = buildAlertAxisTicks(trends, 'en-GB');
+      const positions = ticks.map((tick) => tick.position);
+      for (let index = 1; index < positions.length; index += 1) {
+        expect(positions[index]).toBeGreaterThan(positions[index - 1]);
+      }
+      expect(new Set(ticks.map((tick) => tick.label)).size).toBe(ticks.length);
+    } finally {
+      vi.useRealTimers();
+      if (previousTz === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTz;
+    }
   });
 });

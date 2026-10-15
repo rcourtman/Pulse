@@ -1567,6 +1567,17 @@ exact counts. The legend counts critical, warnings and info (info only when
 present) over the current window and bar selection
 (`AlertHistoryFrequencyCard.test.tsx`, `alertHistoryModel.test.ts`).
 
+The chart's axis names round local times. Buckets start at the window start
+(now minus the range), so labelling bucket edges printed times such as
+`11:50`, and an hour without minutes reads as a bare number in 24-hour
+locales (`8 Oct, 11`). `formatAlertAxisTickLabel` writes an hour with its
+minutes, and `buildAlertAxisTicks` moves each inner tick to
+`nextAlertAxisBoundary`, the next whole bucket step within the day (or the
+next local midnight for date-only labels), at that time's true position. The
+first tick keeps the exact window start the range line shows, the last reads
+`Now`, and the buckets, bar tooltips and counts are unchanged
+(`alertHistoryModel.test.ts`).
+
 The desktop alert history table sizes each column for its content instead of
 giving all visible columns an equal share. Each density is sized for the
 narrowest card it serves (600px, 800px, 1024px and 1280px): Time (the column
