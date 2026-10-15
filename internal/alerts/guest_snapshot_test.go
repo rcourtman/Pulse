@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
@@ -218,5 +219,288 @@ func TestGuestFilesystemAlertsNameOwningGuest(t *testing.T) {
 				t.Fatalf("expected two filesystem alerts (guest-level alert under %q: %v): %+v", vm.ID, wantGuestLevel, m.GetActiveAlerts())
 			}
 		})
+	}
+}
+
+func snapshotPartialFixture(t *testing.T) (*Manager, models.GuestSnapshot, map[string]GuestLookup) {
+	t.Helper()
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.SnapshotDefaults = SnapshotAlertConfig{Enabled: true, WarningDays: 7, CriticalDays: 14, WarningSizeGiB: 50, CriticalSizeGiB: 100}
+	m.UpdateConfig(cfg)
+	snapshot := models.GuestSnapshot{ID: "inst-node-100-weekly", Name: "weekly", Instance: "inst", Node: "node", VMID: 100, Type: "qemu", Time: time.Now().Add(-10 * 24 * time.Hour), SizeBytes: 1 << 30}
+	guests := map[string]GuestLookup{"inst:node:100": {ResourceID: "inst:node:100", Name: "database", Instance: "inst", Node: "node", VMID: 100, Type: "qemu"}}
+	return m, snapshot, guests
+}
+
+func requireSnapshotPartialAlert(t *testing.T, m *Manager, level AlertLevel) *Alert {
+	t.Helper()
+	active := m.GetActiveAlerts()
+	if len(active) != 1 || active[0].Level != level {
+		t.Fatalf("expected one %s snapshot condition, got %+v", level, active)
+	}
+	return &active[0]
+}
+
+// No native snapshot, guest command, backup, clock change or database fault is
+// induced. These are ordinary detector inputs, including the mapper's epoch.
+func TestSnapshotPartialEvidenceSizeIndependentOfTime(t *testing.T) {
+	for _, guestType := range []string{"qemu", "lxc"} {
+		for _, clock := range []string{"missing", "epoch", "negative", "future"} {
+			t.Run(guestType+"/"+clock, func(t *testing.T) {
+				m, snapshot, guests := snapshotPartialFixture(t)
+				snapshot.Type = guestType
+				switch clock {
+				case "missing":
+					snapshot.Time = time.Time{}
+				case "epoch":
+					snapshot.Time = time.Unix(0, 0)
+				case "negative":
+					snapshot.Time = time.Unix(-1, 0)
+				case "future":
+					snapshot.Time = time.Now().Add(24 * time.Hour)
+				}
+				snapshot.SizeBytes = 120 << 30
+				m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+				alert := requireSnapshotPartialAlert(t, m, AlertLevelCritical)
+				if alert.Value != 120 || alert.Threshold != 100 || alert.Metadata["primaryMetric"] != "size" || !strings.Contains(alert.Message, "120.0 GiB") {
+					t.Fatalf("valid size breach was not evaluated: %+v", alert)
+				}
+				for _, key := range []string{"snapshotAgeDays", "snapshotAgeHours", "snapshotCreatedAt", "snapshotAgeObservedAt", "thresholdDays"} {
+					if _, exists := alert.Metadata[key]; exists {
+						t.Errorf("unavailable age fabricated %s=%v", key, alert.Metadata[key])
+					}
+				}
+				if !strings.Contains(alert.Message, "age was not re-evaluated") || (clock == "future" && !strings.Contains(alert.Message, "clocks")) {
+					t.Fatalf("missing fixed age explanation: %s", alert.Message)
+				}
+				snapshot.SizeBytes = 1 << 30
+				m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+				if len(m.GetActiveAlerts()) != 0 {
+					t.Fatal("fresh size recovery did not clear size-only condition")
+				}
+			})
+		}
+	}
+}
+
+func TestSnapshotPartialEvidenceRetainsAgeAndAcceptsSizeChanges(t *testing.T) {
+	m, snapshot, guests := snapshotPartialFixture(t)
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	before := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	m.mu.Lock()
+	m.activeAlerts[before.CanonicalState].Acknowledged = true
+	m.activeAlerts[before.CanonicalState].AckUser = "fixture-operator"
+	m.mu.Unlock()
+
+	snapshot.Time = time.Now().Add(24 * time.Hour)
+	snapshot.SizeBytes = 120 << 30
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	mixed := requireSnapshotPartialAlert(t, m, AlertLevelCritical)
+	if mixed.Metadata["primaryMetric"] != "size" || mixed.Metadata["snapshotAgeHeld"] != true || mixed.Metadata["snapshotSizeHeld"] != false || !strings.Contains(mixed.Message, "last known 10.0 days") {
+		t.Fatalf("current size did not coexist with held age: %+v", mixed)
+	}
+	if mixed.Metadata["snapshotAgeDays"] != before.Metadata["snapshotAgeDays"] || mixed.Metadata["snapshotAgeObservedAt"] != before.Metadata["snapshotAgeObservedAt"] {
+		t.Fatal("held age grew or its observation time was renewed")
+	}
+	if mixed.ID != before.ID || !mixed.StartTime.Equal(before.StartTime) || !mixed.Acknowledged || mixed.AckUser != "fixture-operator" {
+		t.Fatal("partial read lost occurrence or acknowledgement")
+	}
+
+	snapshot.Time = time.Time{}
+	snapshot.SizeBytes = 1 << 30
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	held := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	if held.Metadata["primaryMetric"] != "age" || !held.LastSeen.Equal(before.LastSeen) || held.Metadata["snapshotAgeDays"] != before.Metadata["snapshotAgeDays"] {
+		t.Fatal("size recovery silently cleared or renewed the independent held age condition")
+	}
+	for range 2 {
+		m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+		repeated := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+		if !repeated.LastSeen.Equal(before.LastSeen) || !repeated.StartTime.Equal(before.StartTime) || repeated.Value != before.Value {
+			t.Fatal("repeated missing age renewed or replaced the occurrence")
+		}
+	}
+	snapshot.Time = time.Now().Add(-time.Hour)
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	if len(m.GetActiveAlerts()) != 0 {
+		t.Fatal("complete current age and size recovery did not clear the condition")
+	}
+}
+
+func TestSnapshotPartialEvidenceRetainsMissingSizeWithoutRenewingIt(t *testing.T) {
+	m, snapshot, guests := snapshotPartialFixture(t)
+	snapshot.Time = time.Now().Add(-time.Hour)
+	snapshot.SizeBytes = 120 << 30
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	before := requireSnapshotPartialAlert(t, m, AlertLevelCritical)
+	for _, size := range []int64{0, -1, 0} {
+		snapshot.SizeBytes = size
+		m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+		held := requireSnapshotPartialAlert(t, m, AlertLevelCritical)
+		if held.Metadata["snapshotSizeHeld"] != true || held.Metadata["snapshotSizeObservedAt"] != before.Metadata["snapshotSizeObservedAt"] || !held.LastSeen.Equal(before.LastSeen) || !strings.Contains(held.Message, "last known 120.0 GiB") {
+			t.Fatal("missing optional size cleared or renewed its previous breach")
+		}
+	}
+	snapshot.SizeBytes = 1 << 30
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	if len(m.GetActiveAlerts()) != 0 {
+		t.Fatal("positive complete size did not establish recovery")
+	}
+}
+
+func TestSnapshotPartialEvidenceReplacementDoesNotInheritSize(t *testing.T) {
+	m, snapshot, guests := snapshotPartialFixture(t)
+	snapshot.SizeBytes = 120 << 30
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	requireSnapshotPartialAlert(t, m, AlertLevelCritical)
+	snapshot.Time = time.Now().Add(-time.Hour) // Same name, newly-created snapshot.
+	snapshot.SizeBytes = 0
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	if len(m.GetActiveAlerts()) != 0 {
+		t.Fatal("a replacement snapshot inherited the retired snapshot's size")
+	}
+}
+
+func TestSnapshotPartialEvidenceRestoredLegacyObservation(t *testing.T) {
+	m, snapshot, guests := snapshotPartialFixture(t)
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	before := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	delete(before.Metadata, "snapshotAgeObservedAt")
+	delete(before.Metadata, "snapshotSizeObservedAt")
+	wire, err := json.Marshal(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored Alert
+	if err := json.Unmarshal(wire, &restored); err != nil {
+		t.Fatal(err)
+	}
+	m.mu.Lock()
+	m.activeAlerts[before.CanonicalState] = &restored
+	m.mu.Unlock()
+	snapshot.Time, snapshot.SizeBytes = time.Time{}, 0
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	held := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	if held.Metadata["snapshotAgeHeld"] != true || !held.LastSeen.Equal(before.LastSeen) || !strings.Contains(held.Message, "last known") {
+		t.Fatal("legacy JSON metadata did not retain its original observation")
+	}
+}
+
+func TestSnapshotPartialEvidencePolicyAndDeletionRemainAuthoritative(t *testing.T) {
+	for _, action := range []string{"global-disable", "guest-disable", "snapshot-disable", "tag", "delete", "threshold-change"} {
+		t.Run(action, func(t *testing.T) {
+			m, snapshot, guests := snapshotPartialFixture(t)
+			m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+			requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+			snapshot.Time, snapshot.SizeBytes = time.Time{}, 0
+			cfg := m.GetConfig()
+			switch action {
+			case "global-disable":
+				cfg.SnapshotDefaults.Enabled = false
+			case "guest-disable":
+				cfg.Overrides = map[string]ThresholdConfig{"inst:node:100": {Disabled: true}}
+			case "snapshot-disable":
+				cfg.Overrides = map[string]ThresholdConfig{"inst:node:100": {Snapshot: &SnapshotAlertConfig{Enabled: false}}}
+			case "tag":
+				guest := guests["inst:node:100"]
+				guest.Tags = []string{"pulse-no-alerts"}
+				guests["inst:node:100"] = guest
+			case "threshold-change":
+				cfg.SnapshotDefaults.WarningDays, cfg.SnapshotDefaults.CriticalDays = 30, 60
+			}
+			m.UpdateConfig(cfg)
+			rows := []models.GuestSnapshot{snapshot}
+			if action == "delete" {
+				rows = nil
+			}
+			m.CheckSnapshotsForInstance("inst", rows, guests)
+			if len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("held evidence overruled deliberate policy or authoritative deletion")
+			}
+		})
+	}
+}
+
+func TestSnapshotPartialEvidenceScopeDoesNotTransferHeldMetrics(t *testing.T) {
+	m, snapshot, guests := snapshotPartialFixture(t)
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	original := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	m.mu.Lock()
+	m.activeAlertAlias["snapshot-age-"+snapshot.ID] = original.CanonicalState
+	m.mu.Unlock()
+	peer := snapshot
+	// Even a colliding legacy alias cannot lend evidence across connections.
+	peer.Instance, peer.VMID = "other", 101
+	peer.Time, peer.SizeBytes = time.Time{}, 0
+	m.CheckSnapshotsForInstance("other", []models.GuestSnapshot{peer}, nil)
+	remaining := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	if remaining.ID != original.ID {
+		t.Fatal("another connection/name inherited held metrics or cleared the original")
+	}
+}
+
+func TestSnapshotPartialEvidenceRestoredAliasCacheIsSerialized(t *testing.T) {
+	m, snapshot, guests := snapshotPartialFixture(t)
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	original := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	snapshot.Time, snapshot.SizeBytes = time.Time{}, 0
+	done, stopped := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				m.mu.RLock()
+				_ = len(m.activeAlertAlias)
+				m.mu.RUnlock()
+			}
+		}
+	}()
+	defer func() { close(done); <-stopped }()
+	for range 50 {
+		// Restore a legacy storage key without its disposable alias cache.
+		m.mu.Lock()
+		m.activeAlerts = map[string]*Alert{"legacy-snapshot-key": original.Clone()}
+		m.activeAlertAlias = make(map[string]string)
+		m.mu.Unlock()
+		m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+		alert := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+		if alert.ID != original.ID || !alert.LastSeen.Equal(original.LastSeen) {
+			t.Fatal("alias repair changed held snapshot identity or evidence age")
+		}
+	}
+}
+
+func TestSnapshotPartialEvidenceClockCorrectionCannotEstablishRecovery(t *testing.T) {
+	m, snapshot, guests := snapshotPartialFixture(t)
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	original := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	// Model an accepted observation made before a correction of Pulse's own
+	// clock. No system clock, guest, backup or executable is changed.
+	shift := 30 * 24 * time.Hour
+	original.Metadata["snapshotCreatedAt"] = snapshot.Time.Add(shift)
+	original.Metadata["snapshotAgeObservedAt"] = original.LastSeen.Add(shift)
+	original.Metadata["snapshotSizeObservedAt"] = original.LastSeen.Add(shift)
+	original.LastSeen = original.LastSeen.Add(shift)
+	m.mu.Lock()
+	m.activeAlerts[original.CanonicalState] = original
+	m.mu.Unlock()
+	snapshot.Time, snapshot.SizeBytes = snapshot.Time.Add(shift), 0
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	held := requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	if held.Metadata["snapshotAgeHeld"] != true || held.Metadata["snapshotSizeHeld"] != true || held.Value != original.Value || !held.LastSeen.Equal(original.LastSeen) || !strings.Contains(held.Message, "clocks") {
+		t.Fatal("a backwards clock correction cleared or renewed accepted evidence")
+	}
+	// An independent current size can still recover while the age stays held.
+	snapshot.SizeBytes = 1 << 30
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guests)
+	held = requireSnapshotPartialAlert(t, m, AlertLevelWarning)
+	if held.Metadata["snapshotAgeObservedAt"] != original.Metadata["snapshotAgeObservedAt"] || held.Metadata["snapshotAgeDays"] != original.Metadata["snapshotAgeDays"] {
+		t.Fatal("clock correction changed the original age evidence")
 	}
 }

@@ -8108,3 +8108,18 @@ rollup read alone cannot clear it. Deliberate disablement still clears it.
 replacement, independent guest alerts, repeated evidence, served-state output
 and genuine fresh recovery. This does not alter stored timestamps, rollup
 aggregation, backup-server clocks or native guest/backup operations.
+
+### Snapshot partial-evidence alert projection
+
+`TestSnapshotPartialEvidenceServedState` connects the production snapshot
+alert detector to `Monitor.GetState` across held age, current-size escalation,
+future/missing/epoch times, missing size, independent recovery and deletion.
+The served array preserves metric observation times/held flags and fixed
+explanations, without changing snapshot collection or issuing guest/backup
+commands. Its exact payloads feed desktop/narrow browser verification; source
+and browser proof do not establish installed/native guest or restore recovery.
+
+`TestSnapshotPartialEvidenceClockCorrectionServedState` restores a real alert
+with old-clock dates through the ordinary temporary-profile JSON seam and
+checks that a clock correction cannot establish recovery. It changes no system
+clock and emits the actual served frame for additional consuming proof.
