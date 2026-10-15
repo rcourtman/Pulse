@@ -99,6 +99,9 @@ func TestClusterGuestInventoryOutageRetainsAndRecovers(t *testing.T) {
 	vm := models.VM{ID: "inventory-fixture:member:105", VMID: 105, Type: "qemu", Instance: "inventory-fixture", Node: "member", Name: "accepted-vm", Status: "running", CPU: 0.2, Memory: memory, Disk: models.Disk{Total: 10 * gib, Used: 4 * gib, Usage: 40}, LastSeen: at, Tags: []string{"accepted"}}
 	ct := models.Container{ID: "inventory-fixture:member:206", VMID: 206, Type: "lxc", Instance: "inventory-fixture", Node: "member", Name: "accepted-container", Status: "running", CPU: 0.25, Memory: memory, Disk: models.Disk{Total: 10 * gib, Used: 3 * gib, Usage: 30}, LastSeen: at, Tags: []string{"accepted"}}
 	other := models.VM{ID: "other:member:105", VMID: 105, Type: "qemu", Instance: "other", Node: "member", Name: "independent-vm", Status: "running", Memory: memory, LastSeen: at}
+	// State reads normalize empty collections. Compare the same complete tuple
+	// representation, rather than nil fixture slices against normalized clones.
+	vm, ct, other = vm.NormalizeCollections(), ct.NormalizeCollections(), other.NormalizeCollections()
 	m.state.UpdateGuestsForInstance("inventory-fixture", []models.VM{vm}, []models.Container{ct})
 	m.state.UpdateGuestsForInstance("other", []models.VM{other}, nil)
 	projections := make(map[string]any)
