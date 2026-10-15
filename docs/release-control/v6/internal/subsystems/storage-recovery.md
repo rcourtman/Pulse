@@ -3168,6 +3168,29 @@ vdev layout is reported` in
 
 ## Current State
 
+
+### Backup point pruning and verification are independent (15 October 2026)
+
+Coverage restore evidence and the By date feed show a backup point's completion
+or verification state separately from the provider's `protected` flag. The
+additional **Prune protected** badge means protection from pruning, not a
+verified point or a workload protection verdict. Verified and Unverified remain
+visible when that flag is set; absent PBS verification is **Unknown**, not a
+failed verification job. Running and incomplete points cannot acquire a Verified
+badge, and a guest snapshot remains distinct from a separate backup. Ordinary
+PVE files without a verification result retain their Backup file label.
+
+Both badges wrap within their State cell and update on the existing inventory
+refresh without losing Coverage expansion, focus or route. Sorting State uses
+completion/verification, not the pruning flag. Resource matching, API formats,
+server-owned workload posture, backup operations, retention and collection
+behaviour are unchanged. Shared component controls plus
+`ProxmoxBackupsTable.test.tsx` exercise the real parser/model consumers in both
+views; the offline `backup-point-state.cjs` browser fixture also consumes the
+shipped PBS help. These are source/consuming proofs, not native restore, guest
+thaw, every-filesystem writes, installed recovery or publication evidence.
+
+
 Webhook destination edits restore submitted masks per key while preserving
 explicit map edits/removals. They retain encrypted persistence, serialized
 save-before-publish and owned rollback on live publication failure; invalid

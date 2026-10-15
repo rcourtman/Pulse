@@ -223,6 +223,57 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it.each(['date', 'coverage'])(
+    'keeps point verification separate from pruning and workload posture in %s',
+    async (view) => {
+      let verified: boolean | undefined = false;
+      mockBackupAPIs('protected');
+      apiFetchMock.mockImplementation((url: string) =>
+        Promise.resolve(
+          jsonResponse(
+            url === '/api/backups/pbs'
+              ? { data: { backups: [{ ...pbsPayload.data.backups[0], verified }] } }
+              : { data: { storageBackups: [], guestSnapshots: [], backupTasks: [] } },
+          ),
+        ),
+      );
+      window.history.replaceState({}, '', `/proxmox/backups/${view}`);
+      const { container } = renderInRouter(() => (
+        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+      ));
+      const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
+      await waitFor(() => expect(refresh).toBeEnabled());
+      if (view === 'coverage') {
+        await fireEvent.click(
+          screen.getByRole('button', { name: /expand details for pbs-docker/i }),
+        );
+      }
+      const primary = () => container.querySelector('[data-backup-artifact-state]');
+      expect(primary()).toHaveTextContent('Unverified');
+      expect(screen.getByText('Prune protected')).toBeInTheDocument();
+      const initialRoute = window.location.pathname;
+      for (const next of [true, undefined]) {
+        verified = next;
+        refresh.focus();
+        await fireEvent.click(refresh);
+        await waitFor(() => expect(refresh).toBeEnabled());
+        await waitFor(() =>
+          expect(primary()).toHaveTextContent(next ? 'Verified' : 'Unknown verification'),
+        );
+        expect(screen.getByText('Prune protected')).toBeInTheDocument();
+        expect(window.location.pathname).toBe(initialRoute);
+        expect(refresh).toHaveFocus();
+      }
+      if (view === 'coverage') {
+        // A server-owned workload verdict is not recomputed from the point badge.
+        expect(container.querySelector('[data-proxmox-backup-row="coverage"]')).toHaveTextContent(
+          'Protected',
+        );
+        expect(screen.getByText('Restore evidence')).toBeInTheDocument();
+      }
+    },
+  );
+
   it('refreshes readable inventories and posture without leaving the filtered expanded view', async () => {
     mockBackupAPIs();
     window.history.replaceState({}, '', '/proxmox/backups/coverage?q=pbs-docker&node=pve-a');

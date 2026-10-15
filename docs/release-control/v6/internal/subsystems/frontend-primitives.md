@@ -4767,6 +4767,17 @@ resolves late` in
 
 ## Current State
 
+### Independent backup point evidence (15 October 2026)
+
+The Proxmox Coverage and By date State consumers render completion/verification
+and pruning protection as separate shared MetadataBadge instances. The existing
+`wrap` affordance contains both in narrow cells. No badge primitive, resource
+identity, row action, table shell or collection authority changes. Shared render
+controls and `ProxmoxBackupsTable.test.tsx` cover replacement through both real
+consumer tables, with source-bound desktop/narrow browser proof. A prune flag is
+not successful verification, restore evidence or a workload protection verdict.
+
+
 ### Recovery backup-record polling controls
 
 `RecoverySettingsPanel.tsx` presents backup-record polling as a saved setting,
