@@ -8,7 +8,7 @@
 #   3. final frontend browser receipt coverage (same range semantics as CI)
 #   4. guard/registry snapshot tests when the subsystem registry changed
 #   5. mutation registry audits (fail closed on unclassified API routes)
-#   6. compilation plus tests for the Go packages the outgoing commits touch
+#   6. Go compilation plus touched-package tests (all packages for graph changes)
 #   7. frontend type-check when frontend-modern changed (dependencies required)
 #
 # Usage: scripts/dev-prepush.sh [base-ref]
@@ -66,6 +66,7 @@ if ! RANGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
 fi
 CHANGED=$(git diff --name-only "$RANGE_BASE" "$HEAD_SHA")
 CHANGED_GO=$(printf '%s\n' "$CHANGED" | grep -E '\.go$' || true)
+CHANGED_GO_GRAPH=$(printf '%s\n' "$CHANGED" | grep -E '^go\.(mod|sum)$' || true)
 
 # Match Build and Test's strict audit paths. A known-rejected graph should not
 # wait for the expensive source checks, or get a local passing verdict instead.
@@ -119,7 +120,10 @@ if printf '%s\n' "$CHANGED" | grep -q 'docs/release-control/v6/internal/subsyste
   python3 scripts/release_control/subsystem_lookup_test.py || fail "subsystem lookup snapshot test (slow, ~3m)"
 fi
 
-if [ -n "$CHANGED_GO" ]; then
+# A dependency/toolchain-only commit can break every package without changing
+# a .go file. It needs the same build and mutation checks, plus the complete
+# module test selection rather than an empty list of touched source packages.
+if [ -n "$CHANGED_GO" ] || [ -n "$CHANGED_GO_GRAPH" ]; then
   # internal/api embeds frontend-modern/dist; a stub keeps compilation working
   # in worktrees that never built the frontend. CI does the same for test jobs.
   if [ ! -f internal/api/frontend-modern/dist/index.html ]; then
@@ -136,11 +140,17 @@ if [ -n "$CHANGED_GO" ]; then
     -run 'Test(EveryRegisteredMutationHasDisposition|InfrastructureAPIRoutesResolveToRegistry|TransportCommandCatalogsResolveToRegistry|PatrolJobRegistrationResolvesToRegistry|RuntimeCandidateAuditNegativeFixtures|ActionRouteMethodAuthorityIsExactAndLookalikesFailClosed|NonAdmittingTransportMessagesCannotCarryDispatchAuthority|UnknownTransportLookalikeFailsClosed|RegisteredModelMutationSchemasResolveToClosedRegistry|RetiredMutationAliasesCannotShadowExtensions)' \
     || fail "mutation registry audits"
 
-  step "Go tests for touched packages (no -race locally)"
-  PKGS=$(printf '%s\n' "$CHANGED_GO" | xargs -n1 dirname | sort -u | sed 's|^|./|')
+  if [ -n "$CHANGED_GO_GRAPH" ]; then
+    TEST_SCOPE='changed dependency graph'
+    PKGS='./...'
+  else
+    TEST_SCOPE='touched packages'
+    PKGS=$(printf '%s\n' "$CHANGED_GO" | xargs -n1 dirname | sort -u | sed 's|^|./|')
+  fi
+  step "Go tests for $TEST_SCOPE (no -race locally)"
   echo "$PKGS"
   # shellcheck disable=SC2086
-  go test -count=1 -timeout 15m $PKGS || fail "go tests for touched packages"
+  go test -count=1 -timeout 15m $PKGS || fail "go tests for $TEST_SCOPE"
 fi
 
 if printf '%s\n' "$CHANGED" | grep '^frontend-modern/' >/dev/null; then

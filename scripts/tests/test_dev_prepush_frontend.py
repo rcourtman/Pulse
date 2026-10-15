@@ -1,4 +1,7 @@
-"""Exercise the local delivery gate, not a live advisory service or Go suite."""
+"""Exercise local delivery admission, including disposable Go graph consumers.
+
+No live advisory service or Pulse application suite runs inside these fixtures.
+"""
 
 from __future__ import annotations
 
@@ -143,13 +146,13 @@ class DevPrepushFixture(unittest.TestCase):
         self.git("commit", "--quiet", *message)
         return self.git("rev-parse", "HEAD").stdout.strip()
 
-    def run_gate(self, *, dependencies: bool = True):
+    def run_gate(self, *, dependencies: bool = True, timeout: int = 30):
         if dependencies:
             (self.repo / "frontend-modern/node_modules").mkdir(exist_ok=True)
         result = subprocess.run(
             ["bash", "scripts/dev-prepush.sh", self.base],
             cwd=self.repo, env=self.env, text=True, capture_output=True,
-            check=False, timeout=30,
+            check=False, timeout=timeout,
         )
         calls = [json.loads(line) for line in self.calls.read_text().splitlines()] if self.calls.exists() else []
         guards = [json.loads(line) for line in self.guard_calls.read_text().splitlines()] if self.guard_calls.exists() else []
@@ -275,6 +278,185 @@ class DevPrepushSourceIdentityTest(DevPrepushFixture):
         self.assertNotIn("All pre-push checks passed", result.stdout)
         self.assertEqual([call["args"] for call in calls], [["run", "type-check"]])
         self.assertEqual(len(guards), 1)
+
+
+class DevPrepushGoGraphTest(DevPrepushFixture):
+    def setUp(self):
+        super().setUp()
+        self.go_calls = Path(self.directory.name) / "go-calls"
+        self.real_go = shutil.which("go", path=self.env["PATH"])
+        self.assertIsNotNone(self.real_go, "the local Go gate needs the declared compiler")
+        self.env.update(
+            PREPUSH_GO_CALLS=str(self.go_calls), PREPUSH_GO_BUILD_STATUS="0",
+            PREPUSH_GO_MUTATION_STATUS="0", PREPUSH_GO_PACKAGE_STATUS="0",
+            PREPUSH_REAL_GO="", GOTOOLCHAIN="local", GOPROXY="off", GOSUMDB="off",
+        )
+        # Match the real checkout's ignored embed output. The gate must still
+        # reject tracked/untracked source mutations, not its ignored build stub.
+        self.write(".gitignore", (self.repo / ".gitignore").read_text() +
+                   "internal/api/frontend-modern/dist/\n")
+        self.write("go.mod", "module example.invalid/local-preflight\n\ngo 1.26.0\n\n"
+                   "require example.invalid/prepush-dependency v0.0.0\n"
+                   "replace example.invalid/prepush-dependency => ./fixtures/dependency-v1\n")
+        self.write("go.sum", "")
+        self.write("main.go", "package main\nfunc main() {}\n")
+        self.write("internal/mutationregistry/registry.go", "package mutationregistry\n")
+        self.write("internal/ai/tools/tools.go", "package tools\n")
+        # Two entirely local dependency versions keep runtime compilation valid
+        # while an API used only by a consuming test disappears in v2.
+        for version in (1, 2):
+            self.write(f"fixtures/dependency-v{version}/go.mod",
+                       "module example.invalid/prepush-dependency\n\ngo 1.26.0\n")
+            self.write(f"fixtures/dependency-v{version}/dependency.go",
+                       "package dependency\nfunc RuntimeAPI() int { return 1 }\n" +
+                       ("func TestOnlyAPI() int { return 1 }\n" if version == 1 else ""))
+        self.write("consumer/value.go", 'package consumer\nimport "example.invalid/prepush-dependency"\n'
+                   'func Value() int { return dependency.RuntimeAPI() }\n')
+        self.write("consumer/value_test.go", 'package consumer\nimport ("testing"; "example.invalid/prepush-dependency")\n'
+                   'func TestDependencyAPI(t *testing.T) { if dependency.TestOnlyAPI() != Value() { t.Fatal("wrong value") } }\n')
+        self.git("add", "--", ".gitignore", "go.mod", "go.sum", "main.go", "internal", "fixtures", "consumer")
+        self.git("commit", "--quiet", "-m", "Standalone local Go graph fixtures")
+        self.base = self.git("rev-parse", "HEAD").stdout.strip()
+        go = self.bin / "go"
+        go.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json,os,subprocess,sys\n"
+            "args=sys.argv[1:]\n"
+            "with open(os.environ['PREPUSH_GO_CALLS'],'a') as output:\n"
+            " output.write(json.dumps(args)+'\\n')\n"
+            "if os.environ['PREPUSH_REAL_GO']:\n"
+            " sys.exit(subprocess.run([os.environ['PREPUSH_REAL_GO'],*args]).returncode)\n"
+            "if args[:1] == ['build']: key='PREPUSH_GO_BUILD_STATUS'\n"
+            "elif args[:1] == ['test']:\n"
+            " key='PREPUSH_GO_MUTATION_STATUS' if './internal/mutationregistry' in args else 'PREPUSH_GO_PACKAGE_STATUS'\n"
+            "else: sys.exit(64)\n"
+            "sys.exit(int(os.environ[key]))\n"
+        )
+        go.chmod(0o755)
+
+    def graph_change(self, path="go.mod"):
+        original = (self.repo / path).read_text()
+        self.write(path, original + ("\n// graph-only fixture change\n" if path == "go.mod" else "\n"))
+        self.git("add", "--", path)
+        self.git("commit", "--quiet", "-m", "Go dependency-only fixture change")
+
+    def recorded_go(self):
+        return [json.loads(line) for line in self.go_calls.read_text().splitlines()] if self.go_calls.exists() else []
+
+    def assert_go_selection(self, packages):
+        calls = self.recorded_go()
+        self.assertEqual(len(calls), 3, calls)
+        self.assertEqual(calls[0], ["build", "./..."])
+        self.assertEqual(calls[1][:4], ["test", "./internal/mutationregistry", "./internal/ai/tools", "-count=1"])
+        self.assertIn("-run", calls[1])
+        self.assertEqual(calls[2], ["test", "-count=1", "-timeout", "15m", *packages])
+
+    def test_manifest_only_change_checks_the_entire_module(self):
+        self.graph_change()
+        result, calls, guards = self.run_gate(dependencies=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Go tests for changed dependency graph", result.stdout)
+        self.assert_go_selection(["./..."])
+        self.assertEqual(calls, [])
+        self.assertEqual(len(guards), 1)
+
+    def test_checksum_only_change_checks_the_entire_module(self):
+        self.graph_change("go.sum")
+        result, _, _ = self.run_gate(dependencies=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assert_go_selection(["./..."])
+
+    def test_source_and_graph_change_still_selects_all_packages(self):
+        self.graph_change()
+        self.change("consumer/value.go")
+        result, _, _ = self.run_gate(dependencies=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assert_go_selection(["./..."])
+
+    def test_source_only_change_keeps_the_existing_touched_package_scope(self):
+        self.change("consumer/value.go")
+        result, _, _ = self.run_gate(dependencies=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assert_go_selection(["./consumer"])
+
+    def test_unrelated_documentation_does_not_start_go(self):
+        self.change("README.md")
+        result, _, _ = self.run_gate(dependencies=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.recorded_go(), [])
+
+    def test_each_go_failure_stays_a_failed_gate_for_graph_only_changes(self):
+        self.graph_change()
+        for key in ("PREPUSH_GO_BUILD_STATUS", "PREPUSH_GO_MUTATION_STATUS", "PREPUSH_GO_PACKAGE_STATUS"):
+            with self.subTest(stage=key):
+                self.env[key] = "23"
+                result, _, _ = self.run_gate(dependencies=False)
+                self.env[key] = "0"
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertNotIn("All pre-push checks passed", result.stdout)
+                self.assert_go_selection(["./..."])
+                self.go_calls.unlink()
+
+    def test_large_change_list_does_not_hide_dependency_only_changes(self):
+        self.graph_change()
+        for index in range(600):
+            self.write("zzz/" + str(index) + "x" * 140 + ".txt", "fixture\n")
+        self.git("add", "--", "zzz")
+        self.git("commit", "--quiet", "-m", "Large changed-file fixture")
+        self.assertGreater(len(self.git("diff", "--name-only", self.base, "HEAD").stdout), 65536)
+        result, _, _ = self.run_gate(dependencies=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assert_go_selection(["./..."])
+
+    def test_incoming_upstream_graph_is_not_an_outgoing_change(self):
+        original_base = self.base
+        self.graph_change()
+        upstream = self.git("rev-parse", "HEAD").stdout.strip()
+        self.git("checkout", "--quiet", "--detach", original_base)
+        self.change("README.md")
+        self.base = upstream
+        result, _, _ = self.run_gate(dependencies=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.recorded_go(), [])
+
+    def test_real_compiler_rejects_a_malformed_manifest_only_commit(self):
+        self.write("go.mod", (self.repo / "go.mod").read_text() + "invalid-fixture-directive\n")
+        self.git("add", "--", "go.mod")
+        self.git("commit", "--quiet", "-m", "Compiler-rejected manifest-only fixture")
+        self.env["PREPUSH_REAL_GO"] = self.real_go
+        result, _, _ = self.run_gate(dependencies=False)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("unknown directive: invalid-fixture-directive", result.stdout + result.stderr)
+        self.assertNotIn("All pre-push checks passed", result.stdout)
+        self.assert_go_selection(["./..."])
+
+    def test_real_compatible_checksum_change_passes_consuming_tests(self):
+        self.graph_change("go.sum")
+        self.env["PREPUSH_REAL_GO"] = self.real_go
+        # First compilation may need to populate the disposable VM's standard
+        # library cache. This fixture budget changes no application deadline.
+        result, _, _ = self.run_gate(dependencies=False, timeout=120)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("example.invalid/local-preflight/consumer", result.stdout)
+        self.assertIn("All pre-push checks passed", result.stdout)
+        self.assert_go_selection(["./..."])
+
+    def test_real_graph_change_cannot_skip_test_only_consumer_breakage(self):
+        self.env["PREPUSH_REAL_GO"] = self.real_go
+        before = subprocess.run([self.real_go, "test", "./..."], cwd=self.repo, env=self.env,
+                                text=True, capture_output=True, timeout=120)
+        self.assertEqual(before.returncode, 0, before.stdout + before.stderr)
+        self.write("go.mod", (self.repo / "go.mod").read_text().replace("dependency-v1", "dependency-v2"))
+        self.git("add", "--", "go.mod")
+        self.git("commit", "--quiet", "-m", "Runtime-compatible graph breaks a test consumer")
+        result, _, _ = self.run_gate(dependencies=False, timeout=120)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("undefined: dependency.TestOnlyAPI", result.stdout + result.stderr)
+        self.assertNotIn("FAIL: go build", result.stdout)
+        self.assertNotIn("FAIL: mutation registry audits", result.stdout)
+        self.assertIn("FAIL: go tests for changed dependency graph", result.stdout)
+        self.assertNotIn("All pre-push checks passed", result.stdout)
+        self.assert_go_selection(["./..."])
 
 
 class DevPrepushFrontendTest(DevPrepushFixture):
