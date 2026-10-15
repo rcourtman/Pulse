@@ -223,6 +223,153 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it('refreshes readable inventories and posture without leaving the filtered expanded view', async () => {
+    mockBackupAPIs();
+    window.history.replaceState({}, '', '/proxmox/backups/coverage?q=pbs-docker&node=pve-a');
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+    const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
+    await waitFor(() => expect(refresh).toBeEnabled());
+    await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
+    const details = () => container.querySelector('[data-inline-detail-for="resource:ct-112"]');
+    expect(details()).toHaveTextContent('PVE file');
+    expect(details()).toHaveTextContent('Snapshot');
+    const previousRoute = window.location.pathname + window.location.search;
+    expect(screen.getByText(/Restore points reflect the last inventory read/)).toBeInTheDocument();
+
+    // Removed restore points must disappear too: a refresh is replacement,
+    // not an append-only merge of the previously readable inventory.
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url === '/api/backups/pve'
+            ? {
+                data: {
+                  ...pvePayload.data,
+                  storageBackups: [],
+                  guestSnapshots: [],
+                },
+              }
+            : pbsPayload,
+        ),
+      ),
+    );
+    refresh.focus();
+    await fireEvent.click(refresh);
+    await waitFor(() => expect(refresh).toBeEnabled());
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pve')).toHaveLength(2);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(2);
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+    expect(details()).toHaveTextContent('Restore evidence');
+    expect(details()).toHaveTextContent('PBS');
+    expect(details()).not.toHaveTextContent('PVE file');
+    expect(details()).not.toHaveTextContent('Snapshot');
+    expect(window.location.pathname + window.location.search).toBe(previousRoute);
+    expect(refresh).toHaveFocus();
+  });
+
+  it('keeps a refresh single-flight until both inventories and posture have settled', async () => {
+    mockBackupAPIs();
+    const posture = await apiFetchJSONMock();
+    apiFetchJSONMock.mockClear();
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+    const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
+    await waitFor(() => expect(refresh).toBeEnabled());
+    const rows = () => container.querySelectorAll('[data-proxmox-backup-row="recoverable"]');
+    expect(rows()).toHaveLength(3);
+    let finishPVE!: (value: Response) => void;
+    let finishPBS!: (value: Response) => void;
+    let finishPosture!: (value: unknown) => void;
+    apiFetchMock.mockImplementation(
+      (url: string) =>
+        new Promise<Response>((resolve) => {
+          if (url === '/api/backups/pve') finishPVE = resolve;
+          else finishPBS = resolve;
+        }),
+    );
+    apiFetchJSONMock.mockReturnValue(new Promise((resolve) => (finishPosture = resolve)));
+    await fireEvent.click(refresh);
+    expect(screen.getByRole('button', { name: 'Reading backups…' })).toBe(refresh);
+    expect(refresh).toBeDisabled();
+    expect(rows()).toHaveLength(3);
+    await fireEvent.click(refresh);
+    expect(apiFetchMock).toHaveBeenCalledTimes(4);
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+    finishPVE(jsonResponse({ data: { guestSnapshots: [], storageBackups: [], backupTasks: [] } }));
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(refresh).toBeDisabled();
+    finishPBS(new Response('{}', { status: 503 }));
+    await screen.findByText(/PBS backup inventory is unavailable/);
+    expect(rows()).toHaveLength(0);
+    expect(refresh).toBeDisabled();
+    finishPosture(posture);
+    await waitFor(() => expect(refresh).toBeEnabled());
+    expect(refresh).toHaveTextContent('Refresh backups');
+    expect(window.location.pathname).toBe('/proxmox/backups/date');
+  });
+
+  it.each(['empty', 'failed'] as const)(
+    'can discover restore points from an initially %s inventory without navigating away',
+    async (initial) => {
+      mockBackupAPIs();
+      apiFetchMock.mockImplementation((url: string) =>
+        Promise.resolve(
+          initial === 'failed'
+            ? new Response('{}', { status: 503 })
+            : jsonResponse({
+                data:
+                  url === '/api/backups/pve'
+                    ? { guestSnapshots: [], storageBackups: [], backupTasks: [] }
+                    : { backups: [] },
+              }),
+        ),
+      );
+      window.history.replaceState({}, '', '/proxmox/backups/date');
+      const { container } = renderInRouter(() => (
+        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+      ));
+      const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
+      await waitFor(() => expect(refresh).toBeEnabled());
+      expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(0);
+      mockBackupAPIs();
+      await fireEvent.click(refresh);
+      await waitFor(() =>
+        expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(
+          3,
+        ),
+      );
+      expect(screen.queryByText(/backup inventory is unavailable/)).not.toBeInTheDocument();
+      expect(window.location.pathname).toBe('/proxmox/backups/date');
+    },
+  );
+
+  it('keeps the all-failed Refresh action disabled while the initial posture read is still pending', async () => {
+    mockBackupAPIs();
+    const posture = deferred<unknown>();
+    apiFetchJSONMock.mockReturnValue(posture.promise);
+    apiFetchMock.mockImplementation(() => Promise.resolve(new Response('{}', { status: 503 })));
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+    const refresh = await screen.findByRole('button', { name: 'Refresh' });
+    expect(refresh).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Reading backups…' })).toBeDisabled();
+    fireEvent.click(refresh);
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    posture.resolve({ data: [], policy: {} });
+    await waitFor(() => expect(refresh).toBeEnabled());
+    mockBackupAPIs();
+    fireEvent.click(refresh);
+    await waitFor(() =>
+      expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(3),
+    );
+  });
+
   it('keeps successful backup inventory independent of unavailable datastore capacity', async () => {
     mockBackupAPIs();
     const failed = {
@@ -1104,8 +1251,11 @@ describe('independent Proxmox backup inventory reads', () => {
       apiFetchMock.mockImplementation((url) =>
         Promise.resolve(jsonResponse(url.endsWith('/pbs') ? pbsPayload : readPvePayload)),
       );
-      if (failed === 'both') fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
-      else
+      if (failed === 'both') {
+        const refresh = screen.getByRole('button', { name: 'Refresh' });
+        await waitFor(() => expect(refresh).toBeEnabled());
+        fireEvent.click(refresh);
+      } else
         fireEvent.click(
           screen.getByRole('button', { name: `Retry ${failed.toUpperCase()} inventory` }),
         );
@@ -1131,7 +1281,9 @@ describe('independent Proxmox backup inventory reads', () => {
     apiFetchMock.mockImplementation((url) =>
       url.endsWith('/pve') ? pending.promise : Promise.resolve(jsonResponse(pbsPayload)),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    const refresh = screen.getByRole('button', { name: 'Refresh' });
+    await waitFor(() => expect(refresh).toBeEnabled());
+    fireEvent.click(refresh);
     await screen.findByText(/PVE backup inventory is unavailable/);
     await waitFor(() => expect(recoverableRows()).toHaveLength(1));
     pending.resolve(jsonResponse(readPvePayload));

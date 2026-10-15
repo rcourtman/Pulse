@@ -141,15 +141,19 @@ export const ProxmoxBackupsTable: Component<{
   const hasReadableInventory = () =>
     inventorySources.some(({ query }) => query.resolvedOnce() && !query.error());
   const allInventoriesFailed = () => inventorySources.every(({ query }) => Boolean(query.error()));
-  const retryAllInventories = () => {
-    if (inventorySources.some(({ query }) => query.loading())) return;
-    void Promise.all([backups.refetch(), pbsBackups.refetch(), protectionPostures.refetch()]);
-  };
   const { isMobile } = useBreakpoint();
   const location = useLocation();
   const protectionPostures = useProtectionPostures(() =>
     (props.workloads ?? []).map((workload) => workload.id),
   );
+  const backupReadPending = () =>
+    inventorySources.some(({ query }) => query.loading()) || protectionPostures.response.loading;
+  const refreshBackups = () => {
+    if (backupReadPending()) return;
+    // These APIs read Pulse's already-collected snapshots. Do not turn a
+    // presentation refresh into a backup, guest probe or recurring full read.
+    void Promise.all([backups.refetch(), pbsBackups.refetch(), protectionPostures.refetch()]);
+  };
 
   // Saved views persist the current route query, so every filter and the active
   // backup workspace must share one URL owner. View changes also clear the
@@ -666,6 +670,20 @@ export const ProxmoxBackupsTable: Component<{
 
   return (
     <div class="space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p class="min-w-0 flex-1 basis-64 text-xs text-muted">
+          Restore points reflect the last inventory read. Refresh to read new or removed backups.
+        </p>
+        <button
+          type="button"
+          class="min-h-10 shrink-0 rounded-md border border-border px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-60"
+          title="Read Pulse’s collected inventory and protection posture without starting a backup or contacting guests."
+          disabled={backupReadPending()}
+          onClick={refreshBackups}
+        >
+          {backupReadPending() ? 'Reading backups…' : 'Refresh backups'}
+        </button>
+      </div>
       <For each={inventorySources}>
         {({ label, query }) => (
           <Show when={!query.resolvedOnce() || query.error()}>
@@ -714,7 +732,8 @@ export const ProxmoxBackupsTable: Component<{
           <PlatformErrorState
             title="Could not load Proxmox backup inventory"
             description="PVE and PBS backup inventories are unavailable. Counts are incomplete. Refresh to retry both sources."
-            onRefresh={retryAllInventories}
+            onRefresh={refreshBackups}
+            refreshDisabled={backupReadPending()}
           />
         }
       >

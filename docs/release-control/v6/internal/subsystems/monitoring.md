@@ -17,6 +17,35 @@
 
 ## Purpose
 
+### Backups can reread healthy inventory without leaving the view
+
+The existing Backups surface discloses that its restore points reflect the last
+inventory read, not a live check. Refresh is available in readable, empty and
+failed states. It rereads the existing PVE/PBS collected-snapshot APIs and current
+protection posture; it starts no backup or guest command and adds no recurring
+inventory poll. No API, trust, policy or native recovery authority changes.
+
+The existing independent read owners settle each source. While either inventory
+or a foreground posture read is pending, another whole-view refresh is disabled
+and rejected by the handler. Retained readable observations stay visible pending
+replacement; a failed source withdraws its old points, while successful empty
+inventory is authoritative replacement. Existing per-source retry, organisation
+switch cancellation, query ownership and resource health remain independent.
+Filters, route, logical row expansion and the refresh control are not remounted
+to perform a read. This does not establish appliance collection freshness,
+backup completion, thaw or filesystem writes.
+
+The existing all-failed error action uses the same pending predicate, including
+an initial posture read that has not settled yet. It must not appear enabled
+while its handler would reject the click. Other platform error actions retain
+their existing behaviour when no disabled state is supplied.
+
+`ProxmoxBackupsTable.test.tsx` covers readable/empty/failed starts, replacement,
+per-owner pending settlement and disabled duplicate activation. Consuming desktop
+and narrow browser proof must drive actual synthetic GET responses through the
+production reader and tables, preserving view state and inspecting current,
+pending, changed, failed and successful-empty pixels.
+
 ### Efficient guest inventory distinguishes deletion from node grace
 
 A completed cluster guest inventory with no guests on a currently online node

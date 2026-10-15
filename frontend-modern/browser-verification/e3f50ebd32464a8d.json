@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "d6be11a481cc523cf00c62a63de5562352b14090",
+  "verified_at": "2026-10-15T08:45:09Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "7a56ba677ea9c189ecfdf75c5099ece31f8d7d9700ffe8156960fb2c18e6551d",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "24e17c945aa7ec3757b87ac47eb298d5d1009edb325a5a70049f94707fa33636"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Existing production Backups table, shared platform error action, query owner, API client, router and shipped CSS, compiled in the exact-source offline proof VM at the parent. Synthetic GET responses only; Playwright 1.56.1 matches the integration lock. Chromium desktop light and WebKit narrow dark touch.",
+    "Healthy expanded Coverage, held whole-view read with disabled duplicate activation, current replacement of PVE/PBS points and removal of a snapshot without losing route/search/node filters/expansion. The same refresh DOM owner remains mounted.",
+    "By date PBS failure withdraws stale PBS points while preserving independent PVE data. Successful empty replacement remains refreshable. Both-source failure also disables the legacy error action through pending posture; after settlement that actual action recovers inventory.",
+    "Fifty completed checks, thirty-six synthetic GETs and twelve final captures. All twelve were opened natively and inspected; notices, state, actions and current/empty/error evidence are legible at both widths, with no document horizontal overflow or uncaught page errors. This is read/presentation recovery, not appliance freshness, backup completion, guest thaw/writes or installed recovery."
+  ],
+  "interactions": [
+    "Open and expand real Coverage with the desktop disclosure button or a narrow row tap. Activate Refresh backups with desktop Enter or phone touch; hold each producer read, verify retained evidence and rejected duplicate native activation.",
+    "Release PVE, PBS and posture independently, verify both changed restore dates, removed snapshot, current attention explanation, original control identity and unchanged route/filters/expansion. Switch to By date and exercise source failure followed by valid empty recovery.",
+    "Drive both source reads to failure with posture still held; verify both refresh controls disabled, a native tap/click does not duplicate work, then release posture and use the existing all-failed Refresh to recover one real consuming row.",
+    "The separate direct Vite preview expired before its first API read and produced a blank capture; it establishes no product acceptance. Retain it separately, with the successful exact-source static preview and all native image inspections. Browser and loopback-server closure were awaited."
+  ]
+}
