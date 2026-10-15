@@ -866,3 +866,40 @@ func TestStatusFromStorageStateCoversPBSAndPVEVocabulary(t *testing.T) {
 		}
 	}
 }
+
+func TestPMGConnectionHealthUsesOnlyConfiguredReference(t *testing.T) {
+	now := time.Now()
+	resource := Resource{
+		ID: "runtime-a", Name: "gateway", Type: ResourceTypePMG, Status: StatusOnline, LastSeen: now,
+		Canonical: &CanonicalIdentity{PrimaryID: "agent:runtime-a", Aliases: []string{"gateway", "shared.example.invalid", "pmg:other"}},
+		PMG:       &PMGData{InstanceID: "pmg-generated", ConnectionID: "pmg:configured-a"},
+	}
+	for _, tc := range []struct {
+		reference string
+		want      ResourceHealthVerdict
+	}{
+		{"pmg:configured-a", HealthCritical}, {"pmg:other", HealthOK}, {"gateway", HealthOK}, {"shared.example.invalid", HealthOK},
+	} {
+		got := EvaluateResourceHealth(resource, []ResourceHealthAlert{{ResourceID: tc.reference, Level: "critical", Type: "connection-degraded"}}, now)
+		if got.Verdict != tc.want {
+			t.Fatalf("reference %q health = %s, want %s", tc.reference, got.Verdict, tc.want)
+		}
+	}
+	resource.PMG.ConnectionID = "pmg:configured-b"
+	got := EvaluateResourceHealth(resource, []ResourceHealthAlert{{ResourceID: "pmg:configured-a", Level: "critical", Type: "connection-degraded"}}, now)
+	if got.Verdict != HealthOK {
+		t.Fatal("critical connection alert crossed colliding labels/host aliases")
+	}
+	resource.Status = StatusWarning
+	if got := EvaluateResourceHealth(resource, nil, now); got.Verdict != HealthAttention {
+		t.Fatal("collection degradation hidden without an alert")
+	}
+	resource.Status = StatusOnline
+	if got := EvaluateResourceHealth(resource, nil, now); got.Verdict != HealthOK {
+		t.Fatal("complete recovery retained adverse health")
+	}
+	resource.PMG.ConnectionID = ""
+	if got := EvaluateResourceHealth(resource, []ResourceHealthAlert{{ResourceID: "pmg:gateway", Level: "critical"}}, now); got.Verdict != HealthOK {
+		t.Fatal("legacy absence inferred from display/runtime ID")
+	}
+}

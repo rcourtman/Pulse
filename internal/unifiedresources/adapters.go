@@ -1692,6 +1692,7 @@ func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIde
 		CustomURL: instance.GuestURL,
 		PMG: &PMGData{
 			InstanceID:       instance.ID,
+			ConnectionID:     instance.ConnectionID,
 			Hostname:         extractHostname(instance.Host),
 			HostURL:          strings.TrimSpace(instance.Host),
 			GuestURL:         strings.TrimSpace(instance.GuestURL),

@@ -3051,6 +3051,13 @@ func (v PMGInstanceView) InstanceID() string {
 	return v.r.PMG.InstanceID
 }
 
+func (v PMGInstanceView) ConnectionID() string {
+	if v.r == nil || v.r.PMG == nil {
+		return ""
+	}
+	return v.r.PMG.ConnectionID
+}
+
 func (v PMGInstanceView) Status() ResourceStatus {
 	if v.r == nil {
 		return ""

@@ -6931,3 +6931,15 @@ update pipeline's existing backup of the installed binary before replacing it
 and its existing history-entry rollback. The data directory, metrics and
 configuration stores, backups, snapshots and recovery points are untouched,
 and no new backup, retention or restore path is added.
+
+### PMG attribution does not replace storage evidence (15 October 2026)
+
+PMG data's optional `connectionId` is an explicit configured alert reference,
+preserved by the unified adapter and canonical alias projection. It changes
+neither resource/metrics identities nor backup inventory completeness. A failed
+PMG read still retains previously accepted backups; a complete empty read can
+replace only that connection's inventory. `TestPMGNodeDiscoveryFailurePreservesAcceptedBackups`
+and `TestPMGConfiguredConnectionIdentity` cover those distinct boundaries;
+connection recovery is not backup restoration or native guest safety evidence.
+
+The full PMG detail projection retains the configured connection reference without turning its presence or version read into backup completeness. Detail mapping changes no backup list, retained source time or restoration decision.

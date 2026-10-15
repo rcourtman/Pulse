@@ -8543,3 +8543,28 @@ retained/unavailable source classifications preserve their existing semantics.
 The connected stacked-model controls retain explicit aggregate fallback tests;
 the browser fixture checks mixed and all-unknown lists in the actual summaries
 as well as both drawers, including live replacement at narrow widths.
+
+### PMG explicit connection-alert reference (15 October 2026)
+
+PMG `connectionId` is an optional scoped reference supplied by the poller from
+configuration. The adapter preserves it in PMG data; canonical aliases include
+only that explicit reference, never one inferred by stripping a generated ID
+or joining presentation names/hostnames. Existing resource IDs, primary
+identities, metrics targets and aliases remain. Legacy absence stays absent.
+`TestPMGConfiguredConnectionIdentity` exercises colliding labels/hosts, exact
+alias resolution and degraded-to-online replacement without merging siblings.
+`TestPMGConnectionAliasRequiresExplicitReference` rejects inferred references.
+The reference is attribution, not permission, a health override or proof of
+native monitoring/release recovery.
+
+The canonical PMG view also exposes the explicit connection reference unchanged
+(or empty for legacy/nil data), allowing full-instance consumers to retain the
+same attribution as the slim resource. `TestPMGViewConfiguredConnectionReference`
+covers this boundary without inferring a value from the runtime ID or label.
+
+Canonical PMG health matches a connection alert through that same explicit
+configured `PMG.ConnectionID`, not arbitrary canonical/name/hostname aliases.
+A critical connection failure therefore survives actual Resources HTTP health
+projection without colouring a sibling sharing its presentation data.
+`TestPMGConnectionHealthUsesOnlyConfiguredReference` covers critical precedence,
+collision negatives, absent references, degraded collection and recovery.

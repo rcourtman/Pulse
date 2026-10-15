@@ -762,6 +762,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	now := time.Now()
 	pmgInst := models.PMGInstance{
 		ID:               PMGMonitorResourceID(instanceName),
+		ConnectionID:     "pmg:" + instanceCfg.Name,
 		Name:             instanceName,
 		Host:             instanceCfg.Host,
 		GuestURL:         instanceCfg.GuestURL,
@@ -795,11 +796,10 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	if version != nil {
 		pmgInst.Version = strings.TrimSpace(version.Version)
 	}
-	m.setProviderConnectionHealth(InstanceTypePMG, instanceName, true)
 	m.resetAuthFailures(instanceName, "pmg")
 
-	// A successful version read establishes connection health, not complete
-	// downstream collection. Preserve missing readings and report failed polls.
+	// Version establishes reachability only. Final collection health must also
+	// account for every selected read; missing readings remain absent.
 	recordReadError := func(operation string, err error) {
 		if err != nil {
 			pollErr = stderrors.Join(pollErr, errors.WrapAPIError(operation, instanceName, err, 0))
@@ -1063,6 +1063,11 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	if backupsComplete {
 		m.state.UpdatePMGBackups(instanceName, pmgBackups)
 	}
+	if pollErr != nil {
+		pmgInst.Status = "degraded"
+		pmgInst.ConnectionHealth = "degraded"
+	}
+	m.setProviderConnectionHealth(InstanceTypePMG, instanceName, pollErr == nil)
 	m.state.UpdatePMGInstance(pmgInst)
 	log.Info().
 		Str("instance", instanceName).

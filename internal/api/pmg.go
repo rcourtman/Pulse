@@ -182,6 +182,7 @@ func mapPMGInstanceViewToModel(v *unifiedresources.PMGInstanceView) models.PMGIn
 
 	inst := models.PMGInstance{
 		ID:               instanceID,
+		ConnectionID:     v.ConnectionID(),
 		Name:             v.Name(),
 		Host:             host,
 		GuestURL:         guestURL,

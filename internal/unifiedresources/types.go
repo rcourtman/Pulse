@@ -1380,6 +1380,7 @@ type PMGDomainStatMeta struct {
 // PMGData contains Proxmox Mail Gateway data.
 type PMGData struct {
 	InstanceID       string    `json:"instanceId,omitempty"`
+	ConnectionID     string    `json:"connectionId,omitempty"` // Authoritative configured connection/alert reference.
 	Hostname         string    `json:"hostname,omitempty"`
 	HostURL          string    `json:"hostUrl,omitempty"`
 	GuestURL         string    `json:"guestUrl,omitempty"`

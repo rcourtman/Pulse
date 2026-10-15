@@ -27301,3 +27301,39 @@ func TestContract_PortablePrivateBootstrapPayloads(t *testing.T) {
 		}
 	}
 }
+
+// The full detail handler must not discard the configured reference while
+// projecting a canonical view, nor invent it for pre-reference snapshots.
+func TestContract_PMGConfiguredReferenceInFullDetail(t *testing.T) {
+	for _, connectionID := range []string{"", "pmg:configured-not-the-label"} {
+		registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+		registry.IngestSnapshot(models.StateSnapshot{PMGInstances: []models.PMGInstance{{
+			ID: "pmg-generated", Name: "display", ConnectionID: connectionID,
+			Status: "degraded", ConnectionHealth: "degraded", LastSeen: time.Now(),
+		}}})
+		monitor := &monitoring.Monitor{}
+		setUnexportedField(t, monitor, "resourceStore", unifiedresources.NewMonitorAdapter(registry))
+		router := &Router{monitor: monitor}
+		recorder := httptest.NewRecorder()
+		router.handleListPMGInstances(recorder, httptest.NewRequest(http.MethodGet, "/api/pmg/instances?id=pmg-generated", nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("HTTP %d: %s", recorder.Code, recorder.Body.String())
+		}
+		var payload struct {
+			Data []map[string]any `json:"data"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if len(payload.Data) != 1 {
+			t.Fatalf("filtered identity changed: %s", recorder.Body.String())
+		}
+		got, present := payload.Data[0]["connectionId"]
+		if present != (connectionID != "") || present && got != connectionID {
+			t.Fatalf("configured reference lost/inferred: %s", recorder.Body.String())
+		}
+		if payload.Data[0]["connectionHealth"] != "degraded" || payload.Data[0]["status"] != "warning" {
+			t.Fatalf("detail hid partial collection: %s", recorder.Body.String())
+		}
+	}
+}

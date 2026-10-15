@@ -19,12 +19,13 @@ func TestHandleListPMGInstancesUsesUnifiedReadStateWithFullPayload(t *testing.T)
 	domainStatsAsOf := now.Add(-30 * time.Second)
 
 	source := models.PMGInstance{
-		ID:       "pmg-1",
-		Name:     "gateway-main",
-		Host:     "https://pmg.example.com:8006",
-		GuestURL: "https://guest.example.com/pmg",
-		Status:   "online",
-		Version:  "8.2",
+		ID:           "pmg-1",
+		ConnectionID: "pmg:configured-key",
+		Name:         "gateway-main",
+		Host:         "https://pmg.example.com:8006",
+		GuestURL:     "https://guest.example.com/pmg",
+		Status:       "online",
+		Version:      "8.2",
 		Nodes: []models.PMGNodeStatus{{
 			Name:    "pmg-node-1",
 			Status:  "online",
@@ -103,7 +104,7 @@ func TestHandleListPMGInstancesUsesUnifiedReadStateWithFullPayload(t *testing.T)
 	}
 
 	got := resp.Data[0]
-	if got.ID != source.ID || got.Name != source.Name || got.GuestURL != source.GuestURL || got.Status != source.Status || got.Version != source.Version {
+	if got.ID != source.ID || got.ConnectionID != source.ConnectionID || got.Name != source.Name || got.GuestURL != source.GuestURL || got.Status != source.Status || got.Version != source.Version {
 		t.Fatalf("basic PMG identity/status fields not preserved: %+v", got)
 	}
 	if got.Host != source.Host {

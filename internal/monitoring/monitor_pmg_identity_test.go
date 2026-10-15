@@ -141,6 +141,9 @@ func TestPMGDiscoveredNodeRouting(t *testing.T) {
 			m.pollPMGInstance(context.Background(), "gateway", f.client(t))
 			state := m.state.GetSnapshot()
 			v := state.PMGInstances[0]
+			if v.ConnectionID != "pmg:gateway" {
+				t.Fatalf("configured connection identity lost: %+v", v)
+			}
 			if v.Status != "online" || len(v.Nodes) != 2 || v.Nodes[0].Name != "mail-a" || v.Nodes[1].Name != "mail-b" {
 				t.Fatalf("node inventory = %+v", v)
 			}
@@ -187,6 +190,12 @@ func TestPMGNodeDiscoveryFailurePreservesAcceptedBackups(t *testing.T) {
 			f.setMode(mode)
 			m.pollPMGInstance(context.Background(), "gateway", client)
 			v := m.state.GetSnapshot().PMGInstances[0]
+			if v.ConnectionID != "pmg:gateway" {
+				t.Fatalf("failed collection lost configured connection identity: %+v", v)
+			}
+			if mode != "version-denied" && (v.Status != "degraded" || v.ConnectionHealth != "degraded") {
+				t.Fatalf("partial collection looks healthy: %+v", v)
+			}
 			status := m.pollStatusMap["pmg::gateway"]
 			if status.ConsecutiveFailures != 1 || status.LastErrorMessage == "" || !status.LastSuccess.Equal(success) {
 				t.Fatalf("failure hidden: %+v", status)

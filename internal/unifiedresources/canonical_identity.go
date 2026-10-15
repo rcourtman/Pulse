@@ -110,6 +110,12 @@ func canonicalAliases(resource Resource, primaryID, platformID, hostname string)
 	if agentID := strings.TrimSpace(canonicalAgentID(resource)); agentID != "" {
 		values = append(values, "agent:"+agentID)
 	}
+	// PMG's runtime and configured connection IDs are different namespaces.
+	// Only the poller's explicit scoped reference can associate its connection
+	// alert; do not reconstruct one from names, host aliases or runtime prefixes.
+	if resource.PMG != nil && CanonicalResourceType(resource.Type) == ResourceTypePMG {
+		values = append(values, strings.TrimSpace(resource.PMG.ConnectionID))
+	}
 	if resource.Proxmox != nil {
 		// Only the node owns its node identity. Guests and storage inherit
 		// the parent's NodeIdentity and NodeAliases for presentation and
