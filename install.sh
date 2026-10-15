@@ -4264,14 +4264,23 @@ if [[ \${#helper_args[@]} -gt 0 ]]; then
 fi
 
 echo "Updating Pulse..."
-tmp_installer=\$(mktemp /tmp/pulse-update-installer.XXXXXX)
-tmp_signature=\$(mktemp /tmp/pulse-update-installer.sig.XXXXXX)
+tmp_installer=""
+tmp_signature=""
 trap 'rm -f "\$tmp_installer" "\$tmp_signature"' EXIT
-if ! curl -fsSL "\$INSTALLER_URL" -o "\$tmp_installer"; then
+if ! tmp_installer=\$(mktemp /tmp/pulse-update-installer.XXXXXX) ||
+   ! tmp_signature=\$(mktemp /tmp/pulse-update-installer.sig.XXXXXX); then
+    echo "Could not create installer verification files; no update attempted." >&2
+    exit 1
+fi
+# Bound both reads before any installer can run. Ignore ambient curl settings
+# and never follow a redirect from the signed HTTPS delivery path to HTTP.
+if ! curl --disable -fsSL --connect-timeout 5 --max-time 60 \\
+    --proto '=https' --proto-redir '=https' "\$INSTALLER_URL" -o "\$tmp_installer"; then
     echo "Failed to download Pulse installer from \$INSTALLER_URL" >&2
     exit 1
 fi
-if ! curl -fsSL "\$INSTALLER_SIG_URL" -o "\$tmp_signature"; then
+if ! curl --disable -fsSL --connect-timeout 5 --max-time 60 \\
+    --proto '=https' --proto-redir '=https' "\$INSTALLER_SIG_URL" -o "\$tmp_signature"; then
     echo "Failed to download Pulse installer signature from \$INSTALLER_SIG_URL" >&2
     exit 1
 fi
