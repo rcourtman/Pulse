@@ -97,6 +97,12 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
 
   return (
     <div class="space-y-4">
+      <Show when={state.isPreparingSetup()}>
+        <p role="status" class="text-sm text-muted">
+          Preparing setup output… Wait for this request to finish before generating another command
+          or script.
+        </p>
+      </Show>
       <Show when={modalProps.nodeType === 'pve'}>
         <div class="space-y-3 text-xs">
           <div class="bg-blue-50 dark:bg-blue-900/25 border border-blue-200 dark:border-blue-800 rounded-md p-4">
@@ -168,7 +174,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
                     <button
                       type="button"
-                      disabled={state.loadingAgentCommand() || setupHandoffDisabled()}
+                      disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                       onClick={async () => {
                         await state.copyProxmoxAgentInstallCommand(
                           'pve',
@@ -290,7 +296,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           );
                         }}
                         class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors"
-                        disabled={setupHandoffDisabled()}
+                        disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                         title={
                           setupHandoffDisabled() ? setupHandoffDisabledReason() : 'Copy command'
                         }
@@ -374,7 +380,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           onClick={async () => {
                             await state.downloadProxmoxSetupScript('pve', true);
                           }}
-                          disabled={setupHandoffDisabled()}
+                          disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                           title={setupHandoffDisabled() ? setupHandoffDisabledReason() : undefined}
                           class="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -451,7 +457,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                               'pveum user add pulse-monitor@pve --comment "Pulse monitoring service"';
                             await state.copyCommand(command);
                           }}
-                          disabled={setupHandoffDisabled()}
+                          disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                           class={setupCommandButtonClass(
                             'absolute top-1 right-1 p-1 text-slate-500 hover:text-base-content transition-colors',
                           )}
@@ -487,7 +493,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                               'pveum user token add pulse-monitor@pve pulse-token --privsep 0';
                             await state.copyCommand(command);
                           }}
-                          disabled={setupHandoffDisabled()}
+                          disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                           class={setupCommandButtonClass(
                             'absolute top-1 right-1 p-1 text-slate-500 hover:text-base-content transition-colors',
                           )}
@@ -524,7 +530,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           onClick={async () => {
                             await state.copyCommand(PVE_MANUAL_PERMISSION_COMMAND);
                           }}
-                          disabled={setupHandoffDisabled()}
+                          disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                           class={setupCommandButtonClass(
                             'absolute top-1 right-1 p-1 hover:text-muted transition-colors',
                           )}
@@ -554,7 +560,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                               'pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin';
                             await state.copyCommand(command);
                           }}
-                          disabled={setupHandoffDisabled()}
+                          disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                           class={setupCommandButtonClass(
                             'absolute top-1 right-1 p-1 hover:text-muted transition-colors',
                           )}
@@ -663,7 +669,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       title={
                         setupHandoffDisabled() ? setupHandoffDisabledReason() : 'Copy to clipboard'
                       }
-                      disabled={state.loadingAgentCommand() || setupHandoffDisabled()}
+                      disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                     >
                       <Show
                         when={state.loadingAgentCommand()}
@@ -762,7 +768,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                             );
                           }}
                           class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors"
-                          disabled={setupHandoffDisabled()}
+                          disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                           title={
                             setupHandoffDisabled() ? setupHandoffDisabledReason() : 'Copy command'
                           }
@@ -847,7 +853,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           onClick={async () => {
                             await state.downloadProxmoxSetupScript('pbs');
                           }}
-                          disabled={setupHandoffDisabled()}
+                          disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                           title={setupHandoffDisabled() ? setupHandoffDisabledReason() : undefined}
                           class="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -922,7 +928,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                             const command = 'proxmox-backup-manager user create pulse-monitor@pbs';
                             await state.copyCommand(command);
                           }}
-                          disabled={setupHandoffDisabled()}
+                          disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                           class={setupCommandButtonClass(
                             'absolute top-1 right-1 p-1 text-slate-500 hover:text-base-content transition-colors',
                           )}
@@ -958,7 +964,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                               'proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token';
                             await state.copyCommand(command);
                           }}
-                          disabled={setupHandoffDisabled()}
+                          disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                           class={setupCommandButtonClass(
                             'absolute top-1 right-1 p-1 text-slate-500 hover:text-base-content transition-colors',
                           )}
@@ -997,7 +1003,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                               'proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs';
                             await state.copyCommand(command);
                           }}
-                          disabled={setupHandoffDisabled()}
+                          disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                           class={setupCommandButtonClass(
                             'absolute top-1 right-1 p-1 hover:text-muted transition-colors',
                           )}
@@ -1027,7 +1033,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                               "proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!pulse-token'";
                             await state.copyCommand(command);
                           }}
-                          disabled={setupHandoffDisabled()}
+                          disabled={state.isPreparingSetup() || setupHandoffDisabled()}
                           class={setupCommandButtonClass(
                             'absolute top-1 right-1 p-1 hover:text-muted transition-colors',
                           )}

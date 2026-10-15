@@ -9978,3 +9978,14 @@ establish native guest restart, installed-agent or thaw recovery.
 existing update pipeline. They add no agent enrollment, command, install or
 reporting path, and agent continuity stays judged by the same update readiness
 verdict the apply route already computes for its target version.
+
+### Proxmox assisted setup completion ownership
+
+The PVE/PBS setup-command, downloaded-script and optional host-agent handoffs
+share one pending-action boundary in the consuming frontend state. Relevant
+editor input or lifetime changes invalidate late results and cached output
+without releasing that action's busy state before it settles. Agent installer
+TLS preference changes also retire output, including an A → B → A reversal.
+Successful current actions retain monitoring-only command scope and separate
+token entry; the frontend never cancels, replays or revokes a dispatched action
+and makes no installed enrolment/recovery claim from these checks.
