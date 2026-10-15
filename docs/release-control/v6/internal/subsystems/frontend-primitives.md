@@ -8842,6 +8842,13 @@ active locale rather than the English-only `formatRelativeTime`. Proofs live
 in `frontend-modern/src/i18n/__tests__/i18n.test.ts` and
 `frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts`.
 
+### Page titles name what the page holds
+
+A page title or its localized catalog entry names the job the page does, not
+a neighbouring feature: the alerts Schedule page is "Delivery Schedule" in
+every locale, and `i18n.test.ts` refuses a maintenance word in any locale's
+title because maintenance windows live elsewhere.
+
 ### Alert overview rows place Investigate by the shared breakpoint
 
 `AlertOverviewAlertCard` reads the shared `useBreakpoint()` hook to decide

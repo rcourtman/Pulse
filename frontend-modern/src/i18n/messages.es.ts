@@ -169,7 +169,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.page.overview.title': 'Resumen de alertas',
   'alerts.page.schedule.description':
     'Define horas de silencio, agrupacion, enfriamiento, recuperacion y escalado para la entrega de alertas.',
-  'alerts.page.schedule.title': 'Programacion de mantenimiento',
+  'alerts.page.schedule.title': 'Programacion de entregas',
   'alerts.page.thresholds.description':
     'Ajusta umbrales y excepciones especificas para infraestructura, cargas e integraciones.',
   'alerts.page.thresholds.title': 'Umbrales de alerta',
