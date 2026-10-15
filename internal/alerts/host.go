@@ -56,15 +56,21 @@ func stripHostResourcePrefix(resourceID string) string {
 	return strings.TrimSpace(trimmed)
 }
 
-func hostDisplayName(host models.Host) string {
-	base := "Agent"
+func hostBaseName(host models.Host) string {
 	if name := strings.TrimSpace(host.DisplayName); name != "" {
-		base = name
-	} else if name := strings.TrimSpace(host.Hostname); name != "" {
-		base = name
-	} else if host.ID != "" {
-		base = host.ID
+		return name
 	}
+	if name := strings.TrimSpace(host.Hostname); name != "" {
+		return name
+	}
+	if host.ID != "" {
+		return host.ID
+	}
+	return "Agent"
+}
+
+func hostDisplayName(host models.Host) string {
+	base := hostBaseName(host)
 
 	// When a host agent is linked to a Proxmox node/VM/container, qualify its
 	// name so its alerts are not confused with the linked resource's alerts.
@@ -938,8 +944,11 @@ func (m *Manager) HandleHostOfflineWithCorrelation(host models.Host, correlation
 		ResourceName: resourceName,
 		Node:         nodeName,
 		Instance:     instanceName,
-		Message:      fmt.Sprintf("Host '%s' is offline", resourceName),
-		Correlation:  correlation,
+		// Pulse only knows the agent went quiet. The machine itself may still
+		// be up (a linked Proxmox node keeps reporting through its API), so
+		// the message names the missing reports, not a host outage.
+		Message:     fmt.Sprintf("Pulse agent on '%s' stopped reporting", hostBaseName(host)),
+		Correlation: correlation,
 		Metadata: map[string]interface{}{
 			"resourceType":       "agent",
 			alertPlatformTypeKey: string(unifiedresources.SourceAgent),
