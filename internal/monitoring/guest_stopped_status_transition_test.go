@@ -55,7 +55,11 @@ func TestGuestStoppedDetailedStatusTransition(t *testing.T) {
 							if p == 1 || p == 4 {
 								fmt.Fprintf(w, `{"data":{"status":"running","agent":1,"maxmem":%d,"mem":%d}}`, 8*mib, 4*mib)
 							} else {
-								fmt.Fprintf(w, `{"data":{"status":"stopped","agent":%d}}`, agent)
+								lock := ""
+								if p == 3 {
+									lock = "backup"
+								}
+								fmt.Fprintf(w, `{"data":{"status":"stopped","agent":%d,"lock":%q}}`, agent, lock)
 							}
 						case strings.Contains(r.URL.Path, "/agent/"):
 							commands.Add(1)
@@ -145,6 +149,13 @@ func TestGuestStoppedDetailedStatusTransition(t *testing.T) {
 								originalCPU = m.metricsHistory.GetGuestMetrics(id, "cpu", time.Hour)
 							}
 						} else {
+							wantLock := ""
+							if p == 3 {
+								wantLock = "backup"
+							}
+							if vm.Lock != wantLock {
+								t.Errorf("%s lost observed operation lock: %q, want %q", label, vm.Lock, wantLock)
+							}
 							if vm.Status != "stopped" || vm.CPU != 0 || vm.GuestAgentStatus != "" || vm.GuestAgentExpected || !vm.GuestAgentEvidence.ObservedAt.IsZero() || vm.DiskStatusReason != "vm-stopped" || vm.Disk.Usage != -1 || len(vm.Disks) != 0 || !vm.DiskObservation.ObservedAt.IsZero() || vm.Memory.Used != 0 || vm.Memory.Observation.Source != "powered-off" || vm.OnBoot == nil || !*vm.OnBoot {
 								t.Errorf("%s newer stopped observation lost to stale running inventory: %+v", label, vm)
 							}

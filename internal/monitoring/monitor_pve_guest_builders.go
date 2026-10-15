@@ -289,6 +289,9 @@ func (m *Monitor) buildVMFromClusterResource(
 			// work, renew QGA evidence or publish a running row from the older list.
 			if status.Status != "" && status.Status != "running" {
 				res.Status = status.Status
+				if res.Lock == "" {
+					res.Lock = status.Lock
+				}
 				state.detailedStatus = status
 			} else {
 				m.applyVMStatusDetails(ctx, instanceName, res, client, guestID, vmIDToHostAgent, status, recentGuestAgentEvidence, &state)
