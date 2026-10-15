@@ -73,6 +73,8 @@ let browser;
         page.on('pageerror', (error) => errors.push(error.message));
         page.on('download', (download) => downloads.push(download.suggestedFilename()));
         await page.addInitScript(() => {
+          // Synthetic CSRF fixture only; this is not full-application auth proof.
+          document.cookie = 'pulse_csrf=synthetic-setup-fixture; path=/; SameSite=Lax';
           window.__copies = [];
           window.__holdClipboard = false;
           Object.defineProperty(navigator, 'clipboard', {
