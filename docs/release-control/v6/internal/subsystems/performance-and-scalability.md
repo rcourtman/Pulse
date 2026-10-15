@@ -3811,6 +3811,15 @@ cached client and floor, so the next incident observes the new policy without
 turning alert fan-out into configuration I/O. The hosted Relay runtime tests
 pin persistence and cache replacement together.
 
+### Alert readiness is published with its alerts
+
+`commitActiveAlertsTruth` sets `activeAlertsHydrationStatus` to `ready` and
+applies the alert map in one `batch`, for socket snapshots, socket deltas and
+REST recovery alike, so a reader that sees `ready` also sees the alerts it
+vouches for. Alert History relies on this before deciding a linked alert is
+not firing; the batch adds no work, it only defers effects to one flush
+(`websocket-resilience.test.ts`, `websocket-unified.test.ts`).
+
 ### Mock alert timelines reuse the canonical fixture graph
 
 Mock alert incidents are built once with the canonical fixture graph and read

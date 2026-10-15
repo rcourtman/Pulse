@@ -9054,6 +9054,15 @@ breakpoint only as the fallback before the first measurement, because side
 rails and panels leave a table far less room than the screen width suggests.
 Alerts > History switches below an 800px card (`ALERT_HISTORY_TABLE_MIN_WIDTH`).
 
+### A deep link narrows, then decides once
+
+A route parameter that points a list at one record (Alert History's
+`?alert=`) narrows the list to that record instead of scrolling a windowed
+list to it, waits until every source that could hold the record has
+answered before widening or declaring it missing, decides once per record so
+later filters stay the operator's, and offers one control back to the full
+list.
+
 ### Mobile destinations are links and update evidence stays explicit
 
 Fixed mobile destinations and menu destinations that navigate are anchors with

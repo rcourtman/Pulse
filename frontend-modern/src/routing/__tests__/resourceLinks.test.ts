@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildAlertHistoryAlertPath,
   buildPatrolAttentionPath,
   API_TOKEN_CREATE_ANCHOR,
   API_TOKEN_PRESET_QUERY_PARAM,
@@ -362,5 +363,12 @@ describe('resource link routing contract', () => {
     expect(buildPatrolAttentionPath('record/one')).toBe('/patrol?attention=record%2Fone');
     expect(buildPatrolAttentionPath('')).toBe('/patrol');
     expect(parsePatrolAttentionItemId('?attention=record%2Fone')).toBe('record/one');
+  });
+});
+
+describe('buildAlertHistoryAlertPath', () => {
+  // The notification sender builds the same address; the parameter is a contract.
+  it('opens Alert History narrowed to one alert', () => {
+    expect(buildAlertHistoryAlertPath('qemu/101-cpu')).toBe('/alerts/history?alert=qemu%2F101-cpu');
   });
 });

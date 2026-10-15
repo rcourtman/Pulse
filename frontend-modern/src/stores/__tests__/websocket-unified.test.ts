@@ -145,6 +145,50 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  // Alert History waits for "ready" before deciding a linked alert is not
+  // firing, so readiness must never be observable before the snapshot's alerts.
+  it('publishes alert readiness together with the socket snapshot alerts', async () => {
+    const { store, dispose } = await createStoreHarness();
+    const seen: number[] = [];
+    const disposeObserver = createRoot((disposeRoot) => {
+      createComputed(() => {
+        if (store.activeAlertsHydrationStatus() === 'ready') {
+          seen.push(Object.keys(store.activeAlerts).length);
+        }
+      });
+      return disposeRoot;
+    });
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 1,
+          activeAlerts: [
+            {
+              id: 'agent:host-4-cpu',
+              type: 'cpu',
+              level: 'warning',
+              resourceId: 'agent:host-4',
+              resourceName: 'host-4',
+              node: 'host-4',
+              instance: 'host-4',
+              message: 'CPU above threshold',
+              value: 91,
+              threshold: 90,
+              startTime: '2026-05-14T07:57:00Z',
+              acknowledged: false,
+            },
+          ],
+        },
+      });
+      expect(seen).toEqual([1]);
+    } finally {
+      disposeObserver();
+      dispose();
+    }
+  });
+
   it('ignores retired AI Discovery progress frames without touching resources', async () => {
     const { store, dispose } = await createStoreHarness();
     const { eventBus } = await import('@/stores/events');

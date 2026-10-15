@@ -2761,6 +2761,12 @@ the `?q=` key the thresholds page owns; callers pass a resource's display
 label, never an id, because the thresholds search matches names
 (`resourceLinks.test.ts`).
 
+`buildAlertHistoryAlertPath(alertId)` builds `/alerts/history?alert=<id>`
+from `ALERT_HISTORY_QUERY_PARAMS` (`q`, `period`, `severity`, `alert`), which
+now live with the other route keys instead of inside the History hook. The
+`alert` key is a public address: notifications build the same link, so it
+must not be renamed (`resourceLinks.test.ts`).
+
 17. Platform table ordering is a two-layer contract. Each platform table's
     default order is owned by its page model's status-first compare
     (`compareDockerContainers`, `compareKubernetesPods`, and peers), which

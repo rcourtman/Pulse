@@ -6619,6 +6619,12 @@ recovery state and grants no storage action, and Patrol's alert-only guidance
 sends a physical disk to its tab unsearched, so it never filters storage or
 recovery rows by a disk name they do not carry.
 
+### Alert History links open no storage or recovery path
+
+`buildAlertHistoryAlertPath` adds only an alert id to the History route. It
+reads no storage or recovery state and grants no action; the History page
+reads the same saved and live alerts it always did.
+
 ### App-shell AI navigation gating opens no recovery path
 
 `App.tsx` now passes the `assistantEnabled` session capability to the keyboard

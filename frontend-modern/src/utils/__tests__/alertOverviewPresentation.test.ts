@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import {
+  getAlertHistoryFocusNotice,
   ALERT_BUCKET_EMPTY_LABEL,
   ALERT_HISTORY_ALL_TIME_FILTER_LABEL,
   ALERT_HISTORY_EMPTY_DESCRIPTION,
@@ -428,5 +429,24 @@ describe('alertOverviewPresentation', () => {
     setActiveLocale('de');
     expect(formatAlertOverviewStartedAgo(start, at(10))).toBe('vor 10 Min.');
     setActiveLocale(DEFAULT_LOCALE);
+  });
+});
+
+describe('getAlertHistoryFocusNotice', () => {
+  it('names the linked alert and says plainly when history no longer holds it', () => {
+    expect(getAlertHistoryFocusNotice({ missing: false }).text).toBe(
+      'Showing one alert, opened from a link.',
+    );
+    expect(
+      getAlertHistoryFocusNotice({ alertTitle: 'CPU usage', resourceName: 'db-01', missing: false })
+        .text,
+    ).toBe('Showing CPU usage on db-01, opened from a link.');
+    expect(getAlertHistoryFocusNotice({ missing: false, liveAlertsUnavailable: true }).text).toBe(
+      'Pulse could not load the alerts firing now, so this alert may still be active.',
+    );
+    expect(getAlertHistoryFocusNotice({ alertTitle: 'CPU usage', missing: true })).toEqual({
+      text: "That alert is no longer in Pulse's alert history.",
+      clearLabel: 'Show all alerts',
+    });
   });
 });
