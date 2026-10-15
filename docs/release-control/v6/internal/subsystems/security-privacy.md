@@ -3443,3 +3443,17 @@ weakened. The diagnostic wire/identity and ordinary same-credential recovery
 controls in `diagnostics_access_test.go`, `diagnostics_additional_test.go`,
 `contract_test.go` and `client_request_test.go` cover these properties; they do
 not establish provider or installed acceptance.
+
+### Consumer-bound Proxmox setup handoff
+
+The existing separate-token PVE/PBS setup handoff accepts asynchronous output
+only for its current consuming editor revision. Endpoint/name/target, strategy,
+authentication, installer TLS and import-review changes (including reversals),
+close/reset and disposal retire old output. The handler also honours the existing
+review boundary; no concurrent copy/download/agent issuance is started while an
+earlier action remains outstanding. Clipboard completion is checked before
+revealing a token or reporting success. A clipboard write already sent to the
+browser is not retractable, and retiring output does not cancel an issuance,
+revoke a server token or grant stronger permissions. Monitoring-only scope,
+verified TLS defaults, credential-free command/download URLs and the silent
+separate-token prompt remain unchanged.

@@ -438,3 +438,19 @@ store initialization, migration, and read failures stay visible as
 as an organization with no roles or users. Local identities and opaque stable
 SSO principals are both valid assignment subjects, including principals with
 an intentionally empty role set.
+
+### Proxmox setup output follows the consuming editor
+
+The PVE/PBS assisted setup state binds issuance, downloads and clipboard
+completion to the editor's lifetime, target, endpoint, connection name, setup
+and authentication modes, installer TLS preference and existing import review.
+Changing any of them retires prior output, including A → B → A. Same-target
+health polling and unrelated guest-navigation edits do not invalidate a live
+artifact. One preparation action owns the busy state until it settles, even
+when the editor changes; copy/download controls share that state and show
+visible progress. A current explicit action still reuses an unexpired setup
+artifact and reveals its token separately from command text. Failed copies do
+not reveal the token. Already dispatched requests and clipboard writes are
+not cancelled or replayed; their late completions cannot revive output or
+success/error feedback in another draft. This UI contract does not revoke
+issued server tokens, install an agent or establish platform recovery.

@@ -53,6 +53,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const [quickSetupExpiry, setQuickSetupExpiry] = createSignal<number | null>(null);
   const [agentInstallCommand, setAgentInstallCommand] = createSignal('');
   const [loadingAgentCommand, setLoadingAgentCommand] = createSignal(false);
+  const [isPreparingSetup, setIsPreparingSetup] = createSignal(false);
   const [agentCommandError, setAgentCommandError] = createSignal<string | null>(null);
   const [agentInstallInsecure, setAgentInstallInsecure] = createSignal(false);
 
@@ -87,9 +88,21 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   let bootstrapGeneration = 0;
+  let disposed = false;
   const bootstrapActive = (generation: number) =>
-    generation === bootstrapGeneration && props.isOpen !== false;
+    !disposed &&
+    generation === bootstrapGeneration &&
+    props.isOpen !== false &&
+    !props.setupHandoffDisabled?.();
+  // One issuance/download/clipboard action at a time, even across mode or
+  // target changes. Retiring output does not cancel a dispatched request.
+  const beginSetup = () => {
+    if (isPreparingSetup() || !bootstrapActive(bootstrapGeneration)) return null;
+    setIsPreparingSetup(true);
+    return bootstrapGeneration;
+  };
   onCleanup(() => {
+    disposed = true;
     bootstrapGeneration++;
     connectionTestGeneration++;
     clearQuickSetupState();
@@ -102,7 +115,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   const copyProxmoxAgentInstallCommand = async (type: 'pve' | 'pbs', successMessage: string) => {
-    const generation = bootstrapGeneration;
+    const generation = beginSetup();
+    if (generation === null) return;
     try {
       setLoadingAgentCommand(true);
       setAgentCommandError(null);
@@ -113,16 +127,19 @@ export const useNodeModalState = (props: NodeModalProps) => {
         insecure: agentInstallInsecure(),
       });
       if (!bootstrapActive(generation)) return;
-      setAgentInstallCommand(data.command);
-      if (data.token) {
-        showTokenReveal({
-          token: data.token,
-          source: type,
-          note: 'Run the copied install command first. Then copy this token and paste it only at the silent “Pulse agent token” prompt. It is not part of the command.',
-        });
-      }
       const copied = await copyToClipboard(data.command);
+      // A clipboard write already sent to the browser cannot be retracted.
+      // Do not reveal its token or revive output after its consumer changes.
+      if (!bootstrapActive(generation)) return;
       if (copied) {
+        setAgentInstallCommand(data.command);
+        if (data.token) {
+          showTokenReveal({
+            token: data.token,
+            source: type,
+            note: 'Run the copied install command first. Then copy this token and paste it only at the silent “Pulse agent token” prompt. It is not part of the command.',
+          });
+        }
         notificationStore.success(successMessage);
         return;
       }
@@ -137,7 +154,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
       setAgentCommandError(message);
       notificationStore.error(message);
     } finally {
-      if (bootstrapActive(generation)) setLoadingAgentCommand(false);
+      setLoadingAgentCommand(false);
+      setIsPreparingSetup(false);
     }
   };
 
@@ -147,8 +165,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const loadQuickSetupBootstrap = async (
     type: 'pve' | 'pbs',
     backupPerms: boolean,
+    generation: number,
   ): Promise<ProxmoxSetupCommandResponse | null> => {
-    const generation = bootstrapGeneration;
     const host = formData().host?.trim() ?? '';
     if (!host) {
       notificationStore.error('Please enter the Endpoint URL first');
@@ -183,16 +201,19 @@ export const useNodeModalState = (props: NodeModalProps) => {
     backupPerms: boolean,
     successMessage: string,
   ) => {
-    const generation = bootstrapGeneration;
+    const generation = beginSetup();
+    if (generation === null) return;
     logger.debug('[Quick Setup] Copy button clicked');
     try {
       logger.debug('[Quick Setup] Generating setup URL for host', {
         host: formData().host,
       });
-      const data = await loadQuickSetupBootstrap(type, backupPerms);
+      const data = await loadQuickSetupBootstrap(type, backupPerms, generation);
       if (!data || !bootstrapActive(generation)) return;
-      showSetupToken(data);
-      if (await copyToClipboard(data.command)) {
+      const copied = await copyToClipboard(data.command);
+      if (!bootstrapActive(generation)) return;
+      if (copied) {
+        showSetupToken(data);
         notificationStore.success(successMessage);
         return;
       }
@@ -204,6 +225,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
       if (!(error instanceof Error && error.message === PROXMOX_SETUP_HOST_REQUIRED_MESSAGE)) {
         notificationStore.error('Failed to copy command');
       }
+    } finally {
+      setIsPreparingSetup(false);
     }
   };
 
@@ -218,14 +241,13 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const setupScriptRunHint = (fileName: string) => `bash ${fileName}`;
 
   const downloadProxmoxSetupScript = async (type: 'pve' | 'pbs', backupPerms = false) => {
-    const generation = bootstrapGeneration;
+    const generation = beginSetup();
+    if (generation === null) return;
     try {
-      const bootstrap = await loadQuickSetupBootstrap(type, backupPerms);
+      const bootstrap = await loadQuickSetupBootstrap(type, backupPerms, generation);
       if (!bootstrap || !bootstrapActive(generation)) return;
       const data = await NodesAPI.downloadProxmoxSetupScript(bootstrap);
       if (!bootstrapActive(generation)) return;
-      showSetupToken(bootstrap);
-
       const blob = new Blob([data.content], {
         type: data.contentType,
       });
@@ -233,10 +255,14 @@ export const useNodeModalState = (props: NodeModalProps) => {
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = data.fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      URL.revokeObjectURL(url);
+      try {
+        document.body.appendChild(anchor);
+        anchor.click();
+      } finally {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }
+      showSetupToken(bootstrap);
 
       notificationStore.success(
         `Script downloaded! Upload it to your server and run: ${setupScriptRunHint(data.fileName)}`,
@@ -245,6 +271,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
       if (!bootstrapActive(generation)) return;
       logger.error('Failed to download script:', error);
       notificationStore.error('Failed to download script. Please check your connection.');
+    } finally {
+      setIsPreparingSetup(false);
     }
   };
 
@@ -268,12 +296,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
     const isOpen = props.isOpen;
     const editingNode = props.editingNode;
     const prefillNode = props.prefillNode;
-
-    if (isOpen === false || key !== previousResetKey || nodeType !== previousNodeType) {
-      bootstrapGeneration++;
-      clearQuickSetupState();
-      setLoadingAgentCommand(false);
-    }
 
     if (key !== undefined && key !== previousResetKey) {
       previousResetKey = key;
@@ -430,6 +452,36 @@ export const useNodeModalState = (props: NodeModalProps) => {
 
     previousFormSourceSignature = formSourceSignature;
     setFormData(formSource);
+  });
+
+  let previousSetupContext: unknown[] | undefined;
+  createEffect(() => {
+    const data = formData();
+    const target = props.editingNode ?? props.prefillNode;
+    // Keep only input values in memory. A → B → A must retire earlier output,
+    // while a health-only poll of the same target must preserve a live cache.
+    const context = [
+      props.isOpen,
+      props.resetKey,
+      props.nodeType,
+      target?.type,
+      target && 'id' in target ? target.id : undefined,
+      target?.host,
+      target?.name,
+      data.host,
+      data.name,
+      data.setupMode,
+      data.authType,
+      agentInstallInsecure(),
+      Boolean(props.setupHandoffDisabled?.()),
+    ];
+    if (previousSetupContext && context.some((value, i) => value !== previousSetupContext![i])) {
+      bootstrapGeneration++;
+      clearQuickSetupState();
+      setAgentInstallCommand('');
+      setAgentCommandError(null);
+    }
+    previousSetupContext = context;
   });
 
   let previousTestContext: unknown[] | undefined;
@@ -695,6 +747,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     isAdvancedSetupMode,
     isEditingExistingNode,
     isTesting,
+    isPreparingSetup,
     loadingAgentCommand,
     quickSetupExpiry,
     quickSetupExpiryLabel,

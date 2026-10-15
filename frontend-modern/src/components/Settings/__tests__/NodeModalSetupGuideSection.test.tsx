@@ -13,6 +13,7 @@ const renderSetupGuide = (
     setupHandoffDisabledReason?: string;
     quickSetupCommandReady?: boolean;
     quickSetupTokenHint?: string;
+    isPreparingSetup?: boolean;
   } = {},
 ) => {
   const copyCommand = vi.fn();
@@ -34,10 +35,11 @@ const renderSetupGuide = (
       copyProxmoxAgentInstallCommand: vi.fn(),
       copyQuickSetupCommand,
       downloadProxmoxSetupScript: vi.fn(),
-      formData: () => ({ setupMode: setupMode(), host: '' }),
+      formData: () => ({ setupMode: setupMode(), host: 'https://fixture.example.invalid' }),
       isAdvancedSetupMode: () => setupMode() === 'manual',
       isEditingExistingNode: () => Boolean(options.isEditingExistingNode),
       loadingAgentCommand: () => false,
+      isPreparingSetup: () => Boolean(options.isPreparingSetup),
       quickSetupExpiry: () => null,
       quickSetupExpiryLabel: () => '',
       quickSetupCommandReady: () => Boolean(options.quickSetupCommandReady),
@@ -69,6 +71,24 @@ const renderSetupGuide = (
 
 describe('NodeModalSetupGuideSection', () => {
   afterEach(() => cleanup());
+
+  it.each(['pve', 'pbs'] as const)(
+    'blocks all %s issuance actions while one is pending',
+    (type) => {
+      renderSetupGuide(type, { isPreparingSetup: true });
+      expect(screen.getByRole('status')).toHaveTextContent('Preparing setup output');
+      expect(screen.getByRole('button', { name: 'Copy command' })).toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: 'Download setup script', hidden: true }),
+      ).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Host Telemetry Agent' }));
+      expect(
+        screen.getByRole('button', {
+          name: type === 'pbs' ? 'Copy to clipboard' : 'Copy command',
+        }),
+      ).toBeDisabled();
+    },
+  );
 
   it('keeps Proxmox API inventory framed as the recommended least-privilege path', () => {
     renderSetupGuide('pve');
