@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "de7fc078fc561f2e4b9d6e816b19f42ef626dd58",
+  "verified_at": "2026-10-15T22:20:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx": "372cb93c01b8de3d1cdfcfc516b5f78e04cdbaa425849fb45a335ffd0654937f"
+  },
+  "routes": [
+    "/settings/infrastructure?add=pve"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): the connection sequence above Add Proxmox VE read \"Endpoint \u2014 Name and API address\" while the form below asks for Endpoint URL first and Node Name second",
+    "After: the first step reads \"Endpoint \u2014 API address and name\", matching the field order",
+    "At 375px the step text fits on one line (126px, not clipped) and the page has no sideways scroll"
+  ],
+  "interactions": [
+    "Signed in to a private mock stack, opened Add infrastructure for Proxmox VE, read the sequence text from the DOM and looked at a full screenshot",
+    "Resized to the mobile preset and measured the step text and page width"
+  ]
+}

@@ -1798,6 +1798,8 @@ describe('settings architecture guardrails', () => {
     expect(nodeCredentialSlotSource).toContain('get savingTemperatureSetting()');
     expect(nodeCredentialSlotSource).not.toContain('editingNode: props.editingNode');
     expect(nodeCredentialSlotSource).toContain('<NodeModalBasicInfoSection');
+    // The step summary follows the form's field order: endpoint, then name.
+    expect(nodeCredentialSlotSource).toContain('API address and name');
     expect(nodeCredentialSlotSource).toContain('<NodeModalAuthenticationSection');
     expect(nodeCredentialSlotSource).toContain('<NodeModalMonitoringSection');
     expect(nodeCredentialSlotSource).toContain('<NodeModalStatusFooter');
