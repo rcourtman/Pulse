@@ -39,7 +39,9 @@ function Fixture() {
   return (
     <main class="mx-auto min-h-screen max-w-6xl space-y-3 bg-surface p-3 text-base-content">
       <h1 class="text-base font-semibold">Guest metadata across migration</h1>
-      <p class="text-xs text-muted">Controlled source proof. No native guest or backup is operated.</p>
+      <p class="text-xs text-muted">
+        Controlled source proof. No native guest or backup is operated.
+      </p>
       <div class="flex flex-wrap gap-2" aria-label="Fixture phases">
         <For each={phases}>
           {([key, label]) => (
@@ -59,7 +61,11 @@ function Fixture() {
           <tbody>
             <GuestRow
               guest={guest()}
-              visibleColumnIds={window.innerWidth <= 768 ? ['name', 'node', 'disk'] : ['name', 'node', 'cpu', 'memory', 'disk', 'ip', 'os']}
+              visibleColumnIds={
+                window.innerWidth <= 768
+                  ? ['name', 'node', 'disk']
+                  : ['name', 'node', 'cpu', 'memory', 'disk', 'ip', 'os']
+              }
               isExpanded={expanded()}
               onClick={() => setExpanded(!expanded())}
               workloadTableLayoutMode={window.innerWidth <= 768 ? 'phone' : 'wide'}
@@ -79,7 +85,9 @@ function Fixture() {
 render(
   () => (
     <DarkModeContext.Provider value={() => document.documentElement.classList.contains('dark')}>
-      <Router><Route path="/*" component={Fixture} /></Router>
+      <Router>
+        <Route path="/*" component={Fixture} />
+      </Router>
     </DarkModeContext.Provider>
   ),
   document.getElementById('root')!,
