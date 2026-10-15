@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "96b385dab497cdc75c6246bb05cac1c801c37a7f",
+  "verified_at": "2026-10-15T11:14:22Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/memoryObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/memoryObservation.ts": "8cfbddf31227f3b43044cc0e433735d9acc3b6b82de32de6e1da7914cc2797f8"
+  },
+  "routes": [
+    "/.vite/nonrunning-memory/index.html (offline shell of existing production Workloads row and full GuestDrawer; not full-app navigation)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Core 28704af976 / source-x06bw_h3 original unchanged producer snapshots: cold stopped, running, stopped, resumed, rejected stopped-detail fallback and paused, six per viewport. Projection SHA-256 6990d3a69542bd2de549507047500cdc9518f54d063e40818b19c439fd7b9f42.",
+    "Paused retains its native Paused indicator and unavailable memory. Row title/assistive text and full drawer say not running, never powered off; stopped remains unavailable and disk remains 40%.",
+    "Running memory remains 50%; ordinary resume gives 25% and measured disk zero, distinct from missing memory. Rejected detail does not replace the running listing. Identity, source, original observation data and selected drawer persist unchanged.",
+    "12 source-bound final captures and two original paused comparison captures opened with native view_image. At both widths the explanation, current legends and filesystem values are readable without horizontal page overflow. Requested narrow dark system preference did not change this isolated shell from its default light rendering; no dark-theme acceptance claimed."
+  ],
+  "interactions": [
+    "Desktop disclosure click and phone name tap open the production GuestDrawer. Updates use original producer data through production useWorkloads and GuestRow, not precomputed labels.",
+    "Checked exact row memory title, absent current number, paused/stopped/running status and original snapshot equality in all twelve viewport phases; collapse removes the drawer.",
+    "All fixture API requests are GETs, no console/page errors, browsers and static server closed. Ancillary History/API responses are safe synthetic fixtures. No live guest command, backup, thaw, installation or native recovery."
+  ],
+  "source_proof": {
+    "source": "96b385dab497cdc75c6246bb05cac1c801c37a7f",
+    "receipt": "source-2g7o2cc2",
+    "tests": 484,
+    "complete_output": true,
+    "guest_stop_completed": true
+  },
+  "engines": [
+    {
+      "name": "chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "name": "webkit",
+      "version": "26.0"
+    }
+  ],
+  "playwright": "1.56.1"
+}
