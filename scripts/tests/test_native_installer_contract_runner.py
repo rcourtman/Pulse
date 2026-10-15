@@ -17,21 +17,30 @@ spec.loader.exec_module(runner)
 
 
 class NativeInstallerRunnerTest(unittest.TestCase):
-    inventory = "TestInstaller\nTestRootInstallResetSafety\nExample\nFuzzInput\nTestFuture\nTestRootInstallResetFuture\nTestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure\nok\tpackage\n"
+    inventory = (
+        "TestInstaller\nTestRootInstallResetSafety\nExample\nFuzzInput\n"
+        "TestFuture\nTestRootInstallResetFuture\n"
+        "TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure\n"
+        "TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure\n"
+        "TestAutoUpdateServiceStateFailsClosed\nok\tpackage\n"
+    )
     expected_groups = (
         ["TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure"],
-        ["Example", "TestFuture", "TestInstaller"],
-        ["FuzzInput"],
+        ["TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure"],
+        ["TestAutoUpdateServiceStateFailsClosed"],
+        ["Example", "TestInstaller"],
+        ["FuzzInput", "TestFuture"],
         ["TestRootInstallResetFuture", "TestRootInstallResetSafety"],
     )
 
     def test_every_discovered_check_runs_once_in_one_group(self):
         groups = runner.partition(self.inventory)
-        self.assertEqual(runner.GROUPS, ("nas-preflight", "general-0", "general-1", "reset"))
+        self.assertEqual(runner.GROUPS, (
+            "nas-preflight", "truenas-retirement", "update-state", "general-0", "general-1", "reset"))
         self.assertEqual(groups, self.expected_groups)
         selected = [name for group in groups for name in group]
-        self.assertEqual(len(selected), 7)
-        self.assertEqual(len(set(selected)), 7)
+        self.assertEqual(len(selected), 9)
+        self.assertEqual(len(set(selected)), 9)
 
     def test_partition_order_and_odd_inventory_are_exhaustive(self):
         reversed_inventory = "\n".join(reversed(self.inventory.splitlines()))
@@ -39,8 +48,10 @@ class NativeInstallerRunnerTest(unittest.TestCase):
         self.assertEqual(runner.partition(self.inventory + "TestZ\n"), (
             self.expected_groups[0],
             self.expected_groups[1],
-            ["FuzzInput", "TestZ"],
+            self.expected_groups[2],
             self.expected_groups[3],
+            ["FuzzInput", "TestFuture", "TestZ"],
+            self.expected_groups[5],
         ))
 
     def test_other_checks_keep_their_previous_group_and_order(self):
@@ -48,13 +59,15 @@ class NativeInstallerRunnerTest(unittest.TestCase):
                          if name.startswith(("Test", "Example", "Fuzz"))
                          and not name.startswith("TestRootInstallReset"))
         groups = runner.partition(self.inventory)
-        for group, previous in zip(groups[1:3], (general[::2], general[1::2])):
-            self.assertEqual(group, [name for name in previous if name not in runner.PREFLIGHT])
+        for group, previous in zip(groups[3:5], (general[::2], general[1::2])):
+            self.assertEqual(group, [name for name in previous
+                                    if name not in runner.PREFLIGHT + runner.FIXTURES])
 
     def test_missing_inventory_is_not_a_passing_empty_run(self):
         for inventory in ("", "ok\tpackage\n", "TestInstaller\n", "TestRootInstallResetSafety\n",
                           "TestInstaller\nTestRootInstallResetSafety\n",
-                          self.inventory.replace(runner.PREFLIGHT[0] + "\n", "")):
+                          *(self.inventory.replace(name + "\n", "")
+                            for name in runner.PREFLIGHT + runner.FIXTURES)):
             with self.subTest(inventory=inventory), self.assertRaises(ValueError):
                 runner.partition(inventory)
 
@@ -65,7 +78,19 @@ class NativeInstallerRunnerTest(unittest.TestCase):
 
     def test_unicode_go_identifiers_remain_included(self):
         groups = runner.partition(self.inventory + "TestΣ\n")
-        self.assertIn("TestΣ", [name for group in groups[1:3] for name in group])
+        self.assertIn("TestΣ", [name for group in groups[3:5] for name in group])
+
+    def test_missing_dedicated_fixture_cannot_start_a_partial_run(self):
+        for name in runner.PREFLIGHT + runner.FIXTURES:
+            for phase in ("all", "preflight", "remaining"):
+                with self.subTest(name=name, phase=phase):
+                    result = subprocess.CompletedProcess(
+                        [], 0, stdout=self.inventory.replace(name + "\n", ""))
+                    with mock.patch.object(runner.subprocess, "run", return_value=result) as run:
+                        with self.assertRaises(ValueError):
+                            runner.main(phase)
+                        self.assertEqual(run.call_count, 1)
+                        self.assertEqual(run.call_args.args[0], ["go", "test", "-list", ".", runner.PACKAGE])
 
     def run_main(self, fault=None, phase="all"):
         calls = []
@@ -92,16 +117,18 @@ class NativeInstallerRunnerTest(unittest.TestCase):
         self.assertTrue(calls[0][1]["text"])
         # Check the count before zip: a missing final reset invocation must not
         # silently truncate the comparison and become a passing control.
-        self.assertEqual(len(calls), 5)
-        for (command, kwargs), names in zip(calls[1:], self.expected_groups):
-            self.assertEqual(command, ["go", "test", "-count=1", "-timeout", "10m", "-run", "^(" + "|".join(names) + ")$", runner.PACKAGE])
+        self.assertEqual(len(calls), 7)
+        for index, ((command, kwargs), names) in enumerate(zip(calls[1:], self.expected_groups)):
+            verbose = ["-v"] if index < 3 else []
+            self.assertEqual(command, ["go", "test", "-count=1", "-timeout", "10m", *verbose,
+                                       "-run", "^(" + "|".join(names) + ")$", runner.PACKAGE])
             self.assertTrue(kwargs["check"])
             self.assertEqual(kwargs["cwd"], ROOT)
 
     def test_command_selectors_do_not_broaden_the_inventory(self):
         calls = self.run_main()
-        self.assertEqual(len(calls), 5)
-        patterns = [re.compile(command[6]) for command, _ in calls[1:]]
+        self.assertEqual(len(calls), 7)
+        patterns = [re.compile(command[command.index("-run") + 1]) for command, _ in calls[1:]]
         for name in (name for group in self.expected_groups for name in group):
             with self.subTest(name=name):
                 self.assertEqual(sum(bool(pattern.fullmatch(name)) for pattern in patterns), 1)
@@ -116,28 +143,34 @@ class NativeInstallerRunnerTest(unittest.TestCase):
         self.assertEqual(len(self.run_main(2)), 2)
 
     def test_first_general_failure_remains_terminal(self):
-        self.assertEqual(len(self.run_main(3)), 3)
+        self.assertEqual(len(self.run_main(5)), 5)
 
     def test_second_general_failure_remains_terminal(self):
-        self.assertEqual(len(self.run_main(4)), 4)
+        self.assertEqual(len(self.run_main(6)), 6)
+
+    def test_each_dedicated_fixture_failure_remains_terminal(self):
+        for fault in (3, 4):
+            with self.subTest(fault=fault):
+                self.assertEqual(len(self.run_main(fault)), fault)
 
     def test_reset_failure_remains_terminal(self):
-        self.assertEqual(len(self.run_main(5)), 5)
+        self.assertEqual(len(self.run_main(7)), 7)
 
     def test_workflow_phases_execute_the_same_inventory_once(self):
         early = self.run_main(phase="preflight")
         remaining = self.run_main(phase="remaining")
         self.assertEqual(len(early), 2)
-        self.assertEqual(len(remaining), 4)
+        self.assertEqual(len(remaining), 6)
         self.assertEqual(early[1][0], self.run_main()[1][0])
         self.assertEqual(remaining[1:], self.run_main()[2:])
-        patterns = [re.compile(command[6]) for command, _ in early[1:] + remaining[1:]]
+        patterns = [re.compile(command[command.index("-run") + 1])
+                    for command, _ in early[1:] + remaining[1:]]
         for name in (name for group in self.expected_groups for name in group):
             with self.subTest(name=name):
                 self.assertEqual(sum(bool(pattern.fullmatch(name)) for pattern in patterns), 1)
 
     def test_each_phased_failure_stops_without_retry(self):
-        for phase, count in (("preflight", 2), ("remaining", 4)):
+        for phase, count in (("preflight", 2), ("remaining", 6)):
             for fault in range(1, count + 1):
                 with self.subTest(phase=phase, fault=fault):
                     self.assertEqual(len(self.run_main(fault, phase)), fault)
