@@ -59,13 +59,12 @@ import {
   buildPatrolAttentionPath,
   parsePatrolAttentionItemId,
 } from '@/routing/resourceLinks';
-import { ResourceAPI } from '@/api/resources';
 import {
   buildResourcePagePath,
   buildResourceThresholdsPath,
   type ResourcePageSubject,
 } from '@/features/platformNavigation/resourcePagePath';
-import type { Resource } from '@/types/resource';
+import { useResolvedResource } from '@/features/platformNavigation/useResolvedResource';
 import type { EvidenceEnvelope } from '@/types/operationalTrust';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { getAlertResourceIncidentAcknowledgedByLabel } from '@/utils/alertIncidentPresentation';
@@ -915,32 +914,15 @@ function AttentionDetail(props: {
   const olderEvidence = createMemo(() => orderedEvidence().slice(PRIMARY_EVIDENCE_LIMIT));
   // The registry knows which platform shows the subject; until it answers,
   // or when it cannot resolve the record's id, the item's own type decides.
-  const [resolvedSubject, setResolvedSubject] = createSignal<{
-    id: string;
-    resource: Resource | null;
-  } | null>(null);
-  createEffect(() => {
-    const id = item()?.subjectResourceId?.trim();
-    if (!id) return;
-    const controller = new AbortController();
-    void ResourceAPI.getResource(id, { signal: controller.signal })
-      .then((resource) => {
-        if (!controller.signal.aborted) setResolvedSubject({ id, resource });
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setResolvedSubject({ id, resource: null });
-      });
-    onCleanup(() => controller.abort());
-  });
+  const resolvedSubject = useResolvedResource(() => item()?.subjectResourceId);
   const pageSubject = (): ResourcePageSubject | null => {
     const value = item();
     if (!value) return null;
-    const resolved = resolvedSubject();
     return {
       id: value.subjectResourceId,
       name: value.subjectResourceName,
       type: value.subjectResourceType,
-      resource: resolved?.id === value.subjectResourceId.trim() ? resolved.resource : null,
+      resource: resolvedSubject(),
     };
   };
   const resourceHref = () => {

@@ -7909,6 +7909,24 @@ presentation only: the action audit list, approval counts, review dialog,
 routing and every recorded action outcome are read and rendered exactly as
 before, and no resource or action identity changes.
 
+### Action review links to the resource it acts on
+
+The governed action review tells the operator to check the actual resource
+before approving, retrying or closing an action whose outcome is unknown, but
+linked only back to Patrol. With `showResourceLink`, `ActionReviewDialog`
+resolves `audit.request.resourceId` through `useResolvedResource`
+(`frontend-modern/src/features/platformNavigation/useResolvedResource.ts`)
+and shows `Open resource` from `buildResourcePagePath`, with the audit's
+recorded resource name and type as the fallback while the registry answers or
+when it cannot resolve the id. Only the Actions page passes it: it keeps the
+review in `?action=`, so Back from the resource reopens the same review.
+Patrol holds its review in memory and already links the subject, and the
+Docker container controls open the review from the resource itself, so they
+get no link and no lookup. It is a link only: the action ledger, plan,
+decision and every recorded outcome are read and rendered as before, and no
+resource or action identity changes (`ActionReviewDialog.test.tsx`,
+`Actions.requestOwnership.test.tsx`).
+
 ### vSphere Overview leads with vCenter health signals
 
 The vSphere Overview answers "is anything in trouble?" before inventory, as
