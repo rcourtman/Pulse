@@ -4767,6 +4767,34 @@ resolves late` in
 
 ## Current State
 
+### Recovery backup-record polling controls
+
+`RecoverySettingsPanel.tsx` presents backup-record polling as a saved setting,
+not a guest-agent pause or a backup/restore action. Its on/off selection and
+loss-of-freshness consequence remain visible when interval controls are hidden.
+The selection is not proof of running monitor state; editable drafts explicitly
+require saving, while environment-locked selections do not offer a save.
+
+The existing checkbox retains its visible name, with descriptions bound to the
+selection, backup-only scope, non-dismissable guest-safety notice and any
+environment override. The notice must not disappear when polling is off or
+locked. It links the existing shipped backup-safety procedure, without claiming
+that polling off stops PVE/QGA reads, cancels issued requests or backup jobs, or
+establishes thaw/recovery. Environment-change advice must not prescribe an
+incident restart. The switch owns a visible keyboard-focus indicator, a themed
+off-state track and a minimum 44px interaction target. Backend scheduling,
+payloads, environment precedence and export/import authority are unchanged.
+
+Verification: `Settings/__tests__/RecoverySettingsPanel.test.tsx`,
+`Settings/__tests__/SettingsSwitchLabels.test.tsx` and
+`Settings/__tests__/settingsArchitecture.test.ts` cover the consuming control
+and its persistent safety boundary. `browser-tests/recovery-backup-polling.cjs`
+exercises the real settings loader/draft/save API through this panel, saved
+readback, auto/custom cadence, environment locks and the shipped Docs viewer
+on desktop and narrow viewports. Synthetic source/browser proof is not native
+guest, thaw, filesystem-write or installed-recovery evidence.
+
+
 ### Retained monitoring status remains reactive (11 October 2026)
 
 The existing Machines status dot subscribes to the shared relative-time clock

@@ -1368,8 +1368,22 @@ describe('settings architecture guardrails', () => {
     expect(normalize(nodeModalMonitoringSectionSource)).toContain('trim workload noise');
     expect(normalize(nodeModalMonitoringSectionSource)).toContain('Existing monitoring readings');
     expect(normalize(nodeModalMonitoringSectionSource)).not.toContain('dashboard readings');
-    expect(normalize(recoverySettingsPanelSource)).toContain('Required for workload backup status');
+    expect(normalize(recoverySettingsPanelSource)).toContain(
+      'Controls scheduled backup-record collection',
+    );
     expect(normalize(recoverySettingsPanelSource)).not.toContain('dashboard backup status');
+  });
+
+  it('keeps backup-polling safety help at the control rather than in a hidden interval section', () => {
+    const scopeIndex = recoverySettingsPanelSource.indexOf('aria-label="Backup polling scope"');
+    const intervalIndex = recoverySettingsPanelSource.indexOf('{/* Polling interval options */}');
+    expect(scopeIndex).toBeGreaterThan(0);
+    expect(scopeIndex).toBeLessThan(intervalIndex);
+    expect(recoverySettingsPanelSource).toContain('aria-label="Backup polling selection"');
+    expect(recoverySettingsPanelSource).toContain('aria-describedby={');
+    expect(recoverySettingsPanelSource).toContain("getShippedDocUrl('VM_DISK_MONITORING.md')");
+    expect(recoverySettingsPanelSource).toContain('peer-focus-visible:outline-2');
+    expect(recoverySettingsPanelSource).not.toContain('peer-focus:outline-hidden');
   });
 
   it('keeps cluster member address edits on the durable IPOverride boundary', () => {
