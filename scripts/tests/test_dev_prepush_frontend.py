@@ -60,7 +60,7 @@ class DevPrepushFixture(unittest.TestCase):
         self.write("frontend-modern/package.json", '{"private":true}\n')
         self.write("frontend-modern/package-lock.json", '{"lockfileVersion":3}\n')
         self.write("frontend-modern/src/example.ts", "export const value = 1;\n")
-        self.write(".gitignore", "node_modules/\n.generated/\n")
+        self.write(".gitignore", "node_modules/\n.generated/\n__pycache__/\n")
         self.write("README.md", "Local gate fixture\n")
         # The completion guard has its own exact-source tests. This fixture
         # records the real prepush invocation and exit handling only; it does
@@ -212,6 +212,7 @@ class DevPrepushSourceIdentityTest(DevPrepushFixture):
     def test_ignored_dependencies_and_build_outputs_do_not_block_clean_source(self):
         self.change("frontend-modern/src/example.ts")
         self.write(".generated/result.txt", "ignored fixture output\n")
+        self.write("scripts/release_control/__pycache__/fixture.pyc", "ignored Python helper cache\n")
         result, calls, guards = self.run_gate()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("All pre-push checks passed", result.stdout)
