@@ -33,7 +33,9 @@ modern/legacy replies, four collision diagnostics and repeated explicit calls,
 checking modelled token state and zero destructive/token-ACL/registration work.
 `TestRootInstallAutoRegisterPreservesExistingDeterministicToken` pins the
 producer boundary; existing credential confidentiality, TLS and bootstrap
-non-replay controls are unchanged and remain required.
+non-replay controls are unchanged and remain required. The TLS ordering control
+must check the remaining setup/create/ACL operations and explicitly reject token
+removal, rather than requiring that deleted operation to exist.
 
 ### Conflicting saved endpoint pins cannot select certificate trust
 

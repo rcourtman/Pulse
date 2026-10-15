@@ -37,7 +37,10 @@ POST and no leaked secret/provider text. The exact-parent control must detect
 credential replacement. Fresh registration, refusal, lost-response and bounded
 transport controls remain gating, with both ninety-second wrapper limits intact.
 `TestRootInstallAutoRegisterPreservesExistingDeterministicToken` also excludes
-token removal/recreation in the automatic producer. These are synthetic source
+token removal/recreation in the automatic producer. The TLS preflight ordering
+control checks the surviving setup/create/ACL operations and separately rejects
+token removal; it must not assume the removed rotation command still exists.
+These are synthetic source
 controls, not installed PVE recovery or a report's resolution.
 
 ### Bounded, single-attempt install-time Pulse bootstrap

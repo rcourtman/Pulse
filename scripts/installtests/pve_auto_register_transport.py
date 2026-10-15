@@ -321,8 +321,11 @@ class PVEAutoRegisterTransport(unittest.TestCase):
         source = function("auto_register_pve_node")
         preflight = source.index('preflight_pve_auto_register_api "$normalized_host_url"')
         for action in ('"$pulse_url/api/setup-script-url"', 'pveum user add',
-                       'create_pve_auto_register_token "$token_name"', 'pveum user token remove'):
+                       'create_pve_auto_register_token "$token_name"',
+                       'pveum aclmod / -token "$token_id"'):
             self.assertLess(preflight, source.index(action))
+        self.assertNotIn('pveum user token remove', source,
+                         "optional registration must preserve an existing monitoring token")
 
     def test_extracted_functions_are_complete_bash(self):
         for name in ("pve_auto_register_api_status", "preflight_pve_auto_register_api",
