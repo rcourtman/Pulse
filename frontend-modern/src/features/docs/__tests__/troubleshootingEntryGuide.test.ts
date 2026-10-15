@@ -39,12 +39,86 @@ function entry(): HTMLElement {
 const prose = (element: HTMLElement): string =>
   (element.textContent ?? '').replace(/\s+/g, ' ').trim();
 
+// Keep the composed symptom inventory explicit. A row/link total alone cannot
+// distinguish a missing recovery route from an unrelated new help link.
+const workflowEntries: ReadonlyArray<readonly [string, readonly string[]]> = [
+  [
+    'Not sure which version is affected:',
+    ['/docs/TROUBLESHOOTING#find-the-running-server-and-agent-versions'],
+  ],
+  [
+    'Cannot sign in:',
+    [
+      '/docs/TROUBLESHOOTING#i-forgot-my-password',
+      '/docs/TROUBLESHOOTING#cannot-login--401-unauthorized',
+    ],
+  ],
+  [
+    'Update failed or its result is uncertain:',
+    ['/docs/AUTO_UPDATE#update-failed', '/docs/DOCKER#check-a-failed-or-pending-workload-update'],
+  ],
+  [
+    'Agent host is missing or reporting is rejected:',
+    ['/docs/UNIFIED_AGENT#agent-lookup-returns-http-401-or-403'],
+  ],
+  [
+    'Proxmox or PBS reports a certificate error:',
+    ['/docs/TROUBLESHOOTING#proxmox-or-pbs-certificate-validation-failed'],
+  ],
+  [
+    'Copied agent install or removal command failed:',
+    ['/docs/UNIFIED_AGENT#copied-agent-command-fails-before-installation'],
+  ],
+  [
+    'Guest readings are missing or disagree:',
+    [
+      '/docs/VM_DISK_MONITORING#current-retained-and-unavailable-disk-readings',
+      '/docs/TROUBLESHOOTING#guest-memory-is-high-but-available-memory-is-plentiful',
+    ],
+  ],
+  [
+    'Proxmox data belongs to the wrong host, or healthy jobs look Pending:',
+    [
+      '/docs/TROUBLESHOOTING#monitoring-is-mixed-between-proxmox-installations',
+      '/docs/TROUBLESHOOTING#replication-jobs-are-pending-stale-or-missing',
+    ],
+  ],
+  ['TrueNAS readings are stale or absent:', ['/docs/TRUENAS#stale-truenas-data']],
+  [
+    'PBS is Active but missing from monitoring:',
+    ['/docs/PBS#pbs-is-active-but-missing-from-monitoring'],
+  ],
+  [
+    'RAID is reported degraded despite a spare:',
+    ['/docs/TROUBLESHOOTING#raid-array-is-degraded-with-a-spare'],
+  ],
+  [
+    'Unraid reports missing disks in empty slots:',
+    ['/docs/TROUBLESHOOTING#unraid-reports-missing-disks-in-empty-slots'],
+  ],
+  [
+    'Pulse itself uses more memory, CPU or disk writes:',
+    [
+      '/docs/TROUBLESHOOTING#memory-use-keeps-growing',
+      '/docs/TROUBLESHOOTING#excessive-cpu-writes-or-database-growth',
+    ],
+  ],
+  [
+    'Notification Test works but alerts do not arrive:',
+    ['/docs/TROUBLESHOOTING#test-succeeds-but-real-alerts-are-missing'],
+  ],
+  [
+    'Private information was posted:',
+    ['/docs/TROUBLESHOOTING#if-you-already-posted-private-information'],
+  ],
+];
+
 describe('troubleshooting workflow entry', () => {
   it('puts guest incident safety before the symptom links and any collection recipe', () => {
     const section = entry();
     const link = section.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/docs/VM_DISK_MONITORING#backup-safety');
-    expect(section.querySelectorAll('li')).toHaveLength(12);
+    expect(section.querySelectorAll('li')).toHaveLength(workflowEntries.length);
     expect(section.querySelector('pre')).toBeNull();
     const beforeList = [...section.children]
       .slice(
@@ -58,6 +132,14 @@ describe('troubleshooting workflow entry', () => {
       'Do not run Diagnostics, force guest-agent probes or repeat a backup',
     );
     expect(beforeList).toContain('responsive console alone does not establish safe recovery');
+  });
+
+  it('keeps every composed symptom and its own recovery routes exactly once', () => {
+    const rows = [...entry().querySelectorAll('li')].map((element) => [
+      prose(element.querySelector('strong') as HTMLElement),
+      [...element.querySelectorAll('a[href]')].map((link) => link.getAttribute('href')),
+    ]);
+    expect(rows).toEqual(workflowEntries);
   });
 
   it('keeps server updates, workload updates and reporting acceptance distinct', () => {
@@ -99,7 +181,11 @@ describe('troubleshooting workflow entry', () => {
 
   it('routes every entry to an existing shipped heading in the production viewer', () => {
     const links = [...entry().querySelectorAll('a[href]')];
-    expect(links).toHaveLength(19);
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/docs/VM_DISK_MONITORING#backup-safety',
+      ...workflowEntries.flatMap(([, routes]) => routes),
+      '/docs/TROUBLESHOOTING#-getting-help',
+    ]);
     for (const link of links) {
       const href = link.getAttribute('href')!;
       const match = /^\/docs\/([^#]+)#(.+)$/.exec(href);
