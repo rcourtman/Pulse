@@ -20,7 +20,7 @@ func (e *PulseToolExecutor) registerMetricsTools() {
 			Description: `Get performance metrics, baselines, and sensor data.
 
 Types:
-- performance: Historical CPU/memory/disk metrics over 24h or 7d
+- performance: Historical CPU/memory/disk metrics, or storage usage percentages, over 24h or 7d. Accepts the canonical resource_id from pulse_query. Storage responses retain the history source; mock_synthetic is demo data, not observed infrastructure history.
 - temperatures: CPU, disk, and sensor temperatures from hosts
 - network: Network interface statistics (rx/tx bytes, speed)
 - diskio: Disk I/O statistics (read/write bytes, ops)
@@ -51,7 +51,7 @@ Examples:
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Filter by resource type: agent, vm, system-container (performance). The node alias is also accepted. Baselines accept vm, system-container, node.",
+						Description: "Filter by resource type: agent, vm, system-container, storage, ceph (performance). The node alias is also accepted. Baselines accept vm, system-container, node.",
 					},
 					"host": {
 						Type:        "string",
@@ -143,9 +143,9 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use agent, vm, or system-container (node is an alias)", resourceType)), nil
 		}
 		resourceType = canonicalMetricsResourceType(resourceType)
-		validTypes := map[string]bool{"agent": true, "vm": true, "system-container": true, "node": true}
+		validTypes := map[string]bool{"agent": true, "vm": true, "system-container": true, "node": true, "storage": true, "ceph": true}
 		if !validTypes[resourceType] {
-			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use agent, vm, or system-container (node is an alias)", resourceType)), nil
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use agent, vm, system-container, storage, or ceph (node is an alias)", resourceType)), nil
 		}
 	}
 
@@ -189,6 +189,9 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 			}
 			metricsID = target.ResourceID
 			metricsTarget = target
+		}
+		if metricsTarget != nil && metricsTarget.ResourceType == "storage" {
+			return e.storageMetricsHistory(response.ResourceID, *metricsTarget, period, duration)
 		}
 		var metrics []MetricPoint
 		var err error

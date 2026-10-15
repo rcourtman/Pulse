@@ -20,6 +20,16 @@
 
 ## Purpose
 
+### Recovery point reads stay coherent between HTTP and investigations
+
+The points endpoint and investigation adapter use the same org-scoped manager
+reader. Demo composition reads the canonical fixture graph through the recovery
+query helpers; ordinary tenants read their persisted store. Moving the existing
+in-memory filters into recovery preserves point, series and facet query semantics
+and pagination bounds. The API/tool parity regression checks that a collected
+backup failure remains readable without a PVE client or command agent. No route,
+entitlement, recovery mutation or action approval is added.
+
 ### Patrol setup panel reuses existing AI endpoints
 
 The Patrol page setup panel adds no endpoint or payload field. It calls
