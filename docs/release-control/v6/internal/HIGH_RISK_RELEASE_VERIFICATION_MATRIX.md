@@ -1372,3 +1372,17 @@ as verification progresses:
   recovery route, file selection, pending locking, uncertain server responses,
   export and token handoff using synthetic archives/credentials. Inspect retained
   pixels. None of this substitutes for a real installed migration or thaw proof.
+
+### Readable backup inventory refresh (15 October 2026)
+
+- `ProxmoxBackupsTable.test.tsx` must expose refresh for healthy, empty and failed
+  reads; replace new/removed restore points; and admit no duplicate whole-view
+  refresh until both inventory owners and foreground posture have settled.
+  Preserve independent source failure withdrawal, filters and expanded evidence.
+- Desktop and narrow consuming-browser proof must drive the existing PVE/PBS
+  snapshot and posture GETs, not status props: initial evidence, held reads,
+  changed replacement, a failed source and successful empty recovery. Inspect
+  retained pixels, route/expansion preservation and the visible inventory-read
+  boundary. No recurring full-inventory polling or guest command is introduced.
+- This is presentation/read recovery, not native inventory freshness, backup
+  completion, guest thaw, filesystem writes or installed recovery acceptance.
