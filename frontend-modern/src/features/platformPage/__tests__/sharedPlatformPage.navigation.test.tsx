@@ -25,10 +25,12 @@ describe('PlatformSectionTabs', () => {
       },
     );
     const frames: FrameRequestCallback[] = [];
-    const requestFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      frames.push(callback);
-      return frames.length;
-    });
+    const requestFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
     const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
     const { unmount } = render(() => (
       <Router>
