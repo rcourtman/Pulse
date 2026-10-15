@@ -92,6 +92,49 @@ const utilization = () => screen.getAllByTestId('guest-history-group-chart')[0];
 // Actual backend provenance remains authoritative. Removing a VM lock alone
 // cannot turn retained readings into current data or prove native thaw.
 describe('GuestDrawerHistory filesystem provenance', () => {
+  it.each(['paused', 'suspended'])(
+    'does not call the %s VM carrier current or alter stored History',
+    async (status) => {
+      const fetch = vi
+        .spyOn(ChartsAPI, 'getMetricsHistory')
+        .mockResolvedValue(response({ disk: [point(start, 25), point(end, 50)] }));
+      const [value, setValue] = createSignal(guest('', 90));
+      mount(value);
+      await settledHistory();
+      const chart = utilization();
+      const paths = () =>
+        Array.from(chart.querySelectorAll('path[data-history-series]'), (item) =>
+          item.getAttribute('d'),
+        );
+      const storedPaths = paths();
+      expect(storedPaths.length).toBeGreaterThan(0);
+      setValue({ ...value(), status });
+      expect(getGuestDrawerCurrentMetrics(value()).disk).toBeUndefined();
+      expect(getGuestDrawerDeferredMetrics(value()).disk.lastKnownValue).toBe(90);
+      expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
+      expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+        `while the VM is ${status}`,
+      );
+      // The drawer can live inside a table cell that inherits nowrap. Long
+      // safety explanations must stay within their chart, not cross its peers.
+      expect(chart).toHaveClass('min-w-0');
+      expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveClass(
+        'whitespace-normal',
+        'wrap-anywhere',
+      );
+      expect(paths()).toEqual(storedPaths);
+      // Capacity alone must not become an invented retained zero.
+      setValue({ ...value(), disk: { total: 100 } });
+      expect(getGuestDrawerDeferredMetrics(value()).disk.lastKnownValue).toBeUndefined();
+      expect(chart.querySelector('[data-history-last-known="disk"]')).toBeNull();
+      setValue(guest('', 0));
+      expect(getGuestDrawerCurrentMetrics(value()).disk).toBe(0);
+      expect(chart.querySelector('[data-history-deferred="disk"]')).toBeNull();
+      expect(paths()).toEqual(storedPaths);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('keeps capacity-only aggregates unknown and accepts explicit zero/byte-only fallback without chart points', async () => {
     const fetch = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
     const [value, setValue] = createSignal<WorkloadGuest>({ ...guest(''), disk: { total: 100 } });

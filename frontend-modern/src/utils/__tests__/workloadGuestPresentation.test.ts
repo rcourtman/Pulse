@@ -30,6 +30,35 @@ describe('workloadGuestPresentation', () => {
     expect(getWorkloadGuestDiskRead({ status: 'stopped' }, false).state).toBe('current');
   });
 
+  it.each(['paused', 'suspended'])(
+    'does not call a %s VM filesystem report current, including a still-leased agent',
+    (status) => {
+      for (const disksFromAgent of [undefined, true]) {
+        expect(getWorkloadGuestDiskRead({ status, disksFromAgent }, true)).toEqual({
+          state: 'last-known',
+          message: `Guest filesystem readings are not current while the VM is ${status}. Any displayed values are last known.`,
+          needsAction: false,
+        });
+      }
+      // Host-reported LXC storage need not stop being current with execution.
+      expect(getWorkloadGuestDiskRead({ status }, false).state).toBe('current');
+      // Do not replace an explicit absence/failure or its existing advice.
+      expect(
+        getWorkloadGuestDiskRead({ status, diskStatusReason: 'permission-denied' }, true),
+      ).toEqual({
+        state: 'unavailable',
+        message: getWorkloadGuestDiskStatusMessage('permission-denied'),
+        needsAction: true,
+      });
+      expect(
+        getWorkloadGuestDiskRead({ status, diskStatusReason: 'prev-agent-busy' }, true).message,
+      ).toBe(getWorkloadGuestDiskStatusMessage('prev-agent-busy'));
+      expect(
+        getWorkloadGuestDiskRead({ status, disksFromAgent: true, agentStale: true }, true).message,
+      ).toContain('Pulse Agent in this guest stopped reporting');
+    },
+  );
+
   it.each(['permission-denied', 'prev-permission-denied'])(
     'keeps %s separate from permission expansion and guest health',
     (reason) => {

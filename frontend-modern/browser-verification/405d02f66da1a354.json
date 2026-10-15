@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "base_sha": "493863187a80ae5901a6be4019535d79082d5429",
+  "verified_at": "2026-10-15T16:14:02.213108Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "70795ab369c6eb030e66683a828b464b46b104e69330d04438e5ce12dffba7ce",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "be0adeae8b00922c7d0371d87ee3d05304ce2b81244f5fb6f575bab29b60368f"
+  },
+  "routes": [
+    "/browser-tests/paused-filesystem.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Assigned-base helper control exposes the paused VM falsely labelled current. Final shared admission makes paused and suspended VM filesystem readings last known, including a linked agent whose lease is still valid; the same mounted row and full drawer update.",
+    "Current disk History carriers and live filesystem gauges withdraw while deferred. Stored 1h History paths remain unchanged, explicit zero stays last known, capacity-only input does not invent a zero, and saved filesystem thresholds remain 95%.",
+    "An explicit permission failure remains unavailable, a stale linked-agent reason remains authoritative, and a subsequently accepted running zero report restores the live gauge without clearing stored History.",
+    "Long paused and permission-denied History reading explanations wrap within their chart instead of crossing neighbouring charts. No page overflow at desktop, narrow WebKit and 320px reopen."
+  ],
+  "interactions": [
+    "Native desktop expand click and phone row tap; accept safe synthetic resource snapshots through production useWorkloads and the existing row/full drawer/alert settings consumers.",
+    "Open reading disclosure, inspect complete text, Escape and check focus return; change History range to stored observations and compare plot paths through source/power changes.",
+    "Collapse, switch to sparklines, verify the existing desktop Last known / compact Prior cue, and reopen at 320px. No guest, backup or settings mutation."
+  ],
+  "browsers": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "proof_source_sha": "659c797c756158fabda9d6981089953df56ebbed",
+  "proof_source_tree": "1740c706ef6c74f2ef9c99840dcfd4e1be2f8439",
+  "proof_identity_note": "The new unshared source commit was amended only to add its Contract-Neutral message trailer after execution. Tested 659c797c75 and own-parent 493863187a have exactly the same complete source tree and parent. The original proof identity is retained; no executable byte changed and no earlier receipt was rebound.",
+  "scope": "Offline Vite development preview of production snapshot adapter, Workloads row/full drawer, History and filesystem alert table. Safe synthetic REST snapshots and stored History. No full App route, native guest, collector, thaw, notification or installed recovery acceptance.",
+  "pixel_review": "All 12 final captures and all 18 adverse capture files were opened with the native view_image tool and image content inspected. Desktop and phone reading text, retained zero, stored History, unavailable reads and final chart containment are visible. Existing 320px Details summary clipping remains separate.",
+  "capture_sha256": {
+    "base-paused-false-current.png": "54e20b406d9f9456498338a0bfda670d5d7f2b2d235e055c4829ee5d15b51048",
+    "desktop-paused-explanation.png": "8d66b1386258790d49c8cd0ed3c4ef62d473da978fd42fe3cbe7baff6e354930",
+    "desktop-suspended.png": "a9d13f0ca98984d758b27bf5f929089b4183f3c44f22a63045904329e9d7eaf6",
+    "desktop-paused-stored-history.png": "9e81455fc281c94ff3efd97df22b21ccfa5f334a240722b5d3de220556cdb5c6",
+    "desktop-permission-denied.png": "0611bbcc2ff8f633494dca6ee6cd368d2e45e82d3c5618b70e3ed43af69cdac6",
+    "desktop-running-zero.png": "580e710ddec05e6d0860907c3f0cff943f6f161bc047488fc5167f4a5a03ba54",
+    "phone-paused-explanation.png": "b9a1c538435d81373cc7c95a9c8f35f44d15fe95a887c0888e0f87974d7b2deb",
+    "phone-suspended.png": "0b37f56b08e05c3943a456c6f5630e27aa9fbccb16ffb7c7a7c1b90d3f267d92",
+    "phone-paused-stored-history.png": "d19dd9594eaa5844eee9aae4fd32971243101770ec25c0a5f9a4daec10610c59",
+    "phone-permission-denied.png": "3038137ffa8bf3f6036ee07f56935e7350b36fa335007837156ee6c4e7200891",
+    "phone-running-zero.png": "99a2b8f4eee2cc6f777fe075f4c0d923eaf3fe42036ddb3b889c801a075a9ff6",
+    "phone-320-paused.png": "3124880226d6bcd93bbd1fc3da91b08a265c72e363f2efa4d90a9593696bb12a"
+  }
+}

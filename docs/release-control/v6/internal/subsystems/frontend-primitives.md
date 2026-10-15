@@ -45,6 +45,27 @@ exact-source same-open desktop/narrow browser proof using the retained actual
 producer HTTP phases and native inspection of captures; component proof alone
 is not browser, native-appliance, protected-source or release acceptance.
 
+### Paused VM filesystem readings are not current
+
+The shared `getWorkloadGuestDiskRead` rule downgrades otherwise-current VM
+filesystem readings to last known while the native state is paused or suspended,
+including a linked agent whose last-report lease has not expired. Existing
+read failures and stale-agent reasons remain authoritative. This does not change
+host-reported LXC storage, stored History, alert settings, collection or guest
+operations, and establishes neither thaw nor recovery.
+
+Workload rows, expanded filesystem details, History's current-value carrier and
+alert-threshold subtitles consume that same rule. Verification covers both
+power states, linked and platform sources, missing readings, retained zero,
+stored History preservation and subsequent running reports in the
+`workloadGuestPresentation`, `GuestRow`, `GuestDrawerOverview.filesystems`,
+`GuestDrawerHistory.disk-provenance`, canonical linked-filesystem History and
+`useThresholdsGuestData` tests. The existing History chart's deferred reading
+explanation must explicitly wrap inside its own shrinkable column, even in a
+no-wrap table cell. The `paused-filesystem` consuming fixture covers the shared
+surfaces; desktop/narrow browser and native pixel proof are required. This
+fixture provides no native guest recovery evidence.
+
 ### Backup activity calendar-day presentation
 
 Backups renders one activity column per local calendar date, including
