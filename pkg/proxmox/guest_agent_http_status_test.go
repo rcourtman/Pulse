@@ -460,7 +460,7 @@ func TestGuestAgentHTTPFailureFixtureRetainsIndependentUncertainty(t *testing.T)
 		fmt.Fprint(w, "upstream API error 403: permission denied")
 	}))
 	defer server.Close()
-	previous := backupTestClient(t, server.URL)
+	previous := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL)+"/earlier")
 	release, err := acquireGuestAgent(previous.baseURL, 105)
 	if err != nil {
 		t.Fatal(err)
