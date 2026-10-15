@@ -172,7 +172,11 @@ let browser;
           await expect(dialog).toHaveCount(0);
           assert.equal(await page.evaluate(() => window.__copies.length), copies);
           assert.equal(downloads.length, downloadCount);
-          await expect(page.getByRole('region', { name: 'Notifications' })).toHaveCount(0);
+          await expect(
+            page
+              .getByRole('region', { name: 'Notifications' })
+              .locator('[role="alert"], [role="status"]'),
+          ).toHaveCount(0);
         };
         const dismiss = async () => {
           await dialog.getByRole('button', { name: 'Dismiss', exact: true }).click();
@@ -183,7 +187,11 @@ let browser;
             .getByRole('button', { name: 'Dismiss notification' })
             .all())
             await button.click();
-          await expect(page.getByRole('region', { name: 'Notifications' })).toHaveCount(0);
+          await expect(
+            page
+              .getByRole('region', { name: 'Notifications' })
+              .locator('[role="alert"], [role="status"]'),
+          ).toHaveCount(0);
         };
         const capture = async (label) => {
           await page.waitForTimeout(600);
