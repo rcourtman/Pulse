@@ -23,7 +23,9 @@ if [ "$CAPTURE_COUNT" = "0" ]; then
   exit 0
 fi
 BEFORE_CAPTURE_COUNT=$(python3 "$ROOT_DIR/scripts/release_control/release_note_visuals.py" \
-  before-count --plan "$PLAN_FILE")
+  runtime-count --plan "$PLAN_FILE" --side before)
+AFTER_CAPTURE_COUNT=$(python3 "$ROOT_DIR/scripts/release_control/release_note_visuals.py" \
+  runtime-count --plan "$PLAN_FILE" --side after)
 
 if ! git rev-parse -q --verify "${COMPARISON_TAG}^{commit}" >/dev/null; then
   echo "Comparison tag ${COMPARISON_TAG} does not exist" >&2
@@ -63,7 +65,9 @@ if [ "$BEFORE_CAPTURE_COUNT" -gt 0 ]; then
   git -C "$ROOT_DIR" worktree add --detach "$PREVIOUS_TREE" "$COMPARISON_TAG"
   build_visual_image "$PREVIOUS_TREE" "$BEFORE_IMAGE"
 fi
-build_visual_image "$ROOT_DIR" "$AFTER_IMAGE"
+if [ "$AFTER_CAPTURE_COUNT" -gt 0 ]; then
+  build_visual_image "$ROOT_DIR" "$AFTER_IMAGE"
+fi
 
 start_visual_container() {
   local image_name=$1
@@ -103,17 +107,22 @@ wait_for_runtime() {
 if [ "$BEFORE_CAPTURE_COUNT" -gt 0 ]; then
   start_visual_container "$BEFORE_IMAGE" "$BEFORE_CONTAINER" "$BEFORE_PORT"
 fi
-start_visual_container "$AFTER_IMAGE" "$AFTER_CONTAINER" "$AFTER_PORT"
+if [ "$AFTER_CAPTURE_COUNT" -gt 0 ]; then
+  start_visual_container "$AFTER_IMAGE" "$AFTER_CONTAINER" "$AFTER_PORT"
+fi
 if [ "$BEFORE_CAPTURE_COUNT" -gt 0 ]; then
   wait_for_runtime "$BEFORE_PORT" "$BEFORE_CONTAINER"
 fi
-wait_for_runtime "$AFTER_PORT" "$AFTER_CONTAINER"
+if [ "$AFTER_CAPTURE_COUNT" -gt 0 ]; then
+  wait_for_runtime "$AFTER_PORT" "$AFTER_CONTAINER"
+fi
 
 node "$ROOT_DIR/scripts/release_control/capture_release_note_visuals.mjs" \
   "$PLAN_FILE" \
   "http://127.0.0.1:${BEFORE_PORT}" \
   "http://127.0.0.1:${AFTER_PORT}" \
-  "$OUTPUT_DIR"
+  "$OUTPUT_DIR" \
+  "$COMPARISON_TAG"
 
 while IFS= read -r asset_name; do
   [ -f "$OUTPUT_DIR/$asset_name" ] || {

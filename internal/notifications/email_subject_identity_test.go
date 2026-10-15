@@ -46,7 +46,7 @@ func TestEmailSubjectIdentitySingle(t *testing.T) {
 			a.NodeDisplayName, a.ResourceName, a.ResourceID = tc.display, tc.resource, tc.resourceID
 			a.Instance = "connection-is-not-a-host"
 			before := a.Clone()
-			subject, html, text := EmailTemplate([]*alerts.Alert{a}, true)
+			subject, html, text := EmailTemplate([]*alerts.Alert{a}, true, "")
 			if subject != tc.want {
 				t.Fatalf("subject = %q, want %q", subject, tc.want)
 			}
@@ -67,7 +67,7 @@ func TestEmailSubjectIdentityDigest(t *testing.T) {
 		a.NodeDisplayName = "Kitchen"
 	}
 	want := "[Pulse Alert] 1 Critical, 1 Warning, 1 Info alerts: nginx (Kitchen [docker-one]), nginx (Kitchen [docker-three]), nginx (Kitchen [docker-two])"
-	subject, html, text := EmailTemplate(batch, false)
+	subject, html, text := EmailTemplate(batch, false, "")
 	if subject != want {
 		t.Fatalf("subject = %q, want %q", subject, want)
 	}
@@ -77,11 +77,11 @@ func TestEmailSubjectIdentityDigest(t *testing.T) {
 		}
 	}
 	reversed := []*alerts.Alert{batch[2], batch[1], batch[0]}
-	reordered, _, _ := EmailTemplate(reversed, false)
+	reordered, _, _ := EmailTemplate(reversed, false, "")
 	if reordered != subject {
 		t.Fatalf("same identities changed subject on reorder: %q", reordered)
 	}
-	one, _, _ := EmailTemplate(batch[:1], false)
+	one, _, _ := EmailTemplate(batch[:1], false, "")
 	if one != "[Pulse Alert] 1 Info alert: nginx (Kitchen [docker-three])" {
 		t.Fatalf("one-alert digest = %q", one)
 	}
@@ -98,7 +98,7 @@ func TestEmailSubjectIdentityBounds(t *testing.T) {
 	// Different metrics for the same resource/host label count in severity,
 	// not twice in the subject's identity list.
 	batch = append(batch, batch[0].Clone(), batch[0].Clone())
-	subject, html, text := EmailTemplate(batch, false)
+	subject, html, text := EmailTemplate(batch, false, "")
 	if !strings.HasPrefix(subject, "[Pulse Alert] 22 Warning alerts:") || !strings.HasSuffix(subject, "+17 more") {
 		t.Fatalf("incorrect alert count or full-label overflow: %q", subject)
 	}
@@ -121,11 +121,11 @@ func TestEmailSubjectIdentityBounds(t *testing.T) {
 	for i := range batch[:4] {
 		batch[i].Node, batch[i].NodeDisplayName = strings.Repeat("x", 100)+fmt.Sprint(i), ""
 	}
-	collision, _, _ := EmailTemplate(batch[:4], false)
+	collision, _, _ := EmailTemplate(batch[:4], false, "")
 	if !strings.HasSuffix(collision, "+1 more") {
 		t.Fatalf("truncated hints collapsed full identities: %q", collision)
 	}
-	empty, _, _ := EmailTemplate(nil, false)
+	empty, _, _ := EmailTemplate(nil, false, "")
 	if strings.Contains(empty, "unknown host") || strings.Contains(empty, ": ") {
 		t.Fatalf("empty digest invented identity: %q", empty)
 	}
@@ -158,7 +158,7 @@ func readIdentityEmail(t *testing.T, raw []byte) (*mail.Message, string) {
 func TestEmailSubjectIdentityLiteralEncodedWord(t *testing.T) {
 	a := subjectIdentityAlert("=?UTF-8?q?different_host?=", alerts.AlertLevelWarning)
 	a.ResourceName = "=?UTF-8?q?different_resource?="
-	subject, html, text := EmailTemplate([]*alerts.Alert{a}, true)
+	subject, html, text := EmailTemplate([]*alerts.Alert{a}, true, "")
 	manager := newEmailDeliveryManager(EmailConfig{From: "pulse@example.test"}, []string{"recipient@example.test"})
 	addresses, err := manager.resolveEmailAddresses()
 	if err != nil {
@@ -185,10 +185,10 @@ func TestEmailSubjectIdentityMIME(t *testing.T) {
 	b.Node = strings.Repeat("🚨", 100)
 	c := a.Clone()
 	c.Node = strings.Repeat("界", 100)
-	subject, html, text := EmailTemplate([]*alerts.Alert{a, b, c}, false)
+	subject, html, text := EmailTemplate([]*alerts.Alert{a, b, c}, false, "")
 	for _, single := range []bool{false, true} {
 		if single {
-			subject, html, text = EmailTemplate([]*alerts.Alert{a}, true)
+			subject, html, text = EmailTemplate([]*alerts.Alert{a}, true, "")
 		}
 		for _, attachments := range [][]EmailAttachment{nil, {{Filename: "report.txt", ContentType: "text/plain", Data: []byte("safe attachment")}}} {
 			manager := newEmailDeliveryManager(EmailConfig{From: "pulse@example.test"}, []string{"recipient@example.test"})

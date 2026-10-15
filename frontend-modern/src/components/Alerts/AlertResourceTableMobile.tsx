@@ -114,6 +114,8 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
     state: OfflineState,
     disabled: boolean,
     onToggle: () => void,
+    // What the button sets; its visible state word ends the accessible name.
+    name: string,
   ) => {
     const config = getAlertResourceTableOfflineStatePresentation(state);
 
@@ -127,11 +129,17 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
           onToggle();
         }}
         title={config.title}
+        aria-label={`${name}: ${config.label}`}
       >
         {config.label}
       </button>
     );
   };
+
+  // The value a metric cell shows, which its accessible name repeats so a
+  // screen reader hears the current threshold and voice control can say it.
+  const metricValueText = (metric: string, value: number) =>
+    value <= 0 ? 'Off' : props.table.formatMetricValue(metric, value);
 
   const MetricValueWithHeat = (metricProps: {
     resourceId: string;
@@ -140,9 +148,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
     isOverridden: boolean;
   }) => {
     const isDisabledMetric = metricProps.value <= 0;
-    const displayText = isDisabledMetric
-      ? 'Off'
-      : props.table.formatMetricValue(metricProps.metric, metricProps.value);
+    const displayText = metricValueText(metricProps.metric, metricProps.value);
 
     return (
       <div
@@ -197,6 +203,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                   props.table.onToggleGlobalDisable?.();
                   props.table.setHasUnsavedChanges?.(true);
                 }}
+                ariaLabel="Global alerts toggle"
               />
             </Show>
           </div>
@@ -254,6 +261,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                           labelDisabled="Off"
                           titleEnabled="Offline alerts currently enabled by default. Click to disable."
                           titleDisabled="Offline alerts currently disabled by default. Click to enable."
+                          ariaLabel="Offline alerts default"
                         />
                       </Show>
                     }
@@ -268,10 +276,15 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                           ? 'critical'
                           : 'warning';
 
-                      return renderOfflineStateButton(state, disabledGlobally, () => {
-                        if (disabledGlobally) return;
-                        props.table.onSetGlobalOfflineState?.(nextOfflineState(state));
-                      });
+                      return renderOfflineStateButton(
+                        state,
+                        disabledGlobally,
+                        () => {
+                          if (disabledGlobally) return;
+                          props.table.onSetGlobalOfflineState?.(nextOfflineState(state));
+                        },
+                        'Offline alerts default',
+                      );
                     })()}
                   </Show>
                 </div>
@@ -333,6 +346,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                           !(props.table.globalDisableFlag?.() ?? false) &&
                           props.table.onToggleDisabled?.(resource.id)
                         }
+                        ariaLabel={`Alerts for ${getAlertResourceLabel(resource)}`}
                       />
                     </div>
                   </Show>
@@ -492,6 +506,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             onToggle={() => onToggle(resource.id)}
                             titleEnabled={`${titlePrefix} alerts enabled. Click to disable for this resource.`}
                             titleDisabled={`${titlePrefix} alerts disabled. Click to enable for this resource.`}
+                            ariaLabel={`${titlePrefix} alerts for ${getAlertResourceLabel(resource)}`}
                           />
                         </div>
                       );
@@ -510,7 +525,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                               type="button"
                               onClick={(e) => startEditing(resource, metric, e)}
                               class="min-h-11 min-w-11 font-mono text-xs font-medium cursor-pointer rounded-sm px-1 -mx-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-400"
-                              aria-label={`Edit ${column} threshold for ${getAlertResourceLabel(resource)}`}
+                              aria-label={`Edit ${column} threshold for ${getAlertResourceLabel(resource)}: ${metricValueText(metric, displayValue(metric))}`}
                             >
                               <MetricValueWithHeat
                                 resourceId={resource.id}
@@ -528,6 +543,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             layout="card"
                             value={thresholds()?.[metric]}
                             inheritedDefault={resource.defaults?.[metric]}
+                            resourceName={getAlertResourceLabel(resource)}
                             onFocus={() =>
                               props.setActiveMetricInput({ resourceId: resource.id, metric })
                             }
@@ -577,6 +593,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                               titleEnabled="Offline alerts enabled. Click to disable for this resource."
                               titleDisabled="Offline alerts disabled. Click to enable for this resource."
                               titleWhenDisabled="Offline alerts controlled globally"
+                              ariaLabel={`Offline alerts for ${getAlertResourceLabel(resource)}`}
                             />
                           }
                         >
@@ -596,10 +613,18 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                               state = defaultSeverity === 'critical' ? 'critical' : 'warning';
                             }
 
-                            return renderOfflineStateButton(state, disabledGlobally(), () => {
-                              if (disabledGlobally()) return;
-                              props.table.onSetOfflineState?.(resource.id, nextOfflineState(state));
-                            });
+                            return renderOfflineStateButton(
+                              state,
+                              disabledGlobally(),
+                              () => {
+                                if (disabledGlobally()) return;
+                                props.table.onSetOfflineState?.(
+                                  resource.id,
+                                  nextOfflineState(state),
+                                );
+                              },
+                              `Offline alerts for ${getAlertResourceLabel(resource)}`,
+                            );
                           })()}
                         </Show>
                       </div>

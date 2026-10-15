@@ -25,6 +25,39 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Investigations retain collected backup and storage history evidence
+
+Guest investigation manifests include the existing read-only storage tool so
+backup failures do not require a host command connection. `backup_tasks` queries
+the tenant's canonical recovery store without misclassifying execution records
+as backup artifacts, supports canonical subject IDs and preserves failed-task
+error text. Task success alone never proves that a restore artifact exists.
+The API and tool adapter share `Manager.ListPointsForOrg`, including the
+canonical graph source in demo mode, rather than presenting fixture evidence
+through HTTP alone while tools consult an empty store.
+`TestInvestigationReadsCanonicalBackupFailureWithoutAgent` uses mapped, persisted
+task evidence and checks subject and tenant isolation. The `backups` inventory
+also reads this org-scoped source with `KindBackup` and canonical subject IDs.
+It returns canonical points with repository references, provenance and optional
+verification fields, rather than VM-ID-filtered PBS/PVE summary lists or an
+unscoped recent-task cache. Global offset pagination preserves source ordering
+across providers and does not scan earlier pages. Read failures remain errors;
+an artifact record alone is not proof of restorability.
+
+Storage performance reads resolve the canonical registry metrics target and use
+the monitor-owned history selector. Responses contain usage percentages with
+timestamps and source provenance, including `mock_synthetic`, rather than
+invented zero CPU/memory observations. Retained read errors remain errors and an
+empty requested window cannot be filled with older chart samples.
+History downsampling covers every observation in the returned window, including
+the newest remainder samples when the count is not a multiple of the tool limit.
+`TestDownsampleMetrics_IncludesNewestRemainder` covers dense retained series.
+`TestStoragePerformanceReadsRetainedHistoryAcrossRestart`,
+`TestStorageInvestigationHistoryKeepsRequestedWindowAndStoreErrors` and
+`TestInvestigationStorageHistoryUsesCommunityMonitoringSource` cover retained
+storage history, measured zero, failure, window bounds and API/tool parity.
+These are read-path controls, not proof of real remediation or release readiness.
+
 ### Pro Patrol defaults to Ask first until the operator chooses
 
 `AIConfig.PatrolAutonomyLevel` stays empty until an operator saves a Patrol
@@ -8693,6 +8726,15 @@ explicit renderer fixtures at 1440, 900 and 390 pixel widths.
 
 
 ### Monitoring identity without command access
+
+An ambiguous target returns `STRICT_RESOLUTION` with the tool error bit and
+guidance to select an exact canonical resource ID. It cannot be described as a
+missing command connection or fall back to a connected hostname. Docker children
+inherit placement, not their reporting host's identity aliases, through the
+shared canonical identity owner. `TestDockerLogReadRoutesToHostWithCollectedChildren`
+checks registered read dispatch with host/child ingestion and real-collision
+refusal; `TestAmbiguousResourceNameCannotFallBackToConnectedHostname` checks the
+failure envelope without dispatch.
 
 Command routing resolves monitored topology independently of agent connection
 availability. A missing connection must preserve the known target kind and

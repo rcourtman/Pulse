@@ -86,6 +86,8 @@ export const EN_MESSAGES = {
   'setup.security.error.setupFailed': 'Setup failed: {error}',
   'setup.security.error.telemetryDisableFailed':
     'Your admin account was created, but usage statistics could not be turned off. You can turn them off in Settings → System → General.',
+  'setup.security.error.telemetryLockedOn':
+    'Your admin account was created. Usage statistics stay on because this server sets PULSE_TELEMETRY=true. Set PULSE_TELEMETRY=false and restart Pulse to turn them off.',
   'setup.security.generatedPasswordHelp':
     'A secure 20-character password will be generated and shown on the next screen.',
   'setup.security.label.confirmPassword': 'Confirm password',
@@ -143,6 +145,9 @@ export const EN_MESSAGES = {
   'alerts.assistant.subject': '{level} {alertType} on {resourceName}',
   'alerts.assistant.title': 'Alert investigation attached',
   'alerts.assistant.unlockedTitle': 'Ask Pulse Assistant about this alert',
+  'alerts.assistant.iconLabel': 'Ask Pulse Assistant about {alertType} on {resourceName}',
+  'alerts.assistant.iconLabelAt':
+    'Ask Pulse Assistant about {alertType} on {resourceName}, {startedAt}',
   'alerts.assistant.explain.menuLabel': 'Explain with Assistant',
   'alerts.assistant.explain.menuHint': 'Use this alert as read-only context',
   'alerts.assistant.patrol.chevron': 'More alert actions',
@@ -265,7 +270,7 @@ export const EN_MESSAGES = {
   'alerts.page.overview.title': 'Alerts Overview',
   'alerts.page.schedule.description':
     'Define quiet hours, grouping, cooldowns, recovery, and escalation behavior for alert delivery.',
-  'alerts.page.schedule.title': 'Maintenance Schedule',
+  'alerts.page.schedule.title': 'Delivery Schedule',
   'alerts.page.thresholds.description':
     'Tune thresholds and scoped overrides for infrastructure, workloads, and integrations.',
   'alerts.page.thresholds.title': 'Alert Thresholds',
@@ -681,6 +686,7 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
   'setup.security.error.passwordTooShort',
   'setup.security.error.setupFailed',
   'setup.security.error.telemetryDisableFailed',
+  'setup.security.error.telemetryLockedOn',
   'setup.security.generatedPasswordHelp',
   'setup.security.label.confirmPassword',
   'setup.security.label.password',
@@ -769,6 +775,8 @@ export const ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS = [
   'alerts.assistant.subject',
   'alerts.assistant.title',
   'alerts.assistant.unlockedTitle',
+  'alerts.assistant.iconLabel',
+  'alerts.assistant.iconLabelAt',
   'alerts.assistant.explain.menuLabel',
   'alerts.assistant.explain.menuHint',
   'alerts.assistant.patrol.chevron',

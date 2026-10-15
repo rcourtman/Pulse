@@ -2440,6 +2440,28 @@ describe('GuestRow', () => {
       expect(onClick).not.toHaveBeenCalled();
     });
 
+    // #2858: the amber shield names the operator's own limits (this mock's
+    // stale limit is 48 hours, not the 72-hour default) and links to them.
+    it('says which backup age limit a row crossed and links to where it is set', () => {
+      const guest = makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: Date.now() - 60 * 3_600_000,
+      });
+      renderGuestRow({ guest, visibleColumnIds: ['name', 'backup'] });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Backup status: overdue/ }));
+      const dialog = screen.getByRole('dialog', {
+        name: `Backup status details for ${guest.name}`,
+      });
+      expect(dialog).toHaveTextContent(
+        'Shown amber: more than 1 day old (Fresh Hours). Also past Stale Hours (2 days).',
+      );
+      expect(
+        screen.getByRole('link', { name: 'Change when backups count as old' }),
+      ).toHaveAttribute('href', '/alerts/thresholds/proxmox#backups');
+    });
+
     it('keeps the 44px touch target on the Backup column badge', () => {
       renderGuestRow({
         guest: makeGuest({ type: 'qemu', workloadType: 'vm', lastBackup: Date.now() }),

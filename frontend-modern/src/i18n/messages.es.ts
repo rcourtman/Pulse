@@ -41,6 +41,9 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.assistant.subject': '{level} {alertType} en {resourceName}',
   'alerts.assistant.title': 'Investigacion de alerta adjunta',
   'alerts.assistant.unlockedTitle': 'Preguntar a Pulse Assistant sobre esta alerta',
+  'alerts.assistant.iconLabel': 'Preguntar a Pulse Assistant sobre {alertType} en {resourceName}',
+  'alerts.assistant.iconLabelAt':
+    'Preguntar a Pulse Assistant sobre {alertType} en {resourceName}, {startedAt}',
   'alerts.assistant.explain.menuLabel': 'Explicar con Assistant',
   'alerts.assistant.explain.menuHint': 'Usar esta alerta como contexto de solo lectura',
   'alerts.assistant.patrol.chevron': 'Mas acciones para esta alerta',
@@ -166,7 +169,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.page.overview.title': 'Resumen de alertas',
   'alerts.page.schedule.description':
     'Define horas de silencio, agrupacion, enfriamiento, recuperacion y escalado para la entrega de alertas.',
-  'alerts.page.schedule.title': 'Programacion de mantenimiento',
+  'alerts.page.schedule.title': 'Programacion de entregas',
   'alerts.page.thresholds.description':
     'Ajusta umbrales y excepciones especificas para infraestructura, cargas e integraciones.',
   'alerts.page.thresholds.title': 'Umbrales de alerta',
@@ -285,6 +288,8 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.security.error.passwordRequired': 'Ingresa una contraseña',
   'setup.security.error.passwordTooShort': 'La contraseña debe tener al menos 12 caracteres',
   'setup.security.error.setupFailed': 'La configuración falló: {error}',
+  'setup.security.error.telemetryLockedOn':
+    'Tu cuenta de administrador se creó. Las estadísticas de uso siguen activadas porque este servidor define PULSE_TELEMETRY=true. Define PULSE_TELEMETRY=false y reinicia Pulse para desactivarlas.',
   'setup.security.error.telemetryDisableFailed':
     'Tu cuenta de administrador se creó, pero las estadísticas de uso no se pudieron desactivar. Puedes desactivarlas en Ajustes → Sistema → General.',
   'setup.security.generatedPasswordHelp':

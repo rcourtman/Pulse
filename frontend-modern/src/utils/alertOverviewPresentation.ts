@@ -22,7 +22,10 @@ export const ALERTS_PAGE_DEFAULT_TITLE = 'Alerts';
 export const ALERTS_PAGE_OVERVIEW_TITLE = 'Alerts Overview';
 export const ALERTS_PAGE_THRESHOLDS_TITLE = 'Alert Thresholds';
 export const ALERTS_PAGE_DESTINATIONS_TITLE = 'Notifications';
-export const ALERTS_PAGE_SCHEDULE_TITLE = 'Maintenance Schedule';
+// The page sets how alerts are delivered (quiet hours, cooldown, grouping,
+// recovery, escalation). Maintenance windows are a separate per-resource
+// feature, so the title must not promise them.
+export const ALERTS_PAGE_SCHEDULE_TITLE = 'Delivery Schedule';
 export const ALERTS_PAGE_HISTORY_TITLE = 'Alert History';
 export const ALERTS_PAGE_DEFAULT_DESCRIPTION =
   'Review active incidents, inspect alert history, and manage thresholds, notifications, and schedules.';
@@ -427,6 +430,39 @@ export function getAlertHistoryLoadFailure() {
       'Any entries shown may be incomplete or out of date. Retry to refresh saved history.',
     retryLabel: 'Retry history',
     retryingLabel: 'Retrying…',
+  } as const;
+}
+
+/**
+ * The notice above History when a link narrowed it to one alert. It names the
+ * alert once it is found and says plainly when history no longer holds it.
+ */
+export function getAlertHistoryFocusNotice(options: {
+  alertTitle?: string;
+  resourceName?: string;
+  missing: boolean;
+  liveAlertsUnavailable?: boolean;
+}) {
+  const clearLabel = 'Show all alerts';
+  // Saved history holds resolved alerts only; without the live list Pulse
+  // cannot tell whether the linked alert is still firing.
+  if (options.liveAlertsUnavailable) {
+    return {
+      text: 'Pulse could not load the alerts firing now, so this alert may still be active.',
+      clearLabel,
+    } as const;
+  }
+  if (options.missing) {
+    return { text: "That alert is no longer in Pulse's alert history.", clearLabel } as const;
+  }
+  const subject = [options.alertTitle, options.resourceName && `on ${options.resourceName}`]
+    .filter(Boolean)
+    .join(' ');
+  return {
+    text: subject
+      ? `Showing ${subject}, opened from a link.`
+      : 'Showing one alert, opened from a link.',
+    clearLabel,
   } as const;
 }
 

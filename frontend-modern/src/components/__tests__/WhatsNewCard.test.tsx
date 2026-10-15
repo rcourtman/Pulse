@@ -107,7 +107,7 @@ describe('WhatsNewCard', () => {
 
     expect(screen.queryByTestId('whats-new-notice')).not.toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Pulse v6.1.0-rc.1 changelog')).toBeInTheDocument();
+    expect(screen.getByText("What's new in Pulse v6.1.0-rc.1")).toBeInTheDocument();
     expect(screen.getByText('Added')).toBeInTheDocument();
     expect(
       screen.getByText('Actions now has a dedicated inbox for approvals.'),
@@ -116,7 +116,9 @@ describe('WhatsNewCard', () => {
     expect(
       screen.getByText('Acknowledged alerts now stay dismissed after refresh.'),
     ).toBeInTheDocument();
-    expect(screen.queryByText('General agent improvements')).not.toBeInTheDocument();
+    expect(screen.getByText('General agent improvements')).toBeInTheDocument();
+    expect(screen.getByText('All changes').parentElement).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('All changes'));
     expect(screen.queryByText('Internal work')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Full release notes →' })).toHaveAttribute(
       'href',
@@ -178,7 +180,7 @@ describe('WhatsNewCard', () => {
     expect(screen.queryByTestId('whats-new-notice')).not.toBeInTheDocument();
   });
 
-  it('stays quiet when a release has only a highlights summary', async () => {
+  it('announces a highlights-only release without adding an empty details section', async () => {
     localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.0.5');
     versionInfoMock.mockReturnValue({
       version: '6.1.0-rc.1',
@@ -198,6 +200,101 @@ describe('WhatsNewCard', () => {
       expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.1.0-rc.1');
     });
     expect(screen.queryByTestId('whats-new-modal')).not.toBeInTheDocument();
+    fireEvent.click(
+      await screen.findByRole('button', { name: "See what's new in Pulse 6.1.0-rc.1" }),
+    );
+    expect(screen.getByText('General improvements')).toBeInTheDocument();
+    expect(screen.queryByText('All changes')).not.toBeInTheDocument();
+  });
+
+  it('puts screenshots under highlights, keeps warnings open and collapses routine upgrade notes', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.5.0');
+    versionInfoMock.mockReturnValue({
+      version: '6.6.0',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+    const assetBase = 'https://github.com/rcourtman/Pulse/releases/download/v6.6.0/';
+    getReleaseNotesMock.mockResolvedValue({
+      version: '6.6.0',
+      releaseNotes: [
+        '## Highlights',
+        '- Find backup failures faster.',
+        '## Proxmox, PBS and backups',
+        '- Open Backups to inspect recent failures.',
+        '## Known issues',
+        'Older agents need an update.',
+        '## Breaking changes',
+        'Migrate the old configuration before enabling collection.',
+        '## Before you upgrade',
+        'Verify the published checksums.',
+        '## See the difference',
+        '### Backup coverage at a glance',
+        'Compare backup coverage across nodes.',
+        '| Before | Now |',
+        '| --- | --- |',
+        `| ![Before](${assetBase}release-note-backups-before.png) | ![Now](${assetBase}release-note-backups-now.png) |`,
+        '## Install',
+        'Internal installation instructions.',
+      ].join('\n'),
+    });
+    await renderCard();
+    fireEvent.click(await screen.findByRole('button', { name: "See what's new in Pulse 6.6.0" }));
+    expect(screen.getByText('Older agents need an update.')).toBeVisible();
+    expect(
+      screen.getByText('Migrate the old configuration before enabling collection.'),
+    ).toBeVisible();
+    const warnings = screen.getByRole('region', { name: 'Important release information' });
+    const highlights = screen.getByRole('region', { name: 'Release highlights' });
+    const comparison = screen.getByRole('region', { name: 'Backup coverage at a glance' });
+    expect(warnings.closest('details')).toBeNull();
+    expect(
+      warnings.compareDocumentPosition(highlights) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(highlights.nextElementSibling).toBe(comparison);
+    const upgradeNotes = screen.getByText('Before you upgrade').closest('details');
+    expect(upgradeNotes).not.toHaveAttribute('open');
+    expect(screen.getByText('Verify the published checksums.')).not.toBeVisible();
+    expect(
+      comparison.compareDocumentPosition(upgradeNotes!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const after = screen.getByRole('img', { name: 'Backup coverage at a glance, now' });
+    expect(after).toHaveAttribute(
+      'src',
+      '/api/updates/release-notes/assets/v6.6.0/release-note-backups-now.png',
+    );
+    expect(after).toHaveAttribute('referrerpolicy', 'no-referrer');
+    expect(
+      screen.getByRole('link', { name: /View Backup coverage at a glance, now, full size/ }),
+    ).toHaveAttribute('rel', 'noopener noreferrer');
+    fireEvent.error(after);
+    expect(screen.getByText('Screenshot unavailable.')).toBeVisible();
+    expect(
+      screen.getByRole('img', { name: 'Backup coverage at a glance, before' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Internal installation instructions.')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('renders text-only legacy releases without requiring highlights or images', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.0.5');
+    versionInfoMock.mockReturnValue({
+      version: '6.1.0',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+    getReleaseNotesMock.mockResolvedValue({
+      version: '6.1.0',
+      releaseNotes:
+        '## Fixed\n- Alerts stay dismissed. <script>window.pwned=true</script><img src="https://example.com/tracker.png">',
+    });
+    await renderCard();
+    fireEvent.click(await screen.findByRole('button', { name: "See what's new in Pulse 6.1.0" }));
+    expect(screen.getByText('All changes').parentElement).toHaveAttribute('open');
+    expect(screen.getByText(/Alerts stay dismissed/)).toBeVisible();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(document.querySelector('script')).not.toBeInTheDocument();
   });
 
   it('stays quiet for development builds', async () => {

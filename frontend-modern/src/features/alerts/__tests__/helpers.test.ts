@@ -216,7 +216,7 @@ describe('alerts helpers', () => {
     });
 
     it('maps infrastructure alert types', () => {
-      expect(alertTypeDisplayLabel('host-offline')).toBe('Host Offline');
+      expect(alertTypeDisplayLabel('host-offline')).toBe('Agent Not Reporting');
       expect(alertTypeDisplayLabel('offline')).toBe('Offline');
       expect(alertTypeDisplayLabel('powered-off')).toBe('Powered Off');
       expect(alertTypeDisplayLabel('connectivity')).toBe('Connectivity');

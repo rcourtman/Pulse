@@ -101,8 +101,8 @@ describe('AlertHistoryMobileList', () => {
 
     const { container } = render(() => <AlertHistoryMobileList state={state} />);
 
-    expect(container.querySelector('[data-testid="alert-history-mobile-list"]')).toHaveClass(
-      'md:hidden',
+    expect(container.querySelector('[data-testid="alert-history-mobile-list"]')).not.toHaveClass(
+      'hidden',
     );
     expect(screen.getByRole('heading', { name: 'pve-production-01' })).toBeInTheDocument();
     expect(screen.getByText('Backup failed after the target became unavailable.')).toBeVisible();
@@ -117,10 +117,12 @@ describe('AlertHistoryMobileList', () => {
     expect(screen.getByText('warning')).toBeVisible();
     expect(screen.getByText('resolved')).toBeVisible();
 
-    expect(screen.getByRole('button', { name: 'Timeline' })).toHaveClass('min-h-11');
-    expect(screen.getByRole('button', { name: 'Resource' })).toHaveClass('min-h-11');
+    expect(screen.getByRole('button', { name: /^Timeline for / })).toHaveClass('min-h-11');
+    expect(screen.getByRole('button', { name: /^Resource incidents for / })).toHaveClass(
+      'min-h-11',
+    );
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Timeline for / }));
     expect(toggleIncidentTimeline).toHaveBeenCalledWith(
       'alert-1-row',
       'alert-1',
@@ -131,7 +133,7 @@ describe('AlertHistoryMobileList', () => {
     ).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Close incident timeline' }));
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Resource' }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Resource incidents for / }));
     expect(openResourceIncidentPanel).toHaveBeenCalledWith(
       'node-1',
       'pve-production-01',
@@ -200,7 +202,7 @@ describe('AlertHistoryMobileList', () => {
     const { state } = createState();
 
     const { container } = render(() => <AlertHistoryMobileList state={state} />);
-    await fireEvent.click(screen.getByRole('button', { name: 'Resource' }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Resource incidents for / }));
 
     const card = container.querySelector('article');
     const dialog = screen.getByRole('dialog', {
@@ -221,7 +223,7 @@ describe('AlertHistoryMobileList', () => {
     const { closeResourceIncidentPanel, state } = createState();
 
     render(() => <AlertHistoryMobileList state={state} />);
-    const resourceButton = screen.getByRole('button', { name: 'Resource' });
+    const resourceButton = screen.getByRole('button', { name: /^Resource incidents for / });
     resourceButton.focus();
     await fireEvent.click(resourceButton);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -231,40 +233,31 @@ describe('AlertHistoryMobileList', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(closeResourceIncidentPanel).toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Resource' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: /^Resource incidents for / })).toHaveFocus();
   });
 });
 
 describe('AlertHistoryMobileList changing history', () => {
   it.each(['timeline', 'resource'] as const)(
-    'preserves an open %s across desktop and phone layouts',
+    'preserves an open %s across table and card layouts',
     async (kind) => {
       const { state } = createState();
-      let resize = () => {};
-      const viewport = {
-        matches: true,
-        addEventListener: vi.fn((_event: string, listener: () => void) => {
-          resize = listener;
-        }),
-        removeEventListener: vi.fn(),
-      };
-      vi.stubGlobal('matchMedia', () => viewport);
+      // The table section shows the cards when its card is too narrow for
+      // the table; `active` is that decision.
+      const [cardsShown, setCardsShown] = createSignal(false);
       if (kind === 'timeline') await state.toggleIncidentTimeline('alert-1-row', 'alert-1');
       else await state.openResourceIncidentPanel('node-1', 'pve-production-01', 'alert-1-row');
-      const mounted = render(() => <AlertHistoryMobileList state={state} />);
+      const mounted = render(() => <AlertHistoryMobileList state={state} active={cardsShown} />);
       const assistantOpen = vi.spyOn(aiChatStore, 'isOpen', 'get').mockReturnValue(false);
       try {
         expect(screen.queryByRole('dialog')).toBeNull();
-        expect(screen.getByRole('button', { name: 'Timeline' })).toBeVisible();
+        expect(screen.getByRole('button', { name: /^Timeline for / })).toBeVisible();
         assistantOpen.mockReturnValue(true);
-        viewport.matches = false;
-        resize();
+        setCardsShown(true);
         expect(screen.queryByRole('dialog')).toBeNull();
-        viewport.matches = true;
-        resize();
+        setCardsShown(false);
         assistantOpen.mockReturnValue(false);
-        viewport.matches = false;
-        resize();
+        setCardsShown(true);
         expect(
           screen.getByRole('dialog', {
             name:
@@ -273,16 +266,14 @@ describe('AlertHistoryMobileList changing history', () => {
                 : 'Resource incidents for pve-production-01',
           }),
         ).toBeVisible();
-        viewport.matches = true;
-        resize();
+        setCardsShown(false);
         expect(screen.queryByRole('dialog')).toBeNull();
         expect(
           kind === 'timeline'
             ? state.expandedIncidents().has('alert-1-row')
             : state.resourceIncidentPanel()?.rowKey === 'alert-1-row',
         ).toBe(true);
-        viewport.matches = false;
-        resize();
+        setCardsShown(true);
         expect(screen.getByRole('dialog')).toBeVisible();
         await fireEvent.click(
           screen.getByRole('button', {
@@ -298,17 +289,53 @@ describe('AlertHistoryMobileList changing history', () => {
       } finally {
         assistantOpen.mockRestore();
         mounted.unmount();
-        vi.unstubAllGlobals();
       }
-      expect(viewport.removeEventListener).toHaveBeenCalledWith('change', resize);
     },
   );
+
+  // The table section derives `active` from the card's width, so the accessor
+  // changes on every resized pixel; only a change of layout may move the open
+  // expansions into the drawer, or a drawer the operator closed reopens.
+  it('moves expansions into the drawer only when the layout changes', async () => {
+    const { state, setGroupedAlerts } = createState();
+    setGroupedAlerts((groups) => {
+      const [group] = groups;
+      const first = group.alerts[0];
+      return [
+        {
+          ...group,
+          alerts: [
+            first,
+            { ...first, id: 'alert-2', resourceId: 'node-2', resourceName: 'pve-production-02' },
+          ],
+        },
+      ];
+    });
+    const keyed = {
+      ...state,
+      getIncidentRowKey: (alert: { id: string }) => `${alert.id}-row`,
+    } as AlertHistoryState;
+    await keyed.toggleIncidentTimeline('alert-1-row', 'alert-1');
+    await keyed.toggleIncidentTimeline('alert-2-row', 'alert-2');
+    const [cardWidth, setCardWidth] = createSignal(1000);
+    render(() => <AlertHistoryMobileList state={keyed} active={() => cardWidth() < 800} />);
+
+    setCardWidth(602);
+    expect(
+      screen.getByRole('dialog', { name: 'Incident timeline for pve-production-02' }),
+    ).toBeVisible();
+    await fireEvent.click(screen.getByRole('button', { name: 'Close incident timeline' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    setCardWidth(603);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
 
   it('returns focus to the list when the investigated row disappears', async () => {
     const { closeResourceIncidentPanel, setGroupedAlerts, state } = createState();
     render(() => <AlertHistoryMobileList state={state} />);
 
-    const resourceButton = screen.getByRole('button', { name: 'Resource' });
+    const resourceButton = screen.getByRole('button', { name: /^Resource incidents for / });
     resourceButton.focus();
     await fireEvent.click(resourceButton);
     expect(
@@ -353,7 +380,7 @@ describe('history handoff focus ownership', () => {
     const open = vi.spyOn(aiChatStore, 'open').mockImplementation(() => composer.focus());
     try {
       render(() => <AlertHistoryMobileList state={state} />);
-      await fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+      await fireEvent.click(screen.getByRole('button', { name: /^Timeline for / }));
       await fireEvent.click(
         screen.getByRole('button', {
           name: 'Discuss incident incident-focus with Pulse Assistant',

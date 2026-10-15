@@ -148,6 +148,14 @@ in alert helpers and the production held-breach browser fixture bind this
 shared presentation boundary to the alerts/API contracts.
 
 
+### Alert severity fills are one primitive
+
+`getAlertSeverityFillClass` in `frontend-modern/src/utils/alertSeverityPresentation.ts`
+is the one fill per alert severity, and `getAlertSeverityDotClass` composes
+it, so a legend dot and the chart segment it names cannot drift apart. Each
+fill holds at least 3:1 against the chart surface in both themes; yellow on
+the light surface is under 2:1, so light-theme warnings use amber-700.
+
 ### Systemd backup-pause help separates shutdown from remote completion
 
 The existing systemd precaution reads the stop result as well as the inactive
@@ -599,6 +607,12 @@ zero, pre-sample status, dated inspection, access denial and resumption.
 `browser-tests/guest-history-provenance.cjs` uses the production full drawer
 and History API client at desktop and touch widths with synthetic responses.
 These checks do not establish native guest thaw, collection or release availability.
+
+Backup age rules read through one resolver: `resolveBackupThresholds` in
+`frontend-modern/src/utils/format.ts` fills the fresh and stale defaults for
+both `getBackupInfo` and `getWorkloadsGuestBackupAgeRule`, so the copy that
+explains a shield (#2858) cannot disagree with the colour it explains.
+`workloadGuestPresentation.test.ts` pins the wording.
 
 ### Completed guest backup evidence versus current activity
 
@@ -4472,6 +4486,9 @@ confirmation note or rule reason is a `FormTextarea`, and the alert-only
 guidance link is a `ButtonLink`. `PatrolIntelligenceSurface.tsx` passes the
 Patrol findings accessor into the workbench; the workbench does not fetch or
 poll findings itself.
+`Open resource` in the attention detail is a `ButtonLink` whose destination
+comes from `buildResourcePagePath`; the workbench hides it when no platform
+page can show the subject instead of linking to a page that cannot.
 The feature shell keeps the independent attention workbench mounted when
 Patrol is off or its model needs setup, while retaining the existing setup task
 above it. Desktop and narrow browser checks must show the task and attention
@@ -4977,6 +4994,10 @@ bounds, including provider-backed alert-history wording. `frontend-modern/src/fe
 backed host and VM incidents with the shared `resource-incident` vocabulary
 and existing alert-history shells instead of introducing VMware-only labels,
 badges, or panel copy just because the underlying signal came from vSphere.
+The same helper labels the `host-offline` alert type `Agent Not Reporting`:
+that alert only means an agent's reports lapsed, so drawers and the alerts
+page must not call it a host outage beside a node row that is still online.
+`docker-host-offline` keeps its own `Host Offline` label.
 That same shared settings and modal boundary now also owns the public usage-data
 vocabulary. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts`, and
@@ -5558,10 +5579,16 @@ amber in all three. That mapper also owns the restart verdict
 restarts is warning in its dot, the sort, the phone State words, the Restarts
 column and the drawer's lifted Restarts row alike, never a green dot beside an
 amber or red count. Docker State words read in their row dot's colour through
-`dockerStateTextToneClass` (`DockerNativeTableShared.tsx`) with no second dot;
+`dockerStateTextToneClass` (`DockerNativeTableShared.tsx`) with no second dot,
+which now delegates to the platform helper `getPlatformStatusTextToneClass`
+(`features/platformPage/platformStatusTone.ts`): every platform table colours
+the cell behind a dot's verdict through it, and `PlatformIssueReason` and the
+TrueNAS Services and VMs state notes take their tones from it too;
 the Docker Networks row's single name-cell dot carries its attached-container
 verdict the same way, and each attached-container card's state words take its
-dot's tone through the same helper. "Worth checking" renders through
+dot's tone through the same helper. The Swarm tables follow it too: the cell
+behind a service, task or node dot's verdict (Running count and Update words,
+Current state, Reachability or Availability) reads in that dot's tone. "Worth checking" renders through
 `DrawerExceptionList.tsx` directly under the alerts line, above the charts:
 one compact label/value line per lifted row with the shared
 `detailValueToneClass` tone, not a card per section. A guest memory reading
@@ -5682,6 +5709,10 @@ gating and click runtime, and
 label/title fallback policy, and status-badge class selection. Future status
 badge work should extend those owners instead of pushing label/title policy or
 disabled click handling back into the shell.
+A badge given `ariaLabel` is named "<ariaLabel>: <visible label>" through
+`getStatusBadgeAriaLabel`, so pages of alike On/Off badges say what each
+switches while keeping the visible word in the name (WCAG 2.5.3); without it
+the visible label remains the name.
 Read-only health/state badges are a separate shared primitive.
 `frontend-modern/src/components/shared/StatusIndicatorBadge.tsx` owns
 status-to-tone mapping, optional dot wiring, sizing, shape, and label
@@ -8672,6 +8703,15 @@ unresolved status would flash the default tab away from an admin on every load.
 `__tests__/useSettingsAccess.test.tsx` pin the complete named-capability,
 fail-closed mount, failed-status, deduplicated-load, and General-fallback rules.
 
+### Infrastructure system names are plain in-app links
+
+`InfrastructureSourceManager` renders a connected system's name as a plain
+`<a href>` to its monitoring page in both the desktop table and the phone
+cards; Solid Router intercepts it as an in-app navigation, so the component
+needs no router context. The name keeps its existing tooltip, carries a
+resting underline, and leaves the Actions column (budgeted for Manage and
+the install button) unchanged.
+
 ### Alert monitoring actions preserve domain ownership
 
 The Alerts overview may offer a compact per-resource Monitoring menu, but the
@@ -8802,6 +8842,22 @@ active locale rather than the English-only `formatRelativeTime`. Proofs live
 in `frontend-modern/src/i18n/__tests__/i18n.test.ts` and
 `frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts`.
 
+### Page titles name what the page holds
+
+A page title or its localized catalog entry names the job the page does, not
+a neighbouring feature: the alerts Schedule page is "Delivery Schedule" in
+every locale, and `i18n.test.ts` refuses a maintenance word in any locale's
+title because maintenance windows live elsewhere.
+
+### A refused setting reports the state the server kept
+
+When a write is refused because the server owns the value (an environment
+lock), the surface reads the effective value before speaking: no message when
+the server already holds what the operator chose, a message naming the
+variable when it holds the opposite, and the generic failure only when the
+state cannot be read. The setup wizard's usage-statistics opt-out follows
+this, and catalog copy keeps the variable name untranslated (`i18n.test.ts`).
+
 ### Alert overview rows place Investigate by the shared breakpoint
 
 `AlertOverviewAlertCard` reads the shared `useBreakpoint()` hook to decide
@@ -8822,6 +8878,33 @@ adds no identity mapping of its own: the workloads selection
 state resolves non-row ids through the resource registry, and the summary
 focus bridge reveals the selected row, so the alert link and every other
 `?resource=` link share one resolution and reveal path.
+
+### Alert cards deep-link storage through the storage route search
+
+`AlertOverviewAlertCard` builds a Proxmox storage alert's link with
+`buildStorageRouteSearch({ resource })` on `/proxmox/storage`, preferring the
+alert's `storageResourceId` metadata, and adds no identity mapping of its
+own. `ProxmoxPageSurface` passes `routeActive` to the Storage surface it keeps
+mounted behind its other tabs, so a guest tab's `?resource=` link is not read
+as a storage deep link.
+
+### Record-to-resource links resolve through one hook
+
+A surface that links a record (a Patrol item, a governed action) to its
+resource's page resolves the id with `useResolvedResource` and builds the
+link with `buildResourcePagePath`, rather than issuing its own
+`ResourceAPI.getResource` call. The action review's `Open resource` and
+`Open Patrol` links share one wrapping row whose links keep 44px targets on
+phones. A dialog offers a link away only when its host keeps the dialog in
+the address, so Back returns to it (`showResourceLink`).
+
+### Thresholds search is a route search
+
+The thresholds resource search writes `?q=` through `navigate(..., { replace:
+true })` instead of a component signal, so a deep link, a reload and the back
+button all keep the narrowed list. Pages with an unsaved-changes leave guard
+must compare the destination path, not every navigation, before asking, or a
+route-owned search prompts on every keystroke (`shouldConfirmAlertsLeave`).
 
 ### Alert groups use the shared localization boundary
 
@@ -8855,6 +8938,33 @@ class and synthesis labels route through the shared English, German, and
 Spanish catalogs. `AlertIncidentSynthesisSummary.test.tsx`,
 `useAlertOverviewState.test.tsx`, and `i18n.test.ts` pin inspectability,
 uncertainty wording, and additive group behavior at the frontend boundary.
+
+### Repeated row controls carry row-specific names
+
+A control repeated on every row of a table or card list (Timeline, Resource,
+an icon-only action) gets an accessible name that says which row it acts on,
+starting with its visible label so speech input still matches it, and a
+toggle reports `aria-expanded`. Localized names go through catalog keys with
+placeholders for the row subject (`alerts.assistant.iconLabel`,
+`alerts.assistant.iconLabelAt`); every locale keeps those placeholders
+(`i18n.test.ts`).
+
+### Layouts that swap a table for cards follow the container
+
+A surface that swaps a table for a card list decides from the width of the
+element that holds them (`useObservedElementWidth`), with the viewport
+breakpoint only as the fallback before the first measurement, because side
+rails and panels leave a table far less room than the screen width suggests.
+Alerts > History switches below an 800px card (`ALERT_HISTORY_TABLE_MIN_WIDTH`).
+
+### A deep link narrows, then decides once
+
+A route parameter that points a list at one record (Alert History's
+`?alert=`) narrows the list to that record instead of scrolling a windowed
+list to it, waits until every source that could hold the record has
+answered before widening or declaring it missing, decides once per record so
+later filters stay the operator's, and offers one control back to the full
+list.
 
 ### Mobile destinations are links and update evidence stays explicit
 
@@ -8897,6 +9007,14 @@ Current-source browser receipts under `frontend-modern/browser-verification/`
 cover desktop, intermediate, phone and short landscape layouts. These checks
 establish presentation and interaction, not installed Proxmox permissions or
 released acceptance.
+
+### Time axes label round times
+
+A chart axis built from fixed-width buckets anchored at "now minus the range"
+labels its inner ticks at the next round local time at their true positions,
+not at the raw bucket edges, and any label that shows an hour shows its
+minutes, so 24-hour locales never print a bare hour after a date
+(`nextAlertAxisBoundary` in `alertHistoryModel.ts`).
 
 ### Docker drawers expose reduced helper coverage without actions
 

@@ -3,6 +3,7 @@ package unifiedresources
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -112,6 +113,49 @@ func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T
 		if got := resource.Canonical.Aliases[i]; got != want {
 			t.Fatalf("alias[%d] = %q, want %q", i, got, want)
 		}
+	}
+}
+
+func TestDockerChildIdentityDoesNotClaimItsCommandHost(t *testing.T) {
+	for _, kind := range []ResourceType{
+		ResourceTypeAppContainer, ResourceTypeDockerService, ResourceTypeDockerImage,
+		ResourceTypeDockerVolume, ResourceTypeDockerNetwork, ResourceTypeDockerTask,
+		ResourceTypeDockerSwarmNode, ResourceTypeDockerSecret, ResourceTypeDockerConfig,
+	} {
+		t.Run(string(kind), func(t *testing.T) {
+			resource := Resource{
+				ID: "child-1", Type: kind, Name: "workload",
+				Identity:        ResourceIdentity{Hostnames: []string{"workload"}},
+				Docker:          &DockerData{HostSourceID: "native-host", AgentID: "native-host", Hostname: "command-host", NodeID: "swarm-node", NodeName: "swarm-worker"},
+				MetricsTarget:   &MetricsTarget{ResourceType: string(kind), ResourceID: "native-child"},
+				DiscoveryTarget: &DiscoveryTarget{ResourceType: string(kind), ResourceID: "workload", AgentID: "native-host", Hostname: "command-host"},
+			}
+			RefreshCanonicalIdentity(&resource)
+			for _, alias := range resource.Canonical.Aliases {
+				if alias == "native-host" || alias == "agent:native-host" || alias == "command-host" || alias == "docker-host:native-host" {
+					t.Fatalf("child claimed parent identity %q: %+v", alias, resource.Canonical)
+				}
+			}
+			if resource.Canonical.PlatformID != "native-child" || resource.Canonical.Hostname != "workload" {
+				t.Fatalf("child presentation borrowed parent placement: %+v", resource.Canonical)
+			}
+			for _, reference := range []string{"child-1", "native-child", "workload", string(kind) + ":native-child"} {
+				if !slices.Contains(resource.Canonical.Aliases, reference) {
+					t.Fatalf("child lost its own reference %q: %+v", reference, resource.Canonical)
+				}
+			}
+			// Losing discovery detail must not turn the child into its parent.
+			resource.MetricsTarget = nil
+			resource.DiscoveryTarget = &DiscoveryTarget{ResourceType: "agent", ResourceID: "native-host", AgentID: "native-host"}
+			resource.Identity = ResourceIdentity{}
+			RefreshCanonicalIdentity(&resource)
+			if resource.Canonical.PrimaryID == "agent:native-host" || resource.Canonical.PrimaryID == "docker-host:native-host" || resource.Canonical.Hostname != "" {
+				t.Fatalf("incomplete child became its parent: %+v", resource.Canonical)
+			}
+			if slices.Contains(resource.Canonical.Aliases, "native-host") {
+				t.Fatalf("parent discovery target became a child alias: %+v", resource.Canonical)
+			}
+		})
 	}
 }
 
@@ -505,8 +549,6 @@ func TestRefreshCanonicalIdentityUsesDockerSwarmNodeIdentity(t *testing.T) {
 		"docker-swarm-node:cluster-1:node-1",
 		"node-1",
 		"manager-1",
-		"docker-host-1",
-		"docker-host",
 		"docker-swarm-node-resource-1",
 	}
 	if len(resource.Canonical.Aliases) != len(wantAliases) {

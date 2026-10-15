@@ -21,6 +21,19 @@
 
 ## Purpose
 
+### Recovery APIs and investigations share the org-scoped point reader
+
+`Manager.ListPointsForOrg` selects the composed recovery evidence source for
+both the HTTP points API and investigation tools. Real installations retain
+tenant-scoped SQLite reads, including errors; demo composition projects the
+current canonical fixture graph through shared recovery filters and pagination.
+It does not seed a second store or grant recovery execution. Source selection is
+bound before consumers share the manager and follows runtime demo-mode changes
+without exposing persisted rows through demo reads. Manager boundary tests preserve tenant
+validation, cancellation and read failures; the API/tool parity regression in
+`internal/api/investigation_evidence_parity_test.go` reads actual graph-owned
+failure text without a PVE command connection.
+
 ### Patrol maintenance coverage adds no recovery execution
 
 Patrol's operator-state projection now projects the active recurring
@@ -266,6 +279,10 @@ strip states what its attention, unprotected and unknown counts mean from the
 server posture policy (`freshnessWindowSeconds`) using the causes
 `internal/recovery/posture.go` evaluates, and renders no rule until that policy
 has loaded rather than a guessed window.
+
+The workload backup shield explains its colour from the configured Fresh and
+Stale Hours and links to the Recovery thresholds through the shared
+`ALERT_BACKUP_THRESHOLDS_PATH`; it reads no recovery evidence of its own.
 
 Phone pool/disk rows preserve health and identity while using weighted widths,
 consistent gutters and compact capacity/health labels. Full disk risk reasons
@@ -2291,6 +2308,10 @@ recovery scope, or a storage/recovery-owned secret source.
     route remains deployment-installability and API-contract owned; storage
     and recovery must not treat release-note availability or publication time
     as protection freshness, recovery evidence, or restore state.
+    Its authenticated exact-version PNG screenshot route is presentation of
+    that same release body only. Even when an image depicts backup coverage,
+    the screenshot is illustrative release evidence and must never supply
+    live protection state, restore readiness or storage mutation authority.
 27. Keep VMware datastore projection on the shared unified-resource and storage-source contracts. When `frontend-modern/src/hooks/useUnifiedResources.ts` or shared `internal/api/router.go` wiring starts surfacing VMware-backed canonical `storage` resources, storage and recovery may expose those datastores through the owned `vmware-vsphere` source/platform vocabulary for inventory, capacity, and handoff flows only; they must not reinterpret that projection as VMware recovery support, restore semantics, or a provider-local protection surface.
     The same shared unified-resource boundary also covers canonical
     Resource.Uptime fallback on the consumer side. When
@@ -6545,6 +6566,39 @@ walk the same group repeatedly during large-estate Storage navigation. The
 windowing test pins the row shape, and the 50-node browser fixture exercises
 expanded rows and History at desktop and phone widths. This is presentation
 work only; it changes no storage evidence, alert state or recovery authority.
+
+### Storage deep links resolve through the registry and open the pool
+
+`useStorageResourceHighlight` matches `?resource=` against a record's id,
+then its metrics resource id (alerts and history use it), then its name only
+when exactly one record carries that name, because every Proxmox node can
+have a `local-zfs` and two PBS servers can both expose `primary-vault`. Any
+other reference is resolved by `ResourceAPI.getResource` (the registry owns
+aliases, succession and ambiguity) and matched by the resolved id; a shared
+name is never looked up. Every matched pool is opened, not only Ceph, so the
+shared summary focus bridge reveals its row and details. The Proxmox page
+keeps Storage mounted behind its other tabs, whose guest links also use
+`?resource=`, so the hook acts only while Storage is the active tab
+(`routeActive`). A visit is one stretch of Storage showing one link: a
+refusal lasts for the visit, so live updates do not repeat the request but a
+later visit (another link, or the tab again) retries, and a resolved pool not
+listed yet opens when its record arrives. Once a visit has needed a lookup,
+any pool the operator opens or closes outranks the link, whether the lookup
+or a record update finds the pool first.
+
+### Thresholds deep links open no storage or recovery path
+
+`buildAlertThresholdsPath` in `frontend-modern/src/routing/resourceLinks.ts`
+adds only a thresholds tab and its `?q=` name search. It reads no storage or
+recovery state and grants no storage action, and Patrol's alert-only guidance
+sends a physical disk to its tab unsearched, so it never filters storage or
+recovery rows by a disk name they do not carry.
+
+### Alert History links open no storage or recovery path
+
+`buildAlertHistoryAlertPath` adds only an alert id to the History route. It
+reads no storage or recovery state and grants no action; the History page
+reads the same saved and live alerts it always did.
 
 ### App-shell AI navigation gating opens no recovery path
 

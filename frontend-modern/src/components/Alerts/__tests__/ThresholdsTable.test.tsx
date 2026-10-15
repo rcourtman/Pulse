@@ -500,7 +500,11 @@ describe('ThresholdsTable navigation and redirection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
 
     expect(search).toHaveValue('');
-    expect(mockNavigate).not.toHaveBeenCalled();
+    // The search lives in the route (?q=), so clearing it rewrites the address
+    // in place; it must never leave the Docker tab.
+    for (const [path] of mockNavigate.mock.calls) {
+      expect(path).toMatch(/^\/alerts\/thresholds\/docker(?:#|$)/);
+    }
     expect(screen.getByRole('tab', { name: 'Docker' })).toHaveAttribute('aria-selected', 'true');
   });
 });

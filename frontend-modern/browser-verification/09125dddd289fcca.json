@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "65e3fa6f24a866dcee4ba9bf3d6a239ac846abcb",
+  "verified_at": "2026-10-15T08:52:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "3ae752ae1d423baad87fdeab950c8df68b39e0316973f96683f9d5d33c5bd7b6",
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts": "e99319eff749d95bfca0c84bca0a62e6abe528932bedbd6b67de5b030af2c00d"
+  },
+  "routes": [
+    "/patrol",
+    "/proxmox/overview",
+    "/proxmox/storage",
+    "/proxmox/mail",
+    "/docker/overview",
+    "/vmware/overview",
+    "/vmware/networks",
+    "/vmware/storage",
+    "/truenas/storage"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): Open resource on every Patrol decision pointed at /standalone/machines?resource=<id>; for the nginx container it opened Machines listing 3 agent hosts and no nginx",
+    "After: on the mock estate all 18 decisions link to the page that shows their resource: Proxmox VMs/LXC/storage selected by ?resource=, the ZFS device decision opens its pool, the physical disk is filtered to one row, Docker containers filtered by name, vSphere host/network/datastore and TrueNAS datasets on their tabs, PMG on Mail Gateway",
+    "A subject the registry cannot resolve (mock Docker container ids) still links by its type hint",
+    "No visual change to the detail; the link hides only when nothing names a platform"
+  ],
+  "interactions": [
+    "Opened each attention item via ?attention= and read the Open resource href",
+    "Followed each distinct destination and confirmed the page shows the resource by name; clicked Open resource on a ZFS device decision and the pool detail opened",
+    "At 375x812 the Open resource link is 44px tall with no page overflow; following it on a VM decision opened postgres-replica-01 selected on the Proxmox page"
+  ]
+}

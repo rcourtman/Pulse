@@ -1250,6 +1250,32 @@ func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
 	m.mu.RUnlock()
 }
 
+func TestHandleHostOfflineNamesSilentAgentNotHostOutage(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	// A Proxmox node keeps reporting through its API while its linked agent
+	// is silent, so the alert must not claim the host itself is offline.
+	host := models.Host{ID: "host-linked", Hostname: "delly", LinkedNodeID: "homelab-delly"}
+	alertID := canonicalConnectivityStateID(hostResourceID(host.ID))
+
+	for i := 0; i < 3; i++ {
+		m.HandleHostOffline(host)
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	alert, ok := testLookupActiveAlert(t, m, alertID)
+	if !ok {
+		t.Fatalf("expected alert %q after three offline detections", alertID)
+	}
+	if want := "Pulse agent on 'delly' stopped reporting"; alert.Message != want {
+		t.Fatalf("message = %q, want %q", alert.Message, want)
+	}
+	if want := "delly (Host Agent)"; alert.ResourceName != want {
+		t.Fatalf("resource name = %q, want %q", alert.ResourceName, want)
+	}
+}
+
 func TestHandleHostOfflineWithCorrelationPreservesHostLifecycleIdentity(t *testing.T) {
 	m := newTestManager(t)
 	host := models.Host{ID: "host-correlated", Hostname: "pve-1"}
@@ -22990,5 +23016,41 @@ func TestCheckNodeTemperatureJudgesPrimaryCPUReading(t *testing.T) {
 	}
 	if want := *models.PrimaryCPUTemperatureCelsius(node.Temperature); alert.Value != want || want != 92 {
 		t.Fatalf("alert value = %v, want the primary reading 92 (rule gave %v)", alert.Value, want)
+	}
+}
+
+// ZFS pool and device alerts are raised under "<storage>/zfs-pool:..." ids
+// that the resource registry cannot open; each names its storage so the
+// Alerts overview can open the pool on the Storage page.
+func TestZFSAlertsNameTheirStorage(t *testing.T) {
+	m := newTestManager(t)
+	storage := models.Storage{
+		ID:       "pve1-local-zfs",
+		Name:     "Local ZFS",
+		Node:     "pve1",
+		Instance: "lab",
+		ZFSPool: &models.ZFSPool{
+			Name:       "rpool",
+			State:      "DEGRADED",
+			ReadErrors: 3,
+			Devices: []models.ZFSDevice{
+				{Name: "sda", State: "FAULTED", ReadErrors: 3},
+			},
+		},
+	}
+
+	m.checkZFSPoolHealth(storage)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, id := range []string{
+		buildCanonicalStateID("pve1-local-zfs/zfs-pool:rpool", "pve1-local-zfs/zfs-pool:rpool-state"),
+		buildCanonicalStateID("pve1-local-zfs/zfs-pool:rpool", "pve1-local-zfs/zfs-pool:rpool-errors"),
+		buildCanonicalStateID("pve1-local-zfs/zfs-pool:rpool/device:sda", "pve1-local-zfs/zfs-pool:rpool/device:sda-health"),
+	} {
+		alert := testRequireActiveAlert(t, m, id)
+		if got := alert.Metadata["storageResourceId"]; got != "pve1-local-zfs" {
+			t.Errorf("%s: storageResourceId = %v, want pve1-local-zfs", id, got)
+		}
 	}
 }

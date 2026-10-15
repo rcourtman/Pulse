@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "base_sha": "50864566e0442b697a352d83c152c58bfbc9adaf",
+  "verified_at": "2026-10-15T10:21:30.056Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/WhatsNewCard.tsx",
+    "frontend-modern/src/components/WhatsNewContent.tsx",
+    "frontend-modern/src/components/whatsNewModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/WhatsNewCard.tsx": "540ea2b4501fb60257256e7f2c6554eed9b372a4e000456fcc64ad24dd30a893",
+    "frontend-modern/src/components/WhatsNewContent.tsx": "b08941975e68413622552cd3425228b88ca6320375af1e3d2426899e195a0683",
+    "frontend-modern/src/components/whatsNewModel.ts": "fde56f5b2ce94d7fc29275df57e32d523ad5a373faab2eb07cf6f857bc9b6c4a"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "notice without automatic modal",
+    "three highlights",
+    "current grouped changes collapsed and expanded",
+    "important notes visible",
+    "before and now screenshots",
+    "single current screenshot",
+    "text-only historical notes",
+    "highlights-only notes",
+    "failed images",
+    "first-run baseline",
+    "metadata-only release",
+    "release notes fetch failure",
+    "dismissed and reloaded"
+  ],
+  "interactions": [
+    "notice click",
+    "pointer and keyboard disclosure toggle",
+    "scroll to last change",
+    "full-size image link",
+    "focus trap",
+    "Escape",
+    "backdrop click",
+    "close button",
+    "Got it",
+    "focus returns to main",
+    "notice dismissal",
+    "reload remains quiet"
+  ],
+  "screenshots": [
+    "frontend-modern/browser-verification/screenshots/release-highlights-desktop.png",
+    "frontend-modern/browser-verification/screenshots/release-highlights-mobile.png"
+  ],
+  "notes": "Current production build with generated demo data. Release API and image responses use controlled fixtures; screenshot Markdown is produced by the canonical visual-plan renderer."
+}

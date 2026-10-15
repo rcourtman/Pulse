@@ -28,6 +28,13 @@ ALLOWED_ROLES = {
     "tab",
 }
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+PR_IMAGE_PATTERN = re.compile(
+    r"(?:https://github\.com/user-attachments/assets/"
+    r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"
+    r"|https://raw\.githubusercontent\.com/rcourtman/Pulse/[0-9a-f]{40}/"
+    r"(?:docs/images|frontend-modern/browser-verification/screenshots)/[a-zA-Z0-9_-]+\.(?:png|jpg|jpeg|webp))"
+)
+PR_PATTERN = re.compile(r"https://github\.com/rcourtman/Pulse/pull/[1-9][0-9]*")
 
 
 class PlanError(ValueError):
@@ -89,6 +96,16 @@ def _locator(value: Any, field: str) -> dict[str, Any]:
 def _state(value: Any, field: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise PlanError(f"{field} must be an object")
+    if "image_url" in value:
+        if set(value) != {"image_url", "pull_request_url"}:
+            raise PlanError(f"{field} reused image needs only image_url and pull_request_url")
+        image_url = value.get("image_url")
+        pull_request_url = value.get("pull_request_url")
+        if not isinstance(image_url, str) or not PR_IMAGE_PATTERN.fullmatch(image_url):
+            raise PlanError(f"{field}.image_url must be a public GitHub attachment or immutable Pulse screenshot")
+        if not isinstance(pull_request_url, str) or not PR_PATTERN.fullmatch(pull_request_url):
+            raise PlanError(f"{field}.pull_request_url must identify a Pulse pull request")
+        return {"image_url": image_url, "pull_request_url": pull_request_url}
     unknown = set(value) - {"route", "steps", "ready"}
     if unknown:
         raise PlanError(f"{field} has unsupported fields: {', '.join(sorted(unknown))}")
@@ -211,6 +228,14 @@ def load_plan(path: str) -> dict[str, Any]:
     return validate_plan(raw)
 
 
+def runtime_count(plan: dict[str, Any], side: str) -> int:
+    """Reused PR images need no old/new runtime build."""
+    return sum(
+        bool(capture[side] and "route" in capture[side])
+        for capture in plan["captures"]
+    )
+
+
 def asset_names(plan: dict[str, Any]) -> list[str]:
     names: list[str] = []
     for capture in plan["captures"]:
@@ -275,6 +300,16 @@ def json_schema() -> dict[str, Any]:
             "ready": locator,
         },
     }
+    image_state = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["image_url", "pull_request_url"],
+        "properties": {
+            "image_url": {"type": "string", "pattern": "^" + PR_IMAGE_PATTERN.pattern + "$"},
+            "pull_request_url": {"type": "string", "pattern": "^" + PR_PATTERN.pattern + "$"},
+        },
+    }
+    visual_state = {"anyOf": [state, image_state]}
     return {
         "type": "object",
         "additionalProperties": False,
@@ -321,8 +356,8 @@ def json_schema() -> dict[str, Any]:
                                 },
                             },
                         },
-                        "before": {"anyOf": [state, {"type": "null"}]},
-                        "after": state,
+                        "before": {"anyOf": [state, image_state, {"type": "null"}]},
+                        "after": visual_state,
                     },
                 },
             },
@@ -374,6 +409,10 @@ def main() -> int:
     before_count_parser = subparsers.add_parser("before-count")
     before_count_parser.add_argument("--plan", required=True)
 
+    runtime_count_parser = subparsers.add_parser("runtime-count")
+    runtime_count_parser.add_argument("--plan", required=True)
+    runtime_count_parser.add_argument("--side", required=True, choices=("before", "after"))
+
     subparsers.add_parser("schema")
 
     assets_parser = subparsers.add_parser("assets")
@@ -397,6 +436,8 @@ def main() -> int:
             output = f"{len(plan['captures'])}\n"
         elif args.command == "before-count":
             output = f"{sum(capture['before'] is not None for capture in plan['captures'])}\n"
+        elif args.command == "runtime-count":
+            output = f"{runtime_count(plan, args.side)}\n"
         elif args.command == "assets":
             output = "".join(f"{name}\n" for name in asset_names(plan))
         else:

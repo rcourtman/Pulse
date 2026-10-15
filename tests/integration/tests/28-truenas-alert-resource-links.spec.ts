@@ -214,10 +214,10 @@ test.describe("TrueNAS alert resource links", () => {
         : page.locator("tr")
     )
       .filter({ hasText: "TrueNAS Main" })
-      .filter({ has: page.getByRole("button", { name: "Resource" }) })
+      .filter({ has: page.getByRole("button", { name: /^Resource incidents for / }) })
       .first();
     await expect(alertItem).toBeVisible();
-    await alertItem.getByRole("button", { name: "Resource" }).click();
+    await alertItem.getByRole("button", { name: /^Resource incidents for / }).click();
 
     // Cross-link affordances into the retired standalone routes were removed
     // with platform-first navigation; the canonical handoff is the resource

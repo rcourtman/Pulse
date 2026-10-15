@@ -20,6 +20,20 @@
 
 ## Purpose
 
+### Recovery point reads stay coherent between HTTP and investigations
+
+The points endpoint and investigation adapter use the same org-scoped manager
+reader. Demo composition reads the canonical fixture graph through the recovery
+query helpers; ordinary tenants read their persisted store. Moving the existing
+in-memory filters into recovery preserves point, series and facet query semantics
+and pagination bounds. The API/tool parity regression checks that a collected
+backup failure remains readable without a PVE client or command agent. The
+investigation backup inventory uses the same `KindBackup` and canonical subject
+query as the points endpoint, retaining point identity, repository references,
+tri-state verification and evidence provenance in real and demo modes. Tool
+pagination translates global offsets into the shared source's bounded pages.
+No route, entitlement, recovery mutation or action approval is added.
+
 ### Patrol setup panel reuses existing AI endpoints
 
 The Patrol page setup panel adds no endpoint or payload field. It calls
@@ -338,6 +352,20 @@ check accompany desktop/narrow browser interaction proof.
 
 The delivery-log response redacts embedded webhook URLs in errorMessage rather than treating the entire diagnostic as a URL. Non-secret operation and failure context survive alongside notificationId, destinationId, outcome, failureClass and attempts; malformed URL diagnostics fail closed. The HTTP payload proof is TestContract_DeliveryDiagnosticPayload; notification handler tests pin plain, credential-bearing and malformed errors. No response keys or route permissions change.
 
+### Node form name stays an optional label
+
+The add/edit node form no longer marks `name` required. Every client save
+path already sends a non-empty name (`data.name.trim() ||
+deriveNameFromHost(data.host)`), the setup-command request omits an empty name
+so registration falls back to the reported server name, and
+`disambiguateNodeName` keeps duplicate names distinct, so the node APIs see no
+new empty-name request shape. `NodeCredentialSlot.test.tsx` pins endpoint-first
+order, the optional name and the derivation as the endpoint is typed.
+
+The sequence summary in `NodeCredentialSlot.tsx` names the endpoint step "API
+address and name" to match that field order; it is copy only and changes no
+request.
+
 ### Canonical incident-history query contract
 
 Incident APIs discover canonical-only occurrences and retain exact-start
@@ -598,6 +626,22 @@ collapse evidence, protection posture, and lifecycle history, but it must not
 drop those typed fields or replace their server-authored trust state. Decision,
 finding, and approval counts remain distinct API projections and must not be
 presented as interchangeable totals.
+`subjectResourceId` and `subjectResourceType` also decide the browser's
+`Open resource` destination: the browser resolves the id through
+`GET /api/resources/{id}` for the subject's platform and falls back to the
+type hint, so both fields must keep naming the subject the alert or finding
+is about (an alert's `unifiedAlertType` display words are accepted as hints).
+
+Governed action audits are read the same way: the browser resolves
+`request.resourceId` through `GET /api/resources/{id}` for the action
+review's `Open resource` link and falls back to the audit's recorded
+`resource` name and type, so both must keep naming the resource the action
+acts on.
+
+The same resolution picks the thresholds tab and search behind the alert-only
+guidance link, so the registry resource's display label must stay the label
+the thresholds rows are built from (`getAlertResourceDisplayLabel`).
+
 The attention list's authenticated read contract is independent of Patrol's
 model-readiness and on/off state. `PatrolIntelligenceSurface.tsx` must not gate
 the attention transport or its canonical list on `shouldShowPatrolSetupOnly`;
@@ -2655,6 +2699,12 @@ payload shape change when the portal presents compact client rows.
     source/development builds, and keeps missing releases distinct from
     upstream failures. `frontend-modern/src/api/updates.ts` must preserve that
     payload without creating a frontend-authored changelog shape.
+    `GET /api/updates/release-notes/assets/{tag}/{name}` uses the same
+    authentication and monitoring-read scope, accepts only the running
+    published tag and PNG sidecars referenced by that release body, and
+    distinguishes missing assets from upstream failures. The server bounds
+    payload size, PNG dimensions and GitHub redirect hosts. Versioned private
+    browser caching keeps images inside the existing same-origin CSP boundary.
 86. `pkg/aicontracts/action_broker.go` shared with `ai-runtime`: the public typed action-proposal broker contract is both an AI runtime proposal boundary (the only sanctioned Patrol route to an infrastructure mutation) and a canonical API dependency contract over the shared action lifecycle service.
     The updater registry behind `GET /api/updates/plan` is a plan-provider
     seam only (`SupportsApply`, `PrepareUpdate`, `GetDeploymentType`); apply

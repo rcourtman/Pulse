@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "fbf5b0c8beb89ce114b468cceb7f606255f9b33d",
+  "verified_at": "2026-10-15T13:00:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx",
+    "frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx": "e2bfcc34a8a5bb93c38c1cda0e3d7da67a5593d28f89730b9356f91e92cedb4a",
+    "frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx": "318f48211cf5fd1437299fa194e3a23becc64a788da143390f7b7cd473b15a5b"
+  },
+  "routes": [
+    "/alerts/history"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 900,
+      "height": 768
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): a 1024px window with the Alerts rail open showed the table in a 602px card, names broken mid-word (\"inventory-/api\"), messages cut after two lines and the three row actions stacked",
+    "After: 1280px window, 837px card, table unchanged; 1024px, 602px card, cards with full names and messages; 900px (rail collapses to tabs), 774px card, cards; 375px phone, cards, no horizontal overflow",
+    "A timeline opened inline in the table at 1280px reappears as the card drawer at 1024px and returns to the inline expansion at 1280px",
+    "A card timeline opens the shared drawer at 1024px"
+  ],
+  "interactions": [
+    "Resized between 1280, 1024, 900 and 375 and read the layout, card width and visibility of each layout",
+    "Opened a table timeline, narrowed to cards, widened back; opened and closed a card timeline drawer"
+  ]
+}

@@ -20,6 +20,7 @@ import {
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
@@ -97,11 +98,6 @@ const vmStateNote = (resource: Resource): VMStateNote | null => {
       : 'TrueNAS has not reported a state',
     tone: 'warning',
   };
-};
-
-const VM_STATE_NOTE_CLASS: Record<VMStateNote['tone'], string> = {
-  danger: 'text-red-600 dark:text-red-300',
-  warning: 'text-amber-700 dark:text-amber-300',
 };
 
 // Columns a user can sort by. Flags summarize several values at once, so they
@@ -315,6 +311,15 @@ export const TrueNASVirtualMachinesTable: Component<{
                                 >
                                   {name()}
                                 </div>
+                                {/* A phone hides State; the state and any note read under the name. */}
+                                <span
+                                  class={`platform-table-phone-only-inline max-w-full text-[11px] ${note() ? getPlatformStatusTextToneClass(note()!.tone) : ''}`}
+                                  data-truenas-vm-state-phone={note() ? note()!.tone : 'none'}
+                                >
+                                  <span class="min-w-0 truncate">
+                                    {[stateLabel(), note()?.short].filter(Boolean).join(' · ')}
+                                  </span>
+                                </span>
                               </div>
                             </div>
                           </TableCell>
@@ -332,7 +337,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                               <Show when={note()?.short}>
                                 {(short) => (
                                   <span
-                                    class={`min-w-0 truncate text-[11px] font-medium ${VM_STATE_NOTE_CLASS[note()!.tone]}`}
+                                    class={`min-w-0 truncate text-[11px] font-medium ${getPlatformStatusTextToneClass(note()!.tone)}`}
                                   >
                                     {short()}
                                   </span>

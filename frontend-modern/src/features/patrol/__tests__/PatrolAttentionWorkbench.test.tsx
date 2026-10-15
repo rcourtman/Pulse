@@ -25,6 +25,11 @@ const apiMocks = vi.hoisted(() => ({
   createRule: vi.fn(),
 }));
 
+// The registry resolves the subject to the platform page that shows it; by
+// default it cannot, so the item's own type decides.
+const getResource = vi.hoisted(() => vi.fn());
+vi.mock('@/api/resources', () => ({ ResourceAPI: { getResource } }));
+
 vi.mock('@/stores/aiIntelligence', () => ({
   aiIntelligenceStore: {
     dismissFinding: (...args: unknown[]) => apiMocks.dismissFinding(...args),
@@ -72,10 +77,15 @@ vi.mock('@/features/actions/ActionReviewDialog', async () => {
       detail: { audit?: { id?: string } } | null;
       onClose: () => void;
       onChanged: (next: { audit?: { id?: string } }) => Promise<void> | void;
+      showResourceLink?: boolean;
     }) => (
       <Show when={props.detail}>
         {(value) => (
-          <div role="dialog" aria-label="Governed action review">
+          <div
+            role="dialog"
+            aria-label="Governed action review"
+            data-resource-link={props.showResourceLink ? 'shown' : 'hidden'}
+          >
             <span>{value().audit?.id}</span>
             <button type="button" onClick={() => void props.onChanged(value())}>
               Complete action
@@ -222,6 +232,8 @@ const detail = (value: AttentionItem): AttentionItemDetail => ({
 
 describe('PatrolAttentionWorkbench', () => {
   beforeEach(() => {
+    getResource.mockReset();
+    getResource.mockRejectedValue(new Error('Resource not found'));
     window.history.replaceState({}, '', '/patrol');
     patrolAttentionStore.clear();
     apiMocks.getList.mockReset();
@@ -546,7 +558,38 @@ describe('PatrolAttentionWorkbench', () => {
       'min-h-11',
       'sm:min-h-0',
     );
+    // An unresolved Proxmox VM opens the Proxmox workloads with it selected,
+    // not the standalone Machines page that lists only agent hosts.
+    expect(within(detailRegion).getByRole('link', { name: 'Open resource' })).toHaveAttribute(
+      'href',
+      '/proxmox/overview?resource=pve%3Avm%3A101',
+    );
     expect(window.location.search).toBe('?attention=record-1');
+  });
+
+  it('opens the subject on the page of the platform the registry says reports it', async () => {
+    // An ESXi host's alert names an agent-type subject; Machines never shows it.
+    const active = item({
+      subjectResourceId: 'agent-b602',
+      subjectResourceName: 'esxi-07.lab.local',
+      subjectResourceType: 'agent',
+    });
+    getResource.mockResolvedValue({
+      id: 'agent-b602',
+      type: 'agent',
+      name: 'esxi-07.lab.local',
+      sources: ['vmware'],
+    });
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    renderWorkbench();
+
+    fireEvent.click(await screen.findByRole('button', { name: /^Open .*Database VM/ }));
+    const link = await screen.findByRole('link', { name: 'Open resource' });
+    await waitFor(() => expect(link).toHaveAttribute('href', '/vmware/overview'));
+    expect(getResource).toHaveBeenCalledWith('agent-b602', expect.anything());
   });
 
   it('keeps the open detail transition, evidence and acknowledgement ages moving', async () => {
@@ -1296,9 +1339,11 @@ describe('PatrolAttentionWorkbench', () => {
       /turn it off for Database VM under alert thresholds/i,
     );
     expect(screen.queryByRole('list', { name: 'Lasting decisions' })).not.toBeInTheDocument();
+    // The thresholds open on the subject's platform tab, searched to it,
+    // instead of the top of every threshold section.
     expect(screen.getByRole('link', { name: 'Adjust alert thresholds' })).toHaveAttribute(
       'href',
-      '/alerts/thresholds',
+      '/alerts/thresholds/proxmox?q=Database+VM',
     );
     fireEvent.click(
       screen.getByRole('button', { name: 'Browse Patrol findings for this resource' }),
@@ -1456,9 +1501,12 @@ describe('PatrolAttentionWorkbench', () => {
       expect(apiMocks.planAction).toHaveBeenCalledWith('record-1', 'restart');
       expect(apiMocks.getAction).toHaveBeenCalledWith('act-attention-restart');
     });
-    expect(
-      await screen.findByRole('dialog', { name: 'Governed action review' }),
-    ).toBeInTheDocument();
+    // Patrol holds this review in memory and already links its subject, so
+    // the review must not offer a resource link that Back could not return from.
+    expect(await screen.findByRole('dialog', { name: 'Governed action review' })).toHaveAttribute(
+      'data-resource-link',
+      'hidden',
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Complete action' }));
     const currentTrigger = await screen.findByRole('button', { name: 'Review action' });

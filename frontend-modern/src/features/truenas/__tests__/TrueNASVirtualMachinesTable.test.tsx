@@ -55,6 +55,10 @@ describe('TrueNASVirtualMachinesTable', () => {
 
     expect(noteFor('router')).toHaveTextContent('Stoppedshould be running');
     expect(noteFor('router')).toHaveAttribute('title', 'Set to start at boot but stopped');
+    // A phone hides State, so the state and its note read under the name there.
+    expect(
+      screen.getByText('router').closest('td')?.querySelector('[data-truenas-vm-state-phone]'),
+    ).toHaveTextContent('Stopped · should be running');
     expect(noteFor('ubuntu-build')).toBeNull();
     expect(noteFor('windows-lab')).toBeNull();
     expect(noteFor('lab-paused')).toHaveAttribute('title', 'TrueNAS reports Paused');

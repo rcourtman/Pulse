@@ -23,6 +23,22 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Docker object aliases do not identify their reporting host
+
+Containers and other Docker child objects own their native IDs, names and
+subject-typed discovery/metrics targets. Reporting-agent IDs, Docker host IDs,
+hostnames and task placement nodes remain routing metadata, not child aliases.
+Canonical hostname/platform presentation must not reintroduce those parent
+identities. Missing child targets cannot promote the parent to primary identity.
+Host aliases and same-entity host facets retain their existing semantics.
+
+`TestDockerChildIdentityDoesNotClaimItsCommandHost` covers all nine child kinds,
+owned aliases and missing-target boundaries. The registered Docker log-read
+control in `internal/ai/tools/internal_routing_identity_test.go` consumes actual
+registry ingestion with collected containers, images and networks. Genuine
+duplicate names must still fail closed. Source controls alone do not establish
+installed command transport or autonomous recovery.
+
 ### Shared interpretation of selected guest memory
 
 `GuestMemoryEvidenceForResource` and the VM/container `MemoryEvidence` accessors
@@ -1118,7 +1134,18 @@ workflow tab; legacy object routes such as `/kubernetes/pods`,
 `/kubernetes/autoscaling` are compatibility aliases for that workflow. Pods
 render through `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
 with Pod phase, container readiness, restart, owner, node, image, and age fields
-from the Kubernetes API projection. StatefulSet, DaemonSet, Job, and CronJob rows
+from the Kubernetes API projection. Each Kubernetes row's status words read in
+its dot's colour through `getPlatformStatusTextToneClass`: a Pod's Status
+("CrashLoopBackOff" red, "Pending" amber, Running plain), a Deployment's Ready
+count while replicas are short, a controller's Exceptions. The Pods Status
+column takes 12 percent so a failure reason such as CrashLoopBackOff reads
+whole, and a phone, which hides that column, reads the same words under the
+Pod name. The TrueNAS and vSphere tables follow the same rule: a TrueNAS app,
+which has no State column, reads its state under its name at every width
+("Crashed" amber, Running plain); a share's State ("Disabled" red, "Attention"
+amber) and a vSphere activity's State ("Error" red) take the dot's tone; and
+where a phone hides a State column (shares, services, VMs, vSphere activity)
+the state, with any note such as "should be running", reads under the name. StatefulSet, DaemonSet, Job, and CronJob rows
 render through
 `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx` and must
 preserve the Kubernetes API status semantics for desired replica/node/job
@@ -2659,6 +2686,23 @@ Any future platform that wants to default to a Systems / Hosts
 overview must first have its canonical resource adapter project the
 platform's top-level system as a unified resource so the builder
 default still resolves to a populated table.
+
+`ALERT_BACKUP_THRESHOLDS_PATH` (`/alerts/thresholds/proxmox#backups`) names
+the Recovery thresholds whose fresh and stale hours colour every backup
+shield; the backup dialog links there and the thresholds page treats
+`#backups` like `#pbs` and `#pmg` (`resourceLinks.test.ts`).
+
+`buildAlertThresholdsPath(tab, { query })` builds a thresholds tab address
+already searched to one resource through `ALERT_THRESHOLDS_QUERY_PARAMS`,
+the `?q=` key the thresholds page owns; callers pass a resource's display
+label, never an id, because the thresholds search matches names
+(`resourceLinks.test.ts`).
+
+`buildAlertHistoryAlertPath(alertId)` builds `/alerts/history?alert=<id>`
+from `ALERT_HISTORY_QUERY_PARAMS` (`q`, `period`, `severity`, `alert`), which
+now live with the other route keys instead of inside the History hook. The
+`alert` key is a public address: notifications build the same link, so it
+must not be renamed (`resourceLinks.test.ts`).
 
 17. Platform table ordering is a two-layer contract. Each platform table's
     default order is owned by its page model's status-first compare
@@ -7041,7 +7085,14 @@ host name and the Update control render whole; the percentage-only CPU and
 memory bars yield the difference. Swarm services show the rollout state as
 words ("Rollback started") with the raw token, message and completion time in
 the title, and Swarm tasks show Started as an age with the RFC3339 stamp in
-the title, matching every other platform table's time cells.
+the title, matching every other platform table's time cells. A service's dot
+names Docker's mid-change update states as themselves ("Update paused",
+"Rolling back", "Rollback paused"; `rollback_started` used to read "Rollback
+paused"), and no replicas running outranks a rollout. The cell behind each
+Swarm dot's verdict reads in its tone: a service's Running count (with
+"/desired" on phones, where Desired is hidden) and its Update words, a task's
+Current state (the dot's own word, Docker's token and error on hover and the
+error in the expansion), a node's Reachability or Availability.
 The containers table's State cell says what `docker ps` would flag, through
 `dockerContainerStatePresentation.ts` over `mapDockerContainerStatus`, so the
 row dot and the words agree: Unhealthy and Starting for a running container's
@@ -7805,6 +7856,24 @@ The Actions page now hides its Patrol Watch only guidance while the
 presentation only: the action audit list, approval counts, review dialog,
 routing and every recorded action outcome are read and rendered exactly as
 before, and no resource or action identity changes.
+
+### Action review links to the resource it acts on
+
+The governed action review tells the operator to check the actual resource
+before approving, retrying or closing an action whose outcome is unknown, but
+linked only back to Patrol. With `showResourceLink`, `ActionReviewDialog`
+resolves `audit.request.resourceId` through `useResolvedResource`
+(`frontend-modern/src/features/platformNavigation/useResolvedResource.ts`)
+and shows `Open resource` from `buildResourcePagePath`, with the audit's
+recorded resource name and type as the fallback while the registry answers or
+when it cannot resolve the id. Only the Actions page passes it: it keeps the
+review in `?action=`, so Back from the resource reopens the same review.
+Patrol holds its review in memory and already links the subject, and the
+Docker container controls open the review from the resource itself, so they
+get no link and no lookup. It is a link only: the action ledger, plan,
+decision and every recorded outcome are read and rendered as before, and no
+resource or action identity changes (`ActionReviewDialog.test.tsx`,
+`Actions.requestOwnership.test.tsx`).
 
 ### vSphere Overview leads with vCenter health signals
 

@@ -2,9 +2,10 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
-import type {
-  InfrastructureSystemMemberRow,
-  InfrastructureSystemRow,
+import {
+  infrastructureRowMonitoringPath,
+  type InfrastructureSystemMemberRow,
+  type InfrastructureSystemRow,
 } from '../connectionsTableModel';
 import { InfrastructureWorkspace } from '../InfrastructureWorkspace';
 
@@ -1449,5 +1450,28 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByTestId('install-section')).toBeNull();
     expect(screen.getByText('Connected systems')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
+  });
+});
+
+describe('infrastructureRowMonitoringPath', () => {
+  // A PBS read as Active in this workspace while its servers sat under
+  // Proxmox > Backups, and its user could not find it (#2905).
+  it('sends each API-collected system to the page that shows its data', () => {
+    expect(infrastructureRowMonitoringPath({ ownerType: 'pve' })).toBe('/proxmox/overview');
+    expect(infrastructureRowMonitoringPath({ ownerType: 'pbs' })).toBe('/proxmox/backups');
+    expect(infrastructureRowMonitoringPath({ ownerType: 'pmg' })).toBe('/proxmox/mail');
+    expect(infrastructureRowMonitoringPath({ ownerType: 'vmware' })).toBe('/vmware/overview');
+    expect(infrastructureRowMonitoringPath({ ownerType: 'truenas' })).toBe('/truenas/overview');
+    expect(infrastructureRowMonitoringPath({ ownerType: 'docker' })).toBe('/docker/overview');
+    expect(infrastructureRowMonitoringPath({ ownerType: 'kubernetes' })).toBe(
+      '/kubernetes/overview',
+    );
+  });
+
+  it('gives agent hosts and availability checks no single destination', () => {
+    // An agent host shows on Proxmox, Machines or Kubernetes depending on
+    // what it runs, so a fixed link would often be wrong.
+    expect(infrastructureRowMonitoringPath({ ownerType: 'agent' })).toBeUndefined();
+    expect(infrastructureRowMonitoringPath({ ownerType: 'availability' })).toBeUndefined();
   });
 });

@@ -42,6 +42,9 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.assistant.subject': '{level} {alertType} auf {resourceName}',
   'alerts.assistant.title': 'Warnungsanalyse angehaengt',
   'alerts.assistant.unlockedTitle': 'Pulse Assistant zu dieser Warnmeldung fragen',
+  'alerts.assistant.iconLabel': 'Pulse Assistant zu {alertType} auf {resourceName} fragen',
+  'alerts.assistant.iconLabelAt':
+    'Pulse Assistant zu {alertType} auf {resourceName} ({startedAt}) fragen',
   'alerts.assistant.explain.menuLabel': 'Mit Assistant erklaeren',
   'alerts.assistant.explain.menuHint': 'Diese Warnmeldung als reinen Kontext verwenden',
   'alerts.assistant.patrol.chevron': 'Weitere Aktionen fuer diese Warnmeldung',
@@ -172,7 +175,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.page.overview.title': 'Warnmeldungsuebersicht',
   'alerts.page.schedule.description':
     'Definieren Sie Ruhezeiten, Gruppierung, Abklingzeiten, Wiederherstellung und Eskalation fuer Warnmeldungen.',
-  'alerts.page.schedule.title': 'Wartungszeitplan',
+  'alerts.page.schedule.title': 'Zustellplan',
   'alerts.page.thresholds.description':
     'Passen Sie Schwellwerte und gezielte Ausnahmen fuer Infrastruktur, Workloads und Integrationen an.',
   'alerts.page.thresholds.title': 'Warnungsschwellwerte',
@@ -293,6 +296,8 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.security.error.passwordRequired': 'Bitte geben Sie ein Passwort ein',
   'setup.security.error.passwordTooShort': 'Das Passwort muss mindestens 12 Zeichen haben',
   'setup.security.error.setupFailed': 'Einrichtung fehlgeschlagen: {error}',
+  'setup.security.error.telemetryLockedOn':
+    'Ihr Admin-Konto wurde erstellt. Die Nutzungsstatistiken bleiben eingeschaltet, weil dieser Server PULSE_TELEMETRY=true setzt. Setzen Sie PULSE_TELEMETRY=false und starten Sie Pulse neu, um sie auszuschalten.',
   'setup.security.error.telemetryDisableFailed':
     'Ihr Admin-Konto wurde erstellt, aber die Nutzungsstatistiken konnten nicht ausgeschaltet werden. Sie koennen sie unter Einstellungen → System → Allgemein ausschalten.',
   'setup.security.generatedPasswordHelp':

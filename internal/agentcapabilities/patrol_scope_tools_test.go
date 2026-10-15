@@ -62,3 +62,19 @@ func TestPatrolScopedToolProjectionComposesProfileOwnedTools(t *testing.T) {
 		t.Fatalf("detection surface gained investigation proposal authority: %v", detection)
 	}
 }
+
+func TestGuestInvestigationsCanReadCollectedBackupEvidence(t *testing.T) {
+	for _, kind := range []string{"vm", "system-container"} {
+		t.Run(kind, func(t *testing.T) {
+			names, ok := PatrolInvestigationToolNamesForResourceTypes([]string{kind})
+			if !ok || !slices.Contains(names, PulseStorageToolName) {
+				t.Fatalf("guest investigation lacks backup evidence: %v", names)
+			}
+			for _, name := range names {
+				if !IsPatrolInfrastructureEvidenceToolName(name) && name != PatrolActionCapabilitiesToolName && name != PatrolProposeActionToolName {
+					t.Fatalf("read projection gained action authority: %s", name)
+				}
+			}
+		})
+	}
+}

@@ -49,7 +49,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
-	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
@@ -453,7 +452,7 @@ func (r *Router) setupRoutes() {
 			return service
 		}),
 	)
-	recoveryManager := recoverymanager.New(r.multiTenant)
+	recoveryManager := newRecoveryReadManager(r.multiTenant)
 	r.recoveryHandlers = NewRecoveryHandlers(recoveryManager)
 	r.attentionHandlers = NewAttentionHandlers(r.configHandlers.Monitor, recoveryManager)
 	if r.mtMonitor != nil {
@@ -3275,7 +3274,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	if monitor != nil {
 		if metricsHistory := monitor.GetMetricsHistory(); metricsHistory != nil {
 			metricsAdapter := tools.NewMetricsHistoryToolAdapter(
-				&metricsSourceWrapper{history: metricsHistory},
+				&metricsSourceWrapper{history: metricsHistory, monitor: monitor},
 				monitor.GetUnifiedReadState(),
 				monitor.GetMetricsStore(),
 			)
@@ -3523,6 +3522,22 @@ func (w *eventCorrelatorProviderWrapper) GetCorrelationsForResource(resourceID s
 // metricsSourceWrapper wraps monitoring.MetricsHistory to implement tools.MetricsSource
 type metricsSourceWrapper struct {
 	history *monitoring.MetricsHistory
+	monitor *monitoring.Monitor
+}
+
+func (w *metricsSourceWrapper) GetStorageMetricHistory(storageID string, duration time.Duration) (map[string][]tools.RawMetricPoint, string, error) {
+	if w.monitor == nil {
+		return nil, "unavailable", fmt.Errorf("storage metrics monitor is not available")
+	}
+	series, source, err := w.monitor.ReadStorageMetricHistory(storageID, duration)
+	if err != nil {
+		return nil, "", err
+	}
+	result := make(map[string][]tools.RawMetricPoint, len(series))
+	for metric, points := range series {
+		result[metric] = convertMetricPoints(points)
+	}
+	return result, source, nil
 }
 
 func (w *metricsSourceWrapper) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []tools.RawMetricPoint {

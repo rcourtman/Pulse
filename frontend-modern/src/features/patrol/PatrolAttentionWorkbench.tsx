@@ -57,10 +57,14 @@ import { patrolAttentionStore } from '@/stores/patrolAttention';
 import {
   ALERT_THRESHOLDS_PATH,
   buildPatrolAttentionPath,
-  buildStandalonePath,
-  buildWorkloadsRouteSearch,
   parsePatrolAttentionItemId,
 } from '@/routing/resourceLinks';
+import {
+  buildResourcePagePath,
+  buildResourceThresholdsPath,
+  type ResourcePageSubject,
+} from '@/features/platformNavigation/resourcePagePath';
+import { useResolvedResource } from '@/features/platformNavigation/useResolvedResource';
 import type { EvidenceEnvelope } from '@/types/operationalTrust';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { getAlertResourceIncidentAcknowledgedByLabel } from '@/utils/alertIncidentPresentation';
@@ -908,12 +912,28 @@ function AttentionDetail(props: {
   );
   const primaryEvidence = createMemo(() => orderedEvidence().slice(0, PRIMARY_EVIDENCE_LIMIT));
   const olderEvidence = createMemo(() => orderedEvidence().slice(PRIMARY_EVIDENCE_LIMIT));
-  const resourceHref = () => {
+  // The registry knows which platform shows the subject; until it answers,
+  // or when it cannot resolve the record's id, the item's own type decides.
+  const resolvedSubject = useResolvedResource(() => item()?.subjectResourceId);
+  const pageSubject = (): ResourcePageSubject | null => {
     const value = item();
-    if (!value) return buildStandalonePath('machines');
-    return `${buildStandalonePath('machines')}${buildWorkloadsRouteSearch({
-      resource: value.subjectResourceId,
-    })}`;
+    if (!value) return null;
+    return {
+      id: value.subjectResourceId,
+      name: value.subjectResourceName,
+      type: value.subjectResourceType,
+      resource: resolvedSubject(),
+    };
+  };
+  const resourceHref = () => {
+    const subject = pageSubject();
+    return subject ? buildResourcePagePath(subject) : null;
+  };
+  // A bare alert's lasting control is its thresholds: open the subject's
+  // platform tab already searched to it, not the top of every threshold.
+  const thresholdsHref = () => {
+    const subject = pageSubject();
+    return subject ? buildResourceThresholdsPath(subject) : ALERT_THRESHOLDS_PATH;
   };
   const openAssistant = () => {
     const value = detail();
@@ -1082,15 +1102,19 @@ function AttentionDetail(props: {
                 >
                   <span class="text-xs">Copy ID</span>
                 </CopyValueButton>
-                <ButtonLink
-                  href={resourceHref()}
-                  variant="ghost"
-                  size="xs"
-                  class="min-h-11 gap-1.5 sm:min-h-0"
-                >
-                  <ExternalLinkIcon class="h-4 w-4" aria-hidden="true" />
-                  Open resource
-                </ButtonLink>
+                <Show when={resourceHref()}>
+                  {(href) => (
+                    <ButtonLink
+                      href={href()}
+                      variant="ghost"
+                      size="xs"
+                      class="min-h-11 gap-1.5 sm:min-h-0"
+                    >
+                      <ExternalLinkIcon class="h-4 w-4" aria-hidden="true" />
+                      Open resource
+                    </ButtonLink>
+                  )}
+                </Show>
               </div>
               <Show when={loaded().item.relatedResources.length > 0}>
                 <p class="mt-2 text-xs text-muted">
@@ -1174,6 +1198,7 @@ function AttentionDetail(props: {
               item={loaded().item}
               linkedFindings={linkedFindings()}
               onOpenFindings={props.onOpenFindings}
+              thresholdsHref={thresholdsHref()}
             />
 
             <details class="rounded-lg border border-border-subtle">
@@ -1528,6 +1553,7 @@ function AttentionLastingDecisions(props: {
   item: AttentionItem;
   linkedFindings: UnifiedFinding[];
   onOpenFindings?: (item: AttentionItem) => void;
+  thresholdsHref: string;
 }) {
   const [pending, setPending] = createSignal<PatrolLastingDecision | null>(null);
   const [note, setNote] = createSignal('');
@@ -1626,6 +1652,7 @@ function AttentionLastingDecisions(props: {
                 <AttentionAlertOnlyGuidance
                   item={props.item}
                   onOpenFindings={props.onOpenFindings}
+                  thresholdsHref={props.thresholdsHref}
                 />
               }
             >
@@ -1755,6 +1782,7 @@ function AttentionLastingDecisions(props: {
 function AttentionAlertOnlyGuidance(props: {
   item: AttentionItem;
   onOpenFindings?: (item: AttentionItem) => void;
+  thresholdsHref: string;
 }) {
   return (
     <div>
@@ -1765,7 +1793,7 @@ function AttentionAlertOnlyGuidance(props: {
       </p>
       <div class="mt-2 flex flex-wrap gap-2">
         <ButtonLink
-          href={ALERT_THRESHOLDS_PATH}
+          href={props.thresholdsHref}
           variant="secondary"
           size="sm"
           class="min-h-11 sm:min-h-0"

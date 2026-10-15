@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "477a81e603792a131474e7c2f6b82ef197a99c11",
+  "verified_at": "2026-10-14T20:38:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx",
+    "frontend-modern/src/features/alerts/alertHistoryModel.ts",
+    "frontend-modern/src/utils/alertSeverityPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx": "453028f18aedc497bc485add31efc53ecf1776e19169739ab6a944a3445e2b78",
+    "frontend-modern/src/features/alerts/alertHistoryModel.ts": "a0d0ad493f06ac830ec45f588357aa6f76004be5b0a229a347bd13fbe9386491",
+    "frontend-modern/src/utils/alertSeverityPresentation.ts": "c9225ccb725fd476ab5504d3c63ba2db960be02028204dc7406b957424065317"
+  },
+  "routes": [
+    "/alerts/history"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): every frequency bar one blue; legend showed only warnings and critical; 23 alerts drew 25px against 8px for one alert",
+    "After: each period stacks critical (base), warning and info in the legend colours; legend lists critical, warnings and info (info only when present)",
+    "Square-root heights: busiest period 40px, quiet periods 8-16px with their severity mix readable",
+    "Light theme: warning segments amber-700 (#b45309) on the slate-100 chart surface; dark theme keeps yellow-500",
+    "Phone 375px: chart scrolls inside its card, legend on one line, no horizontal page overflow"
+  ],
+  "interactions": [
+    "Hovered a period: tooltip reads \"4 alerts: 2 critical, 1 warning, 1 info\" with the period and range",
+    "Selected a period: it is ringed, every other bar keeps full opacity, the list narrows to its alerts and the legend follows the selection",
+    "Switched light and dark themes and compared segment and legend colours",
+    "Repeated selection at 375x812 in dark theme"
+  ]
+}

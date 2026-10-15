@@ -17,6 +17,16 @@
 
 ## Purpose
 
+### Storage investigation history shares the chart source boundary
+
+`ReadStorageMetricHistory` and `GetStorageMetricsForChart` use the same monitor
+selector for memory, retained and generated storage history. Analytical reads
+retain the requested window and propagate retained-store errors. Chart-only
+lookback remains presentation behavior and cannot supply older observations as
+current investigation history. Generated demo samples carry `mock_synthetic`;
+they are never evidence of a real storage growth rate. The requested-window and
+store-error regression is `internal/monitoring/storage_history_test.go`.
+
 ### Cluster endpoint membership belongs to its client
 
 `NewClusterClient` snapshots the supplied endpoint slice before registering

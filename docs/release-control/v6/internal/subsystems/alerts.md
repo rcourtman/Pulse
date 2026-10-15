@@ -260,6 +260,25 @@ message, so search and the Assistant handoff still read the record, and
 attaches the source alert as `liveAlert` only to active, non-system rows.
 Closed rows, and open ones without a live status, keep their recorded message.
 
+### History row controls name the alert they act on
+
+Every Alerts > History row, in the desktop table and the phone cards, repeats
+Timeline, Resource and an icon-only Assistant button, and each used to share
+one name ("Timeline", "Resource", "Ask Pulse Assistant about this alert"), so
+a screen-reader or speech-input user could not tell rows apart.
+`AlertHistoryItemActions` now names Timeline with
+`getAlertHistoryTimelineActionLabel` (alert title, resource and the row's full
+start time, since history repeats one alert over time; "Hide timeline for
+..." while open, with `aria-expanded`) and Resource with
+`getAlertHistoryResourceActionLabel` (rows on one resource share it because
+they open the same panel). The Assistant icon names its alert through the
+`alerts.assistant.iconLabel` and `alerts.assistant.iconLabelAt` catalog keys
+from the host's `subjectLabel` and `subjectTime`; a locked button keeps its
+locked explanation and the hover title is unchanged. Each name begins with
+the visible label (`AlertHistoryItemActions.test.tsx`,
+`AlertHistoryMobileList.test.tsx`, `InvestigateAlertButton.test.tsx`,
+`alertIncidentPresentation.test.ts`).
+
 ### Retained guest observations are not alert evidence
 
 Guest memory marked `last-known`, `unavailable` or an unknown observation state
@@ -740,6 +759,15 @@ and hide the resource identity. Backup, snapshot and offline controls keep their
 separate configuration contracts. Global default cells never route backup or
 snapshot into numeric thresholds. Host cards preserve the canonical cluster
 context shown by table rows, so identically named hosts remain distinguishable.
+Every threshold control names itself for assistive tech, because moving
+between form controls reads a control's own name, not its column header:
+the editor's input is "<column> default" or "<column> for <resource>" and its
+On/Off badge "... alerts: On"; offline, backup and snapshot toggles and the
+three-state Warn / Crit / Off control are "Offline alerts for <resource>: Warn";
+display-mode value buttons are "Edit <column> threshold for <resource>: <value>";
+and the alert switches are "Alerts for <resource>". Each name ends with the
+control's visible word or value so voice control can say what is on screen
+(WCAG 2.5.3). `ResourceTable.test.tsx` pins the names in both layouts.
 
 A per-metric threshold is off whenever its trigger is `<= 0`. That boundary is
 engine truth (`internal/alerts/canonical_metric.go`,
@@ -1544,6 +1572,31 @@ presentation and sort below warnings, while the history facet exposes a real
 Info option whose count and filtered rows use the same predicate as every
 other severity.
 
+The alert history frequency chart in `AlertHistoryFrequencyCard.tsx` stacks
+each period by severity, critical at the base, from the `severityBuckets` that
+`buildAlertTrends` counts in the same pass as its totals. Those counts use
+`alertSeverityCountKey`, the closed vocabulary above: `error` is critical and
+an empty or unknown value is a warning, never information. Segment fills and
+legend dots share `getAlertSeverityFillClass`, each at least 3:1 against the
+chart surface in both themes (light-theme warnings use amber-700). A bar's
+height is the square root of its share of the busiest period (4px floor, 40px
+ceiling), so a burst stands well clear while ordinary periods stay tall
+enough to read their mix; each bar's tooltip and accessible name carry the
+exact counts. The legend counts critical, warnings and info (info only when
+present) over the current window and bar selection
+(`AlertHistoryFrequencyCard.test.tsx`, `alertHistoryModel.test.ts`).
+
+The chart's axis names round local times. Buckets start at the window start
+(now minus the range), so labelling bucket edges printed times such as
+`11:50`, and an hour without minutes reads as a bare number in 24-hour
+locales (`8 Oct, 11`). `formatAlertAxisTickLabel` writes an hour with its
+minutes, and `buildAlertAxisTicks` moves each inner tick to
+`nextAlertAxisBoundary`, the next whole bucket step within the day (or the
+next local midnight for date-only labels), at that time's true position. The
+first tick keeps the exact window start the range line shows, the last reads
+`Now`, and the buckets, bar tooltips and counts are unchanged
+(`alertHistoryModel.test.ts`).
+
 The desktop alert history table sizes each column for its content instead of
 giving all visible columns an equal share. Each density is sized for the
 narrowest card it serves (600px, 800px, 1024px and 1280px): Time (the column
@@ -1581,6 +1634,36 @@ ended in an ellipsis at nine windows from 1024px to 2000px in a 12-hour
 locale. Cards narrower than 600px, which a window of about 900px with
 the rail open produces, are still cramped; a container-driven switch to the
 card list is the remaining fix.
+
+The history card's own width now chooses between the table and the cards,
+not the viewport. `AlertHistoryTableSection` measures its wrapper with
+`useObservedElementWidth` and shows the cards whenever the card is narrower
+than `ALERT_HISTORY_TABLE_MIN_WIDTH` (800px, the width from which the three
+row actions share one line); until the card is measured, the phone
+breakpoint decides as before. A 1024px to roughly 1240px window with the
+Alerts rail open, which gave the table a 600px to 800px card with stacked
+actions and names broken mid-word, now shows the cards; a 1280px window
+(an 837px card) keeps the table. The 600px density and the stacked-action
+rule above therefore serve only a card that has not been measured. The cards
+take `active` from that decision instead of a 768px media query, so an open
+timeline or resource view moves into the cards' drawer when the cards take
+over and back to the inline expansion when the table returns
+(`AlertHistoryTableSection.test.tsx`, `AlertHistoryMobileList.test.tsx`).
+
+`/alerts/history?alert=<id>` (`buildAlertHistoryAlertPath`) opens History
+narrowed to one alert's occurrences, the landing a notification can link to.
+`useAlertHistoryState` filters to that id before severity and search, shows
+every loaded occurrence regardless of the range window, and decides once per
+id, only after saved history has loaded and the live alert list is `ready`
+(saved history holds resolved alerts only): if nothing matches outside "All
+time" it widens to All time once, so a later range is the operator's;
+`focusedAlertMissing` reports an id history no longer holds. It opens the
+latest occurrence (still firing first) through the shared timeline expansion
+and hands the cards a one-shot drawer request a remounted list cannot replay.
+The tab names the alert in a status notice with "Show all alerts", and while
+the live list is `unavailable` it says the alert may still be firing and
+offers Retry instead of a verdict (`useAlertHistoryState.test.tsx`,
+`HistoryTab.test.tsx`, `alertOverviewPresentation.test.ts`).
 
 Alert history row timestamps render clock time in the viewer's own locale and
 must carry the absolute date and time as a title. The date otherwise lives
@@ -2761,6 +2844,15 @@ health handling, host cleanup, and host offline lifecycle handling; future host
 agent alert behavior should extend that resource checker owner while shared
 health-assessment evaluation remains package-level until all storage-health
 callers can be separated behind a narrower owner.
+The host offline lifecycle is raised only by a lapsed agent report, and
+Pulse cannot tell a dead host from an agent that lost its route to Pulse.
+Its message therefore names the silent agent ("Pulse agent on '<name>'
+stopped reporting", using the agent's own name without the linked
+`(Host Agent)` qualifier) and never claims the host is offline, because a
+linked Proxmox node keeps reporting through its API while its agent is
+silent. The `host-offline` type, alert identity and lifecycle stay
+unchanged. `TestHandleHostOfflineNamesSilentAgentNotHostOutage` in
+`internal/alerts/alerts_test.go` pins this wording.
 Host long-running storage-operation alerts require fresh operation evidence.
 An accepted Unraid cancellation/completion or terminal Linux RAID report
 resolves the corresponding operation alert immediately. A normal polling gap
@@ -2964,6 +3056,34 @@ node names, source-system messages, commands, command output, event payloads,
 log text, and the English Assistant model-context labels must remain
 untranslated; only the user-visible briefing labels and alert controls may use
 the active app locale.
+
+The Recovery section is a thresholds deep link: `/alerts/thresholds/proxmox#backups`
+expands and scrolls to it like `#pbs` and `#pmg` (`useThresholdsTableState.test.tsx`).
+
+The thresholds resource search is route state: `useThresholdsTableState`
+reads and writes `?q=` (`ALERT_THRESHOLDS_QUERY_PARAMS.query`) with replace
+navigation, keeps it across platform tab clicks, section hashes and the
+legacy-path redirects, so a link from elsewhere can open a tab already
+searched to one resource (`buildAlertThresholdsPath`). Host and Docker host
+rows match the search on their shown, display and raw names
+(`matchesThresholdResourceSearch`), because a link carries the full display
+label while those rows show a shortened name and keep the label as their raw
+name. Because each search edit navigates within the
+page, the Alerts page's unsaved-changes guard asks only when the destination
+path differs (`shouldConfirmAlertsLeave` in `alertConfigPresentation.ts`):
+narrowing the list keeps an unsaved edit without a prompt, leaving the page
+still asks (`useThresholdsTableState.test.tsx`,
+`alertConfigPresentation.test.ts`, `Alerts.helpers.test.ts`).
+
+A successful Alerts page save re-reads the shared `alertsActivation` config in
+`useAlertsConfigurationState.ts` (only when the config write landed and the
+save still owns the editor), because backup shields and metric colours on
+every page read that config and otherwise kept the old limits until a reload.
+`refreshConfig` in `frontend-modern/src/stores/alertsActivation.ts` installs a
+read only while it is the latest: each read and each organisation switch takes
+a new generation, so a slow reply for the previous organisation or an older
+read cannot overwrite the current config (`alertsActivation.test.ts`,
+`useAlertsConfigurationState.test.tsx`).
 
 The remaining alert configuration and history presentation helpers now also
 have explicit alerts ownership. `frontend-modern/src/utils/alertActivationPresentation.ts`,
@@ -3470,6 +3590,14 @@ incidents and current coverage across monitored resources, and must not imply
 that the overview itself owns installation-wide alert activation controls.
 The exported English fallback in `alertOverviewPresentation.ts`, localized
 message catalog, and header metadata proof must remain textually aligned.
+
+The Schedule tab's header title is "Delivery Schedule" (`ALERTS_PAGE_SCHEDULE_TITLE`,
+`alerts.page.schedule.title`; de "Zustellplan", es "Programacion de entregas").
+The page sets how alerts are delivered (quiet hours, cooldown, grouping,
+delivery channels, recovery and escalation); it was titled "Maintenance
+Schedule", which promised maintenance windows, a separate per-resource
+feature this page does not hold (`alertOverviewPresentation.test.ts`,
+`i18n.test.ts`).
 
 Alert threshold and schedule surfaces must now also treat
 `discoveryTarget` as optional frontend input and keep grouping-card state on
@@ -4063,9 +4191,10 @@ alert's own resource id. The shared workloads table resolves that id
 (including a Proxmox source id such as `<cluster>-<node>-<vmid>`) through
 the resource registry, opens the guest's drawer and reveals it, so a
 notification reaches the affected guest in one tap instead of the top of a
-page with every guest on it. Other alerts (hosts, storage, Docker
+page with every guest on it. Other alerts (hosts, Docker
 containers, Kubernetes, TrueNAS, Pulse system alerts) keep their platform
-page link, because their pages do not read `?resource=`. So do orphaned
+page link, because their pages do not read `?resource=`; Proxmox storage
+alerts open their pool (below). So do orphaned
 backup alerts (`backup-subject:...`), whose ids name no resource the
 registry can open. A guest's per-filesystem alert (`<guest>-disk-<key>`,
 marked by `mountpoint` or `diskIndex` metadata) names no registry resource
@@ -4078,6 +4207,21 @@ filesystem filled; a filesystem alert without that key (raised before the
 stamp) keeps the platform page link and never falls back to its own id.
 The platform used for the monitoring policy menu is still read from the
 page path alone.
+
+### A Proxmox storage alert's name opens its pool
+
+A storage alert (`resourceType` `storage`) whose platform page is Proxmox
+links its name to `/proxmox/storage?resource=`, so a full or degraded pool
+opens on Storage instead of the top of the Proxmox overview. ZFS pool-state,
+pool-error and device alerts are raised under
+`<storage>/zfs-pool:<pool>[/device:<device>]` ids, which the resource
+registry cannot open, so `checkZFSPoolHealth` in `internal/alerts/storage.go`
+stamps the owning storage as `storageResourceId` metadata
+(`TestZFSAlertsNameTheirStorage`); the card prefers that key, then the
+alert's own id. An unstamped composite id (raised before the stamp, or a
+pool-error alert whose counters have not grown since) opens Storage without
+naming a pool and never passes the composite id. TrueNAS and vSphere storage
+alerts keep their platform page, which does not read `?resource=`.
 
 ### Thresholds lead with each group's default limits
 

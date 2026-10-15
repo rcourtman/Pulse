@@ -1,4 +1,12 @@
-import { batch, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  untrack,
+} from 'solid-js';
 import type { Accessor } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 
@@ -9,6 +17,7 @@ import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { logger } from '@/utils/logger';
+import { ALERT_HISTORY_QUERY_PARAMS } from '@/routing/resourceLinks';
 import {
   getAlertAdministrationClearHistoryError,
   getAlertAdministrationClearHistoryConfirmation,
@@ -38,15 +47,16 @@ export interface UseAlertHistoryStateProps {
   activeAlerts: Accessor<Record<string, Alert>>;
   getResource: (resourceId: string) => Resource | undefined;
   allResources: () => Resource[];
+  /**
+   * Whether the live alert list has arrived. Saved history holds resolved
+   * alerts only, so a linked alert that is still firing is unknown until it
+   * does; without this, History would widen or report it missing too early.
+   */
+  activeAlertsSettled?: () => boolean;
 }
 
 const DEFAULT_TIME_FILTER: AlertHistoryRange = '7d';
 const DEFAULT_SEVERITY_FILTER: AlertSeverityFilter = 'all';
-const ALERT_HISTORY_QUERY_PARAMS = {
-  query: 'q',
-  period: 'period',
-  severity: 'severity',
-} as const;
 
 const parsePeriod = (raw: string | null | undefined): AlertHistoryRange =>
   raw === '24h' || raw === '7d' || raw === '30d' || raw === 'all' ? raw : DEFAULT_TIME_FILTER;
@@ -100,6 +110,15 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
         params.set(ALERT_HISTORY_QUERY_PARAMS.query, value);
       }
     });
+  };
+
+  // A notification links to one alert (`buildAlertHistoryAlertPath`): History
+  // narrows to that alert's occurrences until the operator shows all again.
+  const focusedAlertId: Accessor<string> = () =>
+    new URLSearchParams(location.search).get(ALERT_HISTORY_QUERY_PARAMS.alert)?.trim() ?? '';
+
+  const clearFocusedAlert = (): void => {
+    updateSearchParam((params) => params.delete(ALERT_HISTORY_QUERY_PARAMS.alert));
   };
 
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
@@ -291,15 +310,92 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     });
   });
 
+  const focusScopedItems = createMemo<HistoryItem[]>(() => {
+    const focus = focusedAlertId();
+    return focus ? allHistoryData().filter((item) => item.id === focus) : allHistoryData();
+  });
+
+  const historyReady = () =>
+    (props.activeAlertsSettled?.() ?? true) &&
+    !loading() &&
+    !historyLoadError() &&
+    loadedHistoryRange() === timeFilter();
+
+  // The linked alert may be older than the range on show: widen to all of
+  // history, deciding once per alert so a later range is the operator's.
+  let rangeCheckedFor = '';
+  createEffect(() => {
+    const focus = focusedAlertId();
+    if (!focus) {
+      rangeCheckedFor = '';
+      return;
+    }
+    if (!historyReady() || rangeCheckedFor === focus) return;
+    rangeCheckedFor = focus;
+    if (focusScopedItems().length > 0 || timeFilter() === 'all') return;
+    untrack(() => setTimeFilter('all'));
+  });
+
+  const focusedAlertMissing = (): boolean =>
+    focusedAlertId() !== '' &&
+    historyReady() &&
+    timeFilter() === 'all' &&
+    focusScopedItems().length === 0;
+
+  // Open the linked alert's latest occurrence once, preferring one still
+  // active. The table shows the shared expansion inline; the cards show a
+  // timeline only in their drawer, so they take a one-shot request that a
+  // remounted list cannot replay after the operator closed it.
+  const [focusedAlert, setFocusedAlert] = createSignal<HistoryItem | null>(null);
+  const [focusRequest, setFocusRequest] = createSignal<{
+    rowKey: string;
+    alert: HistoryItem;
+  } | null>(null);
+  const takeFocusRequest = () => {
+    const request = untrack(focusRequest);
+    if (request) setFocusRequest(null);
+    return request;
+  };
+  let openedFor = '';
+  createEffect(() => {
+    const focus = focusedAlertId();
+    if (!focus) {
+      openedFor = '';
+      untrack(() => {
+        setFocusedAlert(null);
+        setFocusRequest(null);
+      });
+      return;
+    }
+    if (openedFor === focus || !historyReady()) return;
+    const [latest] = [...focusScopedItems()]
+      .filter((item) => item.source === 'alert')
+      .sort(
+        (left, right) =>
+          Number(right.status === 'active') - Number(left.status === 'active') ||
+          Date.parse(right.startTime) - Date.parse(left.startTime),
+      );
+    if (!latest) return;
+    openedFor = focus;
+    const rowKey = getIncidentRowKey(latest);
+    untrack(() => {
+      if (!expandedIncidents().has(rowKey)) {
+        void toggleIncidentTimeline(rowKey, latest.id, latest.startTime);
+      }
+      setFocusedAlert(latest);
+      setFocusRequest({ rowKey, alert: latest });
+    });
+  });
+
   const severityAndSearchFilteredItems = createMemo(() => {
-    return filterAlertHistoryItems(allHistoryData(), severityFilter(), searchTerm());
+    return filterAlertHistoryItems(focusScopedItems(), severityFilter(), searchTerm());
   });
 
   // Chip-count source for the severity facet: the same predicate the list
   // filters with, so each chip shows the row count its selection renders
   // (before any chart bar drill-down, which narrows further and explicitly).
   const countForSeverity = (value: AlertSeverityFilter): number =>
-    filterAlertHistoryItems(allHistoryData(), value, searchTerm()).length;
+    filterAlertHistoryItems(focusScopedItems(), value, searchTerm()).length;
 
   const alertTrends = createMemo(() => {
     return buildAlertTrends(severityAndSearchFilteredItems(), timeFilter());
@@ -308,7 +404,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   const alertData = createMemo(() => {
     return applyAlertHistoryWindow({
       filteredItems: severityAndSearchFilteredItems(),
-      timeFilter: timeFilter(),
+      // A linked alert shows every loaded occurrence: one still firing may
+      // have started before the range on show.
+      timeFilter: focusedAlertId() ? 'all' : timeFilter(),
       selectedBarIndex: selectedBarIndex(),
       trends: alertTrends(),
     });
@@ -356,6 +454,12 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   };
 
   return {
+    focusedAlertId,
+    focusedAlertMissing,
+    clearFocusedAlert,
+    focusRequest,
+    takeFocusRequest,
+    focusedAlert,
     STORAGE_KEYS,
     timeFilter,
     setTimeFilter,

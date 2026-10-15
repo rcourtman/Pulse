@@ -24,12 +24,13 @@ import {
   DEFAULT_STORAGE_SOURCE_FILTER,
   DEFAULT_STORAGE_DISK_GROUP_FILTER,
   DEFAULT_STORAGE_DISK_ROLE_FILTER,
-  isStorageRecordCeph,
 } from './storagePageState';
 
 type UseStoragePageModelOptions = {
   forcedSourceFilter?: () => string | undefined;
   resourceSource?: StoragePageResourceSource;
+  // False while a platform page keeps Storage mounted behind another tab.
+  routeActive?: () => boolean;
 };
 
 export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) => {
@@ -253,8 +254,9 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     locationSearch: () => location.search,
     navigate,
     records,
-    isStorageRecordCeph,
+    expandedPoolId,
     setExpandedPoolId,
+    active: options.routeActive,
   });
   const summaryInteraction = useSummaryPageInteractionState({
     clearPinnedScope: clearPinnedSummaryScope,

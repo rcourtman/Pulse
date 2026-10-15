@@ -48,6 +48,40 @@ export const VMWARE_PATH = '/vmware';
 export const VMWARE_DEFAULT_TAB = 'overview';
 export const ALERT_THRESHOLDS_PATH = '/alerts/thresholds';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
+// The Recovery section, whose fresh and stale hours colour every backup shield.
+export const ALERT_BACKUP_THRESHOLDS_PATH = `${ALERT_THRESHOLDS_PATH}/proxmox#backups`;
+export const ALERT_THRESHOLDS_QUERY_PARAMS = {
+  query: 'q',
+} as const;
+export type AlertThresholdsTab =
+  'proxmox' | 'docker' | 'kubernetes' | 'truenas' | 'vmware' | 'systems';
+
+/** A thresholds tab, optionally already searched to one resource's rows. */
+export const buildAlertThresholdsPath = (
+  tab?: AlertThresholdsTab,
+  options: { query?: string | null } = {},
+): string => {
+  const path = tab ? `${ALERT_THRESHOLDS_PATH}/${tab}` : ALERT_THRESHOLDS_PATH;
+  const query = options.query?.trim();
+  return query
+    ? `${path}?${new URLSearchParams({ [ALERT_THRESHOLDS_QUERY_PARAMS.query]: query }).toString()}`
+    : path;
+};
+export const ALERT_HISTORY_PATH = '/alerts/history';
+export const ALERT_HISTORY_QUERY_PARAMS = {
+  query: 'q',
+  period: 'period',
+  severity: 'severity',
+  alert: 'alert',
+} as const;
+
+/**
+ * Alert History narrowed to one alert's occurrences, with its latest timeline
+ * open. Notifications link here (`internal/notifications` builds the same
+ * address), so the parameter name is a public contract.
+ */
+export const buildAlertHistoryAlertPath = (alertId: string): string =>
+  `${ALERT_HISTORY_PATH}?${new URLSearchParams({ [ALERT_HISTORY_QUERY_PARAMS.alert]: alertId }).toString()}`;
 export const PATROL_PATH = '/patrol';
 export const PATROL_ATTENTION_QUERY_PARAM = 'attention';
 export const ACTIONS_PATH = '/actions';

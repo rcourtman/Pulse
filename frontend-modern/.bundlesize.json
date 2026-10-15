@@ -26,7 +26,7 @@
       "baselineGzip": 67677
     },
     "AIIntelligence": {
-      "baselineGzip": 63097
+      "baselineGzip": 73662
     },
     "useWorkloadsState": {
       "baselineGzip": 62538
@@ -89,7 +89,7 @@
       "baselineGzip": 7595
     },
     "ActionReviewDialog": {
-      "baselineGzip": 8453
+      "baselineGzip": 10414
     },
     "DrawerDiskListCard": {
       "baselineGzip": 6035

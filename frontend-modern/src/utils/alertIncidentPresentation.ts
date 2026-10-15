@@ -220,6 +220,29 @@ export function getAlertResourceIncidentViewTitle() {
   return ALERT_RESOURCE_INCIDENT_VIEW_TITLE;
 }
 
+/**
+ * Accessible names for the controls every alert history row repeats. A
+ * shared "Timeline" or "Resource" tells a screen-reader user nothing about
+ * which row it belongs to, and history repeats one alert over time, so the
+ * timeline control also names when it started. Each name begins with the
+ * visible label so speech input still finds it.
+ */
+export function getAlertHistoryTimelineActionLabel(options: {
+  open: boolean;
+  alertTitle: string;
+  resourceName?: string;
+  startedAt: string;
+}): string {
+  const subject = [options.alertTitle, options.resourceName && `on ${options.resourceName}`]
+    .filter(Boolean)
+    .join(' ');
+  return `${options.open ? 'Hide timeline' : 'Timeline'} for ${subject}, ${options.startedAt}`;
+}
+
+export function getAlertHistoryResourceActionLabel(resourceName?: string): string {
+  return `Resource incidents for ${resourceName?.trim() || 'this resource'}`;
+}
+
 export function getAlertIncidentEventFilterContainerClass(
   variant: AlertIncidentEventFilterVariant,
 ): string {

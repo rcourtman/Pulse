@@ -1239,6 +1239,19 @@ customer story is settled, a model may select no visual views or a bounded set
 of views that materially improve it. The harness supplies only safe same-origin
 navigation, accessible click and wait actions, deterministic generated data,
 and identical rendering of the channel-specific comparison tag and candidate.
+Merged PRs carry a Visual evidence section for visible interface changes,
+including safe demo screenshots and reproducible route, viewport and steps.
+The visual investigation inspects those images and may select public GitHub
+attachments or immutable repository screenshots that still represent the final
+release. Reuse records bind each
+image to its merged Pulse PR in the exact release range. The capture helper
+also binds repository screenshot revisions to that PR's reviewed history. It
+verifies that provenance, bounds downloads to GitHub image hosting, decodes
+PNG/JPEG/WebP without network access and writes the same versioned PNG sidecars
+as fresh captures. It builds old/new runtimes only for states needing fresh
+captures. Screenshot selection is autonomous within the release dispatch and
+does not add a separate visual-plan confirmation prompt. Existing publication
+authority and release gates are unchanged.
 It does not prescribe product areas or visual themes. Visual evidence discovery
 is separate from structured capture selection, so tool-led investigation is not
 forced to share one response with rigid JSON. Capture selection uses native JSON
@@ -1659,6 +1672,7 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 3. `frontend-modern/src/api/updates.ts`
 4. `frontend-modern/src/components/UpdateBanner.tsx`
 5. `frontend-modern/src/components/WhatsNewCard.tsx`
+5a. `frontend-modern/src/components/WhatsNewContent.tsx`
 6. `frontend-modern/src/components/whatsNewModel.ts`
 7. `frontend-modern/src/utils/localStorage.ts`
 4. `cmd/pulse-control-plane/main.go`
@@ -1735,6 +1749,7 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 37a. `scripts/capture-release-note-visuals.sh`
 37b. `scripts/release_control/capture_release_note_visuals.mjs`
 37c. `scripts/release_control/release_note_visuals.py`
+37d. `.github/PULL_REQUEST_TEMPLATE.md`
 37. `scripts/check-workflow-dispatch-inputs.py`
 38. `scripts/clean-mock-alerts.sh`
 39. `scripts/com.pulse.hot-dev.plist.template`
@@ -2756,6 +2771,7 @@ artifact-selection behaviour.
    `frontend-modern/src/api/updates.ts`,
    `frontend-modern/src/components/UpdateBanner.tsx`,
    `frontend-modern/src/components/WhatsNewCard.tsx`,
+   `frontend-modern/src/components/WhatsNewContent.tsx`,
    `frontend-modern/src/components/whatsNewModel.ts`, and
    `frontend-modern/src/utils/localStorage.ts`
    Server update planning must attach the canonical upgrade-readiness verdict
@@ -2785,10 +2801,23 @@ artifact-selection behaviour.
    `frontend-modern/src/utils/localStorage.ts` owns that browser-session notice
    reservation boundary so the release notice and the GitHub gratitude prompt
    cannot create a one-two sequence. The post-update
-   surface must not reuse the Highlights summary as its content,
-   and must stay silent for a first baseline, malformed or development
-   versions, missing releases, and releases without categorized changes.
-   `Highlights` remains a pre-update overview only: release rendering
+   surface keeps authored Known issues and historical Breaking changes open
+   before the Highlights, with optional `See the difference` images directly
+   after the Highlights. Routine Before-you-upgrade instructions have their own
+   initially collapsed disclosure, separate from the grouped change expansion.
+   Release authors must put critical risks and required safety actions in Known
+   issues so those warnings remain visible without expanding upgrade notes.
+   Screenshot URLs must be exact-version public release PNG sidecars, never
+   arbitrary remote images or raw PR attachment URLs. Before/now comparisons
+   load through the authenticated exact-version release-asset endpoint, which
+   validates body references, bounded PNG data and GitHub redirect hosts
+   without loosening the application's same-origin image policy. Comparisons
+   stack at narrow widths, link to full-size assets and degrade to readable
+   text if an image cannot load. Highlights-only releases remain useful, while
+   a first baseline, malformed or development version, missing release, or
+   metadata-only release stays silent. Text is sanitized independently of
+   screenshot rendering and cannot expand the chat Markdown trust boundary.
+   For both the pre-update preview and post-update overview, release rendering
    keeps it to at most three short plain-text bullets of no more than 140
    characters each, with links, code, issue references, and nested structure
    reserved for the categorized or full release notes.
@@ -4788,16 +4817,16 @@ candidate builds; the canonical core/mobile contract proves that `v6.1.0`
 serves their route, scope, payload, pairing, and push requirements, including
 the relay-mobile Patrol attention scopes corrected after rc.4. No companion
 build upload or public mobile-store rollout is part of this server release.
-The same release boundary now provides one canonical in-app release-note
-experience. Update checks can preview a curated `Highlights` section before an
-update, while the authenticated running-version endpoint lets the post-update
-surface extract the published `Added`, `Improved`/`Changed`, `Fixed`,
-`Security`, `Breaking changes`, `Deprecated`, and `Removed` sections into a
-categorized changelog after an upgrade. Summary-only or uncategorized releases
-stay quiet in the post-update dialog, and source or development builds never
-masquerade as published releases. The shared scrollable dialog keeps the
-categories readable without pushing the dashboard down; every close path still
-records the running release as seen.
+The same release boundary provides one canonical in-app release-note
+experience. Update checks preview curated Highlights, while the authenticated
+running-version endpoint supplies the same published body to the post-update
+modal. That modal shows Highlights, optional release screenshot comparisons,
+important operator information and expandable grouped changes. Historical
+Added/Improved/Fixed categories remain readable. PR visual evidence can be
+selected autonomously and copied into versioned release assets, with fresh
+captures available for missing or stale views. Source/development builds and
+metadata-only releases stay quiet. The compact notice records the running
+release immediately and opens the shared scrollable dialog only on request.
 The initial GA promotion
 metadata remains
 `promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.35`,

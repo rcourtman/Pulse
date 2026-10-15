@@ -325,6 +325,9 @@ describe('tab path helpers', () => {
     );
     expect(alertsPageSource).toContain('getAlertsTabGroups({ readOnly: readOnlySession() })');
     expect(alertsPageSource).toContain('touch-scroll');
+    expect(alertsPageSource).toContain(
+      'shouldConfirmAlertsLeave(e.to, e.from.pathname, hasUnsavedChanges())',
+    );
     expect(alertsPageSource).toContain('scrollbar-hide');
     expect(alertsPageSource).not.toContain('style="-webkit-overflow-scrolling: touch;"');
     expect(alertsPageSource).not.toContain('const loadAlertConfiguration = async');

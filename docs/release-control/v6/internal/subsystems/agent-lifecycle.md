@@ -15,6 +15,15 @@
 
 ## Purpose
 
+### Collected backup evidence does not require command-agent access
+
+Guest investigation manifests include the existing read-only storage tool for
+collected backup attempts. The org-scoped recovery reader preserves task error
+text independently of PVE command clients and connected agents. Missing command
+access remains an execution boundary; reading a failure or a successful task
+does not grant a lifecycle action or prove a restorable artifact. Manifest,
+persisted-task and API/tool parity regressions cover this separation.
+
 ### Patrol maintenance coverage adds no agent authority
 
 The Patrol operator-state projection in `internal/api/router.go` now reads the
@@ -561,6 +570,21 @@ Plan changes still clear explicit approval; generating setup commands and saving
 remain subject to the existing approval guard. Preview generation is local UI
 state, not an agent identity, enrollment token or liveness signal.
 
+
+### Node setup asks for the endpoint before the name
+
+`NodeModalBasicInfoSection.tsx` puts Endpoint URL first and marks Node Name
+optional, because the name is derived and never a separate gate. Typing an
+endpoint fills an empty or still-derived name from `deriveNameFromHost`; manual
+and password saves fall back to that derivation; assisted setup omits an empty
+name and registration uses the host's reported name; and the server suffixes
+duplicates with the host IP. The help copy therefore says only that an empty
+name is named after the host, and makes no uniqueness demand. This adds no
+agent authority and changes no setup or save payload.
+
+The connection sequence above the form follows the same order: its first step
+reads "Endpoint — API address and name" (`NodeCredentialSlot.tsx`), so the
+summary never asks for the name before the address it is derived from.
 
 ### Explicit filesystem selections survive the report boundary
 
@@ -2790,6 +2814,12 @@ product-adoption telemetry only. It accepts a closed content-free activity and
 updates a bounded aggregate tally; it does not identify, register, authorize,
 configure, update, or report a Pulse agent and must not consume agent tokens,
 agent inventory, registration state, or command-channel readiness.
+
+The authenticated running-release screenshot route under
+`/api/updates/release-notes/assets/` is adjacent deployment presentation.
+It uses monitoring-read authority and exact published PNG references. It must
+not accept agent-report credentials as image authority or reinterpret release
+screenshots as enrollment, update readiness or lifecycle verification.
 
 1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.
    Canonical `/api/auto-register` auth is split by intent: when the setup-token
@@ -9786,6 +9816,21 @@ The accepted upstream `diagnostics_token_visibility_test.go` controls and API
 reference route checks cover caller filtering and the documented authority.
 Final-source checks must retain this upstream behavior beside the reviewed
 reporting/help repairs; source proof is not installed credential recovery.
+
+### Connected systems open the page that shows their data (14 October 2026)
+
+Settings > Infrastructure listed a connected PBS as Active, but its servers
+appear under Proxmox > Backups, and a user could not find them (#2905).
+Each connected API system's name now links to the page that shows its data:
+Proxmox VE to the Proxmox overview, PBS to Proxmox > Backups, Mail Gateway to
+Proxmox > Mail Gateway, vCenter to vSphere, TrueNAS to TrueNAS, and Docker or
+Kubernetes connections to their pages. `infrastructureRowMonitoringPath`
+in `connectionsTableModel.ts` owns the mapping. Agent hosts and availability
+checks get no link: an agent host appears on Proxmox, Machines or Kubernetes
+depending on what it runs, so a fixed destination would often be wrong. The
+link is underlined at rest, because touch users have no hover hint, and it
+does not depend on edit rights or read-only mode; Manage still owns
+connection settings.
 
 ### PVE guest-cycle publication and independent agents (12 October 2026)
 

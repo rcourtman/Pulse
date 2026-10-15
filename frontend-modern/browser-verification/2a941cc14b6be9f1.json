@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "base_sha": "6fca29ca8196af9fda30ce89bf66182f09711919",
+  "verified_at": "2026-10-15T12:51:32.759Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/WhatsNewContent.tsx",
+    "frontend-modern/src/components/whatsNewModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/WhatsNewContent.tsx": "81e78a81d227f83bd3756d0b36fce5564e4b0aecc8b5802527d1fc76fc06ced6",
+    "frontend-modern/src/components/whatsNewModel.ts": "5e4f2069fba15764d898475558b8b361f45bfab674b14a43ce0712ebfa920012"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "non-blocking update notice",
+    "critical known issues and historical breaking changes always expanded",
+    "screenshots immediately after highlights",
+    "upgrade notes collapsed by default",
+    "upgrade and all-changes disclosures independently expanded and collapsed",
+    "before and now images",
+    "current-only image",
+    "no warnings or upgrade notes",
+    "upgrade-only and historical notes",
+    "failed images",
+    "first baseline",
+    "metadata-only release",
+    "release-note fetch error",
+    "dismissed and reloaded"
+  ],
+  "interactions": [
+    "notice click",
+    "pointer and keyboard upgrade disclosure",
+    "All changes disclosure",
+    "scroll to final upgrade instruction and final change",
+    "full-size image link",
+    "focus trap and return",
+    "Escape",
+    "outside click",
+    "close button",
+    "Got it",
+    "notice dismissal",
+    "reload stays quiet"
+  ],
+  "screenshots": [
+    "frontend-modern/browser-verification/screenshots/release-layout-desktop.png",
+    "frontend-modern/browser-verification/screenshots/release-layout-mobile.png",
+    "frontend-modern/browser-verification/screenshots/release-layout-warnings.png"
+  ],
+  "notes": "Current production frontend with a private demo runtime and controlled release transport. Existing beta.3 notes include actual v6.5.0 and updated resource-drawer captures using demo data. Known issues and historical breaking changes remain expanded and appear only once. Upgrade guidance and all changes have independent disclosures."
+}

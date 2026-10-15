@@ -471,6 +471,29 @@ describe('i18n foundation', () => {
     expect(I18N_MESSAGES.es['alerts.activation.toast.deactivated']).toContain('seguira');
   });
 
+  // The Schedule page sets how alerts are delivered; maintenance windows are a
+  // separate per-resource feature, so no locale may title it as maintenance.
+  it('titles the alerts Schedule page for delivery, not maintenance', () => {
+    expect(I18N_MESSAGES.en['alerts.page.schedule.title']).toBe('Delivery Schedule');
+    for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      expect(I18N_MESSAGES[locale]['alerts.page.schedule.title']).not.toMatch(
+        /maintenance|wartung|mantenimiento/i,
+      );
+    }
+  });
+
+  // The setup message names the environment variable an operator must remove;
+  // a translated name would point at a variable that does not exist.
+  it('keeps PULSE_TELEMETRY untranslated in the setup lock message', () => {
+    for (const locale of ['en', ...FIRST_LOCALIZATION_LOCALES] as const) {
+      // Removing the variable restores the default (on), so the copy must
+      // name the value that turns statistics off.
+      expect(I18N_MESSAGES[locale]['setup.security.error.telemetryLockedOn']).toContain(
+        'PULSE_TELEMETRY=false',
+      );
+    }
+  });
+
   it('keeps machine-facing identifiers unchanged in alerts overview catalog copy', () => {
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
       expect(I18N_MESSAGES[locale]['alerts.assistant.button.full']).toContain('Pulse Assistant');
@@ -480,6 +503,14 @@ describe('i18n foundation', () => {
       expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.menuLabel']).toContain('Patrol');
       expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.title']).toContain('Patrol');
       expect(I18N_MESSAGES[locale]['alerts.assistant.explain.menuLabel']).toContain('Assistant');
+      // History rows name each Assistant button after its alert, resource
+      // and start time; every locale must keep all three placeholders.
+      for (const key of ['alerts.assistant.iconLabel', 'alerts.assistant.iconLabelAt'] as const) {
+        expect(I18N_MESSAGES[locale][key]).toContain('Pulse Assistant');
+        expect(I18N_MESSAGES[locale][key]).toContain('{alertType}');
+        expect(I18N_MESSAGES[locale][key]).toContain('{resourceName}');
+      }
+      expect(I18N_MESSAGES[locale]['alerts.assistant.iconLabelAt']).toContain('{startedAt}');
       expect(
         t(
           'alerts.assistant.action.investigate',

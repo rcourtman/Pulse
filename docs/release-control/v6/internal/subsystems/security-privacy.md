@@ -18,6 +18,18 @@
 
 ## Purpose
 
+### Investigation evidence retains tenant and runtime-source boundaries
+
+Recovery HTTP and tool reads share `Manager.ListPointsForOrg`: a nonblank tenant
+is required, cancellation and read failures remain errors, and ordinary reads
+use that tenant's cached store. The optional demo source follows the current
+fixture graph and never merges persisted tenant rows into demo evidence. The
+real-to-demo-to-real regression checks both consumers and retained store data;
+the persisted task regression excludes another tenant and another guest with
+the same provider VM ID. Historical storage reads preserve source labels and
+requested time bounds. These read paths add no credential, execution or approval
+authority.
+
 ### Patrol maintenance coverage widens no authority
 
 Patrol inherits only maintenance from an ancestor window scoped
@@ -588,6 +600,25 @@ resource ids plus alert identifier/type — and injects no operator briefing,
 command, prompt, or remediation payload into the model beyond the existing
 scoped-investigation context, so it adds no new disclosure surface and the
 existing resource-policy redaction still governs any model-bound context.
+
+The Alerts > History Assistant label keys (`alerts.assistant.iconLabel`,
+`alerts.assistant.iconLabelAt`) render the alert type, resource name and start
+time into the operator's own browser as accessible names. They are local UI
+copy: they add nothing to the Assistant handoff, the model-bound context or
+any request, so resource-policy redaction is unaffected.
+
+Renaming the alerts Schedule page title (`alerts.page.schedule.title`) changes
+local presentation copy only; it carries no resource data and changes no
+request, handoff or model-bound context.
+
+First-run setup reports the usage-statistics choice truthfully when the server
+owns it. An opt-out written after the admin account exists is refused with
+409 `env_locked` on a server started with `PULSE_TELEMETRY`; the security step
+then reads `/api/system/settings` and says nothing when statistics are already
+off, tells the operator to set `PULSE_TELEMETRY=false` and restart
+(`setup.security.error.telemetryLockedOn`) when the server keeps them on,
+because removing the variable would restore the default (on), and keeps the
+generic failure only when it cannot tell. It never claims statistics are off without reading that they are.
 
 Docker and Podman container CPU normalization may expose numeric raw per-core
 CPU percent, normalized capacity percent, and reporting host CPU count in

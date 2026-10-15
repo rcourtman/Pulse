@@ -39,6 +39,12 @@ vi.mock('@/components/shared/StatusBadge', () => ({
   StatusBadge: (props: any) => (
     <button
       data-testid="status-badge"
+      aria-label={
+        props.ariaLabel
+          ? `${props.ariaLabel}: ${props.isEnabled ? (props.labelEnabled ?? 'On') : (props.labelDisabled ?? 'Off')}`
+          : undefined
+      }
+      aria-pressed={props.isEnabled}
       onClick={() => props.onToggle?.()}
       title={props.isEnabled ? props.titleEnabled : props.titleDisabled}
     >
@@ -767,8 +773,8 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      const toggle = screen.getByRole('switch', { name: 'Alerts enabled for this resource' });
-      expect(toggle).toBeInTheDocument();
+      const toggle = screen.getByRole('switch', { name: 'Alerts for Test VM' });
+      expect(toggle).toHaveAttribute('aria-checked', 'true');
     });
 
     it('calls onToggleDisabled with resource id when toggle is clicked', () => {
@@ -779,7 +785,7 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      const toggle = screen.getByRole('switch', { name: 'Alerts enabled for this resource' });
+      const toggle = screen.getByRole('switch', { name: 'Alerts for Test VM' });
       fireEvent.click(toggle);
       expect(onToggleDisabled).toHaveBeenCalledWith('vm-1');
     });
@@ -793,7 +799,8 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      const toggle = screen.getByRole('switch', { name: 'Alerts disabled for this resource' });
+      const toggle = screen.getByRole('switch', { name: 'Alerts for Test VM' });
+      expect(toggle).toHaveAttribute('aria-checked', 'false');
       expect(toggle).toBeDisabled();
     });
 
@@ -955,6 +962,196 @@ describe('ResourceTable', () => {
       expect(screen.getAllByTestId('status-badge')).toHaveLength(1);
     },
   );
+
+  // Moving between form controls, assistive tech reads a control's own name,
+  // not its column header: every threshold input and On/Off toggle on the
+  // page used to sound alike ("Click to enable this metric", "On").
+  describe('threshold control names', () => {
+    it.each([false, true])(
+      'names each global default input and toggle by its metric (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['CPU %', 'Memory %'],
+          resources: [],
+          globalDefaults: { cpu: 80, memory: 85 },
+          setGlobalDefaults: vi.fn(),
+          setHasUnsavedChanges: vi.fn(),
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(screen.getByRole('spinbutton', { name: 'CPU % default' })).toHaveValue(80);
+        expect(screen.getByRole('spinbutton', { name: 'Memory % default' })).toHaveValue(85);
+        expect(screen.getByRole('button', { name: 'CPU % default alerts: On' })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+      },
+    );
+
+    it.each([false, true])(
+      'names an override input and toggle by metric and resource (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['CPU %'],
+          editingId: () => 'vm-1',
+          editingThresholds: () => ({ cpu: 90 }),
+          resources: [
+            makeResource({
+              id: 'vm-1',
+              name: 'web-01',
+              thresholds: { cpu: 90 },
+              defaults: { cpu: 80 },
+            }),
+          ],
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(screen.getByRole('spinbutton', { name: 'CPU % for web-01' })).toHaveValue(90);
+        expect(
+          screen.getByRole('button', { name: 'CPU % for web-01 alerts: On' }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it.each([false, true])(
+      'names the offline alert toggles for the default and each resource (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['CPU %'],
+          resources: [makeResource({ id: 'node-a', name: 'pve-a', type: 'node' })],
+          globalDefaults: { cpu: 80 },
+          setGlobalDefaults: vi.fn(),
+          setHasUnsavedChanges: vi.fn(),
+          showOfflineAlertsColumn: true,
+          onToggleGlobalDisableOffline: vi.fn(),
+          globalDisableOfflineFlag: () => false,
+          onToggleNodeConnectivity: vi.fn(),
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(
+          screen.getByRole('button', { name: /^Offline alerts default: On$/ }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: /^Offline alerts for pve-a: / }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it.each([false, true])(
+      'names each resource backup and snapshot toggle (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['Backup', 'Snapshot'],
+          resources: [
+            makeResource({
+              id: 'vm-1',
+              name: 'web-01',
+              backup: { enabled: true },
+              snapshot: { enabled: false },
+            }),
+          ],
+          onToggleBackup: vi.fn(),
+          onToggleSnapshot: vi.fn(),
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(screen.getByRole('button', { name: /^Backup alerts for web-01: / })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+        expect(
+          screen.getByRole('button', { name: /^Snapshot alerts for web-01: / }),
+        ).toHaveAttribute('aria-pressed', 'false');
+      },
+    );
+
+    // Proxmox guests and Docker containers cycle Warn / Crit / Off instead
+    // of a binary badge; their names carry the context and the visible word.
+    it.each([false, true])(
+      'names the three-state offline controls for the default and each guest (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['CPU %'],
+          resources: undefined,
+          groupedResources: {
+            node1: [makeResource({ id: 'vm-1', name: 'VM1', type: 'guest' })],
+          },
+          globalDefaults: { cpu: 80 },
+          setGlobalDefaults: vi.fn(),
+          setHasUnsavedChanges: vi.fn(),
+          showOfflineAlertsColumn: true,
+          onSetGlobalOfflineState: vi.fn(),
+          onSetOfflineState: vi.fn(),
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(
+          screen.getByRole('button', { name: 'Offline alerts default: Warn' }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: 'Offline alerts for VM1: Warn' }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    // A metric cell outside edit mode is a button showing the current value;
+    // its name says which threshold it edits and repeats that value.
+    it.each([false, true])(
+      'names each metric value button with its resource and shown value (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['CPU %', 'Memory %'],
+          resources: [
+            makeResource({
+              id: 'vm-1',
+              name: 'web-01',
+              thresholds: { cpu: 90, memory: -1 },
+              defaults: { cpu: 80, memory: 85 },
+            }),
+          ],
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(
+          screen.getByRole('button', { name: 'Edit CPU % threshold for web-01: 90' }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: 'Edit Memory % threshold for web-01: Off' }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it.each([false, true])(
+      'names the global and per-resource alert switches (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['CPU %'],
+          resources: [makeResource({ id: 'vm-1', name: 'web-01' })],
+          globalDefaults: { cpu: 80 },
+          setGlobalDefaults: vi.fn(),
+          setHasUnsavedChanges: vi.fn(),
+          onToggleGlobalDisable: vi.fn(),
+          globalDisableFlag: () => false,
+          onToggleDisabled: vi.fn(),
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(screen.getByRole('switch', { name: 'Global alerts toggle' })).toHaveAttribute(
+          'aria-checked',
+          'true',
+        );
+        expect(screen.getByRole('switch', { name: 'Alerts for web-01' })).toBeInTheDocument();
+      },
+    );
+  });
 
   describe('metric off toggles', () => {
     // The alert engine disables a metric whenever its trigger is <= 0, so every
@@ -1973,7 +2170,7 @@ describe('ResourceTable', () => {
         'min-h-11',
         'min-w-11',
       );
-      expect(screen.getByLabelText('Edit CPU % threshold for Mobile VM')).toHaveClass(
+      expect(screen.getByLabelText(/^Edit CPU % threshold for Mobile VM: /)).toHaveClass(
         'min-h-11',
         'min-w-11',
       );

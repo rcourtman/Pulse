@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { guestDiskDeferrals } from '@/components/Workloads/__fixtures__/guestDiskDeferrals';
 import {
+  getWorkloadsGuestBackupAgeRule,
   getWorkloadsGuestBackupStatusPresentation,
   getWorkloadsGuestBackupTooltip,
   getWorkloadsGuestProtectionPresentation,
@@ -216,5 +217,32 @@ describe('workloadGuestPresentation', () => {
     );
     // An agent's staleness says nothing about Proxmox's own filesystems.
     expect(getWorkloadGuestDiskRead({ agentStale: true }, true).state).toBe('current');
+  });
+  it('names the age limit that coloured a completed backup, in days when whole', () => {
+    const defaults = { freshHours: 24, staleHours: 72 };
+    expect(getWorkloadsGuestBackupAgeRule('fresh', defaults)).toBe(
+      'Fresh: no more than 1 day old (Fresh Hours).',
+    );
+    expect(getWorkloadsGuestBackupAgeRule('stale', defaults)).toBe(
+      'Shown amber: more than 1 day old (Fresh Hours).',
+    );
+    // Overdue is amber for the same reason as stale: Fresh Hours decides the
+    // colour, so raising Stale Hours would not postpone it.
+    expect(getWorkloadsGuestBackupAgeRule('overdue', defaults)).toBe(
+      'Shown amber: more than 1 day old (Fresh Hours). Also past Stale Hours (3 days).',
+    );
+    // A three-day backup cycle (#2858) sets Fresh Hours to 72.
+    expect(getWorkloadsGuestBackupAgeRule('stale', { freshHours: 72, staleHours: 96 })).toBe(
+      'Shown amber: more than 3 days old (Fresh Hours).',
+    );
+    expect(getWorkloadsGuestBackupAgeRule('fresh', { freshHours: 36, staleHours: 96 })).toBe(
+      'Fresh: no more than 36 hours old (Fresh Hours).',
+    );
+    // Unset limits fall back to the same defaults the shield is judged by.
+    expect(getWorkloadsGuestBackupAgeRule('overdue')).toBe(
+      'Shown amber: more than 1 day old (Fresh Hours). Also past Stale Hours (3 days).',
+    );
+    expect(getWorkloadsGuestBackupAgeRule('never', defaults)).toBeNull();
+    expect(getWorkloadsGuestBackupAgeRule('unknown', defaults)).toBeNull();
   });
 });

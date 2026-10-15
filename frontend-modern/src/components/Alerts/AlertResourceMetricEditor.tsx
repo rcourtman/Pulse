@@ -24,6 +24,8 @@ interface AlertResourceMetricEditorProps {
   inheritedDefault?: number;
   fallback?: AlertResourceGlobalDefaultFallback;
   onChange: (value: number | undefined) => void;
+  /** The resource an override row edits, so its controls say whose they are. */
+  resourceName?: string;
   autoFocus?: boolean;
   onFocus?: () => void;
 }
@@ -39,6 +41,14 @@ export function AlertResourceMetricEditor(props: AlertResourceMetricEditorProps)
       ? defaultCell().isOff
       : isAlertResourceMetricOff(props.value, props.inheritedDefault);
   const follows = () => isDefault() && defaultCell().follows;
+  // A thresholds page holds dozens of alike inputs and On/Off badges. Each
+  // names its metric, and an override its resource, so assistive tech and
+  // voice control can tell them apart; the column header alone is not read
+  // when moving between form controls.
+  const controlName = () =>
+    isDefault()
+      ? `${props.column} default`
+      : `${props.column} for ${props.resourceName?.trim() || 'this resource'}`;
   const enableValue = () =>
     isDefault()
       ? defaultCell().enableValue
@@ -71,6 +81,7 @@ export function AlertResourceMetricEditor(props: AlertResourceMetricEditorProps)
             });
           }}
           type="number"
+          aria-label={controlName()}
           onFocus={props.onFocus}
           min={bounds().min}
           max={bounds().max}
@@ -112,6 +123,7 @@ export function AlertResourceMetricEditor(props: AlertResourceMetricEditorProps)
           isEnabled={!isOff()}
           onToggle={() => props.onChange(isOff() ? enableValue() : ALERT_RESOURCE_METRIC_OFF_VALUE)}
           {...getAlertResourceTableMetricOffToggleProps()}
+          ariaLabel={`${controlName()} alerts`}
         />
       </div>
     </div>

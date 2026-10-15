@@ -61,6 +61,28 @@ export interface AlertTrendSeries {
   rangeHours: number;
 }
 
+export interface AlertSeverityCounts {
+  critical: number;
+  warning: number;
+  info: number;
+}
+
+/**
+ * The frequency chart's series: each period's alerts by severity as well as
+ * in total, so a busy period shows how bad it was.
+ */
+export interface AlertFrequencySeries extends AlertTrendSeries {
+  severityBuckets: AlertSeverityCounts[];
+}
+
+// The closed alert vocabulary: legacy `error` is critical, and an empty or
+// unknown value fails safe to warning rather than reading as information.
+export const alertSeverityCountKey = (severity: string | undefined): keyof AlertSeverityCounts => {
+  const normalized = (severity ?? '').trim().toLowerCase();
+  if (normalized === 'critical' || normalized === 'error') return 'critical';
+  return normalized === 'info' ? 'info' : 'warning';
+};
+
 export interface AlertAxisTick {
   position: number;
   label: string;
@@ -326,7 +348,7 @@ export function buildAlertTrends(
   filteredAlerts: HistoryItem[],
   timeFilter: AlertHistoryRange,
   now = Date.now(),
-): AlertTrendSeries {
+): AlertFrequencySeries {
   const niceBucketSizes = [1, 2, 3, 6, 12, 24, 48, 72, 168, 336, 720, 1440];
   const maxBuckets = 30;
 
@@ -373,6 +395,11 @@ export function buildAlertTrends(
   startTime = Math.min(startTime, now - bucketCount * bucketSizeHours * MS_PER_HOUR);
 
   const buckets = new Array(bucketCount).fill(0);
+  const severityBuckets: AlertSeverityCounts[] = Array.from({ length: bucketCount }, () => ({
+    critical: 0,
+    warning: 0,
+    info: 0,
+  }));
   const bucketTimes = new Array(bucketCount)
     .fill(0)
     .map((_, index) => startTime + index * bucketSizeHours * MS_PER_HOUR);
@@ -388,11 +415,13 @@ export function buildAlertTrends(
     const bucketIndex = Math.min(bucketCount - 1, Math.max(0, rawIndex));
     if (bucketIndex >= 0 && bucketIndex < bucketCount) {
       buckets[bucketIndex]++;
+      severityBuckets[bucketIndex][alertSeverityCountKey(alert.severity)]++;
     }
   });
 
   return {
     buckets,
+    severityBuckets,
     max: Math.max(...buckets, 1),
     bucketSize: bucketSizeHours,
     bucketTimes,
@@ -547,6 +576,40 @@ export function getAlertBucketDurationLabel(bucketHours: number) {
   return `${bucketHours} hour${bucketHours === 1 ? '' : 's'}`;
 }
 
+// Whether an axis label at this scale names a time of day as well as a date.
+const axisLabelShowsTime = (bucketHours: number, totalHours: number): boolean =>
+  totalHours <= 48 || (totalHours <= 24 * 90 && (bucketHours <= 12 || totalHours <= 24 * 14));
+
+/**
+ * The first round local time at or after `timestamp` that an axis label can
+ * name exactly: the next whole step of `bucketHours` within the day when the
+ * label shows a time, otherwise the next local midnight. Bucket edges follow
+ * the window start (now minus the range), so labelling them directly printed
+ * times such as "11:50" and dated a day bar from its noon-ish edge.
+ */
+export function nextAlertAxisBoundary(
+  timestamp: number,
+  bucketHours: number,
+  totalHours: number,
+): number {
+  const date = new Date(timestamp);
+  const stepHours =
+    axisLabelShowsTime(bucketHours, totalHours) && bucketHours < 24 && 24 % bucketHours === 0
+      ? bucketHours
+      : 24;
+  const midnight = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  for (let hour = 0; hour <= 24; hour += stepHours) {
+    const boundary = new Date(
+      midnight.getFullYear(),
+      midnight.getMonth(),
+      midnight.getDate(),
+      hour,
+    ).getTime();
+    if (boundary >= timestamp) return boundary;
+  }
+  return new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() + 1).getTime();
+}
+
 export function formatAlertAxisTickLabel({
   timestamp,
   bucketHours,
@@ -571,16 +634,14 @@ export function formatAlertAxisTickLabel({
   const date = new Date(timestamp);
   const options: Intl.DateTimeFormatOptions = {};
 
-  if (totalHours <= 48) {
+  if (totalHours <= 24 * 90) {
     options.month = 'short';
     options.day = 'numeric';
-    options.hour = '2-digit';
-    options.minute = '2-digit';
-  } else if (totalHours <= 24 * 90) {
-    options.month = 'short';
-    options.day = 'numeric';
-    if (bucketHours <= 12 || totalHours <= 24 * 14) {
+    if (axisLabelShowsTime(bucketHours, totalHours)) {
+      // Minutes make the hour read as a time: 24-hour locales render a
+      // bare hour as "8 Oct, 11", which looks like a stray number.
       options.hour = '2-digit';
+      options.minute = '2-digit';
     }
   } else {
     options.year = 'numeric';
@@ -634,8 +695,17 @@ export function buildAlertAxisTicks(trends: AlertTrendSeries, locale: string): A
   const ticks: Array<{ position: number; label: string }> = [];
 
   for (let index = 0; index < trends.bucketTimes.length; index += step) {
-    const ts = trends.bucketTimes[index];
+    // Inner ticks sit at the round time they name, at its true position; the
+    // first tick below keeps the exact window start the range line shows.
+    const ts =
+      index === 0
+        ? trends.bucketTimes[index]
+        : nextAlertAxisBoundary(trends.bucketTimes[index], bucketHours, totalHours);
     const position = Math.min(1, Math.max(0, (ts - start) / (totalDurationMs || 1)));
+    // Two edges can snap to one boundary when a clock change repeats an hour;
+    // keep inner ticks clear of each other and of the end tick.
+    const previous = ticks.at(-1)?.position ?? -1;
+    if (index > 0 && (position >= 0.97 || position <= previous + 0.02)) continue;
     ticks.push({
       position,
       label: formatAlertAxisTickLabel({

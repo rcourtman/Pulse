@@ -149,6 +149,10 @@ describe('KubernetesControllersTable', () => {
     expect(screen.getByText('ReplicaSet')).toBeInTheDocument();
     expect(screen.getByText('4 pods')).toBeInTheDocument();
     expect(screen.getAllByText('1 not ready')).toHaveLength(2);
+    // An exception reads in its row dot's colour.
+    for (const exception of screen.getAllByText('1 not ready')) {
+      expect(exception).toHaveClass('text-amber-700');
+    }
     expect(screen.getByText('Fully labeled: 4')).toBeInTheDocument();
 
     expect(screen.getByText('StatefulSet')).toBeInTheDocument();
