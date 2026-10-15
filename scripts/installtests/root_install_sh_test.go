@@ -1266,7 +1266,9 @@ func TestRootInstallAutoRegisterSmokeTestsCreatedTokenBeforeRegistration(t *test
 
 	for _, needle := range []string{
 		`smoke_test_pve_auto_register_token() {`,
-		`printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl --retry 2 --retry-delay 1 -kfsS -H @- "${host_url%/}/api2/json/nodes"`,
+		`pve_auto_register_api_status() {`,
+		`printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" |`,
+		`curl "${curl_args[@]}" --header @- --url "${host_url%/}/api2/json/nodes" 2>/dev/null`,
 		`AUTO_NODE_REGISTER_ERROR="token smoke check failed"`,
 		`smoke_test_pve_auto_register_token "$normalized_host_url" "$token_id" "$token_value"`,
 	} {
@@ -1279,6 +1281,11 @@ func TestRootInstallAutoRegisterSmokeTestsCreatedTokenBeforeRegistration(t *test
 	registerIdx := strings.Index(script, `curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-`)
 	if smokeCallIdx < 0 || registerIdx < 0 || smokeCallIdx > registerIdx {
 		t.Fatalf("expected token smoke check to run before /api/auto-register (smoke=%d register=%d)", smokeCallIdx, registerIdx)
+	}
+	preflightIdx := strings.Index(script, `preflight_pve_auto_register_api "$normalized_host_url"`)
+	createIdx := strings.Index(script, `create_pve_auto_register_token "$token_name" token_output token_status`)
+	if preflightIdx < 0 || createIdx < 0 || preflightIdx > createIdx {
+		t.Fatal("API trust/availability must be checked without a credential before creating or rotating it")
 	}
 }
 

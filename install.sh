@@ -2330,22 +2330,61 @@ create_pve_auto_register_token() {
     printf -v "$token_status_var" '%s' "$token_status"
 }
 
-smoke_test_pve_auto_register_token() {
+pve_auto_register_api_status() {
     local host_url="$1"
-    local token_id="$2"
-    local token_value="$3"
+    local token_id="${2:-}"
+    local token_value="${3:-}"
+    # This runs on the PVE host. Its existing cluster CA authenticates the
+    # self-signed API without accepting an arbitrary peer's certificate. With
+    # no cluster CA, keep curl's normal system trust; never retry insecurely.
+    local curl_args=(--disable --silent --show-error --proto '=https'
+        --noproxy '*' --connect-timeout 5 --max-time 15
+        --capath /etc/ssl/certs
+        --output /dev/null --write-out '%{http_code}')
+    if [[ -f /etc/pve/pve-root-ca.pem ]]; then
+        # Retain Debian's system CA directory too, for an ACME-issued PVE
+        # certificate. The cluster CA augments trust; it does not replace it.
+        curl_args+=(--cacert /etc/pve/pve-root-ca.pem)
+    fi
+    # No redirects, ambient curl config, provider body or stderr. The caller
+    # accepts only the expected HTTP status, not untrusted diagnostic text.
+    if [[ -n "$token_id" ]]; then
+        printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" |
+            curl "${curl_args[@]}" --header @- --url "${host_url%/}/api2/json/nodes" 2>/dev/null
+    else
+        curl "${curl_args[@]}" --url "${host_url%/}/api2/json/nodes" 2>/dev/null
+    fi
+}
+
+preflight_pve_auto_register_api() {
+    local api_status=""
+    # Establish TLS and API availability before creating or rotating a token.
+    # A 401/403 is expected from this deliberately credential-free request.
+    if ! api_status=$(pve_auto_register_api_status "$1"); then
+        api_status=""
+    fi
+    case "$api_status" in
+        200|401|403) return 0 ;;
+    esac
+    AUTO_NODE_REGISTER_ERROR="Proxmox API trust or availability check failed"
+    print_warn "Could not verify the Proxmox HTTPS API; skipping automatic node registration. Check its address, certificate name and the host's existing CA trust."
+    print_warn "Monitoring credentials have not been changed."
+    return 1
+}
+
+smoke_test_pve_auto_register_token() {
     local smoke_output=""
     local smoke_status=0
 
     set +e
-    smoke_output=$(printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl --retry 2 --retry-delay 1 -kfsS -H @- "${host_url%/}/api2/json/nodes" 2>&1)
+    smoke_output=$(pve_auto_register_api_status "$1" "$2" "$3")
     smoke_status=$?
     set -e
 
-    if [[ $smoke_status -ne 0 ]]; then
+    if [[ $smoke_status -ne 0 || "$smoke_output" != "200" ]]; then
         AUTO_NODE_REGISTER_ERROR="token smoke check failed"
         print_warn "Created Proxmox monitoring token, but a local API smoke check failed; skipping automatic node registration"
-        print_warn "Smoke check error: ${smoke_output}"
+        print_warn "Check the Proxmox API certificate and monitoring-token permissions; no TLS bypass was attempted."
         return 1
     fi
 
@@ -2394,28 +2433,32 @@ auto_register_pve_node() {
 import sys, urllib.parse
 raw = sys.argv[1].strip()
 default_port = sys.argv[2]
-if not raw:
+try:
+    if not raw or any(c.isspace() or ord(c) < 32 for c in raw):
+        raise ValueError("invalid host")
+    parsed = urllib.parse.urlsplit(raw if "://" in raw else f"https://{raw}")
+    host = parsed.hostname
+    if (parsed.scheme != "https" or not host or parsed.username is not None
+            or parsed.password is not None or parsed.path not in ("", "/")
+            or parsed.query or parsed.fragment or any(c in host for c in "\\%")):
+        raise ValueError("invalid API origin")
+    port = parsed.port if parsed.port is not None else int(default_port)
+    if not 1 <= port <= 65535:
+        raise ValueError("invalid port")
+    authority = f"[{host}]" if ":" in host else host
+    print(f"https://{authority}:{port}")
+except ValueError:
     print("")
-    sys.exit(0)
-if "://" not in raw:
-    raw = f"https://{raw}"
-parsed = urllib.parse.urlparse(raw)
-scheme = parsed.scheme or "https"
-netloc = parsed.netloc or parsed.path
-path = parsed.path if parsed.netloc else ""
-if not netloc:
-    print("")
-    sys.exit(0)
-host = netloc.split('@', 1)[-1]
-if ':' not in host:
-    netloc = f"{netloc}:{default_port}"
-print(urllib.parse.urlunparse((scheme, netloc, path, "", "", "")))
 PY
 ) || normalized_host_url=""
 
     if [[ -z "$normalized_host_url" ]]; then
         AUTO_NODE_REGISTER_ERROR="invalid host URL"
-        print_warn "Unable to determine Proxmox API URL; skipping automatic node registration"
+        print_warn "Use a Proxmox HTTPS hostname or address without credentials, path, query or fragment; skipping automatic node registration"
+        return
+    fi
+
+    if ! preflight_pve_auto_register_api "$normalized_host_url"; then
         return
     fi
 
