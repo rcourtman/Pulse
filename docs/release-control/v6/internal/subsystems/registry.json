@@ -6667,9 +6667,9 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "pkg/proxmox/snapshot_inventory_response_test.go",
+              "internal/monitoring/pve_protection_observation_test.go",
               "pkg/proxmox/host_diagnostics_regression_test.go",
-              "internal/monitoring/pve_protection_observation_test.go"
+              "pkg/proxmox/snapshot_inventory_response_test.go"
             ]
           }
         ],
