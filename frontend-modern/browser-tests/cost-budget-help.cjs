@@ -133,8 +133,8 @@ const result = { result: 'incomplete', source_sha: binding.source_sha,
       await page.waitForURL('**/docs/AI#cost-tracking');
       await atFragment('cost-tracking');
       // The existing troubleshooting table must point back to this guidance.
-      await page.locator('article a[href="/docs/AI#cost-tracking"]').last().evaluate(element => element.scrollIntoView({ block: 'center' }));
-      await activate(page.locator('article a[href="/docs/AI#cost-tracking"]').last());
+      await page.locator('article a[href="#cost-tracking"]').last().evaluate(element => element.scrollIntoView({ block: 'center' }));
+      await activate(page.locator('article a[href="#cost-tracking"]').last());
       await atFragment('cost-tracking');
       record.checks.push('keyboard/touch existing-report help and Back preserve shell and heading focus; troubleshooting link returns to cost section; only local GETs and no backend requests');
       await context.close(); await browser.close(); browser = null;

@@ -92,6 +92,12 @@ describe('shipped AI cost and budget guidance', () => {
     const link = section.querySelector('a[href="/docs/TROUBLESHOOTING#-getting-help"]');
     expect(link?.hasAttribute('data-doc-link')).toBe(true);
     expect(link?.hasAttribute('target')).toBe(false);
-    expect(guide().querySelector('a[href="/docs/AI#cost-tracking"]')).not.toBeNull();
+    const article = guide();
+    const costLinks = [...article.querySelectorAll('a[href="#cost-tracking"]')];
+    expect(costLinks.length).toBeGreaterThan(0);
+    for (const costLink of costLinks) {
+      expect(costLink.hasAttribute('data-doc-link')).toBe(false);
+    }
+    expect(article.querySelector('a[href="/docs/AI#cost-tracking"]')).toBeNull();
   });
 });

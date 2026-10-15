@@ -530,7 +530,7 @@ not run Patrol or recover missing history.
 | **Issues resolved** | Recorded automatic resolutions plus manual resolutions still retained. Dismissed and muted findings are described separately. A cleared finding does not establish that an action ran or was independently verified. |
 | **Investigated** | Recorded investigation outcomes on retained findings. “Fix run, result unknown” is not a verified fix; open the finding for its result and remaining work. |
 | **Fixes run** | Actions recorded as successfully executed. “Verified afterwards” is a separate count; review failed actions and waiting approvals in **Actions**. Do not run an action again merely to increase the count. |
-| **Estimated spend** | Recorded Patrol model calls and their estimated USD cost, not an invoice or all Assistant usage. If some calls have no known price, the displayed amount is incomplete, not a zero-cost result. Check [Cost Tracking](AI.md#cost-tracking). |
+| **Estimated spend** | Recorded Patrol model calls and their estimated USD cost, not an invoice or all Assistant usage. If some calls have no known price, the displayed amount is incomplete, not a zero-cost result. Check [Cost Tracking](#cost-tracking). |
 
 The displayed mode is Patrol's **current** mode, not a history of mode changes.
 Watch-only mode can explain why investigations or fixes were not performed,
@@ -1006,7 +1006,7 @@ export, credential, new diagnostic run or paid model call is required.
 
 | Issue | Solution |
 |-------|----------|
-| Budget exceeded or an unexpected cost estimate | Use [Cost Tracking](AI.md#cost-tracking) before changing a budget, resetting usage or testing the provider |
+| Budget exceeded or an unexpected cost estimate | Use [Cost Tracking](#cost-tracking) before changing a budget, resetting usage or testing the provider |
 | Assistant or Patrol not responding | Verify provider credentials in **Settings → Pulse Intelligence → Provider & Models** |
 | No execution capability | Confirm at least one agent is connected |
 | Findings not persisting | Check Pulse has write access to `ai_findings.json` in the config directory |
