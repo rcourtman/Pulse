@@ -209,6 +209,7 @@ const expectCanonicalPlatformTableShell = (table: HTMLElement): void => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.history.replaceState({}, '', '/');
@@ -362,15 +363,7 @@ describe('ProxmoxBackupsTable', () => {
     mockBackupAPIs();
     const validPosture = await apiFetchJSONMock();
     apiFetchJSONMock.mockClear();
-    let poll: (() => void) | undefined;
-    const originalSetInterval = globalThis.setInterval;
-    vi.spyOn(globalThis, 'setInterval').mockImplementation(((
-      callback: () => void,
-      delay?: number,
-    ) => {
-      if (delay === 30_000) poll = callback;
-      return originalSetInterval(callback, delay);
-    }) as typeof setInterval);
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     window.history.replaceState({}, '', '/proxmox/backups/coverage');
     const { container } = renderInRouter(() => (
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
@@ -384,15 +377,16 @@ describe('ProxmoxBackupsTable', () => {
     const originalEvidence = details!.querySelector('table')!.textContent;
     const inventoryReads = apiFetchMock.mock.calls.length;
     apiFetchJSONMock.mockRejectedValue(new Error('PRIVATE_PROVIDER_FAILURE'));
-    expect(poll).toBeTypeOf('function');
-    poll!();
+    await vi.advanceTimersByTimeAsync(30_000);
     await screen.findByText(/Protection posture is unavailable/);
     expect(coverageRow()).toHaveTextContent('Unknown');
     expect(details).toHaveTextContent('Pulse cannot tell yet whether this guest is backed up.');
     expect(details!.querySelector('table')!.textContent).toBe(originalEvidence);
     expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_FAILURE');
     expect(container.querySelector('[data-coverage-strip-footnote]')).toBeNull();
-    expect(screen.getByRole('button', { name: '0 protected' })).toBeInTheDocument();
+    expect(screen.getByText('protected', { exact: true }).closest('li')).toHaveTextContent(
+      '0protected',
+    );
     expect(screen.getByRole('button', { name: '1 unknown' })).toBeInTheDocument();
 
     let finishRetry!: (value: unknown) => void;
