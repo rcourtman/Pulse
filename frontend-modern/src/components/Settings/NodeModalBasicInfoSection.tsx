@@ -27,25 +27,6 @@ export const NodeModalBasicInfoSection: Component<NodeModalBasicInfoSectionProps
       />
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div class={formField}>
-          <label for="node-name" class={labelClass('flex items-center gap-2')}>
-            Node Name <span class="text-red-500">*</span>
-          </label>
-          <input
-            id="node-name"
-            type="text"
-            value={state.formData().name}
-            onInput={(event) => state.updateField('name', event.currentTarget.value)}
-            placeholder="Pulse uses this label across monitoring views"
-            required
-            class={controlClass()}
-          />
-          <p class={formHelpText}>
-            Required and must be unique. We can auto-fill it from the Endpoint URL if you leave it
-            blank.
-          </p>
-        </div>
-
-        <div class={formField}>
           <label for="node-endpoint-url" class={labelClass('flex items-center gap-1')}>
             Endpoint URL <span class="text-red-500">*</span>
           </label>
@@ -61,6 +42,24 @@ export const NodeModalBasicInfoSection: Component<NodeModalBasicInfoSectionProps
           <Show when={getNodeEndpointHelp(modalProps.nodeType)}>
             {(help) => <p class={formHelpText}>{help()}</p>}
           </Show>
+        </div>
+
+        <div class={formField}>
+          <label for="node-name" class={labelClass('flex items-center gap-1')}>
+            Node Name <span class="text-slate-500 text-xs font-normal">(Optional)</span>
+          </label>
+          <input
+            id="node-name"
+            type="text"
+            value={state.formData().name}
+            onInput={(event) => state.updateField('name', event.currentTarget.value)}
+            placeholder="Defaults to the host name"
+            class={controlClass()}
+          />
+          <p class={formHelpText}>
+            Pulse shows this name across its monitoring views. If you leave it empty, Pulse names it
+            after the host.
+          </p>
         </div>
 
         <div class={formField}>

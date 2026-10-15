@@ -352,6 +352,16 @@ check accompany desktop/narrow browser interaction proof.
 
 The delivery-log response redacts embedded webhook URLs in errorMessage rather than treating the entire diagnostic as a URL. Non-secret operation and failure context survive alongside notificationId, destinationId, outcome, failureClass and attempts; malformed URL diagnostics fail closed. The HTTP payload proof is TestContract_DeliveryDiagnosticPayload; notification handler tests pin plain, credential-bearing and malformed errors. No response keys or route permissions change.
 
+### Node form name stays an optional label
+
+The add/edit node form no longer marks `name` required. Every client save
+path already sends a non-empty name (`data.name.trim() ||
+deriveNameFromHost(data.host)`), the setup-command request omits an empty name
+so registration falls back to the reported server name, and
+`disambiguateNodeName` keeps duplicate names distinct, so the node APIs see no
+new empty-name request shape. `NodeCredentialSlot.test.tsx` pins endpoint-first
+order, the optional name and the derivation as the endpoint is typed.
+
 ### Canonical incident-history query contract
 
 Incident APIs discover canonical-only occurrences and retain exact-start

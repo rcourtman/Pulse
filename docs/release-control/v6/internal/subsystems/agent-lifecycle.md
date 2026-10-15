@@ -571,6 +571,17 @@ remain subject to the existing approval guard. Preview generation is local UI
 state, not an agent identity, enrollment token or liveness signal.
 
 
+### Node setup asks for the endpoint before the name
+
+`NodeModalBasicInfoSection.tsx` puts Endpoint URL first and marks Node Name
+optional, because the name is derived and never a separate gate. Typing an
+endpoint fills an empty or still-derived name from `deriveNameFromHost`; manual
+and password saves fall back to that derivation; assisted setup omits an empty
+name and registration uses the host's reported name; and the server suffixes
+duplicates with the host IP. The help copy therefore says only that an empty
+name is named after the host, and makes no uniqueness demand. This adds no
+agent authority and changes no setup or save payload.
+
 ### Explicit filesystem selections survive the report boundary
 
 Disk reports carry optional `explicitlyIncluded` evidence when the collector
