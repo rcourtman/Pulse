@@ -250,7 +250,7 @@ describe.each(['pve', 'pbs'] as const)(
       const hook = mount(type),
         { state } = hook;
       await copy(state, type);
-      hook.setNode({ ...hook.original, status: 'online' } as NodeConfig);
+      hook.setNode({ ...hook.original, status: 'connected' } as NodeConfig);
       state.updateField('guestURL', 'https://guest.example.invalid');
       await download(state, type);
       expect(NodesAPI.getProxmoxSetupCommand).toHaveBeenCalledExactlyOnceWith({

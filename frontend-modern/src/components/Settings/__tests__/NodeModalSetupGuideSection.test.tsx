@@ -77,15 +77,14 @@ describe('NodeModalSetupGuideSection', () => {
     (type) => {
       renderSetupGuide(type, { isPreparingSetup: true });
       expect(screen.getByRole('status')).toHaveTextContent('Preparing setup output');
-      expect(screen.getByRole('button', { name: 'Copy command', exact: true })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Copy command' })).toBeDisabled();
       expect(
-        screen.getByRole('button', { name: 'Download setup script', exact: true, hidden: true }),
+        screen.getByRole('button', { name: 'Download setup script', hidden: true }),
       ).toBeDisabled();
-      fireEvent.click(screen.getByRole('button', { name: 'Host Telemetry Agent', exact: true }));
+      fireEvent.click(screen.getByRole('button', { name: 'Host Telemetry Agent' }));
       expect(
         screen.getByRole('button', {
           name: type === 'pbs' ? 'Copy to clipboard' : 'Copy command',
-          exact: true,
         }),
       ).toBeDisabled();
     },
