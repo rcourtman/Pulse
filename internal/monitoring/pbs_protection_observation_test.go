@@ -1,6 +1,8 @@
 package monitoring
 
 import (
+	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -123,5 +125,30 @@ func TestBuildPBSProtectionProviderObservationMapsEvidenceQuality(t *testing.T) 
 				t.Fatalf("Validate() error = %v", err)
 			}
 		})
+	}
+}
+
+// A count-preserving prune/import can move last-backup backwards. Exercise the
+// ordinary HTTP collector and stored projection before the unchanged cache TTL
+// expires; no native backup, guest, clock change or recovery action is involved.
+func TestPBSGroupLatestChangeRefreshesBeforeCacheTTL(t *testing.T) {
+	for _, kind := range []string{"vm", "ct"} {
+		for _, namespace := range []string{"", "team/production"} {
+			for _, direction := range []int64{-1, 1} {
+				t.Run(fmt.Sprintf("%s/%s/direction_%d", kind, namespace, direction), func(t *testing.T) {
+					exercisePBSGroupLatestChange(t, kind, namespace, direction, 0)
+				})
+			}
+		}
+	}
+}
+
+func TestPBSGroupLatestChangePreservesFailedRefreshBoundaries(t *testing.T) {
+	for _, namespace := range []string{"", "team/production"} {
+		for _, status := range []int{http.StatusServiceUnavailable, http.StatusForbidden} {
+			t.Run(fmt.Sprintf("%s/status_%d", namespace, status), func(t *testing.T) {
+				exercisePBSGroupLatestChange(t, "vm", namespace, -1, status)
+			})
+		}
 	}
 }

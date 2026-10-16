@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### PBS group cache follows the actual latest snapshot
+
+A successful group listing may move `last-backup` backwards as well as forwards
+without changing `backup-count` (for example, a prune plus an older import).
+Only an equal latest time permits snapshot-cache reuse before the existing TTL.
+Either direction of change causes an ordinary snapshot read, so a removed
+newest snapshot cannot keep its timestamp or verification in raw inventory,
+stored recovery points or protection posture. Unchanged sibling groups retain
+their own cache age and bounded read count. Verification-only changes with an
+unchanged group still use the existing TTL; no extra probe or backup is added.
+
+`TestPBSGroupLatestChangeRefreshesBeforeCacheTTL` joins real PBS HTTP,
+publication/cache, persisted recovery points and protection posture for VM/CT,
+root/nested namespaces and both time directions, plus unchanged reuse, actual
+removal and ordinary recovery. `TestPBSGroupLatestChangePreservesFailedRefreshBoundaries`
+retains transient history without renewing its cache, withdraws access-rejected
+raw rows, and never treats a failed refresh as current protection. Consuming
+proof exercises the emitted observations through existing Backups date and
+Coverage views. This does not establish native backup, restore or guest recovery.
+
 ### PBS inventory failures retain only the unreadable namespace
 
 A transient or invalid group-list response preserves the exact datastore and
