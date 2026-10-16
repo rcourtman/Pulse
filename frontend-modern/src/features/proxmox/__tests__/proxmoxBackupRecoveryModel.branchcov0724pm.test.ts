@@ -192,13 +192,7 @@ describe('snapshot artifact detail fallback chain (||)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// latestTask replacement comparison (line 548). Existing specs add at most one
-// task per workload, so `!row.latestTask` always short-circuits and the
-// `(candidateTask.startedMs ?? 0) > (row.latestTask.startedMs ?? 0)` comparison
-// is never evaluated. We add multiple tasks for one workload.
-// ---------------------------------------------------------------------------
-
+// Latest task selection must not guess chronology from missing timestamps.
 describe('latestTask replacement comparison', () => {
   it('replaces the stored task when a newer one arrives for the same workload', () => {
     const model = buildModel({
@@ -222,8 +216,7 @@ describe('latestTask replacement comparison', () => {
     expect(model.coverageRows[0].latestTask?.id).toBe('t-new');
   });
 
-  it('treats a task with an unparseable start time as epoch (0) when comparing', () => {
-    // startedMs is undefined for the garbage timestamp -> ?? 0 -> always older.
+  it('does not demote an undated job below a dated job', () => {
     const model = buildModel({
       workloads: [workload({})],
       tasks: [
@@ -231,13 +224,11 @@ describe('latestTask replacement comparison', () => {
         task({ id: 't-garbage', startTime: 'not-a-date' }),
       ],
     });
-    expect(model.coverageRows[0].latestTask?.id).toBe('t-valid');
-    expect(model.coverageRows[0].latestTask?.startedMs).toBe(Date.parse(isoDaysAgo(2)));
+    expect(model.coverageRows[0].latestTask).toBeUndefined();
+    expect(model.coverageRows[0].taskChronologyUnknown).toBe(true);
   });
 
-  it('treats the stored task as epoch (0) when its start time is unparseable', () => {
-    // The first task wins the slot with an undefined startedMs; the second
-    // task's comparison then evaluates `(row.latestTask.startedMs ?? 0)`.
+  it('does not demote a stored undated job when a dated job follows', () => {
     const later = isoDaysAgo(1);
     const model = buildModel({
       workloads: [workload({})],
@@ -246,8 +237,8 @@ describe('latestTask replacement comparison', () => {
         task({ id: 't-valid-later', startTime: later }),
       ],
     });
-    expect(model.coverageRows[0].latestTask?.id).toBe('t-valid-later');
-    expect(model.coverageRows[0].latestTask?.startedMs).toBe(Date.parse(later));
+    expect(model.coverageRows[0].latestTask).toBeUndefined();
+    expect(model.coverageRows[0].taskChronologyUnknown).toBe(true);
   });
 });
 

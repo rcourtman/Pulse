@@ -224,6 +224,35 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it('keeps the job column for undated-only history and clears it only when history is empty', async () => {
+    mockBackupAPIs('protected');
+    let backupTasks = [{ ...pvePayload.data.backupTasks[0], startTime: 'not-a-date' }];
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url === '/api/backups/pve'
+            ? { data: { storageBackups: [], guestSnapshots: [], backupTasks } }
+            : { data: { backups: [] } },
+        ),
+      ),
+    );
+    window.history.replaceState({}, '', '/proxmox/backups/coverage');
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+    const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
+    await waitFor(() =>
+      expect(container.querySelector('[data-backup-task-unknown]')).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Sort by Task' })).toBeInTheDocument();
+    backupTasks = [];
+    await fireEvent.click(refresh);
+    await waitFor(() =>
+      expect(container.querySelector('[data-backup-task-unknown]')).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('button', { name: 'Sort by Task' })).not.toBeInTheDocument();
+  });
+
   it('measures logical backup blocks, not their individual DOM rows or runway spacers', () => {
     const root = document.createElement('div');
     root.innerHTML =

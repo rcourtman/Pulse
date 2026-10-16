@@ -23,6 +23,17 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Backup-job time uncertainty stays local to its workload
+
+Coverage propagates unorderable job chronology through its existing canonical
+workload match, without changing identity resolution, provider protection or
+restore-point selection. One guest's undated job cannot suppress another's
+known latest result. Rebuilt rows clear the uncertainty after a corrected
+inventory, and their existing disclosure/focus identity stays stable. The
+recovery-model and Coverage tests cover isolation and replacement. No new API,
+resource, persistence or execution path is introduced.
+
+
 ### Coverage window geometry follows workload identity
 
 Expanded backup detail measurements are associated with the same canonical row

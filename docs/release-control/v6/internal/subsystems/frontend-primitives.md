@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Unknown backup-job chronology is not a successful latest job
+
+Coverage shows an explicit unknown job indicator when a matched job's start
+time is absent, invalid or in the future. Its existing disclosure explains why
+Pulse cannot choose a latest outcome and points to Proxmox job history. The
+indicator stays accessible at desktop and narrow widths, clears on ordinary
+inventory replacement and must not turn into a green success dot or an absent
+job column. The consuming table tests and `backup-task-chronology.cjs` cover
+these states and same-open read-only refresh.
+
+
 ### Expandable backup Coverage uses per-workload geometry
 
 The opt-in platform window geometry maps native scroll positions to cumulative
