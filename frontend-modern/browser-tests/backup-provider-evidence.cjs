@@ -188,10 +188,12 @@ async function inspect(page) {
     }
     res.setHeader(
       'Content-Type',
-      { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.md': 'text/markdown' }[
-        path.extname(file)
-      ] ||
-        'application/octet-stream',
+      {
+        '.html': 'text/html',
+        '.js': 'text/javascript',
+        '.css': 'text/css',
+        '.md': 'text/markdown',
+      }[path.extname(file)] || 'application/octet-stream',
     );
     res.end(bytes);
   });
