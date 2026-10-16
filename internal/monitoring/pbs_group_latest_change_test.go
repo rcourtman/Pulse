@@ -187,7 +187,18 @@ func exercisePBSGroupLatestChange(t *testing.T, kind, namespace string, directio
 	}
 	project("withdrawn")
 	poll(4)
-	f.assertProtected(t, instance)
+	if len(f.m.state.GetSnapshot().PBSBackups) != 2 || len(f.points(t, instance)) != 2 {
+		t.Fatal("ordinary recovery did not restore both actual snapshots")
+	}
+	for _, p := range f.postures(t) {
+		wantTime := f.backupAt
+		if p.SubjectResourceID == f.ids[0] {
+			wantTime += 7200
+		}
+		if p.State != recovery.ProtectionStateProtected || p.LastSuccessfulPointAt == nil || p.LastSuccessfulPointAt.Unix() != wantTime {
+			t.Fatalf("recovered posture=%+v, want current verified snapshot at %d", p, wantTime)
+		}
+	}
 	if b := row("100"); b == nil || b.BackupTime.Unix() != f.backupAt+7200 || !b.Verified {
 		t.Fatalf("ordinary recovery did not publish new actual snapshot: %+v", b)
 	}
