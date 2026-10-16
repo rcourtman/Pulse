@@ -9906,3 +9906,12 @@ The shared footer stacks its action groups on narrow screens and wraps controls
 within each group. Delete, Test, Pause, Cancel and Save must remain visible and
 keyboard reachable without horizontal scrolling. Desktop groups retain their
 existing ordering. Browser proof covers both narrow and desktop viewports.
+
+### Chart service initialization preserves lifecycle authority (16 October 2026)
+
+`internal/api/charts_compat.go` and the router constructor share one guarded
+chart service initialization path per router. This only synchronizes service
+publication. Tenant monitors still resolve from each request context, and chart
+reads do not gain enrollment, heartbeat or agent lifecycle authority. The
+concurrent initialization contract and tenant-isolation race tests are owned
+by api-contracts.

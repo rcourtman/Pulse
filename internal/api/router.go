@@ -83,6 +83,7 @@ type Router struct {
 	monitor                         *monitoring.Monitor            // Legacy/Default support
 	mtMonitor                       *monitoring.MultiTenantMonitor // Multi-tenant manager
 	chartService                    *chartapi.Service
+	chartServiceOnce                sync.Once
 	alertHandlers                   *AlertHandlers
 	configHandlers                  *ConfigHandlers
 	trueNASHandlers                 *TrueNASHandlers
@@ -258,7 +259,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		monitorSupplementalRecords:      make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider),
 		startedPatrolOrgs:               make(map[string]bool),
 	}
-	r.chartService = chartapi.NewService(routerChartMonitorResolver{router: r})
+	r.ensureChartService()
 	if r.wsHub != nil {
 		r.wsHub.SetTrustedProxyChecker(isTrustedProxyIP)
 	}

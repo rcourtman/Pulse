@@ -3350,3 +3350,13 @@ command ceilings are unchanged. The host and observer auth-guidance recovery
 controls in `send_report_test.go` and `observer_delivery_test.go` verify observed
 status/endpoint, non-disclosure and resumed ordinary reporting with the same
 credential. They are not a credential inventory probe or native recovery proof.
+
+### Concurrent chart service publication retains tenant boundaries (16 October 2026)
+
+`internal/api/router.go` initializes each router's chart service through the
+same guarded accessor used by concurrent history and chart requests. The
+service remains scoped to its router and resolves the monitor from the current
+request context. This synchronizes publication without changing authentication,
+authorization, tenant selection or disclosure. The concurrent initialization
+regression in `internal/api/contract_test.go` and the existing
+`TestMultiTenant_TenantIsolation` race test verify that boundary.

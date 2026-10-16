@@ -12293,3 +12293,14 @@ This is neutral to storage-recovery because no persistence or recovery path chan
 platforms, saved credentials, omitted/cleared settings and unchanged configuration
 and health. `frontend-modern/src/api/__tests__/nodes.test.ts` binds the optional
 body to the saved-node route, including explicit false and empty values.
+
+### Router chart service initializes once for concurrent requests (16 October 2026)
+
+Each router constructs and publishes its chart service once, including routers
+created without the normal constructor. Eager construction uses the same guarded
+accessor as lazy history and chart handlers. Concurrent requests share that
+router's service, while different routers retain separate services and resolve
+the tenant monitor from each request context. Payload and route authority are
+unchanged. `TestChartServiceInitializationIsConcurrentAndRouterScoped` in
+`internal/api/contract_test.go` and `TestMultiTenant_TenantIsolation` are the
+direct race-detector proofs. This is a separate CI stabilization slice.
