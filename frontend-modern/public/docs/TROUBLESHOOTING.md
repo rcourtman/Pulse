@@ -709,6 +709,14 @@ planned maintenance window, preserving the deployment's settings and data.
   pre-pause states are not permission to start them. **Pulse monitoring and
   alerts are unavailable while stopped**; arrange independent outage coverage.
 
+#### Backup-age alerts name a deleted or renamed guest
+
+Follow the [retained-backup alert checks](PBS.md#backup-age-alerts-name-a-deleted-or-renamed-guest)
+to distinguish stored backups from live inventory and new notifications from
+History. Orphaned-backup and VMID filters have wider scope than one named guest;
+keep the intended protection unchanged while diagnosing, and do not delete
+stored state to clear the symptom.
+
 #### Backup-age alerts were not evaluated
 
 The **Pulse** warning “Backup-age alerts were not evaluated because recovery

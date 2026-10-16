@@ -610,6 +610,45 @@ Pulse Agent's stored History request. Restarting that guest is not a diagnosis
 of an empty PBS chart. See [VM Disk Monitoring](VM_DISK_MONITORING.md) if the
 separate symptom is missing filesystem information in a PVE VM row.
 
+### Backup-age alerts name a deleted or renamed guest
+
+PBS can retain backups after a VM or container has been removed. A retained
+backup is not evidence that the guest is still running, and a last-known name
+or location does not prove live ownership. With orphaned-backup alerts enabled,
+those retained backups can still reach the configured age threshold. A wrong
+node on a **live** guest is a separate attribution problem; use the
+[cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations),
+not an ignore rule to hide it.
+
+Keep the intended policy unchanged while diagnosing. If you deliberately want
+to change which retained backups raise age alerts, the existing controls are
+under **Alerts → Thresholds → Proxmox → Recovery** (called **Proxmox Backups**
+in older versions). Expand Recovery and find **Orphaned backups**:
+
+- Its **Alerts** switch applies to **all orphaned guests**, not just the named
+  guest. Turning it off is suppression, not a repaired identity or successful
+  backup. It does not delete the stored backups or History.
+- **Ignore VMIDs** also excludes **live guests with the same VMID**, across
+  connected installations. A trailing `*` matches a VMID prefix. Do not use this
+  global filter to silence only one guest when another installation reuses its
+  ID; it would remove that other guest's backup-age protection too.
+
+Save an intentional policy change with **Save changes**, then observe ordinary
+polling. Do not treat an old received message or a retained History entry as a
+new firing, or a disappeared alert as proof that backups are healthy. If new
+notifications continue despite the intended saved policy, or the corresponding
+active alert cannot be found, retain that as an unresolved alerting problem.
+
+For a report, use the already-received message's time and the affected view
+(**Alerts → Overview**, History, or notification only), plus the saved orphan
+policy if already known. Use consistent aliases for the source, guest type/VMID
+and datastore/namespace; share only the relevant redacted facts, not a full
+payload or queue export. Do not edit Pulse's state files or databases, and do
+not delete backups, clear History, rename/re-add sources or restart to clear
+the symptom. No new backup, guest-agent probe, notification test or queue replay
+is needed. An unresponsive guest needs the separate [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+procedure, not an alert-policy change.
+
 ### Slow Backup Loading
 
 A slow backup list does not establish an encrypted-datastore or PVE-proxy
