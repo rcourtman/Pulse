@@ -8095,6 +8095,12 @@ so the persisted message matches the stream, and falls back only when that
 prefix is empty. Proof: `TestInteractiveFinalSummaryKeepsCleanPrefixBeforeLeakedToolCall`
 and `TestInvestigationFinalSummaryWithLeakedToolCallIsNotAConclusion` in
 `internal/ai/chat/agentic_final_failure_test.go`.
+The same rule holds for a main-loop turn with no structured tool calls whose
+content leaked a textual tool call: a Patrol investigation drops that prefix and
+takes the bounded summary turn and failure receipt, while interactive chat keeps
+it. Proof: `TestInvestigationMainLoopLeakedToolCallIsNotAConclusion` and
+`TestInteractiveMainLoopKeepsCleanPrefixBeforeLeakedToolCall` in
+`internal/ai/chat/agentic_main_loop_leak_test.go`.
 
 The private orchestrator clears the previous finding outcome when starting a
 new session, after retaining its prior context. Failed runs preserve evidence,
