@@ -32,12 +32,14 @@ def installer_commands(text: str) -> str:
     for block in re.findall(r"```bash\n(.*?)\n```", text, flags=re.DOTALL):
         if "ssh-keygen -Y verify" not in block:
             continue
-        lines = block.splitlines()
-        for index, line in enumerate(lines):
-            if line.startswith("bash install.sh --version "):
-                # Only exercise the download -> verification -> execution gate,
-                # never any subsequent file-cleanup recipe.
-                return "\n".join(lines[: index + 1]) + "\n"
+        # Keep the subshell, private staging and EXIT cleanup. Truncating the
+        # recipe before its closing parenthesis would test different code.
+        if "bash install.sh --version " in block:
+            return block + "\n"
+    if "docs/INSTALL.md#proxmox-ve-lxc-installer" in text:
+        # The root landing page now sends readers to the complete canonical
+        # recipe rather than keeping another executable fork of it.
+        return installer_commands(read_repo_text("docs/INSTALL.md"))
     raise AssertionError("signed server-installer command block is missing")
 
 
@@ -60,7 +62,8 @@ if name == 'curl':
     code = int(os.environ.get('CURL_' + str(attempt), '0'))
     if code == 0:
         # Public dummy bytes only. The installer itself is never executed.
-        Path(sys.argv[-1].rsplit('/', 1)[-1]).write_text('downloaded fixture\\n')
+        Path(sys.argv[sys.argv.index('--output') + 1]).write_text('downloaded fixture\\n')
+    print(os.environ.get('HTTP_' + str(attempt), '200'), end='')
 elif name == 'ssh-keygen':
     sys.stdin.read()
     code = int(os.environ.get('VERIFY', '0'))
@@ -105,6 +108,10 @@ class ReadmeEntrypointsTest(unittest.TestCase):
         cases = (
             ({"CURL_1": "22"}, 22, ["curl"]),
             ({"CURL_2": "23"}, 23, ["curl", "curl"]),
+            ({"CURL_1": "28"}, 28, ["curl"]),
+            ({"CURL_2": "28"}, 28, ["curl", "curl"]),
+            ({"HTTP_1": "206"}, 1, ["curl"]),
+            ({"HTTP_2": "206"}, 1, ["curl", "curl"]),
             ({"VERIFY": "1"}, 1, ["curl", "curl", "ssh-keygen"]),
         )
         for relative_path in ENTRYPOINTS:
@@ -133,7 +140,13 @@ class ReadmeEntrypointsTest(unittest.TestCase):
                         "https://github.com/rcourtman/Pulse/releases/download/vX.Y.Z/install.sh.sshsig",
                     ],
                 )
-                self.assertTrue(all(event["argv"][0] == "-fsSLO" for event in events[:2]))
+                for event in events[:2]:
+                    self.assertEqual(event["argv"][0], "--disable")
+                    for option, value in (("--proto", "=https"),
+                                          ("--proto-redir", "=https"),
+                                          ("--connect-timeout", "10"),
+                                          ("--max-time", "60")):
+                        self.assertEqual(event["argv"][event["argv"].index(option) + 1], value)
                 self.assertEqual(events[2]["allowed_signers"], SIGNER + "\n")
                 verify = events[2]["argv"]
                 for option, value in (

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute both copied installer recipes; transport is fake, SSH verification real."""
+"""Execute every public installer recipe; transport fake, SSH verification real."""
 
 import json
 import os
@@ -15,6 +15,13 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 PRODUCTION_KEY = "AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm"
 VERSION = "v6.6.0-rc.1"
+ENTRYPOINTS = ("docs/i18n/de/README.md", "docs/i18n/es/README.md")
+
+
+def signed_recipes(relative):
+    return [block for block in re.findall(
+        r"```bash\n(.*?)\n```", (ROOT / relative).read_text(), re.S)
+        if "ssh-keygen -Y verify" in block]
 
 # No network, service, privilege or production signing key is used. Check the
 # actual arguments the copied recipe supplies, then simulate each result.
@@ -78,11 +85,14 @@ class SignedInstallerDocsTest(unittest.TestCase):
             cls.run_keygen("-Y", "sign", "-f", str(cls.fixtures / key),
                            "-n", namespace, str(payload))
             (cls.fixtures / (fixture + ".sig")).rename(cls.fixtures / (fixture + ".sshsig"))
-        cls.blocks = [block for block in re.findall(
-            r"```bash\n(.*?)\n```", (ROOT / "docs/INSTALL.md").read_text(), re.S)
-            if "ssh-keygen -Y verify" in block]
+        cls.blocks = signed_recipes("docs/INSTALL.md")
         if len(cls.blocks) != 2:
             raise AssertionError("Exercise both LXC and systemd recipes")
+        for relative in ENTRYPOINTS:
+            blocks = signed_recipes(relative)
+            if len(blocks) != 1:
+                raise AssertionError(f"Expected one server recipe in {relative}")
+            cls.blocks.extend(blocks)
 
     @classmethod
     def run_keygen(cls, *args):
@@ -133,33 +143,50 @@ class SignedInstallerDocsTest(unittest.TestCase):
             return result
 
     def test_verified_script_runs_once_with_exact_release(self):
-        for recipe in range(2):
+        for recipe in range(len(self.blocks)):
             with self.subTest(recipe=recipe):
                 self.exercise(recipe, "none")
 
     def test_download_exit_timeout_and_non_200_never_execute(self):
         # Exit 28 simulates curl's deadline result. This proves the recipe's
         # response, not real-network deadline enforcement or GitHub availability.
-        for recipe in range(2):
+        for recipe in range(len(self.blocks)):
             for phase in ("installer", "signature"):
                 for failure in ("download", "timeout", "http"):
                     with self.subTest(recipe=recipe, phase=phase, failure=failure):
                         self.exercise(recipe, phase + "-" + failure)
 
     def test_native_signature_rejects_changed_bytes_wrong_key_and_namespace(self):
-        for recipe in range(2):
+        for recipe in range(len(self.blocks)):
             for failure in ("payload-tampered", "signature-key", "signature-namespace"):
                 with self.subTest(recipe=recipe, failure=failure):
                     self.exercise(recipe, failure)
 
     def test_installer_failure_is_returned_without_automatic_retry(self):
-        for recipe in range(2):
+        for recipe in range(len(self.blocks)):
             with self.subTest(recipe=recipe):
                 self.exercise(recipe, "installer-runtime")
 
     def test_shipped_copy_is_identical(self):
         self.assertEqual((ROOT / "docs/INSTALL.md").read_bytes(),
                          (ROOT / "frontend-modern/public/docs/INSTALL.md").read_bytes())
+
+    def test_entrypoints_share_bounded_lxc_recipe(self):
+        for relative, block in zip(ENTRYPOINTS, self.blocks[2:]):
+            with self.subTest(page=relative):
+                self.assertEqual(block, self.blocks[0],
+                                 "Quick starts must retain the complete canonical LXC recipe")
+                if relative.startswith("docs/"):
+                    self.assertEqual((ROOT / relative).read_bytes(),
+                                     (ROOT / "frontend-modern/public" / relative).read_bytes())
+
+    def test_root_readme_refers_to_complete_platform_recipes_without_a_fork(self):
+        text = (ROOT / "README.md").read_text()
+        self.assertFalse(signed_recipes("README.md"))
+        for fragment in ("docs/INSTALL.md#proxmox-ve-lxc-installer",
+                         "docs/INSTALL.md#2-bare-metal--systemd"):
+            self.assertIn(fragment, text)
+        self.assertLessEqual(len(text.splitlines()), 220)
 
     def test_guidance_qualifies_deadlines_and_uncertain_execution(self):
         text = " ".join((ROOT / "docs/INSTALL.md").read_text().split())

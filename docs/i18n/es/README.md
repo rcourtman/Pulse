@@ -38,18 +38,37 @@ activation key `ppk_live_` y no funcionará en esa página de descarga.
 Si usas Proxmox VE, el instalador LXC oficial es el camino más nativo de Pulse.
 Instala el servidor Pulse. Sustituye `vX.Y.Z` por la etiqueta exacta del
 release que quieres instalar, verifica el instalador firmado y ejecútalo en tu
-host Proxmox:
+host Proxmox con **Bash**. El bloque usa un directorio temporal privado,
+ignora la configuración local de curl, solo permite redirecciones HTTPS y
+exige HTTP 200 en un máximo de 60 segundos para cada archivo antes de
+verificar la firma. Para un host Linux estándar, usa la
+[receta systemd](../../INSTALL.md#2-bare-metal--systemd):
 
 ```bash
+(
+set -eu
+umask 077
 export PULSE_VERSION=vX.Y.Z
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
+pulse_installer_dir="$(mktemp -d)"
+trap 'rm -rf "$pulse_installer_dir"' EXIT
+cd "$pulse_installer_dir"
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh")
+[ "$status" = 200 ]
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh.sshsig --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig")
+[ "$status" = 200 ]
 ssh-keygen -Y verify \
   -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
   -I pulse-installer \
   -n pulse-install \
-  -s install.sh.sshsig < install.sh &&
+  -s install.sh.sshsig < install.sh
 bash install.sh --version "${PULSE_VERSION}"
+)
 ```
 
 Pega el bloque completo: si falla una descarga o la verificación de firma, el

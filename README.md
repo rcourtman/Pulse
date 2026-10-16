@@ -86,23 +86,13 @@ not need the Docker socket.
 - [Docker Compose](docs/INSTALL.md#docker-compose)
 - [Kubernetes and Helm](docs/KUBERNETES.md)
 
-The installer is signed. Verify `install.sh` against the pinned
-`pulse-installer` key before running it:
-
-```bash
-export PULSE_VERSION=vX.Y.Z
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
-ssh-keygen -Y verify \
-  -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
-  -I pulse-installer \
-  -n pulse-install \
-  -s install.sh.sshsig < install.sh &&
-bash install.sh --version "${PULSE_VERSION}"
-```
-
-Paste the whole block: installation stops if either download or signature
-verification fails. Do not run the final command separately to bypass a failure.
+Use the complete [signed LXC recipe](docs/INSTALL.md#proxmox-ve-lxc-installer)
+on the Proxmox host, or the [systemd recipe](docs/INSTALL.md#2-bare-metal--systemd)
+on a standard Linux host. These Bash recipes use private temporary files,
+ignore local curl settings, allow only HTTPS redirects and require HTTP 200
+within 60 seconds for each file before verifying the pinned `pulse-installer`
+signature. Keep the whole recipe intact; do not run its final command separately
+to bypass a failed download or signature check.
 
 The GitHub installer installs the Pulse server. Install and upgrade agents
 (including v5-to-v6 agent upgrades) with the per-host command generated under
