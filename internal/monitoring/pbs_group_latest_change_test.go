@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 )
@@ -161,9 +162,20 @@ func exercisePBSGroupLatestChange(t *testing.T, kind, namespace string, directio
 		if len(f.points(t, instance)) != 2 || !f.m.pbsBackupCacheTimeFor(instance, key).Equal(targetRead) {
 			t.Fatal("failed refresh deleted history or renewed cache")
 		}
+		wantState := recovery.ProtectionStateUnknown
+		wantPermissions := operationaltrust.EvidencePermissionsUnknown
+		if failureStatus == http.StatusForbidden {
+			// A readable sibling plus rejected access is the existing partial-
+			// permission Attention verdict, not a whole-provider outage.
+			wantState = recovery.ProtectionStateAttention
+			wantPermissions = operationaltrust.EvidencePermissionsPartial
+		}
 		for _, p := range f.postures(t) {
-			if p.State != recovery.ProtectionStateUnknown || len(p.ProviderStates) != 1 || p.ProviderStates[0].HistoryCompleteness == recovery.ProtectionHistoryComplete {
-				t.Fatalf("failed refresh claimed current protection: %+v", p)
+			if p.State != wantState || len(p.ProviderStates) != 1 ||
+				p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial ||
+				p.ProviderStates[0].Permissions != wantPermissions ||
+				p.ProviderStates[0].JobState != recovery.OutcomeWarning {
+				t.Fatalf("failed refresh posture=%+v, want %s/partial/%s/warning", p, wantState, wantPermissions)
 			}
 		}
 		poll(2)
