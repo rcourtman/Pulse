@@ -25,6 +25,28 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Uncertain remediation retains a model-led follow-up
+
+An inconclusive verification remains unresolved and may be investigated again
+when the model reports it present, without another cooldown on top of Watch's
+schedule. Existing attempt admission and autonomy checks still apply.
+A model's fresh `present` assessment records evidence during Watch and hands off
+only after the Watch adapter has unwound. It does not dispatch a second
+investigation inside the detection conversation. Deliberate rejection,
+needs-attention and cannot-fix outcomes keep their existing terminal meaning.
+
+`pulse-enterprise:internal/investigation/orchestrator.go` captures the prior
+investigation context before replacing the finding's session identity. It reads
+only the exact retained session for the current occurrence and gives the model
+its bounded summary and canonical action receipt as historical evidence.
+Reopened occurrences with no current session cannot borrow an old receipt.
+The model must reconcile an uncertain effect using current reads before deciding
+whether a new action is justified. This adds no mutation or approval authority.
+`findings_verification_followup_test.go` covers eligibility, persistence and the
+Watch handoff. The enterprise orchestrator test covers receipt continuity and
+session isolation. Native unattended runs remain necessary outcome evidence.
+
+
 ### Patrol resumes its actual next-check deadline after restart
 
 The main Patrol timer checkpoints its next deadline and effective interval in
@@ -1299,6 +1321,8 @@ model-facing content, tool exposure, or approval authority, and it does not clai
 a measured cost reduction or installed-deployment cache-read rate.
 
 ## Canonical Files
+
+- `pulse-enterprise:internal/investigation/orchestrator.go`: private investigation execution and current-occurrence follow-up context.
 
 - `pkg/reporting/evidence.go`: measured retained-history evidence contract for model-facing summaries, with no report narrator or heuristic health judgement.
 

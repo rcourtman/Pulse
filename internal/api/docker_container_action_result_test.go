@@ -161,6 +161,24 @@ func TestDockerContainerExecutionResultDoesNotVerifyUnrecoveredHealth(t *testing
 	}
 }
 
+func TestDockerContainerExecutionResultStartingHealthRemainsInconclusive(t *testing.T) {
+	now := time.Now().UTC()
+	facts := dockerResultFacts(now, true, false, false, true)
+	facts.ContainerID = dockerLifecycleTestID
+	observation := &dockerContainerPostconditionObservation{
+		ObserverID: "daemon", TrustDomain: "docker-daemon:agent-1", Method: "docker_api_inspect",
+		Snapshot: dockerObservationSnapshotFromLifecycle(facts.After), ReceivedAt: now,
+	}
+	observation.Snapshot.Health = agentexec.DockerContainerHealthStarting
+	result, err := dockerContainerExecutionResult("app-container:fixture", "agent-1", agentexec.DockerContainerLifecyclePayload{ActionID: "action", Operation: agentexec.DockerContainerOperationRestart}, facts, observation, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ActionResultV2.Execution.Status != unified.ActionExecutionInconclusive || result.ActionResultV2.Verification.Status != unified.ActionVerificationInconclusive || result.ActionResultV2.Verification.ReasonCode != "container_health_starting" {
+		t.Fatalf("transitional health was treated as a final contradiction: %#v", result.ActionResultV2)
+	}
+}
+
 func dockerObservationSnapshotFromLifecycle(snapshot agentexec.DockerContainerLifecycleSnapshot) agentexec.DockerContainerObservationSnapshot {
 	return agentexec.DockerContainerObservationSnapshot{
 		ContainerID: snapshot.ContainerID, State: snapshot.State, Running: snapshot.Running, Health: snapshot.Health,
