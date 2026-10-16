@@ -721,6 +721,43 @@ func TestAllTelemetryFieldsAreDisclosed(t *testing.T) {
 	}
 }
 
+func TestTelemetryPrivacyReleaseNoticeCoversExtendedHistory(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "releases", "TELEMETRY_SCHEMA_V19.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	notice := string(raw)
+	for _, required := range []string{"schema v19", "successful_history_reads_over_7d_30d", "customer identifiers", "opt-out"} {
+		if !strings.Contains(notice, required) {
+			t.Errorf("release notice must disclose %q", required)
+		}
+	}
+}
+
+func TestSuccessfulExtendedHistoryReadCounterAppearsInPreview(t *testing.T) {
+	preview, err := BuildPreview(Config{
+		Version: "6.6.0", DataDir: t.TempDir(),
+		GetSnapshot: func() Snapshot { return Snapshot{SuccessfulHistoryReadsOver7d30d: 7} },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.SuccessfulHistoryReadsOver7d30d != 7 {
+		t.Fatalf("preview reads = %d", preview.SuccessfulHistoryReadsOver7d30d)
+	}
+	raw, err := json.Marshal(preview)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["successful_history_reads_over_7d_30d"] != float64(7) {
+		t.Fatalf("missing aggregate read count")
+	}
+}
+
 func TestTelemetryPrivacyDocsDisclosePseudonymousIdentityAndIPHandling(t *testing.T) {
 	anonymousTelemetryClaimPattern := regexp.MustCompile(`(?i)\banonymous\b[^\n]{0,120}\btelemetry\b|\btelemetry\b[^\n]{0,120}\banonymous\b`)
 	for _, relativePath := range []string{

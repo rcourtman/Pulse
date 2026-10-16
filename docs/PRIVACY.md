@@ -40,7 +40,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `18` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `19` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -259,6 +259,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Pulse Intelligence approved action refusals: other 30d | `1` | Count pre-dispatch refusals not covered by the fixed categories without sending raw error or action content |
 | Pulse Intelligence verified finding resolutions 30d | `1` | Count approved Patrol-origin actions whose execution succeeded and whose linked finding postcondition was independently confirmed, without sending finding IDs, action IDs, evidence, resources, or fix details |
 | Pulse Intelligence approved action last failure reason 30d | `plan_drift` | See one fixed machine reason code for the most recent approved-action failure in the current 30-day telemetry window without sending error text, action output, command text, resource IDs, or actors |
+| Successful history reads over 7d 30d (`successful_history_reads_over_7d_30d`) | `5` | Count successful GET responses for a history range longer than seven days that actually return a numeric metric point older than seven days. Includes successful cache hits, but excludes empty/recent-only results, denied requests, failed writes, cancelled requests, HEAD requests and synthetic data. Only a rolling count leaves the install, with no selected range, timestamp, metric value, resource, tenant, user or request identity |
 | Workload history preview sessions 30d | `18` | Count browser sessions that successfully displayed a populated workload history preview, deduplicated locally once per session without sending a guest, user, route, timing, or browser identifier |
 | Workload history scrub sessions 30d | `9` | Count browser sessions that inspected a point on a workload history graph, deduplicated locally once per session without sending coordinates, values, guests, or browser identity |
 | Workload history range change sessions 30d | `6` | Count browser sessions that changed the workload history range, deduplicated locally once per session without sending the selected range or browser identity |
@@ -311,7 +312,7 @@ occurrence exists, leaving no trustworthy fired-alert denominator. Detected
 flapping episodes are not reported because their diagnostic event path may be
 dropped under pressure. Configuration adoption is reported instead.
 
-The current telemetry contract is schema version 18. Schema v16 adds four
+The current telemetry contract is schema version 19. Schema v16 adds four
 workload-history adoption counts. The browser
 sends only one closed milestone name to the local Pulse server and deduplicates
 each milestone once per browser session. Pulse stores bounded UTC-day counts
@@ -336,6 +337,22 @@ fixed category for the most recent update check on that channel, with a single
 flag for whether it offered a newer release. They exist because a failed check
 never shows up in the update counters, which only see updates that were
 applied. No version, release URL, response, or error text is sent.
+
+Schema v19 adds `successful_history_reads_over_7d_30d`. The server counts
+successfully written metric-history and chart responses containing a metric
+point older than seven days. Selecting a long range alone does not count.
+Empty results, denied requests, failed writes and mock data do not count.
+Pulse retains bounded UTC-day totals locally and sends only their rolling
+30-day sum, including the UTC day containing the cutoff. The day buckets
+are not exported. Requests and auto-refreshes count as reads, not people
+or proof of a human viewing a chart.
+
+No customer identity, request URL, selected range, metric timestamp, metric
+value or infrastructure identifier is retained in this tally or sent. Older
+schemas cannot report this signal. Measurement starts after upgrading, so
+historical use cannot be reconstructed and an initial zero does not represent
+a full 30-day observation. Telemetry opt-out, installation-ID rotation,
+account-linking restrictions and 90-day receiver retention are unchanged.
 
 #### Server-side handling and retention
 
@@ -389,6 +406,7 @@ Every change to the payload bumps the schema version, is listed here with its da
 
 | Schema | Date | Change |
 |--------|------|--------|
+| 19 | 2026-10-16 | Content-free rolling count of successful metric-history responses that return data older than seven days |
 | 18 | 2026-09-27 | Effective update channel, closed outcome of the last update check on that channel, and whether it offered a newer release |
 | 17 | 2026-09-02 | Closed Patrol provider class, effective Patrol autonomy level, coarse 30-day Patrol token buckets, and per-outcome investigation counts |
 | 16 | 2026-08-30 | Four content-free workload-history adoption counters, each counted at most once per browser session |

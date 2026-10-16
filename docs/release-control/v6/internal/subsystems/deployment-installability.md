@@ -15,6 +15,16 @@
 ```
 
 ## Purpose
+### Schema-v19 release disclosure follows receiver compatibility
+
+`docs/releases/TELEMETRY_SCHEMA_V19.md` carries the extended-history telemetry notice for
+inclusion in the first release containing schema v19. Source landing neither
+deploys the compatible license-server receiver nor releases upgraded clients.
+The reporter exposes missing receiver columns and pre-v19 clients as unknown
+coverage, never as evidence of zero use. Existing telemetry opt-out, ID rotation
+and retention are unchanged. Payload details belong to security-privacy.
+
+
 
 ### TrueNAS SCALE removal retires every owned middleware boot task before recovery erasure
 

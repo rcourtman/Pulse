@@ -67,3 +67,16 @@ func TestApplyLicensedFeatureConfigSnapshot_ToleratesNilInputs(t *testing.T) {
 	applyLicensedFeatureConfigSnapshot(&snap, nil, time.Now().UTC())
 	applyLicensedFeatureConfigSnapshot(nil, config.NewConfigPersistence(t.TempDir()), time.Now().UTC())
 }
+
+func TestApplyLicensedFeatureConfigSnapshotIncludesSuccessfulExtendedHistoryReads(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	now := time.Now().UTC()
+	if err := persistence.RecordSuccessfulExtendedHistoryRead(now); err != nil {
+		t.Fatal(err)
+	}
+	var snap telemetry.Snapshot
+	applyLicensedFeatureConfigSnapshot(&snap, persistence, now)
+	if snap.SuccessfulHistoryReadsOver7d30d != 1 {
+		t.Fatalf("extended history reads = %d, want 1", snap.SuccessfulHistoryReadsOver7d30d)
+	}
+}

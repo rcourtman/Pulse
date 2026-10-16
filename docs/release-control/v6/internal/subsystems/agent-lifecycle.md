@@ -9879,3 +9879,12 @@ controls establish no native guest restart, thaw or prior-workload restoration.
 existing update pipeline. They add no agent enrollment, command, install or
 reporting path, and agent continuity stays judged by the same update readiness
 verdict the apply route already computes for its target version.
+
+### Extended history observation preserves existing read authority
+
+The shared chart/history response writer now observes successful extended
+history delivery for the security-privacy schema-v19 aggregate. It adds no
+query, resource, tenant, credential or action authority. The observer receives
+only a successful-read marker after serialization/write, and existing API
+entitlement checks remain before that boundary. Read semantics remain owned
+by api-contracts and telemetry retention/disclosure by security-privacy.
