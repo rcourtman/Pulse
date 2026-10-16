@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "ffd768063d0351fdb3cdc0275b63abfdfe7fea36",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "b0eb8fc0e4757b06f5a7953054ca71bf84063ecc4d0710df0207c464efd7f9cf",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "5228f04b2ee4ef9cc5e896c50d3d361975ea27e3048f065fac2878697dab2756"
+  },
+  "routes": [
+    "/proxmox/backups/coverage through production HTTP inventory/posture readers, recovery model and the real Coverage table; synthetic loopback observations only"
+  ],
+  "states": [
+    "Equally recent OK/Failed and OK/Running outcomes remain Unknown, with a conflict-specific explanation, in either input order.",
+    "A strictly newer failure clears the conflict and becomes the displayed result; agreeing OK/completed aliases stay OK.",
+    "Undated jobs retain their distinct unavailable/future-time explanation; empty history does not retain a job or conflict.",
+    "Independent provider posture, verified restore evidence and full source location remain visible and unchanged."
+  ],
+  "interactions": [
+    "1440px Chromium keyboard and 320px touch WebKit expand the existing workload detail.",
+    "Six ordinary inventory refreshes per browser exercise reversed ties, strictly newer failure, agreeing aliases, running conflict, unavailable date and empty history. Each refresh retains the same row, open disclosure and refresh-control focus, and makes exactly three read-only API GETs.",
+    "Both browsers check actual warning glyph bounds and no horizontal page overflow. Four captures were opened with native view_image at worker-local paths."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "browsers": ["Chromium 141.0.7390.37 / Playwright 1.56.1", "WebKit 26.0 / Playwright 1.56.1"],
+  "verified_at": "2026-10-16T18:14:05Z",
+  "limits": [
+    "Synthetic read-only proof does not establish native backup completion, guest thaw, restores, installed recovery or protected delivery.",
+    "The containing production/embed/budget VM request returned client 2/proof-capacity-low without an execution receipt; fixture compilation is not that build."
+  ]
+}
