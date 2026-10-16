@@ -46,6 +46,10 @@ failures are not successful empty observations. Complete empty lists and an
 explicit empty GC configuration object remain valid; supported field aliases,
 additive metadata, bounded pagination and HTTP permission/404 handling remain.
 Malformed body contents do not enter errors or served partial-read evidence.
+Unobserved optional PBS job end/next-run timestamps are omitted on the wire,
+not serialized as year-0001 dates. The existing drawer can therefore show the
+actual observation time. Known timestamps, age/state and JSON round-trip meaning
+are pinned by `TestPBSJobHealthFreshnessJSONDoesNotInventRunTimes`.
 
 An unreadable enabled job family emits existing unknown/partial-error evidence,
 not an empty ledger or an invented permission denial. An unreadable live-writer
