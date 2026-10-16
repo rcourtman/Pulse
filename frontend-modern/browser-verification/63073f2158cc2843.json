@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "37cd794329dc613205a058aa57d91e92bd1017f3",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "86e5d6f1c874454eb848273afc3f36631d28f2af198b3ad6dc9c2739ede3df11",
+    "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts": "b1d225f47eb9dfa2746ca20c662652527fa7f110d443e1ab9da1b7e60feeaaae"
+  },
+  "routes": [
+    "/proxmox/backups/date with synthetic loopback workload/PVE/PBS/posture observations through production inventory readers, recovery mapper and real By date table"
+  ],
+  "states": [
+    "Repeated guest names and IDs retain visible workload connection/native-node facts at every layout. Hidden Target ID folds type/ID beneath the name, including the intermediate layout.",
+    "PBS repository connection/path remains separate from the matched workload connection. An unmatched PBS namespace does not become a workload node; missing workload connection stays Unknown.",
+    "Accepted workload/inventory refresh changes target 101 to 102 and native node in the mounted table without inventing new matching, protection or completion rules.",
+    "Per-key logical point and day geometry includes phone provenance rows. Both browsers reach all 200 mixed-height restore points in both actual viewport scroll directions within 140/36 mounted-item limits."
+  ],
+  "interactions": [
+    "Chromium 1440px plus 600/800/1000px responsive projections, dark touch WebKit 320px; real glyph bounds and horizontal-overflow checks pass.",
+    "Keyboard backup refresh retains focus and makes exactly three read-only API GETs per browser. Search for the refreshed 102 target yields one matching point, then clears back to all four points.",
+    "All four retained successful-source captures opened with native view_image. No page/console-error, off-origin or non-GET observations remain; both browser and server close."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 600,
+      "height": 1000
+    },
+    {
+      "width": 800,
+      "height": 1000
+    },
+    {
+      "width": 1000,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "browsers": [
+    "desktop 141.0.7390.37 / Playwright 1.56.1",
+    "phone 26.0 / Playwright 1.56.1"
+  ],
+  "verified_at": "2026-10-16T19:27:10Z",
+  "limits": [
+    "Synthetic source-bound browser proof is not native backup completion, guest thaw, restore, installed fleet recovery, protected landing or release availability.",
+    "The first protocol completed desktop but failed a phone-only summary/provenance assertion. Its raw partial result is retained; the corrected complete protocol passes without product-source changes.",
+    "Normal containing production/embed/unchanged-budget CI and independent review/protected landing remain with Delivery/coordinator/reviewer/publisher. No capacity retry or full-source-suite success is claimed."
+  ]
+}
