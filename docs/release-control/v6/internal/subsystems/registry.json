@@ -2041,6 +2041,7 @@
         "pkg/aicontracts/orchestrator_deps.go",
         "pkg/extensions/ai_autofix.go",
         "pkg/reporting/evidence.go",
+        "pulse-enterprise:internal/investigation/orchestrator.go",
         "scripts/generate-pulse-intelligence-docs.go"
       ],
       "verification": {
@@ -2049,6 +2050,19 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "investigation-followup-context",
+            "label": "Current-occurrence investigation continuity proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-enterprise:internal/investigation/orchestrator.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-enterprise:internal/investigation/orchestrator_test.go"
+            ]
+          },
           {
             "id": "legacy-incident-archive",
             "label": "Explicit read-only legacy recording archive proof",

@@ -20,8 +20,9 @@ import (
 const dockerLifecycleTestContainerID = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 type stubDockerLifecycleOperator struct {
-	snapshots []agentexec.DockerContainerLifecycleSnapshot
-	mutations []string
+	snapshots     []agentexec.DockerContainerLifecycleSnapshot
+	mutations     []string
+	mutationError error
 }
 
 func (s *stubDockerLifecycleOperator) InspectDockerContainerLifecycle(context.Context, string, string) (agentexec.DockerContainerLifecycleSnapshot, error) {
@@ -35,7 +36,62 @@ func (s *stubDockerLifecycleOperator) InspectDockerContainerLifecycle(context.Co
 
 func (s *stubDockerLifecycleOperator) MutateDockerContainerLifecycle(_ context.Context, _, operation, _ string) error {
 	s.mutations = append(s.mutations, operation)
-	return nil
+	return s.mutationError
+}
+
+func TestDockerLifecycleManagerReconcilesLostMutationAcknowledgement(t *testing.T) {
+	before := time.Now().UTC().Add(-time.Minute)
+	after := before.Add(time.Minute)
+	operator := &stubDockerLifecycleOperator{mutationError: context.DeadlineExceeded, snapshots: []agentexec.DockerContainerLifecycleSnapshot{
+		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthUnhealthy, StartedAt: before, ObservedAt: before},
+		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthStarting, StartedAt: after, ObservedAt: after},
+		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthHealthy, StartedAt: after, ObservedAt: after.Add(time.Millisecond)},
+	}}
+	manager := newLocalDockerLifecycleManager(operator)
+	manager.healthPollInterval = time.Millisecond
+	result := manager.Apply(context.Background(), dockerLifecycleTestRequest(t, before))
+	if !result.MutationStarted || result.MutationCompleted || !result.ReadbackRan || result.After.Health != agentexec.DockerContainerHealthHealthy {
+		t.Fatalf("lost acknowledgement was not reconciled without inventing completion: %#v", result)
+	}
+	if result.Error == "" || len(operator.mutations) != 1 {
+		t.Fatalf("uncertainty or exactly-once mutation lost: result=%#v writes=%v", result, operator.mutations)
+	}
+}
+
+func TestDockerLifecycleManagerDoesNotDetachCanceledReconciliation(t *testing.T) {
+	t.Setenv("DOCKER_CONTEXT", "")
+	before := time.Now().UTC().Add(-time.Minute)
+	ctx, cancel := context.WithCancel(context.Background())
+	manager := newLocalDockerLifecycleManager()
+	writes, reads := 0, 0
+	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if args[0] == "restart" {
+			writes++
+			cancel()
+			return nil, context.Canceled
+		}
+		reads++
+		if args[2] == "{{.RestartCount}}" {
+			return []byte("0"), nil
+		}
+		return []byte(fmt.Sprintf(`{"Status":"running","Running":true,"StartedAt":%q}`, before.Format(time.RFC3339Nano))), nil
+	}
+	result := manager.Apply(ctx, dockerLifecycleTestRequest(t, before))
+	if writes != 1 || reads != 2 || result.ReadbackRan || result.MutationCompleted {
+		t.Fatalf("canceled operation detached or retried: result=%#v reads=%d writes=%d", result, reads, writes)
+	}
+}
+
+func TestDockerLifecycleErrorReceiptRetainsOnlySafeCauses(t *testing.T) {
+	for _, cause := range []error{context.DeadlineExceeded, context.Canceled, fmt.Errorf("daemon at https://user:secret@example.invalid refused operation")} {
+		message := dockerLifecycleMutationError(cause)
+		if got := sanitizeDockerLifecycleError(message); got != message || strings.Contains(got, "secret") {
+			t.Fatalf("safe cause lost or leaked: %q", got)
+		}
+	}
+	if got := sanitizeDockerLifecycleError("daemon response: secret"); strings.Contains(got, "secret") {
+		t.Fatalf("raw daemon output leaked: %q", got)
+	}
 }
 
 func TestDockerLifecycleManagerUsesConnectedModuleWithoutExternalCLI(t *testing.T) {

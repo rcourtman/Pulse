@@ -1196,8 +1196,14 @@ func (c *CommandClient) replayDockerContainerLifecycle(conn *websocket.Conn, rec
 }
 
 func sanitizeDockerLifecycleError(value string) string {
-	if strings.TrimSpace(value) == "" {
+	switch strings.TrimSpace(value) {
+	case "":
 		return ""
+	case "container lifecycle mutation acknowledgement timed out",
+		"container lifecycle mutation acknowledgement canceled",
+		"container lifecycle mutation acknowledgement unavailable":
+		// Fixed messages retain the cause without daemon output or endpoints.
+		return strings.TrimSpace(value)
 	}
 	return "typed container lifecycle did not complete as requested"
 }
