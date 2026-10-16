@@ -15,7 +15,7 @@ required for these API-backed readings:
 - ✅ Deduplication factor and storage efficiency stats
 - ✅ PBS server health monitoring (CPU, memory, uptime)
 - ✅ Datastore usage and namespace hierarchy
-- ✅ Sync, verify, prune, and GC job status
+- ✅ [Sync, verify, prune, and GC job status](#a-pbs-job-looks-healthy-but-its-status-disagrees)
 - ✅ Backup owner information
 - ✅ Faster queries (no PVE proxy overhead)
 
@@ -270,6 +270,39 @@ retry the poll, restart, recreate the connection or change permissions,
 retention or backups as a test. Use PBS's existing records meanwhile; see
 [backup health](#backups-are-visible-but-coverage-says-unprotected) separately
 for a Coverage disagreement.
+
+### A PBS job looks Healthy but its status disagrees
+
+**An error, warning or running state must not be treated as a completed OK
+job just because Pulse shows a Healthy badge.** Job status text can contain
+`OK` or `success` inside a longer message; those words alone do not establish
+successful completion. Use the same task's existing PBS result when the badge
+and status disagree.
+
+In the PBS **Backup server** resource's details, look for **Job health
+evidence** when present. Compare its **State**, job family/ID, datastore,
+namespace and run time with the same job in PBS. Keep an unavailable identity
+or time unknown; a successful sibling job or earlier run cannot supply the
+missing outcome.
+
+| Observed result for the same task | What it establishes |
+| --- | --- |
+| Error or failed | Not successful completion, even if the message also contains `OK` or `success`. |
+| Warnings | A warning result, not a clean successful run. Read the existing PBS task summary for the affected work. |
+| Running | Work is in progress; neither completed success nor failure is established. |
+| No matching result, a partial read or a permission gap | The outcome is unknown. An empty list or a green connection does not supply it. |
+| Completed OK | That task reported success. It does not establish current inventory, verification of every snapshot, restore readiness or guest thaw. |
+
+Use PBS's existing task records while the readings disagree. Do not run a new
+job, backup, verification, restore or Diagnostics, restart Pulse, replace tokens
+or widen permissions to test the badge. When asking for help, retain the running
+Pulse/PBS versions, job family/ID, matching time and relevant redacted status;
+use consistent aliases for private names and keep full task logs and tokens
+private. No new capture or probe is needed just to fill a report.
+
+An unresponsive guest or uncertain freeze/thaw needs the separate
+[Backup safety](VM_DISK_MONITORING.md#backup-safety) procedure, not these display
+checks. A corrected badge alone is not monitoring or guest recovery.
 
 ### "Connection Failed" Error
 

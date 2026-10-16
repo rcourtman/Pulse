@@ -499,5 +499,60 @@ PY
             self.assertEqual(len(requests), 1)
 
 
+class PBSJobEvidenceHelpTest(unittest.TestCase):
+    """Static guidance checks only; no listener, TLS recipe or PBS request."""
+
+    heading = "### A PBS job looks Healthy but its status disagrees\n"
+    anchor = "#a-pbs-job-looks-healthy-but-its-status-disagrees"
+
+    def guidance(self):
+        text = DOC.read_text()
+        self.assertEqual(text.count(self.heading), 1)
+        return " ".join(text.split(self.heading, 1)[1].split("\n### ", 1)[0].split())
+
+    def test_shipped_guidance_has_a_reachable_entry_and_real_labels(self):
+        self.assertEqual(DOC.read_bytes(), (ROOT / "frontend-modern/public/docs/PBS.md").read_bytes())
+        self.assertIn(f"[Sync, verify, prune, and GC job status]({self.anchor})", DOC.read_text())
+        guidance = self.guidance()
+        drawer = " ".join((ROOT / "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx").read_text().split())
+        model = (ROOT / "frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts").read_text()
+        self.assertIn("Job health evidence", drawer)
+        self.assertIn("State:", drawer)
+        self.assertIn("label: 'Healthy'", model)
+        for label in ("Job health evidence", "State", "Healthy"):
+            self.assertIn(label, guidance)
+
+    def test_existing_results_do_not_inherit_success_from_a_badge_or_sibling(self):
+        guidance = self.guidance()
+        for distinction in (
+            "words alone do not establish successful completion",
+            "same task's existing PBS result", "job family/ID, datastore, namespace and run time",
+            "successful sibling job or earlier run cannot supply the missing outcome",
+            "Error or failed | Not successful completion",
+            "Warnings | A warning result, not a clean successful run",
+            "Running | Work is in progress; neither completed success nor failure",
+            "partial read or a permission gap | The outcome is unknown",
+            "Completed OK | That task reported success",
+            "does not establish current inventory, verification of every snapshot, restore readiness or guest thaw",
+        ):
+            with self.subTest(distinction=distinction):
+                self.assertIn(distinction, guidance)
+
+    def test_disagreement_uses_existing_evidence_without_new_workload_actions(self):
+        guidance = self.guidance()
+        self.assertNotIn("```", guidance, "No new live command is needed to compare existing job records")
+        for boundary in (
+            "Do not run a new job, backup, verification, restore or Diagnostics",
+            "restart Pulse, replace tokens or widen permissions to test the badge",
+            "relevant redacted status", "full task logs and tokens private",
+            "No new capture or probe is needed",
+            "A corrected badge alone is not monitoring or guest recovery",
+        ):
+            self.assertIn(boundary, guidance)
+        target = "VM_DISK_MONITORING.md#backup-safety"
+        self.assertIn(f"[Backup safety]({target})", guidance)
+        self.assertIn("## Backup safety\n", (ROOT / "docs/VM_DISK_MONITORING.md").read_text())
+
+
 if __name__ == "__main__":
     unittest.main()
