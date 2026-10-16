@@ -79,6 +79,58 @@ describe('FilterBar', () => {
     expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
   });
 
+  it('wraps wide inline groups without shrinking labels and preserves mobile scope controls', () => {
+    const [source, setSource] = createSignal('all');
+    const [node, setNode] = createSignal('pve1');
+    const sourceOptions = ['All', 'PBS', 'PVE files', 'Snapshots', 'Verified', 'Unverified'];
+    render(() => (
+      <FilterBar
+        search={search}
+        filters={[
+          {
+            id: 'source',
+            label: 'Source',
+            inline: true,
+            value: source,
+            setValue: setSource,
+            defaultValue: 'all',
+            options: () => sourceOptions.map((label) => ({ value: label.toLowerCase(), label })),
+          },
+          { ...menuNodeFilter(setNode), value: node },
+        ]}
+        isMobile={() => true}
+      />
+    ));
+
+    expect(screen.queryByRole('group', { name: 'Source' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    const group = screen.getByRole('group', { name: 'Source' });
+    expect(group).toHaveClass('max-w-full', 'flex-wrap', '[&>button]:shrink-0');
+    expect(group.parentElement).toHaveClass('min-w-0', 'max-w-full');
+
+    for (const label of sourceOptions) {
+      const button = within(group).getByRole('button', { name: label });
+      expect(button).toHaveClass('min-h-11', 'min-w-11');
+      fireEvent.click(button);
+      expect(source()).toBe(label.toLowerCase());
+      expect(button).toHaveAttribute('aria-pressed', 'true');
+      expect(node()).toBe('pve1');
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    expect(source()).toBe('unverified');
+    expect(node()).toBe('pve1');
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    expect(
+      within(screen.getByRole('group', { name: 'Source' })).getByRole('button', {
+        name: 'Unverified',
+      }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Node filter' }));
+    expect(node()).toBe('');
+    expect(source()).toBe('unverified');
+  });
+
   it('hides the add-filter trigger when every menu filter is already active', () => {
     render(() => (
       <FilterBar
