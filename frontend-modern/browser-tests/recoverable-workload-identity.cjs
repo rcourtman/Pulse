@@ -152,7 +152,12 @@ async function identity(page) {
   const rows = await page.locator('[data-proxmox-backup-row="recoverable"]').evaluateAll((nodes) =>
     nodes.map((row) => ({
       key: row.dataset.proxmoxBackupKey,
-      text: row.textContent,
+      // Phone provenance is a second DOM row in the same logical point.
+      text:
+        row.textContent +
+        (row.nextElementSibling?.getAttribute('data-proxmox-backup-row') === 'location'
+          ? row.nextElementSibling.textContent
+          : ''),
       target: row.querySelector('[data-backup-point-workload-target]')?.textContent.trim(),
       connection: row.querySelector('[data-backup-point-workload-connection]')?.textContent.trim(),
       node: row.querySelector('[data-backup-point-workload-node]')?.textContent.trim(),
