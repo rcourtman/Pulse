@@ -29,6 +29,9 @@ export function useAlertDeliveryPausedReason(): AlertDeliveryPausedState {
     if (!alertsActivation.detectionEnabled()) {
       return 'detection_off';
     }
+    // Pending covers a fresh install and someone switching delivery off; the
+    // config cannot tell which (an import can carry another install's
+    // activation time), so the banner only says delivery is off.
     return alertsActivation.activationState() === 'snoozed' ? 'snoozed' : 'not_activated';
   });
 

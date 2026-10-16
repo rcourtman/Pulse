@@ -130,8 +130,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.delivery.paused.reason.detectionOff':
     'Las alertas están desactivadas en la configuración de alertas.',
   'alerts.delivery.paused.reason.snoozed': 'El envío de notificaciones está pospuesto.',
-  'alerts.delivery.paused.reason.notActivated':
-    'El envío de notificaciones aún no se ha activado en esta instalación.',
+  'alerts.delivery.paused.reason.notActivated': 'El envío de notificaciones está desactivado.',
   'alerts.delivery.paused.consequence.destinations':
     'Pulse sigue detectando alertas, pero ninguna se enviará a los destinos de abajo. Los mensajes de prueba omiten la pausa, así que una prueba correcta no significa que las alertas reales lleguen.',
   'alerts.delivery.paused.consequence.destinationsDetectionOff':

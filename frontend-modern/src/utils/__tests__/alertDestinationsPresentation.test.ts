@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import {
   ALERT_DESTINATION_ALL_SEVERITIES_LABEL,
   ALERT_DESTINATION_CRITICAL_ONLY_LABEL,
@@ -332,12 +333,21 @@ describe('alert destinations delivery paused copy', () => {
     expect(getAlertDestinationsDeliveryPausedDescription('detection_off', 'overview')).toBe(
       'Alerts are switched off in the alert configuration. Pulse is not raising new alerts while they are switched off, so nobody is being notified.',
     );
+    // Pending delivery covers a fresh install and a deliberate switch-off, so
+    // the cause claims only that delivery is off, never that it was never on.
     expect(getAlertDestinationsDeliveryPausedDescription('not_activated', 'overview')).toBe(
-      'Notification delivery has not been turned on for this install yet. Pulse is still detecting the alerts below, but nobody is being notified about them.',
+      'Notification delivery is turned off. Pulse is still detecting the alerts below, but nobody is being notified about them.',
     );
     expect(getAlertDestinationsDeliveryPausedDescription('snoozed')).toContain('snoozed');
     expect(getAlertDestinationsDeliveryPausedDescription('not_activated')).toContain(
-      'has not been turned on for this install yet',
+      'Notification delivery is turned off.',
     );
+    for (const locale of ['de', 'es'] as const) {
+      setActiveLocale(locale);
+      expect(getAlertDestinationsDeliveryPausedDescription('not_activated')).not.toMatch(
+        /noch nicht|aún no/,
+      );
+    }
+    setActiveLocale(DEFAULT_LOCALE);
   });
 });

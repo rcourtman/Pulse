@@ -8877,6 +8877,13 @@ separate status copy such as a banner. The Alerts overview **Send
 notifications** switch follows this (`alerts.activation.switchLabel`), and
 `i18n.test.ts` rejects state words in that label in every locale.
 
+### Status copy claims only what the state proves
+
+When one stored state covers several histories, its copy states only what that
+state proves now. The alerts paused banner says notification delivery "is
+turned off", not that it "has not been turned on for this install yet",
+because the same pending state follows a deliberate switch-off.
+
 ### Alert overview rows place Investigate by the shared breakpoint
 
 `AlertOverviewAlertCard` reads the shared `useBreakpoint()` hook to decide
