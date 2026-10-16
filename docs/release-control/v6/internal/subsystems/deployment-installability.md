@@ -15,6 +15,29 @@
 ```
 
 ## Purpose
+### Automatic-update settings are privately and atomically published
+
+The Linux server installer's explicit `setup_auto_updates` opt-in must never
+copy saved settings through a predictable shared temporary path. It stages a
+mode-0600 file beside `system.json`, retains unrelated JSON values, assigns
+the Pulse service owner, and atomically replaces the destination before
+enabling or starting the timer. Existing settings require jq and exactly one
+complete JSON object; text substitution is not a parser fallback. A fresh
+configuration keeps the existing polling default and selected stable/RC
+channel without needing jq. Linked/nonregular destinations, failed staging,
+parsing, permissions, ownership or rename leave activation unchanged and
+report that settings setup did not complete. The scoped EXIT trap removes
+the owned stage, including on interruption; a raced destination directory
+must not receive the staged file as a child.
+
+`TestRootInstallAutoUpdateSettingsPublication` executes the production function
+against real private files, jq and rename, with only manager/ownership doubles.
+It checks preserved settings, private modes, refusal and cleanup, including
+conditional callers. This proves settings publication, not native timer
+activation, installed upgrade/recovery, or any release outcome. Successful
+settings retain the existing consumed values; no API or frontend rendering
+contract changes.
+
 ### Schema-v19 release disclosure follows receiver compatibility
 
 `docs/releases/TELEMETRY_SCHEMA_V19.md` carries the extended-history telemetry notice for

@@ -8,6 +8,19 @@ A gate is only `passed` when its automated proof still passes and the manual
 scenario has been exercised in a staging-like environment with the expected
 result.
 
+## Automatic-update settings publication
+
+Run `TestRootInstallAutoUpdateSettingsPublication` (production shell plus
+`scripts/installtests/auto_update_settings.py`). Existing settings must preserve
+unrelated values, remain private, and be completely replaced before timer
+activation. Invalid/multiple JSON, missing parser, linked/nonregular files,
+failed staging/mode/owner/rename and interruption retain the old settings and
+do not enable/start the timer; staged files are removed. A concurrent directory
+must not receive settings as a child. Fresh stable/RC defaults remain unchanged.
+The old shared temporary link is confined inside the parent-control fixture;
+it is not a real host-file attack. These source controls are not native timer
+or installed recovery acceptance; existing native installer CI remains needed.
+
 ## Backups local-calendar activity
 
 Run `proxmoxBackupActivityPresentation.calendar.test.ts` with timezone set
