@@ -10,6 +10,8 @@ const root = '/workspace';
 const compiled = path.join(root, 'tmp/backup-point-state/static');
 const output = path.join(root, 'tmp/backup-completion-totals/browser');
 const origin = 'http://127.0.0.1:5298';
+const phoneCompletion = process.argv.includes('--phone-completion-only');
+const phoneContinuation = phoneCompletion || process.argv.includes('--phone-coverage-only');
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const binding = JSON.parse(fs.readFileSync(path.join(compiled, 'binding.json')));
 const result = {
@@ -223,8 +225,8 @@ async function readable(page) {
   for (const spec of [
     { name: 'desktop', engine: chromium, width: 1440, touch: false, dark: false },
     { name: 'phone', engine: webkit, width: 320, touch: true, dark: true },
-  ]) {
-    revision = 0;
+  ].filter((spec) => !phoneContinuation || spec.name === 'phone')) {
+    revision = phoneContinuation ? 1 : 0;
     holdPBS = false;
     browser = await spec.engine.launch(
       spec.engine === chromium
@@ -253,64 +255,75 @@ async function readable(page) {
       name: spec.name,
       states: [],
     };
-    await page.goto(origin + '/proxmox/backups/date');
+    await page.goto(
+      origin + '/proxmox/backups/' + (phoneContinuation && !phoneCompletion ? 'coverage' : 'date'),
+    );
     const summary = page.getByText(/targets · .*restore points/);
     const refresh = page.getByRole('button', { name: 'Refresh backups', exact: true });
     await refresh.waitFor();
-    assert.match(await summary.innerText(), /0 restore points.*3 incomplete entries/);
-    assert.equal(await page.locator('[data-proxmox-backup-row="recoverable"]').count(), 3);
-    assert.deepEqual(
-      (await page.locator('[data-backup-artifact-state]').allTextContents()).sort(),
-      ['Failed', 'Running', 'Running'],
-    );
-    await page.getByText(/No completed restore-point activity/).waitFor();
-    assert.equal(
-      await page.getByRole('group', { name: 'Activity metric', exact: true }).count(),
-      0,
-    );
-    item.states.push({
-      phase: 'only-incomplete',
-      summary: await summary.innerText(),
-      geometry: await readable(page),
-    });
-    await capture(page, spec.name + '-incomplete');
+    if (!phoneContinuation) {
+      assert.match(await summary.innerText(), /0 restore points.*3 incomplete entries/);
+      assert.equal(await page.locator('[data-proxmox-backup-row="recoverable"]').count(), 3);
+      assert.deepEqual(
+        (await page.locator('[data-backup-artifact-state]').allTextContents()).sort(),
+        ['Failed', 'Running', 'Running'],
+      );
+      await page.getByText(/No completed restore-point activity/).waitFor();
+      assert.equal(
+        await page.getByRole('group', { name: 'Activity metric', exact: true }).count(),
+        0,
+      );
+      item.states.push({
+        phase: 'only-incomplete',
+        summary: await summary.innerText(),
+        geometry: await readable(page),
+      });
+      await capture(page, spec.name + '-incomplete');
 
-    revision = 1;
-    await activate(refresh, spec);
-    await page.getByRole('button', { name: /: 3 backups$/, exact: false }).waitFor();
-    assert.match(await summary.innerText(), /3 restore points.*3 incomplete entries.*1 with/);
-    assert.equal(await page.locator('[data-proxmox-backup-row="recoverable"]').count(), 6);
-    assert.match(await page.locator('[data-proxmox-backup-row="day"]').innerText(), /6 entries/);
-    await activate(page.getByRole('button', { name: /: 3 backups$/ }), spec);
-    assert.match(page.url(), /day=/);
-    assert.equal(await page.locator('[data-proxmox-backup-row="recoverable"]').count(), 6);
-    await activate(page.getByRole('button', { name: 'Clear date filter', exact: true }), spec);
-    await activate(page.getByRole('button', { name: 'Volume', exact: true }), spec);
-    await page.getByRole('button', { name: /: 3\.50 KB$/ }).waitFor();
-    await activate(page.getByRole('button', { name: 'Count', exact: true }), spec);
-    item.states.push({
-      phase: 'mixed',
-      summary: await summary.innerText(),
-      rows: 6,
-      chartPoints: 3,
-      chartBytes: 3584,
-      geometry: await readable(page),
-    });
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await capture(page, spec.name + '-mixed');
+      revision = 1;
+      await activate(refresh, spec);
+      await page.getByRole('button', { name: /: 3 backups$/, exact: false }).waitFor();
+      assert.match(await summary.innerText(), /3 restore points.*3 incomplete entries.*1 with/);
+      assert.equal(await page.locator('[data-proxmox-backup-row="recoverable"]').count(), 6);
+      assert.match(await page.locator('[data-proxmox-backup-row="day"]').innerText(), /6 entries/);
+      await activate(page.getByRole('button', { name: /: 3 backups$/ }), spec);
+      assert.match(page.url(), /day=/);
+      assert.equal(await page.locator('[data-proxmox-backup-row="recoverable"]').count(), 6);
+      await activate(page.getByRole('button', { name: 'Clear date filter', exact: true }), spec);
+      await activate(page.getByRole('button', { name: 'Volume', exact: true }), spec);
+      await page.getByRole('button', { name: /: 3\.50 KB$/ }).waitFor();
+      await activate(page.getByRole('button', { name: 'Count', exact: true }), spec);
+      item.states.push({
+        phase: 'mixed',
+        summary: await summary.innerText(),
+        rows: 6,
+        chartPoints: 3,
+        chartBytes: 3584,
+        geometry: await readable(page),
+      });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await capture(page, spec.name + '-mixed');
 
-    await activate(page.getByRole('link', { name: 'Coverage', exact: true }), spec);
-    assert.match(await summary.innerText(), /3 restore points.*3 incomplete entries/);
-    await page.getByText(/Incomplete backups remain listed/).waitFor();
-    const expansion = page.locator('[data-proxmox-backup-row="coverage"] button[aria-expanded]');
-    await activate(expansion, spec);
-    assert.equal(await expansion.getAttribute('aria-expanded'), 'true');
-    assert.equal(await page.locator('[data-backup-artifact-state]').count(), 6);
-    assert.match(await page.locator('[data-proxmox-backup-row="coverage"]').innerText(), /Unknown/);
-    // The actual workload row remains reachable without changing its provider posture.
-    await page.getByRole('link', { name: 'By date', exact: true }).waitFor();
-    await activate(page.getByRole('link', { name: 'By date', exact: true }), spec);
-    assert.equal(await expansion.count(), 0);
+      await activate(page.getByRole('link', { name: 'Coverage', exact: true }), spec);
+    }
+    if (!phoneCompletion) {
+      assert.match(await summary.innerText(), /3 restore points.*3 incomplete entries/);
+      await page.getByText(/Incomplete backups remain listed/).waitFor();
+      const expansion = page.locator('[data-proxmox-backup-row="coverage"] button[aria-expanded]');
+      // Mobile hides the keyboard toggle in favour of the tappable workload row.
+      if (spec.touch) await page.locator('[data-proxmox-backup-row="coverage"]').tap();
+      else await activate(expansion, spec);
+      assert.equal(await expansion.getAttribute('aria-expanded'), 'true');
+      assert.equal(await page.locator('[data-backup-artifact-state]').count(), 6);
+      assert.match(
+        await page.locator('[data-proxmox-backup-row="coverage"]').innerText(),
+        /Unknown/,
+      );
+      // The actual workload row remains reachable without changing its provider posture.
+      await page.getByRole('link', { name: 'By date', exact: true }).waitFor();
+      await activate(page.getByRole('link', { name: 'By date', exact: true }), spec);
+      assert.equal(await expansion.count(), 0);
+    }
 
     revision = 2;
     holdPBS = true;
@@ -320,7 +333,11 @@ async function readable(page) {
     );
     assert.match(await summary.innerText(), /3 restore points.*3 incomplete entries/);
     const before = result.requests.filter((request) => request.path === '/api/backups/pbs').length;
-    await activate(page.getByRole('button', { name: 'Reading backups…', exact: true }), spec);
+    const reading = page.getByRole('button', { name: 'Reading backups…', exact: true });
+    assert.equal(await reading.getAttribute('aria-disabled'), 'true');
+    // Playwright refuses a tap on an aria-disabled target. Do not force it;
+    // desktop keyboard exercises the handler's duplicate-read guard.
+    if (!spec.touch) await activate(reading, spec);
     assert.equal(
       result.requests.filter((request) => request.path === '/api/backups/pbs').length,
       before,
