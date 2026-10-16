@@ -294,6 +294,18 @@ alerts, which keeps the 2026-07-18 boundary between detection and delivery.
 rejects state words in the label in every locale, and spec 01 finds the switch
 by the new name.
 
+### The paused banner claims only that delivery is off
+
+Pending notification delivery (`pending_review`) covers both a fresh install
+and someone switching delivery off, because `deactivate` writes the same state.
+The config cannot tell them apart: `activationTime` can arrive in an imported
+config without local activation, and the activation API can enable delivery
+without recording one. So the paused banner's cause for pending delivery
+(`alerts.delivery.paused.reason.notActivated`) reads "Notification delivery is
+turned off." in every locale, instead of claiming it was never turned on.
+`OverviewTab.emptystate.test.tsx` renders both histories through the real
+activation store and hook.
+
 ### Retained guest observations are not alert evidence
 
 Guest memory marked `last-known`, `unavailable` or an unknown observation state

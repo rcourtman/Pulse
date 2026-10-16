@@ -231,8 +231,7 @@ export const EN_MESSAGES = {
   'alerts.delivery.paused.reason.detectionOff':
     'Alerts are switched off in the alert configuration.',
   'alerts.delivery.paused.reason.snoozed': 'Notification delivery is snoozed.',
-  'alerts.delivery.paused.reason.notActivated':
-    'Notification delivery has not been turned on for this install yet.',
+  'alerts.delivery.paused.reason.notActivated': 'Notification delivery is turned off.',
   'alerts.delivery.paused.consequence.destinations':
     'Pulse is still detecting alerts, but none of them will be sent to the destinations below. Test messages bypass the pause, so a successful test does not mean live alerts are getting through.',
   'alerts.delivery.paused.consequence.destinationsDetectionOff':

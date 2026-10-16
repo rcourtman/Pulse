@@ -627,6 +627,10 @@ delivery (email, webhooks, Apprise); detection and the in-product alert view
 continue, and the paused banner and toast say so. No payload, destination or
 delivery behaviour changes.
 
+The Alerts paused banner describes pending notification delivery as turned off
+rather than never turned on, since switching delivery off stores the same
+state. Delivery, payloads and destinations are unchanged.
+
 Docker and Podman container CPU normalization may expose numeric raw per-core
 CPU percent, normalized capacity percent, and reporting host CPU count in
 resource or alert metadata. Those fields are operational usage telemetry only;

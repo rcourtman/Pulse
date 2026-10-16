@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "3609f86ac5374d2b0fda7f51b7db5fd2d3b04dc4",
+  "verified_at": "2026-10-16T10:40:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/useAlertDeliveryPausedReason.ts",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/useAlertDeliveryPausedReason.ts": "47a647560dff001e69003b0356b728eaf06f14ecb9a04dc746b98669da30c50d",
+    "frontend-modern/src/i18n/messages.de.ts": "aeab016eda192d6c9d5d3f387a46357b0d3c7b04bf9b02875d4dd4dd24000b64",
+    "frontend-modern/src/i18n/messages.es.ts": "32a6a10f40f736b632269967a2fe53c77938e044e55b7f2e89d0e83e7f8da228",
+    "frontend-modern/src/i18n/messages.ts": "cc24dd61ef5a365ca9808adc76a0f20efc5a292c924869d6e7fa8f03474e7c7e"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): after delivery was turned on (activationTime 10:28) and switched off again, the paused banner said \"Notification delivery has not been turned on for this install yet\"",
+    "After, same stack and state (pending_review): the Alerts overview banner reads \"Notification delivery is turned off. Pulse is still detecting the alerts below, but nobody is being notified about them.\"",
+    "After: the Notifications tab banner reads \"Notification delivery is turned off.\" followed by the unchanged destinations and test-send caveat",
+    "At 375px the overview banner fits the page (card 341px wide, scrollWidth 375)"
+  ],
+  "interactions": [
+    "Signed in to a private mock stack whose delivery had been turned on and off; read the config activation state and both banners from the DOM",
+    "Resized to the mobile preset and measured the banner and page width"
+  ]
+}
