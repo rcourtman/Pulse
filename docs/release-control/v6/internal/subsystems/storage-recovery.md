@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### Disabled PVE backup stores retain known evidence
+
+A listed backup-capable store which is disabled (or not confirmed enabled)
+is not queried and cannot clear its known archives or PBS attribution. The
+same local/shared preservation scopes apply as for a failed content read;
+a complete readable shared view remains authoritative regardless of node
+order. Held rows keep their original archive identity, timestamps and size.
+Skipped content makes provider history partial/unavailable, not complete
+empty history and not a permission refusal. Ordinary re-enable refreshes the
+known copy; successful empty content or removal from a complete storage
+configuration can still withdraw it. No disabled store is probed.
+
+`TestPVEDisabledBackupStorageRetainsKnownEvidence` joins real synthetic HTTP,
+raw state, persisted recovery points and provider protection projection for
+local/shared/sole stores, both enable-field forms and node orders. Consuming
+proof uses these actual observations in the existing date/Coverage views.
+`TestPVEDisabledPBSStorageRetainsAttribution` protects saved PBS associations.
+This does not establish archive availability, backup/restore execution or
+native guest thaw, filesystem liveness or installed recovery.
+
 ### PVE archive removal requires complete storage inventories
 
 Node/all-storage lists and storage-content lists become authoritative only
