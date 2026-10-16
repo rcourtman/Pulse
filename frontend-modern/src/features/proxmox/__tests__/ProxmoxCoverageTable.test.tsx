@@ -157,6 +157,10 @@ describe('ProxmoxCoverageTable column visibility', () => {
 
     expect(document.body.textContent).toContain('Provider evidence');
     expect(document.body.textContent).toContain('Proxmox Backup Server');
+    expect(document.body.textContent).toContain('pbs-main');
+    expect(document.body.textContent).toContain('Result Success');
+    expect(document.body.textContent).not.toContain('Job Success');
+    expect(document.body.textContent).toContain('pbs-backup-enumeration');
     expect(document.body.textContent).toContain('History Complete');
     expect(document.body.textContent).toContain('Access Sufficient');
   });

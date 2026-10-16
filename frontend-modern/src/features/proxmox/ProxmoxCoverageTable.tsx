@@ -497,19 +497,41 @@ export function ProxmoxCoverageTable(props: {
                               <div class="divide-y divide-border-subtle">
                                 <For each={row.protectionPosture?.providerStates ?? []}>
                                   {(provider) => (
-                                    <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 px-2 py-1.5 text-[11px] sm:grid-cols-4">
-                                      <span class="font-medium text-base-content">
+                                    <div
+                                      class="min-w-0 space-y-1 px-2 py-1.5 text-[11px]"
+                                      data-backup-provider-evidence
+                                    >
+                                      <div class="font-medium text-base-content">
                                         {providerLabel(provider.provider)}
-                                      </span>
-                                      <span class="text-muted">
-                                        Job {evidenceQualityLabel(provider.jobState)}
-                                      </span>
-                                      <span class="text-muted">
-                                        History {evidenceQualityLabel(provider.historyCompleteness)}
-                                      </span>
-                                      <span class="text-muted">
-                                        Access {evidenceQualityLabel(provider.permissions)}
-                                      </span>
+                                      </div>
+                                      <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5">
+                                        <dt class="text-muted">Scope</dt>
+                                        <dd
+                                          class="min-w-0 whitespace-normal wrap-anywhere text-base-content"
+                                          data-backup-provider-scope
+                                        >
+                                          {provider.scope?.trim() || 'Unknown'}
+                                        </dd>
+                                        <dt class="text-muted">Source</dt>
+                                        <dd
+                                          class="min-w-0 whitespace-normal wrap-anywhere text-base-content"
+                                          data-backup-provider-source
+                                        >
+                                          {provider.source?.trim() || 'Unknown'}
+                                        </dd>
+                                      </dl>
+                                      <div class="flex flex-wrap gap-x-3 gap-y-0.5 text-muted">
+                                        <span>
+                                          Result {evidenceQualityLabel(provider.jobState)}
+                                        </span>
+                                        <span>
+                                          History{' '}
+                                          {evidenceQualityLabel(provider.historyCompleteness)}
+                                        </span>
+                                        <span>
+                                          Access {evidenceQualityLabel(provider.permissions)}
+                                        </span>
+                                      </div>
                                     </div>
                                   )}
                                 </For>

@@ -60,6 +60,7 @@ try {
     'package-lock.json',
     'browser-tests/backup-point-state.cjs',
     'browser-tests/backup-location-access.cjs',
+    'browser-tests/backup-provider-evidence.cjs',
     'browser-tests/build-backup-point-state.mjs',
   ])
     sources[file] = hash(fs.readFileSync(path.join(root, file)));

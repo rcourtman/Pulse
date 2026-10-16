@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Backup provider evidence remains readable and attributable
+
+Expanded Coverage renders observation scope/source as labelled text that wraps
+inside the existing detail panel, not hover-only or clipped identifiers. Each
+observation retains its own result/history/access facts on desktop and narrow
+screens; missing identifiers stay Unknown. Existing text search can find these
+observations even without current artifacts. `coverageProviderEvidence.test.tsx`
+and `ProxmoxCoverageTable.test.tsx` check the consuming markup and refresh;
+`backup-provider-evidence.cjs` requires desktop/320px interactions and pixel
+review. No new route, navigation item or provider action is introduced.
+
 ### Windowed backup provenance measures logical blocks
 
 The existing platform window controller permits a consumer-supplied item-height

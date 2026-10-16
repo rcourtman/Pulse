@@ -41,6 +41,26 @@ orders with an independent-connection control. Consuming proof uses those
 emitted observations in the existing By date and Coverage tables. No backup,
 guest probe, thaw, restore or installed recovery is established by this proof.
 
+### Protection evidence names its observed scope and source
+
+Expanded Coverage keeps each provider's exact scope and observation source
+beside that provider's result, history and access facts, including when no current
+artifact is available. The generic Result label does not mistake a successful
+inventory read for a successful backup job. Equal provider kinds or scopes do not collapse distinct
+observations. Identifiers wrap without hover on phones; missing identity stays
+Unknown and is not inferred from guest placement. Existing Coverage search
+includes these displayed identities and facts without changing backup-location
+facets, resource matching, collection or the server-owned protection verdict.
+
+`coverageProviderEvidence.test.tsx` and `ProxmoxCoverageTable.test.tsx` cover
+mixed provider access, missing identity, text-only rendering and same-open
+refresh. `backup-provider-evidence.cjs` consumes synthetic HTTP responses through
+the production posture reader, model, search and expanded table on desktop and
+narrow screens. Shipped PBS help uses the same labels, distinguishes inventory
+results from backup jobs and keeps older missing identities unknown. The
+`pbsProtectionHelp.test.ts` contract checks that guidance without binding it to
+JSX whitespace. This improves attribution, not native restore or guest recovery.
+
 ### PBS group cache follows the actual latest snapshot
 
 A successful group listing may move `last-backup` backwards as well as forwards
