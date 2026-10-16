@@ -998,8 +998,9 @@ verification without changing an uncertain mutation acknowledgement into
 successful execution. The action summary retains the agent's sanitized error.
 Neither readback nor a container restart establishes filesystem writes, backup
 completion, guest thaw or storage recovery. The existing
-`TestDockerContainerExecutionResultStartingHealthRemainsInconclusive` covers
-both observers; `TestDockerContainerExecutionResultDerivesTruthOnlyFromFacts`
+`TestDockerContainerExecutionResultStartingHealthRemainsInconclusive` checks
+the independent observer through that shared classifier;
+`TestDockerContainerExecutionResultDerivesTruthOnlyFromFacts`
 preserves the distinct execution, verification and unavailable-compensation axes.
 
 
