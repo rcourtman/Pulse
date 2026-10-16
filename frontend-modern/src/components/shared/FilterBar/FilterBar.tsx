@@ -38,10 +38,11 @@ const FilterBarClearAllButton: Component<{ onClick: () => void }> = (props) => (
 );
 
 const InlineFilterControl: Component<{ filter: FilterDef }> = (props) => (
-  <div class="inline-flex min-w-0 items-center">
+  <div class="inline-flex min-w-0 max-w-full items-center">
     <FilterButtonGroup
       ariaLabel={props.filter.label}
       variant="compact"
+      class="max-w-full flex-wrap [&>button]:shrink-0"
       options={props.filter.options().map((option) => ({
         value: option.value,
         label: option.label,

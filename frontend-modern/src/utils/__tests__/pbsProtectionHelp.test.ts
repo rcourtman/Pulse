@@ -79,7 +79,7 @@ describe('PBS protection disagreement help', () => {
     expect(text()).toContain('without running Diagnostics or another verification');
   });
 
-  it('keeps the Protected caution truthful for every hidden verification value', () => {
+  it('keeps pruning separate from every reported or absent verification value', () => {
     const point: RecoverableArtifact = {
       id: 'fixture-point',
       nativeId: 'fixture-point',
@@ -97,15 +97,23 @@ describe('PBS protection disagreement help', () => {
       detail: '',
       protected: true,
     };
-    for (const verified of [true, false, undefined]) {
-      expect(artifactStateLabel({ ...point, verified })).toBe('Protected');
+    for (const [verified, label] of [
+      [true, 'Verified'],
+      [false, 'Unverified'],
+      [undefined, 'Unknown'],
+    ] as const) {
+      expect(artifactStateLabel({ ...point, verified })).toBe(label);
+      expect(artifactStateLabel({ ...point, protected: false, verified })).toBe(label);
     }
     expect(artifactStateLabel({ ...point, protected: false, verified: true })).toBe('Verified');
     expect(artifactStateLabel({ ...point, protected: false, verified: false })).toBe('Unverified');
     expect(text()).toContain(
-      'Protected point leaves its verification state unknown from that label alone',
+      'Prune protected does not change the verification result alongside it',
     );
-    expect(text()).toContain("displays the backup's protected flag before its verification state");
+    expect(text()).toContain(
+      "provider's protection-from-pruning flag, shown separately from verification",
+    );
+    expect(text()).toContain('Unknown on a PBS point means no verification result was reported');
   });
 
   it('prevents destructive diagnostics and an assumed freshness-policy cause', () => {

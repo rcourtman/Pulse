@@ -24,7 +24,6 @@ import {
   ProxmoxBackupWorkloadTypeBadge,
   RowMetricBar,
   SortableHead,
-  artifactStateLabel,
 } from './proxmoxBackupsTableShared';
 import {
   getRecoverableColumns,
@@ -188,7 +187,7 @@ export function ProxmoxRecoverableTable(props: {
         </TableCell>
       </Show>
       <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-        <ArtifactStateBadge artifact={artifact} label={artifactStateLabel(artifact)} />
+        <ArtifactStateBadge artifact={artifact} />
       </TableCell>
       <Show when={columnVisible('details')}>
         <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>

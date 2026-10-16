@@ -261,8 +261,8 @@ export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact; com
   );
 }
 
-// Short state label for a recoverable artifact, paired with ArtifactStateBadge
-// for colour. Snapshot and protected take precedence over verification state.
+// Completion and verification are independent of the provider's prune-protected
+// flag. Never let retention protection hide an unverified or unknown point.
 export function artifactStateLabel(artifact: RecoverableArtifact): string {
   if (artifact.sourceKind === 'snapshot') {
     return getProxmoxBackupSourcePresentation('snapshot').stateFallbackLabel;
@@ -270,59 +270,76 @@ export function artifactStateLabel(artifact: RecoverableArtifact): string {
   // Runtime/terminal incompleteness outranks every completed-artifact state.
   if (artifact.running) return 'Running';
   if (artifact.failed) return 'Failed';
-  if (artifact.protected) return 'Protected';
   if (artifact.verified === true) return 'Verified';
   if (artifact.verified === false) return 'Unverified';
+  if (artifact.sourceKind === 'pbs') return 'Unknown';
   return getProxmoxBackupSourcePresentation(artifact.sourceKind).stateFallbackLabel;
 }
 
-export function ArtifactStateBadge(props: { artifact: RecoverableArtifact; label: string }) {
-  if (props.artifact.running) {
-    return (
-      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="info">
-        {props.label}
-      </MetadataBadge>
-    );
-  }
-  if (props.artifact.failed) {
-    return (
-      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="danger">
-        {props.label}
-      </MetadataBadge>
-    );
-  }
-  if (props.artifact.sourceKind === 'snapshot') {
-    return (
-      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="indigo">
-        {props.label}
-      </MetadataBadge>
-    );
-  }
-  if (props.artifact.protected) {
-    return (
-      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="warning">
-        {props.label}
-      </MetadataBadge>
-    );
-  }
-  if (props.artifact.verified === true) {
-    return (
-      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="success">
-        {props.label}
-      </MetadataBadge>
-    );
-  }
-  if (props.artifact.verified === false) {
-    return (
-      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="warning">
-        {props.label}
-      </MetadataBadge>
-    );
-  }
+export function ArtifactStateBadge(props: { artifact: RecoverableArtifact }) {
+  const state = () => {
+    const artifact = props.artifact;
+    if (artifact.sourceKind === 'snapshot') {
+      return { tone: 'indigo' as const, title: 'Guest snapshot, not a separate backup.' };
+    }
+    if (artifact.running) {
+      return { tone: 'info' as const, title: 'Backup running, not a completed recovery point.' };
+    }
+    if (artifact.failed) {
+      return {
+        tone: 'danger' as const,
+        title: 'Incomplete backup, not a completed recovery point.',
+      };
+    }
+    if (artifact.verified === true) {
+      return {
+        tone: 'success' as const,
+        title:
+          'Successful verification reported for this point. This does not prove a restore or guest thaw.',
+      };
+    }
+    if (artifact.verified === false) {
+      return {
+        tone: 'warning' as const,
+        title:
+          'No successful verification evidence for this point. This does not prove that the verification job failed.',
+      };
+    }
+    return {
+      tone: 'muted' as const,
+      title: 'Verification unknown: no verification result reported for this point.',
+    };
+  };
   return (
-    <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="muted">
-      {props.label}
-    </MetadataBadge>
+    <span class="inline-flex max-w-full flex-col items-start gap-1">
+      <MetadataBadge
+        {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
+        tone={state().tone}
+        title={state().title}
+        wrap
+        data-backup-artifact-state
+      >
+        {artifactStateLabel(props.artifact)}
+        <Show
+          when={
+            props.artifact.sourceKind === 'pbs' && artifactStateLabel(props.artifact) === 'Unknown'
+          }
+        >
+          <span class="sr-only"> verification</span>
+        </Show>
+      </MetadataBadge>
+      <Show when={props.artifact.sourceKind !== 'snapshot' && props.artifact.protected}>
+        <MetadataBadge
+          {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
+          tone="info"
+          title="The provider marks this backup protected from pruning. This is not verification or the workload's protection assessment."
+          wrap
+          data-backup-prune-protected
+        >
+          Prune protected
+        </MetadataBadge>
+      </Show>
+    </span>
   );
 }
 

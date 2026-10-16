@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "base_sha": "0107ff8998c55b0c5820f9093ae80c427245e0af",
+  "verified_at": "2026-10-16T03:28:44.239471+00:00",
+  "result": "passed",
+  "changed_paths": [
+    "docs/PBS.md",
+    "frontend-modern/public/docs/PBS.md"
+  ],
+  "content_sha256": {
+    "docs/PBS.md": "7cb111e59960ed96a49d18e15c9e0dbcca1c891e592d56a13bd09d9d76bc83fc",
+    "frontend-modern/public/docs/PBS.md": "7cb111e59960ed96a49d18e15c9e0dbcca1c891e592d56a13bd09d9d76bc83fc"
+  },
+  "routes": [
+    "/docs/PBS#backups-are-visible-but-coverage-says-unprotected",
+    "/docs/PBS#prune-protection-is-not-verification"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Fresh supplement for the PBS help merge resolution; the original verification candidate and current namespace/prune-safety help are composed, not replaced.",
+    "Prune protected remains separate from verification and workload assessment; Unknown is not failure. The inherited same-snapshot pruning guidance and independent-thaw boundary remain intact.",
+    "The resolved comparison table and verification paragraph are readable at desktop light and 320px dark with no horizontal page overflow."
+  ],
+  "interactions": [
+    "Chromium keyboard Enter / WebKit touch tap on the comparison table prune-protection link focus the existing prune heading. Browser Back restores the original Coverage heading.",
+    "Fetched Markdown matches the committed containing-source guide. Only synthetic local GETs; no provider/API request, mutation, page error or off-origin request. Browser and server close."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "preview": "Explicit reuse of the original compiled production consumer. All 301 unchanged source inputs and compiled assets match the original binding; only the runtime-fetched PBS Markdown is replaced. This is not a new build, replay of the old table proof or rebinding of an old receipt."
+  },
+  "source_binding_sha256": "96e31a996ceeb2e608c449c75eea8a93bf5ca0d9e0ca4fc85f0b61fb3c4450e1",
+  "preview_reuse": {
+    "original_source_sha": "2845092a02d78453ee2a5a79c2795263f58b448d",
+    "original_binding_sha256": "9ef53ec99de114b553c9a214bd63afaa26646a09cf78da162cd5c739a46ab568",
+    "original_archive_sha256": "df73664ff8e9e62e031b5e678118c9de37b89b222d8c08ba49f4defb33cacadd",
+    "original_archive_projection": "/var/lib/pulse-maintainer/queue/staging/20261016T031948Z-web-product/lane-evidence-00c9gk18/20261016T020018Z-web-product/OUTCOME.md.evidence-_wy38ulc/BROWSER-RAW.tar.xz",
+    "unchanged_source_count": 301,
+    "changed_runtime_fetched_inputs": [
+      "public/docs/PBS.md"
+    ],
+    "new_build_claimed": false
+  },
+  "pixel_review": {
+    "source_sha": "0107ff8998c55b0c5820f9093ae80c427245e0af",
+    "reviewed_at": "2026-10-16T03:28:44.239471+00:00",
+    "tool": "native view_image; actual image content presented to the model for all six files",
+    "captures": [
+      {
+        "file": "docs-pixels/desktop-light-combined-table.png",
+        "sha256": "b43d747d916be6d320acf6780527e62b432dc47d47824089530e9c889491582b",
+        "bytes": 257503,
+        "width": 1365,
+        "height": 1000,
+        "observation": "The composed comparison table distinguishes Prune protected from verification and workload assessment; the inherited prune-safety link is visible and legible."
+      },
+      {
+        "file": "docs-pixels/phone-dark-combined-table.png",
+        "sha256": "76d9fac2e32b121bb836e17740ec0eca691286fb65d2346675c62ec13b53838f",
+        "bytes": 115054,
+        "width": 320,
+        "height": 1000,
+        "observation": "At 320px the two-column table and prune-safety link remain readable without overlapping labels or horizontal page overflow."
+      },
+      {
+        "file": "docs-pixels/desktop-light-prune-link.png",
+        "sha256": "20041c36e6516d99abf7d2b15fa6f8fcdfdb7c708da6cd583025accb5cc0bef5",
+        "bytes": 259947,
+        "width": 1365,
+        "height": 1000,
+        "observation": "Keyboard activation focuses the prune heading. Successful, failed and absent verification remain separate; the non-destructive and independent-thaw warnings remain visible below."
+      },
+      {
+        "file": "docs-pixels/phone-dark-prune-link.png",
+        "sha256": "e9f6cc26db4c5b8fabfe05b21f87e52b90db03457332817af0e0b80110d16534",
+        "bytes": 117979,
+        "width": 320,
+        "height": 1000,
+        "observation": "At 320px the prune heading and all three independent verification cases wrap legibly; the no-flag-change warning is readable."
+      },
+      {
+        "file": "docs-pixels/desktop-light-verification.png",
+        "sha256": "3e5c1fca541ddc23bba63a15d29b37938745efeba22a6d8c965ae7e2b3793d09",
+        "bytes": 266029,
+        "width": 1365,
+        "height": 1000,
+        "observation": "The resolved verification paragraph explicitly keeps Prune protected separate and Unknown distinct from failure; the inherited prune guidance and recovery boundary remain coherent."
+      },
+      {
+        "file": "docs-pixels/phone-dark-verification.png",
+        "sha256": "2425499f52db01bc41a2848067fc58306256cc599ac16fd76bb2f4996c6a9447",
+        "bytes": 128239,
+        "width": 320,
+        "height": 1000,
+        "observation": "At 320px the composed verification paragraph is fully readable with no horizontal clipping; the prune-safety section follows separately."
+      }
+    ],
+    "limit": "Fresh supplement for the resolved PBS help only. Previous table/filter interactions and their native pixel observations are retained, not replayed."
+  },
+  "evidence": {
+    "command": "pulse-worker-browser tmp/backup-docs-composition.cjs",
+    "result": "DOCS-BROWSER-RESULT.json",
+    "raw": "DOCS-BROWSER-RAW.tar.xz",
+    "pixels": "DOCS-PIXEL-REVIEW.json"
+  },
+  "limits": "Consuming help proof, not native guest/backup recovery, installed full-app use, protected landing, publication or release acceptance. Existing own-parent receipts for the five unchanged runtime files are preserved."
+}

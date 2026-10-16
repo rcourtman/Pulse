@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
 import proxmoxCoverageTableSource from '../ProxmoxCoverageTable.tsx?raw';
@@ -8,6 +9,7 @@ import proxmoxBackupsTableSharedSource from '../proxmoxBackupsTableShared.tsx?ra
 import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
+  artifactStateLabel,
   ProxmoxBackupAgeText,
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
@@ -55,15 +57,96 @@ describe('proxmoxBackupsTableShared', () => {
     render(() => (
       <>
         <ArtifactSourceBadge artifact={artifact({ sourceKind: 'pbs', sourceLabel: 'PBS' })} />
-        <ArtifactStateBadge artifact={artifact({ protected: true })} label="Protected" />
-        <ArtifactStateBadge artifact={artifact({ verified: true })} label="Verified" />
+        <ArtifactStateBadge artifact={artifact({ protected: true })} />
+        <ArtifactStateBadge artifact={artifact({ verified: true })} />
       </>
     ));
 
     expect(screen.getByText('PBS').className).toContain('whitespace-nowrap');
     expect(screen.getByText('PBS').className).toContain('bg-sky-100');
-    expect(screen.getByText('Protected').className).toContain('bg-amber-100');
+    expect(screen.getByText('Prune protected').className).toContain('bg-blue-100');
     expect(screen.getByText('Verified').className).toContain('bg-emerald-100');
+  });
+
+  it.each([
+    [true, 'Verified'],
+    [false, 'Unverified'],
+    [undefined, 'Unknown'],
+  ] as const)(
+    'keeps PBS verification %s visible independently of prune protection',
+    (verified, label) => {
+      const point = artifact({ sourceKind: 'pbs', protected: true, verified });
+      render(() => <ArtifactStateBadge artifact={point} />);
+      const primary = screen.getByText(label, { exact: false });
+      expect(primary).toHaveAttribute('data-backup-artifact-state');
+      expect(primary).toHaveClass('whitespace-normal', 'max-w-full');
+      expect(screen.getByText('Prune protected')).toHaveAttribute(
+        'title',
+        expect.stringContaining('not verification'),
+      );
+      expect(screen.queryByText('Protected', { exact: true })).toBeNull();
+      expect(artifactStateLabel(point)).toBe(label);
+      expect(artifactStateLabel({ ...point, protected: false })).toBe(label);
+      if (verified === undefined) expect(primary).toHaveTextContent('Unknown verification');
+    },
+  );
+
+  it.each([
+    [{ running: true, failed: true }, 'Running', 'bg-blue-100'],
+    [{ failed: true }, 'Failed', 'bg-red-100'],
+  ] as const)(
+    'keeps incomplete backup state above contradictory verification %s',
+    (flags, label, tone) => {
+      render(() => (
+        <ArtifactStateBadge
+          artifact={artifact({ sourceKind: 'pbs', protected: true, verified: true, ...flags })}
+        />
+      ));
+      expect(screen.getByText(label)).toHaveClass(tone);
+      expect(screen.getByText(label)).toHaveAttribute(
+        'title',
+        expect.stringContaining('not a completed recovery point'),
+      );
+      expect(screen.queryByText('Verified')).toBeNull();
+      expect(screen.getByText('Prune protected')).toBeInTheDocument();
+    },
+  );
+
+  it('keeps PVE files and guest snapshots distinct from PBS verification', () => {
+    render(() => (
+      <>
+        <ArtifactStateBadge artifact={artifact({ protected: true })} />
+        <ArtifactStateBadge
+          artifact={artifact({ sourceKind: 'snapshot', verified: true, protected: true })}
+        />
+      </>
+    ));
+    expect(screen.getByText('Backup file')).toHaveAttribute(
+      'title',
+      expect.stringContaining('Verification unknown'),
+    );
+    expect(screen.getByText('Snapshot')).toHaveAttribute(
+      'title',
+      'Guest snapshot, not a separate backup.',
+    );
+    expect(screen.queryByText('Verified')).toBeNull();
+    expect(screen.getAllByText('Prune protected')).toHaveLength(1);
+  });
+
+  it('updates verification and prune protection in the same mounted State cell', () => {
+    const [point, setPoint] = createSignal(
+      artifact({ sourceKind: 'pbs', protected: true, verified: false }),
+    );
+    render(() => <ArtifactStateBadge artifact={point()} />);
+    expect(screen.getByText('Unverified')).toBeInTheDocument();
+    setPoint({ ...point(), verified: true });
+    expect(screen.getByText('Verified')).toHaveClass('bg-emerald-100');
+    expect(screen.queryByText('Unverified')).toBeNull();
+    expect(screen.getByText('Prune protected')).toBeInTheDocument();
+    setPoint({ ...point(), verified: undefined, protected: false });
+    expect(screen.getByText('Unknown', { exact: false })).toHaveTextContent('verification');
+    expect(screen.queryByText('Prune protected')).toBeNull();
+    expect(screen.queryByText('Verified')).toBeNull();
   });
 
   it('keeps backup source and state chips on the shared MetadataBadge primitive', () => {

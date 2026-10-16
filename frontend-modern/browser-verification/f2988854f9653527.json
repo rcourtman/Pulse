@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "base_sha": "4f225186fea11e3fc991d1b19f4016fe6472b022",
+  "verified_at": "2026-10-15T22:55:32Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "cfddd112606eff6203721202b2b221fc6f279fad1d9f87c63d23d31217ea3212",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "634231e848256287f793dbf0753466d904981a91a0b5e80850652810aac2865e",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "4da4f3e3aa1d29f58a70b1105f42936b7936b816a0ef4b6bf4159cd94d20d621",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "a7047148af6faa1dffc72abfa3a26518ebae38e079fb1287285ec6d2fd6fcbec"
+  },
+  "routes": [
+    "/proxmox/backups/date: real backup HTTP readers, recovery mapper and By date table",
+    "/proxmox/backups/coverage: real reader/model and expanded Coverage restore evidence",
+    "/docs/PBS#backups-are-visible-but-coverage-says-unprotected: shipped Docs viewer"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "PBS verified/unverified/absent verification with prune protection displayed independently; unprotected verified control.",
+    "Running/incomplete points do not inherit a Verified label even with contradictory raw fixture flags.",
+    "PVE file and guest snapshot retain distinct states. Server-owned workload Attention is unchanged by point verification.",
+    "Same-open refresh changes one point unverified to verified, then unknown with prune protection removed."
+  ],
+  "interactions": [
+    "Sort By date by completion/verification State. Keyboard-open desktop Coverage and touch-open narrow Coverage.",
+    "Hold the synthetic PBS response during each of six refreshes; pending aria-disabled and final focus stay on Refresh. A repeated Enter queues no extra read.",
+    "Expanded evidence, route and workload posture survive both refreshed replacements at all three viewports.",
+    "Open shipped PBS guidance; inspect twelve source-bound captures using native view_image."
+  ],
+  "proof_source_sha": "4f225186fea11e3fc991d1b19f4016fe6472b022",
+  "playwright": "1.56.1",
+  "browsers": [
+    "desktop 141.0.7390.37",
+    "phone 26.0",
+    "narrow 26.0"
+  ],
+  "notes": [
+    "All changed runtime State cells fit their columns at desktop, 390px and 320px; prune protection wraps without hiding verification.",
+    "Main proof: no page/console errors, unexpected requests, off-origin traffic or writes; browser and server closed.",
+    "Additional narrow captures of the lower help paragraph were not executed: browser capacity busy before execution instructed ending the turn. The visible help table and desktop lower paragraph were inspected; no unsupported supplemental pixel claim.",
+    "A pre-existing 320px By date Via/Snapshot label clips in its unchanged source column; this receipt does not claim to repair that separate projection.",
+    "Synthetic consuming proof is not native backup verification, restore, guest thaw, every-filesystem writes, installed recovery or release evidence."
+  ]
+}
