@@ -384,7 +384,7 @@ backup or working protection from the strip alone.
 | --- | --- |
 | **With PBS snapshots** or a matching backup row | That Pulse's protection assessment received the same subject-linked backup evidence. A similar name or guest ID alone is not identity proof. |
 | **Verified** on a PBS backup | That every backup is current, every covered disk is included, or the guest recovered after the backup. Verification is evidence about that backup, not a successful restore. |
-| **Protected** in a restore point's **State** | That this point is verified. This displays the backup's protected flag before its verification state; it is not the workload's protection assessment. |
+| **Protected** in a restore point's **State** | That this point is verified. This displays the backup's protected flag before its verification state; it is not the workload's protection assessment. See [prune protection](#prune-protection-is-not-verification) before changing that flag. |
 | **Protected**, **Attention**, **Unprotected** or **Unknown** on the workload | An independent check that backups are restorable. These are Pulse's assessment from the backup evidence it can read, not instructions to change backups. |
 
 Check one affected guest without changing its setup:
@@ -418,6 +418,34 @@ its explanation and Provider evidence. A **Protected** point leaves its
 verification state unknown from that label alone. **Job OK** is not an
 individual point's verification result. Use the records already available,
 without running Diagnostics or another verification just to compare them.
+
+#### Prune protection is not verification
+
+A PBS snapshot's **protected** flag excludes it from ordinary pruning. It is
+**retention protection**, not a check of the stored data, another backup copy,
+or protection against storage loss. Do not remove the flag to reveal another
+State label in Pulse: that can make the snapshot eligible for a later prune.
+
+Read the **same snapshot's existing record in PBS**, matching its server,
+datastore, namespace, guest type/ID and backup time. Read its protected flag and
+last verification result/time separately:
+
+- **Protected with successful verification:** these are two independent facts.
+  The result applies to that snapshot at the recorded verification time, not
+  every backup or a successful restore.
+- **Protected with failed verification:** retention has not repaired the failed
+  check. Keep the snapshot and its existing failure evidence; a Protected label
+  must not be used to dismiss it.
+- **Protected with no recorded verification result:** verification is unknown,
+  not successful or failed. A different snapshot's result or an OK backup job
+  cannot fill that gap.
+
+If Pulse shows separate prune-protection and verification labels, read both.
+If it shows only Protected, that label alone cannot distinguish these cases;
+use the existing PBS record, not a flag change or a new verification job. Do
+not run prune, garbage collection, a backup or a restore just to compare the
+displays. For a discrepancy, retain only the matching point's redacted result
+and time alongside the observations above, not a full job log or inventory.
 
 Do not delete backups, clear History, change retention or freshness settings,
 recreate tokens/connections, restart or downgrade Pulse, or run a new backup,

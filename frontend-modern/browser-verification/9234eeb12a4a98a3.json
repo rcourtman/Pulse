@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "base_sha": "fad0fc55414cbb3caf8c0430dc9b7c59f9437ec1",
+  "verified_at": "2026-10-16T01:12:23.829236Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/PBS.md",
+    "frontend-modern/public/docs/PBS.md"
+  ],
+  "content_sha256": {
+    "docs/PBS.md": "0f24d2e8400c411035457188b213aa685ffe872a6701feca69fca4de771037c9",
+    "frontend-modern/public/docs/PBS.md": "0f24d2e8400c411035457188b213aa685ffe872a6701feca69fca4de771037c9"
+  },
+  "routes": [
+    "/docs/PBS#backups-are-visible-but-coverage-says-unprotected",
+    "/docs/PBS#prune-protection-is-not-verification"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Existing PBS guide rendered by the production Docs page, router, Markdown renderer and CSS under the documentation-only fixture shell. Exact final document and compiled assets match their source-bound hashes.",
+    "Prune-retention protection is independent of successful, failed or unknown verification of the same snapshot. Removing the protected flag to expose another State label can make a snapshot eligible for later pruning.",
+    "Desktop/light and 320px/dark content remains readable without horizontal page overflow. No PBS job, backup-state change or guest operation is exercised."
+  ],
+  "interactions": [
+    "Keyboard Enter in Chromium and touch tap in WebKit activate the actual bare-fragment link from the existing Protected State table cell and focus its H4 heading.",
+    "History Back returns focus to the existing parent fragment without replacing the client shell; re-entry and reload focus the new heading.",
+    "Exact consumed Markdown hashes, failed/unknown/successful examples and existing Backup safety destination are checked. No page errors, API requests or mutations were observed; browser/server close completed."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "preview": "Actual Docs/router/Markdown/CSS built from committed source by source-pel6m1bj in the offline VM; fixed hashed static assets."
+  },
+  "input_hashes": {
+    "docs/PBS.md": "0f24d2e8400c411035457188b213aa685ffe872a6701feca69fca4de771037c9",
+    "frontend-modern/public/docs/PBS.md": "0f24d2e8400c411035457188b213aa685ffe872a6701feca69fca4de771037c9",
+    "frontend-modern/src/pages/Docs.tsx": "e1d181803722b38ed211517d12495d201c299cc8ebb0a14131c58ac91c7e3a6a",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "213b6216dca650aab7d3ea4c8a66af6ee128f829ba455b5f53cd00a27e62d4cb",
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c",
+    "frontend-modern/src/components/shared/PageHeader.tsx": "428d4c02380ba13a38d1ee7404c56b538562df904aecb66f11786ef0dbb8d259",
+    "frontend-modern/browser-tests/doc-command-help.tsx": "81005ed6de41f32d7a581d1115e8c52be974a41ae421eab893ffe0a3a59a42f5",
+    "frontend-modern/browser-tests/build-doc-command-help.mjs": "4bc5eed4d8030c5533a7afa36a4b33ad048b2386c40ad8490a31c231d6ca60cc",
+    "frontend-modern/package.json": "8d8da916d45b0aaf90d256787ea294b45c4aec89ee9fa3cab773bb8368c8da97",
+    "frontend-modern/package-lock.json": "927b6fd356ececa0de2d44bd68a62a7733a6bf2a93314bb24cc66d1c120e3915"
+  },
+  "input_count": 2933,
+  "pixel_review": {
+    "tool": "native view_image",
+    "captures": [
+      {
+        "file": "desktop-light-existing-state-link.png",
+        "sha256": "b899771085a9c6d69e939f17b39f7ec566e958d1532c27d105dd5be8bf5c8aa2",
+        "bytes": 260167,
+        "width": 1440,
+        "height": 1000,
+        "observation": "The Protected State row and its underlined prune-protection link are visible and readable within the table."
+      },
+      {
+        "file": "desktop-light-retention-warning.png",
+        "sha256": "86fb6c57c341870c8071ce49fd1eaa3625093bbe98b8ce1b604f5a5d8f586ec5",
+        "bytes": 266439,
+        "width": 1440,
+        "height": 1000,
+        "observation": "Focused heading, prune-retention warning and successful/failed/unknown verification cases are readable without page overflow."
+      },
+      {
+        "file": "desktop-light-no-new-jobs.png",
+        "sha256": "47210f933bbaac0acd4ee3d39858580bdc55b88e4cf38c35ed944b97b3af8f88",
+        "bytes": 281225,
+        "width": 1440,
+        "height": 1000,
+        "observation": "Existing-record/no-new-jobs guidance and the separate guest-thaw safety link are legible."
+      },
+      {
+        "file": "phone-dark-existing-state-link.png",
+        "sha256": "22db6d36c4145254aaaaa51ebaa5e677377c5d5c55c3bfd1e9a6e16469779d63",
+        "bytes": 112090,
+        "width": 320,
+        "height": 1000,
+        "observation": "At 320px the table wraps within the document; the prune-protection link remains legible and usable."
+      },
+      {
+        "file": "phone-dark-retention-warning.png",
+        "sha256": "5b270369f7bf00afc847d355548788c9e4c0abbdae2e2a1e2db37c0d4e3dd9c5",
+        "bytes": 111487,
+        "width": 320,
+        "height": 1000,
+        "observation": "At 320px the heading and warning not to remove the protected flag wrap legibly without clipping."
+      },
+      {
+        "file": "phone-dark-verification-successful.png",
+        "sha256": "9400102ee9ac1d8c8a9299a272d1e4a1b1d40a7ad60237cc4e4eb1a597d8e9eb",
+        "bytes": 106415,
+        "width": 320,
+        "height": 1000,
+        "observation": "The successful verification example, separate from retention protection, is readable in the narrow layout."
+      },
+      {
+        "file": "phone-dark-verification-failed.png",
+        "sha256": "b99161a1301954c27fbaaf34b22cc2c432795549a2eadfa29c3278445437e297",
+        "bytes": 108591,
+        "width": 320,
+        "height": 1000,
+        "observation": "The failed verification example says to keep the snapshot and failure evidence; it is readable without page overflow."
+      },
+      {
+        "file": "phone-dark-verification-unknown.png",
+        "sha256": "a254ac6bb65532ae35ad3269b003e1b3b08f4baa8b78f0f8066cdedf567a7e41",
+        "bytes": 107810,
+        "width": 320,
+        "height": 1000,
+        "observation": "The no-recorded-result case explicitly stays unknown; text and the surrounding safety guidance are legible."
+      },
+      {
+        "file": "phone-dark-no-new-jobs.png",
+        "sha256": "38dc21d7a467532b3f011ea054331625d509799be29272ae334698928d4a7840",
+        "bytes": 109212,
+        "width": 320,
+        "height": 1000,
+        "observation": "No flag changes or new jobs are prescribed; the separate frozen-guest safety guidance and link remain readable."
+      }
+    ]
+  }
+}
