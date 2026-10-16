@@ -7,7 +7,7 @@ import type { StorageHealthFilter } from '../src/features/storageBackups/models'
 import type { Resource } from '../src/types/resource';
 import '../src/index.css';
 
-const disk = (phase: 'healthy' | 'fault' | 'missing'): Resource => ({
+const disk = (phase: 'healthy' | 'fault' | 'missing', reason = 'No current reading'): Resource => ({
   id: 'disk-one',
   type: 'physical_disk',
   name: 'Archive disk',
@@ -46,7 +46,7 @@ const disk = (phase: 'healthy' | 'fault' | 'missing'): Resource => ({
     collection:
       phase === 'missing'
         ? {
-            temperature: { state: 'unavailable', source: 'fixture', reason: 'No current reading' },
+            temperature: { state: 'unavailable', source: 'fixture', reason },
           }
         : undefined,
   },
@@ -76,6 +76,20 @@ const Fixture = () => {
           onClick={() => setDisks([disk('missing')])}
         >
           Remove current readings
+        </button>
+        <button
+          class="min-h-11 rounded border border-border px-3"
+          data-update="long-reason"
+          onClick={() =>
+            setDisks([
+              disk(
+                'missing',
+                `Collection deadline exceeded for /dev/disk/by-id/${'SYNTHETIC_'.repeat(16)}; no current reading`,
+              ),
+            ])
+          }
+        >
+          Report long collection reason
         </button>
         <button
           class="min-h-11 rounded border border-border px-3"

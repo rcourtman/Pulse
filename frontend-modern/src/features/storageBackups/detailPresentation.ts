@@ -37,7 +37,9 @@ export const STORAGE_DETAIL_SPACED_STACK_CLASS = 'space-y-3';
 export const STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS = 'col-span-2';
 export const STORAGE_DETAIL_MUTED_TEXT_CLASS = 'text-muted';
 
-export const STORAGE_DETAIL_EMPTY_CLASS = `${INFO_CARD_FRAME_CLASS} text-center text-[11px] text-muted`;
+// Expanded details inherit nowrap from their table cell. Notices must show the
+// whole collection reason, including identifiers without spaces, on a phone.
+export const STORAGE_DETAIL_EMPTY_CLASS = `${INFO_CARD_FRAME_CLASS} min-w-0 whitespace-normal wrap-anywhere text-center text-[11px] text-muted`;
 
 export const STORAGE_DISK_DETAIL_ROOT_CLASS = 'space-y-3';
 export const STORAGE_DISK_DETAIL_HEADER_CLASS =

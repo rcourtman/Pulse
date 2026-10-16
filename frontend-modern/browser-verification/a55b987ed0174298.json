@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "3a55af17e69121f96ff812f176fed5ed0df8227f",
+  "changed_paths": [
+    "frontend-modern/src/features/storageBackups/detailPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/storageBackups/detailPresentation.ts": "82acd0b2420fa5ece9401b629c464e9ccb029ec1169d0c4921b5d6bf3bdd03cf"
+  },
+  "routes": [
+    "Storage / physical disks / expanded DiskDetail through the production DiskList in /browser-tests/disk-live-refresh.html"
+  ],
+  "states": [
+    "Healthy current reading -> temporarily unavailable -> long collection reason -> recovered current reading",
+    "Same open keyed row; metric target and aria-controls update together; no zero/healthy substitution"
+  ],
+  "interactions": [
+    "Desktop keyboard disclosure and producer-button clicks",
+    "320px WebKit touch on the visible row and producer buttons",
+    "Exact full text, every non-space glyph within the card, no paragraph/document overflow, same-row recovery"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-16T14:22:40Z",
+  "browsers": [
+    "Chromium 141.0.7390.37 / Playwright 1.56.1",
+    "WebKit 26.0 / Playwright 1.56.1"
+  ],
+  "observations": [
+    "The actual first table cell still computes white-space: nowrap; the notice paragraph computes normal and overflow-wrap: anywhere.",
+    "Short and long reasons have zero clipped glyphs on desktop and phone. Phone messages occupy two and seven lines.",
+    "Four final captures were opened with native view_image and pixel-reviewed. Baseline two captures were also opened and show clipped text."
+  ],
+  "limits": [
+    "Synthetic collector snapshots and valid empty History responses, not native SMART collection, stored readings or appliance recovery.",
+    "The first baseline observer tried the screen-reader-only disclosure on a phone and failed on pointer interception. That failed recipe is retained separately; the corrected observer uses the visible row target.",
+    "No dependency graph, collection state, data value, request target, safety permission or chart behaviour changed."
+  ]
+}

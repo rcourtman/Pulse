@@ -105,6 +105,30 @@ afterEach(() => {
 });
 
 describe('Disk History independently of current collection', () => {
+  it('keeps a long collection reason intact in a wrapping notice, not a current reading', () => {
+    const reason = `Collection deadline exceeded for /dev/disk/by-id/${'SYNTHETIC_'.repeat(16)}; <no current reading>`;
+    const missing = disk(true);
+    render(() => (
+      <DiskDetail
+        disk={{
+          ...missing,
+          physicalDisk: {
+            ...missing.physicalDisk!,
+            collection: {
+              temperature: { state: 'unavailable', reason },
+            },
+          },
+        }}
+        nodes={[]}
+      />
+    ));
+    const message = screen.getByText(`Temperature is temporarily unavailable: ${reason}`);
+    expect(message.textContent).toBe(`Temperature is temporarily unavailable: ${reason}`);
+    expect(message.closest('[role="status"]')).toHaveClass('whitespace-normal', 'wrap-anywhere');
+    expect(message.children).toHaveLength(0);
+    expect(screen.queryByText('0°C')).not.toBeInTheDocument();
+  });
+
   it('loads stored ATA readings when current temperature and SMART are unavailable', async () => {
     render(() => <DiskDetail disk={disk(true)} nodes={[]} />);
     expect(screen.getByText(/Temperature is temporarily unavailable/)).toBeInTheDocument();
