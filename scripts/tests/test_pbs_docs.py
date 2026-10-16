@@ -206,6 +206,31 @@ class PBSDocsTest(unittest.TestCase):
         self.assertIn("Missing rows do not mean no backups exist", slow)
         self.assertIn("do not repeatedly press Retry", slow)
 
+    def test_duplicate_help_uses_real_location_and_source_columns(self):
+        section = DOC.read_text().split("### Duplicate Backups\n", 1)[1].split("\n---", 1)[0]
+        presentation = (ROOT / "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts").read_text()
+        for label in ("Source", "Location"):
+            self.assertIn(f"**{label}**", section)
+            self.assertIn(f"label: '{label}'", presentation)
+        for distinction in ("node-local storage", "storage node", "guest can migrate",
+                            "genuinely shared PVE storage", "Direct PBS", "namespace",
+                            "independent recovery options", "not a deletion receipt"):
+            self.assertIn(distinction, " ".join(section.split()))
+        self.assertNotIn("```", section, "compare existing evidence, no new storage command")
+
+    def test_duplicate_help_keeps_missing_identity_and_backup_safety_explicit(self):
+        section = " ".join(DOC.read_text().split("### Duplicate Backups\n", 1)[1].split("\n---", 1)[0].split())
+        for distinction in ("unknown", "existing report", "consistent aliases",
+                            "another node's local archive", "do not rerun a backup",
+                            "rename storage, migrate a guest, delete backups",
+                            "Row counts do not establish restore readiness or guest thaw"):
+            self.assertIn(distinction, section)
+        self.assertIn("VM_DISK_MONITORING.md#backup-safety", section)
+        trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        entry = trouble.split("- **Backup rows look duplicated or copies are missing:**", 1)[1].split("\n- **", 1)[0]
+        self.assertIn("PBS.md#duplicate-backups", entry)
+        self.assertIn("do not delete", entry)
+
     def test_every_documented_shell_recipe_parses(self):
         for command in blocks():
             with self.subTest(command=command):

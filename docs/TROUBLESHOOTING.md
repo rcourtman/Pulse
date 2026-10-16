@@ -50,6 +50,10 @@ establish safe recovery.
   [server, backup inventory and History](PBS.md#pbs-is-active-but-missing-from-monitoring).
   An Active API connection does not establish a visible PBS resource; installing
   an agent does not prove API recovery.
+- **Backup rows look duplicated or copies are missing:** compare
+  [node-local copies, shared storage and PBS collection paths](PBS.md#duplicate-backups).
+  Matching filenames or VMIDs do not prove one stored copy; do not delete
+  backups or change retention to make the display agree.
 - **Mail Gateway Test succeeds but collection fails:** use
   [PMG read-failure checks](MAIL_GATEWAY.md#troubleshooting-without-changing-the-gateway).
   For `ClusterStatusEntry.data.cid` or `hostname lookup failed`, read the
