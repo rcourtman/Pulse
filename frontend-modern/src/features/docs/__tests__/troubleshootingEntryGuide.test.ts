@@ -86,7 +86,14 @@ const workflowDestinations = [
   ['TrueNAS readings are stale or absent:', ['/docs/TRUENAS#stale-truenas-data']],
   [
     'PBS is Active but missing from monitoring:',
-    ['/docs/PBS#pbs-is-active-but-missing-from-monitoring'],
+    [
+      '/docs/PBS#pbs-is-active-but-missing-from-monitoring',
+      '/docs/PBS#one-pbs-namespace-is-missing-or-stops-changing',
+    ],
+  ],
+  [
+    'Backup rows look duplicated or copies are missing:',
+    ['/docs/PBS#duplicate-backups'],
   ],
   [
     'Mail Gateway Test succeeds but collection fails:',
