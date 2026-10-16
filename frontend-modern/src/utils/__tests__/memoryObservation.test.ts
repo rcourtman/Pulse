@@ -122,7 +122,8 @@ describe('cache-inclusive Proxmox memory sources', () => {
     (source) => {
       const precaution =
         'Defer agent setup, restarts and live guest-agent probes during backups or a guest incident.';
-      for (const type of ['qemu', 'lxc']) {
+      // A container's listing reading is cache-excluded, so it carries no note.
+      for (const type of source === 'cluster-resources' ? ['qemu'] : ['qemu', 'lxc']) {
         for (const state of ['current', 'last-known', 'future-state']) {
           const input = reading(source, state, { type });
           const original = structuredClone(input);
@@ -160,6 +161,42 @@ describe('cache-inclusive Proxmox memory sources', () => {
     ).toBeNull();
   });
 
+  it.each([
+    { type: 'lxc' },
+    { type: 'system-container', workloadType: 'system-container' as const },
+  ])('reads a container listing value as cache-excluded (%o)', (changes) => {
+    // Proxmox subtracts page cache from an LXC's cgroup usage before it
+    // reaches /cluster/resources, unlike a QEMU guest's listing mem.
+    for (const state of ['current', 'last-known']) {
+      const presentation = getWorkloadMemoryObservationPresentation(
+        reading('cluster-resources', state, changes),
+      )!;
+      expect(presentation.mayIncludeCache).toBe(false);
+      expect(presentation.cacheNote).toBeUndefined();
+      expect(presentation.summary).not.toContain('may include cache');
+      expect(presentation.message).not.toContain('cached memory');
+      expect(presentation.summary).toContain('Proxmox');
+    }
+    expect(
+      getWorkloadMemoryObservationPresentation(reading('cluster-resources', 'current', changes), {
+        includeCurrent: false,
+      }),
+    ).toBeNull();
+    // Other Proxmox fallbacks keep their caveat for a container.
+    expect(
+      getWorkloadMemoryObservationPresentation(reading('status-mem', 'current', changes))
+        ?.mayIncludeCache,
+    ).toBe(true);
+  });
+
+  it('keeps a listing value of unknown guest kind cache-inclusive', () => {
+    expect(
+      getWorkloadMemoryObservationPresentation(
+        reading('cluster-resources', 'current', { type: 'docker' }),
+      )?.mayIncludeCache,
+    ).toBe(true);
+  });
+
   it('names the fix that fits the guest: the QEMU agent is a VM-only, Linux-only option', () => {
     const vm = getWorkloadMemoryObservationPresentation(reading('status-mem'))!;
     expect(vm.cacheNote).toContain('memory the VM can reuse');
@@ -177,7 +214,7 @@ describe('cache-inclusive Proxmox memory sources', () => {
       { type: 'system-container', workloadType: 'system-container' as const },
     ]) {
       const note = getWorkloadMemoryObservationPresentation(
-        reading('cluster-resources', 'current', changes),
+        reading('status-mem', 'current', changes),
       )!.cacheNote;
       expect(note).toContain('memory the container can reuse');
       expect(note).toContain('Pulse agent in the container');

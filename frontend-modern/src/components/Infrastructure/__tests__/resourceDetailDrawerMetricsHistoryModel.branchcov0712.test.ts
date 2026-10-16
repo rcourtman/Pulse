@@ -67,6 +67,18 @@ describe('canonical drawer History honours selected guest observation provenance
     },
   );
 
+  it('qualifies a retained Proxmox listing reading by the guest kind', () => {
+    const listing = (type: 'vm' | 'system-container') => {
+      const value = { ...resource('last-known'), type };
+      value.memory!.observation!.source = 'cluster-resources';
+      return getResourceMetricsHistoryDeferredMetrics(value).memory.message;
+    };
+    // A QEMU listing counts the guest's cache; a container's has it removed.
+    expect(listing('vm')).toContain('cached memory the VM can reuse');
+    expect(listing('system-container')).not.toContain('cached memory');
+    expect(listing('system-container')).toContain('Source: Proxmox.');
+  });
+
   it.each([-1, 101, NaN, Infinity])('withdraws invalid retained memory %s', (value) => {
     expect(
       getResourceMetricsHistoryDeferredMetrics(resource('last-known', value)).memory.lastKnownValue,
