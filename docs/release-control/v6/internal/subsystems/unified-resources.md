@@ -23,6 +23,18 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Incomplete backup observations retain their identity
+
+Running and failed entries remain attached to their existing workload, source
+and native artifact identity while completed-point summaries exclude them.
+Ordinary inventory replacement changes completion, not matching or disclosure
+keys. Day grouping counts visible entries rather than promising completed
+backups; a completed guest-local snapshot still does not fill the independent
+latest-backup slot. Connected recovery-model/table and browser regressions
+check counts, bytes, visible evidence and same-open replacement without new
+collection, resource, persistence or recovery execution paths.
+
+
 ### Backup-job time uncertainty stays local to its workload
 
 Coverage propagates unorderable job chronology through its existing canonical

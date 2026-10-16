@@ -500,6 +500,7 @@ describe('buildProxmoxBackupRecoveryModel summary, sort, and empty edges', () =>
       unknown: 0,
       withPBS: 0,
       recoverableArtifacts: 0,
+      incompleteArtifacts: 0,
       totalBytes: 0,
     });
   });

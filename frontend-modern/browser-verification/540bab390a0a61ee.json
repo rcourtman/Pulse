@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "31f21cb95c0f1cedec22e44946d7e02dac46986f",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "da337850b1df8bf31cebf865bee43c8f66c6682d56f816b4b788a2cb8a9d7ae8",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "534025c64bdbce599b93117a5141d4749a2be18e61d674bff4e6c99ac5b5d494",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "5504024d6cbb2d82496f4a07e09b8668277d1f8c1dbee274683e5dadc666f4d4"
+  },
+  "routes": [
+    "/proxmox/backups/date and /proxmox/backups/coverage through actual HTTP readers, recovery model, summary, chart and tables; synthetic loopback observations only"
+  ],
+  "states": [
+    "Three running/failed incomplete entries: zero restore points, no completed activity, every entry and its original state retained.",
+    "Mixed inventory: three completed points and three incomplete entries; six visible entries, chart count three and volume 3584 bytes, no partial-write bytes counted.",
+    "Ordinary replacement completes all six entries and removes the incomplete notice/count without changing the unknown provider posture; pending reads do not optimistically complete the points."
+  ],
+  "interactions": [
+    "Desktop keyboard and 320px WebKit touch navigate both views, select and clear a chart day, switch chart count/volume, and expand actual Coverage evidence.",
+    "Desktop keyboard activation while pending issues no duplicate inventory read; phone verifies the aria-disabled state without forcing a disabled tap.",
+    "All six retained desktop/phone captures were opened with the native image tool; new totals and notice wrap readably."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "browsers": [
+    "Chromium 141.0.7390.37 / Playwright 1.56.1",
+    "WebKit 26.0 / Playwright 1.56.1"
+  ],
+  "verified_at": "2026-10-16T16:54:25Z",
+  "limits": [
+    "Proof is composed from three requests over identical production runtime/emitted assets: complete desktop plus initial/mixed phone in request one (overall exit 1 at a hidden mobile keyboard toggle), mobile Coverage in request two (exit 1 because Playwright refused an aria-disabled tap), and missing phone completion in request three (exit 0). Both stopped protocols, exact results and cleanup are retained; adequate phases were not replayed.",
+    "Synthetic collected observations establish presentation, not native backup completion, restore execution, guest thaw, filesystem writes, production/embed budgets, protected publication or installed recovery.",
+    "Unchanged narrow source-badge clipping remains outside these completion-summary changes."
+  ]
+}

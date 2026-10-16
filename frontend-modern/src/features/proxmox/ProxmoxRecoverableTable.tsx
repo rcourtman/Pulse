@@ -350,7 +350,7 @@ export function ProxmoxRecoverableTable(props: {
                           {item.kind === 'day' ? item.label : ''}{' '}
                           <span class="ml-2 normal-case tracking-normal text-muted">
                             {item.kind === 'day' ? item.count : 0}{' '}
-                            {item.kind === 'day' && item.count === 1 ? 'backup' : 'backups'}
+                            {item.kind === 'day' && item.count === 1 ? 'entry' : 'entries'}
                           </span>
                         </TableCell>
                       </TableRow>

@@ -119,7 +119,9 @@ export interface ProxmoxBackupRecoveryModel {
     unprotected: number;
     unknown: number;
     withPBS: number;
+    /** Completed observations only; incomplete writes remain in the inventory. */
     recoverableArtifacts: number;
+    incompleteArtifacts: number;
     totalBytes: number;
   };
 }
@@ -163,6 +165,12 @@ export function getRecoveryAgeBand(
 // "a snapshot is not a separate backup, so it does not count".
 export function isBackupArtifact(artifact: RecoverableArtifact): boolean {
   return artifact.sourceKind !== 'snapshot';
+}
+
+// Completion is independent of age, verification and prune protection. An
+// incomplete write is useful diagnostic inventory, not an available point.
+export function isCompletedRecoveryArtifact(artifact: RecoverableArtifact): boolean {
+  return !artifact.running && !artifact.failed;
 }
 
 function parseTimestampMs(value: string | undefined): number | undefined {
@@ -540,7 +548,7 @@ export function selectWorkloadRecoveryArtifacts(
 > {
   // Completion remains independent of age. Keep every artifact listed, but
   // don't guess the latest when even one completed date cannot be ordered.
-  const completed = artifacts.filter((artifact) => !artifact.running && !artifact.failed);
+  const completed = artifacts.filter(isCompletedRecoveryArtifact);
   const select = (items: RecoverableArtifact[]) => {
     const unknown = items.some(
       (artifact) => getRecoveryAgeBand(artifact.createdMs, nowMs) === 'unknown',
@@ -831,7 +839,8 @@ export function buildProxmoxBackupRecoveryModel(
   });
   artifacts.sort((left, right) => (right.createdMs ?? 0) - (left.createdMs ?? 0));
 
-  const totalBytes = artifacts.reduce((sum, artifact) => sum + (artifact.size ?? 0), 0);
+  const completed = artifacts.filter(isCompletedRecoveryArtifact);
+  const totalBytes = completed.reduce((sum, artifact) => sum + (artifact.size ?? 0), 0);
   return {
     coverageRows,
     recoverableArtifacts: artifacts,
@@ -841,8 +850,13 @@ export function buildProxmoxBackupRecoveryModel(
       attention: coverageRows.filter((row) => isCoverageAttention(row.posture)).length,
       unprotected: coverageRows.filter((row) => row.posture === 'unprotected').length,
       unknown: coverageRows.filter((row) => row.posture === 'unknown').length,
-      withPBS: coverageRows.filter((row) => row.pbsCount > 0).length,
-      recoverableArtifacts: artifacts.length,
+      withPBS: coverageRows.filter((row) =>
+        row.artifacts.some(
+          (artifact) => artifact.sourceKind === 'pbs' && isCompletedRecoveryArtifact(artifact),
+        ),
+      ).length,
+      recoverableArtifacts: completed.length,
+      incompleteArtifacts: artifacts.length - completed.length,
       totalBytes,
     },
   };

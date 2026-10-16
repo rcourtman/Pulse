@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Backup diagnostics are not completed restore points
+
+The existing backup views keep running/failed inventory entries visible but
+exclude them from completed-point count and volume charts and restore-point
+totals. An incomplete-entry count and wrapping status notice explain why a
+non-empty table can have zero restore points. Day groups and row counters say
+entries, so diagnostic rows cannot read as completed backups. Keyboard/touch,
+chart count/volume selection and ordinary same-open replacement are exercised
+by `backup-completion-totals.cjs`; model and consuming-table tests cover the
+shared completion predicate. No new route or guest operation is introduced.
+
+
 ### Unknown backup-job chronology is not a successful latest job
 
 Coverage shows an explicit unknown job indicator when a matched job's start

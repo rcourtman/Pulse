@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Restore-point summaries require completed inventory
+
+Running and failed incomplete PBS snapshots and running PVE files remain visible
+as diagnostic entries, with their original state, identity and size. They do not
+contribute to restore-point totals, completed bytes, the count/volume activity
+chart or the number of targets with a PBS point. Day groups and visible-row
+counters describe inventory entries, not successful backups. A separate incomplete
+entry count and notice explain the distinction in both existing backup views.
+
+Completion uses the same predicate as latest-point selection. Unknown dates and
+missing verification are independent facts, not evidence of an incomplete write;
+completed guest-local snapshots remain distinct from independent backups. Ordinary
+inventory replacement can add or withdraw completion without navigation. Model,
+consuming-table and desktop/narrow browser regressions cover those transitions.
+This is presentation of collected observations, not proof of a restore, guest
+thaw, filesystem writes, backup execution or installed recovery.
+
+
 ### Coverage must not guess the latest backup-job outcome
 
 A matched task with an unavailable, invalid or future start time prevents the
