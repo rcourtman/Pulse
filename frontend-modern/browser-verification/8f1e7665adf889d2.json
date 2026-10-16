@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "200caca27c1a9da9aede27f55f2bc10edd13ca4c",
+  "verified_at": "2026-10-16T09:55:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "b9f4c66bc2970ee689b584573eccc4bb4c7e73efc06b7a573d23be1a35a691ea"
+  },
+  "routes": [
+    "/proxmox/backups"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): the Backup server table showed backup-vault twice, once per datastore (offsite-vault, primary-vault), each with Healthy, 10.7% CPU, 35.8% memory and 30d uptime, reading as two identical servers",
+    "After at 1024px: the first backup-vault row carries status, CPU, memory and uptime; the second shows backup-vault muted with those cells empty and only its datastore, used and count",
+    "The second row keeps its own detail toggle: clicking it opened the backup-vault drawer (aria-expanded true), then closed it",
+    "At 375px (compact layout) the second row shows backup-vault, an empty state cell, primary-vault and 27.4%; page scrollWidth 375"
+  ],
+  "interactions": [
+    "Signed in to a private mock stack and opened Proxmox > Backups; read each server-table row cell by cell from the DOM and looked at a full screenshot",
+    "Opened and closed the detail drawer from the continuation row",
+    "Resized to the mobile preset and re-read the rows and page width"
+  ]
+}

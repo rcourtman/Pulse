@@ -270,6 +270,53 @@ describe('ProxmoxBackupsTable', () => {
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
   });
 
+  it('shows host cells once for a server with several datastores', async () => {
+    mockBackupAPIs();
+    const twoStores = {
+      ...pbsServerResource,
+      pbs: {
+        ...pbsServerResource.pbs!,
+        datastores: [
+          ...pbsServerResource.pbs!.datastores!,
+          { name: 'offsite', total: 20_000, used: 5_000, available: 15_000, usagePercent: 25 },
+        ],
+      },
+    } as Resource;
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[workloadResource]}
+        servers={[twoStores]}
+      />
+    ));
+    await screen.findByText('offsite');
+    const table = container.querySelector('[data-proxmox-backups-table="servers"]') as HTMLElement;
+    const columns = Array.from(table.querySelectorAll('col')).map((col) =>
+      col.getAttribute('data-proxmox-backups-column'),
+    );
+    const dataRows = () =>
+      Array.from(table.querySelectorAll('tbody tr')).filter(
+        (row) => row.querySelectorAll('td').length === columns.length,
+      );
+    const cellText = (row: number, column: string) => {
+      expect(columns).toContain(column);
+      return dataRows()[row].querySelectorAll('td')[columns.indexOf(column)].textContent?.trim();
+    };
+
+    // Two datastores of one server read as one server, not two identical ones:
+    // the host cells sit on its first row, and the second row keeps its name
+    // and its own datastore figures.
+    expect(dataRows()).toHaveLength(2);
+    expect(within(table).getAllByText('pbs-main')).toHaveLength(2);
+    for (const column of ['status', 'version', 'cpu', 'memory', 'uptime']) {
+      expect(cellText(0, column)).not.toBe('');
+      expect(cellText(1, column)).toBe('');
+    }
+    expect(cellText(0, 'datastore')).toBe('main');
+    expect(cellText(1, 'datastore')).toBe('offsite');
+    expect(cellText(1, 'used')).toContain('25');
+  });
+
   it('uses a corroborated PBS host link for Backups History despite a PVE-only name collision', () => {
     const pbs = {
       ...pbsServerResource,

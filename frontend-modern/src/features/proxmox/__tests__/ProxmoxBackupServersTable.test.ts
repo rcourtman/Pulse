@@ -61,6 +61,28 @@ describe('buildBackupServerRows', () => {
       expect(row.uptimeSeconds).toBe(1_036_800);
     }
     expect(rows.map((row) => row.datastore?.name)).toEqual(['offsite', 'tank']);
+    // The table shows host cells once per server: only later rows continue it.
+    expect(rows.map((row) => row.continuesServer)).toEqual([false, true]);
+  });
+
+  it('starts every server, and every reachability-only row, as its own first row', () => {
+    const first = makePbsResource();
+    const second = makePbsResource({ id: 'pbs-2', name: 'pbs-second' });
+    const empty = makePbsResource({
+      id: 'pbs-3',
+      name: 'pbs-third',
+      pbs: { instanceId: 'pbs-third', connectionHealth: 'healthy', datastores: [] },
+    });
+
+    const rows = buildBackupServerRows([empty, second, first]);
+
+    expect(rows.map((row) => [row.serverName, row.continuesServer])).toEqual([
+      ['pbs-main', false],
+      ['pbs-main', true],
+      ['pbs-second', false],
+      ['pbs-second', true],
+      ['pbs-third', false],
+    ]);
   });
 
   it('keeps server and datastore rows stable when provider order changes', () => {
