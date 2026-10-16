@@ -91,10 +91,7 @@ const workflowDestinations = [
       '/docs/PBS#one-pbs-namespace-is-missing-or-stops-changing',
     ],
   ],
-  [
-    'Backup rows look duplicated or copies are missing:',
-    ['/docs/PBS#duplicate-backups'],
-  ],
+  ['Backup rows look duplicated or copies are missing:', ['/docs/PBS#duplicate-backups']],
   [
     'Mail Gateway Test succeeds but collection fails:',
     [
