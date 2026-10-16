@@ -30,34 +30,99 @@ are published on the [GitHub Releases page](https://github.com/rcourtman/Pulse/r
 
 New release packets include `release-build-provenance.sigstore.json`, the
 Sigstore bundle emitted by the hosted workflow that assembled and validated
-the candidate. Verify a downloaded asset against that exact workflow and the
-release source commit with GitHub CLI 2.97.0 or newer:
+the candidate. The following **Bash** recipe verifies a public Community archive
+against that exact workflow and the release source commit with GitHub CLI
+2.97.0 or newer. Choose the exact published tag and the asset for your operating
+system and architecture; the example is Linux amd64, not the private Pro runtime.
+
+Run it on a trusted connected machine. It creates a new private directory,
+prints its location and stops on any failed preparation or verification step.
+It does not install or execute the downloaded archive:
 
 ```bash
-export PULSE_VERSION=vX.Y.Z
-export PULSE_ASSET=pulse-vX.Y.Z-linux-amd64.tar.gz
+(
+set -eu
+umask 077
+PULSE_VERSION=vX.Y.Z
+PULSE_ASSET=pulse-vX.Y.Z-linux-amd64.tar.gz
+provenance_dir="$(mktemp -d "${TMPDIR:-/tmp}/pulse-provenance.XXXXXX")"
+printf 'Private verification directory: %s\n' "$provenance_dir"
+cd "$provenance_dir"
 gh release download "${PULSE_VERSION}" --repo rcourtman/Pulse \
   --pattern "${PULSE_ASSET}" \
   --pattern release-build-provenance.sigstore.json
 SOURCE_SHA="$(gh api "repos/rcourtman/Pulse/releases/tags/${PULSE_VERSION}" \
   --jq .target_commitish)"
+[ "${#SOURCE_SHA}" -eq 40 ]
+case "$SOURCE_SHA" in
+  *[!0-9a-f]*) printf 'Release source must be a full commit SHA.\n' >&2; exit 1 ;;
+esac
 printf '%s\n' "${SOURCE_SHA}" > release-source-sha.txt
+gh attestation trusted-root > trusted_root.jsonl
+[ -s trusted_root.jsonl ]
 gh attestation verify "${PULSE_ASSET}" \
   --repo rcourtman/Pulse \
   --bundle release-build-provenance.sigstore.json \
   --signer-workflow github.com/rcourtman/Pulse/.github/workflows/build-release-candidate.yml \
   --source-digest "${SOURCE_SHA}" \
   --deny-self-hosted-runners \
-  --predicate-type https://slsa.dev/provenance/v1
+  --predicate-type https://slsa.dev/provenance/v1 \
+  --custom-trusted-root trusted_root.jsonl > provenance-verification.txt
+printf 'Verified build provenance; private report: %s/provenance-verification.txt\n' "$provenance_dir"
+)
 ```
 
-For an offline target, also run `gh attestation trusted-root >
-trusted_root.jsonl` on the connected trusted machine and transfer that file
-with the asset, bundle, and `release-source-sha.txt`. On the offline target,
-restore `SOURCE_SHA="$(cat release-source-sha.txt)"` and add
-`--custom-trusted-root trusted_root.jsonl` to the verification command. Refresh
-the trusted root whenever importing newly signed material; an old copy cannot
-report later key revocation or rotation.
+The directory and any partial files remain available if a step fails. Do not
+execute the archive or transfer it as verified after a failed command; a partial
+verification report is not a pass. An empty source or a moving reference such
+as `main` is refused rather than used as an unbound source digest. Keep the
+report with the exact files it checked; existing downloads elsewhere are not
+overwritten.
+For an offline target, use the [complete offline recipe](#verify-on-an-offline-target)
+below.
+
+### Verify on an offline target
+
+Only after connected verification succeeds, transfer the archive, bundle,
+`release-source-sha.txt` and `trusted_root.jsonl` together through your trusted
+transfer path into a private directory on the offline target. Keep their names
+unchanged. Use the same asset name and replace the directory below with that
+actual location. This recipe makes no acquisition request and refuses to
+overwrite an earlier offline report:
+
+```bash
+(
+set -euC
+umask 077
+PULSE_ASSET=pulse-vX.Y.Z-linux-amd64.tar.gz
+cd "/path/to/private-verification-directory"
+for file in "$PULSE_ASSET" release-build-provenance.sigstore.json \
+  release-source-sha.txt trusted_root.jsonl; do
+  [ -f "$file" ] && [ -s "$file" ] || exit 1
+done
+SOURCE_SHA="$(cat release-source-sha.txt)"
+[ "${#SOURCE_SHA}" -eq 40 ]
+case "$SOURCE_SHA" in
+  *[!0-9a-f]*) printf 'Release source must be a full commit SHA.\n' >&2; exit 1 ;;
+esac
+gh attestation verify "${PULSE_ASSET}" \
+  --repo rcourtman/Pulse \
+  --bundle release-build-provenance.sigstore.json \
+  --signer-workflow github.com/rcourtman/Pulse/.github/workflows/build-release-candidate.yml \
+  --source-digest "${SOURCE_SHA}" \
+  --deny-self-hosted-runners \
+  --predicate-type https://slsa.dev/provenance/v1 \
+  --custom-trusted-root trusted_root.jsonl > provenance-verification-offline.txt
+printf 'Verified build provenance; private report: provenance-verification-offline.txt\n'
+)
+```
+
+Refresh the trusted root on the connected machine whenever importing newly
+signed material; an old offline copy cannot report later key revocation or
+rotation. Build provenance does not replace the release's checksum and detached
+signature checks, and is not proof of a completed installation or a healthy
+service. Continue with the appropriate installation method only after the
+required checks pass.
 
 ## 🚀 Quick Start (Recommended)
 
