@@ -25,6 +25,24 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Patrol resumes its actual next-check deadline after restart
+
+The main Patrol timer checkpoints its next deadline and effective interval in
+the existing run-history persistence envelope. A restart retains that deadline
+after the normal collection/configuration startup grace. An overdue deadline
+causes one immediate check after that grace, without replaying missed intervals.
+An explicit interval change resets and checkpoints the new timer deadline.
+Scoped checks and capped run-history retention cannot move an existing deadline.
+Older stores without a cursor resume from the last successful full run and the
+current interval. Disabled preparation never checkpoints a check that did not run.
+
+`patrol_schedule_test.go` exercises the real timer loop with Go simulated time,
+including repeated restarts, due/overdue execution, interval changes and first
+startup. History adapter and configuration tests verify file reconstruction,
+failed-write retry and concurrent history/deadline preservation. Live native
+Patrol and independent workload observations remain necessary for operational
+outcome qualification.
+
 ### Investigations retain collected backup and storage history evidence
 
 Guest investigation manifests include the existing read-only storage tool so

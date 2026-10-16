@@ -117,20 +117,13 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 		p.mu.Unlock()
 	}
 
-	// Run initial patrol shortly after startup, but only if one hasn't run recently
-	initialDelay := initialPatrolStartDelay
-	initialTimer := time.NewTimer(initialDelay)
+	// Let configuration and collection initialize before resuming a due check.
+	// This grace period must not become a new full scheduling interval.
+	initialTimer := time.NewTimer(initialPatrolStartDelay)
 	defer initialTimer.Stop()
 
 	select {
 	case <-initialTimer.C:
-		// Check if a patrol ran recently (within last hour) to avoid wasting tokens on restarts
-		runHistory := p.GetRunHistory(10)
-		skipInitial := shouldSkipInitialFullPatrol(runHistory, time.Now())
-
-		if !skipInitial {
-			p.runPatrolWithTrigger(ctx, TriggerReasonStartup, nil)
-		}
 	case <-p.stopCh:
 		if !initialTimer.Stop() {
 			select {
@@ -154,23 +147,30 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 	configCh := p.configChanged
 	p.mu.RUnlock()
 
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	p.mu.Lock()
-	p.nextScheduledAt = time.Now().Add(interval)
-	p.mu.Unlock()
+	next, trigger := p.initialPatrolSchedule(time.Now(), interval)
+	if trigger != TriggerReasonStartup {
+		p.setNextPatrolSchedule(next, interval)
+	}
+	timer := time.NewTimer(time.Until(next))
+	defer timer.Stop()
 
 	for {
 		select {
-		case <-ticker.C:
-			// Update next scheduled time before the run starts — time.Now() closely
-			// matches the tick time here, and the ticker will fire again at roughly
-			// this moment + interval regardless of how long the run takes.
-			p.mu.Lock()
-			p.nextScheduledAt = time.Now().Add(interval)
-			p.mu.Unlock()
-			p.runPatrolWithTrigger(ctx, TriggerReasonScheduled, nil)
+		case <-timer.C:
+			if trigger == TriggerReasonStartup {
+				p.runPatrolWithTrigger(ctx, trigger, nil)
+				// Keep the first-install cadence anchored after its startup check.
+				next = time.Now().Add(interval)
+			} else {
+				// Persist the next deadline before starting work. Collapse missed
+				// intervals into one due check rather than replaying a backlog.
+				next = nextPatrolDeadline(next, time.Now(), interval)
+				p.setNextPatrolSchedule(next, interval)
+				p.runPatrolWithTrigger(ctx, trigger, nil)
+			}
+			trigger = TriggerReasonScheduled
+			p.setNextPatrolSchedule(next, interval)
+			timer.Reset(time.Until(next))
 
 		case alert := <-p.adHocTrigger:
 			// Run immediate targeted patrol for this alert
@@ -178,20 +178,22 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 			p.runTargetedPatrol(ctx, alert)
 
 		case <-configCh:
-			// Config changed - reset ticker with new interval
+			// An operator interval change deliberately resets the timer. Persist
+			// that exact reset too, even if no new full run has completed yet.
 			p.mu.RLock()
 			newInterval := p.config.GetInterval()
 			p.mu.RUnlock()
 
 			if newInterval != interval {
 				interval = newInterval
-				ticker.Reset(interval)
-				p.mu.Lock()
-				p.nextScheduledAt = time.Now().Add(interval)
-				p.mu.Unlock()
+				if trigger != TriggerReasonStartup {
+					next = time.Now().Add(interval)
+					p.setNextPatrolSchedule(next, interval)
+					timer.Reset(time.Until(next))
+				}
 				log.Info().
 					Dur("interval", interval).
-					Msg("Patrol ticker reset to new interval")
+					Msg("Patrol schedule reset to new interval")
 			}
 
 		case <-p.stopCh:
@@ -244,25 +246,40 @@ func (p *PatrolService) remindSweepLoop(ctx context.Context) {
 	}
 }
 
-func shouldSkipInitialFullPatrol(runHistory []PatrolRunRecord, now time.Time) bool {
-	for _, run := range runHistory {
-		if run.CompletedAt.IsZero() {
-			continue
-		}
-		timeSinceLastRun := now.Sub(run.CompletedAt)
-		if timeSinceLastRun >= 1*time.Hour {
-			continue
-		}
-		if isSuccessfulFullPatrolRun(run) {
-			log.Info().
-				Dur("time_since_last", timeSinceLastRun).
-				Str("run_type", run.Type).
-				Str("trigger_reason", run.TriggerReason).
-				Msg("AI Patrol: Skipping initial patrol - recent successful full run exists")
-			return true
+func (p *PatrolService) initialPatrolSchedule(now time.Time, interval time.Duration) (time.Time, TriggerReason) {
+	if p.runHistoryStore != nil {
+		if next, savedInterval := p.runHistoryStore.Schedule(); !next.IsZero() && savedInterval == interval {
+			return next, TriggerReasonScheduled
 		}
 	}
-	return false
+	// Upgrade old history without a timer cursor. Use all retained full runs:
+	// recent scoped/verification activity must not hide or move the cadence.
+	if last := p.LastSuccessfulFullPatrolAt(); !last.IsZero() {
+		return last.Add(interval), TriggerReasonScheduled
+	}
+	return now, TriggerReasonStartup
+}
+
+func nextPatrolDeadline(due, now time.Time, interval time.Duration) time.Time {
+	next := due.Add(interval)
+	if !next.After(now) {
+		return now.Add(interval)
+	}
+	return next
+}
+
+func (p *PatrolService) setNextPatrolSchedule(next time.Time, interval time.Duration) {
+	p.mu.Lock()
+	p.nextScheduledAt = next
+	enabled, store := p.config.Enabled, p.runHistoryStore
+	p.mu.Unlock()
+	// Disabled timer ticks are not checks. In particular, first-time provider
+	// setup must not leave a durable cursor that suppresses the startup check.
+	if enabled && store != nil {
+		if err := store.SetSchedule(next, interval); err != nil {
+			log.Error().Err(err).Time("next_scheduled_at", next).Msg("Failed to persist Patrol schedule")
+		}
+	}
 }
 
 // LastSuccessfulFullPatrolAt returns the completion time of the most recent

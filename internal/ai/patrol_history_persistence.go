@@ -13,6 +13,8 @@ import (
 type PatrolHistoryPersistence interface {
 	SavePatrolRunHistory(runs []PatrolRunRecord) error
 	LoadPatrolRunHistory() ([]PatrolRunRecord, error)
+	SavePatrolSchedule(next time.Time, interval time.Duration) error
+	LoadPatrolSchedule() (time.Time, time.Duration, error)
 }
 
 // PatrolHistoryPersistenceAdapter bridges ConfigPersistence to PatrolHistoryPersistence interface
@@ -23,6 +25,18 @@ type PatrolHistoryPersistenceAdapter struct {
 // NewPatrolHistoryPersistenceAdapter creates a new adapter
 func NewPatrolHistoryPersistenceAdapter(cfg *config.ConfigPersistence) *PatrolHistoryPersistenceAdapter {
 	return &PatrolHistoryPersistenceAdapter{config: cfg}
+}
+
+func (a *PatrolHistoryPersistenceAdapter) SavePatrolSchedule(next time.Time, interval time.Duration) error {
+	return a.config.SavePatrolSchedule(next, interval)
+}
+
+func (a *PatrolHistoryPersistenceAdapter) LoadPatrolSchedule() (time.Time, time.Duration, error) {
+	data, err := a.config.LoadPatrolRunHistory()
+	if err != nil {
+		return time.Time{}, 0, err
+	}
+	return data.NextScheduledAt, data.ScheduleInterval, nil
 }
 
 // SavePatrolRunHistory saves patrol run history to disk via ConfigPersistence
@@ -194,10 +208,12 @@ func convertConfigToolCallsToAI(calls []config.ToolCallRecord) []ToolCallRecord 
 
 // PatrolRunHistoryStore provides thread-safe storage for patrol run history with optional persistence
 type PatrolRunHistoryStore struct {
-	mu          sync.RWMutex
-	runs        []PatrolRunRecord
-	maxRuns     int
-	persistence PatrolHistoryPersistence
+	mu               sync.RWMutex
+	runs             []PatrolRunRecord
+	maxRuns          int
+	persistence      PatrolHistoryPersistence
+	nextScheduledAt  time.Time
+	scheduleInterval time.Duration
 	// Debounce save operations
 	saveTimer    *time.Timer
 	savePending  bool
@@ -261,8 +277,49 @@ func (s *PatrolRunHistoryStore) SetPersistence(p PatrolHistoryPersistence) error
 			s.mu.Unlock()
 			log.Info().Int("count", len(runs)).Msg("loaded patrol run history from disk")
 		}
+		next, interval, err := p.LoadPatrolSchedule()
+		if err != nil {
+			return err
+		}
+		s.mu.Lock()
+		s.nextScheduledAt, s.scheduleInterval = next, interval
+		s.mu.Unlock()
 	}
 	return nil
+}
+
+func (s *PatrolRunHistoryStore) Schedule() (time.Time, time.Duration) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.nextScheduledAt, s.scheduleInterval
+}
+
+// SetSchedule persists before the scheduler waits or starts its next run. Run
+// history still uses its ordinary debounce; a restart must not reset this cursor.
+func (s *PatrolRunHistoryStore) SetSchedule(next time.Time, interval time.Duration) error {
+	s.mu.Lock()
+	if s.nextScheduledAt.Equal(next) && s.scheduleInterval == interval && s.lastSaveError == nil {
+		s.mu.Unlock()
+		return nil
+	}
+	s.nextScheduledAt, s.scheduleInterval = next, interval
+	persistence := s.persistence
+	s.mu.Unlock()
+	if persistence == nil {
+		return nil
+	}
+	err := persistence.SavePatrolSchedule(next, interval)
+	s.mu.Lock()
+	s.lastSaveError = err
+	if err == nil {
+		s.lastSaveTime = time.Now()
+	}
+	onErr := s.onSaveError
+	s.mu.Unlock()
+	if err != nil && onErr != nil {
+		onErr(err)
+	}
+	return err
 }
 
 // Add adds a new patrol run to the history
