@@ -746,6 +746,13 @@ delete and re-add a connection to diagnose missing readings or identity mixing.
 Uses the saved connection for a live test. It is not a passive read of its
 last result or a guarantee that ordinary collection recovered.
 
+An optional JSON body can override `verifySSL` and `fingerprint` for this test
+without changing the saved connection or credentials. Omitted fields keep their
+saved values. Send `false` to disable CA verification or `""` to clear the saved
+fingerprint for the test. A nonempty fingerprint remains enforced regardless of
+`verifySSL`. Empty-body requests keep the saved TLS settings. For example,
+`{"verifySSL":true,"fingerprint":"<SHA-256 fingerprint>"}` tests an edited pin.
+
 ### Refresh Cluster Nodes
 `POST /api/config/nodes/{id}/refresh-cluster` (admin, `settings:write`)
 

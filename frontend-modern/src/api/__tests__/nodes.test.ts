@@ -271,6 +271,17 @@ describe('NodesAPI', () => {
       );
       expect(result.latency).toBe(10);
     });
+
+    it('sends edited TLS settings, including false and an empty fingerprint', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ status: 'success' });
+
+      await NodesAPI.testExistingNode('pve:saved cluster', { verifySSL: false, fingerprint: '' });
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/config/nodes/pve%3Asaved%20cluster/test', {
+        method: 'POST',
+        body: JSON.stringify({ verifySSL: false, fingerprint: '' }),
+      });
+    });
   });
 
   describe('refreshClusterNodes', () => {

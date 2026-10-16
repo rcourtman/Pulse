@@ -553,7 +553,10 @@ export const useNodeModalState = (props: NodeModalProps) => {
         setTestResult(null);
 
         try {
-          const result = await NodesAPI.testExistingNode(props.editingNode!.id);
+          const result = await NodesAPI.testExistingNode(props.editingNode!.id, {
+            verifySSL: data.verifySSL,
+            fingerprint: data.fingerprint,
+          });
           setTestResult({
             status: 'success',
             message: result.message || 'Connection successful',

@@ -12276,3 +12276,20 @@ HEAD and mock responses cannot increment the tally. Mock and live cache keys
 are separated. The optional observer receives no request or content.
 `history_activity_test.go` and `telemetry_history_reads_test.go` exercise this
 boundary. Schema v19 count semantics and retention belong to security-privacy.
+
+### Saved-node connection tests use draft TLS settings (16 October 2026)
+
+`POST /api/config/nodes/{id}/test` accepts an optional JSON body containing
+`verifySSL` and `fingerprint` for PVE, PBS and PMG. Omission retains the saved
+value, `false` disables CA verification, and an empty fingerprint clears the
+saved pin for that probe. An empty body remains compatible with existing
+callers. The bounded decoder rejects malformed bodies and unknown fields.
+The endpoint retains its existing administrator and settings-write authority.
+Credentials are read server-side, and overrides affect only the temporary
+client. A test must not save configuration or alter runtime connection health.
+This is neutral to storage-recovery because no persistence or recovery path changes.
+
+`config_handlers_connection_test.go` exercises actual TLS probes for all three
+platforms, saved credentials, omitted/cleared settings and unchanged configuration
+and health. `frontend-modern/src/api/__tests__/nodes.test.ts` binds the optional
+body to the saved-node route, including explicit false and empty values.

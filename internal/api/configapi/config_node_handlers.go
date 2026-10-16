@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -2139,7 +2140,25 @@ func (h *ConfigHandlers) handleTestNodeConfig(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(testResult)
 }
 
-// HandleTestNode tests a node connection
+// nodeConnectionTestTLSOptions overrides only the temporary probe's TLS policy.
+// Pointers distinguish omitted settings from explicitly disabling verification
+// or clearing a saved fingerprint. Credentials remain server-side.
+type nodeConnectionTestTLSOptions struct {
+	VerifySSL   *bool   `json:"verifySSL"`
+	Fingerprint *string `json:"fingerprint"`
+}
+
+func (o nodeConnectionTestTLSOptions) apply(verifySSL bool, fingerprint string) (bool, string) {
+	if o.VerifySSL != nil {
+		verifySSL = *o.VerifySSL
+	}
+	if o.Fingerprint != nil {
+		fingerprint = *o.Fingerprint
+	}
+	return verifySSL, fingerprint
+}
+
+// HandleTestNode tests saved credentials with optional, non-persistent TLS edits.
 
 func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
@@ -2161,11 +2180,27 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	var tlsOptions nodeConnectionTestTLSOptions
+	if r.Body != nil {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32*1024))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&tlsOptions); err != nil {
+			if !errors.Is(err, io.EOF) {
+				http.Error(w, "Invalid request body", http.StatusBadRequest)
+				return
+			}
+		} else if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+	}
+
 	// Find the node to test
 	var testResult map[string]interface{}
 
 	if nodeType == "pve" && index < len(h.getConfig(r.Context()).PVEInstances) {
 		pve := h.getConfig(r.Context()).PVEInstances[index]
+		verifySSL, fingerprint := tlsOptions.apply(pve.VerifySSL, pve.Fingerprint)
 
 		// Create a temporary client to test connection
 		authUser := pve.User
@@ -2178,8 +2213,8 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 			Password:    pve.Password,
 			TokenName:   pve.TokenName,
 			TokenValue:  pve.TokenValue,
-			VerifySSL:   pve.VerifySSL,
-			Fingerprint: pve.Fingerprint,
+			VerifySSL:   verifySSL,
+			Fingerprint: fingerprint,
 		}
 		client, err := proxmox.NewClient(clientConfig)
 		if err != nil {
@@ -2209,6 +2244,7 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 		}
 	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
 		pbsInstance := h.getConfig(r.Context()).PBSInstances[index]
+		verifySSL, fingerprint := tlsOptions.apply(pbsInstance.VerifySSL, pbsInstance.Fingerprint)
 
 		// Create a temporary client to test connection
 		clientConfig := pbs.ClientConfig{
@@ -2217,8 +2253,8 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 			Password:    pbsInstance.Password,
 			TokenName:   pbsInstance.TokenName,
 			TokenValue:  pbsInstance.TokenValue,
-			VerifySSL:   pbsInstance.VerifySSL,
-			Fingerprint: pbsInstance.Fingerprint,
+			VerifySSL:   verifySSL,
+			Fingerprint: fingerprint,
 		}
 		client, err := pbs.NewClient(clientConfig)
 		if err != nil {
@@ -2250,6 +2286,7 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 		pmgInstance := h.getConfig(r.Context()).PMGInstances[index]
 
 		clientConfig := config.CreatePMGConfig(&pmgInstance)
+		clientConfig.VerifySSL, clientConfig.Fingerprint = tlsOptions.apply(clientConfig.VerifySSL, clientConfig.Fingerprint)
 		if pmgInstance.Password != "" && pmgInstance.TokenName == "" && pmgInstance.TokenValue == "" {
 			if clientConfig.User != "" && !strings.Contains(clientConfig.User, "@") {
 				clientConfig.User = clientConfig.User + "@pmg"
