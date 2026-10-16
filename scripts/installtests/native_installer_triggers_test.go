@@ -11,13 +11,16 @@ import (
 
 // The Unix native step runs the root/server installer fixtures as well as
 // scripts/install.sh's agent fixtures. Linux-only Build and Test coverage does
-// not supply the macOS verdict for these source and fixture inputs.
+// not supply the macOS verdict for these source and fixture inputs, including
+// local update completion and both half-removed-install recovery paths.
 var nativeServerUpgradeInputs = []string{
 	"install.sh",
 	"scripts/pulse-auto-update.sh",
+	"scripts/tests/test_auto_update_completion.py",
 	"scripts/tests/test_auto_update_service_state.py",
 	"scripts/tests/test_auto_update_systemd.py",
 	"scripts/tests/test_server_service_discovery.py",
+	"scripts/tests/test_server_update_repair.py",
 }
 
 func validateNativeServerUpgradeTriggers(content []byte) error {
