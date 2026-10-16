@@ -321,7 +321,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.body.textContent).not.toContain('workload-599');
   });
 
-  it('estimates unseen summaries from all measured workload heights, not the first row', () => {
+  it('estimates unseen summaries from all measured workload heights, not the first row', async () => {
     const rectangle = vi
       .spyOn(Element.prototype, 'getBoundingClientRect')
       .mockImplementation(function (this: Element) {
@@ -356,6 +356,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
           layoutWidth={() => 1200}
         />
       ));
+      await fireEvent.scroll(window);
       const measured = Array.from({ length: 140 }, (_, index) => 40 + (index % 3) * 40);
       const average = measured.reduce((sum, height) => sum + height, 0) / measured.length;
       const bottom = document.querySelector('tbody > tr[aria-hidden="true"] td')!;
