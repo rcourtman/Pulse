@@ -299,3 +299,34 @@ func TestSnapshotInventoryReadRecovery(t *testing.T) {
 		})
 	}
 }
+
+// Storage replies can contain archive names and operator notes. A malformed
+// success must be an unavailable inventory, never an auth diagnosis or a copy
+// of the private payload in an error/log, including with Debug enabled.
+func TestStorageInventoryDiagnosticsNoPayload(t *testing.T) {
+	const marker = "synthetic-private-archive-metadata"
+	for _, endpoint := range []string{"node-storages", "all-storages", "content"} {
+		for _, malformed := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/malformed=%t", endpoint, malformed), func(t *testing.T) {
+				body := `{"data":[` + storageInventoryFixtureRow(endpoint) + `],"metadata":"` + marker + strings.Repeat("x", 128*1024) + `"}`
+				if malformed {
+					body = `{"data":[],"errors":{"private":"` + marker + strings.Repeat("x", 128*1024) + `"}}`
+				}
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, body) }))
+				defer server.Close()
+				var captured bytes.Buffer
+				prior, priorLevel := log.Logger, zerolog.GlobalLevel()
+				log.Logger = zerolog.New(zerolog.SyncWriter(&captured)).Level(zerolog.DebugLevel)
+				zerolog.SetGlobalLevel(zerolog.DebugLevel)
+				defer func() { log.Logger = prior; zerolog.SetGlobalLevel(priorLevel) }()
+				rows, err := storageInventoryReader(t, server.URL, "single", endpoint)(context.Background())
+				if (err != nil) != malformed || (!malformed && len(rows) != 1) || (malformed && (len(rows) != 0 || isAuthError(err))) {
+					t.Fatal("diagnostic filtering changed inventory admission or auth classification")
+				}
+				if strings.Contains(captured.String(), marker) || (err != nil && strings.Contains(err.Error(), marker)) || captured.Len() > 2048 {
+					t.Fatal("storage reply payload escaped or inflated diagnostics")
+				}
+			})
+		}
+	}
+}

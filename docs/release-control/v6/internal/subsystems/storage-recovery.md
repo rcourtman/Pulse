@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### PVE archive removal requires complete storage inventories
+
+Node/all-storage lists and storage-content lists become authoritative only
+when the whole bounded HTTP 200 body has completed and closed successfully.
+Missing/null inventories, conflicting envelopes or field spellings, duplicate
+identities, malformed rows and invalid UTF-8 are unavailable observations, not
+empty inventories or credential refusals. Content filtering follows validation
+of every row. Genuine empty arrays, measured zeroes, sparse optional fields and
+unique additive provider metadata remain supported; existing request timeouts,
+authentication, TLS, failover and guest-command admission are unchanged.
+
+The backup poll's existing per-node/per-storage failure paths keep an unreadable
+local archive's identity and original backup time while readable siblings can
+refresh or empty. An ordinary complete read replaces the held copy, and a
+complete empty read can remove it. `TestPVEStorageInventoryAdmissionPreservesUnreadableCopies`
+joins real read-only HTTP, polling, state and recovery mapping in both node
+orders with an independent-connection control. Consuming proof uses those
+emitted observations in the existing By date and Coverage tables. No backup,
+guest probe, thaw, restore or installed recovery is established by this proof.
+
 ### PBS group cache follows the actual latest snapshot
 
 A successful group listing may move `last-backup` backwards as well as forwards
