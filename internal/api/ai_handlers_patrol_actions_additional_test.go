@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,6 +19,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 type scopedPatrolStateProvider struct {
@@ -1379,5 +1382,144 @@ func TestPatrolObjectiveAPIContractKeepsCoverageServerOwned(t *testing.T) {
 	handler.HandlePatrolObjectives(forgedRec, forgedReq)
 	if forgedRec.Code != http.StatusBadRequest {
 		t.Fatalf("forged coverage status = %d, body=%s", forgedRec.Code, forgedRec.Body.String())
+	}
+}
+
+// A completed action remains authoritative for its original investigation,
+// even after the same finding represents a new occurrence of the failure.
+func TestPatrolHistoricalActionCannotResolveRecurringFinding(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	newService := func() *ai.Service {
+		svc := ai.NewService(nil, nil)
+		svc.SetStateProvider(&MockStateProvider{})
+		if err := svc.GetPatrolService().GetFindings().SetPersistence(ai.NewFindingsPersistenceAdapter(persistence)); err != nil {
+			t.Fatal(err)
+		}
+		return svc
+	}
+	svc := newService()
+	findings := svc.GetPatrolService().GetFindings()
+	report := func() {
+		findings.Add(&ai.Finding{ID: "recurring", Key: "health-check-failed", ResourceID: "vm:42", ResourceType: "vm",
+			Title: "Service health check failed", Severity: ai.FindingSeverityWarning, Category: ai.FindingCategoryReliability})
+	}
+	report()
+	investigations := newTestInvestigationStore()
+	auditDirectory := t.TempDir()
+	audits, err := unifiedresources.NewSQLiteResourceStore(auditDirectory, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { audits.Close() })
+	handler := &AISettingsHandler{defaultAIService: svc,
+		investigationStores:   map[string]aicontracts.InvestigationStore{"default": investigations},
+		resourceStoreProvider: func(string) (unifiedresources.ResourceStore, error) { return audits, nil },
+	}
+	var history []*aicontracts.InvestigationSession
+	for occurrence := 1; occurrence <= 3; occurrence++ {
+		t.Run(fmt.Sprintf("occurrence-%d", occurrence), func(t *testing.T) {
+			for _, previous := range history {
+				before := findings.Get("recurring")
+				svc.GetPatrolService().SetInvestigationOrchestrator(&stubInvestigationOrchestrator{session: previous})
+				for _, suffix := range []string{"/investigation", "/investigation/messages"} {
+					req := httptest.NewRequest(http.MethodGet, "/api/ai/findings/recurring"+suffix, nil)
+					rec := httptest.NewRecorder()
+					if suffix == "/investigation" {
+						handler.HandleGetInvestigation(rec, req)
+					} else {
+						handler.HandleGetInvestigationMessages(rec, req)
+					}
+					if rec.Code != http.StatusNotFound {
+						t.Fatalf("current occurrence read returned historical session: status=%d body=%s", rec.Code, rec.Body.String())
+					}
+				}
+				hydrated := handler.hydratePatrolInvestigationAction("default", previous)
+				if hydrated.Outcome != aicontracts.OutcomeFixVerified || hydrated.Action == nil {
+					t.Fatal("historical investigation lost its verified action")
+				}
+				audit, found, err := audits.GetActionAudit(hydrated.Action.ActionID)
+				if err != nil || !found {
+					t.Fatalf("historical audit: found=%v err=%v", found, err)
+				}
+				handler.ReconcilePatrolActionTransition("default", audit)
+				after := findings.Get("recurring")
+				if after.ResolvedAt != nil || !after.ShouldInvestigate("full") || after.InvestigationRecord != nil {
+					t.Fatalf("historical action closed occurrence %d: resolved=%v outcome=%q session=%q", occurrence, after.ResolvedAt, after.InvestigationOutcome, after.InvestigationSessionID)
+				}
+				if len(after.Lifecycle) != len(before.Lifecycle) {
+					t.Fatal("historical action changed the current occurrence's lifecycle")
+				}
+			}
+			if !findings.Get("recurring").ShouldInvestigate("full") {
+				t.Fatal("new occurrence is not eligible for investigation")
+			}
+			current := investigations.Create("recurring", fmt.Sprintf("session-%d", occurrence))
+			current.Status = aicontracts.InvestigationStatusCompleted
+			current.Summary = "Current process stalled; restart proposed."
+			investigations.Update(current)
+			findings.UpdateInvestigation("recurring", current.SessionID, "running", "", nil, 1)
+			for _, previous := range history {
+				handler.hydratePatrolInvestigationAction("default", previous)
+				if got := findings.Get("recurring"); got.ResolvedAt != nil || got.InvestigationSessionID != current.SessionID || got.InvestigationOutcome != "" {
+					t.Fatal("historical result overwrote the new running investigation")
+				}
+			}
+			audit := recurrenceVerifiedAudit(t, current)
+			if _, _, err := audits.CreateActionAudit(audit, nil); err != nil {
+				t.Fatal(err)
+			}
+			handler.ReconcilePatrolActionTransition("default", audit)
+			if got := findings.Get("recurring"); got.ResolvedAt == nil || got.InvestigationOutcome != string(aicontracts.OutcomeFixVerified) || got.InvestigationRecord == nil || got.InvestigationRecord.ID != current.ID {
+				t.Fatalf("current verified action did not resolve its occurrence: %#v", got)
+			}
+			history = append(history, current)
+		})
+		if t.Failed() {
+			return
+		}
+		if occurrence < 3 {
+			report()
+			if occurrence == 2 {
+				// Reconstruct persisted findings and action audit before the third
+				// occurrence, matching the unattended controller restart.
+				if err := findings.ForceSave(); err != nil {
+					t.Fatal(err)
+				}
+				if err := audits.Close(); err != nil {
+					t.Fatal(err)
+				}
+				audits, err = unifiedresources.NewSQLiteResourceStore(auditDirectory, "default")
+				if err != nil {
+					t.Fatal(err)
+				}
+				svc = newService()
+				findings = svc.GetPatrolService().GetFindings()
+				handler.defaultAIService = svc
+			}
+		}
+	}
+}
+
+func recurrenceVerifiedAudit(t *testing.T, investigation *aicontracts.InvestigationSession) unifiedresources.ActionAuditRecord {
+	t.Helper()
+	now := time.Now().UTC()
+	evidence := unifiedresources.ActionEvidence{Version: 1, ID: "health-" + investigation.ID,
+		ObserverID: "daemon-observer", ObserverKind: "docker_daemon_observer", ObserverTrustDomain: "daemon", ExecutorTrustDomain: "agent",
+		Method: "typed_docker_daemon_observation", SubjectID: "vm:42", ObservedAt: now, ReceivedAt: now, Summary: "Service health check passed"}
+	canonical, err := unifiedresources.NormalizeActionResultV2(unifiedresources.ActionResultV2{Version: 2,
+		Execution: unifiedresources.ActionExecutionTruth{Status: unifiedresources.ActionExecutionSucceeded},
+		Verification: unifiedresources.ActionVerificationTruth{Status: unifiedresources.ActionVerificationConfirmed,
+			EvidenceClass: unifiedresources.ActionEvidenceIndependent, Evidence: []unifiedresources.ActionEvidence{evidence}},
+		Compensation: unifiedresources.ActionCompensationTruth{Support: unifiedresources.ActionCompensationUnavailable, Status: unifiedresources.ActionCompensationNotAvailable},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "action-" + investigation.ID
+	return unifiedresources.ActionAuditRecord{ID: id, CreatedAt: now, UpdatedAt: now, State: unifiedresources.ActionStateCompleted,
+		Request: unifiedresources.ActionRequest{RequestID: id, ResourceID: "vm:42", CapabilityName: "restart", RequestedBy: "pulse_patrol"},
+		Plan:    unifiedresources.ActionPlan{ActionID: id, RequestID: id, Allowed: true},
+		Origin:  &unifiedresources.ActionOrigin{Surface: patrolActionOriginSurface, FindingID: investigation.FindingID, InvestigationID: investigation.ID, ProposalID: id},
+		Result:  &unifiedresources.ExecutionResult{Success: true, ActionResultV2: &canonical},
 	}
 }

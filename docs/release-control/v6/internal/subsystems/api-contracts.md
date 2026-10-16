@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Finding-scoped investigation reads belong to the current occurrence
+
+The finding investigation and transcript endpoints return only the session
+owned by the finding's current occurrence. After a resolved finding is
+re-detected, a retained earlier session returns `404` through these current
+views until a new session exists. Explicit session and action history retain
+their original evidence. Outcome and record reconciliation check session
+identity and the persisted regression boundary under the findings lock before
+changing current state. `TestPatrolHistoricalActionCannotResolveRecurringFinding`
+in `internal/api/ai_handlers_patrol_actions_additional_test.go` covers three
+occurrences, restart, historical reads and duplicate action callbacks.
+
 ### Recovery point reads stay coherent between HTTP and investigations
 
 The points endpoint and investigation adapter use the same org-scoped manager
