@@ -20,6 +20,19 @@
 
 ## Purpose
 
+### Backup job errors are readable in Coverage details
+
+The existing workload disclosure exposes its selected latest backup job's
+result, start time and nonblank reported error as labelled, wrapping text.
+Provider text is escaped, not HTML; multiline/long errors remain readable
+without hover on phones. Unorderable or conflicting latest jobs retain the
+existing Unknown explanation rather than exposing a misleading earlier job.
+Ordinary inventory replacement updates/removes the detail without closing the
+workload or retaining an old error. Protection posture and restore evidence
+remain separate. `ProxmoxCoverageTable.taskDetail.test.tsx` and
+`backup-job-detail.cjs` cover this read-only presentation; no provider action,
+new route, backup completion or guest recovery is established.
+
 ### Backup diagnostics are not completed restore points
 
 The existing backup views keep running/failed inventory entries visible but
