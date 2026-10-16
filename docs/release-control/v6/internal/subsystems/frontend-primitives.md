@@ -9133,6 +9133,23 @@ muted, and leave the parent cells empty, so one parent never reads as several
 identical ones. The rows must already be grouped; the Backups "Backup server"
 table follows this through `BackupServerRow.continuesServer`.
 
+### Fixed-layout tables give free width to the column that varies
+
+In a fixed-layout table whose columns change with the container, columns
+whose content has a fixed size (a time, a badge, a row of buttons) take exact
+pixels, columns of truncating names take a plain percentage, and the column
+that says what happened takes no width so it absorbs the rest. Percentages for
+every track hand most of each extra pixel to content that already fits.
+Hidden tracks are collapsed and also zero-width, with the table at 100%:
+WebKit (Safari) keeps a collapsed column's width in a fixed layout, so
+widening the table to compensate scrolls sideways there, and `display: none`
+on a column makes Chromium lay it out as an auto column that shares the free
+width. A `max()` or `calc()` of a length and a percentage on a column is laid
+out as auto. The Alerts History table follows this; App.architecture.test.ts
+pins the pixel floors, zero-width hidden tracks and Message's 18% floor, and
+a WebKit and Chromium probe measured no horizontal overflow from 1280px to
+1920px windows.
+
 ### A refused setting reports the state the server kept
 
 When a write is refused because the server owns the value (an environment

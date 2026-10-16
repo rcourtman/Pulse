@@ -109,6 +109,17 @@ Unraid/QNAP/Linux/PowerShell, TLS/identity/repetition/cleanup and containing
 publication remain separate obligations; this source proof does not resolve
 #1099 or claim installed restoration.
 
+### Lost container mutation acknowledgements reconcile through reads
+
+Typed container lifecycle execution attempts its mutation once. A transport
+error preserves uncertain execution and, while the original operation context
+remains live, reads the same container and waits for its existing health check.
+Readback never manufactures a mutation acknowledgement or extends a canceled
+operation. Fixed, non-sensitive timeout/cancellation/unknown messages survive
+receipt sanitization. `docker_lifecycle_test.go` covers lost acknowledgement,
+health recovery, cancellation, exactly-once mutation and receipt redaction.
+
+
 ### Verified agent actions remain attached to their originating occurrence
 
 An agent action's execution and verification evidence belongs to its original

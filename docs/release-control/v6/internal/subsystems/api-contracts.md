@@ -43,6 +43,16 @@ boundary; full configapi PTY/tool/privacy/caller tests exercise the commands.
 Browser acceptance must use the actual producer fields through their existing
 setup/agent consumers, not a frontend-file guard skip or fabricated commands.
 
+### Container verification distinguishes transitional health
+
+Both agent and independent lifecycle readbacks classify a running container's
+`starting` health as inconclusive, not a final postcondition contradiction.
+Execution and verification remain separate axes: a confirmed readback cannot
+turn a lost mutation acknowledgement into acknowledged execution. The action
+summary retains the agent's sanitized error. The Docker action-result tests
+cover this projection without changing receipt protocol versions or authority.
+
+
 ### Finding-scoped investigation reads belong to the current occurrence
 
 The finding investigation and transcript endpoints return only the session
