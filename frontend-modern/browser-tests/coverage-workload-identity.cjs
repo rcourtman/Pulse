@@ -354,7 +354,8 @@ async function scan(page, reverse) {
       ),
     );
     await capture(page, spec.name + '-refreshed-detail');
-    await toggle.click();
+    if (spec.width === 320) await second.tap();
+    else await toggle.click();
     await page.getByRole('button', { name: 'Load fleet observations', exact: true }).click();
     await page.waitForFunction(
       () =>
