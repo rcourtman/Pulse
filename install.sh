@@ -5066,34 +5066,27 @@ start_pulse() {
         return 1
     fi
 
-    # Try to enable/start service (may fail in unprivileged containers)
-    if ! safe_systemctl enable $SERVICE_NAME; then
-        print_info "Note: systemctl enable failed (common in unprivileged containers)"
-    fi
-    
-    if ! safe_systemctl start $SERVICE_NAME; then
-        print_info "Note: systemctl start failed (common in unprivileged containers)"
-        if [[ "$PULSE_WAS_ACTIVE" != "true" ]]; then
-            print_info "The service will start automatically when the container starts"
-            return 0
-        fi
-        # An update stopped a running Pulse; do not accept a silent start failure
-        # here — fall through to the active-state verification below (#1323).
-    fi
-    
-    # Wait for service to start
-    sleep 3
-    
-    if timeout 5 systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
-        print_success "Pulse started successfully"
-    else
-        print_error "Failed to start Pulse"
-        journalctl -u $SERVICE_NAME -n 20 2>/dev/null || true
-        # Don't exit, just warn
-        print_info "Service may not be running. You might need to start it manually."
+    if ! safe_systemctl enable "$SERVICE_NAME"; then
+        print_warn "Automatic startup could not be enabled; check systemctl is-enabled $SERVICE_NAME."
     fi
 
-    ensure_pulse_running_after_update
+    if ! safe_systemctl start "$SERVICE_NAME"; then
+        print_warn "The Pulse start command failed; checking whether the service became active."
+    fi
+
+    # A successful command is not a running service, and an unsuccessful one
+    # can still have started it. Require the active read in either case. Keep
+    # the existing single retry only for a previously active update (#1323).
+    if [[ "$PULSE_WAS_ACTIVE" == "true" ]]; then
+        ensure_pulse_running_after_update || return 1
+    elif ! wait_for_service_active "$SERVICE_NAME" 20; then
+        print_error "Pulse files are installed, but service startup could not be confirmed; installation is incomplete."
+        print_info "Configuration and data are retained. Check service state before retrying:"
+        print_info "  systemctl status $SERVICE_NAME"
+        print_info "  journalctl -u $SERVICE_NAME -n 50"
+        return 1
+    fi
+    print_success "Pulse started successfully"
 }
 
 create_marker_file() {
@@ -5257,7 +5250,7 @@ main() {
                 refresh_auto_updates
             fi
 
-            start_pulse
+            start_pulse || return 1
             create_marker_file
             print_completion
             exit 0
@@ -5305,7 +5298,7 @@ main() {
                 refresh_auto_updates
             fi
 
-            start_pulse
+            start_pulse || return 1
             create_marker_file
             print_completion
             return 0
@@ -5512,7 +5505,7 @@ main() {
                     refresh_auto_updates
                 fi
                 
-                start_pulse
+                start_pulse || return 1
                 create_marker_file
                 print_completion
                 exit 0
@@ -5540,7 +5533,7 @@ main() {
                     refresh_auto_updates
                 fi
                 
-                start_pulse
+                start_pulse || return 1
                 create_marker_file
                 print_completion
                 exit 0
@@ -5663,7 +5656,7 @@ main() {
             refresh_auto_updates
         fi
         
-        start_pulse
+        start_pulse || return 1
         create_marker_file
         print_completion
     fi
