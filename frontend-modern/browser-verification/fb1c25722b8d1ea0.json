@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "base_sha": "96c8c0bf36715334ddce29d19af0f9e3630c0e08",
+  "verified_at": "2026-10-16T00:02:27.655282Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/DOCKER.md",
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/public/docs/DOCKER.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md"
+  ],
+  "content_sha256": {
+    "docs/DOCKER.md": "acf53ff2d64714ff2eb60a4f94eafecdce79cf6fea954687237526081a8bb628",
+    "docs/TROUBLESHOOTING.md": "74330c3d8b0929591b2252a9c486d52652dff97dc48a88470d04e2f2ba753a76",
+    "frontend-modern/public/docs/DOCKER.md": "acf53ff2d64714ff2eb60a4f94eafecdce79cf6fea954687237526081a8bb628",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "74330c3d8b0929591b2252a9c486d52652dff97dc48a88470d04e2f2ba753a76"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING#container-image-update-disagrees-with-the-runtime",
+    "/docs/DOCKER#update-alert-resolves-and-returns-without-an-image-change",
+    "/docs/DOCKER#image-update-disagrees-with-the-runtime"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Existing Docker/Troubleshooting help, rendered by the production Docs page, router, Markdown and CSS with a documentation-only fixture shell. Shipped document responses match the exact source bytes.",
+    "A resolved alert does not establish an updated workload; Last seen does not establish a new registry comparison; configured pending delay is not the registry-check interval.",
+    "Original observations can be reported without a new registry request, Test, pull, recreation, restart, history deletion, credential change or notification replay. This proof does not reproduce or resolve the Docker runtime defect."
+  ],
+  "interactions": [
+    "Desktop Chromium keyboard Enter and narrow WebKit touch tap follow the real cross-document lifecycle link and focus its destination heading without replacing the fixture shell.",
+    "Browser Back restores the Troubleshooting fragment and focus; the Docker in-document lifecycle link also reaches and focuses the destination.",
+    "Both browsers fetch the actual Markdown assets and match their SHA-256 values. No page errors, failed requests, HTTP error responses or API/WebSocket requests in the completed run. Both browsers and the Vite server closed normally."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "preview": "Vite API with the exact project config; absolute fixture-shell entry, production Docs/router/Markdown/CSS"
+  },
+  "input_hashes": {
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c",
+    "frontend-modern/src/pages/Docs.tsx": "e1d181803722b38ed211517d12495d201c299cc8ebb0a14131c58ac91c7e3a6a",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "213b6216dca650aab7d3ea4c8a66af6ee128f829ba455b5f53cd00a27e62d4cb",
+    "frontend-modern/package.json": "8d8da916d45b0aaf90d256787ea294b45c4aec89ee9fa3cab773bb8368c8da97",
+    "frontend-modern/package-lock.json": "927b6fd356ececa0de2d44bd68a62a7733a6bf2a93314bb24cc66d1c120e3915",
+    "frontend-modern/vite.config.ts": "de649c3466c8369b7ceff630b72f3733d1123417d6ef1964903450d64d796fb2",
+    "frontend-modern/browser-tests/doc-command-help.html": "136202c937d750c014141938d591694552558f6fb91619ebaab9e59bb0605e85",
+    "frontend-modern/browser-tests/doc-command-help.tsx": "81005ed6de41f32d7a581d1115e8c52be974a41ae421eab893ffe0a3a59a42f5",
+    "docs/DOCKER.md": "acf53ff2d64714ff2eb60a4f94eafecdce79cf6fea954687237526081a8bb628",
+    "docs/TROUBLESHOOTING.md": "74330c3d8b0929591b2252a9c486d52652dff97dc48a88470d04e2f2ba753a76",
+    "frontend-modern/public/docs/DOCKER.md": "acf53ff2d64714ff2eb60a4f94eafecdce79cf6fea954687237526081a8bb628",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "74330c3d8b0929591b2252a9c486d52652dff97dc48a88470d04e2f2ba753a76",
+    "tmp/docker-update-lifecycle/browser.cjs": "31937f33871df9bceb8809902357cf4997a814a737de511d782772ec667d3992"
+  },
+  "input_count": 2521,
+  "pixel_review": {
+    "tool": "native view_image; all five original PNG contents presented to the model",
+    "captures": [
+      {
+        "file": "desktop-chromium-troubleshooting-entry.png",
+        "sha256": "2745c21f32f238c000bac8b8ecb1f602d8c74506bbf52a6f137ba0320d7f4117",
+        "bytes": 227014,
+        "width": 1440,
+        "height": 1000
+      },
+      {
+        "file": "desktop-chromium-lifecycle-top.png",
+        "sha256": "b3bdf4dc8faf6fc670eaa9e75019a3f137b6ddad96056baf9641810add99751a",
+        "bytes": 222282,
+        "width": 1440,
+        "height": 1000
+      },
+      {
+        "file": "phone-webkit-troubleshooting-entry.png",
+        "sha256": "9d182ae90881cd993bfd85b5946aaa214ef6406ed2dc6dc42c439506f09b9dd4",
+        "bytes": 116006,
+        "width": 320,
+        "height": 1000
+      },
+      {
+        "file": "phone-webkit-lifecycle-top.png",
+        "sha256": "8af93af14efafeb56cbd901a4caf9af992d59668b526691458e39d9a9e2825c4",
+        "bytes": 110857,
+        "width": 320,
+        "height": 1000
+      },
+      {
+        "file": "phone-webkit-lifecycle-safety.png",
+        "sha256": "883715a49f0ea6ee3afd5af1902e1331aac3bf364a43b9814503d8f27eb54f42",
+        "bytes": 96076,
+        "width": 320,
+        "height": 1000
+      }
+    ],
+    "observations": [
+      "Desktop light: the Troubleshooting entry and underlined lifecycle link are readable. The destination heading has a visible keyboard-focus border; all lifecycle paragraphs fit in the destination capture.",
+      "320px WebKit dark: the Troubleshooting link wraps within the page, and the destination heading, freshness/delay distinctions and long adapter label remain readable without horizontal overflow.",
+      "320px WebKit dark safety capture: the complete passive-reporting and no-pull/recreate/credential-change/replay guidance is visible before the next Updating a Container heading."
+    ]
+  }
+}

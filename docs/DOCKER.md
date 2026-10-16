@@ -317,7 +317,41 @@ the relevant comparison. Never share registry credentials, environment variables
 or a full inspection. Do not change registry logins, enable command execution,
 clear alerts or retry an update just to diagnose the disagreement. A daily
 resolve/reopen cycle with unchanged image evidence is a separate symptom;
-retain its times rather than forcing another cycle.
+use the [alert-lifecycle checks](#update-alert-resolves-and-returns-without-an-image-change)
+below rather than forcing another cycle.
+
+### Update alert resolves and returns without an image change
+
+A **resolved** image-update alert does not establish that the container was
+updated. Keep three observations separate: the running image, the registry
+comparison and the alert's lifecycle. An unchanged running image can still be
+current if the registry tag moved back; a fresh agent report can carry an older
+cached registry result.
+
+Use the existing alert History and container details for the same host and
+container. Retain the original resolve/reopen times, **Last seen**, any image-check
+time and the displayed digest/error, where already available. **Last seen**
+advancing means the host is reporting, not that the registry comparison is new.
+The configured image-update alert delay is how long an observed update waits
+before alerting, not the registry-check interval. Do not shorten it or wait for
+another daily cycle just to gather evidence.
+
+Older agents could report **no update** after a failed local image inspection,
+without knowing the current digest. That is an incomplete comparison, not proof
+of recovery. Later safeguards retain pending alerts on unknown or failed checks,
+and preserve their age across cleanup and restart; those are distinct from
+correcting a wrong registry digest. The label `legacy-alert-recovery-adapter`
+alone does not identify what initiated a resolution. Neither that label nor a
+source-code fix establishes what an installed server and agent contain.
+
+For an already observed cycle, add the original sequence and the separate
+server/agent versions to the existing report; unknown details are valid. No
+new registry request, Test, update, restart or diagnostic run is needed to file
+it. Keep using the owning deployment manager's existing image and workload
+state, not a cleared Pulse alert, to judge whether an update actually happened.
+Do not pull or recreate a workload, clear History, change registry credentials
+or replay a notification to investigate this symptom. Keep raw inspections,
+registry credentials and private host/image names out of the report.
 
 ### Updating a Container
 
