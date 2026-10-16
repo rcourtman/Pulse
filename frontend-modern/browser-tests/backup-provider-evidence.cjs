@@ -111,6 +111,8 @@ async function inspect(page) {
       (item) => item.scope === provider.scope && item.source === provider.source,
     );
     assert(card, JSON.stringify(provider));
+    assert.match(card.text, /Result (Success|Failed|Unknown)/);
+    assert(!card.text.includes('Job Success'));
     assert(
       card.text.includes(
         `Access ${provider.permissions[0].toUpperCase()}${provider.permissions.slice(1)}`,

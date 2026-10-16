@@ -106,7 +106,9 @@ describe('scoped protection provider evidence', () => {
         expect(card.getByText(provider.scope)).toHaveClass('whitespace-normal', 'wrap-anywhere');
         expect(card.getByText(provider.source)).not.toHaveClass('truncate');
         expect(
-          card.getByText(`Result ${provider.jobState[0].toUpperCase()}${provider.jobState.slice(1)}`),
+          card.getByText(
+            `Result ${provider.jobState[0].toUpperCase()}${provider.jobState.slice(1)}`,
+          ),
         ).toBeInTheDocument();
         expect(
           card.getByText(

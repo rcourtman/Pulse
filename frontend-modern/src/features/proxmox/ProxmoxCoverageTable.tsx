@@ -521,7 +521,9 @@ export function ProxmoxCoverageTable(props: {
                                         </dd>
                                       </dl>
                                       <div class="flex flex-wrap gap-x-3 gap-y-0.5 text-muted">
-                                        <span>Result {evidenceQualityLabel(provider.jobState)}</span>
+                                        <span>
+                                          Result {evidenceQualityLabel(provider.jobState)}
+                                        </span>
                                         <span>
                                           History{' '}
                                           {evidenceQualityLabel(provider.historyCompleteness)}
