@@ -65,6 +65,8 @@ const posture = () => ({
     freshness: 'unknown',
     verification: 'unknown',
     coverage: 'unknown',
+    explanation:
+      'Synthetic missing backup evidence; workload identity is independent of protection.',
     providerStates: [],
     repositoryResourceIds: [],
     evidenceIds: [],
@@ -109,6 +111,7 @@ async function identity(page, width) {
     })),
   );
   assert.equal(facts.length, 3);
+  assert(!(await page.getByText('Protection posture is unavailable.', { exact: false }).count()));
   assert.equal(new Set(facts.map((row) => row.text)).size, 3);
   assert.match(facts[0].connection, /production/);
   assert.match(facts[2].connection, /recovery/);
