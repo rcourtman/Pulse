@@ -59,9 +59,11 @@ describe('ProxmoxRecoverableTable responsive columns', () => {
       'State',
     ]);
     expect(document.body.textContent).toContain('VM 100');
-    // The phone projection has no location column; the row title carries it.
-    expect(document.body.textContent).not.toContain('main / pve1');
-    expect(document.querySelector('td [title*="main / pve1"]')).not.toBeNull();
+    // Full-width provenance remains readable without a hover-only fallback.
+    const location = document.querySelector('[data-backup-location]');
+    expect(location).toHaveTextContent('main / pve1');
+    expect(location).toHaveClass('whitespace-normal', 'wrap-anywhere');
+    expect(location?.closest('td')).toHaveAttribute('colspan', '4');
     expect(document.body.textContent).not.toContain('5 PBS files');
   });
 

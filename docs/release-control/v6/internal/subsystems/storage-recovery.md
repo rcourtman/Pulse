@@ -41,6 +41,23 @@ raw rows, and never treats a failed refresh as current protection. Consuming
 proof exercises the emitted observations through existing Backups date and
 Coverage views. This does not establish native backup, restore or guest recovery.
 
+### Restore-point provenance is readable without hover
+
+Both existing backup views show the observed repository connection alongside
+its full datastore/namespace or physical archive-node path. Compact layouts use
+a full-width provenance row; wider cells wrap. Source connection is distinct
+from the guest's hosting connection, and missing source identity is not inferred
+from the matched guest. Search and location sorting include the displayed
+connection; matching, saved filter keys, completion and protection judgments
+are unchanged. The windowed date feed measures complete logical blocks rather
+than assuming each point is one 32px DOM row. Consuming proof must check actual
+viewport reachability, not merely that every point mounted at some time.
+`backupLocationAccess.test.tsx`, `ProxmoxBackupsTable.test.tsx` and the production
+HTTP fixture in `backup-location-access.cjs` cover both views, root/nested PBS
+namespaces, two connections, copied archive nodes and ordinary refresh. None
+establishes guest thaw, filesystem writes, a restore or installed recovery.
+
+
 ### PBS inventory failures retain only the unreadable namespace
 
 A transient or invalid group-list response preserves the exact datastore and

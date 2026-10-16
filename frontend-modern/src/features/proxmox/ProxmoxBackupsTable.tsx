@@ -42,6 +42,7 @@ import {
 } from './proxmoxBackupActivityPresentation';
 import {
   buildProxmoxBackupRecoveryModel,
+  getRecoverableArtifactLocation,
   coverageRowMatchesSearch,
   selectWorkloadRecoveryArtifacts,
   recoverableArtifactMatchesSearch,
@@ -569,7 +570,11 @@ export const ProxmoxBackupsTable: Component<{
         case 'source':
           return cmpString(a.sourceLabel, b.sourceLabel, direction);
         case 'location':
-          return cmpString(a.location, b.location, direction);
+          return cmpString(
+            getRecoverableArtifactLocation(a),
+            getRecoverableArtifactLocation(b),
+            direction,
+          );
         case 'created':
           return cmpNumber(a.createdMs, b.createdMs, direction);
         case 'size':

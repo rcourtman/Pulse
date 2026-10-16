@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "base_sha": "13c2f989ad9b3971c6b227c9424df4b37ba5b892",
+  "verified_at": "2026-10-16T06:01:15.032300Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+    "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts": "7ddf3854997c992dc741d2ba1b71c3ff0700029ee58c1176ff17eedfb2ece2e9",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "af229d46816155ab6a50bb826e50c85bf6ec5ff629a96dafb5b57133b7389e07",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "7a17335008ed9a59e08e33187a63ca9547b90ae1d73623d6fb73ec5a15d551b9",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "043248bbe8c2143f2c33cc8f2ba8acbadc49b7f55188e48020f6ccad15bf4bab",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "2908da26cb20e8c810e814a8331418f3a03c726186098e56aeaa274c47b2ca0d",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "d31815d1684150198cd9e0c05f07500e2d0df0bd26b71ebcd7a161ac0b2eae6d",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "2a4692eb9d2dcb4f19512bb118a06e2f6693ada2846603be1b60c85587cdfaa0",
+    "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts": "9292f82e0dec131d9e7867e4c83f8b95e18c6aa8c87834848c52469062233a60"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Same-named PBS connections and nested/root namespaces remain distinct and fully readable without hover in both existing views. Missing source connection is not inferred from guest ownership.",
+    "Node-local archive copies retain their distinct physical storage hosts and saved location scope. Verification and prune protection remain separate.",
+    "The 166-point windowed feed brings every complete source label into the actual viewport at desktop and 320px; mounting off-screen labels is insufficient. Window bounds remain 140 desktop / 36 phone."
+  ],
+  "interactions": [
+    "Keyboard and touch select the existing PBS connection facet; switching to Coverage and refreshing retains that exact URL scope, open evidence and focus while an updated namespace arrives through the real HTTP reader/model. Removing the facet restores all six distinct points.",
+    "Desktop container resizing through 640/320/1365px preserves each source label once. Location sorting follows the complete visible source path. Native wheel scrolling reaches all 166 fully visible labels in Chromium desktop/phone and WebKit phone.",
+    "Only synthetic local GETs are admitted. No provider/off-origin/mutating request, page error or console error; browser and server close."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "preview_source": "a256cd3606510e36077e51e76e9e6bc093768383",
+    "preview_source_proof": "source-y310ziav",
+    "source_inputs": 303,
+    "binding_sha256": "c8b380de8f2f0f79c68695c5fdbf3f892bd4c916e9a238e651e6a5bcc9d40903"
+  },
+  "pixel_review": {
+    "source_sha": "a256cd3606510e36077e51e76e9e6bc093768383",
+    "reviewed_at": "2026-10-16T06:01:15.032300+00:00",
+    "tool": "native view_image",
+    "captures": [
+      {
+        "file": "pixels-final/desktop-light-date.png",
+        "sha256": "189a5f97f330eeb829edd4857e9593766fd5237dde874f0fb57d5fc0a6cd7191",
+        "width": 1365,
+        "height": 1000,
+        "native_view_image": "Actual image content presented to the model after the final source-bound browser execution.",
+        "observation": "Complete source connection and datastore/namespace or archive-node paths are readable without hover in the existing By date table; verification/prune facts remain separate."
+      },
+      {
+        "file": "pixels-final/desktop-light-coverage-refresh.png",
+        "sha256": "2a551ce127a3e3e49a23c1e912c0484d8f62c9376af143d18c42669ce26d9e9d",
+        "width": 1365,
+        "height": 1000,
+        "native_view_image": "Actual image content presented to the model after the final source-bound browser execution.",
+        "observation": "Expanded Coverage retains complete paths, including the updated west namespace ending after-refresh; text stays inside cells and separate from the existing assessment/badges."
+      },
+      {
+        "file": "pixels-final/desktop-light-windowed-middle.png",
+        "sha256": "fd0e7c26245a2f2921af5d0e5f2f2f24ebbf75a74c424df00b1501507b02065b",
+        "width": 1365,
+        "height": 1000,
+        "native_view_image": "Actual image content presented to the model after the final source-bound browser execution.",
+        "observation": "The actual middle viewport contains continuous readable restore-point source paths, with no blank runway replacing the visible rows. Phone label endings and point numbers remain legible."
+      },
+      {
+        "file": "pixels-final/desktop-light-windowed-tail.png",
+        "sha256": "2e12c89d51e2c5f3d6db4ea4209051e5836fd5ea827a3b041f767aeb76874288",
+        "width": 1365,
+        "height": 1000,
+        "native_view_image": "Actual image content presented to the model after the final source-bound browser execution.",
+        "observation": "The actual tail viewport contains point-159 and both physical archive locations followed by the guest snapshot; full source labels remain readable without horizontal clipping."
+      },
+      {
+        "file": "pixels-final/phone-dark-date.png",
+        "sha256": "1f197a8ef6bddd5a437682f450bae5e941bd2000982c9fea2d808aa6a66e9b0e",
+        "width": 320,
+        "height": 1432,
+        "native_view_image": "Actual image content presented to the model after the final source-bound browser execution.",
+        "observation": "Complete source connection and datastore/namespace or archive-node paths are readable without hover in the existing By date table; verification/prune facts remain separate."
+      },
+      {
+        "file": "pixels-final/phone-dark-coverage-refresh.png",
+        "sha256": "a441b560f68e22dc10dc61ac5e0595ef40517bfdabd028cc9dd35a0193ac6004",
+        "width": 320,
+        "height": 1519,
+        "native_view_image": "Actual image content presented to the model after the final source-bound browser execution.",
+        "observation": "Expanded Coverage retains complete paths, including the updated west namespace ending after-refresh; text stays inside cells and separate from the existing assessment/badges."
+      },
+      {
+        "file": "pixels-final/phone-dark-windowed-middle.png",
+        "sha256": "b194ea35440bcaa2190667007ae8b538f3b7303f40b85418674084f7af9b2a8e",
+        "width": 320,
+        "height": 1000,
+        "native_view_image": "Actual image content presented to the model after the final source-bound browser execution.",
+        "observation": "The actual middle viewport contains continuous readable restore-point source paths, with no blank runway replacing the visible rows. Phone label endings and point numbers remain legible."
+      },
+      {
+        "file": "pixels-final/phone-dark-windowed-tail.png",
+        "sha256": "67ccb5caa95373fc5e9cedfecd3f5771b135709be52414ab87775ec2f3abfd94",
+        "width": 320,
+        "height": 1000,
+        "native_view_image": "Actual image content presented to the model after the final source-bound browser execution.",
+        "observation": "The actual tail viewport contains point-159 and both physical archive locations followed by the guest snapshot; full source labels remain readable without horizontal clipping."
+      },
+      {
+        "file": "pixels-final/phone-webkit-light-date.png",
+        "sha256": "6b66dd535078a997e2d58b2761fe9110bde3d2b130eff2a3266e6853ebccae32",
+        "width": 320,
+        "height": 1428,
+        "native_view_image": "Actual image content presented to the model after the final source-bound browser execution.",
+        "observation": "Complete source connection and datastore/namespace or archive-node paths are readable without hover in the existing By date table; verification/prune facts remain separate."
+      },
+      {
+        "file": "pixels-final/phone-webkit-light-coverage-refresh.png",
+        "sha256": "df61b00071dd8d50fdff3eaa616289f1e372c6b4f3766d29aa57ae0fbabd3ef7",
+        "width": 320,
+        "height": 1516,
+        "native_view_image": "Actual image content presented to the model after the final source-bound browser execution.",
+        "observation": "Expanded Coverage retains complete paths, including the updated west namespace ending after-refresh; text stays inside cells and separate from the existing assessment/badges."
+      },
+      {
+        "file": "pixels-final/phone-webkit-light-windowed-middle.png",
+        "sha256": "fdcb11faf5d2a459812fd646abb7ea018077c5f3521f9211e1d89c6e65a4cddd",
+        "width": 320,
+        "height": 1000,
+        "native_view_image": "Actual image content presented to the model after the final source-bound browser execution.",
+        "observation": "The actual middle viewport contains continuous readable restore-point source paths, with no blank runway replacing the visible rows. Phone label endings and point numbers remain legible."
+      },
+      {
+        "file": "pixels-final/phone-webkit-light-windowed-tail.png",
+        "sha256": "74ceaa95b9e3cc1ba79ab26beb929b6dfcb6e3a3b389f92011faaad3fd341681",
+        "width": 320,
+        "height": 1000,
+        "native_view_image": "Actual image content presented to the model after the final source-bound browser execution.",
+        "observation": "The actual tail viewport contains point-159 and both physical archive locations followed by the guest snapshot; full source labels remain readable without horizontal clipping."
+      }
+    ],
+    "viewport_reachability": [
+      {
+        "case": "desktop-light",
+        "total": 166,
+        "distinctLocationsReached": 166,
+        "scrollSteps": 23,
+        "renderedRows": 140
+      },
+      {
+        "case": "phone-dark",
+        "total": 166,
+        "distinctLocationsReached": 166,
+        "scrollSteps": 49,
+        "renderedRows": 36
+      },
+      {
+        "case": "phone-webkit-light",
+        "total": 166,
+        "distinctLocationsReached": 166,
+        "scrollSteps": 50,
+        "renderedRows": 36
+      }
+    ],
+    "limits": [
+      "Synthetic read-only API/production table consumers, not an installed appliance or native recovery.",
+      "All 166 complete labels entered the actual viewport during wheel scrolling; this is stronger than the earlier mounted-only smoke test, not a claim of arbitrary inventory/variable-height acceptance or physical swipe qualification."
+    ]
+  },
+  "scope_limits": [
+    "Synthetic read-only API/production table consumers, not an installed appliance or native recovery.",
+    "All 166 complete labels entered the actual viewport during wheel scrolling; this is stronger than the earlier mounted-only smoke test, not a claim of arbitrary inventory/variable-height acceptance or physical swipe qualification."
+  ],
+  "candidate_reconstruction": {
+    "original_execution_source": "a256cd3606510e36077e51e76e9e6bc093768383",
+    "abandoned_own_tip": "017cd31e517fd86baf8c81a966b3ea4cfa598a85",
+    "new_parent": "13c2f989ad9b3971c6b227c9424df4b37ba5b892",
+    "unchanged_compiled_inputs_verified": 303,
+    "unchanged_frontend_runtime_files_verified": 8,
+    "browser_replayed": false,
+    "timestamp_correction": "Same actual UTC instant, encoded with the guard-required Z suffix.",
+    "scope": "New coherent own-source candidate after supported assigned-base abandonment. Earlier commits, rejected amendment and invalid receipt remain retained as history; no imported/shared history was amended, no provenance or guard was relaxed, and no new browser execution is claimed."
+  }
+}

@@ -41,6 +41,8 @@ export interface RecoverableArtifact {
   createdAt: string;
   createdMs?: number;
   size?: number;
+  /** Observed source connection, not the guest's current hosting connection. */
+  connection?: string;
   location: string;
   /** Stable source/repository identity used by the backup-location filter. */
   locationKey?: string;
@@ -59,6 +61,10 @@ export interface RecoverableArtifact {
   /** A terminal task left an incomplete artifact which is not recoverable. */
   failed?: boolean;
   fileCount?: number;
+}
+
+export function getRecoverableArtifactLocation(artifact: RecoverableArtifact): string {
+  return [artifact.connection, artifact.location].filter(Boolean).join(' / ');
 }
 
 export interface CoverageTask {
@@ -677,6 +683,7 @@ export function buildProxmoxBackupRecoveryModel(
       createdAt: backup.backupTime,
       createdMs,
       size: backup.size,
+      connection: backup.instance?.trim() || undefined,
       location: `${backup.datastore || '—'} / ${backup.namespace?.trim() || '(root)'}`,
       ...artifactLocationScope('pbs', backup.instance, backup.datastore),
       detail: pbsBackupFileDetailLabel(backup.files.length),
@@ -710,6 +717,7 @@ export function buildProxmoxBackupRecoveryModel(
       createdAt: archive.time,
       createdMs,
       size: archive.size,
+      connection: archive.instance?.trim() || undefined,
       location:
         [archive.storage || archive.node, archive.storageNode].filter(Boolean).join(' / ') || '—',
       ...artifactLocationScope(
@@ -752,6 +760,7 @@ export function buildProxmoxBackupRecoveryModel(
       createdAt: snapshot.time,
       createdMs,
       size: snapshot.sizeBytes,
+      connection: snapshot.instance?.trim() || undefined,
       location: snapshot.node || snapshot.instance || '—',
       ...artifactLocationScope('snapshot', snapshot.instance, snapshot.node),
       detail: snapshot.description || snapshot.name || snapshotSource.detailFallbackLabel,
@@ -844,6 +853,7 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     ...row.artifacts.flatMap((artifact) => [
       artifact.sourceLabel,
       artifact.sourceTitle,
+      artifact.connection,
       artifact.location,
       artifact.detail,
     ]),
@@ -868,6 +878,7 @@ export function recoverableArtifactMatchesSearch(
     artifact.workload.instance,
     artifact.sourceLabel,
     artifact.sourceTitle,
+    artifact.connection,
     artifact.location,
     artifact.detail,
     artifact.detailTitle,

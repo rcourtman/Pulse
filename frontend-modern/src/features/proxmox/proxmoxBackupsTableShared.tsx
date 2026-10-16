@@ -14,6 +14,7 @@ import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 import {
   getRecoveryAgeBand,
+  getRecoverableArtifactLocation,
   type RecoverableArtifact,
   type RecoveryAgeBand,
   type WorkloadReference,
@@ -339,6 +340,20 @@ export function ArtifactStateBadge(props: { artifact: RecoverableArtifact }) {
           Prune protected
         </MetadataBadge>
       </Show>
+    </span>
+  );
+}
+
+// Restore-point provenance must be readable without hover. The repository's
+// connection is separate from workload attribution and saved location keys;
+// equal datastore/namespace names on two PBS connections are not one location.
+export function ArtifactLocationText(props: { artifact: RecoverableArtifact }) {
+  return (
+    <span
+      class="block whitespace-normal wrap-anywhere text-left leading-snug text-base-content"
+      data-backup-location
+    >
+      {getRecoverableArtifactLocation(props.artifact)}
     </span>
   );
 }

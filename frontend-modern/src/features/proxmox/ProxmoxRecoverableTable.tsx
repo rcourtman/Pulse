@@ -18,6 +18,7 @@ import type { RecoverableArtifact } from './proxmoxBackupRecoveryModel';
 import type { RecoverableSortKey } from './proxmoxBackupsTableModel';
 import {
   ArtifactSourceBadge,
+  ArtifactLocationText,
   ArtifactStateBadge,
   PROXMOX_BACKUP_COLUMN_LABELS,
   ProxmoxBackupAgeText,
@@ -110,93 +111,101 @@ export function ProxmoxRecoverableTable(props: {
       })),
     ]);
   });
-  const tableWindow = useProxmoxBackupTableWindowing(tableItems);
+  const tableWindow = useProxmoxBackupTableWindowing(tableItems, () => [
+    layoutMode(),
+    props.artifacts,
+  ]);
 
   const renderRow = (artifact: RecoverableArtifact): JSX.Element => (
-    <TableRow class="hover:bg-surface-hover" data-proxmox-backup-row="recoverable">
-      <TableCell class={`${getPlatformTableCellClassForKind('name')} text-base-content`}>
-        <div class="flex min-w-0 items-center gap-1">
-          <div
-            class="min-w-0 truncate font-semibold"
-            title={[
-              artifact.workload.name || artifact.workload.label,
-              artifact.workload.typeLabel,
-              artifact.workload.vmid,
-              // The phone projection has no location column, so the row's
-              // hover title carries the repository instead.
-              columnVisible('location') ? undefined : artifact.location,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          >
-            {artifact.workload.name || artifact.workload.label}
+    <>
+      <TableRow class="hover:bg-surface-hover" data-proxmox-backup-row="recoverable">
+        <TableCell class={`${getPlatformTableCellClassForKind('name')} text-base-content`}>
+          <div class="flex min-w-0 items-center gap-1">
+            <div
+              class="min-w-0 truncate font-semibold"
+              title={[
+                artifact.workload.name || artifact.workload.label,
+                artifact.workload.typeLabel,
+                artifact.workload.vmid,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            >
+              {artifact.workload.name || artifact.workload.label}
+            </div>
+            <Show when={isCompactBackupIdentityLayout(layoutMode())}>
+              <span class="shrink-0 text-[10px] text-muted">
+                {artifact.workload.typeLabel}
+                <Show when={artifact.workload.vmid}> {artifact.workload.vmid}</Show>
+              </span>
+            </Show>
           </div>
-          <Show when={isCompactBackupIdentityLayout(layoutMode())}>
-            <span class="shrink-0 text-[10px] text-muted">
-              {artifact.workload.typeLabel}
-              <Show when={artifact.workload.vmid}> {artifact.workload.vmid}</Show>
-            </span>
-          </Show>
-        </div>
-      </TableCell>
-      <Show when={columnVisible('type')}>
-        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          <ProxmoxBackupWorkloadTypeBadge
-            type={artifact.workload.type}
-            label={artifact.workload.typeLabel}
-          />
         </TableCell>
-      </Show>
-      <Show when={columnVisible('targetId')}>
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
-        >
-          {artifact.workload.vmid || '—'}
-        </TableCell>
-      </Show>
-      <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-        <ArtifactSourceBadge artifact={artifact} />
-      </TableCell>
-      <Show when={columnVisible('location')}>
-        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          <span class="block truncate" title={artifact.location}>
-            {artifact.location}
-          </span>
-        </TableCell>
-      </Show>
-      <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
-        <ProxmoxBackupAgeText artifact={artifact} compact={layoutMode() === 'compact'} />
-      </TableCell>
-      <Show when={columnVisible('size')}>
-        <TableCell class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}>
-          <Show
-            when={artifact.size && artifact.size > 0}
-            fallback={<span class="text-muted">No size</span>}
-          >
-            <RowMetricBar
-              valuePct={
-                props.sizeMaxBytes > 0 && artifact.size
-                  ? (artifact.size / props.sizeMaxBytes) * 100
-                  : 0
-              }
-              fillClass="bg-blue-500/40 dark:bg-blue-500/40"
-              label={formatPlatformTableBytesValue(artifact.size)}
-              tooltip={`${formatPlatformTableBytesValue(artifact.size)} (relative to largest artifact in view)`}
+        <Show when={columnVisible('type')}>
+          <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+            <ProxmoxBackupWorkloadTypeBadge
+              type={artifact.workload.type}
+              label={artifact.workload.typeLabel}
             />
-          </Show>
-        </TableCell>
-      </Show>
-      <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-        <ArtifactStateBadge artifact={artifact} />
-      </TableCell>
-      <Show when={columnVisible('details')}>
+          </TableCell>
+        </Show>
+        <Show when={columnVisible('targetId')}>
+          <TableCell
+            class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
+          >
+            {artifact.workload.vmid || '—'}
+          </TableCell>
+        </Show>
         <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          <span class="block truncate" title={artifact.detailTitle ?? artifact.detail}>
-            {artifact.detail || '—'}
-          </span>
+          <ArtifactSourceBadge artifact={artifact} />
         </TableCell>
+        <Show when={columnVisible('location')}>
+          <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+            <ArtifactLocationText artifact={artifact} />
+          </TableCell>
+        </Show>
+        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
+          <ProxmoxBackupAgeText artifact={artifact} compact={layoutMode() === 'compact'} />
+        </TableCell>
+        <Show when={columnVisible('size')}>
+          <TableCell class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}>
+            <Show
+              when={artifact.size && artifact.size > 0}
+              fallback={<span class="text-muted">No size</span>}
+            >
+              <RowMetricBar
+                valuePct={
+                  props.sizeMaxBytes > 0 && artifact.size
+                    ? (artifact.size / props.sizeMaxBytes) * 100
+                    : 0
+                }
+                fillClass="bg-blue-500/40 dark:bg-blue-500/40"
+                label={formatPlatformTableBytesValue(artifact.size)}
+                tooltip={`${formatPlatformTableBytesValue(artifact.size)} (relative to largest artifact in view)`}
+              />
+            </Show>
+          </TableCell>
+        </Show>
+        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+          <ArtifactStateBadge artifact={artifact} />
+        </TableCell>
+        <Show when={columnVisible('details')}>
+          <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+            <span class="block truncate" title={artifact.detailTitle ?? artifact.detail}>
+              {artifact.detail || '—'}
+            </span>
+          </TableCell>
+        </Show>
+      </TableRow>
+      <Show when={!columnVisible('location')}>
+        <TableRow data-proxmox-backup-row="location">
+          <TableCell colspan={visibleColumns().length} class="pt-0 text-[11px]">
+            <span class="text-muted">Location</span>
+            <ArtifactLocationText artifact={artifact} />
+          </TableCell>
+        </TableRow>
       </Show>
-    </TableRow>
+    </>
   );
 
   return (

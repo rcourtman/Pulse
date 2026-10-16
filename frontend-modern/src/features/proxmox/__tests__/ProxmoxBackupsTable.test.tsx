@@ -4,6 +4,7 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
+import { measureProxmoxBackupItemHeight } from '../useProxmoxBackupTableWindowing';
 import {
   BACKUP_IDENTITY_NOW,
   identityGuest,
@@ -223,6 +224,18 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it('measures logical backup blocks, not their individual DOM rows or runway spacers', () => {
+    const root = document.createElement('div');
+    root.innerHTML =
+      '<table><tbody><tr aria-hidden="true"></tr><tr data-proxmox-backup-row="day"></tr><tr data-proxmox-backup-row="recoverable"></tr><tr data-proxmox-backup-row="location"></tr><tr data-proxmox-backup-row="recoverable"></tr><tr data-proxmox-backup-row="location"></tr><tr aria-hidden="true"></tr></tbody></table>';
+    const body = root.querySelector('tbody')!;
+    vi.spyOn(body, 'getBoundingClientRect').mockReturnValue({ height: 520 } as DOMRect);
+    for (const row of body.querySelectorAll('[aria-hidden]'))
+      vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({ height: 80 } as DOMRect);
+    expect(measureProxmoxBackupItemHeight(root)).toBe(120);
+    expect(measureProxmoxBackupItemHeight(document.createElement('div'))).toBe(0);
+  });
+
   it.each(['date', 'coverage'])(
     'keeps point verification separate from pruning and workload posture in %s',
     async (view) => {
@@ -655,7 +668,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getByRole('button', { name: /pve backup files/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /guest snapshots/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Archives' })).not.toBeInTheDocument();
-    expect(screen.getByText('main / minipc')).toBeInTheDocument();
+    expect(screen.getByText('pbs-main / main / minipc')).toBeInTheDocument();
     expect(
       screen.getByRole('cell', {
         name: `${getRecoveryFullDateLabel('2026-05-25')} 3 backups`,
@@ -778,7 +791,7 @@ describe('ProxmoxBackupsTable', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
-    await screen.findByText('offsite / minipc');
+    await screen.findByText('pbs-offsite / offsite / minipc');
     const filterSelect = screen.getByRole('combobox', { name: 'Filter' });
     const offsiteOption = screen.getByRole('option', {
       name: 'Backup location: pbs-offsite / offsite',
@@ -790,8 +803,8 @@ describe('ProxmoxBackupsTable', () => {
         'pbs:pbs-offsite:offsite',
       ),
     );
-    expect(screen.getByText('offsite / minipc')).toBeInTheDocument();
-    expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
+    expect(screen.getByText('pbs-offsite / offsite / minipc')).toBeInTheDocument();
+    expect(screen.queryByText('pbs-main / main / minipc')).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Backup location: pbs-offsite / offsite' }),
     ).toBeInTheDocument();
@@ -803,8 +816,8 @@ describe('ProxmoxBackupsTable', () => {
     );
     expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
     await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
-    expect(screen.getByText('offsite / minipc')).toBeInTheDocument();
-    expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
+    expect(screen.getByText('pbs-offsite / offsite / minipc')).toBeInTheDocument();
+    expect(screen.queryByText('pbs-main / main / minipc')).not.toBeInTheDocument();
   });
 
   it('clears incompatible URL facets when switching backup views', async () => {
