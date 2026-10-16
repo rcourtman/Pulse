@@ -102,9 +102,27 @@ if { [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; } && \
     exit 1
 fi
 
-# Do not truncate a regular file/link created after the preflight observation.
-set -o noclobber
-cat > "$COMPOSE_FILE" << COMPOSE_EOF
+# Render privately on the destination filesystem before exposing either file.
+# noclobber alone still leaves partial files after a failed write, and can open
+# special paths raced into place after preflight. Exclusive hard links publish
+# complete files without replacing or following any destination (including a
+# directory). POSIX link has exactly two path operands, unlike ln's implicit
+# target-directory handling. A missing/refused link must stop, not fall back.
+umask 077
+STAGING_DIR=$(mktemp -d ./.pulse-docker.XXXXXX)
+cleanup_generation() {
+    local status=$? file
+    for file in "$STAGING_DIR/compose" "$STAGING_DIR/env"; do
+        if [ -e "$file" ]; then
+            rm -- "$file" || status=1
+        fi
+    done
+    rmdir -- "$STAGING_DIR" || status=1
+    return "$status"
+}
+trap cleanup_generation EXIT
+
+cat > "$STAGING_DIR/compose" << COMPOSE_EOF
 version: '3.8'
 
 services:
@@ -133,19 +151,38 @@ volumes:
     driver: local
 COMPOSE_EOF
 
-echo "✓ Generated docker-compose.yml"
-echo ""
-
 # Create .env file with defaults
-if [ -f "$ENV_FILE" ]; then
-    echo "⚠️  .env file already exists - not overwriting"
-    echo ""
+if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
+    if [ ! -f "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
+        printf '%s\n' "ERROR: .env changed to an unsafe path; configuration was not published." >&2
+        exit 1
+    fi
+    PRESERVE_ENV=true
 else
-    cat > "$ENV_FILE" << EOF
+    PRESERVE_ENV=false
+    cat > "$STAGING_DIR/env" << EOF
 PULSE_IMAGE=${PULSE_IMAGE}
 PULSE_PORT=${PULSE_PORT}
 TZ=$(timedatectl show -p Timezone --value 2>/dev/null || echo "UTC")
 EOF
+    if ! link "$STAGING_DIR/env" "$ENV_FILE"; then
+        printf '%s\n' "ERROR: Could not publish .env without replacing an existing path; configuration was not completed." >&2
+        exit 1
+    fi
+fi
+
+if ! link "$STAGING_DIR/compose" "$COMPOSE_FILE"; then
+    printf '%s\n' "ERROR: Could not publish docker-compose.yml without replacing an existing path; configuration was not completed." \
+        "Any complete .env already generated is retained; no existing configuration was overwritten." >&2
+    exit 1
+fi
+
+echo "✓ Generated docker-compose.yml"
+echo ""
+if [ "$PRESERVE_ENV" = true ]; then
+    echo "⚠️  .env file already exists - not overwriting"
+    echo ""
+else
     echo "✓ Generated .env file"
     echo ""
 fi

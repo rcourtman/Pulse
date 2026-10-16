@@ -7,6 +7,9 @@ Docker, timezone and hostname are closed fixtures; no containers are started.
 
 import os
 from pathlib import Path
+import shlex
+import shutil
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -31,6 +34,7 @@ class DockerGeneratorSafety(unittest.TestCase):
         self.work.mkdir()
         tools = self.root / "tools"
         tools.mkdir()
+        self.tools = tools
         source = INSTALLER.read_text()
         # Assert both confinement edits still target the actual guards. All
         # configuration generation, admission, diagnostics and exits stay real.
@@ -66,7 +70,7 @@ printf '%s\\n' "$*" >> "$FIXTURE_DOCKER_CALLS"
         result = subprocess.run(
             ["bash", str(self.script)], cwd=self.work,
             env={**self.environment, **environment}, capture_output=True,
-            text=True, timeout=10,
+            text=True, timeout=10, umask=0o000,
         )
         # Only capability discovery is admitted. This fixture cannot accept a
         # claimed Docker install, pull, start or recovery result.
@@ -186,14 +190,80 @@ printf '%s\\n' "$*" >> "$FIXTURE_DOCKER_CALLS"
                          (before.st_ino, before.st_mode, before.st_mtime_ns))
         self.assertIn(".env file already exists - not overwriting", result.stdout)
 
+    def test_failed_render_publishes_no_partial_configuration(self):
+        real_cat = shlex.quote(shutil.which("cat"))
+        cat = self.tools / "cat"
+        cat.write_text(f'''#!/bin/bash
+count=0
+if [ -f "$FIXTURE_RENDER_COUNT" ]; then read -r count < "$FIXTURE_RENDER_COUNT"; fi
+count=$((count + 1))
+printf '%s\\n' "$count" > "$FIXTURE_RENDER_COUNT"
+if [ "$count" = "$FIXTURE_FAIL_RENDER" ]; then
+    printf '%s\\n' 'incomplete configuration'
+    exit 44
+fi
+exec {real_cat} "$@"
+''')
+        cat.chmod(0o700)
+        for index, name in ((1, "compose"), (2, "environment")):
+            with self.subTest(render=name):
+                self.work = self.root / ("failed-" + name)
+                self.work.mkdir()
+                result = self.run_generator(
+                    FIXTURE_RENDER_COUNT=str(self.root / ("render-count-" + name)),
+                    FIXTURE_FAIL_RENDER=str(index),
+                )
+                self.assertEqual(result.returncode, 44, result.stdout + result.stderr)
+                self.assertNotIn("Configuration generated", result.stdout)
+                self.assertEqual(list(self.work.iterdir()), [],
+                                 "failed rendering left a partial output or private staging input")
+
+    def test_new_outputs_are_private_complete_files_without_staging_residue(self):
+        result = self.run_generator()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual({p.name for p in self.work.iterdir()}, {"docker-compose.yml", ".env"})
+        for name in ("docker-compose.yml", ".env"):
+            with self.subTest(output=name):
+                path = self.work / name
+                self.assertTrue(stat.S_ISREG(path.lstat().st_mode))
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+                self.assertEqual(path.stat().st_nlink, 1)
+
+    def test_refused_publication_never_copies_over_the_destination(self):
+        real_link = shlex.quote(shutil.which("link"))
+        link = self.tools / "link"
+        link.write_text(f'''#!/bin/bash
+if [ "$2" = "$FIXTURE_FAIL_LINK" ]; then exit 73; fi
+exec {real_link} "$@"
+''')
+        link.chmod(0o700)
+        for target, retained in ((".env", set()), ("./docker-compose.yml", {".env"})):
+            with self.subTest(destination=target):
+                self.work = self.root / ("link-" + str(len(retained)))
+                self.work.mkdir()
+                result = self.run_generator(FIXTURE_FAIL_LINK=target)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("Could not publish", result.stderr)
+                self.assertNotIn("Configuration generated", result.stdout)
+                self.assertEqual({p.name for p in self.work.iterdir()}, retained)
+                if retained:
+                    self.assertEqual((self.work / ".env").read_text(),
+                                     "PULSE_IMAGE=rcourtman/pulse:6.6.0\nPULSE_PORT=7655\nTZ=Europe/London\n")
+                    self.assertIn("complete .env already generated is retained", result.stderr)
+
     def test_output_appearing_after_preflight_is_not_truncated(self):
         hook = self.root / "before-output.sh"
         hook.write_text(r'''
 fixture_before_output() {
-    if [[ "$BASH_COMMAND" == "cat > \"\$$FIXTURE_OUTPUT_VARIABLE\""* ]]; then
+    if [[ "$BASH_COMMAND" == "cat > \"\$$FIXTURE_OUTPUT_VARIABLE\""* ||
+          "$BASH_COMMAND" == "link "*"\"\$$FIXTURE_OUTPUT_VARIABLE\"" ]]; then
         trap - DEBUG
         if [[ "$FIXTURE_RACE_KIND" == regular ]]; then
             printf '%s\n' 'concurrent operator configuration' > "$FIXTURE_RACE_PATH"
+        elif [[ "$FIXTURE_RACE_KIND" == directory ]]; then
+            mkdir "$FIXTURE_RACE_PATH"
+        elif [[ "$FIXTURE_RACE_KIND" == fifo ]]; then
+            mkfifo "$FIXTURE_RACE_PATH"
         else
             ln -s "$FIXTURE_RACE_TARGET" "$FIXTURE_RACE_PATH"
         fi
@@ -202,7 +272,7 @@ fixture_before_output() {
 trap fixture_before_output DEBUG
 ''')
         for variable, name in (("COMPOSE_FILE", "docker-compose.yml"), ("ENV_FILE", ".env")):
-            for kind in ("regular", "link", "dangling"):
+            for kind in ("regular", "link", "dangling", "directory", "fifo"):
                 with self.subTest(output=name, kind=kind):
                     self.work = self.root / (variable + "-" + kind)
                     self.work.mkdir()
@@ -219,12 +289,18 @@ trap fixture_before_output DEBUG
                     self.assertNotIn("Configuration generated", result.stdout)
                     if kind == "regular":
                         self.assertEqual(path.read_text(), "concurrent operator configuration\n")
+                    elif kind == "directory":
+                        self.assertTrue(path.is_dir())
+                        self.assertEqual(list(path.iterdir()), [])
+                    elif kind == "fifo":
+                        self.assertTrue(stat.S_ISFIFO(path.lstat().st_mode))
                     else:
                         self.assertTrue(path.is_symlink())
                         if kind == "link":
                             self.assertEqual(target.read_text(), "saved linked operator configuration\n")
                         else:
                             self.assertFalse(target.exists())
+                    self.assertFalse(list(self.work.glob(".pulse-docker.*")))
 
 
 if __name__ == "__main__":

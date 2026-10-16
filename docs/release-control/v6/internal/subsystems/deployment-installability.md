@@ -23,8 +23,15 @@ operation. Before writing either output it refuses any existing default Compose
 base or override filename, including links, dangling links and directories.
 It does not replace the deployment or overwrite its previous recovery copy.
 An existing regular `.env` is preserved byte-for-byte; a linked, dangling or
-special `.env` path stops before Compose creation. New outputs use Bash
-noclobber so a regular file or link appearing after preflight is not truncated.
+special `.env` path stops before Compose creation. Both outputs are rendered in
+a private same-filesystem staging directory before publication, with mode 0600
+regardless of the caller's umask. POSIX `link` publishes each complete regular
+file exclusively: a raced destination file, link, directory or FIFO is neither
+followed nor replaced. Missing/refused link support stops without a copy fallback.
+Failed rendering exposes neither output; the EXIT cleanup removes owned staging
+inputs. Environment publication precedes Compose publication. If the latter
+fails, the complete generated `.env` remains, with an explicit incomplete-result
+diagnostic and no success claim; no published file is removed as rollback.
 This is not a multi-file atomic transaction or a guarantee for an adversarially
 shared directory. The completion message describes configuration generation,
 not a running or installed container. Image/version/port defaults are unchanged.
@@ -36,7 +43,11 @@ copy. Closed Docker/timezone/hostname fixtures cover repeated refusal and
 recovery-copy preservation, all default base/override names, linked outputs,
 special environment paths, fresh defaults and explicit images, and an unchanged
 regular environment file. Exact-parent controls must reproduce the destructive
-overwrite and successful exit. This is source-bound generator proof, not Docker
+overwrite and successful exit. Complete-output controls also retain both failed
+render exits, refuse publication without fallback, exercise raced special paths,
+and verify private final files and staging cleanup. The direct-write parent must
+leave partial configuration on both injected rendering failures. This is
+source-bound generator proof, not Docker
 startup, native installation, upgrade or installed recovery.
 
 ### Container-agent compatibility bootstrap authenticates before execution
