@@ -46,8 +46,10 @@ describe('signed-installer entrypoints', () => {
       expect(install.querySelector(`#${fragment}`)).not.toBeNull();
     }
     expect(article.textContent).toContain('private temporary files');
-    expect([...article.querySelectorAll('pre code')].some((code) =>
-      code.textContent?.includes('ssh-keygen -Y verify'),
-    )).toBe(false);
+    expect(
+      [...article.querySelectorAll('pre code')].some((code) =>
+        code.textContent?.includes('ssh-keygen -Y verify'),
+      ),
+    ).toBe(false);
   });
 });
