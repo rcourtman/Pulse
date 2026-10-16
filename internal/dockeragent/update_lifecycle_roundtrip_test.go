@@ -119,7 +119,8 @@ func TestDockerUpdateCollectorAdmissionPreservesOccurrence(t *testing.T) {
 					ResourceID: resourceID, ResourceName: "database", Node: hostID, Instance: hostID,
 					StartTime: time.Now().Add(-time.Duration(delay+2) * time.Hour), LastSeen: lastObservation,
 					LastNotified: &lastNotified, Acknowledged: acknowledged,
-					Metadata: map[string]interface{}{"hostId": hostID, "hostAgentId": hostID, "containerId": containerID, "containerName": "database", "image": "mongo:7"},
+					Message: fmt.Sprintf("Docker container 'database' has an image update available for %d hours", delay+2), Value: float64(delay + 2), Threshold: float64(delay),
+					Metadata: map[string]interface{}{"hostId": hostID, "resourceType": "app-container", "hostName": hostID, "hostHostname": hostID, "containerId": containerID, "containerName": "database", "image": "mongo:7"},
 				}
 				if acknowledged {
 					seed.AckTime, seed.AckUser = &lastObservation, "fixture-operator"
@@ -132,6 +133,19 @@ func TestDockerUpdateCollectorAdmissionPreservesOccurrence(t *testing.T) {
 					t.Fatalf("saved occurrence was not restored: %+v", loaded)
 				}
 				seed = loaded // Restoration may canonicalise the legacy checkpoint ID.
+				logFrontendFixture := func(phase string) {
+					t.Helper()
+					if delay != 24 || acknowledged {
+						return
+					}
+					monitor.SyncAlertState()
+					payload, err := json.Marshal(map[string]interface{}{"phase": phase, "state": monitor.BuildFrontendState()})
+					if err != nil {
+						t.Fatal(err)
+					}
+					t.Logf("DOCKER_UPDATE_FRONTEND_FIXTURE:%s", payload)
+				}
+				logFrontendFixture("restored before the first agent report")
 				var firings, resolutions, deliveries atomic.Int32
 				manager.SetAlertCallback(func(*alerts.Alert) { deliveries.Add(1) })
 				manager.SubscribeLifecycleCallback(func(event alerts.LifecycleEvent) {
@@ -165,6 +179,7 @@ func TestDockerUpdateCollectorAdmissionPreservesOccurrence(t *testing.T) {
 					if firings.Load() != 0 || resolutions.Load() != 0 || deliveries.Load() != 0 {
 						t.Fatalf("%s: invented lifecycle/delivery: %d/%d/%d", name, firings.Load(), resolutions.Load(), deliveries.Load())
 					}
+					logFrontendFixture(name)
 					t.Logf("%s: collector/wire/admission evidence, original age/identity/ack/notification and retention agree", name)
 				}
 				admitAndKeep("cached positive after server restart", collect())
@@ -208,6 +223,7 @@ func TestDockerUpdateCollectorAdmissionPreservesOccurrence(t *testing.T) {
 				if got := manager.GetActiveAlerts(); len(got) != 0 || resolutions.Load() != 1 {
 					t.Fatalf("affirmative recovery did not resolve exactly once: active=%+v resolutions=%d", got, resolutions.Load())
 				}
+				logFrontendFixture("affirmative comparison recovered")
 				send(fallback) // Lower report sequence: no alert evaluation or state rollback.
 				host, ok := monitor.GetDockerHost(hostID)
 				if !ok || host.Containers[0].ImageDigest != newImage || host.Containers[0].UpdateStatus.UpdateAvailable || len(manager.GetActiveAlerts()) != 0 || resolutions.Load() != 1 {

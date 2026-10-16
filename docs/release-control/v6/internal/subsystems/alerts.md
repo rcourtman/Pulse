@@ -1388,6 +1388,19 @@ destination result, or reporter confirmation of #2353's full daily cycle.
 
 ### A "no update" report without a local digest is unknown
 
+The application must preserve that occurrence until evidence reaches the
+detector. Live inventory absence is not a host-removal event: after restart,
+router/state synchronisation can run before any Docker agent reports. The
+monitoring boundary preserves saved alerts then; explicit host removal and
+affirmative comparisons still clear them. Complete mock-estate membership is
+separate. `TestDockerUpdateCollectorAdmissionPreservesOccurrence` exercises
+this application boundary through real collector/report ingestion, aged
+checkpoint restoration, 24/48-hour delays, acknowledgement, retention, unknown
+and failed checks, an explicitly synthetic legacy wire control, affirmative
+recovery and stale-report rejection. It does not replay a native day or prove
+the original reporter's installed cause. See the monitoring contract's
+"Empty live Docker inventory is not removal evidence" section.
+
 An image-update clear is a comparison: the agent must have known the local
 digest it compared. Agents before #2353 reported `UpdateAvailable: false` with
 an empty `CurrentDigest` when an image inspect failed, because an empty digest

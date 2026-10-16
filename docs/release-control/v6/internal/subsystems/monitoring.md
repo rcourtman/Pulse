@@ -7680,6 +7680,25 @@ signature for its other callers.
 fallback and the unknown case, with the registry answer seeded offline; on the
 previous code it reproduces the false no-update status.
 
+### Empty live Docker inventory is not removal evidence
+
+Agent inventory starts empty after a monitor restart/reload and grows as each
+agent reports. Alert-state synchronisation must not interpret an absent host
+as removed: router bootstrap could clear a restored update occurrence before
+its first report, discarding the pending age that the alert manager restored.
+`pruneStaleDockerAlerts` now uses membership-based removal only for the complete
+mock fixture estate, retaining the existing mode fence. Explicit live removal
+still owns `finalizeDockerHostRemoval` and clears that host's alerts, including
+when it has not reported in this process. Ordinary inactivity retention remains.
+
+`TestMonitor_PruneDockerAlerts_Extra` covers empty live inventory and explicit
+removal. `TestDockerUpdateCollectorAdmissionPreservesOccurrence` joins the real
+collector, compressed authenticated HTTPS report, admission/order checks,
+restored 24/48-hour occurrence and retention/recovery. Its aged JSON checkpoint
+and daemon/registry cache are synthetic; the legacy no-current-digest wire
+control is labelled separately from collector output. It establishes neither
+the reporter's installed cause nor a naturally elapsed day or release use.
+
 ### Forked host reports cannot bypass a base-identity removal block
 
 Host report admission resolves identity before consulting removal blocks, so a
