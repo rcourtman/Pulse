@@ -25,4 +25,11 @@ function Fixture() {
     </main>
   );
 }
-render(() => <Router><Route path="*" component={Fixture} /></Router>, document.getElementById('root')!);
+render(
+  () => (
+    <Router>
+      <Route path="*" component={Fixture} />
+    </Router>
+  ),
+  document.getElementById('root')!,
+);

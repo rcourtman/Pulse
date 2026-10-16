@@ -136,10 +136,7 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
       );
       return;
     }
-    sync(
-      Math.max(0, -segmentRect.top + projectedScrollDelta),
-      window.innerHeight,
-    );
+    sync(Math.max(0, -segmentRect.top + projectedScrollDelta), window.innerHeight);
   };
 
   createEffect(() => {
@@ -158,10 +155,7 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     const handleWheel = (event: Event) => {
       const wheelEvent = event as WheelEvent;
       if (wheelEvent.deltaY === 0) return;
-      syncWindowToViewport(
-        wheelDeltaInPixels(wheelEvent, viewportHeight()),
-        measureOnScroll,
-      );
+      syncWindowToViewport(wheelDeltaInPixels(wheelEvent, viewportHeight()), measureOnScroll);
     };
     const handleResize = () => syncWindowToViewport(0, true);
 

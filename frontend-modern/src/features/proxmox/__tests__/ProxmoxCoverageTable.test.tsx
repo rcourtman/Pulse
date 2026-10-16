@@ -206,23 +206,47 @@ describe('ProxmoxCoverageTable column visibility', () => {
 
   it('keeps an expanded workload mounted and focused while its tall provider evidence is read', async () => {
     let scrollTop = 0;
-    const rectangle = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-      const isRoot = this.getAttribute('data-proxmox-backups-table') === 'coverage';
-      const height = this.hasAttribute('data-inline-detail-for') ? 6000 : 32;
-      return { x: 0, y: isRoot ? -scrollTop : 0, top: isRoot ? -scrollTop : 0,
-        left: 0, right: 1200, bottom: height, width: 1200, height } as DOMRect;
-    });
+    const rectangle = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: Element) {
+        const isRoot = this.getAttribute('data-proxmox-backups-table') === 'coverage';
+        const height = this.hasAttribute('data-inline-detail-for') ? 6000 : 32;
+        return {
+          x: 0,
+          y: isRoot ? -scrollTop : 0,
+          top: isRoot ? -scrollTop : 0,
+          left: 0,
+          right: 1200,
+          bottom: height,
+          width: 1200,
+          height,
+        } as DOMRect;
+      });
     const rows = Array.from({ length: 200 }, (_, index) => ({
-      ...row, key: `fleet-${index}`, workload: { ...row.workload, key: `fleet-${index}`, label: `fleet-${index}` },
+      ...row,
+      key: `fleet-${index}`,
+      workload: { ...row.workload, key: `fleet-${index}`, label: `fleet-${index}` },
     }));
     try {
       render(() => (
-        <ProxmoxCoverageTable rows={rows} hasAnyRows emptyIcon={<span />} emptyTitle="" emptyDescription=""
-          sortKey={() => 'posture'} sortDirection={() => 'asc'} onSort={() => undefined}
-          expandedKeys={new Set(['fleet-0'])} onToggleExpand={() => undefined}
-          showTaskColumn={false} layoutWidth={() => 1200} />
+        <ProxmoxCoverageTable
+          rows={rows}
+          hasAnyRows
+          emptyIcon={<span />}
+          emptyTitle=""
+          emptyDescription=""
+          sortKey={() => 'posture'}
+          sortDirection={() => 'asc'}
+          onSort={() => undefined}
+          expandedKeys={new Set(['fleet-0'])}
+          onToggleExpand={() => undefined}
+          showTaskColumn={false}
+          layoutWidth={() => 1200}
+        />
       ));
-      const toggle = document.querySelector<HTMLButtonElement>('button[aria-controls="proxmox-coverage-evidence-fleet-0"]')!;
+      const toggle = document.querySelector<HTMLButtonElement>(
+        'button[aria-controls="proxmox-coverage-evidence-fleet-0"]',
+      )!;
       toggle.focus();
       scrollTop = 3000;
       await fireEvent.scroll(window);
@@ -234,7 +258,8 @@ describe('ProxmoxCoverageTable column visibility', () => {
       expect(document.querySelector('[data-inline-detail-for="fleet-0"]')).toBeNull();
       expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(140);
     } finally {
-      cleanup(); rectangle.mockRestore();
+      cleanup();
+      rectangle.mockRestore();
     }
   });
 

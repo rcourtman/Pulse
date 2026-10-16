@@ -12,30 +12,82 @@ const output = path.join(root, `tmp/backup-coverage-windowing/${baseline ? 'base
 const origin = 'http://127.0.0.1:5298';
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const binding = JSON.parse(fs.readFileSync(path.join(compiled, 'binding.json')));
-const result = { binding, baseline, playwright: require('playwright/package.json').version, cases: [], captures: [], requests: [], unexpected: [], errors: [], cleanup: {} };
-let browser, server, revision = 0;
-const providers = () => Array.from({ length: revision ? 20 : 16 }, (_, index) => ({
-  provider: 'proxmox-pbs',
-  scope: `pbs-${String(index).padStart(2, '0')}/department-with-a-long-name/production`,
-  source: 'pbs-backup-enumeration', jobState: index % 2 ? 'failed' : 'success',
-  historyCompleteness: index % 2 ? 'unavailable' : 'complete',
-  permissions: index % 2 ? 'denied' : 'sufficient', evidenceIds: [],
-}));
-const posture = () => ({ data: Array.from({ length: 200 }, (_, index) => ({
-  subjectResourceId: `fixture-${index}`, state: 'unknown', freshness: 'unknown', verification: 'unknown', coverage: 'unknown',
-  explanation: 'Backup evidence is not a restore or guest thaw.',
-  providerStates: index === 0 ? providers() : [], repositoryResourceIds: [], evidenceIds: [], evaluatedAt: '2026-10-16T08:00:00Z',
-})), policy: { freshnessWindowSeconds: 604800, verificationWindowSeconds: 604800, requireVerification: true } });
+const result = {
+  binding,
+  baseline,
+  playwright: require('playwright/package.json').version,
+  cases: [],
+  captures: [],
+  requests: [],
+  unexpected: [],
+  errors: [],
+  cleanup: {},
+};
+let browser,
+  server,
+  revision = 0;
+const providers = () =>
+  Array.from({ length: revision ? 20 : 16 }, (_, index) => ({
+    provider: 'proxmox-pbs',
+    scope: `pbs-${String(index).padStart(2, '0')}/department-with-a-long-name/production`,
+    source: 'pbs-backup-enumeration',
+    jobState: index % 2 ? 'failed' : 'success',
+    historyCompleteness: index % 2 ? 'unavailable' : 'complete',
+    permissions: index % 2 ? 'denied' : 'sufficient',
+    evidenceIds: [],
+  }));
+const posture = () => ({
+  data: Array.from({ length: 200 }, (_, index) => ({
+    subjectResourceId: `fixture-${index}`,
+    state: 'unknown',
+    freshness: 'unknown',
+    verification: 'unknown',
+    coverage: 'unknown',
+    explanation: 'Backup evidence is not a restore or guest thaw.',
+    providerStates: index === 0 ? providers() : [],
+    repositoryResourceIds: [],
+    evidenceIds: [],
+    evaluatedAt: '2026-10-16T08:00:00Z',
+  })),
+  policy: {
+    freshnessWindowSeconds: 604800,
+    verificationWindowSeconds: 604800,
+    requireVerification: true,
+  },
+});
 async function capture(page, name) {
   const file = path.join(output, name + '.png');
   await page.screenshot({ path: file });
   result.captures.push({ file: path.relative(root, file), sha256: hash(fs.readFileSync(file)) });
 }
+async function readDetail(page, spec, expected, suffix) {
+  const detail = page.locator('[data-inline-detail-for]').first();
+  const size = await detail.boundingBox();
+  const seen = new Set();
+  let lost = false, captured = false;
+  for (let y = 0; y <= size.y + size.height; y += spec.height * 0.45) {
+    await page.evaluate((y) => scrollTo(0, y), y);
+    await page.waitForTimeout(65);
+    const visible = await page.locator('[data-backup-provider-scope]').evaluateAll((labels) => labels.filter((label) => {
+      const box = label.getBoundingClientRect(); return box.top >= 0 && box.bottom <= innerHeight;
+    }).map((label) => label.textContent.trim()));
+    for (const text of visible) seen.add(text);
+    if (!captured && y > size.y + size.height * 0.4) {
+      await capture(page, spec.name + '-' + suffix); captured = true;
+    }
+    if (await page.locator('[data-backup-provider-evidence]').count() !== expected) { lost = true; break; }
+  }
+  return { size, detailLostWhileReading: lost, providerLabelsSeen: [...seen] };
+}
 async function visibleRows(page) {
-  return page.locator('[data-proxmox-backup-row="coverage"]').evaluateAll((rows) => rows.filter((row) => {
-    const box = row.getBoundingClientRect();
-    return box.top >= 0 && box.bottom <= innerHeight;
-  }).map((row) => row.querySelector('.font-semibold').textContent.trim()));
+  return page.locator('[data-proxmox-backup-row="coverage"]').evaluateAll((rows) =>
+    rows
+      .filter((row) => {
+        const box = row.getBoundingClientRect();
+        return box.top >= 0 && box.bottom <= innerHeight;
+      })
+      .map((row) => row.querySelector('.font-semibold').textContent.trim()),
+  );
 }
 async function scan(page, reverse) {
   const seen = new Set();
@@ -44,7 +96,12 @@ async function scan(page, reverse) {
     const sample = await page.evaluate((reverse) => {
       const rows = [...document.querySelectorAll('[data-proxmox-backup-row="coverage"]')];
       const max = document.documentElement.scrollHeight - innerHeight;
-      return { scroll: scrollY, max, count: rows.length, done: reverse ? scrollY <= 1 : scrollY >= max - 1 };
+      return {
+        scroll: scrollY,
+        max,
+        count: rows.length,
+        done: reverse ? scrollY <= 1 : scrollY >= max - 1,
+      };
     }, reverse);
     for (const label of await visibleRows(page)) seen.add(label);
     maxMounted = Math.max(maxMounted, sample.count);
@@ -56,24 +113,49 @@ async function scan(page, reverse) {
 }
 (async () => {
   fs.mkdirSync(output, { recursive: true });
-  assert.equal(result.playwright, JSON.parse(fs.readFileSync(path.join(root, 'tests/integration/package-lock.json'))).packages['node_modules/@playwright/test'].version);
-  for (const [file, digest] of Object.entries(binding.sources)) assert.equal(hash(fs.readFileSync(path.join(root, 'frontend-modern', file))), digest, file);
+  assert.equal(
+    result.playwright,
+    JSON.parse(fs.readFileSync(path.join(root, 'tests/integration/package-lock.json'))).packages[
+      'node_modules/@playwright/test'
+    ].version,
+  );
+  for (const [file, digest] of Object.entries(binding.sources))
+    assert.equal(hash(fs.readFileSync(path.join(root, 'frontend-modern', file))), digest, file);
   const assets = new Map();
   for (const [file, digest] of Object.entries(binding.artifacts)) {
     const bytes = fs.readFileSync(path.join(compiled, file));
-    assert.equal(hash(bytes), digest, file); assets.set('/' + file, bytes);
+    assert.equal(hash(bytes), digest, file);
+    assets.set('/' + file, bytes);
   }
   server = http.createServer((req, res) => {
     const url = new URL(req.url, origin);
     result.requests.push({ method: req.method, path: url.pathname, revision });
-    const json = (body) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)); };
-    if (req.method !== 'GET') { result.unexpected.push({ method: req.method }); res.statusCode = 405; return res.end(); }
+    const json = (body) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify(body));
+    };
+    if (req.method !== 'GET') {
+      result.unexpected.push({ method: req.method });
+      res.statusCode = 405;
+      return res.end();
+    }
     if (url.pathname === '/api/backups/pbs') return json({ data: { backups: [] } });
-    if (url.pathname === '/api/backups/pve') return json({ data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } });
+    if (url.pathname === '/api/backups/pve')
+      return json({ data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } });
     if (url.pathname === '/api/recovery/postures') return json(posture());
-    const file = url.pathname.startsWith('/proxmox/backups/') ? '/browser-tests/backup-coverage-windowing.html' : url.pathname;
-    if (!assets.has(file)) { result.unexpected.push({ path: url.pathname }); res.statusCode = 404; return res.end(); }
-    res.setHeader('Content-Type', { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[path.extname(file)] || 'application/octet-stream');
+    const file = url.pathname.startsWith('/proxmox/backups/')
+      ? '/browser-tests/backup-coverage-windowing.html'
+      : url.pathname;
+    if (!assets.has(file)) {
+      result.unexpected.push({ path: url.pathname });
+      res.statusCode = 404;
+      return res.end();
+    }
+    res.setHeader(
+      'Content-Type',
+      { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[path.extname(file)] ||
+        'application/octet-stream',
+    );
     res.end(assets.get(file));
   });
   await new Promise((resolve) => server.listen(5298, '127.0.0.1', resolve));
@@ -83,43 +165,69 @@ async function scan(page, reverse) {
     { name: 'phone-webkit', engine: webkit, width: 320, height: 760, dark: false },
   ]) {
     revision = 0;
-    browser = await spec.engine.launch(spec.engine === chromium ? { headless: true, channel: 'chromium', args: ['--no-sandbox'] } : { headless: true });
-    const context = await browser.newContext({ viewport: { width: spec.width, height: spec.height }, hasTouch: spec.width < 640, locale: 'en-GB' });
+    browser = await spec.engine.launch(
+      spec.engine === chromium
+        ? { headless: true, channel: 'chromium', args: ['--no-sandbox'] }
+        : { headless: true },
+    );
+    const context = await browser.newContext({
+      viewport: { width: spec.width, height: spec.height },
+      hasTouch: spec.width < 640,
+      locale: 'en-GB',
+    });
     await context.route('**/*', (route) => {
       if (new URL(route.request().url()).origin === origin) return route.continue();
-      result.unexpected.push({ offOrigin: route.request().url() }); return route.abort();
+      result.unexpected.push({ offOrigin: route.request().url() });
+      return route.abort();
     });
     const page = await context.newPage();
+    page.setDefaultTimeout(10000);
     page.on('pageerror', (error) => result.errors.push(String(error)));
-    page.on('console', (message) => { if (message.type() === 'error') result.errors.push(message.text()); });
-    if (spec.dark) await page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => document.documentElement.classList.add('dark'), { once: true }));
+    page.on('console', (message) => {
+      if (message.type() === 'error') result.errors.push(message.text());
+    });
+    if (spec.dark)
+      await page.addInitScript(() =>
+        document.addEventListener(
+          'DOMContentLoaded',
+          () => document.documentElement.classList.add('dark'),
+          { once: true },
+        ),
+      );
     await page.goto(origin + '/proxmox/backups/coverage', { waitUntil: 'networkidle' });
     const toggle = page.getByRole('button', { name: /^Expand details for workload-000/ });
     await toggle.waitFor();
-    if (spec.width < 640) await page.locator('[data-proxmox-backup-row="coverage"]').first().tap(); else { await toggle.focus(); await page.keyboard.press('Enter'); }
+    if (spec.width < 640) await page.locator('[data-proxmox-backup-row="coverage"]').first().tap();
+    else {
+      await toggle.focus();
+      await page.keyboard.press('Enter');
+    }
     await page.locator('[data-backup-provider-evidence]').last().waitFor();
     await capture(page, spec.name + '-expanded');
-    const detail = page.locator('[data-inline-detail-for]').first();
-    const size = await detail.boundingBox();
-    const detailSeen = new Set();
-    let lost = false;
-    for (let y = 0; y <= size.y + size.height; y += spec.height * 0.45) {
-      await page.evaluate((y) => scrollTo(0, y), y);
-      await page.waitForTimeout(50);
-      const visible = await page.locator('[data-backup-provider-scope]').evaluateAll((labels) => labels.filter((label) => {
-        const box = label.getBoundingClientRect(); return box.top >= 0 && box.bottom <= innerHeight;
-      }).map((label) => label.textContent.trim()));
-      for (const text of visible) detailSeen.add(text);
-      if (await page.locator('[data-backup-provider-evidence]').count() !== 16) { lost = true; break; }
-    }
-    await capture(page, spec.name + '-detail-scroll');
-    const account = { name: spec.name, browser: browser.version(), size, detailLostWhileReading: lost, providerLabelsSeen: [...detailSeen], forward: null, reverse: null };
+    const reading = await readDetail(page, spec, 16, 'detail-scroll');
+    const account = { name: spec.name, browser: browser.version(), ...reading, refreshed: null, forward: null, reverse: null };
     result.cases.push(account);
-    if (!baseline) { assert(!lost, `${spec.name}: expanded detail disappeared while reading`); assert.equal(detailSeen.size, 16, `${spec.name}: provider labels never reached viewport`); }
-    await page.evaluate(() => scrollTo(0, 0)); await page.waitForTimeout(150);
+    if (!baseline) {
+      assert(!reading.detailLostWhileReading, `${spec.name}: expanded detail disappeared while reading`);
+      assert.equal(reading.providerLabelsSeen.length, 16, `${spec.name}: provider labels never reached viewport`);
+      // Ordinary same-open HTTP refresh grows the existing detail. It must
+      // remeasure without waiting for the operator to collapse/reopen it.
+      await page.evaluate(() => scrollTo(0, 0)); await page.waitForTimeout(150);
+      revision = 1;
+      const refresh = page.getByRole('button', { name: 'Refresh backups', exact: true });
+      await refresh.focus(); await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.querySelectorAll('[data-backup-provider-evidence]').length === 20);
+      assert.equal(await refresh.evaluate((button) => button === document.activeElement), true);
+      account.refreshed = await readDetail(page, spec, 20, 'refreshed-detail');
+      assert(!account.refreshed.detailLostWhileReading, `${spec.name}: refreshed detail disappeared while reading`);
+      assert.equal(account.refreshed.providerLabelsSeen.length, 20);
+    }
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.waitForTimeout(150);
     const hide = page.getByRole('button', { name: /^Collapse details for workload-000/ });
     if (await hide.count()) {
-      if (spec.width < 640) await page.locator('[data-proxmox-backup-row="coverage"]').first().tap();
+      if (spec.width < 640)
+        await page.locator('[data-proxmox-backup-row="coverage"]').first().tap();
       else await hide.click();
     }
     account.forward = await scan(page, false);
@@ -131,12 +239,37 @@ async function scan(page, reverse) {
       assert(account.forward.maxMounted <= (spec.width < 640 ? 36 : 140));
       assert(account.reverse.maxMounted <= (spec.width < 640 ? 36 : 140));
     }
-    await context.close(); await browser.close(); browser = undefined;
+    await context.close();
+    await browser.close();
+    browser = undefined;
   }
-  assert.deepEqual(result.errors, []); assert.deepEqual(result.unexpected, []);
-})().catch((error) => { result.failure = String(error.stack || error); process.exitCode = 1; }).finally(async () => {
-  if (browser) await browser.close(); result.cleanup.browserClosed = true;
-  if (server) await new Promise((resolve) => server.close(resolve)); result.cleanup.serverClosed = true;
-  fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n');
-  console.log(JSON.stringify({ baseline, cases: result.cases.map(({ name, detailLostWhileReading, providerLabelsSeen, forward, reverse }) => ({ name, detailLostWhileReading, labelsSeen: providerLabelsSeen.length, forward: forward?.seen.length, reverse: reverse?.seen.length })), failure: result.failure, cleanup: result.cleanup }));
-});
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.unexpected, []);
+})()
+  .catch((error) => {
+    result.failure = String(error.stack || error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    if (browser) await browser.close();
+    result.cleanup.browserClosed = true;
+    if (server) await new Promise((resolve) => server.close(resolve));
+    result.cleanup.serverClosed = true;
+    fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n');
+    console.log(
+      JSON.stringify({
+        baseline,
+        cases: result.cases.map(
+          ({ name, detailLostWhileReading, providerLabelsSeen, forward, reverse }) => ({
+            name,
+            detailLostWhileReading,
+            labelsSeen: providerLabelsSeen.length,
+            forward: forward?.seen.length,
+            reverse: reverse?.seen.length,
+          }),
+        ),
+        failure: result.failure,
+        cleanup: result.cleanup,
+      }),
+    );
+  });

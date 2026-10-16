@@ -50,10 +50,12 @@ try {
     },
   });
   for (const file of [
-    'package.json', 'package-lock.json',
+    'package.json',
+    'package-lock.json',
     'browser-tests/backup-coverage-windowing.cjs',
     'browser-tests/build-backup-coverage-windowing.mjs',
-  ]) sources[file] = hash(fs.readFileSync(path.join(root, file)));
+  ])
+    sources[file] = hash(fs.readFileSync(path.join(root, file)));
   const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const file = path.join(dir, entry.name);

@@ -322,9 +322,11 @@ describe('PlatformWindowedRows', () => {
 describe('opt-in nonuniform platform windowing', () => {
   it('maps exact edges and positions inside a tall logical item, never the terminal offset', () => {
     const offsets = [0, 2000, 2040, 2080];
-    expect([-1, 0, 1000, 1999, 2000, 2039, 2040, 2080, 9000].map((position) =>
-      findWindowedItemIndex(offsets, position),
-    )).toEqual([0, 0, 0, 0, 1, 1, 2, 2, 2]);
+    expect(
+      [-1, 0, 1000, 1999, 2000, 2039, 2040, 2080, 9000].map((position) =>
+        findWindowedItemIndex(offsets, position),
+      ),
+    ).toEqual([0, 0, 0, 0, 1, 1, 2, 2, 2]);
     expect(findWindowedItemIndex([0], 100)).toBe(0);
   });
 
@@ -332,14 +334,26 @@ describe('opt-in nonuniform platform windowing', () => {
     const [detailHeight, setDetailHeight] = createSignal(2400);
     let scrollTop = 1000;
     const measure = vi.fn();
-    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => ({
-      x: 0, y: -scrollTop, top: -scrollTop, bottom: 4000 - scrollTop,
-      left: 0, right: 320, width: 320, height: 4000,
-    }) as DOMRect);
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+      () =>
+        ({
+          x: 0,
+          y: -scrollTop,
+          top: -scrollTop,
+          bottom: 4000 - scrollTop,
+          left: 0,
+          right: 320,
+          width: 320,
+          height: 4000,
+        }) as DOMRect,
+    );
     const height = Object.getOwnPropertyDescriptor(window, 'innerHeight');
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 240 });
     const Fixture = () => {
-      const offsets = createMemo(() => [0, ...Array.from({ length: 50 }, (_, index) => detailHeight() + (index + 1) * 40)]);
+      const offsets = createMemo(() => [
+        0,
+        ...Array.from({ length: 50 }, (_, index) => detailHeight() + (index + 1) * 40),
+      ]);
       const state = usePlatformWindowedItems({
         items: () => Array.from({ length: 50 }, (_, index) => index),
         windowSize: 8,
@@ -377,7 +391,8 @@ describe('opt-in nonuniform platform windowing', () => {
       await fireEvent.scroll(window);
       expect(measure).toHaveBeenCalledTimes(calls);
     } finally {
-      cleanup(); rect.mockRestore();
+      cleanup();
+      rect.mockRestore();
       if (height) Object.defineProperty(window, 'innerHeight', height);
     }
   });
