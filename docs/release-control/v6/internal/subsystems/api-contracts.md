@@ -12262,3 +12262,17 @@ The accepted upstream `diagnostics_token_visibility_test.go` controls and API
 reference route checks cover caller filtering and the documented authority.
 Final-source checks must retain this upstream behavior beside the reviewed
 reporting/help repairs; source proof is not installed credential recovery.
+
+### Successful extended history HTTP reads
+
+`chartapi.Service.WriteHistoryJSON` and `WriteHistoryPayload` share one
+post-write observation boundary for metric history and the main, workload,
+infrastructure and storage chart handlers, including cached bytes. Existing
+response bodies, range/entitlement checks and failure behavior remain the API
+contract. Only GET responses requested beyond seven days that contain a real
+returned numeric metric point strictly older than seven days qualify. Long
+empty windows, metadata timestamps, failed encoding/writes, cancellation,
+HEAD and mock responses cannot increment the tally. Mock and live cache keys
+are separated. The optional observer receives no request or content.
+`history_activity_test.go` and `telemetry_history_reads_test.go` exercise this
+boundary. Schema v19 count semantics and retention belong to security-privacy.

@@ -7160,14 +7160,14 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				response["points"] = apiPoints
 				response["source"] = source
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(response)
+				r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
 				return
 			}
 		} else if apiData, source, ok := fallbackAll(); ok {
 			response["metrics"] = apiData
 			response["source"] = source
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
+			r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
 			return
 		}
 	}
@@ -7223,7 +7223,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					"source":       source,
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(response)
+				r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
 				return
 			}
 		} else {
@@ -7243,7 +7243,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					"source":       source,
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(response)
+				r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
 				return
 			}
 		}
@@ -7500,7 +7500,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
+	if err := r.ensureChartService().WriteHistoryJSON(w, req, response, duration); err != nil {
 		log.Error().Err(err).Msg("Failed to encode metrics history response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}

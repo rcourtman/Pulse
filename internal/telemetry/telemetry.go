@@ -225,7 +225,9 @@ const (
 	// A 6.4.3-rc.1 update check failed on every call for weeks while its
 	// telemetry looked healthy, because the update counters only see applied
 	// updates. No version, URL, or error text is exported.
-	TelemetrySchemaVersion = 18
+	// Schema v19 adds only the rolling count of successfully served metric
+	// history responses containing data older than seven days.
+	TelemetrySchemaVersion = 19
 )
 
 type installIDRecord struct {
@@ -389,6 +391,7 @@ type Ping struct {
 	// browser intake is session-deduplicated and contains only the closed
 	// milestone; guest/user identity, routes, coordinates, and timings never
 	// enter the tally or payload.
+	SuccessfulHistoryReadsOver7d30d            int `json:"successful_history_reads_over_7d_30d"`
 	WorkloadHistoryPreviewSessions30d          int `json:"workload_history_preview_sessions_30d"`
 	WorkloadHistoryScrubSessions30d            int `json:"workload_history_scrub_sessions_30d"`
 	WorkloadHistoryRangeChangeSessions30d      int `json:"workload_history_range_change_sessions_30d"`
@@ -610,6 +613,7 @@ type Snapshot struct {
 	UpdateAvailable                                                      bool
 	NodeTestAttempts30d                                                  int
 	NodeTestFailures30d                                                  int
+	SuccessfulHistoryReadsOver7d30d                                      int
 	WorkloadHistoryPreviewSessions30d                                    int
 	WorkloadHistoryScrubSessions30d                                      int
 	WorkloadHistoryRangeChangeSessions30d                                int
@@ -1354,6 +1358,7 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.UpdateAvailable = s.UpdateAvailable && ping.UpdateCheckOutcome == updates.UpdateCheckOutcomeAvailable
 	ping.NodeTestAttempts30d = s.NodeTestAttempts30d
 	ping.NodeTestFailures30d = s.NodeTestFailures30d
+	ping.SuccessfulHistoryReadsOver7d30d = s.SuccessfulHistoryReadsOver7d30d
 	ping.WorkloadHistoryPreviewSessions30d = s.WorkloadHistoryPreviewSessions30d
 	ping.WorkloadHistoryScrubSessions30d = s.WorkloadHistoryScrubSessions30d
 	ping.WorkloadHistoryRangeChangeSessions30d = s.WorkloadHistoryRangeChangeSessions30d

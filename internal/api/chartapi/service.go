@@ -435,7 +435,7 @@ func (r *Service) HandleCharts(w http.ResponseWriter, req *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
+	if err := r.WriteHistoryJSON(w, req, response, duration); err != nil {
 		log.Error().Err(err).Msg("Failed to encode chart data response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -1328,11 +1328,11 @@ func (r *Service) HandleWorkloadCharts(w http.ResponseWriter, req *http.Request)
 	}
 	cacheKey := orgID + "|" + timeRange + "|" + selectedNodeID + "|" + maxPointsRaw
 
-	cacheKey = workloadChartsCachePrefix + cacheKey
+	cacheKey = historyDataModeCacheKey(workloadChartsCachePrefix + cacheKey)
 	now := time.Now()
 	if body, ok := r.chartPayloads.get(cacheKey, now); ok {
 		w.Header().Set("Content-Type", "application/json")
-		if _, err := w.Write(body); err != nil {
+		if err := r.WriteHistoryPayload(w, req, body, duration); err != nil {
 			log.Error().Err(err).Msg("Failed to write cached workload chart data response")
 		}
 		return
@@ -1360,7 +1360,7 @@ func (r *Service) HandleWorkloadCharts(w http.ResponseWriter, req *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if _, err := w.Write(v.([]byte)); err != nil {
+	if err := r.WriteHistoryPayload(w, req, v.([]byte), duration); err != nil {
 		log.Error().Err(err).Msg("Failed to write workload chart data response")
 	}
 }
@@ -1764,10 +1764,10 @@ func (r *Service) HandleInfrastructureCharts(w http.ResponseWriter, req *http.Re
 	}
 
 	now := time.Now()
-	cacheKey := infrastructureChartsCacheKey(req, timeRange, requestedMetricNames)
+	cacheKey := historyDataModeCacheKey(infrastructureChartsCacheKey(req, timeRange, requestedMetricNames))
 	if payload, ok := r.cachedInfrastructureChartsPayload(cacheKey, now); ok {
 		w.Header().Set("Content-Type", "application/json")
-		if _, err := w.Write(payload); err != nil {
+		if err := r.WriteHistoryPayload(w, req, payload, duration); err != nil {
 			log.Error().Err(err).Msg("Failed to write cached infrastructure chart data response")
 		}
 		return
@@ -2030,7 +2030,7 @@ func (r *Service) HandleInfrastructureCharts(w http.ResponseWriter, req *http.Re
 	payload = append(payload, '\n')
 	r.cacheInfrastructureChartsPayload(cacheKey, payload, now)
 	w.Header().Set("Content-Type", "application/json")
-	if _, err := w.Write(payload); err != nil {
+	if err := r.WriteHistoryPayload(w, req, payload, duration); err != nil {
 		log.Error().Err(err).Msg("Failed to write infrastructure chart data response")
 	}
 }
@@ -2205,7 +2205,7 @@ func (r *Service) HandleStorageCharts(w http.ResponseWriter, req *http.Request) 
 	resp.Disks = disks
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp.NormalizeCollections()); err != nil {
+	if err := r.WriteHistoryJSON(w, req, resp.NormalizeCollections(), duration); err != nil {
 		log.Error().Err(err).Msg("Failed to encode storage chart data")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}

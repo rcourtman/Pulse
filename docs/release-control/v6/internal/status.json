@@ -5929,7 +5929,7 @@
       "status": "target-met",
       "completion": {
         "state": "complete",
-        "summary": "Security, identity, and privacy is at the current governed floor: privacy disclosures, telemetry controls, RBAC boundaries, and shared token/auth settings surfaces now route through explicit subsystem ownership with exercised proof across the remaining shared token and auth boundaries.",
+        "summary": "Security, identity, and privacy remains at the governed floor. Schema v19 adds only a content-free successful extended-history HTTP read count with private daily persistence, exact Preview disclosure, compatible receiver intake and explicit report coverage. Source and isolated browser proofs pass. Receiver deployment and client release adoption remain separate operational boundaries.",
         "tracking": []
       },
       "blockers": [],
@@ -5990,6 +5990,11 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/chartapi/history_activity_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/org_handlers_test.go",
           "kind": "file"
         },
@@ -6015,12 +6020,37 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/telemetry_history_reads_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/history_read_activity_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/telemetry/telemetry.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
+          "path": "scripts/tests/test_telemetry_adoption_report.py",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "SECURITY.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/19-telemetry-disclosure.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/telemetry_test.go",
           "kind": "file"
         }
       ]

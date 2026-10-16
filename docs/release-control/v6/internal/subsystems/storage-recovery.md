@@ -6932,3 +6932,12 @@ update pipeline's existing backup of the installed binary before replacing it
 and its existing history-entry rollback. The data directory, metrics and
 configuration stores, backups, snapshots and recovery points are untouched,
 and no new backup, retention or restore path is added.
+
+### Extended history observation preserves existing read authority
+
+The shared chart/history response writer now observes successful extended
+history delivery for the security-privacy schema-v19 aggregate. It adds no
+query, resource, tenant, credential or action authority. The observer receives
+only a successful-read marker after serialization/write, and existing API
+entitlement checks remain before that boundary. Read semantics remain owned
+by api-contracts and telemetry retention/disclosure by security-privacy.

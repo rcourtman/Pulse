@@ -1073,6 +1073,7 @@ REPORT_ROW_COLUMNS = tuple(
             "version_is_published_release",
             "platform",
             "notification_failures_7d",
+            "successful_history_reads_over_7d_30d",
             *(key for key, _ in ALERT_QUALITY_COUNT_FIELDS),
             *(key for key, _ in ADOPTION_COUNT_FIELDS),
             *(key for key, _ in FEATURE_BOOL_FIELDS),
@@ -1686,8 +1687,14 @@ def fetch_rows_local(db_path: str, since_days: int) -> dict[str, Any]:
                 """
             ).fetchone()
         )
+        available_columns = {row[1] for row in conn.execute("PRAGMA table_info(telemetry_pings)")}
+        missing_columns = sorted(set(REPORT_ROW_COLUMNS) - available_columns)
+        projection = ", ".join(
+            name if name in available_columns else "0 AS " + name
+            for name in REPORT_ROW_COLUMNS
+        )
         rows_sql = (
-            f"SELECT {REPORT_ROW_PROJECTION} "
+            f"SELECT {projection} "
             "FROM telemetry_pings "
             "WHERE received_at >= datetime('now', ?) "
             "ORDER BY received_at DESC"
@@ -1699,7 +1706,7 @@ def fetch_rows_local(db_path: str, since_days: int) -> dict[str, Any]:
                 (f"-{since_days} days",),
             ).fetchall()
         ]
-        return {"db_stats": db_stats, "rows": rows}
+        return {"db_stats": db_stats, "rows": rows, "unavailable_columns": missing_columns}
     finally:
         conn.close()
 
@@ -2793,6 +2800,53 @@ def summarize_user_base_signals(
     }
 
 
+def summarize_extended_history_usage(
+    latest_by_install: dict[str, dict[str, Any]],
+    published_versions: set[str],
+    *,
+    now: datetime,
+    unavailable_columns: Iterable[str] = (),
+) -> dict[str, Any]:
+    """One latest rolling count per reporting ID, with explicit coverage.
+
+    No heartbeat summing or account joins. The license flag is coarse, and
+    rotating IDs do not identify people or subscriptions.
+    """
+    field = "successful_history_reads_over_7d_30d"
+    source_available = field not in unavailable_columns
+    cohorts = {
+        posture: {"reporting_ids": 0, "covered_ids": 0, "unmeasured_ids": 0,
+                  "ids_with_reads": 0, "successful_reads_30d": 0}
+        for posture in ("nonfree", "free", "unknown")
+    }
+    excluded = 0
+    for row in latest_by_install.values():
+        age = now - parse_received_at(str(row["received_at"]))
+        if age < timedelta(0) or age > timedelta(days=7):
+            continue
+        identity = classify_row_version(row, published_versions)
+        if (is_mock_fleet_row(row) or identity.is_development
+                or not identity.is_published_release
+                or not parse_optional_bool(row.get("monitoring_active"))):
+            excluded += 1
+            continue
+        paid = parse_optional_bool(row.get("paid_license"))
+        cohort = cohorts["nonfree" if paid is True else "free" if paid is False else "unknown"]
+        cohort["reporting_ids"] += 1
+        if (not source_available or field not in row
+                or parse_optional_nonnegative_int(row.get("schema_version")) < 19):
+            cohort["unmeasured_ids"] += 1
+            continue
+        cohort["covered_ids"] += 1
+        reads = parse_optional_nonnegative_int(row.get(field))
+        if reads > 0:
+            cohort["ids_with_reads"] += 1
+            cohort["successful_reads_30d"] += reads
+    return {"window": "7d", "minimum_schema_version": 19,
+            "source_available": source_available, "excluded_ids": excluded,
+            "cohorts": cohorts}
+
+
 def analyze_target_release_rows(
     rows: Iterable[dict[str, Any]],
     published_versions: set[str],
@@ -3321,6 +3375,7 @@ def summarize_rows(
     source_window_days: int | None = None,
     pulse_intelligence_analysis_facts: Iterable[dict[str, Any]] | None = None,
     target_release_analysis_facts: Iterable[dict[str, Any]] | None = None,
+    unavailable_columns: Iterable[str] = (),
 ) -> dict[str, Any]:
     row_list: list[dict[str, Any]] = []
     mock_fleet_rows = 0
@@ -3403,6 +3458,10 @@ def summarize_rows(
             "installs": len(mock_fleet_installs),
         },
         "latest_install_windows": latest_install_windows,
+        "extended_history_usage_7d": summarize_extended_history_usage(
+            latest_by_install, published_versions, now=current_time,
+            unavailable_columns=unavailable_columns,
+        ),
         "user_base_signals_7d": summarize_user_base_signals(
             latest_by_install,
             now=current_time,
@@ -3618,6 +3677,23 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
         lines.append(
             "- notification failure semantics: schema v2 counted unsuccessful retry attempts; "
             "schema v3+ counts only terminal failed or dead-letter outcomes"
+        )
+
+    extended_history = summary.get("extended_history_usage_7d")
+    if extended_history:
+        lines.extend(["", "Successful history reads beyond seven days (active production reporting IDs, 7d):"])
+        for posture, cohort in extended_history["cohorts"].items():
+            lines.append(
+                f"- {posture}: {cohort['covered_ids']} measured, "
+                f"{cohort['unmeasured_ids']} unmeasured, {cohort['ids_with_reads']} with reads, "
+                f"{cohort['successful_reads_30d']} successful reads (rolling 30d)"
+            )
+        lines.append(
+            "- interpretation: schema v19+ only. Older or unavailable measurements are unknown, "
+            "not zero use. Each reporting ID contributes only its latest rolling count. "
+            "Automatic refreshes count as reads. Rotating IDs are not people or subscriptions. "
+            "The nonfree flag does not verify paying customers or willingness to pay. "
+            "An upgrade starts measurement, so a zero is not a full 30-day observation."
         )
 
     pulse_loop = summary.get("pulse_intelligence_value_loop_7d")
@@ -4001,6 +4077,7 @@ def main(argv: list[str] | None = None) -> int:
         baseline_version=args.baseline_version,
         include_mock_fleet=args.include_mock_fleet,
         source_window_days=args.since_days,
+        unavailable_columns=source.get("unavailable_columns", []),
         pulse_intelligence_analysis_facts=source.get(
             "pulse_intelligence_analysis_facts"
         ),

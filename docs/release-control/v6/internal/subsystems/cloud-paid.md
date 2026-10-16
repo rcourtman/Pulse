@@ -3692,3 +3692,15 @@ Mobile settings gate and Alerts push panel carry no upgrade prompt. The
 `relay` feature is labelled "Pulse Relay (Mobile Connection)" because it never
 provided remote access to the web UI. Pulse Mobile retires on 31 March 2027;
 until then licensed instances keep pairing and push unchanged.
+
+### Extended history measurement does not establish customer identity
+
+The license server accepts schema-v19 `successful_history_reads_over_7d_30d`
+as a nonnegative aggregate integer, migrates storage without rewriting older
+rows, and resets pre-v19 supplied values to zero. The public reporter treats
+older schemas or missing receiver columns as unmeasured. Current coarse
+`paid_license` posture is not a paying-subscription census and must not be
+joined to billing accounts. This adds no price, entitlement, refund or billing
+behavior. Receiver intake and migration tests pin the additive schema boundary.
+Deploying the compatible receiver and release adoption remain separate from
+source verification. Count and disclosure semantics belong to security-privacy.
