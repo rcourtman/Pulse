@@ -4778,6 +4778,25 @@ resolves late` in
 
 ## Current State
 
+The backup inventory Refresh button remains focusable while it announces its
+pending read with `aria-disabled`; its existing single-flight handler refuses
+repeated activations until both inventories and posture settle. This avoids
+native disabled-button focus loss without enabling duplicate reads. Connected
+controlled-response tests and the browser fixture cover pending and completed
+focus plus a second keyboard activation. No pending read is cancelled or replayed.
+
+
+### Independent backup point evidence (15 October 2026)
+
+The Proxmox Coverage and By date State consumers render completion/verification
+and pruning protection as separate shared MetadataBadge instances. The existing
+`wrap` affordance contains both in narrow cells. No badge primitive, resource
+identity, row action, table shell or collection authority changes. Shared render
+controls and `ProxmoxBackupsTable.test.tsx` cover replacement through both real
+consumer tables, with source-bound desktop/narrow browser proof. A prune flag is
+not successful verification, restore evidence or a workload protection verdict.
+
+
 ### Recovery backup-record polling controls
 
 `RecoverySettingsPanel.tsx` presents backup-record polling as a saved setting,
