@@ -7,6 +7,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -22,7 +23,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 		}
 		log.Info().
 			Str("name", pve.Name).
-			Str("host", pve.Host).
+			Str("host", securityutil.InfrastructureEndpointDiagnostic(pve.Host)).
 			Str("user", pve.User).
 			Bool("hasToken", pve.TokenName != "").
 			Msg("Configuring PVE instance")
@@ -33,7 +34,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 
 			log.Info().
 				Str("cluster", pve.ClusterName).
-				Strs("endpoints", endpoints).
+				Strs("endpoints", securityutil.InfrastructureEndpointsDiagnostic(endpoints)).
 				Int("fingerprints", len(endpointFingerprints)).
 				Msg("Creating cluster-aware client")
 
@@ -66,7 +67,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 			log.Error().
 				Err(monErr).
 				Str("instance", pve.Name).
-				Str("host", pve.Host).
+				Str("host", securityutil.InfrastructureEndpointDiagnostic(pve.Host)).
 				Str("user", pve.User).
 				Bool("hasPassword", pve.Password != "").
 				Bool("hasToken", pve.TokenValue != "").
@@ -91,7 +92,7 @@ func (m *Monitor) initPBSClients(cfg *config.Config) {
 		}
 		log.Info().
 			Str("name", pbsInst.Name).
-			Str("host", pbsInst.Host).
+			Str("host", securityutil.InfrastructureEndpointDiagnostic(pbsInst.Host)).
 			Str("user", pbsInst.User).
 			Bool("hasToken", pbsInst.TokenName != "").
 			Msg("Configuring PBS instance")
@@ -104,7 +105,7 @@ func (m *Monitor) initPBSClients(cfg *config.Config) {
 			log.Error().
 				Err(monErr).
 				Str("instance", pbsInst.Name).
-				Str("host", pbsInst.Host).
+				Str("host", securityutil.InfrastructureEndpointDiagnostic(pbsInst.Host)).
 				Str("user", pbsInst.User).
 				Bool("hasPassword", pbsInst.Password != "").
 				Bool("hasToken", pbsInst.TokenValue != "").
@@ -139,7 +140,7 @@ func (m *Monitor) initPMGClients(cfg *config.Config) {
 		}
 		log.Info().
 			Str("name", pmgInst.Name).
-			Str("host", pmgInst.Host).
+			Str("host", securityutil.InfrastructureEndpointDiagnostic(pmgInst.Host)).
 			Str("user", pmgInst.User).
 			Bool("hasToken", pmgInst.TokenName != "").
 			Msg("Configuring PMG instance")
@@ -155,7 +156,7 @@ func (m *Monitor) initPMGClients(cfg *config.Config) {
 			log.Error().
 				Err(monErr).
 				Str("instance", pmgInst.Name).
-				Str("host", pmgInst.Host).
+				Str("host", securityutil.InfrastructureEndpointDiagnostic(pmgInst.Host)).
 				Str("user", pmgInst.User).
 				Bool("hasPassword", pmgInst.Password != "").
 				Bool("hasToken", pmgInst.TokenValue != "").

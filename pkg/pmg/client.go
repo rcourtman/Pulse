@@ -186,12 +186,14 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		cfg.Host = "https://" + cfg.Host
 	}
 
-	if strings.HasPrefix(cfg.Host, "http://") {
-		log.Warn().Str("host", cfg.Host).Msg("Using HTTP for PMG connection - consider enabling HTTPS")
-	}
-	baseHostURL, err := securityutil.NormalizeHTTPBaseURL(cfg.Host, "")
+	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(cfg.Host, "")
 	if err != nil {
 		return nil, fmt.Errorf("invalid PMG host: %w", err)
+	}
+	// Rejected input can contain pasted credentials, including in malformed URLs.
+	// Only a validated base URL belongs in diagnostics.
+	if baseHostURL.Scheme == "http" {
+		log.Warn().Str("host", baseHostURL.String()).Msg("Using HTTP for PMG connection - consider enabling HTTPS")
 	}
 	baseAPIURL := securityutil.AppendURLPath(baseHostURL, "api2", "json")
 
