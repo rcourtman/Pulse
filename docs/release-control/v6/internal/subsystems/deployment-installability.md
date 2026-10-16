@@ -921,8 +921,21 @@ unattended update; RC and unknown channels do not. Invalid field types,
 unreadable/nonregular configuration and a missing `jq` fail before any release
 download or installer action, without printing configuration contents. `jq` is
 already an installer dependency; manual updates remain available if its optional
-installation failed. The legacy no-configuration, enabled-timer opt-in and the
-independent disabled-timer gate remain unchanged.
+installation failed. The legacy no-configuration, enabled-timer opt-in remains
+available.
+
+The independent timer gate reads one complete `systemctl is-enabled` state/exit
+tuple, with a five-second deadline and one-second kill backstop. It preserves
+systemd's successful enabled/runtime-enabled, alias, static, indirect, generated
+and transient states. Confirmed disabled, masked/runtime-masked and
+linked/runtime-linked states still skip without release discovery or mutation.
+Unavailable/missing units, failed or timed-out reads, empty/unknown states,
+diagnostic-bearing output, duplicate/blank records and an unterminated final
+record fail before discovery. They are not reported as a disabled timer or a
+successful update check. Both streams and trailing blank records belong to the
+same observation; raw manager diagnostics are not printed. No second sample or
+automatic timer enablement is permitted by a failed read. Explicit configuration
+opt-outs still stop before this manager read.
 
 The standalone `scripts/installtests/pulse_auto_update_consent_test.go` remains
 part of the ordinary installer suite and can also run with
@@ -931,8 +944,14 @@ without the installer package's application imports or local listeners.
 `TestAutoUpdateRequiresCompleteTopLevelConsent` executes the actual shell gate
 against valid and adverse configuration bytes, including padded RC and nested
 opt-in. `TestAutoUpdateConsentKeepsTimerAndParserBoundaries` checks legacy timer
-consent, missing parser and nonregular configuration. These are source-level
-ordinary-user fixtures, not installed timer/systemd or update acceptance.
+consent, missing parser and nonregular configuration.
+`TestAutoUpdateTimerObservationFailsClosed` exercises the real main/gate with
+confined manager, release and installer boundaries, including a configured timer
+name, exact command count, failed partial output and all retained state classes.
+`TestAutoUpdateTimerReadHasHardDeadline` uses the actual timeout with a private
+TERM-resistant, self-bounded process; a plausible early enabled record cannot
+admit unfinished work. These are source-level ordinary-user fixtures, not
+installed timer/systemd or update acceptance.
 The registry binds the standalone verifier only to the unattended updater's
 runtime policy. It cannot satisfy the archive, PowerShell, Docker or other
 installer policies; their existing exact verification obligations remain.
