@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "787675545e3b003cb844018afc17a02c66dedb23",
+  "verified_at": "2026-10-16T08:11:11.025908Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/public/docs/SECURITY.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/SECURITY.md": "9296ceff57a9105c21b35615678190bf807186228dac1cb3b9971cd3a386afbb"
+  },
+  "routes": [
+    "/docs/SECURITY#usage",
+    "/docs/API#api-token-recommended",
+    "/docs/SECURITY#manual-recovery-admin",
+    "/docs/SECURITY#scheduler-health-api"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Exact-source compiled production Docs/router/Markdown renderer/styles with a synthetic surrounding shell; exact shipped SECURITY and API guide bytes. This is help verification, not a deployed API, login, export or lockout result.",
+    "Five rendered API calls exactly match the committed Markdown. Preparation and uncertainty warnings are visible; long phone code stays in its own horizontal viewport.",
+    "Chromium 141.0.7390.37 and Playwright 1.56.1; desktop light and 320 px dark. Twelve screenshots were opened and inspected with the native image viewer.",
+    "No document overflow, page errors, off-origin or administrative API requests; browser and local preview server close successfully."
+  ],
+  "interactions": [
+    "Keyboard Enter on desktop and touch on phone follow the real helper link; browser Back returns to the security guide.",
+    "The real API helper code block is horizontally scrolled on the phone; the HTTPS/private-response explanation remains readable.",
+    "Fragment focus and reload reach the scheduler-health heading; exact Markdown bytes are read back on both routes."
+  ],
+  "proof_source_sha": "787675545e3b003cb844018afc17a02c66dedb23",
+  "scope": "New documentation receipt; no existing receipt is rebound and no runtime frontend source changed."
+}

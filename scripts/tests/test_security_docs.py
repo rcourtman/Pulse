@@ -17,7 +17,8 @@ import subprocess
 import tempfile
 import unittest
 
-from test_api_auth_docs import ROOT, TEST_TOKEN, exercise_curl, recording_server
+from test_api_auth_docs import (ROOT, TEST_TOKEN, exercise_curl,
+                                private_recording_server, request_helper)
 
 
 DOC = ROOT / "SECURITY.md"
@@ -37,7 +38,13 @@ def blocks() -> list[str]:
 
 def recipes() -> list[str]:
     return [step for block in blocks() for step in re.split(r"\n(?=# )", block)
-            if "curl " in step]
+            if "curl " in step or "pulse_api " in step]
+
+
+def executable_recipe(step: str) -> str:
+    # Execute the same shared helper that the reader is told to define, not a
+    # test-only client. Preserve legacy recipes for the baseline control.
+    return request_helper() + "\n" + step if "pulse_api " in step else step
 
 
 def private_export_request(home: Path):
@@ -58,12 +65,13 @@ class SecurityDocsTest(unittest.TestCase):
         for request in requests:
             self.assertNotRegex(request, r"(?:\b\w*TOKEN=|X-API-Token:|Authorization:|Bearer\s|--cookie\b)")
             self.assertNotRegex(request, r"(?:--insecure|--verbose|--trace\S*|--location|\s-k\b)")
-            self.assertIn('curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header"', request)
+            self.assertIn("pulse_api ", request)
+            self.assertNotIn("curl ", request)
             if "/api/config/export" in request:
-                self.assertIn('--data-binary "@$HOME/.config/pulse/export-request.json"', request)
+                self.assertIn('< "$HOME/.config/pulse/export-request.json"', request)
                 self.assertNotIn('"passphrase":', request)
-            elif "--request POST" in request:
-                self.assertIn("--data-binary @-", request)
+            elif "pulse_api POST" in request:
+                self.assertIn("--data-binary @-", request_helper())
                 self.assertIn("<<'JSON'", request)
         shell = "\n".join(blocks())
         self.assertNotRegex(shell, r"(?:--token\s|PULSE_AUTH_PASS=|API_TOKEN[S]?=|curl[^\n]*\|)")
@@ -71,7 +79,7 @@ class SecurityDocsTest(unittest.TestCase):
         self.assertNotIn("authorized_keys", shell)
 
     def test_export_preparation_protects_new_and_existing_files_without_erasing_them(self):
-        preparation = next(block for block in blocks() if 'vi "$HOME/.config/pulse/export-request.json"' in block)
+        preparation = next(block for block in blocks() if 'vi "$request_file"' in block)
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             tools = home / "tools"
@@ -94,13 +102,13 @@ class SecurityDocsTest(unittest.TestCase):
 
     def test_exact_methods_paths_and_bodies_with_both_supported_headers(self):
         steps = recipes()
-        with recording_server() as (port, requests):
+        with private_recording_server() as (port, requests):
             for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
                 for step, (method, path, body) in zip(steps, EXPECTED):
                     with self.subTest(header=key, method=method, path=path), tempfile.TemporaryDirectory() as temporary:
                         home = Path(temporary)
                         private_export_request(home)
-                        result = exercise_curl(self, home, f"{key}: {value}", port, step)
+                        result = exercise_curl(self, home, f"{key}: {value}", port, executable_recipe(step), private_response=True)
                         self.assertEqual(result.returncode, 0, result.stderr.decode())
                         self.assertEqual(requests[-1][0], path)
                         self.assertEqual(requests[-1][1][key], value)
@@ -109,39 +117,105 @@ class SecurityDocsTest(unittest.TestCase):
                         self.assertEqual(json.loads(requests[-1][3]) if body is not None else None, body)
                         self.assertNotIn(TEST_PASSPHRASE.encode(), result.stdout + result.stderr)
                         self.assertNotIn(TEST_PASSPHRASE, (home / "argv.json").read_text())
-                        if path == "/api/config/export":
-                            self.check_export_files(home, result, success=True)
-
-    def check_export_files(self, home: Path, result, *, success: bool):
-        directories = list(home.glob("pulse-export.*"))
-        self.assertEqual(len(directories), 1)
-        directory = directories[0]
-        output = directory / "config-export.json"
-        self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o700)
-        self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
-        # A recording server does not prove encryption. This only checks the
-        # exact response is saved privately, with truthful HTTP success/failure.
-        self.assertEqual(output.read_text(), '{"fixture":true}\n')
-        self.assertNotIn(TEST_TOKEN, output.read_text())
-        self.assertNotIn(TEST_PASSPHRASE, output.read_text())
-        if success:
-            self.assertIn(b"Export response saved", result.stdout)
-        else:
-            self.assertNotIn(b"Export response saved", result.stdout)
-            self.assertIn(b"Export failed; do not import", result.stderr)
 
     def test_unauthorised_and_wrong_scope_responses_never_report_success(self):
-        for status in (401, 403, 500):
-            with self.subTest(status=status), recording_server(status) as (port, requests):
+        for status in (302, 401, 403, 500):
+            with self.subTest(status=status), private_recording_server(status) as (port, requests):
                 for step, (_, path, _) in zip(recipes(), EXPECTED):
                     with self.subTest(path=path), tempfile.TemporaryDirectory() as temporary:
                         home = Path(temporary)
                         private_export_request(home)
-                        result = exercise_curl(self, home, f"X-API-Token: {TEST_TOKEN}", port, step)
+                        before = len(requests)
+                        result = exercise_curl(self, home, f"X-API-Token: {TEST_TOKEN}", port, executable_recipe(step), private_response=True)
+                        self.assertEqual(len(requests), before + 1)
                         self.assertNotEqual(result.returncode, 0)
                         self.assertEqual(requests[-1][0], path)
-                        if path == "/api/config/export":
-                            self.check_export_files(home, result, success=False)
+
+    def test_loopback_credentials_bypass_hostile_proxy_environment(self):
+        with private_recording_server() as (port, requests), \
+                private_recording_server() as (proxy_port, proxy_requests):
+            for step in recipes():
+                with tempfile.TemporaryDirectory() as temporary:
+                    home = Path(temporary)
+                    private_export_request(home)
+                    # exercise_curl clears inherited proxies; explicitly set
+                    # hostile ones inside the copied recipe's shell instead.
+                    environment = (f"export http_proxy=http://127.0.0.1:{proxy_port} "
+                                   f"HTTP_PROXY=http://127.0.0.1:{proxy_port} "
+                                   f"https_proxy=http://127.0.0.1:{proxy_port} "
+                                   f"ALL_PROXY=http://127.0.0.1:{proxy_port} "
+                                   "NO_PROXY='' no_proxy=''\n")
+                    before = len(requests)
+                    result = exercise_curl(self, home, f"X-API-Token: {TEST_TOKEN}",
+                                           port, environment + executable_recipe(step),
+                                           private_response=True)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual(len(requests), before + 1)
+                    self.assertEqual(proxy_requests, [], "a proxy received the credential")
+
+    def test_partial_responses_are_private_failures_without_replay(self):
+        with private_recording_server(partial=True) as (port, requests):
+            for step in recipes():
+                with tempfile.TemporaryDirectory() as temporary:
+                    home = Path(temporary)
+                    private_export_request(home)
+                    before = len(requests)
+                    result = exercise_curl(self, home, f"X-API-Token: {TEST_TOKEN}",
+                                           port, executable_recipe(step), private_response=True)
+                    self.assertEqual(result.returncode, 18)
+                    self.assertEqual(len(requests), before + 1)
+                    self.assertNotIn(TEST_PASSPHRASE.encode(), result.stdout + result.stderr)
+
+    def test_export_preparation_refuses_symlinks_and_nonregular_files(self):
+        preparation = next(block for block in blocks() if 'vi "$request_file"' in block)
+        for component in (".config", ".config/pulse", ".config/pulse/export-request.json"):
+            with self.subTest(component=component), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary) / "home"
+                home.mkdir()
+                target = Path(temporary) / "target"
+                if component.endswith(".json"):
+                    target.write_text("preserve private request\n")
+                    target.chmod(0o644)
+                else:
+                    target.mkdir(mode=0o755)
+                link = home / component
+                link.parent.mkdir(parents=True, exist_ok=True)
+                link.symlink_to(target)
+                before = stat.S_IMODE(target.stat().st_mode)
+                tools = home / "tools"
+                tools.mkdir()
+                editor = tools / "vi"
+                editor.write_text('#!/bin/sh\ntouch "$HOME/editor-called"\n')
+                editor.chmod(0o700)
+                result = subprocess.run(["bash", "-c", preparation], capture_output=True,
+                                        env=dict(os.environ, HOME=str(home),
+                                                 PATH=f"{tools}:{os.environ['PATH']}"), timeout=10)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), before)
+                self.assertFalse((home / "editor-called").exists())
+                if target.is_file():
+                    self.assertEqual(target.read_text(), "preserve private request\n")
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            (home / ".config/pulse/export-request.json").mkdir(parents=True)
+            result = subprocess.run(["bash", "-c", preparation], capture_output=True,
+                                    env=dict(os.environ, HOME=str(home)), timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b"regular file", result.stderr)
+
+    def test_all_shell_recipes_parse_and_explain_shared_transport_and_uncertainty(self):
+        for block in blocks():
+            subprocess.run(["bash", "-n", "-c", block], check=True, capture_output=True)
+        guide = " ".join(DOC.read_text().split())
+        for boundary in ("docs/API.md#api-token-recommended", "same Bash session",
+                         "not an installed Pulse command", "one request", "owner-only",
+                         "prints only", "including on failure", "redacted excerpt",
+                         "proxy environment settings", "HTTPS origin and protocol changes",
+                         "certificate verification", "--globoff", "five-second",
+                         "twenty-second", "no redirects", "automatic retries",
+                         "not a batch", "after the reset was applied",
+                         "do not repeat a reset", "does not prove that login has recovered"):
+            self.assertIn(boundary, guide)
 
     def test_guidance_retains_authority_and_credential_lifecycle_boundaries(self):
         guide = " ".join(DOC.read_text().split())
