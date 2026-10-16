@@ -32,6 +32,16 @@ func TestBuildPBSProtectionProviderObservationMapsEvidenceQuality(t *testing.T) 
 			wantPermissions: operationaltrust.EvidencePermissionsSufficient,
 		},
 		{
+			name:            "readable sibling namespace is not complete history",
+			datastores:      1,
+			fetches:         1,
+			errors:          1,
+			wantJob:         recovery.OutcomeWarning,
+			wantHistory:     recovery.ProtectionHistoryPartial,
+			wantPermissions: operationaltrust.EvidencePermissionsUnknown,
+			wantReason:      "pbs_partial_enumeration",
+		},
+		{
 			name:            "partial transient enumeration",
 			datastores:      2,
 			fetches:         1,

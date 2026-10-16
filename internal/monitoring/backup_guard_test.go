@@ -70,65 +70,6 @@ func TestShouldPreserveBackups(t *testing.T) {
 	}
 }
 
-func TestShouldPreservePBSBackups(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name                     string
-		datastoreCount           int
-		datastoreFetches         int
-		datastoreTerminalFailure int
-		want                     bool
-	}{
-		{
-			name:                     "all datastores failed transiently",
-			datastoreCount:           3,
-			datastoreFetches:         0,
-			datastoreTerminalFailure: 0,
-			want:                     true,
-		},
-		{
-			name:                     "all datastores failed with terminal errors",
-			datastoreCount:           3,
-			datastoreFetches:         0,
-			datastoreTerminalFailure: 3,
-			want:                     false,
-		},
-		{
-			name:                     "no datastores skips preservation",
-			datastoreCount:           0,
-			datastoreFetches:         0,
-			datastoreTerminalFailure: 0,
-			want:                     false,
-		},
-		{
-			name:                     "some datastores succeeded",
-			datastoreCount:           3,
-			datastoreFetches:         2,
-			datastoreTerminalFailure: 0,
-			want:                     false,
-		},
-		{
-			name:                     "all datastores succeeded",
-			datastoreCount:           3,
-			datastoreFetches:         3,
-			datastoreTerminalFailure: 0,
-			want:                     false,
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			got := shouldPreservePBSBackupsWithTerminal(tt.datastoreCount, tt.datastoreFetches, tt.datastoreTerminalFailure)
-			if got != tt.want {
-				t.Fatalf("shouldPreservePBSBackupsWithTerminal() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestShouldReuseCachedPBSBackups(t *testing.T) {
 	t.Parallel()
 

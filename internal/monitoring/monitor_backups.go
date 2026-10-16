@@ -1616,7 +1616,6 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	datastoreCount := len(datastores) // Number of datastores to query
 	datastoreFetches := 0             // Number of successful datastore fetches
 	datastoreErrors := 0              // Datastores with incomplete history
-	datastoreTerminalFailures := 0    // Number of datastores that failed only with terminal errors
 	collectionTerminalFailures := 0   // Datastores with any rejected namespace or snapshot request
 
 	// Process each datastore
@@ -1656,6 +1655,18 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				datastoreNamespaceErrors++
 				if !shouldReuseCachedPBSBackups(err) {
 					datastoreTerminalNamespaceErrors++
+				} else {
+					// An unreadable namespace is not an empty inventory, even
+					// when a sibling succeeded. Preserve only this exact scope;
+					// a parent/child, other store or access-rejected namespace
+					// must keep its independent replacement/withdrawal result.
+					for key, entry := range existingGroups {
+						if key.datastore != ds.Name || key.namespace != namespace {
+							continue
+						}
+						allBackups = appendPBSBackupsWithinLimit(allBackups, entry.snapshots)
+						retainedGroups[key] = struct{}{}
+					}
 				}
 				log.Error().
 					Err(err).
@@ -1780,29 +1791,12 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				Int("groups_refreshed", groupsRequested).
 				Msg("PBS datastore processed")
 		} else {
-			allNamespaceErrorsTerminal := datastoreNamespaceErrors > 0 &&
-				datastoreTerminalNamespaceErrors == datastoreNamespaceErrors
-			if allNamespaceErrorsTerminal {
-				datastoreTerminalFailures++
-				log.Warn().
-					Str("instance", instanceName).
-					Str("datastore", ds.Name).
-					Int("namespace_errors", datastoreNamespaceErrors).
-					Msg("No namespaces succeeded for PBS datastore due to terminal errors; clearing cached backups")
-			} else {
-				// Preserve cached data for this datastore when failures are transient.
-				log.Warn().
-					Str("instance", instanceName).
-					Str("datastore", ds.Name).
-					Msg("No namespaces succeeded for PBS datastore; using cached backups")
-				for key, entry := range existingGroups {
-					if key.datastore != ds.Name || len(entry.snapshots) == 0 {
-						continue
-					}
-					allBackups = appendPBSBackupsWithinLimit(allBackups, entry.snapshots)
-					retainedGroups[key] = struct{}{}
-				}
-			}
+			log.Warn().
+				Str("instance", instanceName).
+				Str("datastore", ds.Name).
+				Int("namespace_errors", datastoreNamespaceErrors).
+				Int("terminal_errors", datastoreTerminalNamespaceErrors).
+				Msg("No namespaces succeeded for PBS datastore; cache retention follows each namespace read")
 		}
 	}
 
@@ -1831,22 +1825,6 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			Err(protectionObservationErr).
 			Str("instance", instanceName).
 			Msg("Failed to build PBS protection provider observation")
-	}
-
-	// Decide whether to keep existing backups when all queries failed
-	if shouldPreservePBSBackupsWithTerminal(datastoreCount, datastoreFetches, datastoreTerminalFailures) {
-		if protectionObservationErr == nil {
-			m.ingestProtectionProviderObservationsAsync(
-				[]recovery.ProtectionProviderObservation{protectionObservation},
-			)
-		}
-		log.Warn().
-			Str("instance", instanceName).
-			Int("datastores", datastoreCount).
-			Int("errors", datastoreErrors).
-			Int("terminal_failures", datastoreTerminalFailures).
-			Msg("All PBS datastore queries failed; keeping previous backup list")
-		return
 	}
 
 	// A manifestless snapshot is incomplete, but it is not necessarily still

@@ -21,6 +21,28 @@
 
 ## Purpose
 
+### PBS inventory failures retain only the unreadable namespace
+
+A transient or invalid group-list response preserves the exact datastore and
+normalised namespace's known raw backup rows, even when a sibling succeeds.
+Parent and child namespaces are independent scopes. Held rows keep their
+original identity, backup time and snapshot-read cache age; they do not establish
+complete provider history or current protection. Readable scopes still refresh
+or authoritatively empty, and access-rejected scopes still withdraw their raw
+rows. A different transient failure cannot reintroduce rejected raw rows through
+a datastore/global fallback. Historical recovery points remain governed by the
+existing incomplete-provider reconciliation rule, not by raw row presence.
+
+`TestPBSNamespaceFailuresRespectReadScope` joins real PBS HTTP collection,
+matching cache publication, stored recovery points and protection projections
+through sibling success, malformed/503 reads, rejection, ordinary recovery,
+mixed whole-provider failure and scoped empty reads, in both namespace orders.
+Root normalisation, a same-ID parent/child, another datastore and another
+connection stay distinct. Desktop/narrow consuming proof uses the emitted
+projections through the existing Backups table, filters and Coverage view.
+This does not start a backup, change access checks, verify restore readiness,
+or establish native guest thaw, writes/liveness or installed recovery.
+
 ### Independent copies on node-local PVE storage
 
 Equal volume IDs on different non-shared storage nodes remain distinct
