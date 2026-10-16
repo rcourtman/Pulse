@@ -222,7 +222,10 @@ func isCarrierGradeNAT(ip net.IP) bool {
 }
 
 func proxyFromEnvironmentBypassingLocalInfrastructure(req *http.Request) (*url.URL, error) {
-	if req != nil && req.URL != nil && shouldBypassProxyForTargetHost(req.URL.Hostname()) {
+	// Even a publicly named infrastructure endpoint can be explicitly HTTP.
+	// An ambient proxy must not receive its tokens, tickets or login bodies in
+	// plaintext. HTTPS keeps the existing CONNECT/NO_PROXY and local-host policy.
+	if req != nil && req.URL != nil && (req.URL.Scheme == "http" || shouldBypassProxyForTargetHost(req.URL.Hostname())) {
 		return nil, nil
 	}
 	return http.ProxyFromEnvironment(req)

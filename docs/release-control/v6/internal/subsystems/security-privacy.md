@@ -252,6 +252,36 @@ monitoring-only scopes/commands and ordinary process identity continuity.
 Neither this local journey nor a credential's inventory entry establishes
 authentication or recovery of an unobserved installed agent.
 
+### Plaintext infrastructure credentials are never ambient-proxy traffic
+
+The shared `tlsutil.CreateHTTPClientWithTimeout` transport sends explicit HTTP
+requests directly to their configured infrastructure endpoint, including public
+DNS names and public-address literals. An inherited `HTTP_PROXY` cannot become
+a plaintext recipient of API tokens, tickets, CSRF headers or JSON/form login
+bodies. This follows the existing host/Kubernetes agent plaintext boundary;
+local-address classification alone was insufficient for publicly named targets.
+Explicit HTTP remains supported and unencrypted, not recommended or made safe
+against network observers. A deployment that depended on a forward HTTP proxy
+must instead use a direct path or verified HTTPS; no new proxy setting is added.
+
+HTTPS retains environment CONNECT proxying/authentication and `NO_PROXY`, the
+local-infrastructure bypass, CA/leaf-pin verification and explicit opt-out modes.
+DNS, Host/base-path/query and authentication bytes, URL admission, timeouts,
+connection bounds, redirects and guest/backup admission do not change.
+`client_proxy_test.go` in `pkg/tlsutil` exercises real HTTP and CONNECT/TLS over
+owned in-memory pipes, including public/private IPv4/IPv6 and DNS targets,
+token/ticket/password encodings, trusted CA, matching/wrong pins, untrusted TLS,
+explicit opt-out, local bypass and `NO_PROXY`. Invalid TLS carries no credential
+request. Environment proxy credentials never enter the infrastructure request.
+
+Adjacent `TestClientPlaintextProxyRouting` tests retain each actual PVE/PBS/PMG
+constructor's transport and exercise token reads, seeded password JSON/form
+login, ordinary node/version reads and fixture-only ticket/CSRF writes at three
+public-style authorities. The production request/authentication code supplies
+the bytes; no listener, DNS, socket, provider or installed service is used.
+These are source confidentiality controls, not installed trust recovery,
+field incident attribution, a changed rendered state or native guest safety.
+
 ### Infrastructure credentials remain within the configured HTTP origin
 
 The shared `tlsutil.CreateHTTPClientWithTimeout` transport permits redirects
@@ -264,8 +294,9 @@ case remains significant. The existing ten-redirect limit and same-origin
 proxy path/query redirects remain supported.
 
 System CA checks, configured leaf pins, the TLS floor, explicit verification
-opt-outs, initial HTTP configuration, DNS/proxy routing and independent cluster
-member admission do not change. Guest-agent commands and backup-lock evidence
+opt-outs, initial HTTP configuration, DNS routing and independent cluster
+member admission do not change. Ambient plaintext proxying follows the direct-HTTP
+boundary above; HTTPS proxy routing is unchanged. Guest-agent commands and backup-lock evidence
 retain their stricter no-redirect policy, including same-origin redirects; an
 ordinary read's policy cannot admit a redirected guest command.
 
@@ -2271,8 +2302,9 @@ silently inheriting whatever older protocol floor the host runtime would allow.
 The same shared client transport must not leak local infrastructure API
 requests through inherited environment proxies: loopback, private, link-local,
 CGNAT/Tailscale, mDNS/local, and single-label infrastructure hosts are direct
-connections by default, while public endpoints may still honor the operator's
-proxy environment. Proxy-bypass changes for this path require targeted TLS
+connections by default. All explicit HTTP targets, including public endpoints,
+are also direct; only public HTTPS endpoints may honor the operator's proxy
+environment. Proxy-bypass changes for this path require targeted TLS
 client tests plus adjacent Proxmox, PBS, and PMG client coverage.
 That same rule also applies inside shipped security guidance itself:
 `SECURITY.md` and the synced `frontend-modern/public/docs/SECURITY.md` copy may

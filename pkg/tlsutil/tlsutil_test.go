@@ -355,6 +355,13 @@ func TestProxyFromEnvironmentBypassingLocalInfrastructure(t *testing.T) {
 		t.Fatalf("local proxy = %v, err = %v; want direct", proxyURL, err)
 	}
 
+	for _, host := range []string{"pve.example.com:8006", "203.0.113.10:8007", "[2001:db8::10]:8006"} {
+		plaintextReq := &http.Request{URL: &url.URL{Scheme: "http", Host: host}}
+		if proxyURL, err := proxyFromEnvironmentBypassingLocalInfrastructure(plaintextReq); err != nil || proxyURL != nil {
+			t.Fatalf("plaintext proxy = %v, err = %v; want direct", proxyURL, err)
+		}
+	}
+
 	publicReq := &http.Request{URL: &url.URL{Scheme: "https", Host: "pve.example.com:8006"}}
 	proxyURL, err := proxyFromEnvironmentBypassingLocalInfrastructure(publicReq)
 	if err != nil {
