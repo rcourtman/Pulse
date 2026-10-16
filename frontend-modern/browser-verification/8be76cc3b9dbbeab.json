@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "9e8cf79ec5e2e33d2ad8be2fb428f5678f89e840",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/useProxmoxCoverageWindowing.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts": "e4cd82ded25ff53a50d93805ea1ce7f3270f45d6f115eb126c63182230ee0671",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "93bb9f63c0f13b7bcf07fee4f93d4db4ba89f4a789b9911c7a2132b82b13b899",
+    "frontend-modern/src/features/proxmox/useProxmoxCoverageWindowing.ts": "18c73ee564d4c301d327e54792b6d99474ba8a46f81662286f8b35dd5c7feb33"
+  },
+  "routes": [
+    "/proxmox/backups/coverage through synthetic loopback workload/inventory/posture observations, production readers/recovery model, real Coverage table and cumulative windowing"
+  ],
+  "states": [
+    "Repeated database names and VMIDs remain distinct through exact workload connection, target and hidden native-node identity at all five responsive layouts. Missing connection identity is not inferred.",
+    "Refreshed workload identity changes in the same mounted open row and disclosure, without inventing backup evidence or a protection verdict.",
+    "A 200-workload fleet with mixed wrapped identity heights reaches every workload in both actual viewport scroll directions on desktop and 320px WebKit, with at most 140/36 summaries mounted.",
+    "Measured resize synchronization completes without ResizeObserver loop errors after deferring observer-driven writes; initial and native-scroll synchronization, row budgets and guest-operation boundaries remain unchanged."
+  ],
+  "interactions": [
+    "Chromium 1440px plus 600/800/1000px container projections, keyboard disclosure; 320px dark touch WebKit row expansion and collapse.",
+    "Workload refresh retains row/toggle identities and open detail. Ordinary backup refresh retains its focus and makes exactly three read-only API GETs in each browser.",
+    "Both browsers check visible identity glyph bounds, no horizontal page overflow and all 200-workload viewport reachability in both directions.",
+    "All four retained desktop/narrow identity/detail captures opened with native view_image; no page, console-error, off-origin or non-GET observations remain."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 600,
+      "height": 1000
+    },
+    {
+      "width": 800,
+      "height": 1000
+    },
+    {
+      "width": 1000,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "browsers": ["Chromium 141.0.7390.37 / Playwright 1.56.1", "WebKit 26.0 / Playwright 1.56.1"],
+  "verified_at": "2026-10-16T18:57:33Z",
+  "limits": [
+    "Synthetic consuming proof establishes presentation/scroll/refresh, not native backup completion, guest thaw, restores, installed fleet recovery or protected publication.",
+    "Previous source-proof admission returned2/proof-capacity-low without execution. Ordinary containing hosted production/embed/unchanged-budget CI remains with Delivery; no new capacity poll or replay occurred."
+  ]
+}
