@@ -115,6 +115,7 @@ export type ProRuntimeSwitchPresentation =
   | { kind: 'in_place'; title: string; body: string; version: string }
   | { kind: 'docker'; title: string; body: string; steps: ProRuntimeSwitchStep[]; note: string }
   | { kind: 'older_release'; title: string; body: string }
+  | { kind: 'prerelease_only'; title: string; body: string }
   | { kind: 'unavailable'; body: string };
 
 const SWITCH_TITLE = 'Your Pro license needs the Pulse Pro build';
@@ -177,6 +178,16 @@ export function getProRuntimeSwitchPresentation(
       kind: 'older_release',
       title: 'The Pulse Pro build is not out for this version yet',
       body: `Your Pro license needs the Pulse Pro build, but the latest one (${version}) is older than this install (${current}). The switch appears here once Pulse Pro ${current} or later is published.`,
+    };
+  }
+
+  // The only Pulse Pro build on offer is a preview, and this install follows
+  // the stable channel, which never installs previews.
+  if (result.reason === 'prerelease_only' && version) {
+    return {
+      kind: 'prerelease_only',
+      title: 'The stable Pulse Pro build is not out yet',
+      body: `Your Pro license needs the Pulse Pro build, but the only one available right now (${version}) is a preview release, and this install only takes stable releases. The switch appears here once a stable Pulse Pro release is published.`,
     };
   }
 

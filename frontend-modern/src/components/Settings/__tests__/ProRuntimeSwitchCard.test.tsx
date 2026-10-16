@@ -47,6 +47,21 @@ describe('ProRuntimeSwitchCard', () => {
     expect(screen.queryByTestId('pro-runtime-switch')).not.toBeInTheDocument();
   });
 
+  it('explains the wait, with no switch button, when only a preview Pro build exists', async () => {
+    mockCheck.mockResolvedValue({
+      available: false,
+      reason: 'prerelease_only',
+      currentVersion: '6.5.0',
+      version: '6.6.0-rc.1',
+      installInPlace: false,
+    });
+    render(() => <ProRuntimeSwitchCard shouldCheck />);
+    const card = await screen.findByTestId('pro-runtime-switch');
+    expect(card).toHaveTextContent('The stable Pulse Pro build is not out yet');
+    expect(card).toHaveTextContent('v6.6.0-rc.1');
+    expect(screen.queryByRole('button', { name: /Switch to Pulse Pro/ })).not.toBeInTheDocument();
+  });
+
   it('confirms before starting an in-place switch', async () => {
     mockCheck.mockResolvedValue({
       available: true,

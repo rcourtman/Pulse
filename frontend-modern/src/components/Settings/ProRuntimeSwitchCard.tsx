@@ -159,6 +159,19 @@ export const ProRuntimeSwitchCard: Component<ProRuntimeSwitchCardProps> = (props
         )}
       </Show>
 
+      <Show when={ofKind('prerelease_only')}>
+        {(view) => (
+          <CalloutCard
+            tone="info"
+            scale="compact"
+            icon={<KeyRound class="h-5 w-5" />}
+            title={view().title}
+            description={view().body}
+            data-testid="pro-runtime-switch"
+          />
+        )}
+      </Show>
+
       <Show when={ofKind('unavailable')}>
         {(view) => (
           <p class="text-xs text-muted" data-testid="pro-runtime-switch">

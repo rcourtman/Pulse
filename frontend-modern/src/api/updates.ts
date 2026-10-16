@@ -36,6 +36,7 @@ export type ProRuntimeSwitchReason =
   | 'source_build'
   | 'unsupported_deployment'
   | 'older_release'
+  | 'prerelease_only'
   | 'unavailable';
 
 export interface ProRuntimeSwitch {

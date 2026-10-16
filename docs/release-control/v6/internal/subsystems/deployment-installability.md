@@ -3127,6 +3127,11 @@ artifact-selection behaviour.
    entry keeps the normal rollback back to the community build. Docker
    installs get the broker's digest-pinned Docker command block as
    `ProRuntimeSwitch.docker` instead, never the community image.
+   The switch check judges the broker pin by the same stable-channel rule as
+   the Pro update check and apply (`stableChannelRefusesProPin` in
+   `internal/updates/pro_update.go`): a stable-channel install whose pin is a
+   prerelease gets `prerelease_only` with the pinned version, and neither an
+   in-place offer nor Docker commands for the preview image.
    Settings → Updates is the user-facing entry to that switch, and
    `docs/UPGRADE_v6.md` and `docs/DOCKER.md` (with their shipped mirrors)
    point paid community installs there before the download portal.

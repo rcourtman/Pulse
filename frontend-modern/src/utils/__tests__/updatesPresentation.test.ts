@@ -173,6 +173,18 @@ describe('getProRuntimeSwitchPresentation', () => {
     expect(view.body).toContain('v6.6.0');
   });
 
+  it('explains a preview-only Pro build to a stable-channel install', () => {
+    const view = getProRuntimeSwitchPresentation({
+      ...proRuntimeSwitchBase,
+      reason: 'prerelease_only',
+      version: '6.1.0-rc.1',
+    });
+    expect(view.kind).toBe('prerelease_only');
+    if (view.kind !== 'prerelease_only') return;
+    expect(view.body).toContain('v6.1.0-rc.1');
+    expect(view.body).toContain('stable');
+  });
+
   it('shows a quiet notice when the license server cannot be reached', () => {
     expect(
       getProRuntimeSwitchPresentation({ ...proRuntimeSwitchBase, reason: 'unavailable' }).kind,
