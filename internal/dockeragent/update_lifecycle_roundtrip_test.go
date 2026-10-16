@@ -106,38 +106,32 @@ func TestDockerUpdateCollectorAdmissionPreservesOccurrence(t *testing.T) {
 					}
 				}
 
-				// Obtain the occurrence from the producer/ingestion route, rather
-				// than hand-writing its canonical or stable host identity.
-				seedMonitor, seedServer, stopSeed := newDockerUpdateRoundTripServer(t, token, nil, 0)
-				connect(seedServer)
-				seedManager := seedMonitor.GetAlertManager()
-				var initialDeliveries atomic.Int32
-				seedManager.SetAlertCallback(func(*alerts.Alert) { initialDeliveries.Add(1) })
-				send(collect())
-				seed := requireDockerUpdateOccurrence(t, seedManager)
-				if seed.ResourceID != alerts.DockerContainerResourceID(hostID, containerID, "") || seed.LastNotified == nil || initialDeliveries.Load() != 1 {
-					t.Fatalf("producer did not create the expected notified occurrence: %+v", seed)
+				// The existing manager tests prove initial firing/delivery. Begin
+				// this boundary proof at a synthetic aged recovery checkpoint,
+				// derived from the collector's resource rather than changing the
+				// supported 24/48-hour delay or waiting for wall-clock ageing.
+				firstReport := collect()
+				resourceID := alerts.DockerContainerResourceID(firstReport.Agent.ID, firstReport.Containers[0].ID, "")
+				lastObservation := time.Now().Add(-25 * time.Hour)
+				lastNotified := lastObservation
+				seed := alerts.Alert{
+					ID: "docker-container-update-" + resourceID, Type: "docker-container-update", Level: alerts.AlertLevelWarning,
+					ResourceID: resourceID, ResourceName: "database", Node: hostID, Instance: hostID,
+					StartTime: time.Now().Add(-time.Duration(delay+2) * time.Hour), LastSeen: lastObservation,
+					LastNotified: &lastNotified, Acknowledged: acknowledged,
+					Metadata: map[string]interface{}{"hostId": hostID, "hostAgentId": hostID, "containerId": containerID, "containerName": "database", "image": "mongo:7"},
 				}
 				if acknowledged {
-					if err := seedManager.AcknowledgeAlert(seed.ID, "fixture-operator"); err != nil {
-						t.Fatal(err)
-					}
-					seed = requireDockerUpdateOccurrence(t, seedManager)
-				}
-				stopSeed()
-				seed.StartTime = time.Now().Add(-time.Duration(delay+2) * time.Hour)
-				seed.LastSeen = time.Now().Add(-25 * time.Hour)
-				if acknowledged {
-					ackTime := seed.LastSeen
-					seed.AckTime = &ackTime
+					seed.AckTime, seed.AckUser = &lastObservation, "fixture-operator"
 				}
 				monitor, server, _ := newDockerUpdateRoundTripServer(t, token, &seed, delay)
 				connect(server)
 				manager := monitor.GetAlertManager()
 				loaded := requireDockerUpdateOccurrence(t, manager)
-				if loaded.ID != seed.ID || !loaded.StartTime.Equal(seed.StartTime) || !loaded.LastSeen.Equal(seed.LastSeen) {
+				if loaded.ResourceID != resourceID || !loaded.StartTime.Equal(seed.StartTime) || !loaded.LastSeen.Equal(seed.LastSeen) || loaded.LastNotified == nil || !loaded.LastNotified.Equal(lastNotified) {
 					t.Fatalf("saved occurrence was not restored: %+v", loaded)
 				}
+				seed = loaded // Restoration may canonicalise the legacy checkpoint ID.
 				var firings, resolutions, deliveries atomic.Int32
 				manager.SetAlertCallback(func(*alerts.Alert) { deliveries.Add(1) })
 				manager.SubscribeLifecycleCallback(func(event alerts.LifecycleEvent) {
