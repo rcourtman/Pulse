@@ -1,0 +1,164 @@
+{
+  "version": 1,
+  "base_sha": "b45db5dd0cd6b45ad3da77f64f99f2cfaa5e71e8",
+  "verified_at": "2026-10-16T04:34:15.459735Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/ZFS_MONITORING.md",
+    "frontend-modern/public/docs/ZFS_MONITORING.md"
+  ],
+  "content_sha256": {
+    "docs/ZFS_MONITORING.md": "c18c243dcb39e56f55156eee4f47164a611ceae1c9698374ae26e9069e6a76f0",
+    "frontend-modern/public/docs/ZFS_MONITORING.md": "c18c243dcb39e56f55156eee4f47164a611ceae1c9698374ae26e9069e6a76f0"
+  },
+  "routes": [
+    "/docs/ZFS_MONITORING#unregistered-and-data-only-pools",
+    "/docs/ZFS_MONITORING#read-native-pool-status-safely",
+    "/docs/VM_DISK_MONITORING#backup-safety"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "The real Docs/router/Markdown/CSS consume final mirrored ZFS guidance in the unchanged compiled preview; the surrounding application shell is a fixture.",
+    "The existing native-status referral reaches host/permission/incident exclusions and the complete bounded recipe. Deadline, kernel-blocked-I/O, unavailable-result and privacy limits remain rendered.",
+    "Desktop and 320 px default-palette Chromium pixels are legible without horizontal page overflow. Long code has its own scroll pane. No native pool, service, credential or recovery action is executed."
+  ],
+  "interactions": [
+    "Keyboard Enter at desktop and touch tap at 320 px follow the existing native-status link and focus its heading without reloading the shell.",
+    "The Backup safety link opens the real shipped safety document; Back and direct reload restore the reader fragment focus in both completed Chromium journeys.",
+    "The rendered code exactly matches the final Markdown recipe. Narrow code scroll position was exercised programmatically, not as an emulated swipe. Final fetched Markdown hashes match both final guide copies."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "profile": "desktop-light",
+        "browser": "141.0.7390.37",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "interactions": [
+          "keyboard Enter follows existing native-status referral",
+          "follow safety exit to real shipped backup guide without a live probe",
+          "Back and direct reload retain reader fragment focus"
+        ]
+      },
+      {
+        "profile": "phone-chromium",
+        "browser": "141.0.7390.37",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "interactions": [
+          "touch follows existing native-status referral",
+          "inspect contained code scroll position; no emulated touch swipe claimed",
+          "follow safety exit to real shipped backup guide without a live probe",
+          "Back and direct reload retain reader fragment focus"
+        ]
+      }
+    ],
+    "preview": "Explicit unchanged consumer reuse, not a fresh compilation. All 2,934 supplied input hashes and 21 supplied artifacts match; final runtime-fetched ZFS document added and hash-verified. Original preview compilation identities remain in the retained outcome.",
+    "cleanup": "All browsers and preview servers closed; each final socket tracker is zero."
+  },
+  "limitations": [
+    "Attempt 1 completed desktop then failed on unsupported mobile-WebKit mouse.wheel. Attempt 2 used programmatic scroll and rendered/followed links in WebKit but crashed on reload; it remains a failed, partial result, not an overall WebKit pass. Chromium at 320 px supplies the completed narrow alternative.",
+    "Default palette only; no dark-theme claim. Documentation procedure proof is not native ZFS, kernel-blocked I/O, monitoring or guest recovery.",
+    "One WebKit limits filename is a duplicate reader frame, not additional deadline pixels. All twelve retained capture files were opened with native view_image."
+  ],
+  "pixel_review": [
+    {
+      "file": "desktop-light-entry.png",
+      "bytes": 202624,
+      "sha256": "ca601a93835fd2eedeca4bab186dbddf82d896c23523b05523bdf2bd7f338859",
+      "tool": "native view_image",
+      "observation": "The existing unregistered-pool section now offers an underlined bounded-reader link. The responsive-host condition and separate health-coverage limit remain readable."
+    },
+    {
+      "file": "desktop-light-reader.png",
+      "bytes": 141212,
+      "sha256": "5002e08ecbedb33a8ce6581f1307f7acab1c2f3227ff2085615438ae8340ec1e",
+      "tool": "native view_image",
+      "observation": "The reader heading receives visible focus. Host, permission and incident exclusions precede the complete code block; code stays within the content column."
+    },
+    {
+      "file": "desktop-light-limits.png",
+      "bytes": 195201,
+      "sha256": "b8c54728e08410e95e29bf4cc483665c645cefd4538afc3ddf0f06c9846cea0a",
+      "tool": "native view_image",
+      "observation": "The code tail, shared deadline, kernel-blocked-I/O limitation, unavailable-versus-healthy distinction and unsanitised-output warning are readable together."
+    },
+    {
+      "file": "desktop-light-safety.png",
+      "bytes": 237631,
+      "sha256": "64c0ab4be15a91a5b8eebd6b11e1267669cf1b4cf996e93a8a081cc6025c2e3b",
+      "tool": "native view_image",
+      "observation": "The safety link reaches the existing Backup safety heading with visible focus, independent thaw/write/liveness checks and prior-active restoration guidance."
+    },
+    {
+      "file": "phone-chromium-entry.png",
+      "bytes": 106753,
+      "sha256": "2564641ffcd0de45f667bb140d3f4cc057e8e6a90c64689f3b374c1540eac8aa",
+      "tool": "native view_image",
+      "observation": "At 320 px the original section and underlined reader referral wrap within the page. The link appears near the lower edge; remaining text requires vertical scrolling."
+    },
+    {
+      "file": "phone-chromium-reader.png",
+      "bytes": 84592,
+      "sha256": "5b4bb371e9ef62198fd9805fcb8bb768e0565c17b1a7c181cbe9e798a16ffac4",
+      "tool": "native view_image",
+      "observation": "At 320 px the host/permission/incident warning is readable above the code. Long code lines clip within their separate horizontal scroll pane, not the page."
+    },
+    {
+      "file": "phone-chromium-limits.png",
+      "bytes": 92209,
+      "sha256": "3f8a46014430a5c12ef8a8f73ad9fd60954de96d3c0e9ed9806eb8922ee311b0",
+      "tool": "native view_image",
+      "observation": "At 320 px the deadline, kernel-blocked-I/O and no-retry limitations wrap legibly below the code. The privacy paragraph begins below; its final lines are outside this capture."
+    },
+    {
+      "file": "phone-chromium-safety.png",
+      "bytes": 111025,
+      "sha256": "ec15827dc83fad40914206522e1b2b00d3a9ed32fdcd1b7b0912c222e56074d5",
+      "tool": "native view_image",
+      "observation": "At 320 px the safety heading, thaw/write/liveness and restoration requirements remain readable. Later safety text continues by normal vertical scrolling."
+    },
+    {
+      "file": "phone-webkit-entry.png",
+      "bytes": 114747,
+      "sha256": "bd79fbd128e6b8b928978590381de80f9945ad6d74fb3d9c27b3c611b0b11869",
+      "tool": "native view_image",
+      "observation": "WebKit at 320 px renders the existing section and underlined referral without page overflow; the focused initial heading is visible."
+    },
+    {
+      "file": "phone-webkit-reader.png",
+      "bytes": 93397,
+      "sha256": "201b8dd95d99911238d345d89b0eb476cda6ff7ee68d69e9e396334457677451",
+      "tool": "native view_image",
+      "observation": "WebKit renders the responsive-host/permission/incident warning above the contained code block. This is partial pre-reload evidence, not a complete WebKit journey."
+    },
+    {
+      "file": "phone-webkit-limits.png",
+      "bytes": 93397,
+      "sha256": "201b8dd95d99911238d345d89b0eb476cda6ff7ee68d69e9e396334457677451",
+      "tool": "native view_image",
+      "observation": "Exact duplicate of the WebKit reader capture: the filename does not establish pixels of the deadline paragraph. Those pixels are not claimed here."
+    },
+    {
+      "file": "phone-webkit-safety.png",
+      "bytes": 119336,
+      "sha256": "3df7554e83fe5a5d97398515f164bd6720ac5954cb05a29336de907864318d25",
+      "tool": "native view_image",
+      "observation": "WebKit renders the linked safety heading and independent recovery requirements. The later reload crashed; this image does not clear that failure."
+    }
+  ]
+}
