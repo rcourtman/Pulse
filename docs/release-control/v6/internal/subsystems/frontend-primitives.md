@@ -20,6 +20,21 @@
 
 ## Purpose
 
+### Windowed backup provenance measures logical blocks
+
+The existing platform window controller permits a consumer-supplied item-height
+measurement and layout/inventory remeasurement key. Unchanged consumers retain
+the existing estimate and sampling behaviour. The By date backup feed measures
+its rendered body minus runway spacers per logical point/day header, including
+wrapped source paths and the compact provenance row. Native scroll/wheel samples
+refresh that measurement; container-layout and accepted-inventory changes also
+remeasure. Mounted-but-off-screen points do not establish scroll acceptance.
+`ProxmoxBackupsTable.test.tsx` protects spacer exclusion and logical counts;
+`backup-location-access.cjs` requires every complete label in a 166-point feed
+to enter the desktop and narrow viewport. Existing row bounds and filter keys
+are unchanged; this adds no provider or recovery operation.
+
+
 ### Existing backup-location filter consumes storage provenance
 
 PVE local archives append their explicit storage host to the existing location

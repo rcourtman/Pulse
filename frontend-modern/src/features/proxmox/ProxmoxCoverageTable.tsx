@@ -29,6 +29,7 @@ import {
 import type { CoverageSortKey } from './proxmoxBackupsTableModel';
 import {
   ArtifactSourceBadge,
+  ArtifactLocationText,
   ArtifactStateBadge,
   PROXMOX_BACKUP_COLUMN_LABELS,
   ProxmoxBackupAgeText,
@@ -572,69 +573,86 @@ export function ProxmoxCoverageTable(props: {
                                 <PlatformDetailTableBody class="divide-border-subtle">
                                   <For each={evidence()}>
                                     {(artifact) => (
-                                      <TableRow>
-                                        <TableCell class={getPlatformTableCellClassForKind('name')}>
-                                          <ArtifactSourceBadge artifact={artifact} />
-                                        </TableCell>
-                                        <Show
-                                          when={isCoverageEvidenceColumnVisible(
-                                            layoutMode(),
-                                            'location',
-                                          )}
-                                        >
+                                      <>
+                                        <TableRow>
                                           <TableCell
-                                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                                            class={getPlatformTableCellClassForKind('name')}
                                           >
-                                            <span class="block truncate" title={artifact.location}>
-                                              {artifact.location}
-                                            </span>
+                                            <ArtifactSourceBadge artifact={artifact} />
                                           </TableCell>
-                                        </Show>
-                                        <TableCell
-                                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                                        >
-                                          <ProxmoxBackupAgeText artifact={artifact} />
-                                        </TableCell>
-                                        <Show
-                                          when={isCoverageEvidenceColumnVisible(
-                                            layoutMode(),
-                                            'size',
-                                          )}
-                                        >
-                                          <TableCell
-                                            class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums text-base-content`}
+                                          <Show
+                                            when={isCoverageEvidenceColumnVisible(
+                                              layoutMode(),
+                                              'location',
+                                            )}
                                           >
-                                            <Show
-                                              when={artifact.size && artifact.size > 0}
-                                              fallback={<span class="text-muted">No size</span>}
+                                            <TableCell
+                                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                             >
-                                              {formatPlatformTableBytesValue(artifact.size)}
-                                            </Show>
-                                          </TableCell>
-                                        </Show>
-                                        <TableCell
-                                          class={getPlatformTableCellClassForKind('badge')}
-                                        >
-                                          <ArtifactStateBadge artifact={artifact} />
-                                        </TableCell>
-                                        <Show
-                                          when={isCoverageEvidenceColumnVisible(
-                                            layoutMode(),
-                                            'details',
-                                          )}
-                                        >
+                                              <ArtifactLocationText artifact={artifact} />
+                                            </TableCell>
+                                          </Show>
                                           <TableCell
-                                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                                           >
-                                            <span
-                                              class="block truncate"
-                                              title={artifact.detailTitle ?? artifact.detail}
-                                            >
-                                              {artifact.detail || '—'}
-                                            </span>
+                                            <ProxmoxBackupAgeText artifact={artifact} />
                                           </TableCell>
+                                          <Show
+                                            when={isCoverageEvidenceColumnVisible(
+                                              layoutMode(),
+                                              'size',
+                                            )}
+                                          >
+                                            <TableCell
+                                              class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums text-base-content`}
+                                            >
+                                              <Show
+                                                when={artifact.size && artifact.size > 0}
+                                                fallback={<span class="text-muted">No size</span>}
+                                              >
+                                                {formatPlatformTableBytesValue(artifact.size)}
+                                              </Show>
+                                            </TableCell>
+                                          </Show>
+                                          <TableCell
+                                            class={getPlatformTableCellClassForKind('badge')}
+                                          >
+                                            <ArtifactStateBadge artifact={artifact} />
+                                          </TableCell>
+                                          <Show
+                                            when={isCoverageEvidenceColumnVisible(
+                                              layoutMode(),
+                                              'details',
+                                            )}
+                                          >
+                                            <TableCell
+                                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                                            >
+                                              <span
+                                                class="block truncate"
+                                                title={artifact.detailTitle ?? artifact.detail}
+                                              >
+                                                {artifact.detail || '—'}
+                                              </span>
+                                            </TableCell>
+                                          </Show>
+                                        </TableRow>
+                                        <Show
+                                          when={
+                                            !isCoverageEvidenceColumnVisible(
+                                              layoutMode(),
+                                              'location',
+                                            )
+                                          }
+                                        >
+                                          <TableRow>
+                                            <TableCell colspan={3} class="pt-0 text-[11px]">
+                                              <span class="text-muted">Location</span>
+                                              <ArtifactLocationText artifact={artifact} />
+                                            </TableCell>
+                                          </TableRow>
                                         </Show>
-                                      </TableRow>
+                                      </>
                                     )}
                                   </For>
                                 </PlatformDetailTableBody>

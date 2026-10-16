@@ -23,6 +23,17 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Backup source provenance does not change guest identity
+
+Restore-point presentation retains its observed source connection separately
+from the matched workload. Both existing backup views expose full source paths
+without hover, including on phones. Connection-aware search/sorting and measured
+windowed row blocks do not alter guest matching, location-filter identity,
+resource attribution or recovery judgments. The connected model/table and
+`backup-location-access.cjs` checks require distinct source locations through
+ordinary refresh and complete-label viewport reachability on a large feed.
+
+
 ### PMG same-open stored-detail lifecycle (15 October 2026)
 
 The existing Mail Gateway drawer refreshes stored full detail for a changed

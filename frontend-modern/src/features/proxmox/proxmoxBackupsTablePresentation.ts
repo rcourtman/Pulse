@@ -267,8 +267,9 @@ const RECOVERABLE_VISIBLE: Record<ProxmoxBackupsTableLayoutMode, readonly Recove
   // verification. Size and verbose details progressively return with usable
   // room; the full values remain available through their title affordance.
   // The phone projection keeps the source and state badges and the age whole;
-  // the repository location returns with the first wider layout and stays in
-  // the row's hover title meanwhile.
+  // repository provenance wraps on a full-width line beneath each point.
+  // The location column returns with the first wider layout, with the same
+  // complete text, rather than hiding the connection or namespace behind hover.
   compact: ['workload', 'source', 'created', 'state'],
   basic: ['workload', 'source', 'location', 'created', 'state'],
   operational: ['workload', 'type', 'source', 'location', 'created', 'size', 'state'],

@@ -28,6 +28,10 @@ export interface PlatformWindowedItemsOptions<Item> {
   estimatedItemHeight?: number;
   enableThreshold?: number;
   windowSize?: number;
+  /** Logical items may span several DOM rows; measure the consumer's block. */
+  measureItemHeight?: (anchor: HTMLElement) => number;
+  /** Re-measure after a container layout or accepted inventory changes. */
+  measurementKey?: Accessor<unknown>;
 }
 
 /**
@@ -73,14 +77,17 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     if (!anchor || isWindowedSurfaceHidden(anchor)) return;
 
     if (measureItems) {
-      let measuredHeight = 0;
-      let sibling = anchor.nextElementSibling;
-      for (let sampled = 0; sampled < MEASUREMENT_SAMPLE_SIZE && sibling; sampled += 1) {
-        const height = sibling.getBoundingClientRect().height;
-        if (height > measuredHeight) measuredHeight = height;
-        sibling = sibling.nextElementSibling;
+      let measuredHeight = options.measureItemHeight?.(anchor) ?? 0;
+      if (!options.measureItemHeight) {
+        let sibling = anchor.nextElementSibling;
+        for (let sampled = 0; sampled < MEASUREMENT_SAMPLE_SIZE && sibling; sampled += 1) {
+          const height = sibling.getBoundingClientRect().height;
+          if (height > measuredHeight) measuredHeight = height;
+          sibling = sibling.nextElementSibling;
+        }
       }
-      if (measuredHeight > 0) setEstimatedItemHeight(measuredHeight);
+      if (Number.isFinite(measuredHeight) && measuredHeight > 0)
+        setEstimatedItemHeight(measuredHeight);
     }
 
     const segmentRect = anchor.getBoundingClientRect();
@@ -104,6 +111,7 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
   createEffect(() => {
     if (typeof window === 'undefined') return;
     options.items().length;
+    options.measurementKey?.();
     const anchor = anchorRef();
     if (!anchor || !windowing.isWindowed()) return;
 
@@ -111,11 +119,14 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     const scrollTarget: HTMLElement | Window = scrollContainer ?? window;
     const viewportHeight = () =>
       scrollContainer?.clientHeight || window.innerHeight || estimatedItemHeight();
-    const handleScroll = () => syncWindowToViewport();
+    const handleScroll = () => syncWindowToViewport(0, Boolean(options.measureItemHeight));
     const handleWheel = (event: Event) => {
       const wheelEvent = event as WheelEvent;
       if (wheelEvent.deltaY === 0) return;
-      syncWindowToViewport(wheelDeltaInPixels(wheelEvent, viewportHeight()));
+      syncWindowToViewport(
+        wheelDeltaInPixels(wheelEvent, viewportHeight()),
+        Boolean(options.measureItemHeight),
+      );
     };
     const handleResize = () => syncWindowToViewport(0, true);
 

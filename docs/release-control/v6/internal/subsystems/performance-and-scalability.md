@@ -15,6 +15,20 @@
 
 ## Purpose
 
+### Backup block measurement preserves bounded windowing
+
+The backup date feed opts into measuring its complete logical item blocks:
+wrapped locations and compact provenance rows contribute height; top/bottom
+runway spacers do not. Native scroll/wheel and layout/inventory changes refresh
+that estimate without increasing the existing 140-desktop/36-phone mounted-item
+budgets. Other platform consumers keep their existing estimates and sampling.
+`PlatformWindowedRows.test.tsx` protects opt-in measurement, remeasurement,
+unchanged bounds and listener disposal; `ProxmoxBackupsTable.test.tsx` checks
+logical point/day counts and spacer exclusion. The source-bound browser fixture
+must bring every complete location label into the actual viewport in its
+166-point feed, not count off-screen mounted labels as readable. This is a
+presentation-only correction, not a collection, provider or recovery operation.
+
 ### Truthful backup coverage in the shared workload drawer (15 October 2026)
 
 The drawer uses the row's shared backup-evidence applicability rule. Where the

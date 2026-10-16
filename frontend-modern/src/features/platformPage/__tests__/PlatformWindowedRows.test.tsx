@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PlatformWindowedRows } from '../PlatformWindowedRows';
 import { PlatformWindowedList } from '../PlatformWindowedList';
+import { usePlatformWindowedItems } from '../usePlatformWindowedItems';
 import platformWindowedItemsSource from '../usePlatformWindowedItems.ts?raw';
 
 describe('PlatformWindowedRows', () => {
@@ -12,6 +13,59 @@ describe('PlatformWindowedRows', () => {
   it('keeps phone touch scrolling on the browser-native page path', () => {
     expect(platformWindowedItemsSource).toContain('bindWindowedPageScrollEvents');
     expect(platformWindowedItemsSource).not.toContain("addEventListener('touch");
+  });
+
+  it('uses opt-in logical-block measurement on native scroll and layout changes without widening the window', async () => {
+    const [height, setHeight] = createSignal(120);
+    const measure = vi.fn(() => height());
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 200,
+      bottom: 120,
+      width: 200,
+      height: 120,
+    } as DOMRect);
+    const prototype = Element.prototype as Element & { checkVisibility?: () => boolean };
+    const visibility = prototype.checkVisibility;
+    prototype.checkVisibility = () => true;
+    const Fixture = () => {
+      const state = usePlatformWindowedItems({
+        items: () => Array.from({ length: 50 }, (_, index) => index),
+        windowSize: 8,
+        estimatedItemHeight: 32,
+        measureItemHeight: measure,
+        measurementKey: height,
+      });
+      return (
+        <div ref={state.setAnchorRef}>
+          <span data-testid="mounted-items">{state.visibleItems().length}</span>
+          <span data-testid="bottom-runway">{state.bottomSpacerHeight()}</span>
+        </div>
+      );
+    };
+    try {
+      render(() => <Fixture />);
+      expect(screen.getByTestId('mounted-items')).toHaveTextContent('8');
+      expect(screen.getByTestId('bottom-runway')).toHaveTextContent('5040');
+      const initial = measure.mock.calls.length;
+      await fireEvent.scroll(window);
+      expect(measure.mock.calls.length).toBeGreaterThan(initial);
+      setHeight(180);
+      expect(screen.getByTestId('bottom-runway')).toHaveTextContent('7560');
+      expect(screen.getByTestId('mounted-items')).toHaveTextContent('8');
+      cleanup();
+      const disposed = measure.mock.calls.length;
+      await fireEvent.scroll(window);
+      expect(measure).toHaveBeenCalledTimes(disposed);
+    } finally {
+      cleanup();
+      rect.mockRestore();
+      if (visibility) prototype.checkVisibility = visibility;
+      else Reflect.deleteProperty(prototype, 'checkVisibility');
+    }
   });
 
   it('mounts small tables in full without virtual spacer rows', () => {
