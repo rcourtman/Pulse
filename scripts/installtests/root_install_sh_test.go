@@ -2391,7 +2391,8 @@ timeout() { shift; "$@"; }
 sleep() { :; }
 journalctl() { return 0; }
 ensure_pulse_running_after_update() { return 0; }
-` + extractRootInstallShellFunction(t, "start_pulse") + "\n"
+` + extractRootInstallShellFunction(t, "wait_for_service_active") + "\n" +
+		extractRootInstallShellFunction(t, "start_pulse") + "\n"
 
 	// Unit genuinely absent: no unit file and `systemctl cat` cannot find it.
 	// start_pulse must fail with a clear error instead of reporting success
@@ -2425,6 +2426,32 @@ start_pulse
 	}
 	if !strings.Contains(string(out), "SUCCESS:") {
 		t.Fatalf("start_pulse did not report a successful start:\n%s", out)
+	}
+}
+
+func TestRootInstallStartRequiresObservedActivityAndCallerPropagation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_installer_start.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("server startup/completion controls: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_unconfirmed_fresh_start_is_failure_not_future_boot_or_success",
+		"test_actual_active_read_not_start_command_exit_admits_completion",
+		"test_prior_active_update_keeps_its_one_existing_start_retry",
+		"test_missing_unit_never_reaches_enable_or_start",
+		"test_every_installer_caller_propagates_start_failure_even_in_an_or_list",
+		"test_every_installer_caller_requires_real_active_observation_before_completion",
+	} {
+		if !strings.Contains(string(out), name+" (__main__.ServerInstallerStart."+name+") ... ok") {
+			t.Fatalf("server startup control %s did not pass:\n%s", name, out)
+		}
+	}
+	if !strings.Contains(string(out), "\nRan 6 tests in ") || !strings.Contains(string(out), "\nOK\n") {
+		t.Fatalf("incomplete server startup verdict:\n%s", out)
 	}
 }
 

@@ -6277,6 +6277,29 @@ not exist at all: the installer always writes the unit file itself, even
 where systemctl cannot run, so a missing unit is a broken installation
 rather than an unprivileged-container quirk and must fail the run loudly.
 
+An existing unit is not sufficient either. Every server startup must observe
+`is-active` success through the existing bounded waiter, including fresh
+installs and a failed start command that might nevertheless have started the
+service. An unconfirmed start returns failure with status/journal commands,
+without claiming a future container boot will recover it or automatically
+printing service logs. Files, configuration and data are retained; no new
+stop, delete or rollback is attempted. A previously active update retains its
+existing single start retry; other starts do not gain a retry. Enable failure
+is explicitly reported, not treated as proof of future automatic startup.
+All five main completion paths explicitly propagate startup failure before
+creating a completion marker or printing installation completion, even when
+Bash's implicit errexit is suppressed by the caller's conditional context.
+
+`TestRootInstallStartRequiresObservedActivityAndCallerPropagation` executes
+`scripts/tests/test_server_installer_start.py` against the actual sourced
+startup/wait/retry functions and all five main callers, with only their fixed
+unit lookup relocated and unrelated installer operations confined. Controls
+cover refused starts, inactive/unreadable status, delayed/actual activation,
+the existing update retry, missing units, explicit caller failure and real
+startup-to-completion propagation. These are closed-manager source controls,
+not native systemd, installed recovery or HTTP readiness proof. The existing
+native workflow retains this fixture in its trigger and discovered inventory.
+
 The generated `pulse.service` unit also owns the local subscription-agent
 execution identity. It pins `HOME` to the Pulse install directory and prepends
 that identity's `.local/bin` plus the install `bin` directory to `PATH`, while
