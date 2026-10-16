@@ -20,9 +20,11 @@ func (r routerChartMonitorResolver) MonitorForContext(ctx context.Context) *moni
 }
 
 func (r *Router) ensureChartService() *chartapi.Service {
-	if r.chartService == nil {
-		r.chartService = chartapi.NewService(routerChartMonitorResolver{router: r})
-	}
+	r.chartServiceOnce.Do(func() {
+		if r.chartService == nil {
+			r.chartService = chartapi.NewService(routerChartMonitorResolver{router: r})
+		}
+	})
 	return r.chartService
 }
 

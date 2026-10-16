@@ -6941,3 +6941,21 @@ query, resource, tenant, credential or action authority. The observer receives
 only a successful-read marker after serialization/write, and existing API
 entitlement checks remain before that boundary. Read semantics remain owned
 by api-contracts and telemetry retention/disclosure by security-privacy.
+
+### Saved-credential TLS probes leave storage and recovery unchanged (16 October 2026)
+
+`internal/api/configapi/config_node_handlers.go` accepts draft SSL verification
+and fingerprint settings only for its temporary saved-credential probe client.
+The probe does not write configuration, stored credentials, runtime connection
+health, backup coverage or recovery readiness. PVE, PBS and PMG retain their
+separate saved connection identities. The direct real-TLS regressions in
+`config_handlers_connection_test.go` assert unchanged configuration and health.
+The request and permission contract remains owned by api-contracts.
+
+### Concurrent chart service publication adds no recovery state (16 October 2026)
+
+Initializing the router's chart service once is in-memory synchronization.
+It adds no store, persisted shape, backup, restore or migration path and does
+not turn chart history into recovery-readiness authority. Separate routers
+retain separate services. Concurrent publication and tenant-isolation proof
+remain owned by api-contracts.
