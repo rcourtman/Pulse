@@ -27,17 +27,26 @@ func openShiftDocsIssues(docs string) []string {
 		}
 	}
 	for _, command := range commands {
-		require(command[1], "helm upgrade --install pulse pulse/pulse")
+		require(command[1], "--version X.Y.Z")
 		require(command[1], "--namespace pulse")
 		require(command[1], "--set openShift.enabled=true")
+		if strings.Contains(command[1], "--install") {
+			issues = append(issues, "installation and existing-release changes must stay separate")
+		}
 	}
+	require(commands[0][1], "helm install pulse pulse/pulse")
 	require(commands[0][1], "--create-namespace")
+	require(commands[0][1], "--set replicaCount=1")
+	require(commands[0][1], "--set strategy.type=Recreate")
+	require(commands[0][1], "--set persistence.enabled=true")
 	if strings.Contains(commands[0][1], "secretEnv") ||
 		strings.Contains(commands[0][1], "openShift.kubernetesAgent.enabled=true") {
 		issues = append(issues, "server must bootstrap before a scoped agent token exists")
 	}
 	require(profile, "complete its browser setup")
 	require(profile, "Create `pulse-agent-env` using the private-file steps above")
+	require(commands[1][1], "helm upgrade pulse pulse/pulse")
+	require(commands[1][1], "--reuse-values")
 	require(commands[1][1], "--set openShift.kubernetesAgent.enabled=true")
 	require(commands[1][1], "--set openShift.kubernetesAgent.clusterID=")
 	require(commands[1][1], "--set agent.secretEnv.name=pulse-agent-env")
@@ -90,6 +99,13 @@ func TestOpenShiftDocsKeepBootstrapAndPrivateSecret(t *testing.T) {
 	}
 	for _, change := range []struct{ name, from, to string }{
 		{"profile", "### OpenShift profile (Helm)", "### Other profile"},
+		{"new release only", "helm install pulse pulse/pulse", "helm upgrade --install pulse pulse/pulse"},
+		{"pinned chart", "--version X.Y.Z", "--devel"},
+		{"single server", "--set replicaCount=1", "--set replicaCount=2"},
+		{"serial rollout", "--set strategy.type=Recreate", "--set strategy.type=RollingUpdate"},
+		{"persistent server", "--set persistence.enabled=true", "--set persistence.enabled=false"},
+		{"saved deployment values", "--reuse-values", "--reset-values"},
+		{"existing release only", "helm upgrade pulse pulse/pulse", "helm upgrade --install pulse pulse/pulse"},
 		{"bootstrap first", "--namespace pulse --create-namespace", "--namespace pulse --set openShift.kubernetesAgent.enabled=true"},
 		{"browser setup", "complete its browser setup", "reuse an administrator token"},
 		{"profile flag", "--set openShift.enabled=true", "--set openShift.enabled=false"},

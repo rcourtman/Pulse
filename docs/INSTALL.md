@@ -181,16 +181,14 @@ full `docker inspect` or resolved Compose output.
 ## 🛠️ Installation Methods
 
 ### 1. Kubernetes (Helm)
-Deploy to your cluster using our Helm chart.
+For a **new release**, follow the [pinned Helm installation](KUBERNETES.md#option-a-using-helm-recommended).
+It checks the intended context/namespace, uses one persistent server with a
+non-overlapping rollout, and refuses to upgrade an already-used release name.
+The guide also covers static manifests and OpenShift.
 
-```bash
-helm repo add pulse https://rcourtman.github.io/Pulse
-helm repo update
-helm upgrade --install pulse pulse/pulse \
-  --namespace pulse \
-  --create-namespace
-```
-See [KUBERNETES.md](KUBERNETES.md) for ingress and persistence configuration.
+For an existing installation, use the [Helm update precautions](DEPLOYMENT_MODELS.md#kubernetes-helm)
+with its saved values, image edition and PVC; new-install defaults are not an
+upgrade recipe. A chart version and a running server image are separate facts.
 
 ### 2. Bare Metal / Systemd
 For Linux servers (VM or bare metal), use the official installer in **Bash**.

@@ -134,8 +134,18 @@ saved deployment values. Review changes to persistence, Secret references and
 image edition before rollout; keep the current PVC, keys and settings. Do not
 let a default Community image replace paid Pro.
 
-See [Kubernetes deployment settings](KUBERNETES.md) and use your cluster's
-rollout and recovery procedure. A Helm rollback changes release resources; it
+New-install examples are not upgrade commands. Keep a single Pulse server per
+data directory and reconcile the deployment strategy with your storage before
+rollout. The chart defaults to `RollingUpdate`; the
+[new-install recipe](KUBERNETES.md#option-a-using-helm-recommended) explicitly uses
+`Recreate` to avoid overlapping servers, with a brief monitoring interruption.
+A storage class alone does not provide single-writer safety. Do not delete or
+replace a PVC, change its access mode or scale up to clear a stuck rollout.
+
+Review the chosen chart and saved values through your existing cluster change
+procedure before applying. If an upgrade reports failure, inspect its current
+release and pod state before retrying; failure is not proof that nothing changed.
+A Helm rollback changes release resources; it
 does not guarantee restoration of Pulse data changed by a newer binary.
 
 ### Provider-hosted MSP
