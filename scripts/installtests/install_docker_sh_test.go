@@ -355,6 +355,15 @@ func TestInstallDockerScriptUsesConfiguredImageRepoDefault(t *testing.T) {
 	}
 }
 
+func TestInstallDockerGeneratorPreservesExistingConfiguration(t *testing.T) {
+	// The complete generator runs against closed tools in a private directory;
+	// its eligibility guards alone are disabled, not its output admission.
+	cmd := exec.Command("python3", repoFile("scripts", "tests", "test_install_docker_generator.py"))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Docker generator safety controls: %v\n%s", err, output)
+	}
+}
+
 func TestInstallDockerScriptPrefersExplicitPulseImage(t *testing.T) {
 	workDir := t.TempDir()
 	version := currentReleaseVersion(t)
