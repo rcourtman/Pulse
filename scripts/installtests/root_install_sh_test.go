@@ -78,7 +78,7 @@ func TestRootInstallScriptArchiveSupportContract(t *testing.T) {
 		`ensure_update_disk_headroom()`,
 		`UPDATE_MIN_TEMP_FREE_BYTES=$((900 * 1024 * 1024))`,
 		`UPDATE_MIN_INSTALL_FREE_BYTES=$((256 * 1024 * 1024))`,
-		`ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`,
+		`ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"`,
 		`prefetch_pulse_archive_for_container()`,
 		`download_release_archive()`,
 		`install_pulse_archive()`,
@@ -111,7 +111,7 @@ func TestRootInstallSystemdServiceExposesOnlyPulseOwnedSubscriptionCLIHome(t *te
 func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 	downloadPulse := extractRootInstallShellFunction(t, "download_pulse")
 	orderedSteps := []string{
-		`ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`,
+		`ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"`,
 		`download_release_archive "$LATEST_RELEASE" "$pulse_arch" "$archive_path"`,
 		`run_upgrade_readiness_preflight "$CURRENT_VERSION" "$expected_release"`,
 		`install_pulse_archive "$archive_path" "$expected_release"`,
@@ -536,7 +536,7 @@ func TestRootInstallScriptDiscardsUnneededConfigBackup(t *testing.T) {
 // backups while the filesystem is short of space (#2127).
 func TestRootInstallScriptDiscardsBackupWhenStagingHeadroomFails(t *testing.T) {
 	downloadPulse := extractRootInstallShellFunction(t, "download_pulse")
-	headroom := strings.Index(downloadPulse, `ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`)
+	headroom := strings.Index(downloadPulse, `ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"`)
 	discard := strings.Index(downloadPulse, `discard_last_config_backup`)
 	if headroom < 0 || discard < 0 {
 		t.Fatalf("download_pulse must check staging headroom and discard the unneeded config backup (headroom=%d discard=%d)", headroom, discard)

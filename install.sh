@@ -3291,8 +3291,22 @@ create_temp_archive_path() {
 
     # Reserving then unlinking a mktemp file does not reserve the .tar.gz or
     # sidecar name. Keep both downloads inside one owner-only directory.
+    # A hidden staging prefix still yields the canonical archive file name.
+    local archive_name="${prefix##*/}"
+    archive_name="${archive_name#.}"
     temp_dir=$(mktemp -d "${prefix}-XXXXXX") || return 1
-    printf '%s/%s.tar.gz\n' "$temp_dir" "${prefix##*/}"
+    printf '%s/%s.tar.gz\n' "$temp_dir" "$archive_name"
+}
+
+# Server archives are staged and extracted on the install filesystem. /tmp is
+# tmpfs on Debian 13 and many LXC templates, where staged bytes count against
+# the container's memory limit rather than its disk (#2785).
+prepare_server_staging_parent() {
+    if ! mkdir -p -- "$INSTALL_DIR"; then
+        print_error "Could not prepare $INSTALL_DIR for staging the Pulse update; Pulse has not been stopped"
+        return 1
+    fi
+    printf '%s\n' "$INSTALL_DIR"
 }
 
 cleanup_temp_archive_path() {
@@ -3536,7 +3550,9 @@ install_pulse_archive() {
         expected_release=$(infer_release_from_archive_name "$archive_path" 2>/dev/null || true)
     fi
 
-    if ! temp_extract=$(mktemp -d /tmp/pulse-extract-XXXXXX); then
+    local staging_parent=""
+    if ! staging_parent=$(prepare_server_staging_parent) ||
+       ! temp_extract=$(mktemp -d "$staging_parent/.pulse-extract-XXXXXX"); then
         print_error "Could not prepare archive extraction; Pulse has not been stopped"
         return 1
     fi
@@ -3653,8 +3669,15 @@ download_pulse() {
         local pulse_arch=""
         local archive_from_temp=false
         local inferred_release=""
+        local staging_parent=""
 
-        if ! ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"; then
+        # The archive download and its extraction live on the install
+        # filesystem, never /tmp. Debian 13 and many LXC templates mount /tmp
+        # as tmpfs, which the kernel charges to the container's memory limit:
+        # a ~280 MB archive plus its ~750 MB extracted tree OOM-killed a 1 GiB
+        # LXC's init mid-update and Proxmox stopped the container (#2785).
+        if ! staging_parent=$(prepare_server_staging_parent) ||
+           ! ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"; then
             # The configuration snapshot taken earlier is not needed: the update
             # never reached staging. Remove it so a retry loop on a low-space
             # filesystem does not accumulate backups and worsen the shortage
@@ -3696,7 +3719,7 @@ download_pulse() {
             print_info "Downloading Pulse..."
             resolve_target_release
 
-            archive_path=$(create_temp_archive_path "/tmp/pulse-${LATEST_RELEASE}-linux-${pulse_arch}") || {
+            archive_path=$(create_temp_archive_path "$staging_parent/.pulse-${LATEST_RELEASE}-linux-${pulse_arch}") || {
                 print_error "Failed to create temporary archive path"
                 exit 1
             }
