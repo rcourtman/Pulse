@@ -4,6 +4,7 @@ import type {
   ProtectionPosture,
   ProtectionPosturePolicy,
   ProtectionPosturesResponse,
+  ProtectionProviderState,
 } from '@/types/recovery';
 import { apiFetchJSON } from '@/utils/apiClient';
 
@@ -47,10 +48,96 @@ export function buildProtectionPostureBatchURL(resourceIDs: readonly string[]): 
   return `${PROTECTION_POSTURES_URL}?${params.toString()}`;
 }
 
-async function fetchProtectionPostures(resourceIDs: readonly string[], signal: AbortSignal) {
-  return apiFetchJSON<ProtectionPosturesResponse>(buildProtectionPostureBatchURL(resourceIDs), {
+const unreadablePosture = () => new Error('Protection posture response is unreadable.');
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+const isText = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+const isOneOf = (value: unknown, choices: readonly string[]) =>
+  typeof value === 'string' && choices.includes(value);
+const isTime = (value: unknown) => isText(value) && Number.isFinite(Date.parse(value));
+const hasOptionalTimes = (value: Record<string, unknown>, fields: readonly string[]) =>
+  fields.every((field) => value[field] == null || isTime(value[field]));
+// Go encodes an empty nil slice as null. Accept that wire spelling, not missing
+// fields, objects or partially usable lists; normalize only after validation.
+const isStringList = (value: unknown): value is string[] | null =>
+  value === null || (Array.isArray(value) && value.every(isText));
+
+function isProviderState(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    ['provider', 'source', 'scope'].every((key) => isText(value[key])) &&
+    isOneOf(value.jobState, ['success', 'warning', 'failed', 'running', 'unknown']) &&
+    isOneOf(value.historyCompleteness, ['complete', 'partial', 'unavailable', 'unknown']) &&
+    isOneOf(value.permissions, ['sufficient', 'partial', 'denied', 'unknown']) &&
+    isStringList(value.evidenceIds) &&
+    hasOptionalTimes(value, ['lastAttemptAt', 'lastSuccessAt', 'lastVerifiedAt']) &&
+    (value.verificationExpected === undefined || typeof value.verificationExpected === 'boolean')
+  );
+}
+
+function readPosture(value: unknown): ProtectionPosture {
+  if (
+    !isRecord(value) ||
+    !isText(value.subjectResourceId) ||
+    !isOneOf(value.state, ['protected', 'attention', 'unprotected', 'unknown']) ||
+    !isOneOf(value.freshness, ['current', 'stale', 'unknown']) ||
+    !isOneOf(value.verification, ['verified', 'unverified', 'stale', 'unknown']) ||
+    !isOneOf(value.coverage, ['complete', 'partial', 'none', 'unknown']) ||
+    !isText(value.explanation) ||
+    !isTime(value.evaluatedAt) ||
+    !hasOptionalTimes(value, ['lastAttemptAt', 'lastSuccessfulPointAt', 'lastVerifiedAt']) ||
+    !isStringList(value.repositoryResourceIds) ||
+    !isStringList(value.evidenceIds) ||
+    !(
+      value.providerStates === null ||
+      (Array.isArray(value.providerStates) && value.providerStates.every(isProviderState))
+    )
+  ) {
+    throw unreadablePosture();
+  }
+  return {
+    ...(value as unknown as ProtectionPosture),
+    providerStates: ((value.providerStates ?? []) as ProtectionProviderState[]).map((provider) => ({
+      ...provider,
+      evidenceIds: provider.evidenceIds ?? [],
+    })),
+    repositoryResourceIds: value.repositoryResourceIds ?? [],
+    evidenceIds: value.evidenceIds ?? [],
+  };
+}
+
+function readPolicy(value: unknown): ProtectionPosturePolicy {
+  if (
+    !isRecord(value) ||
+    !['freshnessWindowSeconds', 'verificationWindowSeconds'].every(
+      (key) => Number.isSafeInteger(value[key]) && (value[key] as number) > 0,
+    ) ||
+    typeof value.requireVerification !== 'boolean'
+  ) {
+    throw unreadablePosture();
+  }
+  return value as unknown as ProtectionPosturePolicy;
+}
+
+async function fetchProtectionPostures(
+  resourceIDs: readonly string[],
+  signal: AbortSignal,
+): Promise<ProtectionPosturesResponse> {
+  const value = await apiFetchJSON<unknown>(buildProtectionPostureBatchURL(resourceIDs), {
     signal,
   });
+  if (!isRecord(value) || !Array.isArray(value.data)) throw unreadablePosture();
+  const policy = readPolicy(value.policy);
+  const remaining = new Set(resourceIDs);
+  const data = value.data.map((raw) => {
+    const posture = readPosture(raw);
+    // Never let a duplicate overwrite an earlier verdict in the resource map,
+    // or lend a verdict to another batch. Missing subjects remain Unknown.
+    if (!remaining.delete(posture.subjectResourceId)) throw unreadablePosture();
+    return posture;
+  });
+  return { data, policy };
 }
 
 /**
@@ -68,9 +155,20 @@ async function fetchAllProtectionPostures(
   const responses = await Promise.all(
     batches.map((batch) => fetchProtectionPostures(batch, signal)),
   );
+  const policy = responses[0]?.policy ?? EMPTY_POLICY;
+  if (
+    responses.some(
+      (response) =>
+        response.policy.freshnessWindowSeconds !== policy.freshnessWindowSeconds ||
+        response.policy.verificationWindowSeconds !== policy.verificationWindowSeconds ||
+        response.policy.requireVerification !== policy.requireVerification,
+    )
+  ) {
+    throw unreadablePosture();
+  }
   return {
-    data: responses.flatMap((response) => response.data ?? []),
-    policy: responses[0]?.policy ?? EMPTY_POLICY,
+    data: responses.flatMap((response) => response.data),
+    policy,
   };
 }
 

@@ -3378,6 +3378,27 @@ vdev layout is reported` in
 
 ## Current State
 
+### Unreadable protection evaluations remain unavailable (16 October 2026)
+
+The Coverage posture reader validates successful HTTP payloads before publishing
+any verdict: the row list, consumed state/evidence fields and positive integral
+policy windows must be readable without coercion. A duplicate subject (including
+conflicting verdicts) or a subject outside its requested batch invalidates the
+whole evaluation. Every batch must use the same policy; the first batch's rule
+cannot describe another batch's differently evaluated verdicts. The browser does
+not recompute server-owned protection state from backup inventory.
+
+Unreadable evaluations follow the existing failed-read path: every current
+verdict and its rule are withdrawn, Coverage shows Unknown with its unavailable
+notice, and Retry stays posture-only. Pending retries and cache remounts cannot
+revive rejected verdicts. Independently readable restore evidence, expansion and
+route remain available. Canonical null evidence slices normalize to empty lists;
+valid empty results, missing subjects and additional transport fields retain
+their existing behaviour. No backup, guest-agent or native recovery operation is
+added. Hook and connected table regressions plus `protection-response.cjs` cover
+the boundary and desktop/phone HTTP-to-Coverage recovery, not guest thaw, writes,
+restore verification, installed recovery or publication.
+
 The backup inventory Refresh button remains focusable while it announces its
 pending read with `aria-disabled`; its existing single-flight handler refuses
 repeated activations until both inventories and posture settle. This avoids

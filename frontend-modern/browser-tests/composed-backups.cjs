@@ -128,8 +128,8 @@ const { chromium, webkit } = require('playwright');
             json: {
               data: [],
               policy: {
-                freshnessWindowSeconds: 0,
-                verificationWindowSeconds: 0,
+                freshnessWindowSeconds: 604800,
+                verificationWindowSeconds: 604800,
                 requireVerification: false,
               },
               meta: { page: 1, limit: 200, total: 0, totalPages: 0 },
