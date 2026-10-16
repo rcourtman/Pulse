@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "base_sha": "931c1d99f90c0ea37c68fe5a09c1814833f9e09d",
+  "verified_at": "2026-10-16T07:32:30.094048Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "916060d082968ee6c8cf6bc97263940202b80e2fbda6ba5bdc6b118c78648109",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "524911500dbe991e056d91f97b2a05de3a355b02ca3728efc057e86942030948"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/docs/PBS#backups-are-visible-but-coverage-says-unprotected"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Equal PBS provider kinds and repeated scopes keep separate observed scope/source identities and their own Result/History/Access facts, including denied/unavailable and unknown evidence with no current artifacts.",
+    "Complete identifiers wrap on 320px screens without hover or horizontal clipping. A successful inventory Result is not labelled a successful backup Job.",
+    "A same-open response reverses observations and recovers one provider without inventing a protection verdict or restore point. Served help matches the new labels and preserves older-version missing-identity guidance."
+  ],
+  "interactions": [
+    "Keyboard or touch expands the actual Coverage row. Existing search finds pbs-west, legacy-recovery-point and denied with no backup artifacts; an unobserved source finds no row.",
+    "Ordinary refresh keeps the detail open and keyboard focus on Refresh, with exactly three reads (one posture and two inventory reads), while scope/source/facts stay paired through response reorder.",
+    "The existing help link opens the shipped PBS article and its revised first step at desktop/320px. Only synthetic loopback GETs are allowed; no provider/off-origin/mutating request or console/page error; browser and server close."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "observed_containing_source": "05a02863ecc37971d9bef05449f715d60fb0e499",
+    "compiler_source": "65926ff445efbc2a4cbabef8fb66e7ea5f8ee20d",
+    "compiler_receipt": "source-ggg5133v",
+    "compiled_artifact_reuse": "302 unchanged source inputs, updated copied PBS help and current runner binding; no fresh compilation claimed. PREVIEW-REUSE.json retains the exact comparison.",
+    "documentation_sha256": "273ca62229d5465a3a99c676087033d59bd2cd1483c16b2f890dc69cc8d05ef2",
+    "non_runtime_followup": {
+      "source": "931c1d99f90c0ea37c68fe5a09c1814833f9e09d",
+      "delta": "Only browser fixture formatting after the observed pass; both frontend runtime files and served PBS help are byte-identical to the tested source.",
+      "no_new_browser_execution_claim": true
+    },
+    "containing_validation": {
+      "source": "931c1d99f90c0ea37c68fe5a09c1814833f9e09d",
+      "receipt": "source-lbwglsld",
+      "affected_tests_passed": 13,
+      "format_lint_types_build_budgets": "passed",
+      "full_suite_rerun_claimed": false
+    }
+  },
+  "pixel_review": {
+    "source_sha": "05a02863ecc37971d9bef05449f715d60fb0e499",
+    "reviewed_at": "2026-10-16T07:32:30.094048+00:00",
+    "tool": "native view_image",
+    "captures": [
+      {
+        "file": "pixels/desktop-light-initial.png",
+        "sha256": "7a070dbb786b0afddb4f98b0ec1f69deecc4e081c613cec5d7e37a3ac9473ec8",
+        "native_view_image": "Actual image content was presented to the model through tools.view_image with original detail in this turn.",
+        "observation": "Each PBS observation has its own visible Scope, Source and Result/History/Access facts. East succeeds; west enumeration is failed/unavailable/denied; west legacy evidence stays Unknown. The long west scope is readable without hover and is not confused with guest placement. No restore point or current protection is invented."
+      },
+      {
+        "file": "pixels/desktop-light-refreshed.png",
+        "sha256": "4f88b5f3acb7cbe4f533578b66237f3d4218a7ad368716c34f7c566eb2943498",
+        "native_view_image": "Actual image content was presented to the model through tools.view_image with original detail in this turn.",
+        "observation": "The same open detail remains visible after refresh, with reversed observation order. West enumeration now says Success/Complete/Sufficient beside the same scope and source; west legacy evidence remains Unknown, east remains distinct, and the workload stays Unknown with no restore evidence. The Refresh control retains its visible focus ring."
+      },
+      {
+        "file": "pixels/desktop-light-help.png",
+        "sha256": "730ecdac66153aa6db88f44a3de96e440a7e8ed6e9418b4da3ed9d749ea851be",
+        "native_view_image": "Actual image content was presented to the model through tools.view_image with original detail in this turn.",
+        "observation": "The actual served PBS help names Scope/Source and Result/History/Access, distinguishes a successful inventory read from a successful backup job, and explains older Job wording and absent identity. The changed first step is readable in the actual viewport."
+      },
+      {
+        "file": "pixels/phone-dark-initial.png",
+        "sha256": "b73958bdf9ece55d39bead69dd9d834118b81c4a5b3ccc65dc653217f945bb2d",
+        "native_view_image": "Actual image content was presented to the model through tools.view_image with original detail in this turn.",
+        "observation": "Each PBS observation has its own visible Scope, Source and Result/History/Access facts. East succeeds; west enumeration is failed/unavailable/denied; west legacy evidence stays Unknown. The long west scope is readable without hover and is not confused with guest placement. No restore point or current protection is invented. Phone scope/source text and fact rows wrap within the panel without horizontal clipping."
+      },
+      {
+        "file": "pixels/phone-dark-refreshed.png",
+        "sha256": "a75a09682a0cc9741be559f7746f1696351c9e05a1ac7fc4c4d18202a8149ae3",
+        "native_view_image": "Actual image content was presented to the model through tools.view_image with original detail in this turn.",
+        "observation": "The same open detail remains visible after refresh, with reversed observation order. West enumeration now says Success/Complete/Sufficient beside the same scope and source; west legacy evidence remains Unknown, east remains distinct, and the workload stays Unknown with no restore evidence. The Refresh control retains its visible focus ring. Phone scope/source text and fact rows wrap within the panel without horizontal clipping."
+      },
+      {
+        "file": "pixels/phone-dark-help.png",
+        "sha256": "17f4af344e3798dad9e4f38d1fa45a9f86e9245400caff5eb564b2dc6ba3db84",
+        "native_view_image": "Actual image content was presented to the model through tools.view_image with original detail in this turn.",
+        "observation": "The actual served PBS help names Scope/Source and Result/History/Access, distinguishes a successful inventory read from a successful backup job, and explains older Job wording and absent identity. The changed first step is readable in the actual viewport."
+      },
+      {
+        "file": "pixels/phone-webkit-light-initial.png",
+        "sha256": "c6d942c72eb9542381dc8121745a80b885bb787db8d18948170b6567f1099c07",
+        "native_view_image": "Actual image content was presented to the model through tools.view_image with original detail in this turn.",
+        "observation": "Each PBS observation has its own visible Scope, Source and Result/History/Access facts. East succeeds; west enumeration is failed/unavailable/denied; west legacy evidence stays Unknown. The long west scope is readable without hover and is not confused with guest placement. No restore point or current protection is invented. Phone scope/source text and fact rows wrap within the panel without horizontal clipping."
+      },
+      {
+        "file": "pixels/phone-webkit-light-refreshed.png",
+        "sha256": "5bf3405e4600bb057660f1ec7b8a2b617552ac9d0149b2c4fea72c07e6cb8cdd",
+        "native_view_image": "Actual image content was presented to the model through tools.view_image with original detail in this turn.",
+        "observation": "The same open detail remains visible after refresh, with reversed observation order. West enumeration now says Success/Complete/Sufficient beside the same scope and source; west legacy evidence remains Unknown, east remains distinct, and the workload stays Unknown with no restore evidence. The Refresh control retains its visible focus ring. Phone scope/source text and fact rows wrap within the panel without horizontal clipping."
+      },
+      {
+        "file": "pixels/phone-webkit-light-help.png",
+        "sha256": "059d1cd8d260172b62bffb383efdb4c9f74bb53d0c8b3d1df623cd3b81927f57",
+        "native_view_image": "Actual image content was presented to the model through tools.view_image with original detail in this turn.",
+        "observation": "The actual served PBS help names Scope/Source and Result/History/Access, distinguishes a successful inventory read from a successful backup job, and explains older Job wording and absent identity. The changed first step is readable in the actual viewport."
+      }
+    ]
+  },
+  "limits": [
+    "Browser/source-fixture proof is not native guest recovery, protected delivery or release availability. The original source-ggg5133v full command exited 1 at an outdated help-contract assertion; that is not an overall pass."
+  ]
+}
