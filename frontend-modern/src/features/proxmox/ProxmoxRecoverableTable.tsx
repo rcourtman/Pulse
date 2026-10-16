@@ -30,7 +30,6 @@ import {
   getRecoverableColumns,
   getRecoverableColumnWidthStyle,
   getRecoverableLayoutForContainer,
-  isCompactBackupIdentityLayout,
   type RecoverableColumnId,
 } from './proxmoxBackupsTablePresentation';
 import { useProxmoxBackupTableWindowing } from './useProxmoxBackupTableWindowing';
@@ -97,30 +96,40 @@ export function ProxmoxRecoverableTable(props: {
     if (!showDayGroups()) {
       return props.artifacts.map((item) => ({
         kind: 'artifact',
-        key: item.id,
+        key: `artifact:${item.id}`,
         artifact: item,
       }));
     }
 
     return groupByDay(props.artifacts).flatMap((group) => [
-      { kind: 'day' as const, key: group.key, label: group.label, count: group.items.length },
+      {
+        kind: 'day' as const,
+        key: `day:${group.key}`,
+        label: group.label,
+        count: group.items.length,
+      },
       ...group.items.map((item) => ({
         kind: 'artifact' as const,
-        key: item.id,
+        key: `artifact:${item.id}`,
         artifact: item,
       })),
     ]);
   });
-  const tableWindow = useProxmoxBackupTableWindowing(tableItems, () => [
-    layoutMode(),
-    props.artifacts,
-  ]);
+  const tableWindow = useProxmoxBackupTableWindowing(
+    tableItems,
+    () => [layoutMode(), props.artifacts, showDayGroups()],
+    () => props.layoutWidth?.() ?? observedWidth.width(),
+  );
 
   const renderRow = (artifact: RecoverableArtifact): JSX.Element => (
     <>
-      <TableRow class="hover:bg-surface-hover" data-proxmox-backup-row="recoverable">
+      <TableRow
+        class="hover:bg-surface-hover"
+        data-proxmox-backup-row="recoverable"
+        data-proxmox-backup-key={`artifact:${artifact.id}`}
+      >
         <TableCell class={`${getPlatformTableCellClassForKind('name')} text-base-content`}>
-          <div class="flex min-w-0 items-center gap-1">
+          <div class="min-w-0">
             <div
               class="min-w-0 truncate font-semibold"
               title={[
@@ -133,11 +142,36 @@ export function ProxmoxRecoverableTable(props: {
             >
               {artifact.workload.name || artifact.workload.label}
             </div>
-            <Show when={isCompactBackupIdentityLayout(layoutMode())}>
-              <span class="shrink-0 text-[10px] text-muted">
-                {artifact.workload.typeLabel}
-                <Show when={artifact.workload.vmid}> {artifact.workload.vmid}</Show>
-              </span>
+            <Show when={!columnVisible('targetId')}>
+              <div
+                class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted"
+                data-backup-point-workload-target
+              >
+                {artifact.workload.typeLabel} {artifact.workload.vmid || '—'}
+              </div>
+            </Show>
+            <div
+              class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted"
+              data-backup-point-workload-connection
+            >
+              Connection: {artifact.workload.instance?.trim() || 'Unknown'}
+            </div>
+            <Show
+              when={
+                // An unresolved PBS namespace is a repository path, not an
+                // observed workload node. Never promote that fallback hint.
+                (artifact.workload.resourceId || artifact.sourceKind !== 'pbs') &&
+                (artifact.workload.nativeNode || artifact.workload.node)
+              }
+            >
+              {(node) => (
+                <div
+                  class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted"
+                  data-backup-point-workload-node
+                >
+                  Node: {node()}
+                </div>
+              )}
             </Show>
           </div>
         </TableCell>
@@ -341,7 +375,7 @@ export function ProxmoxRecoverableTable(props: {
                   <Show
                     when={item.kind === 'artifact' ? item.artifact : undefined}
                     fallback={
-                      <TableRow data-proxmox-backup-row="day">
+                      <TableRow data-proxmox-backup-row="day" data-proxmox-backup-key={item.key}>
                         {/* Cell-level background is reliable across table layout engines. */}
                         <TableCell
                           colspan={visibleColumns().length}

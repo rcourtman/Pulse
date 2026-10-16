@@ -4,7 +4,7 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
-import { measureProxmoxBackupItemHeight } from '../useProxmoxBackupTableWindowing';
+import { measureProxmoxBackupBlocks } from '../useProxmoxBackupTableWindowing';
 import {
   BACKUP_IDENTITY_NOW,
   identityGuest,
@@ -307,16 +307,19 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.queryByRole('button', { name: 'Sort by Task' })).not.toBeInTheDocument();
   });
 
-  it('measures logical backup blocks, not their individual DOM rows or runway spacers', () => {
+  it('measures each point and provenance block by key, without borrowing a neighbour height', () => {
     const root = document.createElement('div');
     root.innerHTML =
-      '<table><tbody><tr aria-hidden="true"></tr><tr data-proxmox-backup-row="day"></tr><tr data-proxmox-backup-row="recoverable"></tr><tr data-proxmox-backup-row="location"></tr><tr data-proxmox-backup-row="recoverable"></tr><tr data-proxmox-backup-row="location"></tr><tr aria-hidden="true"></tr></tbody></table>';
-    const body = root.querySelector('tbody')!;
-    vi.spyOn(body, 'getBoundingClientRect').mockReturnValue({ height: 520 } as DOMRect);
-    for (const row of body.querySelectorAll('[aria-hidden]'))
-      vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({ height: 80 } as DOMRect);
-    expect(measureProxmoxBackupItemHeight(root)).toBe(120);
-    expect(measureProxmoxBackupItemHeight(document.createElement('div'))).toBe(0);
+      '<table><tbody><tr aria-hidden="true"></tr><tr data-proxmox-backup-row="day" data-proxmox-backup-key="day:today"></tr><tr data-proxmox-backup-row="recoverable" data-proxmox-backup-key="artifact:short"></tr><tr data-proxmox-backup-row="location"></tr><tr data-proxmox-backup-row="recoverable" data-proxmox-backup-key="artifact:long"></tr><tr data-proxmox-backup-row="location"></tr><tr aria-hidden="true"></tr></tbody></table>';
+    const heights = [999, 24, 40, 20, 140, 60, 999];
+    for (const [index, row] of [...root.querySelectorAll('tr')].entries())
+      vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({ height: heights[index] } as DOMRect);
+    expect([...measureProxmoxBackupBlocks(root)]).toEqual([
+      ['day:today', 24],
+      ['artifact:short', 60],
+      ['artifact:long', 200],
+    ]);
+    expect(measureProxmoxBackupBlocks(document.createElement('div')).size).toBe(0);
   });
 
   it.each(['date', 'coverage'])(

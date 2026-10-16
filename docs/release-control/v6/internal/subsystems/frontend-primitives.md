@@ -10146,3 +10146,17 @@ bounds. This prevents measuring a wrapped Coverage block from synchronously
 resizing its own observed runway. `PlatformWindowedRows.test.tsx` checks deferred
 measurement, coalescing and cancellation; the Coverage identity browser protocol
 checks both scroll directions at desktop and narrow widths without page errors.
+
+### By date backup points use keyed wrapped-block geometry
+
+The existing `usePlatformWindowedItems.itemGeometry` extension also serves the
+By date backup feed. A logical point measures its summary and optional phone
+provenance row together; day headers are separately keyed items. Cumulative
+per-key heights, invalidated when width changes, prevent wrapped workload
+identity or source paths from shifting another point's geometry. The shared
+controller, observer scheduling, native scrolling, 140/36 item budgets and
+table primitives remain unchanged. The Workload cell folds hidden type/ID and
+wraps observed connection/native-node facts, without conflating a PBS namespace
+with a workload node. `ProxmoxBackupsTable.test.tsx` measures unequal logical
+blocks; `recoverableWorkloadIdentity.test.tsx` and the desktop/320px consuming
+browser protocol verify readable identity and complete fleet traversal.

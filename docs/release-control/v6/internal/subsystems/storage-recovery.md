@@ -7282,3 +7282,24 @@ Coverage windowing measures each wrapped summary by workload key as well as its
 detail, not by a fleet-wide first-row height. Width changes invalidate cached
 wrapping, including off-screen rows; unseen blocks use measured estimates until
 visited. The mounted-row limit and continuous table remain unchanged.
+
+### By date retains the target behind each restore point
+
+The By date Workload cell keeps type and target ID whenever the dedicated
+Target ID column is hidden, including the intermediate layout. It shows the
+matched workload's connection and observed native node separately from the
+backup repository's connection and path. An unmatched PBS namespace remains a
+repository path, never a claimed workload node; missing workload connection is
+Unknown. Identity facts wrap without hover and update on accepted inventory.
+Matching, source filters, completion, verification and protection rules are
+unchanged; these labels do not establish restore or guest-thaw recovery.
+
+By date windowing measures each logical keyed point, including its separate
+phone provenance row, and each day header. Wrapped identity must not borrow a
+neighbour's height. Width changes invalidate off-screen wrapping measurements;
+unseen items use estimates until mounted, preserving the existing row budgets.
+`recoverableWorkloadIdentity.test.tsx`, the block-measurement control in
+`ProxmoxBackupsTable.test.tsx`, and the synthetic HTTP consuming protocol
+`recoverable-workload-identity.cjs` verify target/repository separation,
+responsive identity, refresh and mixed-height fleet reachability. Native backup,
+restore, installed fleet and reporter recovery remain separate evidence.

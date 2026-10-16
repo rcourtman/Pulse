@@ -8735,3 +8735,15 @@ width changes invalidate off-screen measurements. The five-layout component and
 desktop/phone consuming checks in `coverageWorkloadIdentity.test.tsx`,
 `ProxmoxCoverageTable.test.tsx` and `coverage-workload-identity.cjs` verify this
 presentation, not a new resource identity, matching rule or native recovery.
+
+### Restore-point lists retain workload identity at every width
+
+By date's Workload cell now folds type/ID whenever Target ID is hidden and
+keeps current matched workload connection/native-node facts beside the name.
+Backup repository provenance remains separate; an unresolved PBS namespace is
+not a workload node and cannot supply a missing workload connection. The
+existing resource keys, matching rules, API and collection authority do not
+change. Per-key point/day geometry keeps wrapped facts reachable within the
+unchanged window budgets. `recoverableWorkloadIdentity.test.tsx` and
+`recoverable-workload-identity.cjs` cover the existing list's projections and
+refresh, not installed identity or native recovery.
