@@ -164,13 +164,26 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     // top-ups during scrolling cannot re-run measurement and listener binding.
     untrack(handleResize);
     // An expansion, refreshed detail or container-width change can resize
-    // the logical block without a page scroll or a window resize.
+    // the logical block without a page scroll or a window resize. Measuring
+    // that block can change its runway: defer those writes beyond observer
+    // delivery so they cannot synchronously resize the observed surface.
+    let resizeFrame: number | undefined;
+    const scheduleResize = () => {
+      if (resizeFrame !== undefined) return;
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = undefined;
+        handleResize();
+      });
+    };
     const observer =
       options.itemGeometry && typeof ResizeObserver === 'function'
-        ? new ResizeObserver(handleResize)
+        ? new ResizeObserver(scheduleResize)
         : undefined;
     observer?.observe(anchor);
-    onCleanup(() => observer?.disconnect());
+    onCleanup(() => {
+      observer?.disconnect();
+      if (resizeFrame !== undefined) window.cancelAnimationFrame(resizeFrame);
+    });
     onCleanup(
       bindWindowedPageScrollEvents({
         scrollTarget,
