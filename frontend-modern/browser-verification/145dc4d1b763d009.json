@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "5fbceb4c5ac48789b3e71f6a3840fe1b23d0e323",
+  "verified_at": "2026-10-16T09:40:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/pages/Alerts.tsx",
+    "frontend-modern/src/utils/alertActivationPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/i18n/messages.de.ts": "f4d0d111e10e10ece75b1a417ac2123eaf2045d258642b5de831950df7ec3a88",
+    "frontend-modern/src/i18n/messages.es.ts": "a066bd5289ae2a37e982fa8e37c1fecaeb779c430476ec854f56a1e5c0249f35",
+    "frontend-modern/src/i18n/messages.ts": "a7e459dbabb02187410ecf7204c4e2ef52acf972a3e1bc397d32cd17364f2c9e",
+    "frontend-modern/src/pages/Alerts.tsx": "b4d0cd119d5da684ffc3ad8d7a6d316dcf91fe9a0096a3ee69a6a35cbf74a533",
+    "frontend-modern/src/utils/alertActivationPresentation.ts": "15405135319b557fa93a0a301476e71dc0a69c4defee967537b46dddbdac22b8"
+  },
+  "routes": [
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): the Alerts overview header showed \"Notifications paused\" beside an off switch, which reads as \"paused: no\", while the banner below said notifications were paused",
+    "After, delivery off: the header reads \"Send notifications\" beside an off switch; the paused banner still explains that Pulse keeps detecting alerts",
+    "After, delivery on: same label, switch on, paused banner gone",
+    "At 375px the label and switch fit in the header row and the page has no sideways scroll (scrollWidth 375)"
+  ],
+  "interactions": [
+    "Signed in to a private mock stack and opened Alerts overview; read the checkbox label association (labels: Send notifications) and checked state from the DOM",
+    "Clicked the label text to turn delivery on, confirmed the switch checked and the banner gone, clicked again to turn it off and saw the pause toast",
+    "Resized to the mobile preset and measured the header control and page width"
+  ]
+}

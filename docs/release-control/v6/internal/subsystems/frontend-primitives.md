@@ -9113,6 +9113,15 @@ a neighbouring feature: the alerts Schedule page is "Delivery Schedule" in
 every locale, and `i18n.test.ts` refuses a maintenance word in any locale's
 title because maintenance windows live elsewhere.
 
+### Repeated parent cells show once per group
+
+When a table keeps one row per child so each child keeps its own figures,
+toggle and link (PBS datastores under a server), the parent's own readings
+render once, on the group's first row. Later rows keep the parent's name,
+muted, and leave the parent cells empty, so one parent never reads as several
+identical ones. The rows must already be grouped; the Backups "Backup server"
+table follows this through `BackupServerRow.continuesServer`.
+
 ### A refused setting reports the state the server kept
 
 When a write is refused because the server owns the value (an environment
@@ -9121,6 +9130,16 @@ the server already holds what the operator chose, a message naming the
 variable when it holds the opposite, and the generic failure only when the
 state cannot be read. The setup wizard's usage-statistics opt-out follows
 this, and catalog copy keeps the variable name untranslated (`i18n.test.ts`).
+
+### A switch keeps one name in every state
+
+A toggle's visible label names the setting, not its current state, and that
+label is the control's accessible name. A label that flips with the switch
+("Notifications paused" beside an off switch) reads as the opposite of the
+truth. State goes in the switch position and, where it needs explaining, in
+separate status copy such as a banner. The Alerts overview **Send
+notifications** switch follows this (`alerts.activation.switchLabel`), and
+`i18n.test.ts` rejects state words in that label in every locale.
 
 ### Alert overview rows place Investigate by the shared breakpoint
 

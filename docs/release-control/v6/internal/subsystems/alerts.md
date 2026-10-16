@@ -279,6 +279,21 @@ the visible label (`AlertHistoryItemActions.test.tsx`,
 `AlertHistoryMobileList.test.tsx`, `InvestigateAlertButton.test.tsx`,
 `alertIncidentPresentation.test.ts`).
 
+### The delivery switch has one name
+
+The Alerts overview header switch for external notification delivery is
+labelled **Send notifications** in every state
+(`alerts.activation.switchLabel`, English, German and Spanish), and that
+visible label is the checkbox's accessible name. It used to read
+"Notifications enabled" or "Notifications paused" depending on its own
+position, so an off switch beside "Notifications paused" read as "pausing is
+off". The switch position alone now carries the state. The delivery-paused
+banner and the pause toast still say Pulse keeps detecting and showing active
+alerts, which keeps the 2026-07-18 boundary between detection and delivery.
+`Alerts.readOnly.test.tsx` pins the stable name in both states, `i18n.test.ts`
+rejects state words in the label in every locale, and spec 01 finds the switch
+by the new name.
+
 ### Retained guest observations are not alert evidence
 
 Guest memory marked `last-known`, `unavailable` or an unknown observation state

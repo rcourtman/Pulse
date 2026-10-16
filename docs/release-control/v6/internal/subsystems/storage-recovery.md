@@ -431,6 +431,19 @@ source evidence and independent datastore identity. The production-component
 browser fixture checks desktop and narrow phone layouts. These synthetic
 checks establish no native datastore repair, backup/thaw or release acceptance.
 
+### A multi-datastore PBS server reads as one server
+
+The Backups "Backup server" table keeps one row per server and datastore, so
+each datastore keeps its own capacity, count, dedup, detail toggle and web
+link. Host status, version, CPU, memory and uptime render only on a server's
+first datastore row (`buildBackupServerRows` marks later rows
+`continuesServer`); later rows show the server name muted and leave those host
+cells empty, so two datastores no longer read as two identical servers. Rows
+stay grouped (servers by name then ID, datastores by name), and windowing
+follows the scroll position, so a later row is only ever mounted without its
+first row once that first row has scrolled out of view. Capacity evidence is
+unchanged: an offline server's later datastore still reads Unavailable.
+
 ### TrueNAS connection probes do not settle recovery inventory
 
 A successful settings probe reads system information only, on a separate client.

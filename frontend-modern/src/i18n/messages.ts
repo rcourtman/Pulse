@@ -114,8 +114,7 @@ export const EN_MESSAGES = {
     'Pulse sends a small daily usage summary showing which releases are deployed and which features and platforms are in use, so development effort goes where Pulse is actually used. It holds counts and on/off flags with a rotating pseudonymous install ID, never hostnames, credentials, IP addresses, or anything you type. It is never sold, shared, or used for advertising, and it is not linked to a Pulse account or license. It is on by default. You choose on the next step and can change it at any time in Settings.',
   'setup.welcome.telemetryNotice.title': 'Usage statistics',
   'setup.wizard.ariaLabel': 'Pulse Setup Wizard',
-  'alerts.activation.label.enabled': 'Notifications enabled',
-  'alerts.activation.label.disabled': 'Notifications paused',
+  'alerts.activation.switchLabel': 'Send notifications',
   'alerts.activation.toast.activated':
     "Notifications enabled. You'll now receive notifications when issues are detected.",
   'alerts.activation.toast.activateFailed': 'Unable to enable notifications. Please try again.',
@@ -161,7 +160,6 @@ export const EN_MESSAGES = {
   'alerts.nav.collapseSidebar': 'Collapse sidebar',
   'alerts.nav.expandSidebar': 'Expand sidebar',
   'alerts.nav.title': 'Alerts',
-  'alerts.nav.toggleAlerts': 'Toggle external notifications',
   'alerts.overview.action.acknowledge': 'Acknowledge',
   'alerts.overview.action.acknowledgeAll': 'Acknowledge all ({count})',
   'alerts.overview.action.acknowledging': 'Acknowledging...',
@@ -748,8 +746,7 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
 ] as const satisfies readonly I18nMessageKey[];
 
 export const ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS = [
-  'alerts.activation.label.enabled',
-  'alerts.activation.label.disabled',
+  'alerts.activation.switchLabel',
   'alerts.activation.toast.activated',
   'alerts.activation.toast.activateFailed',
   'alerts.activation.toast.deactivated',
@@ -790,7 +787,6 @@ export const ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS = [
   'alerts.nav.collapseSidebar',
   'alerts.nav.expandSidebar',
   'alerts.nav.title',
-  'alerts.nav.toggleAlerts',
   'alerts.overview.action.acknowledge',
   'alerts.overview.action.acknowledgeAll',
   'alerts.overview.action.acknowledging',

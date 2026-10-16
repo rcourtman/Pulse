@@ -1365,8 +1365,8 @@ or audit data to clear the warning.
 
 #### Pause and cancellation limits
 
-In **Alerts → Notifications**, global **Notifications paused** is not a
-store-and-forward hold. Monitoring continues, but pausing clears buffered alert
+Turning off the global **Send notifications** switch on the Alerts overview is
+not a store-and-forward hold. Monitoring continues, but pausing clears buffered alert
 groups and cancels pending queue deliveries for email, webhooks and Apprise,
 including recovery deliveries. **Turning delivery back on does not replay those
 cancelled deliveries.** Retained terminal failures are separate: pausing does
