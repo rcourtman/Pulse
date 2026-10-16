@@ -56,6 +56,10 @@ establish safe recovery.
   an agent does not prove API recovery. If only one datastore or namespace is
   affected, use the [scoped inventory checks](PBS.md#one-pbs-namespace-is-missing-or-stops-changing);
   a fresh sibling does not prove that the missing scope was read.
+- **A PBS job says Healthy despite an error, warning or running status:** compare
+  [the same task's status evidence](PBS.md#a-pbs-job-looks-healthy-but-its-status-disagrees).
+  An `OK` or `success` word inside a longer message is not completed success.
+  Use existing PBS records; do not run another job or verification to test the badge.
 - **Backup rows look duplicated or copies are missing:** compare
   [node-local copies, shared storage and PBS collection paths](PBS.md#duplicate-backups).
   Matching filenames or VMIDs do not prove one stored copy; do not delete
