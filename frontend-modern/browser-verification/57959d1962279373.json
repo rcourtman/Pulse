@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "base_sha": "a4bc8017120447c35e9b54732f58c84ff979fdef",
+  "verified_at": "2026-10-16T05:46:45.517176Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/INSTALL.md",
+    "frontend-modern/public/docs/INSTALL.md"
+  ],
+  "content_sha256": {
+    "docs/INSTALL.md": "d142caa1d9d83354144530521ec48346c2753bfcab5258f5c3c529b6902a757c",
+    "frontend-modern/public/docs/INSTALL.md": "d142caa1d9d83354144530521ec48346c2753bfcab5258f5c3c529b6902a757c"
+  },
+  "routes": [
+    "/docs/INSTALL#2-bare-metal--systemd",
+    "/docs/INSTALL#proxmox-ve-lxc-installer",
+    "/docs/AUTO_UPDATE#update-failed"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "The final mirrored installation document is consumed by freshly compiled real Docs, router, Markdown renderer and CSS; only the surrounding shell and local HTTP server are fixtures.",
+    "Both complete copied recipes match committed Markdown. New HTTPS/deadline/status checks remain ahead of unchanged pinned SSH verification; verified bytes are not installed acceptance.",
+    "Desktop and 320 px prose remain legible without horizontal page overflow; long code has its own scrolling pane. Native pixel review covers every retained final capture."
+  ],
+  "interactions": [
+    "Keyboard Enter at desktop and touch at 320 px follow the LXC recipe referral and focus its target without a shell reload.",
+    "Follow the uncertain-installation recovery link into the real shipped update guide, then Back and direct reload restore the installer fragment focus.",
+    "Programmatic narrow code scrolling verifies independent containment, not touch swiping. Runtime-fetched document bytes match both final source copies."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "journeys": [
+      {
+        "profile": "desktop",
+        "browser": "141.0.7390.37",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "interactions": [
+          "keyboard Enter follows LXC recipe referral",
+          "follow uncertainty exit to existing update recovery without executing a command",
+          "Back and direct reload restore fragment focus"
+        ]
+      },
+      {
+        "profile": "phone",
+        "browser": "141.0.7390.37",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "interactions": [
+          "touch follows LXC recipe referral",
+          "programmatic contained code scroll, not an emulated swipe",
+          "follow uncertainty exit to existing update recovery without executing a command",
+          "Back and direct reload restore fragment focus"
+        ]
+      }
+    ],
+    "preview": "Fresh offline source-proof consumer build on a4bc8017120447c35e9b54732f58c84ff979fdef; 2,939 source inputs and 21 served artifacts hash-match. No reuse or full application build claim.",
+    "cleanup": {
+      "browsersOpened": 2,
+      "browsersClosed": 2,
+      "serverClosed": true,
+      "socketsAfterClose": 0
+    }
+  },
+  "pixel_review": [
+    {
+      "file": "desktop-systemd.png",
+      "bytes": 134865,
+      "sha256": "48eace305094f31d820b258dadd01f694203e3b1bbf96b9b2db4d25161571c79",
+      "tool": "native view_image, original detail",
+      "observation": "The systemd introduction and LXC referral are legible, both HTTPS/deadline/status gates precede the pinned signature, and sudo appears only at the execution handoff. The server/agent note now has correctly decoded quotation marks."
+    },
+    {
+      "file": "desktop-lxc.png",
+      "bytes": 183105,
+      "sha256": "35f271b33ddc6ae17451741fb0ea5bc343591d07a7d4d9cabd92474c578b55e8",
+      "tool": "native view_image, original detail",
+      "observation": "The LXC conditions, per-download deadlines and HTTP 200/signature requirements are readable above the full-height recipe. The long public-key line stays inside the code pane, not the page."
+    },
+    {
+      "file": "desktop-download.png",
+      "bytes": 183105,
+      "sha256": "35f271b33ddc6ae17451741fb0ea5bc343591d07a7d4d9cabd92474c578b55e8",
+      "tool": "native view_image, original detail",
+      "observation": "The LXC recipe is visible within its dark code pane; this frame may duplicate the entry frame and is not extra scenario coverage."
+    },
+    {
+      "file": "desktop-limits.png",
+      "bytes": 183105,
+      "sha256": "35f271b33ddc6ae17451741fb0ea5bc343591d07a7d4d9cabd92474c578b55e8",
+      "tool": "native view_image, original detail",
+      "observation": "The text below the recipe distinguishes download limits from installer runtime and links uncertain execution to recovery. Matching captures are retained but not counted as additional scenarios."
+    },
+    {
+      "file": "desktop-recovery.png",
+      "bytes": 227665,
+      "sha256": "5351fd6e77be7d8ae63d086522a076b1f2d217d4673210a4bbcf7442a950ed22",
+      "tool": "native view_image, original detail",
+      "observation": "The Update failed heading is focused. The ordinary recovery guidance visibly preserves version/state and warns against rerunning, restarting or reinstalling to collect evidence."
+    },
+    {
+      "file": "phone-systemd.png",
+      "bytes": 82467,
+      "sha256": "89b81d9bf3630504938ea790247eed4f0ca07c756c9eab9c412d58c11921ebea",
+      "tool": "native view_image, original detail",
+      "observation": "At 320 px the systemd introduction and LXC referral wrap within the page. The code has its own horizontal pane and the server/agent note is readable with correct quotation marks."
+    },
+    {
+      "file": "phone-lxc.png",
+      "bytes": 90777,
+      "sha256": "cbea369598e0324d88a6d3aea02db256024d2830c37b851588ea8620e62d793d",
+      "tool": "native view_image, original detail",
+      "observation": "The HTTPS, local-default, 60-second/10-second and HTTP 200/signature conditions wrap legibly above the LXC code; body margins stay within the viewport."
+    },
+    {
+      "file": "phone-download.png",
+      "bytes": 77260,
+      "sha256": "f7a900966f0d0dc80e294f18ede2bbfa2c054c1e2f4cd312d077e7e171d72862",
+      "tool": "native view_image, original detail",
+      "observation": "The code pane is panned independently while surrounding prose stays aligned. Leading code characters are deliberately outside the pane; this is not proof that a whole long command is visible at once or that touch swiping works."
+    },
+    {
+      "file": "phone-limits.png",
+      "bytes": 97420,
+      "sha256": "47c5b841fea7535ebb2963b89130051e5d62d7657cc1e7567c3079d65960a847",
+      "tool": "native view_image, original detail",
+      "observation": "The download-versus-installer distinction, no-repeat uncertainty exit and exact-release/helper cautions wrap without page overflow. The recovery link is visible and legible."
+    },
+    {
+      "file": "phone-recovery.png",
+      "bytes": 106930,
+      "sha256": "4d322fed6d0763f854c46185a338985510640a0359e2ae5b0a78f79a6ecc8e02",
+      "tool": "native view_image, original detail",
+      "observation": "The existing Update failed page wraps at 320 px, with the no-rerun/restart/reinstall advice and bounded-log referral visible. No installation or service action was exercised."
+    }
+  ],
+  "limitations": [
+    "Default palette only; no dark-theme, WebKit or native install claim.",
+    "Code scrolling was programmatic; touch was used for links, not an emulated horizontal swipe.",
+    "Repeated byte-identical captures are files retained, not additional scenario coverage.",
+    "The first execution/DOM pass had a preview-server charset fault visible in CSS quotes. Its original ten captures were natively inspected and retained; final UTF-8 serving fixes the fixture only.",
+    "No release download, installer, sudo privilege, host service, guest or production endpoint was used."
+  ]
+}
