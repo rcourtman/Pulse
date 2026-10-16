@@ -165,7 +165,11 @@ const payloads = {
             explanation: 'Synthetic server-owned posture.',
             evaluatedAt: '2026-10-04T12:00:00Z',
           })),
-          policy: {},
+          policy: {
+            freshnessWindowSeconds: 604800,
+            verificationWindowSeconds: 604800,
+            requireVerification: true,
+          },
           meta: { total: 2, totalPages: 1 },
         };
         await route.fulfill({

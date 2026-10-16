@@ -96,7 +96,15 @@ const runtime = [
             ? { data: { backupTasks: tasks, storageBackups: [], guestSnapshots: [] } }
             : url.pathname === '/api/backups/pbs'
               ? { data: { backups: [] } }
-              : { data: [posture], policy: {}, meta: { total: 1, totalPages: 1 } };
+              : {
+                  data: [posture],
+                  policy: {
+                    freshnessWindowSeconds: 604800,
+                    verificationWindowSeconds: 604800,
+                    requireVerification: true,
+                  },
+                  meta: { total: 1, totalPages: 1 },
+                };
         return route.fulfill({
           status: 200,
           contentType: 'application/json',

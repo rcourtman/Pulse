@@ -97,6 +97,9 @@ const posture = {
     {
       subjectResourceId: 'fixture-vm',
       state: 'attention',
+      freshness: 'current',
+      verification: 'unverified',
+      coverage: 'complete',
       explanation: 'Verification evidence needs attention.',
       providerStates: [],
       repositoryResourceIds: [],
