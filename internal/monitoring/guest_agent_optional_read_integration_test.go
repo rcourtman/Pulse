@@ -104,7 +104,7 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 				}))
 				defer server.Close()
 				newClient := func() PVEClientInterface {
-					cfg := proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second}
+					cfg := proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard}
 					if clientKind == "cluster" {
 						return proxmox.NewClusterClient("optional", cfg, []string{server.URL}, nil)
 					}
@@ -134,12 +134,14 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 				}
 				build := func() models.VM {
 					scope := m.mockModeFence.begin()
+					// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+					cycleStart := time.Now()
 					vm, raw, source, notes, at, ok := m.buildVMFromClusterResource(context.Background(), "optional", res, client, id, nil, previous)
 					if !ok {
 						t.Fatal("guest disappeared")
 					}
 					m.recordGuestSnapshot("optional", "qemu", "node", 105, GuestMemorySnapshot{Status: vm.Status, RetrievedAt: at, MemorySource: source, Memory: vm.Memory, Raw: raw, Notes: notes})
-					m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+					m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 					registry.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
 					view := registry.VMs()[0]
 					canonicalID, resolved := registry.ResolveReferenceID(id)

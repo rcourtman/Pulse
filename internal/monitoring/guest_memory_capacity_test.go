@@ -163,7 +163,7 @@ func testGuestMemorySampleCapacityPolling(t *testing.T) {
 					}
 				}))
 				defer server.Close()
-				pcfg := proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second}
+				pcfg := proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard}
 				var client PVEClientInterface
 				if clientKind == "direct" {
 					var err error
@@ -189,6 +189,8 @@ func testGuestMemorySampleCapacityPolling(t *testing.T) {
 				previous := map[string]models.VM{}
 				build := func() models.VM {
 					t.Helper()
+					// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+					cycleStart := time.Now()
 					res := proxmox.ClusterResource{Type: "qemu", Node: "node", Name: "guest", VMID: 105, Status: "running", MaxMem: configured.Load(), Mem: configured.Load(), MaxDisk: gib, CPU: .1}
 					var vms []models.VM
 					if collector == "cluster-resources" {
@@ -200,7 +202,7 @@ func testGuestMemorySampleCapacityPolling(t *testing.T) {
 						t.Fatalf("collector lost VM: %v", vms)
 					}
 					vm := vms[0]
-					m.recordGuestMetrics(vms, nil, time.Now().Add(-time.Second))
+					m.recordGuestMetrics(vms, nil, cycleStart)
 					registry.IngestSnapshot(models.StateSnapshot{VMs: vms})
 					view := registry.VMs()[0]
 					if vm.Memory.HasKnownUsage() && (view.MemoryTotal() != vm.Memory.Total || view.MemoryUsed() != vm.Memory.Used || view.MemoryPercent() != vm.Memory.Usage) {

@@ -90,7 +90,7 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T, kinds ..
 				}
 			}))
 			defer server.Close()
-			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -99,12 +99,14 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T, kinds ..
 			identity := "transport:node:105"
 			var previous *models.VM
 			build := func() (models.VM, string) {
+				// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+				cycleStart := time.Now()
 				vm, raw, source, notes, at, ok := m.buildVMFromClusterResource(context.Background(), "transport", res, client, identity, nil, previous)
 				if !ok {
 					t.Fatal("VM disappeared")
 				}
 				m.recordGuestSnapshot("transport", "qemu", "node", 105, GuestMemorySnapshot{Name: vm.Name, Status: vm.Status, RetrievedAt: at, MemorySource: source, Memory: vm.Memory, Raw: raw, Notes: notes})
-				m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+				m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 				previous = &vm
 				return vm, source
 			}

@@ -197,7 +197,7 @@ func testGuestAgentRetainedIdentityCannotRenewAdmission(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -211,6 +211,8 @@ func testGuestAgentRetainedIdentityCannotRenewAdmission(t *testing.T) {
 			registry := unifiedresources.NewRegistry(nil)
 			build := func() models.VM {
 				t.Helper()
+				// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+				cycleStart := time.Now()
 				ctx := context.Background()
 				if phase.Load() == -1 {
 					canceled, cancel := context.WithCancel(ctx)
@@ -227,7 +229,7 @@ func testGuestAgentRetainedIdentityCannotRenewAdmission(t *testing.T) {
 					t.Fatal("guest disappeared")
 				}
 				vm := vms[0]
-				m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+				m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 				registry.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
 				prev = previousVMFromView(registry.VMs()[0])
 				if vm.ID != id || vm.CPU != .2 {

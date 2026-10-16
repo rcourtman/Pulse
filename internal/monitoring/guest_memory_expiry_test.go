@@ -136,7 +136,7 @@ func testGuestMemoryCarryForwardOrdinaryDeferralAndRecovery(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -158,12 +158,14 @@ func testGuestMemoryCarryForwardOrdinaryDeferralAndRecovery(t *testing.T) {
 			m.guestMetadataCache = map[string]guestMetadataCacheEntry{guestMetadataCacheKey("expiry", "node", 105): {fetchedAt: time.Now(), agentVersion: "fixture"}}
 			res := proxmox.ClusterResource{Type: "qemu", Node: "node", Name: "guest", VMID: 105, Status: "running", MaxMem: 8 * gib, Mem: 8 * gib, MaxDisk: gib, CPU: 0.2}
 			build := func() (models.VM, string) {
+				// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+				cycleStart := time.Now()
 				vm, raw, source, notes, at, ok := m.buildVMFromClusterResource(context.Background(), "expiry", res, client, identity, nil, nil)
 				if !ok {
 					t.Fatal("guest disappeared")
 				}
 				m.recordGuestSnapshot("expiry", "qemu", "node", 105, GuestMemorySnapshot{Status: vm.Status, RetrievedAt: at, MemorySource: source, Memory: vm.Memory, Raw: raw, Notes: notes})
-				m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+				m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 				return vm, source
 			}
 			vm, source := build()

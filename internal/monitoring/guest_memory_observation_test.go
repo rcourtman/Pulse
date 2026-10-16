@@ -54,12 +54,14 @@ func testGuestMemoryObservationLifecycle(t *testing.T) {
 	var previous *models.VM
 	build := func() models.VM {
 		t.Helper()
+		// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+		cycleStart := time.Now()
 		vm, raw, source, notes, at, ok := m.buildVMFromClusterResource(context.Background(), "provenance", res, client, identity, nil, previous)
 		if !ok {
 			t.Fatal("guest disappeared")
 		}
 		m.recordGuestSnapshot("provenance", "qemu", "node", 105, GuestMemorySnapshot{Status: vm.Status, RetrievedAt: at, MemorySource: source, Memory: vm.Memory, Raw: raw, Notes: notes})
-		m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+		m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 		store.PopulateFromSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
 		views := store.VMs()
 		if len(views) != 1 {
