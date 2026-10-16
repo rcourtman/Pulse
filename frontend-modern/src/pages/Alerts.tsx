@@ -238,12 +238,11 @@ export function Alerts() {
         description={headerMeta().description}
         actions={
           <Show when={activeTab() === 'overview' && !readOnlySession()}>
-            <div class="flex items-center gap-3">
-              <span class={`text-sm font-medium ${alertActivationPresentation().labelClass}`}>
+            <label class="flex cursor-pointer items-center gap-3">
+              <span class="text-sm font-medium text-base-content">
                 {alertActivationPresentation().label}
               </span>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <span class="sr-only">{t('alerts.nav.toggleAlerts')}</span>
+              <span class="relative inline-flex items-center">
                 <input
                   type="checkbox"
                   class="sr-only peer"
@@ -257,11 +256,11 @@ export function Alerts() {
                     }
                   }}
                 />
-                <div class={alertActivationPresentation().trackClass}>
+                <span class={alertActivationPresentation().trackClass}>
                   <span class={alertActivationPresentation().thumbClass} />
-                </div>
-              </label>
-            </div>
+                </span>
+              </span>
+            </label>
           </Show>
         }
       />

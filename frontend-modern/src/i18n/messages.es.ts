@@ -7,8 +7,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'pricing.handoff.link.pulseAccount': 'continua a Pulse Account',
   'pricing.handoff.title.publicPricing': 'Redirigiendo a precios',
   'pricing.handoff.title.pulseAccount': 'Redirigiendo a Pulse Account',
-  'alerts.activation.label.enabled': 'Notificaciones activadas',
-  'alerts.activation.label.disabled': 'Notificaciones pausadas',
+  'alerts.activation.switchLabel': 'Enviar notificaciones',
   'alerts.activation.toast.activated':
     'Notificaciones activadas. Ahora recibiras avisos cuando se detecten problemas.',
   'alerts.activation.toast.activateFailed':
@@ -58,7 +57,6 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.nav.collapseSidebar': 'Contraer barra lateral',
   'alerts.nav.expandSidebar': 'Expandir barra lateral',
   'alerts.nav.title': 'Alertas',
-  'alerts.nav.toggleAlerts': 'Alternar notificaciones externas',
   'alerts.overview.action.acknowledge': 'Reconocer',
   'alerts.overview.action.acknowledgeAll': 'Reconocer todas ({count})',
   'alerts.overview.action.acknowledging': 'Reconociendo...',

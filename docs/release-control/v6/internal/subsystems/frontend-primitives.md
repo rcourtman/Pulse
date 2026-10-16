@@ -8858,6 +8858,16 @@ variable when it holds the opposite, and the generic failure only when the
 state cannot be read. The setup wizard's usage-statistics opt-out follows
 this, and catalog copy keeps the variable name untranslated (`i18n.test.ts`).
 
+### A switch keeps one name in every state
+
+A toggle's visible label names the setting, not its current state, and that
+label is the control's accessible name. A label that flips with the switch
+("Notifications paused" beside an off switch) reads as the opposite of the
+truth. State goes in the switch position and, where it needs explaining, in
+separate status copy such as a banner. The Alerts overview **Send
+notifications** switch follows this (`alerts.activation.switchLabel`), and
+`i18n.test.ts` rejects state words in that label in every locale.
+
 ### Alert overview rows place Investigate by the shared breakpoint
 
 `AlertOverviewAlertCard` reads the shared `useBreakpoint()` hook to decide
