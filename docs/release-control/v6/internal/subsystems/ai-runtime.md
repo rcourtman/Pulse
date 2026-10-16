@@ -8087,6 +8087,15 @@ a readable failure receipt and returns the original error identity for Patrol
 investigations. Interactive chat retains its existing best-effort fallback.
 The investigation service must not advance a captured proposal after that error.
 
+A final summary that leaks a textual tool call is unusable only for Patrol
+investigations: the model was still investigating, and the orchestrator would
+read the unmarked prefix as a terminal `needs_attention` conclusion. Interactive
+chat keeps the non-empty clean prefix it already streamed as the final message,
+so the persisted message matches the stream, and falls back only when that
+prefix is empty. Proof: `TestInteractiveFinalSummaryKeepsCleanPrefixBeforeLeakedToolCall`
+and `TestInvestigationFinalSummaryWithLeakedToolCallIsNotAConclusion` in
+`internal/ai/chat/agentic_final_failure_test.go`.
+
 The private orchestrator clears the previous finding outcome when starting a
 new session, after retaining its prior context. Failed runs preserve evidence,
 counts and any existing action reference. They remain failed rather than being
