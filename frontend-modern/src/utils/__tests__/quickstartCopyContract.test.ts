@@ -3,6 +3,10 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+// The retired offer was Pulse-provided inference, not an administrator's
+// chosen external provider. Privacy guidance must be able to name that boundary.
+const pulseHostedInferenceClaim = /Pulse[- ]hosted (?:AI|models?)/i;
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../');
 const readRepoFile = (relativePath: string) =>
   readFileSync(resolve(repoRoot, relativePath), 'utf-8');
@@ -34,12 +38,21 @@ describe('quickstart copy contract', () => {
     ]) {
       expect(copy).not.toMatch(/quickstart/i);
       expect(copy).not.toContain('quickstart:pulse-hosted');
-      expect(copy).not.toMatch(/hosted AI/i);
-      expect(copy).not.toMatch(/hosted model/i);
+      expect(copy).not.toMatch(pulseHostedInferenceClaim);
       expect(copy).not.toMatch(/hosted[\s\S]{0,120}no API key/i);
       expect(copy).not.toMatch(/Pulse-hosted[\s\S]{0,120}no API key/i);
       expect(copy).not.toMatch(/Pulse Account[\s\S]{0,120}no API key/i);
     }
+  });
+
+  it('rejects the retired Pulse inference offer without banning external-provider disclosure', () => {
+    for (const claim of ['Pulse-hosted AI', 'Pulse hosted model', 'Pulse-hosted models']) {
+      expect(claim).toMatch(pulseHostedInferenceClaim);
+    }
+    expect('Hosted model with your own key or subscription').not.toMatch(pulseHostedInferenceClaim);
+    expect('Your chosen hosted AI provider receives the supplied context').not.toMatch(
+      pulseHostedInferenceClaim,
+    );
   });
 
   it('keeps retired Relay guidance about existing pairings, not a current offer', () => {
