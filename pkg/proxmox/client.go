@@ -270,6 +270,10 @@ type authRefresh struct {
 	err  error
 }
 
+// defaultClientTimeout is the per-request timeout when ClientConfig.Timeout
+// is unset.
+const defaultClientTimeout = 60 * time.Second
+
 func (c *Client) authSnapshot() (auth, uint64) {
 	c.authMu.Lock()
 	defer c.authMu.Unlock()
@@ -356,7 +360,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	// Use configured timeout or default to 60 seconds
 	timeout := cfg.Timeout
 	if timeout <= 0 {
-		timeout = 60 * time.Second
+		timeout = defaultClientTimeout
 	}
 	httpClient := tlsutil.CreateHTTPClientWithTimeout(cfg.VerifySSL, cfg.Fingerprint, timeout)
 
@@ -447,17 +451,41 @@ func (c *Client) renewAuthentication(ctx context.Context, expected *uint64) erro
 	username := c.auth.user + "@" + c.auth.realm
 	c.authMu.Unlock()
 
-	password := c.config.Password
-	err := c.authenticateJSON(ctx, username, password)
-	if shouldFallbackToForm(err) {
-		err = c.authenticateForm(ctx, username, password)
+	// The login is shared, so no single caller's cancellation may end it: a
+	// cancelled guest-agent or API read that happened to start the renewal
+	// must not fail every live read waiting on it. The detached attempt keeps
+	// the caller's values, is bounded by the client's request timeout, and
+	// publishes its result for later reads even after its starter has left.
+	loginCtx, cancelLogin := context.WithTimeout(context.WithoutCancel(ctx), c.sessionRenewalTimeout())
+	go func() {
+		defer cancelLogin()
+		password := c.config.Password
+		err := c.authenticateJSON(loginCtx, username, password)
+		if shouldFallbackToForm(err) {
+			err = c.authenticateForm(loginCtx, username, password)
+		}
+		c.authMu.Lock()
+		pending.err = err
+		c.authInFlight = nil
+		close(pending.done)
+		c.authMu.Unlock()
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-pending.done:
+		return pending.err
 	}
-	c.authMu.Lock()
-	pending.err = err
-	c.authInFlight = nil
-	close(pending.done)
-	c.authMu.Unlock()
-	return err
+}
+
+// sessionRenewalTimeout bounds one shared login attempt (JSON plus any form
+// fallback) by the same per-request timeout the client applies to API reads.
+func (c *Client) sessionRenewalTimeout() time.Duration {
+	if c.httpClient != nil && c.httpClient.Timeout > 0 {
+		return c.httpClient.Timeout
+	}
+	return defaultClientTimeout
 }
 
 func (c *Client) authenticateJSON(ctx context.Context, username, password string) error {
