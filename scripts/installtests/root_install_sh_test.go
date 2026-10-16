@@ -2429,6 +2429,35 @@ start_pulse
 	}
 }
 
+func TestRootInstallAutoUpdateSettingsPublication(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "auto_update_settings.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("private automatic-update settings publication: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_existing_object_preserves_values_and_uses_private_atomic_publication",
+		"test_fresh_settings_are_private_and_keep_the_existing_defaults",
+		"test_missing_parser_preserves_existing_configuration_without_text_substitution",
+		"test_invalid_or_multiple_json_values_are_not_rewritten_or_enabled",
+		"test_linked_or_nonregular_configuration_is_not_followed",
+		"test_failed_stage_parse_mode_owner_or_rename_retains_original_without_timer_changes",
+		"test_interrupted_publication_cleans_its_private_staging_file",
+		"test_raced_destination_directory_is_not_written_inside",
+		"test_refused_assets_keep_saved_settings_and_never_enable_the_timer",
+	} {
+		if !strings.Contains(string(out), name+" (__main__.AutoUpdateSettings."+name+") ... ok") {
+			t.Fatalf("settings publication control %s did not pass:\n%s", name, out)
+		}
+	}
+	if !strings.Contains(string(out), "\nRan 9 tests in ") || !strings.Contains(string(out), "\nOK\n") {
+		t.Fatalf("incomplete settings publication verdict:\n%s", out)
+	}
+}
+
 func TestRootInstallStartRequiresObservedActivityAndCallerPropagation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

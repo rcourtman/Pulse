@@ -4865,38 +4865,41 @@ setup_auto_updates() {
         return 0
     fi
 
-    # Enable timer but don't start it yet
+    # Never copy saved settings through a predictable shared /tmp pathname or
+    # edit JSON using text substitution. Stage privately beside the destination
+    # and publish only a complete single object; unrelated values are retained.
+    # The subshell owns cleanup even when this optional setup is in an OR-list.
+    if ! (
+        temp_file=""
+        trap '[[ -z "$temp_file" ]] || rm -f -- "$temp_file"' EXIT
+        [[ ! -L "$config_dir/system.json" ]] || exit 1
+        [[ ! -e "$config_dir/system.json" || -f "$config_dir/system.json" ]] || exit 1
+        temp_file=$(mktemp "$config_dir/.system.json.XXXXXX") || exit 1
+        if [[ -f "$config_dir/system.json" ]]; then
+            command -v jq >/dev/null 2>&1 || exit 1
+            jq -e -s --arg channel "$desired_channel" '
+                if length == 1 and (.[0] | type) == "object" then
+                    .[0] | .autoUpdateEnabled = true | .updateChannel = $channel
+                else error("one settings object required") end
+            ' "$config_dir/system.json" > "$temp_file" 2>/dev/null || exit 1
+        else
+            printf '{"autoUpdateEnabled":true,"updateChannel":"%s","pollingInterval":5}\n' "$desired_channel" > "$temp_file" || exit 1
+        fi
+        chmod 0600 "$temp_file" || exit 1
+        chown pulse:pulse "$temp_file" 2>/dev/null || exit 1
+        # Linux-only installer: -T refuses a destination raced into a directory
+        # rather than placing the staged settings inside it.
+        mv -T -- "$temp_file" "$config_dir/system.json" || exit 1
+        temp_file=""
+    ); then
+        print_warn "Automatic-update settings could not be saved safely; the timer was not enabled or started. Existing settings are retained. Check system.json and jq before retrying."
+        ENABLE_AUTO_UPDATES=false
+        return 0
+    fi
+
+    # Settings must be safely persisted before changing timer activation.
     safe_systemctl enable "$update_timer_unit" || true
 
-    # Update system.json to enable auto-updates
-    if [[ -f "$config_dir/system.json" ]]; then
-        # Update existing file
-        local temp_file="/tmp/system_$$.json"
-        if command -v jq &> /dev/null; then
-            jq --arg channel "$desired_channel" '.autoUpdateEnabled = true | .updateChannel = $channel' "$config_dir/system.json" > "$temp_file" && mv "$temp_file" "$config_dir/system.json"
-        else
-            # Fallback to sed if jq not available
-            # First check if autoUpdateEnabled already exists in the file
-            if grep -q '"autoUpdateEnabled"' "$config_dir/system.json"; then
-                # Field exists, update its value
-                sed -i 's/"autoUpdateEnabled":[^,}]*/"autoUpdateEnabled":true/' "$config_dir/system.json"
-            else
-                # Field doesn't exist, add it after the opening brace
-                sed -i 's/^{/{\"autoUpdateEnabled\":true,/' "$config_dir/system.json"
-            fi
-            if grep -q '"updateChannel"' "$config_dir/system.json"; then
-                sed -i "s/\"updateChannel\":[^,}]*/\"updateChannel\":\"$desired_channel\"/" "$config_dir/system.json"
-            else
-                sed -i "s/^{/{\"updateChannel\":\"$desired_channel\",/" "$config_dir/system.json"
-            fi
-        fi
-    else
-        # Create new file with auto-updates enabled
-        printf '{"autoUpdateEnabled":true,"updateChannel":"%s","pollingInterval":5}\n' "$desired_channel" > "$config_dir/system.json"
-    fi
-    
-    chown pulse:pulse "$config_dir/system.json" 2>/dev/null || true
-    
     # Start the timer
     safe_systemctl start "$update_timer_unit" || true
 
