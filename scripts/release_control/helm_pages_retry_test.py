@@ -275,7 +275,7 @@ class HelmPagesRetryTests(unittest.TestCase):
 
 
 class PublicReceiptTests(unittest.TestCase):
-    def receipt(self, mode):
+    def receipt(self, mode, *, ready_after=0):
         workflow = (ROOT / '.github/workflows/helm-pages.yml').read_text()
         step = workflow.split('      - name: Verify public Pages chart\n', 1)[1]
         script = textwrap.dedent(step.split('        run: |\n', 1)[1])
@@ -285,8 +285,11 @@ class PublicReceiptTests(unittest.TestCase):
             (root / 'dist/pulse-6.4.3.tgz').write_bytes(b'qualified')
             programs = {
                 'curl': '''#!/usr/bin/env python3
-import pathlib, sys
-pathlib.Path(sys.argv[sys.argv.index('-o')+1]).write_text('version: 6.4.3\\n')
+import os, pathlib, sys
+elapsed = pathlib.Path('elapsed')
+seconds = int(elapsed.read_text()) if elapsed.exists() else 0
+version = '6.4.3' if seconds >= int(os.environ['READY_AFTER']) else '6.4.2'
+pathlib.Path(sys.argv[sys.argv.index('-o')+1]).write_text('version: ' + version + '\\n')
 ''',
                 'helm': '''#!/usr/bin/env python3
 import os, pathlib, sys
@@ -298,7 +301,13 @@ if args[0] == 'pull':
         dest = pathlib.Path(args[args.index('--destination')+1])
         (dest / 'pulse-6.4.3.tgz').write_bytes(b'qualified' if mode == 'match' else b'wrong')
 ''',
-                'sleep': '#!/bin/sh\nexit 0\n',
+                'sleep': '''#!/usr/bin/env python3
+import pathlib, sys
+path = pathlib.Path('elapsed')
+seconds = (int(path.read_text()) if path.exists() else 0) + int(sys.argv[1])
+path.write_text(str(seconds))
+print('fixture elapsed: ' + str(seconds))
+''',
             }
             for name, body in programs.items():
                 path = root / name
@@ -306,7 +315,8 @@ if args[0] == 'pull':
                 path.chmod(0o755)
             return subprocess.run(['bash', '-c', script], cwd=root,
                                   env={'PATH': f"{root}:{os.environ['PATH']}",
-                                       'VERSION': '6.4.3', 'MODE': mode},
+                                       'VERSION': '6.4.3', 'MODE': mode,
+                                       'READY_AFTER': str(ready_after)},
                                   capture_output=True, text=True)
 
     def test_matching_public_package_passes(self):
@@ -316,6 +326,30 @@ if args[0] == 'pull':
     def test_same_version_wrong_bytes_fail(self):
         result = self.receipt('wrong')
         self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('[OK]', result.stdout)
+
+    def test_pages_build_and_propagation_can_exceed_one_minute(self):
+        # RC.2's Pages build itself took 60.212s. Leave time for the served
+        # index after that build, rather than exhausting verification first.
+        result = self.receipt('match', ready_after=75)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('fixture elapsed: 75\n', result.stdout)
+        self.assertIn('[OK]', result.stdout)
+
+    def test_delayed_same_version_wrong_bytes_still_fail_immediately(self):
+        result = self.receipt('wrong', ready_after=75)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Public Helm chart bytes differ', result.stdout)
+        self.assertIn('fixture elapsed: 75\n', result.stdout)
+        self.assertNotIn('fixture elapsed: 80\n', result.stdout)
+        self.assertNotIn('[OK]', result.stdout)
+
+    def test_unpublished_index_still_exhausts_bounded_window(self):
+        result = self.receipt('match', ready_after=3600)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('fixture elapsed: 300\n', result.stdout)
+        self.assertNotIn('fixture elapsed: 305\n', result.stdout)
+        self.assertIn('did not expose chart', result.stdout)
         self.assertNotIn('[OK]', result.stdout)
 
     def test_missing_download_fails(self):
