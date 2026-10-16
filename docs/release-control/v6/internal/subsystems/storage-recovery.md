@@ -24,8 +24,9 @@
 ### Protection evidence names its observed scope and source
 
 Expanded Coverage keeps each provider's exact scope and observation source
-beside that provider's job, history and access facts, including when no current
-artifact is available. Equal provider kinds or scopes do not collapse distinct
+beside that provider's result, history and access facts, including when no current
+artifact is available. The generic Result label does not mistake a successful
+inventory read for a successful backup job. Equal provider kinds or scopes do not collapse distinct
 observations. Identifiers wrap without hover on phones; missing identity stays
 Unknown and is not inferred from guest placement. Existing Coverage search
 includes these displayed identities and facts without changing backup-location

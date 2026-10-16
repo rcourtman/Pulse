@@ -26,7 +26,7 @@ and sort the complete canonical change table while startup and ingestion wait.
 ### Provider evidence identity stays separate from guest identity
 
 Existing backup Coverage exposes each observation's scope and source alongside
-its own facts and includes them in the existing text search, even when the
+its own result/history/access facts and includes them in the existing text search, even when the
 source has no current artifact. These labels are not inferred from the guest's
 connection and cannot change matching, location-facet identity or protection.
 `coverageProviderEvidence.test.tsx` and `ProxmoxCoverageTable.test.tsx` check
