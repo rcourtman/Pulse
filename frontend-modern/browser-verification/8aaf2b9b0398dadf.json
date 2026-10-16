@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "base_sha": "fef7b29a82c5886b568cddc2b730ba0e3ce5925d",
+  "verified_at": "2026-10-16T00:31:08.443816Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/PBS.md",
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/public/docs/PBS.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md"
+  ],
+  "content_sha256": {
+    "docs/PBS.md": "c659e95b6e17eb4f7ca646cdb3cb0320a3f7a215d6fea11d989fe2141c8d1aca",
+    "docs/TROUBLESHOOTING.md": "3b4af92c1e2630e68f45db5bafb31b73b60ac455d40d4ee4da356a7207841bd2",
+    "frontend-modern/public/docs/PBS.md": "c659e95b6e17eb4f7ca646cdb3cb0320a3f7a215d6fea11d989fe2141c8d1aca",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "3b4af92c1e2630e68f45db5bafb31b73b60ac455d40d4ee4da356a7207841bd2"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING#choose-the-affected-workflow",
+    "/docs/PBS#duplicate-backups"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Existing shipped PBS and Troubleshooting help, rendered by the production Docs page/router/Markdown/CSS under the documentation-only fixture shell. Exact Markdown responses and preview assets match their source-bound hashes.",
+    "Node-local copies, genuinely shared stores and direct/PVE-passthrough PBS observations are distinguished. Missing location remains unknown; a failed read is not a deletion receipt and row count is not restore or thaw proof.",
+    "The two-column evidence table and reporting/safety guidance are readable on desktop/light and 320px/dark without horizontal page overflow. No product/backend, provider or guest operation was exercised."
+  ],
+  "interactions": [
+    "Keyboard Enter in Chromium and touch tap in WebKit follow the new existing-document link and focus its Duplicate Backups heading.",
+    "Back returns to the Troubleshooting fragment with focus, preserving the same client shell; re-entry and reload focus the PBS heading again.",
+    "All three evidence rows use real semantic column headers. Both document responses match final source bytes; no page errors, API requests or mutations were observed. Browser/server close completed."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "preview": "Built production Docs/router/Markdown/CSS from committed source in the offline source-proof VM; fixed hashed local static preview."
+  },
+  "input_hashes": {
+    "frontend-modern/src/pages/Docs.tsx": "e1d181803722b38ed211517d12495d201c299cc8ebb0a14131c58ac91c7e3a6a",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "213b6216dca650aab7d3ea4c8a66af6ee128f829ba455b5f53cd00a27e62d4cb",
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c",
+    "frontend-modern/src/components/shared/PageHeader.tsx": "428d4c02380ba13a38d1ee7404c56b538562df904aecb66f11786ef0dbb8d259",
+    "frontend-modern/browser-tests/doc-command-help.html": "136202c937d750c014141938d591694552558f6fb91619ebaab9e59bb0605e85",
+    "frontend-modern/browser-tests/doc-command-help.tsx": "81005ed6de41f32d7a581d1115e8c52be974a41ae421eab893ffe0a3a59a42f5",
+    "frontend-modern/browser-tests/build-doc-command-help.mjs": "4bc5eed4d8030c5533a7afa36a4b33ad048b2386c40ad8490a31c231d6ca60cc",
+    "frontend-modern/package.json": "8d8da916d45b0aaf90d256787ea294b45c4aec89ee9fa3cab773bb8368c8da97",
+    "frontend-modern/package-lock.json": "927b6fd356ececa0de2d44bd68a62a7733a6bf2a93314bb24cc66d1c120e3915",
+    "docs/PBS.md": "c659e95b6e17eb4f7ca646cdb3cb0320a3f7a215d6fea11d989fe2141c8d1aca",
+    "docs/TROUBLESHOOTING.md": "3b4af92c1e2630e68f45db5bafb31b73b60ac455d40d4ee4da356a7207841bd2",
+    "frontend-modern/public/docs/PBS.md": "c659e95b6e17eb4f7ca646cdb3cb0320a3f7a215d6fea11d989fe2141c8d1aca",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "3b4af92c1e2630e68f45db5bafb31b73b60ac455d40d4ee4da356a7207841bd2"
+  },
+  "input_count": 2932,
+  "pixel_review": {
+    "tool": "native view_image",
+    "captures": [
+      {
+        "file": "desktop-light-entry.png",
+        "sha256": "74578e58fdbb4bfa975ffd055f1cca15976ea76b75b35a983d2e46f771087bf6",
+        "bytes": 272796,
+        "width": 1440,
+        "height": 1000,
+        "observation": "The new symptom link and deletion warning are readable."
+      },
+      {
+        "file": "desktop-light-copies-heading.png",
+        "sha256": "8579253b1743ee7bd62664cb067225fcfce3cee87c7fb07ebb8e18b57fdd37b1",
+        "bytes": 204852,
+        "width": 1440,
+        "height": 1000,
+        "observation": "The local/shared/PBS distinction table fits the document width; text is legible without horizontal overflow."
+      },
+      {
+        "file": "desktop-light-preserve-backups.png",
+        "sha256": "7b3a01333a464dcbbfd8e416d206dd334dd762041a025285f04fc10dbea62ab1",
+        "bytes": 190361,
+        "width": 1440,
+        "height": 1000,
+        "observation": "Unknown-location, non-deletion and no-backup-changes guidance and the Backup safety link are readable."
+      },
+      {
+        "file": "phone-dark-entry.png",
+        "sha256": "071e2ee527a966d47f17fd4fbebb70537107a1b8b817099784f8786766a8a611",
+        "bytes": 124723,
+        "width": 320,
+        "height": 1000,
+        "observation": "The new symptom link and deletion warning are readable."
+      },
+      {
+        "file": "phone-dark-copies-heading.png",
+        "sha256": "eb41cb96657f8c5348aaf1ee09ef3c3008467bca2912dcee74852428bcb6b418",
+        "bytes": 99882,
+        "width": 320,
+        "height": 1000,
+        "observation": "The local/shared/PBS distinction table fits the document width; text is legible without horizontal overflow."
+      },
+      {
+        "file": "phone-dark-copy-case-1.png",
+        "sha256": "62268965a3ad18a08191cd4bde8abeb54f904884180a057425101ced6ce596ae",
+        "bytes": 102203,
+        "width": 320,
+        "height": 1000,
+        "observation": "The local/shared/PBS distinction table fits the document width; text is legible without horizontal overflow."
+      },
+      {
+        "file": "phone-dark-copy-case-2.png",
+        "sha256": "7d723b00ec0fdda996fab3c9e8e9891f74f252afbc7ee90a7f9cc448ca06cf2d",
+        "bytes": 103513,
+        "width": 320,
+        "height": 1000,
+        "observation": "The local/shared/PBS distinction table fits the document width; text is legible without horizontal overflow."
+      },
+      {
+        "file": "phone-dark-copy-case-3.png",
+        "sha256": "da89923c5ba9c9ad51a729dc6d79bb80b349fb71f8012aa681d0d15ad1c10546",
+        "bytes": 105124,
+        "width": 320,
+        "height": 1000,
+        "observation": "The local/shared/PBS distinction table fits the document width; text is legible without horizontal overflow."
+      },
+      {
+        "file": "phone-dark-preserve-backups.png",
+        "sha256": "f92554d75587997eb43326e566c4066d5b32a84e5708d5a2d682c8e7c41db1c6",
+        "bytes": 98202,
+        "width": 320,
+        "height": 1000,
+        "observation": "Unknown-location, non-deletion and no-backup-changes guidance and the Backup safety link are readable."
+      }
+    ]
+  }
+}
