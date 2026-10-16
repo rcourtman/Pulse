@@ -159,7 +159,7 @@ PBS, Windows guest, restart or workload-safety incident.
 
 ### Rejected infrastructure URLs stay out of diagnostics
 
-PVE/PBS constructors validate a host before logging it. URL syntax errors omit
+PVE/PBS/PMG constructors validate a host before logging it. URL syntax errors omit
 `url.Parse`'s copy of the supplied input; ordinary validation reasons remain.
 Cluster logs, health snapshots, recovery summaries and aggregate errors use
 display-only labels:
@@ -174,8 +174,20 @@ base paths, authentication, CA/pin/opt-out choices and guest fences are unchange
 constructors, single/multiple endpoint routing and recovery with synthetic
 userinfo/query/fragment and malformed URLs. Accepted-host and
 `TestInfrastructureURLValidationPolicyUnchanged` controls preserve ordinary
-routing and diagnostics. This bounds client diagnostics, not arbitrary provider
-error text, previously saved logs, native trust recovery or an installed service.
+routing and diagnostics. Initial add/test request logs and saved-provider client
+initialisation (including the cluster endpoint list and refusal logs) use the
+same display-only labels; filtering never changes the supplied configuration.
+`TestNodeRequestEndpointDiagnosticsExcludeRejectedInput` exercises the ingress
+handlers before credentials are supplied, and
+`TestMonitorClientInitEndpointDiagnostics` exercises all three real
+constructors through saved-provider initialisation. Parseable saved input keeps
+its existing configuration normalisation; malformed syntax stays refused.
+Controls retain routing, client registration and the existing health outcomes,
+including PBS awaiting its first connectivity poll. The saved-PMG refusal test preserves
+the exact generic HTTP response while excluding raw parser input from its
+internal error. This bounds these diagnostics, not arbitrary provider error
+text, other log paths, previously saved logs, native trust recovery or an
+installed service.
 
 ### Investigation evidence retains tenant and runtime-source boundaries
 

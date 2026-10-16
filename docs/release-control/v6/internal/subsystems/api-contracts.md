@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Endpoint diagnostics do not change node HTTP responses
+
+The existing add/test request diagnostics display a validated infrastructure
+base URL or `[invalid endpoint]`, never rejected userinfo, query, fragment or
+URL-parser input. PMG construction uses the same input-free syntax diagnostic
+as PVE/PBS. Routing and stored hosts are not replaced with display labels.
+`node_endpoint_diagnostics_test.go` exercises all three ingress types, accepted
+host labels and actual saved-PMG constructor failures. The existing HTTP 400
+responses and generic saved-node error message stay byte-for-byte unchanged;
+there is no response schema, authentication, UI state or trust-policy change.
+
 ### PVE archive location remains distinct from guest placement
 
 The existing PVE backup response and frontend `StorageBackup` type support

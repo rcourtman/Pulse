@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -275,7 +276,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 	log.Info().
 		Str("type", req.Type).
 		Str("name", req.Name).
-		Str("host", req.Host).
+		Str("host", securityutil.InfrastructureEndpointDiagnostic(req.Host)).
 		Str("user", req.User).
 		Str("tokenName", req.TokenName).
 		Bool("hasTokenValue", req.TokenValue != "").
@@ -835,7 +836,7 @@ func (h *ConfigHandlers) handleTestConnection(w http.ResponseWriter, r *http.Req
 	log.Info().
 		Str("type", req.Type).
 		Str("name", req.Name).
-		Str("host", req.Host).
+		Str("host", securityutil.InfrastructureEndpointDiagnostic(req.Host)).
 		Str("user", req.User).
 		Str("tokenName", req.TokenName).
 		Bool("hasTokenValue", req.TokenValue != "").
