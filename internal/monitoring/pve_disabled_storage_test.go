@@ -173,8 +173,14 @@ func TestPVEDisabledBackupStorageRetainsKnownEvidence(t *testing.T) {
 									t.Errorf("%s: skipped content claimed complete history or rejected access: %+v", label, provider)
 								}
 							}
-							if len(postures[0].ProviderStates) != 1 {
-								t.Errorf("%s: missing unavailable/partial provider observation", label)
+							if len(points) > 0 && len(postures[0].ProviderStates) != 1 {
+								t.Errorf("%s: held points lack unavailable/partial provider evidence", label)
+							}
+							// A readable shared sibling may authoritatively remove
+							// the last point. With no repository left to associate,
+							// an unknown posture need not invent a provider state.
+							if len(points) == 0 && postures[0].State != recovery.ProtectionStateUnknown {
+								t.Errorf("%s: empty incomplete history claimed a known posture: %+v", label, postures[0])
 							}
 						}
 						if layout == "local" && !omitted && !reversed {
