@@ -64,8 +64,10 @@ func newPMGIdentityFixture(t *testing.T) *pmgIdentityFixture {
 				fmt.Fprint(w, `{"data":null}`)
 			case "missing-name":
 				fmt.Fprint(w, `{"data":[{"cid":"1","name":"mail-a"},{"cid":"2","name":" "}]}`)
-			case "invalid-cid":
+			case "unused-cid":
 				fmt.Fprint(w, `{"data":[{"cid":"1","name":"mail-a"},{"cid":"invalid","name":"mail-b"}]}`)
+			case "malformed-name":
+				fmt.Fprint(w, `{"data":[{"cid":"1","name":"mail-a"},{"cid":"2","name":42}]}`)
 			case "numbers":
 				fmt.Fprint(w, `{"data":[{"cid":1,"name":"mail-a","type":"master"},{"cid":2,"name":"mail-b","type":"slave"}]}`)
 			case "mixed":
@@ -133,7 +135,7 @@ func (f *pmgIdentityFixture) client(t *testing.T) *pmg.Client {
 	return c
 }
 func TestPMGDiscoveredNodeRouting(t *testing.T) {
-	for _, mode := range []string{"numbers", "strings", "mixed"} {
+	for _, mode := range []string{"numbers", "strings", "mixed", "unused-cid"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newPMGIdentityFixture(t)
 			f.setMode(mode)
@@ -177,7 +179,7 @@ func TestPMGDiscoveredNodeRouting(t *testing.T) {
 	}
 }
 func TestPMGNodeDiscoveryFailurePreservesAcceptedBackups(t *testing.T) {
-	for _, mode := range []string{"cluster-error", "empty-cluster", "null-cluster", "missing-name", "invalid-cid", "backup-error", "queue-denied", "version-denied"} {
+	for _, mode := range []string{"cluster-error", "empty-cluster", "null-cluster", "missing-name", "malformed-name", "backup-error", "queue-denied", "version-denied"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newPMGIdentityFixture(t)
 			client := f.client(t)

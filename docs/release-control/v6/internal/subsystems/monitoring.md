@@ -974,7 +974,10 @@ Failed enumeration retains the existing failed-collection and backup-preservatio
 semantics rather than fabricating a successful empty inventory.
 `TestClusterStatusIgnoresUnusedCID`, `TestClientClusterStatusIgnoresClusterIDFormat`
 and the `TestPollPMGInstance*` issue tests preserve the upstream string-id repair
-and the containing no-guessed-node boundary. These are source regressions,
+and the containing no-guessed-node boundary. `TestPMGDiscoveredNodeRouting`
+also accepts unused textual ids through the full poller;
+`TestPMGNodeDiscoveryFailurePreservesAcceptedBackups` uses a malformed consumed
+node name, not an ignored id, to exercise decoder-failure preservation. These are source regressions,
 not native appliance recovery or release availability.
 
 ### Guest configuration reads preserve installation and node identity
