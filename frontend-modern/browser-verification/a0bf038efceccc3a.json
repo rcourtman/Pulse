@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "base_sha": "997510d1fc0afd522968a3dd26cbc07ec3029ed2",
+  "verified_at": "2026-10-16T03:12:33.026405Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/PULSE_PRO.md",
+    "docs/FAQ.md",
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/public/docs/PULSE_PRO.md",
+    "frontend-modern/public/docs/FAQ.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md"
+  ],
+  "content_sha256": {
+    "docs/PULSE_PRO.md": "14903eec6b78521d2ff043545148aab336a2df19e9da9873c990069a2a81ce54",
+    "docs/FAQ.md": "a1d52128a6c23e1c3b167c96bf2c7b1053598c1e7cf1e7f510408fd261a0c8f0",
+    "docs/TROUBLESHOOTING.md": "a731d736207652d548ffcb5186ca915d89f8f4afb6d9ce6fb89d57af3f4927cf",
+    "frontend-modern/public/docs/PULSE_PRO.md": "14903eec6b78521d2ff043545148aab336a2df19e9da9873c990069a2a81ce54",
+    "frontend-modern/public/docs/FAQ.md": "a1d52128a6c23e1c3b167c96bf2c7b1053598c1e7cf1e7f510408fd261a0c8f0",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "a731d736207652d548ffcb5186ca915d89f8f4afb6d9ce6fb89d57af3f4927cf"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING#choose-the-affected-workflow",
+    "/docs/FAQ#what-do-pro-and-cloud-unlock",
+    "/docs/PULSE_PRO#already-paid-but-pro-features-are-unavailable"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "The real Docs page/router/Markdown/CSS renders final source/mirrored documentation. Only its surrounding application shell is a fixture.",
+    "Payment, accepted local licence and installed Pro runtime remain separate; missing data is not expired entitlement or a failed charge. Existing private download/retrieval links and key-clearing consequences are readable.",
+    "Both desktop and 320px WebKit default-palette captures are legible without whole-page horizontal overflow. No billing, email, activation, external page or customer runtime operation was performed."
+  ],
+  "interactions": [
+    "Chromium keyboard Enter and 320px WebKit touch tap from each existing symptom/FAQ referral focus the same recovery heading without reloading the router shell.",
+    "Back returns to the original symptom fragment; re-entry through the FAQ and reload retain the target focus.",
+    "Final fetched Markdown hashes match all three final guide sources. All requests are local GETs; no API, mutation or off-origin requests."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "profile": "desktop-light",
+        "browser": "141.0.7390.37",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      {
+        "profile": "phone-dark",
+        "browser": "26.0",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        }
+      }
+    ],
+    "preview": "Explicit unchanged compiled-consumer reuse, not a fresh build. All 2,934 current input hashes (including final runtime Markdown) and 21 preview artifacts are bound. Original source-ffcsih_c/8c5eda5b compilation and earlier source-pel6m1bj/fad0fc5541 identity remain distinct; only three fetched Markdown documents are substituted or added.",
+    "theme_limit": "The phone profile name says dark and requests dark media, but the Docs fixture does not toggle its root dark class. Actual captures show the default light palette. This is narrow-WebKit proof, not dark-theme proof.",
+    "cleanup": {
+      "browsersOpened": 2,
+      "browsersClosed": 2,
+      "serverClosed": true,
+      "sockets": 1
+    },
+    "cleanup_limit": "Both browsers and server completed close. The final socket-tracker count is 1 after destroy; no zero-socket claim or cause inferred."
+  },
+  "checks": {
+    "source_inputs": 2934,
+    "artifacts": 21,
+    "mirrors": 3,
+    "journey": 73
+  },
+  "input_hashes": {
+    "docs/PULSE_PRO.md": "14903eec6b78521d2ff043545148aab336a2df19e9da9873c990069a2a81ce54",
+    "docs/FAQ.md": "a1d52128a6c23e1c3b167c96bf2c7b1053598c1e7cf1e7f510408fd261a0c8f0",
+    "docs/TROUBLESHOOTING.md": "a731d736207652d548ffcb5186ca915d89f8f4afb6d9ce6fb89d57af3f4927cf",
+    "frontend-modern/public/docs/PULSE_PRO.md": "14903eec6b78521d2ff043545148aab336a2df19e9da9873c990069a2a81ce54",
+    "frontend-modern/public/docs/FAQ.md": "a1d52128a6c23e1c3b167c96bf2c7b1053598c1e7cf1e7f510408fd261a0c8f0",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "a731d736207652d548ffcb5186ca915d89f8f4afb6d9ce6fb89d57af3f4927cf",
+    "frontend-modern/src/pages/Docs.tsx": "e1d181803722b38ed211517d12495d201c299cc8ebb0a14131c58ac91c7e3a6a",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "213b6216dca650aab7d3ea4c8a66af6ee128f829ba455b5f53cd00a27e62d4cb",
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c",
+    "frontend-modern/browser-tests/doc-command-help.tsx": "81005ed6de41f32d7a581d1115e8c52be974a41ae421eab893ffe0a3a59a42f5",
+    "frontend-modern/browser-tests/build-doc-command-help.mjs": "4bc5eed4d8030c5533a7afa36a4b33ad048b2386c40ad8490a31c231d6ca60cc",
+    "frontend-modern/package.json": "8d8da916d45b0aaf90d256787ea294b45c4aec89ee9fa3cab773bb8368c8da97",
+    "frontend-modern/package-lock.json": "927b6fd356ececa0de2d44bd68a62a7733a6bf2a93314bb24cc66d1c120e3915"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "captures": [
+      {
+        "file": "desktop-light-entry.png",
+        "bytes": 284842,
+        "sha256": "8180a32d0dc7f19518de335762da3de86f39469e9b1ac9df5728fa2c8209d5bf",
+        "tool": "native view_image",
+        "observation": "The existing symptom list has a readable paid-feature entry and underlined recovery link. Safety warning remains above it; the line fits without horizontal overflow."
+      },
+      {
+        "file": "desktop-light-recovery.png",
+        "bytes": 224735,
+        "sha256": "718d647aceace3da3fefc12ed5f26d8dc63f2cb337164559d483983923660c99",
+        "tool": "native view_image",
+        "observation": "The full three-step recovery section and private-evidence paragraph are visible and readable together; Current plan, private downloads, key types and destructive Clear key remain distinct."
+      },
+      {
+        "file": "desktop-light-private-evidence.png",
+        "bytes": 224735,
+        "sha256": "718d647aceace3da3fefc12ed5f26d8dc63f2cb337164559d483983923660c99",
+        "tool": "native view_image",
+        "observation": "Exact duplicate of the desktop recovery capture; the intact private-evidence paragraph is visible in the same frame, not separate additional coverage."
+      },
+      {
+        "file": "desktop-light-faq.png",
+        "bytes": 225176,
+        "sha256": "c1bcf7bcbc7f9a3b7a960a602209a90fa66e5e31af022ea89e185e2f8564b124",
+        "tool": "native view_image",
+        "observation": "The new existing-FAQ referral is underlined and readable beneath the Pro/Cloud answer. Adjacent retirement guidance is unaffected."
+      },
+      {
+        "file": "phone-dark-entry.png",
+        "bytes": 118291,
+        "sha256": "1eab35543c84398299755bc396cc9d1720f322eb5b9a9a7bf941dc22d8e571bc",
+        "tool": "native view_image",
+        "observation": "At 320px the paid-feature symptom and its wrapped link fit between login and update help, with readable text and no horizontal page overflow."
+      },
+      {
+        "file": "phone-dark-recovery.png",
+        "bytes": 117592,
+        "sha256": "43f13791ca02b719c47898bca1c567e1130594f8df4d896e4da08a2229f7a559",
+        "tool": "native view_image",
+        "observation": "At 320px the target heading wraps cleanly; the payment/activation/runtime distinction and first two numbered steps remain legible."
+      },
+      {
+        "file": "phone-dark-runtime.png",
+        "bytes": 117592,
+        "sha256": "43f13791ca02b719c47898bca1c567e1130594f8df4d896e4da08a2229f7a559",
+        "tool": "native view_image",
+        "observation": "Exact duplicate of the narrow recovery capture; the private-runtime step and its link are readable there, not additional pixel coverage."
+      },
+      {
+        "file": "phone-dark-key.png",
+        "bytes": 120715,
+        "sha256": "a2e8eb75adcb4ae3826d7703935de9b1c4b202a639fa9a87e339c9bfa27f3e05",
+        "tool": "native view_image",
+        "observation": "The narrow key-recovery step wraps without clipping the ppk_live_ prefix or Apply/Clear key distinction. The tail is available by ordinary vertical scrolling."
+      },
+      {
+        "file": "phone-dark-private-evidence.png",
+        "bytes": 103726,
+        "sha256": "16ec697e56954c2e863b7fc9202a236ea6609684fbf6894a2639cefa6a6a91a7",
+        "tool": "native view_image",
+        "observation": "The final narrow section visibly preserves key/verification separation, the non-cancellation Clear key warning and private evidence instructions; subsequent API help stays within width."
+      },
+      {
+        "file": "phone-dark-faq.png",
+        "bytes": 112660,
+        "sha256": "231c9789e2e950998b1aefaf78b27615637bde5ff5818a883e1f96490ef6edd6",
+        "tool": "native view_image",
+        "observation": "At 320px the FAQ referral and its link wrap within the content column; the following retirement heading and text remain readable."
+      }
+    ]
+  },
+  "preview_binding_sha256": "b4b36e441c4017b92291dbe5be3fc0e200e0a09c50d630421ce052ad7f846593",
+  "limitations": [
+    "Documentation help proof only, not installed licence, retrieval delivery, payment, private-runtime recovery or reporter resolution.",
+    "Full containing frontend/backend suites and independent review/protected publication are separate. No repeat of earlier adequate runtime/browser proof."
+  ]
+}
