@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Unix installation completion requires observed local startup
+
+Every Unix agent platform uses the shared `complete_installation_flow` helper.
+If its existing startup verification fails, neither fresh installation nor
+update may return success: process exit and the existing unhealthy JSON event's
+`exitCode` are **13**, with an incomplete-operation explanation and the supplied
+platform log command. The helper exits before the callers can overwrite that
+result, leaving the saved connection state and installed recovery files intact.
+It adds no lifecycle operation, retry, broader privilege or trust fallback.
+
+`TestInstallSHCompletionRequiresObservedStartup` runs the production waiter,
+completion and JSON functions with closed external operations. The 40 cases
+preserve ready/delayed starts, disabled-health process checks, pending server
+registration and definitive authentication failure **18**, across install/update
+and persisted/new connection state. Native platform activation and installed
+recovery remain separate proof obligations; no health or registration check is
+weakened by this completion correction.
+
 ### Archive storage identity is not agent or guest placement
 
 The shared server model's optional `StorageBackup.storageNode` retains the

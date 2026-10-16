@@ -26,6 +26,27 @@ and retention are unchanged. Payload details belong to security-privacy.
 
 
 
+### Unix agent completion reports unconfirmed startup as failure
+
+`scripts/install.sh` must not finish successfully after its bounded startup
+verification reports an absent process or a process that never becomes ready.
+The shared completion helper terminates with the existing service-start failure
+code **13**, before any platform caller's final `exit 0`. Its existing
+`installed_unhealthy` / `updated_unhealthy` JSON completion names remain stable,
+but their `exitCode` must also be 13. Text output distinguishes files installed
+or updated from an incomplete operation and supplies the platform's existing
+log command for either path. Connection state and installed recovery files stay
+available; this adds no restart, retry, removal or credential change.
+
+`TestInstallSHCompletionRequiresObservedStartup` executes the actual waiter,
+completion helper and JSON emitter for install/update and already-persisted/new
+connection state. Closed process/readiness/registration controls cover missing
+processes, readiness timeout, delayed readiness, disabled health, pending
+registration and definitive credential rejection; an OR-list and unconditional
+caller success cannot mask failure. Existing bounded timing, health-disabled
+process fallback, pending-registration handling and authentication exit 18 are
+unchanged. These source controls do not establish native or installed recovery.
+
 ### Docker setup preserves existing deployment configuration
 
 `scripts/install-docker.sh` is a fresh-configuration generator, not an upgrade
