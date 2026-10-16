@@ -101,7 +101,7 @@ let browser;
           const note = page.getByRole('note', { name: 'Mail Gateway account guidance' });
           await expect(note).toHaveCount(1);
           await expect(note).toContainText('minimum read permissions your PMG version supports');
-          await expect(note).toContainText('do not grant administrator access');
+          await expect(note).toContainText('Do not grant administrator access');
           await expect(note).toContainText(
             'Keep passwords out of commands, URLs and issue reports',
           );

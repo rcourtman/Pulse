@@ -1114,8 +1114,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
           <p>
             Use a dedicated service account, such as{' '}
             <code class="font-mono">pulse-monitor@pmg</code>, with the minimum read permissions your
-            PMG version supports for the data you need. Use that version's account-management tools;
-            do not grant administrator access just to populate a panel.
+            PMG version supports for the data you need. Use that version's account-management tools.
+            Do not grant administrator access just to populate a panel.
           </p>
           <p>
             Enter the account name including its realm and its password in this private form. Keep

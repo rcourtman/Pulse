@@ -77,7 +77,7 @@ describe('NodeModalSetupGuideSection', () => {
     const guidance = screen.getByRole('note', { name: 'Mail Gateway account guidance' });
     expect(guidance).toHaveTextContent('Username & Password');
     expect(guidance).toHaveTextContent('minimum read permissions your PMG version supports');
-    expect(guidance).toHaveTextContent('do not grant administrator access');
+    expect(guidance).toHaveTextContent('Do not grant administrator access');
     expect(guidance).toHaveTextContent('Keep passwords out of commands, URLs and issue reports');
     expect(guidance).not.toHaveTextContent(
       /Configuration → API Tokens|Privilege Separation|Auditor/,
