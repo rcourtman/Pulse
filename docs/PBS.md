@@ -552,12 +552,37 @@ a loaded list or an OK task is not proof of restore readiness or guest thaw.
 
 ### Duplicate Backups
 
-Check the source, datastore, namespace, guest type/ID and backup time on each
-entry. Independent PVE installations can reuse a guest ID; matching VMIDs alone
-are not proof of a duplicate. Keep both records while checking their origin.
-If the same backup remains listed twice, report those redacted distinctions and
-whether each entry came from direct PBS or PVE passthrough. Do not delete backups
-or change retention to hide a display problem.
+**Matching names, VMIDs and backup times do not prove that two rows are the
+same stored copy.** Open **Proxmox → Backups → By date** and compare **Source**
+and **Location**, keeping any search or location filter with the observation.
+Use the provider's existing inventory in an authorised session to distinguish:
+
+| Existing evidence | How to interpret it |
+| --- | --- |
+| Two PVE nodes each have node-local storage named `local`, with the same archive filename | These can be independent stored copies, even within one cluster. Compare the **storage node**, not just the guest's current node: a guest can migrate without moving its older backup files. |
+| The same archive on genuinely shared PVE storage is visible through several nodes | Several observations can refer to one stored copy. A common storage name alone does not establish that the storage is shared; use its existing PVE configuration. |
+| Direct PBS and a PBS-backed PVE storage both show the same point | They can be two collection paths to one PBS snapshot. Match the owning PBS server, datastore, namespace, guest type/ID and backup time before treating them as duplicates. |
+
+Keep independent PVE installations separate too: they can reuse node names,
+storage names and VMIDs. If Pulse does not show a storage node or other needed
+distinction, retain it as **unknown**, not proof of shared storage or a safe
+copy to remove. A Location filter changes the view, not what exists on disk.
+One row does not prove that there is only one copy, and two rows do not prove
+two independent recovery options.
+
+**A missing row after a collection error is not a deletion receipt.** An empty
+inventory on one node does not establish that another node's local archive is
+gone. Compare the original location and time with existing provider records;
+do not rerun a backup or rescan repeatedly just to make the rows agree.
+
+If the discrepancy remains, add the affected view/filter, Source and Location,
+owning installation, storage node or known shared-storage relationship, guest
+type/ID, backup time and any existing collection error to the existing report.
+Use consistent aliases for private names and paths; unknown is valid. Do not
+attach a full inventory, rename storage, migrate a guest, delete backups or
+change retention to hide a display problem. Row counts do not establish restore
+readiness or guest thaw; use [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+for an unresponsive guest or uncertain freeze/thaw, not these display checks.
 
 If overlapping VMIDs also coincide with wrong-node errors or lost agent-backed
 Docker monitoring after adding another Proxmox connection, use the
