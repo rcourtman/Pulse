@@ -109,7 +109,9 @@ const result = { source: binding.source_sha, binding_sha256: hash(bindingBytes),
         return geometry;
       });
       if (codeGeometry.content > codeGeometry.width) assert.ok(codeGeometry.offset > 0);
-      await activate(page.locator('article a[href="/docs/INSTALL#verify-on-an-offline-target"]'));
+      // In-page links retain a native fragment href; the real Docs handler
+      // resolves it without reloading the viewer or losing fragment focus.
+      await activate(page.locator('article a[href="#verify-on-an-offline-target"]'));
       await page.waitForURL('**/docs/INSTALL#verify-on-an-offline-target');
       await settledFragment('verify-on-an-offline-target');
       await capture('offline-recipe', page.locator('#verify-on-an-offline-target'));
