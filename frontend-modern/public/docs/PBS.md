@@ -427,8 +427,12 @@ backup or working protection from the strip alone.
 Check one affected guest without changing its setup:
 
 1. Open **Proxmox → Backups → Coverage** and expand that guest. Read its
-   protection explanation and the PBS **Job**, **History** and **Access**
-   evidence. Access describes permissions; if provider evidence is absent,
+   protection explanation and PBS's **Scope** and **Source** to identify each
+   observation; keep different PBS connections separate. Read its **Result**,
+   **History** and **Access** together. A successful inventory read is not a
+   successful backup job. Older versions call Result Job and may omit Scope
+   and Source; keep absent identity unknown rather than guessing from guest
+   placement. Access describes permissions; if provider evidence is absent,
    record that rather than interpreting it as healthy. These are backup
    evidence states, not the PBS host's CPU/metrics History chart.
 2. Compare the listed backup with the existing record in PBS: server,
@@ -441,7 +445,8 @@ Check one affected guest without changing its setup:
    timestamp. A **guest snapshot** is not a PBS backup. Check the existing
    backup task and verification result for that same point in PBS.
 3. If the records still disagree, report the Pulse version, one guest's
-   protection explanation, PBS Job/History/Access values and the matching
+   protection explanation, the PBS scope/source and Result/History/Access values,
+   and the matching
    point's Created time, State and PBS verification result. Use consistent
    placeholders for private server, datastore, namespace and guest identities.
    Do not share tokens, full API responses, HAR exports, or screenshots with secrets.

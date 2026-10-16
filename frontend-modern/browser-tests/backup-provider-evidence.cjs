@@ -76,9 +76,9 @@ const posture = () => ({
     requireVerification: true,
   },
 });
-async function capture(page, name) {
+async function capture(page, name, fullPage = true) {
   const file = path.join(output, `${name}.png`);
-  await page.screenshot({ path: file, fullPage: true });
+  await page.screenshot({ path: file, fullPage });
   result.captures.push({ file: path.relative(root, file), sha256: hash(fs.readFileSync(file)) });
 }
 async function inspect(page) {
@@ -175,9 +175,11 @@ async function inspect(page) {
     if (url.pathname === '/api/backups/pve')
       return json({ data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } });
     if (url.pathname === '/api/recovery/postures') return json(posture());
-    const file = url.pathname.startsWith('/proxmox/backups/')
-      ? '/browser-tests/backup-point-state.html'
-      : url.pathname;
+    const file =
+      url.pathname.startsWith('/proxmox/backups/') ||
+      (url.pathname.startsWith('/docs/') && !url.pathname.endsWith('.md'))
+        ? '/browser-tests/backup-point-state.html'
+        : url.pathname;
     const bytes = assets.get(file);
     if (!bytes) {
       result.unexpected.push({ path: url.pathname });
@@ -186,7 +188,9 @@ async function inspect(page) {
     }
     res.setHeader(
       'Content-Type',
-      { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[path.extname(file)] ||
+      { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.md': 'text/markdown' }[
+        path.extname(file)
+      ] ||
         'application/octet-stream',
     );
     res.end(bytes);
@@ -284,6 +288,24 @@ async function inspect(page) {
     assert.equal(reads.length, 3);
     assert.equal(reads.filter((request) => request.path === '/api/recovery/postures').length, 1);
     assert.match(await page.locator('[data-proxmox-backup-row="coverage"]').innerText(), /Unknown/);
+    await page.getByRole('link', { name: 'PBS protection help', exact: true }).click();
+    await page
+      .getByRole('heading', {
+        name: 'Backups are visible but Coverage says Unprotected',
+        exact: true,
+      })
+      .waitFor();
+    const helpStep = page.locator('article ol > li').filter({
+      hasText: 'A successful inventory read is not a successful backup job.',
+    });
+    await helpStep.waitFor();
+    await helpStep.scrollIntoViewIfNeeded();
+    const help = await helpStep.innerText();
+    assert(help.includes('Scope and Source'));
+    assert(help.includes('Result, History and Access'));
+    assert(help.includes('keep absent identity unknown'));
+    assert(help.includes('Older versions call Result Job'));
+    await capture(page, `${spec.name}-help`, false);
     result.cases.push({
       name: spec.name,
       browser: browser.version(),
@@ -292,6 +314,7 @@ async function inspect(page) {
       searches,
       refreshed,
       refreshReads: reads,
+      help,
     });
     await context.close();
     await browser.close();

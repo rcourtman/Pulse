@@ -44,7 +44,11 @@ describe('PBS protection disagreement help', () => {
     );
     expect(steps).toHaveLength(3);
     expect(steps[0]).toContain('Proxmox → Backups → Coverage');
-    expect(steps[0]).toContain('Job, History and Access');
+    expect(steps[0]).toContain('Scope and Source');
+    expect(steps[0]).toContain('Result, History and Access');
+    expect(steps[0]).toContain('A successful inventory read is not a successful backup job');
+    expect(steps[0]).toContain('Older versions call Result Job');
+    expect(steps[0]).toContain('keep absent identity unknown');
     expect(steps[0]).toContain('provider evidence is absent');
     expect(steps[0]).toContain('not the PBS host');
     expect(steps[1]).toContain(
@@ -59,8 +63,12 @@ describe('PBS protection disagreement help', () => {
     expect(steps[1]).toContain('guest snapshot is not a PBS backup');
     expect(steps[2]).toContain('protection explanation');
     expect(article().querySelector('pre')).toBeNull();
-    const coverage = read('frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx');
-    expect(coverage).toContain('Job {evidenceQualityLabel(provider.jobState)}');
+    const coverage = read('frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx')
+      .replace(/\{' '\}/g, ' ')
+      .replace(/\s+/g, ' ');
+    expect(coverage).toContain('Result {evidenceQualityLabel(provider.jobState)}');
+    expect(coverage).toContain('data-backup-provider-scope');
+    expect(coverage).toContain('data-backup-provider-source');
     expect(coverage).toContain('History {evidenceQualityLabel(provider.historyCompleteness)}');
     expect(coverage).toContain('Access {evidenceQualityLabel(provider.permissions)}');
   });
@@ -153,6 +161,8 @@ describe('PBS protection disagreement help', () => {
     expect(text()).toContain(
       'Do not share tokens, full API responses, HAR exports, or screenshots with secrets',
     );
-    expect(text()).toContain("one guest's protection explanation, PBS Job/History/Access values");
+    expect(text()).toContain(
+      "one guest's protection explanation, the PBS scope/source and Result/History/Access values",
+    );
   });
 });

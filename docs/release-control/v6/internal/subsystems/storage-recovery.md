@@ -36,7 +36,10 @@ facets, resource matching, collection or the server-owned protection verdict.
 mixed provider access, missing identity, text-only rendering and same-open
 refresh. `backup-provider-evidence.cjs` consumes synthetic HTTP responses through
 the production posture reader, model, search and expanded table on desktop and
-narrow screens. This improves attribution, not native restore or guest recovery.
+narrow screens. Shipped PBS help uses the same labels, distinguishes inventory
+results from backup jobs and keeps older missing identities unknown. The
+`pbsProtectionHelp.test.ts` contract checks that guidance without binding it to
+JSX whitespace. This improves attribution, not native restore or guest recovery.
 
 ### PBS group cache follows the actual latest snapshot
 
