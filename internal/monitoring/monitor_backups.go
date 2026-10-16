@@ -1731,13 +1731,14 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 					}
 				}
 
-				// Only re-fetch when the backup count changes, the most recent backup
-				// is newer, or the cache TTL has expired (to pick up verification changes).
+				// Reuse only an unchanged group. A count-preserving prune/import
+				// can move last-backup backwards; the previously newest point
+				// may no longer exist. TTL still bounds verification-only changes.
 				if hasCachedData &&
 					cacheStillFresh &&
 					cacheCountMatches &&
 					!cachedHasInProgress &&
-					!lastBackupTime.After(cached.latest) {
+					lastBackupTime.Equal(cached.latest) {
 
 					allBackups = appendPBSBackupsWithinLimit(allBackups, cached.snapshots)
 					groupsReused++
