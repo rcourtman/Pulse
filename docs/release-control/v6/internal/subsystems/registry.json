@@ -6091,6 +6091,7 @@
         "pkg/proxmox/cluster_client.go",
         "pkg/proxmox/io_counters.go",
         "pkg/proxmox/snapshot_inventory_response.go",
+        "pkg/proxmox/storage_inventory_response.go",
         "pkg/proxmox/zfs.go",
         "pkg/tlsutil/certificate.go"
       ],
@@ -6670,6 +6671,21 @@
               "internal/monitoring/pve_protection_observation_test.go",
               "pkg/proxmox/host_diagnostics_regression_test.go",
               "pkg/proxmox/snapshot_inventory_response_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-storage-inventory-runtime",
+            "label": "Complete PVE storage/archive inventory admission and scoped ordinary recovery proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/proxmox/storage_inventory_response.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/pve_storage_inventory_admission_test.go",
+              "pkg/proxmox/host_diagnostics_regression_test.go",
+              "pkg/proxmox/storage_inventory_response_test.go"
             ]
           }
         ],
