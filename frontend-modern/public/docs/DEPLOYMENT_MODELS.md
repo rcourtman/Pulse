@@ -142,6 +142,7 @@ rollout. The chart defaults to `RollingUpdate`; the
 A storage class alone does not provide single-writer safety. Do not delete or
 replace a PVC, change its access mode or scale up to clear a stuck rollout.
 
+See [Kubernetes deployment settings](KUBERNETES.md) for the available values.
 Review the chosen chart and saved values through your existing cluster change
 procedure before applying. If an upgrade reports failure, inspect its current
 release and pod state before retrying; failure is not proof that nothing changed.

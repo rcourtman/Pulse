@@ -182,8 +182,8 @@ full `docker inspect` or resolved Compose output.
 
 ### 1. Kubernetes (Helm)
 For a **new release**, follow the [pinned Helm installation](KUBERNETES.md#option-a-using-helm-recommended).
-It checks the intended context/namespace, uses one persistent server with a
-non-overlapping rollout, and refuses to upgrade an already-used release name.
+Check the intended context/namespace first. The recipe uses one persistent
+server with a non-overlapping rollout and refuses to upgrade an already-used release name.
 The guide also covers static manifests and OpenShift.
 
 For an existing installation, use the [Helm update precautions](DEPLOYMENT_MODELS.md#kubernetes-helm)
