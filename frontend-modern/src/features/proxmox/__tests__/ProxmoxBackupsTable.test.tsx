@@ -224,6 +224,60 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it('keeps restore-point completion totals and the chart truthful through inventory replacement', async () => {
+    mockBackupAPIs('attention');
+    const time = new Date(Date.now() - 3_600_000).toISOString();
+    let completed = false;
+    const runningPBS = () => ({
+      ...pbsPayload.data.backups[0],
+      backupTime: time,
+      inProgress: !completed,
+      writeActivityObserved: true,
+      writeActive: !completed,
+    });
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url === '/api/backups/pve'
+            ? { data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } }
+            : { data: { backups: [runningPBS()] } },
+        ),
+      ),
+    );
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+    await screen.findAllByText('pbs-docker');
+    await waitFor(() =>
+      expect(screen.getByText(/targets · .*restore points/)).toHaveTextContent('0 restore points'),
+    );
+    expect(screen.getByText(/targets · .*restore points/)).toHaveTextContent('1 incomplete entry');
+    expect(screen.getByText(/Incomplete backups remain listed/)).toBeInTheDocument();
+    expect(screen.getByText(/No completed restore-point activity/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /: 1 backup$/ })).not.toBeInTheDocument();
+    expect(container.querySelector('[data-backup-artifact-state]')).toHaveTextContent('Running');
+    expect(screen.getByRole('cell', { name: /1 entry$/ })).toBeInTheDocument();
+
+    completed = true;
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
+    await waitFor(() =>
+      expect(screen.getByText(/targets · .*restore points/)).toHaveTextContent('1 restore points'),
+    );
+    expect(screen.queryByText(/Incomplete backups remain listed/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /: 1 backup$/ })).toBeInTheDocument();
+    expect(container.querySelector('[data-backup-artifact-state]')).toHaveTextContent('Verified');
+
+    completed = false;
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
+    await waitFor(() =>
+      expect(screen.getByText(/targets · .*restore points/)).toHaveTextContent('0 restore points'),
+    );
+    expect(screen.queryByRole('button', { name: /: 1 backup$/ })).not.toBeInTheDocument();
+    expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'Coverage' })).toBeInTheDocument();
+  });
+
   it('keeps the job column for undated-only history and clears it only when history is empty', async () => {
     mockBackupAPIs('protected');
     let backupTasks = [{ ...pvePayload.data.backupTasks[0], startTime: 'not-a-date' }];
@@ -761,7 +815,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getByText('pbs-main / main / minipc')).toBeInTheDocument();
     expect(
       screen.getByRole('cell', {
-        name: `${getRecoveryFullDateLabel('2026-05-25')} 3 backups`,
+        name: `${getRecoveryFullDateLabel('2026-05-25')} 3 entries`,
       }),
     ).toBeInTheDocument();
     const tables = screen.getAllByRole('table');
@@ -1626,7 +1680,7 @@ describe('backup-date-evidence connected inventory', () => {
     );
     expect(warning).toHaveAttribute('role', 'status');
     expect(warning).toHaveTextContent('excluded from the activity chart and day filters');
-    expect(screen.getByText(/No dated backup activity/)).toBeInTheDocument();
+    expect(screen.getByText(/No completed restore-point activity/)).toBeInTheDocument();
     const future = [...document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')].find(
       (row) => row.textContent?.includes('PBS'),
     )! as HTMLElement;

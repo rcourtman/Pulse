@@ -42,6 +42,7 @@ import {
 } from './proxmoxBackupActivityPresentation';
 import {
   buildProxmoxBackupRecoveryModel,
+  isCompletedRecoveryArtifact,
   getRecoverableArtifactLocation,
   coverageRowMatchesSearch,
   selectWorkloadRecoveryArtifacts,
@@ -517,7 +518,7 @@ export const ProxmoxBackupsTable: Component<{
   const recoverableTimeline = createMemo(() =>
     buildBackupActivityTimeline<RecoverableArtifact>(
       chartRange(),
-      recoveryModel().recoverableArtifacts,
+      recoveryModel().recoverableArtifacts.filter(isCompletedRecoveryArtifact),
       (artifact) => artifact.createdMs,
       (artifact) =>
         artifact.sourceKind === 'pbs'
@@ -794,6 +795,13 @@ export const ProxmoxBackupsTable: Component<{
                   {liveTotalCount()} targets ·{' '}
                   {recoveryModel().coverageSummary.recoverableArtifacts} restore points
                   {inventoryIncomplete() ? ' read' : ''}
+                  <Show when={recoveryModel().coverageSummary.incompleteArtifacts > 0}>
+                    {' · '}
+                    {recoveryModel().coverageSummary.incompleteArtifacts} incomplete{' '}
+                    {recoveryModel().coverageSummary.incompleteArtifacts === 1
+                      ? 'entry'
+                      : 'entries'}
+                  </Show>
                   <Show when={recoveryModel().coverageSummary.withPBS > 0}>
                     {' · '}
                     {recoveryModel().coverageSummary.withPBS} with{' '}
@@ -854,6 +862,13 @@ export const ProxmoxBackupsTable: Component<{
               ]}
             />
 
+            <Show when={recoveryModel().coverageSummary.incompleteArtifacts > 0}>
+              <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
+                Incomplete backups remain listed with their state. They do not count as restore
+                points or towards the activity chart.
+              </p>
+            </Show>
+
             <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
               <Show
                 when={recoveryModel().recoverableArtifacts.some(
@@ -869,7 +884,9 @@ export const ProxmoxBackupsTable: Component<{
                 when={hasRecoverableActivityInRange()}
                 fallback={
                   <div class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
-                    <span>No dated backup activity in the selected {chartRange()}-day window.</span>
+                    <span>
+                      No completed restore-point activity in the selected {chartRange()}-day window.
+                    </span>
                     <div class="flex items-center gap-2">
                       <button
                         type="button"
@@ -945,8 +962,8 @@ export const ProxmoxBackupsTable: Component<{
                   rowNoun={
                     view() === 'date'
                       ? inventoryIncomplete()
-                        ? 'backups read'
-                        : 'backups'
+                        ? 'backup entries read'
+                        : 'backup entries'
                       : 'targets'
                   }
                 />
