@@ -55,7 +55,7 @@ const backups = () =>
     },
     { id: 'unprotected', verified: true, protected: false },
     { id: 'other-connection', instance: 'second-pbs', verified: true, protected: false },
-    { id: 'other-datastore', datastore: 'other', verified: false, protected: false },
+    { id: 'other-datastore', datastore: 'other', verified: revision > 0, protected: false },
   ].map((point, index) => ({
     instance: 'fixture-pbs',
     datastore: 'main',
@@ -75,6 +75,7 @@ const pve = {
       type: 'qemu',
       instance: 'fixture-pve',
       node,
+      storageNode: node,
       time: '2026-10-15T09:00:00Z',
       storage: 'local',
       protected: true,
@@ -374,6 +375,19 @@ async function checkSourceGeometry(narrow) {
         await waitRows(11);
         assert.equal(new URL(page.url()).searchParams.has('location'), false);
       }
+      const dateStates = await page
+        .locator('[data-proxmox-backups-table="recoverable"] [data-backup-artifact-state]')
+        .allTextContents();
+      for (const state of [
+        'Verified',
+        'Unverified',
+        'Unknown verification',
+        'Running',
+        'Failed',
+        'Backup file',
+        'Snapshot',
+      ])
+        assert(dateStates.includes(state), state);
       await page.getByRole('link', { name: 'Coverage', exact: true }).click();
       const toggle = page.getByRole('button', { name: /Expand details for recovery-vm/i });
       await activate(
@@ -385,7 +399,6 @@ async function checkSourceGeometry(narrow) {
       for (const state of [
         'Verified',
         'Unverified',
-        'Unknown verification',
         'Running',
         'Failed',
         'Backup file',
@@ -398,6 +411,10 @@ async function checkSourceGeometry(narrow) {
           state,
         );
       assert((await evidence.locator('[data-backup-prune-protected]').count()) > 0);
+      assert.equal(await evidence.getByText('Showing 8 of 11', { exact: true }).count(), 1);
+      const verifiedBefore = (
+        await evidence.locator('[data-backup-artifact-state]').allTextContents()
+      ).filter((state) => state === 'Verified').length;
       revision = 1;
       const ready = new Promise((resolve) => {
         observePBS = resolve;
@@ -424,6 +441,15 @@ async function checkSourceGeometry(narrow) {
         apiCount + 3,
       );
       assert.equal(await evidence.isVisible(), true);
+      await page.waitForFunction(
+        (expected) =>
+          [
+            ...document.querySelectorAll(
+              '[data-inline-detail-for="resource:fixture-vm"] [data-backup-artifact-state]',
+            ),
+          ].filter((el) => el.textContent === 'Verified').length === expected,
+        verifiedBefore + 1,
+      );
       await capture(`${spec.name}-coverage`);
       checks.push(
         'Saved aggregate location still contains both node-local files; each connection/datastore/node-local facet keeps its exact location key/count and removing its chip restores all rows. Combined Coverage retains separate verification/prune evidence, open details and refresh focus without duplicate reads.',
