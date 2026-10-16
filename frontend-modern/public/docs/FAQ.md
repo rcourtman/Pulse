@@ -105,6 +105,10 @@ Pro and Cloud unlock **hands-on Patrol modes, issue investigation, governed fixe
 Example output includes trend-based capacity warnings, backup regressions, Kubernetes cluster analysis, and correlated container failures that simple threshold alerts miss.
 See [Pulse Intelligence](AI.md), [Plans and entitlements](PULSE_PRO.md), and <https://pulserelay.pro>.
 
+Already paid but a feature is still unavailable? Check
+[activation and the installed Pro runtime](PULSE_PRO.md#already-paid-but-pro-features-are-unavailable)
+before buying again or clearing a key.
+
 ### What happens to Pulse Mobile and Relay?
 
 Pulse Mobile and Relay retire on **31 March 2027**. Existing paired phones keep

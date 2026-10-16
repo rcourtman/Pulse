@@ -18,6 +18,10 @@ establish safe recovery.
   or [401 and login failures](TROUBLESHOOTING.md#cannot-login--401-unauthorized),
   according to the existing authentication method. Do not delete configuration
   or repeat first-time setup.
+- **Already paid but Pro features are unavailable:** distinguish
+  [payment, local activation and the installed runtime](PULSE_PRO.md#already-paid-but-pro-features-are-unavailable).
+  An active licence does not install Pro-only runtime hooks; do not buy again
+  or clear the key to diagnose missing features.
 - **Update failed or its result is uncertain:** start with
   [Pulse server update checks](AUTO_UPDATE.md#update-failed). An update of a
   monitored container is a different job; use
