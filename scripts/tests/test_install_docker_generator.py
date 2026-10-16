@@ -171,7 +171,8 @@ printf '%s\\n' "$*" >> "$FIXTURE_DOCKER_CALLS"
                       (self.work / "docker-compose.yml").read_text())
         self.assertEqual((self.work / ".env").read_text(),
                          "PULSE_IMAGE=example/pulse:retained\nPULSE_PORT=8765\nTZ=Europe/London\n")
-        self.assertIn("docker compose up -d", result.stdout)
+        self.assertIn("docker compose --env-file ./.env -f ./docker-compose.yml up -d",
+                      result.stdout)
         self.assertFalse((self.work / "docker-compose.yml.backup").exists())
         expected = {p.name: p.read_bytes() for p in self.work.iterdir()}
         self.assert_refused(self.run_generator())
@@ -189,6 +190,38 @@ printf '%s\\n' "$*" >> "$FIXTURE_DOCKER_CALLS"
         self.assertEqual((path.stat().st_ino, path.stat().st_mode, path.stat().st_mtime_ns),
                          (before.st_ino, before.st_mode, before.st_mtime_ns))
         self.assertIn(".env file already exists - not overwriting", result.stdout)
+
+    def test_start_guidance_uses_generated_files_not_guessed_settings(self):
+        for existing_env in (False, True):
+            with self.subTest(existing_env=existing_env):
+                self.work = self.root / ("guidance-" + str(existing_env))
+                self.work.mkdir()
+                marker = self.work / "must-not-evaluate-env"
+                env = self.work / ".env"
+                if existing_env:
+                    content = (
+                        "PULSE_IMAGE=private/pulse:operator-retained\n"
+                        "PULSE_PORT=9876\n"
+                        "COMPOSE_FILE=other-deployment.yml\n"
+                        f"UNUSED=$(touch {shlex.quote(str(marker))})\n"
+                    )
+                    env.write_text(content)
+                result = self.run_generator()
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                prefix = ["docker", "compose", "--env-file", "./.env",
+                          "-f", "./docker-compose.yml"]
+                commands = [shlex.split(line.strip()) for line in result.stdout.splitlines()
+                            if line.startswith("  docker compose ")]
+                self.assertEqual(commands, [prefix + ["config", "--quiet"],
+                                            prefix + ["up", "-d"], prefix + ["ps"]])
+                self.assertIn("Shell variables can override .env", result.stdout)
+                self.assertIn("published port", result.stdout)
+                for misleading in ("docker run", "http://192.0.2.10:",
+                                   "rcourtman/pulse:6.6.0", "private/pulse:", "9876"):
+                    self.assertNotIn(misleading, result.stdout)
+                self.assertFalse(marker.exists(), "generator evaluated the retained .env")
+                if existing_env:
+                    self.assertEqual(env.read_text(), content)
 
     def test_failed_render_publishes_no_partial_configuration(self):
         real_cat = shlex.quote(shutil.which("cat"))

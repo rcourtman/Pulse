@@ -35,6 +35,12 @@ diagnostic and no success claim; no published file is removed as rollback.
 This is not a multi-file atomic transaction or a guarantee for an adversarially
 shared directory. The completion message describes configuration generation,
 not a running or installed container. Image/version/port defaults are unchanged.
+Start guidance selects this exact Compose file and `.env` explicitly for quiet
+validation, startup and published-port readback. It does not print an alternative
+`docker run` deployment with a different volume identity, guess an image or access
+port from shell defaults when a retained `.env` can disagree, or evaluate that
+file as shell code. Shell environment precedence remains explicit; effective
+settings and a running container are not claimed by generation alone.
 
 `TestInstallDockerGeneratorPreservesExistingConfiguration` runs the complete
 `scripts/tests/test_install_docker_generator.py` controls against the real
@@ -49,6 +55,10 @@ and verify private final files and staging cleanup. The direct-write parent must
 leave partial configuration on both injected rendering failures. This is
 source-bound generator proof, not Docker
 startup, native installation, upgrade or installed recovery.
+`TestInstallDockerGuidanceKeepsTheGeneratedDeployment` and the complete generator
+matrix also check fresh and retained-environment guidance, explicit file selection
+despite `COMPOSE_FILE`, no bypass command or guessed address, and an inert retained
+shell-expression sentinel. The parent must reproduce the misleading commands.
 
 ### Container-agent compatibility bootstrap authenticates before execution
 

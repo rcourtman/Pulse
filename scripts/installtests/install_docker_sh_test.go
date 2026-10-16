@@ -373,6 +373,30 @@ func TestInstallDockerGeneratorPreservesExistingConfiguration(t *testing.T) {
 	}
 }
 
+func TestInstallDockerGuidanceKeepsTheGeneratedDeployment(t *testing.T) {
+	workDir := t.TempDir()
+	content := "PULSE_IMAGE=private/pulse:retained\nPULSE_PORT=9876\nCOMPOSE_FILE=other-deployment.yml\n"
+	envPath := filepath.Join(workDir, ".env")
+	if err := os.WriteFile(envPath, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output := runInstallDockerScript(t, workDir)
+	prefix := "  docker compose --env-file ./.env -f ./docker-compose.yml "
+	for _, command := range []string{"config --quiet", "up -d", "ps"} {
+		if !strings.Contains(output, prefix+command+"\n") {
+			t.Fatalf("missing generated-deployment command %q:\n%s", command, output)
+		}
+	}
+	for _, guess := range []string{"docker run", "Access Pulse at:", "private/pulse:retained", "9876"} {
+		if strings.Contains(output, guess) {
+			t.Fatalf("guidance bypasses Compose or guesses its effective settings (%q):\n%s", guess, output)
+		}
+	}
+	if saved, err := os.ReadFile(envPath); err != nil || string(saved) != content {
+		t.Fatalf("guidance changed retained environment: %v", err)
+	}
+}
+
 func TestInstallDockerScriptPrefersExplicitPulseImage(t *testing.T) {
 	workDir := t.TempDir()
 	version := currentReleaseVersion(t)
@@ -484,7 +508,7 @@ func TestInstallDockerProofTracksStableMinorContract(t *testing.T) {
 	)
 }
 
-func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) {
+func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) string {
 	t.Helper()
 
 	scriptPath := repoFile("scripts", "install-docker.sh")
@@ -519,6 +543,7 @@ func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) {
 	if err != nil {
 		t.Fatalf("run install-docker.sh: %v\n%s", err, out)
 	}
+	return string(out)
 }
 
 func writeTestStub(t *testing.T, path, content string) {
