@@ -486,18 +486,29 @@
     can be much narrower than the viewport. Exact time stays with the six core
     fields whenever the desktop table is active. Duration is secondary context
     at 800px, while type and node remain reserved for a 1024px table shell.
-    Fixed-layout tables calculate all nine tracks before collapsed columns are
-    removed, so the table width compensates at each density to let the six,
-    seven, or nine visible tracks fill the card without creating a scrollbar:
-    it is the sum of all nine track widths over the sum of the visible ones.
-    Visible tracks sum to 100%. Each density is sized for the narrowest card
-    it serves (600px, 800px, 1024px and 1280px): time ("08:27 AM" in a 14px
-    monospace), severity, duration, status ("acknowledged" needs 119px with its
-    cell padding), the resource header, the type badge (from 1024px) and the
-    three actions on one line (177px) get the pixels their content and header
-    need at that width, and message, the column that says what happened, takes
-    what is left.
-    App.architecture.test.ts holds those minimums. Below 800px the three
+    Hidden tracks are collapsed and also given zero width, so the table is
+    always 100% of the card. Chromium removes collapsed columns, but WebKit
+    (Safari) keeps their width in a fixed-layout table: the earlier approach of
+    widening the table by the hidden tracks' share made the History table
+    scroll sideways in Safari from an 800px to a 1024px card. `display: none`
+    on a column is no better: Chromium then lays it out as an auto column that
+    shares the free width with message.
+    The base density (an unmeasured card under 800px) sizes every visible
+    track as a percentage summing to 100%. From an 800px card the columns
+    whose content has a fixed size take exactly the pixels it needs: time
+    ("08:27 AM" in a 14px monospace), severity, duration, status
+    ("acknowledged" needs 119px with its cell padding), the type label (from
+    1024px; "Container Health" needs 119px, and from 1280px it takes 128px for
+    wider Linux fonts) and the three actions on one line
+    (177px). Resource and node hold names that truncate, so they keep a plain
+    share of the card, at least their header at the narrowest card (a max()
+    of a length and a percentage would be laid out as an auto column).
+    Message, the column that says what happened, has no width so it takes all
+    the rest. Percentages for every track gave the fixed columns most of each
+    extra pixel: at a 982px card message held 182px while status and actions
+    held 364px for a badge and three buttons.
+    App.architecture.test.ts holds those minimums and message's 18% floor at
+    the narrowest card of each density. Below 800px the three
     actions stack, which makes those rows taller than the rest.
     Below an 80rem card, resource and message wrap inside their cells
     instead of ending in an ellipsis after one line. Message then occupies two
@@ -520,14 +531,14 @@
   .table-scroll-shell table.alert-history-responsive-table {
     --alert-history-timestamp-width: 14%;
     --alert-history-resource-width: 15.6%;
-    --alert-history-type-width: 11.8%;
+    --alert-history-type-width: 0%;
     --alert-history-severity-width: 14.4%;
     --alert-history-message-width: 22.7%;
-    --alert-history-duration-width: 11.5%;
+    --alert-history-duration-width: 0%;
     --alert-history-status-width: 19.9%;
-    --alert-history-node-width: 11.2%;
+    --alert-history-node-width: 0%;
     --alert-history-actions-width: 13.4%;
-    width: 134.5%;
+    width: 100%;
   }
 
   .table-scroll-shell col.alert-history-timestamp-track {
@@ -625,16 +636,16 @@
     }
 
     .table-scroll-shell table.alert-history-responsive-table {
-      --alert-history-timestamp-width: 10.5%;
+      --alert-history-timestamp-width: 84px;
       --alert-history-resource-width: 11.7%;
-      --alert-history-type-width: 11.8%;
-      --alert-history-severity-width: 10.8%;
-      --alert-history-message-width: 18.5%;
-      --alert-history-duration-width: 11.4%;
-      --alert-history-status-width: 14.9%;
-      --alert-history-node-width: 11.2%;
-      --alert-history-actions-width: 22.2%;
-      width: 123%;
+      --alert-history-type-width: 0px;
+      --alert-history-severity-width: 86px;
+      --alert-history-message-width: auto;
+      --alert-history-duration-width: 91px;
+      --alert-history-status-width: 119px;
+      --alert-history-node-width: 0px;
+      --alert-history-actions-width: 177px;
+      width: 100%;
     }
 
     .table-scroll-shell :is(th, td).agent-doctor-target-column {
@@ -669,30 +680,30 @@
     }
 
     .table-scroll-shell table.alert-history-responsive-table {
-      --alert-history-timestamp-width: 8.2%;
+      --alert-history-timestamp-width: 84px;
       --alert-history-resource-width: 9.1%;
-      --alert-history-type-width: 10.7%;
-      --alert-history-severity-width: 8.4%;
-      --alert-history-message-width: 19%;
-      --alert-history-duration-width: 8.9%;
-      --alert-history-status-width: 11.6%;
-      --alert-history-node-width: 6.8%;
-      --alert-history-actions-width: 17.3%;
+      --alert-history-type-width: 120px;
+      --alert-history-severity-width: 86px;
+      --alert-history-message-width: auto;
+      --alert-history-duration-width: 91px;
+      --alert-history-status-width: 119px;
+      --alert-history-node-width: 6.7%;
+      --alert-history-actions-width: 177px;
       width: 100%;
     }
   }
 
   @container (min-width: 80rem) {
     .table-scroll-shell table.alert-history-responsive-table {
-      --alert-history-timestamp-width: 6.6%;
-      --alert-history-resource-width: 11.5%;
-      --alert-history-type-width: 8.5%;
-      --alert-history-severity-width: 6.8%;
-      --alert-history-message-width: 27.7%;
-      --alert-history-duration-width: 7.2%;
-      --alert-history-status-width: 9.3%;
+      --alert-history-timestamp-width: 84px;
+      --alert-history-resource-width: 12%;
+      --alert-history-type-width: 128px;
+      --alert-history-severity-width: 86px;
+      --alert-history-message-width: auto;
+      --alert-history-duration-width: 91px;
+      --alert-history-status-width: 119px;
       --alert-history-node-width: 8.5%;
-      --alert-history-actions-width: 13.9%;
+      --alert-history-actions-width: 177px;
       width: 100%;
     }
 

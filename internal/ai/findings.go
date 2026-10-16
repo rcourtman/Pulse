@@ -451,6 +451,10 @@ func (f *Finding) IsResolved() bool {
 
 func investigationCooldownForOutcome(outcome string) time.Duration {
 	switch InvestigationOutcome(outcome) {
+	case InvestigationOutcomeFixVerificationUnknown:
+		// The next model assessment owns follow-up. Investigating an uncertain
+		// effect is a read, not permission to retry the infrastructure write.
+		return 0
 	case InvestigationOutcomeTimedOut:
 		return investigationTimeoutCooldown
 	case InvestigationOutcomeFixFailed, InvestigationOutcomeFixVerificationFailed:
@@ -549,8 +553,7 @@ func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeResolved ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixRejected ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeCannotFix ||
-		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention ||
-		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerificationUnknown {
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention {
 		return false
 	}
 
@@ -684,8 +687,7 @@ func (f *Finding) CanRetryInvestigation() bool {
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeResolved ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixRejected ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeCannotFix ||
-		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention ||
-		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerificationUnknown {
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention {
 		return false
 	}
 	// Can't retry if currently running

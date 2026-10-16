@@ -945,7 +945,7 @@ func (a *patrolFindingCreatorAdapter) AssessFinding(input tools.PatrolFindingAss
 		if a.objectiveContext != nil {
 			refreshed.ObjectiveContext = clonePatrolObjectiveContext(a.objectiveContext)
 		}
-		if a.patrol.recordFinding(&refreshed) {
+		if a.patrol.recordFindingDuringPatrol(&refreshed) {
 			return fmt.Errorf("finding %s unexpectedly became a new finding during assessment", assessment.FindingID)
 		}
 		if stored := a.patrol.findings.Get(assessment.FindingID); stored != nil {
