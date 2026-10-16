@@ -514,9 +514,12 @@ func parseProxmoxLXCRunningContainers(output string) ([]proxmoxLXCRunningContain
 		}
 		result = append(result, proxmoxLXCRunningContainer{VMID: vmid, Name: name})
 	}
-	if !sawHeader {
-		return nil, errors.New("pct list has no inventory header")
-	}
+	// pct list prints nothing at all, not even the header, when the node has
+	// no containers (pve-container src/PVE/CLI/pct.pm returns before the
+	// header printf on an empty vmlist). Reaching here without a header means
+	// every line was blank: any non-blank line before the header is already
+	// rejected above, so this is a complete, empty inventory rather than
+	// truncated output.
 	sort.Slice(result, func(i, j int) bool { return result[i].VMID < result[j].VMID })
 	return result, nil
 }
