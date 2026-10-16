@@ -222,7 +222,6 @@ func kubernetesProxyFixtureDial(t *testing.T, observed chan<- kubernetesProxyObs
 				reader = bufio.NewReader(secure)
 				// Keep the original Pipe for deferred cleanup: tls.Close can wait
 				// for close_notify and obscure a completed HTTP fixture result.
-				defer secure.Close()
 				got.err = kubernetesProxyReadReport(reader, secure, &got)
 			} else {
 				got.err = kubernetesProxyReadReport(reader, server, &got)
