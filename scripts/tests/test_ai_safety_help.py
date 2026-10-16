@@ -61,6 +61,10 @@ class AISafetyHelpTest(unittest.TestCase):
                       (ROOT / "docs/README.md").read_text())
         self.assertNotIn("Detailed FSM states",
                          (ROOT / "docs/AI.md").read_text())
+        overview = (ROOT / "docs/AI.md").read_text()
+        for stale in ("FSM prevents", "FSM enforcement", "read-after-write verification"):
+            self.assertNotIn(stale, overview)
+        self.assertIn("[recorded action outcomes](AI_AUTONOMY.md#verification-after-write)", overview)
 
 
 if __name__ == "__main__":
