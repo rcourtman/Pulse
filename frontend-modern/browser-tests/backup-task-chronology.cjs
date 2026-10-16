@@ -189,7 +189,7 @@ const runtime = [
       await capture('uncertain-collapsed');
       checks.push('A known OK plus undated failed job is unknown, never a green success');
       const toggle = row.getByRole('button', { name: /details for backup-guest/ });
-      if (phone) await toggle.tap();
+      if (phone) await row.locator('td').first().tap();
       else {
         await toggle.focus();
         await page.keyboard.press('Enter');
