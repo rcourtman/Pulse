@@ -1746,37 +1746,29 @@ func TestGetStatus_BlockedReason(t *testing.T) {
 	}
 }
 
-func TestShouldSkipInitialFullPatrol_IgnoresRecentScopedErrorRun(t *testing.T) {
+func TestInitialPatrolSchedule_IgnoresRecentScopedErrorRun(t *testing.T) {
 	now := time.Now()
-	skip := shouldSkipInitialFullPatrol([]PatrolRunRecord{
-		{
-			ID:            "scoped-error",
-			Type:          "scoped",
-			TriggerReason: "alert_fired",
-			CompletedAt:   now.Add(-5 * time.Minute),
-			ErrorCount:    1,
-			Status:        "error",
-		},
-	}, now)
-	if skip {
-		t.Fatal("expected recent scoped error run not to suppress initial full patrol")
+	p := NewPatrolService(nil, nil)
+	p.runHistoryStore.Add(PatrolRunRecord{
+		ID: "scoped-error", Type: "scoped", TriggerReason: "alert_fired",
+		CompletedAt: now.Add(-5 * time.Minute), ErrorCount: 1, Status: "error",
+	})
+	next, trigger := p.initialPatrolSchedule(now, 15*time.Minute)
+	if trigger != TriggerReasonStartup || !next.Equal(now) {
+		t.Fatalf("scoped error postponed initial full patrol: next=%v trigger=%s", next, trigger)
 	}
 }
 
-func TestShouldSkipInitialFullPatrol_SkipsAfterRecentSuccessfulFullRun(t *testing.T) {
+func TestInitialPatrolSchedule_ResumesAfterRecentSuccessfulFullRun(t *testing.T) {
 	now := time.Now()
-	skip := shouldSkipInitialFullPatrol([]PatrolRunRecord{
-		{
-			ID:            "full-success",
-			Type:          "patrol",
-			TriggerReason: "scheduled",
-			CompletedAt:   now.Add(-10 * time.Minute),
-			ErrorCount:    0,
-			Status:        "healthy",
-		},
-	}, now)
-	if !skip {
-		t.Fatal("expected recent successful full patrol to suppress initial full patrol")
+	p := NewPatrolService(nil, nil)
+	p.runHistoryStore.Add(PatrolRunRecord{
+		ID: "full-success", Type: "patrol", TriggerReason: "scheduled",
+		CompletedAt: now.Add(-10 * time.Minute), Status: "healthy",
+	})
+	next, trigger := p.initialPatrolSchedule(now, 15*time.Minute)
+	if trigger != TriggerReasonScheduled || !next.Equal(now.Add(5*time.Minute)) {
+		t.Fatalf("full patrol cadence was not resumed: next=%v trigger=%s", next, trigger)
 	}
 }
 

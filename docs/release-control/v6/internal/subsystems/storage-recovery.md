@@ -21,6 +21,16 @@
 
 ## Purpose
 
+### Patrol timer checkpoints preserve run and recovery history
+
+The existing Patrol history envelope retains the next scheduled deadline and
+its effective interval. History and timer writes share a serialized
+read-modify-write boundary, preserving each other's records, daily tallies and
+cursor. A failed history read must fail the timer write instead of replacing
+unreadable evidence. The configuration and Patrol history tests cover concurrent
+writes, file reconstruction and failed-write retry. This cursor schedules a
+check only; it grants no additional recovery execution authority.
+
 ### Recurring findings preserve the ownership of recovery evidence
 
 Storage and recovery findings use the same occurrence-bound investigation

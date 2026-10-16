@@ -583,7 +583,7 @@ type PatrolService struct {
 	lastBlockedReason string
 	lastBlockedCause  PatrolFailureCause
 	lastBlockedAt     time.Time
-	nextScheduledAt   time.Time // Tracks actual next patrol time (accounts for ticker resets)
+	nextScheduledAt   time.Time // Live timer projection; enabled deadlines are checkpointed in runHistoryStore.
 
 	// Patrol run history with persistence support
 	runHistoryStore *PatrolRunHistoryStore

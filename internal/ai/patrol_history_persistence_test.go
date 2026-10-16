@@ -18,12 +18,74 @@ import (
 
 // mockPatrolHistoryPersistence implements PatrolHistoryPersistence for testing
 type mockPatrolHistoryPersistence struct {
-	mu        sync.Mutex
-	runs      []PatrolRunRecord
-	saveErr   error
-	loadErr   error
-	saveCalls atomic.Int32
-	loadCalls atomic.Int32
+	mu               sync.Mutex
+	runs             []PatrolRunRecord
+	saveErr          error
+	loadErr          error
+	saveCalls        atomic.Int32
+	loadCalls        atomic.Int32
+	nextScheduledAt  time.Time
+	scheduleInterval time.Duration
+	scheduleSaves    atomic.Int32
+}
+
+func TestPatrolHistorySchedulePersistenceAndRetry(t *testing.T) {
+	want := time.Now().Add(5 * time.Minute).UTC()
+	persistence := &mockPatrolHistoryPersistence{saveErr: errors.New("schedule write failed")}
+	store := NewPatrolRunHistoryStore(10)
+	if err := store.SetPersistence(persistence); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetSchedule(want, 10*time.Minute); err == nil {
+		t.Fatal("schedule persistence failure was hidden")
+	}
+	if err, _, _ := store.GetPersistenceStatus(); err == nil {
+		t.Fatal("schedule persistence failure was not retained")
+	}
+	persistence.mu.Lock()
+	persistence.saveErr = nil
+	persistence.mu.Unlock()
+	if err := store.SetSchedule(want, 10*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetSchedule(want, 10*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if persistence.scheduleSaves.Load() != 2 {
+		t.Fatal("identical failed deadline must retry; identical saved deadline must not rewrite")
+	}
+	restored := NewPatrolRunHistoryStore(10)
+	if err := restored.SetPersistence(persistence); err != nil {
+		t.Fatal(err)
+	}
+	next, interval := restored.Schedule()
+	if !next.Equal(want) || interval != 10*time.Minute {
+		t.Fatalf("restored deadline %v/%v, want %v/10m", next, interval, want)
+	}
+}
+
+func TestPatrolHistoryScheduleSurvivesFileReconstruction(t *testing.T) {
+	dir := t.TempDir()
+	want := time.Now().Add(5 * time.Minute).UTC()
+	store := NewPatrolRunHistoryStore(10)
+	if err := store.SetPersistence(NewPatrolHistoryPersistenceAdapter(config.NewConfigPersistence(dir))); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetSchedule(want, 10*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	store.Add(PatrolRunRecord{ID: "scoped", Type: "scoped", CompletedAt: time.Now()})
+	if err := store.FlushPersistence(); err != nil {
+		t.Fatal(err)
+	}
+	restored := NewPatrolRunHistoryStore(10)
+	if err := restored.SetPersistence(NewPatrolHistoryPersistenceAdapter(config.NewConfigPersistence(dir))); err != nil {
+		t.Fatal(err)
+	}
+	next, interval := restored.Schedule()
+	if !next.Equal(want) || interval != 10*time.Minute || restored.Count() != 1 {
+		t.Fatalf("reconstructed history lost deadline or records: %v/%v count=%d", next, interval, restored.Count())
+	}
 }
 
 type errorPatrolHistoryPersistence struct {
@@ -36,6 +98,31 @@ func (e *errorPatrolHistoryPersistence) SavePatrolRunHistory(runs []PatrolRunRec
 
 func (e *errorPatrolHistoryPersistence) LoadPatrolRunHistory() ([]PatrolRunRecord, error) {
 	return nil, nil
+}
+
+func (e *errorPatrolHistoryPersistence) SavePatrolSchedule(time.Time, time.Duration) error {
+	return e.err
+}
+
+func (e *errorPatrolHistoryPersistence) LoadPatrolSchedule() (time.Time, time.Duration, error) {
+	return time.Time{}, 0, nil
+}
+
+func (m *mockPatrolHistoryPersistence) SavePatrolSchedule(next time.Time, interval time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.scheduleSaves.Add(1)
+	if m.saveErr != nil {
+		return m.saveErr
+	}
+	m.nextScheduledAt, m.scheduleInterval = next, interval
+	return nil
+}
+
+func (m *mockPatrolHistoryPersistence) LoadPatrolSchedule() (time.Time, time.Duration, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.nextScheduledAt, m.scheduleInterval, m.loadErr
 }
 
 func (m *mockPatrolHistoryPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {

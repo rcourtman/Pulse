@@ -27,6 +27,7 @@ import (
 // ConfigPersistence handles saving and loading configuration
 type ConfigPersistence struct {
 	mu                         sync.RWMutex
+	patrolHistoryMu            sync.Mutex // Serializes history/schedule read-modify-write updates.
 	tx                         *importTransaction
 	configDir                  string
 	alertFile                  string
@@ -2721,6 +2722,9 @@ type PatrolRunHistoryData struct {
 	Version   int               `json:"version"`
 	LastSaved time.Time         `json:"last_saved"`
 	Runs      []PatrolRunRecord `json:"runs"`
+	// The timer deadline is independent of capped run history and scoped work.
+	NextScheduledAt  time.Time     `json:"next_scheduled_at,omitzero"`
+	ScheduleInterval time.Duration `json:"schedule_interval_ns,omitempty"`
 
 	// DailyRuns counts completed patrol runs per UTC day. Runs is deliberately
 	// capped for the operator-facing history, so on any install patrolling on a
@@ -3557,6 +3561,7 @@ func loadHistoryData[T any](
 	getCount func(*T) int,
 	getLastSaved func(*T) time.Time,
 	logLabel string,
+	strictDecode ...bool,
 ) (*T, error) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -3583,6 +3588,9 @@ func loadHistoryData[T any](
 	var historyData T
 	if err := json.Unmarshal(data, &historyData); err != nil {
 		log.Error().Err(err).Str("file", filePath).Msgf("Failed to parse %s file", logLabel)
+		if len(strictDecode) > 0 && strictDecode[0] {
+			return nil, fmt.Errorf("parse %s: %w", logLabel, err)
+		}
 		return emptyDataFactory(), nil
 	}
 
@@ -3693,6 +3701,8 @@ func (c *ConfigPersistence) LoadWorkflowPromptActivityHistory() (*WorkflowPrompt
 // SavePatrolRunHistory persists patrol run history to disk, carrying the
 // daily run and finding tallies forward across the capped run list it replaces.
 func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
+	c.patrolHistoryMu.Lock()
+	defer c.patrolHistoryMu.Unlock()
 	now := time.Now()
 	data := PatrolRunHistoryData{
 		Version:   1,
@@ -3705,6 +3715,8 @@ func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
 	if existing, err := c.LoadPatrolRunHistory(); err != nil {
 		log.Warn().Err(err).Str("file", c.aiPatrolRunsFile).Msg("Failed to read existing patrol run history; daily run and finding tallies restart from this save")
 	} else if existing != nil {
+		data.NextScheduledAt = existing.NextScheduledAt
+		data.ScheduleInterval = existing.ScheduleInterval
 		data.DailyRuns = existing.DailyRuns
 		data.RunTallyThrough = existing.RunTallyThrough
 		data.DailyNewFindings = existing.DailyNewFindings
@@ -3712,6 +3724,21 @@ func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
 	}
 	advancePatrolRunTally(&data, runs, now)
 	return saveHistoryData(c, c.aiPatrolRunsFile, data, len(runs), "patrol run history", "Patrol run history")
+}
+
+// SavePatrolSchedule retains the timer cursor in the existing history envelope.
+// Serialize with history writes so neither writer can discard the other's data.
+func (c *ConfigPersistence) SavePatrolSchedule(next time.Time, interval time.Duration) error {
+	c.patrolHistoryMu.Lock()
+	defer c.patrolHistoryMu.Unlock()
+	data, err := c.loadPatrolRunHistory(true)
+	if err != nil {
+		return fmt.Errorf("load patrol history before saving schedule: %w", err)
+	}
+	data.NextScheduledAt = next
+	data.ScheduleInterval = interval
+	data.LastSaved = time.Now()
+	return saveHistoryData(c, c.aiPatrolRunsFile, data, len(data.Runs), "patrol schedule", "Patrol schedule")
 }
 
 func newEmptyPatrolRunHistoryData() *PatrolRunHistoryData {
@@ -3723,6 +3750,10 @@ func newEmptyPatrolRunHistoryData() *PatrolRunHistoryData {
 
 // LoadPatrolRunHistory loads patrol run history from disk
 func (c *ConfigPersistence) LoadPatrolRunHistory() (*PatrolRunHistoryData, error) {
+	return c.loadPatrolRunHistory(false)
+}
+
+func (c *ConfigPersistence) loadPatrolRunHistory(strictDecode bool) (*PatrolRunHistoryData, error) {
 	return loadHistoryData(
 		c.fs,
 		&c.mu,
@@ -3754,6 +3785,7 @@ func (c *ConfigPersistence) LoadPatrolRunHistory() (*PatrolRunHistoryData, error
 			return data.LastSaved
 		},
 		"Patrol run history",
+		strictDecode,
 	)
 }
 
