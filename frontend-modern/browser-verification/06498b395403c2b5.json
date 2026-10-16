@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "21e56cf12bb7b1e5e3bd3e49366268f0472a8885",
+  "changed_paths": ["frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "43fadda9cc37d67fb484b15e3f1b1d81d00fd7ab41ad4efba0ad7cfc3af9622e"
+  },
+  "routes": [
+    "/proxmox/backups/date and /proxmox/backups/coverage through production HTTP readers, recovery model, source badges and table windowing; synthetic loopback inventory only"
+  ],
+  "states": [
+    "PBS, PVE file and guest Snapshot retain their complete source text and existing provenance titles without glyph/cell clipping in both views.",
+    "320px source text wraps inside its own badge rather than inheriting the table no-wrap rule.",
+    "Unknown provider posture remains unknown; verification, prune protection, ages, identity and source locations are unchanged."
+  ],
+  "interactions": [
+    "Desktop keyboard and 320px WebKit touch navigate the existing views, expand Coverage and refresh the same open detail.",
+    "Desktop resize through 640px, 390px and 320px and back to 1440px checks actual glyph bounds, not only element boxes.",
+    "Both browsers scroll the real bounded date feed and reach every one of 163 distinct points; rendered rows remain bounded.",
+    "Four retained captures opened with native view_image: desktop date/Coverage and 320px date/Coverage."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 640,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "browsers": ["Chromium 141.0.7390.37 / Playwright 1.56.1", "WebKit 26.0 / Playwright 1.56.1"],
+  "verified_at": "2026-10-16T17:18:38Z",
+  "limits": [
+    "Synthetic read-only producer/consumer proof does not establish native backup completion, restore, guest thaw, installed recovery, protected publication or production/embed/budget CI.",
+    "The earlier baseline protocol recorded three clipped source cases, then stopped at its incorrect 123-point desktop windowing assumption. A corrected-baseline request returned browser-access-preparation unavailable without execution evidence; neither is a passing baseline. The new exact committed-source protocol above completes and passes."
+  ]
+}

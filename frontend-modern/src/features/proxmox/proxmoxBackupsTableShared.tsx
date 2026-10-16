@@ -367,6 +367,9 @@ export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact }) {
       {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
       tone={presentation().badgeTone}
       title={title()}
+      // These cells narrow independently of the viewport. Keep the source
+      // readable in both tables instead of clipping it behind a hover title.
+      wrap
     >
       {props.artifact.sourceLabel}
     </MetadataBadge>

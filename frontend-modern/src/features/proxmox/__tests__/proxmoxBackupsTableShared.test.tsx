@@ -62,11 +62,26 @@ describe('proxmoxBackupsTableShared', () => {
       </>
     ));
 
-    expect(screen.getByText('PBS').className).toContain('whitespace-nowrap');
+    expect(screen.getByText('PBS')).toHaveClass('whitespace-normal', 'max-w-full');
     expect(screen.getByText('PBS').className).toContain('bg-sky-100');
     expect(screen.getByText('Prune protected').className).toContain('bg-blue-100');
     expect(screen.getByText('Verified').className).toContain('bg-emerald-100');
   });
+
+  it.each([
+    ['pbs', 'PBS', 'Direct inventory from Proxmox Backup Server'],
+    ['archive', 'PVE file', 'PVE backup files reported by Proxmox VE storage'],
+    ['snapshot', 'Snapshot', 'Proxmox VE guest snapshot'],
+  ] as const)(
+    'keeps the complete %s source inside narrow cells without losing provenance',
+    (sourceKind, sourceLabel, title) => {
+      render(() => <ArtifactSourceBadge artifact={artifact({ sourceKind, sourceLabel })} />);
+      const badge = screen.getByText(sourceLabel);
+      expect(badge).toHaveClass('min-w-0', 'max-w-full', 'whitespace-normal', 'wrap-anywhere');
+      expect(badge).not.toHaveClass('whitespace-nowrap');
+      expect(badge).toHaveAttribute('title', title);
+    },
+  );
 
   it.each([
     [true, 'Verified'],
