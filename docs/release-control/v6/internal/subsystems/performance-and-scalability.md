@@ -4348,3 +4348,10 @@ independent memory/disk provenance are unchanged.
 `useWorkloads.test.ts` cover state preservation, both resource adapters,
 mounted replacement and recovery. Browser proof uses safe resource responses
 through the real hook, row and full drawer, not native pause/thaw acceptance.
+
+Measured variable-height platform windows defer observer-driven geometry writes
+to one animation frame and cancel pending work on disposal. Native scrolling,
+mounted-row budgets and public hook inputs remain unchanged. The observer
+lifecycle control in `PlatformWindowedRows.test.tsx` and the 200-workload Coverage
+identity browser protocol cover this feedback-loop repair, not installed fleet
+or guest recovery.

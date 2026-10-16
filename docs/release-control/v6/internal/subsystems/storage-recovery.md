@@ -7257,3 +7257,28 @@ query, resource, tenant, credential or action authority. The observer receives
 only a successful-read marker after serialization/write, and existing API
 entitlement checks remain before that boundary. Read semantics remain owned
 by api-contracts and telemetry retention/disclosure by security-privacy.
+
+### Coverage keeps workload identity when columns disappear
+
+Collapsed Coverage rows retain the workload type and target ID whenever the
+dedicated Target ID column is hidden. A hidden Node column is replaced by the
+observed native node (or the existing node label when native identity is absent).
+The workload connection remains visible at every width, independently of the
+backup repository connection; equal display names, IDs and node names across
+connections are not one target. These labels wrap without hover. The disclosure
+keeps that connection too, with missing identity explicitly Unknown rather than
+inferred from a backup repository. Matching, posture and guest operations do not
+change.
+
+`coverageWorkloadIdentity.test.tsx` covers all five layouts, repeated names/IDs,
+unknown connections and same-row focused refresh. `ProxmoxCoverageTable.test.tsx`
+checks the compact folded identity alongside posture, age and job. The synthetic
+HTTP consuming protocol `coverage-workload-identity.cjs` checks actual glyphs,
+keyboard/touch disclosure, refresh and windowed viewport reachability at desktop
+and 320px. This is attribution/presentation proof, not installed fleet recovery,
+backup completion, guest thaw or restore acceptance.
+
+Coverage windowing measures each wrapped summary by workload key as well as its
+detail, not by a fleet-wide first-row height. Width changes invalidate cached
+wrapping, including off-screen rows; unseen blocks use measured estimates until
+visited. The mounted-row limit and continuous table remain unchanged.

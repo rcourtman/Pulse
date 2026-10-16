@@ -10135,3 +10135,14 @@ accessible descriptions/unchanged retirement-discard behaviour. The
 `operator-overrides-readability.cjs` browser checks actual text-line geometry
 and controls through the production workload drawer and API client. This is
 presentation proof, not native guest thaw, filesystem writes or recovery.
+
+### Measured table geometry does not write during observer delivery
+
+The opt-in cumulative windowed-item geometry path schedules ResizeObserver
+synchronization in one animation frame. Multiple observer notifications coalesce;
+disposal disconnects observation and cancels pending work. Initial, native-scroll,
+wheel and window-resize synchronization retain their existing behaviour and row
+bounds. This prevents measuring a wrapped Coverage block from synchronously
+resizing its own observed runway. `PlatformWindowedRows.test.tsx` checks deferred
+measurement, coalescing and cancellation; the Coverage identity browser protocol
+checks both scroll directions at desktop and narrow widths without page errors.

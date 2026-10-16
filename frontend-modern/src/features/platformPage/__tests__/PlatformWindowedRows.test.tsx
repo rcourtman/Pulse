@@ -68,6 +68,60 @@ describe('PlatformWindowedRows', () => {
     }
   });
 
+  it('defers geometry-changing observer delivery, coalesces frames and cancels on disposal', () => {
+    let notify = () => {};
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          notify = callback;
+        }
+        observe() {}
+        disconnect = disconnect;
+      },
+    );
+    const frames: FrameRequestCallback[] = [];
+    const requestFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    const measure = vi.fn();
+    const Fixture = () => {
+      const state = usePlatformWindowedItems({
+        items: () => Array.from({ length: 50 }, (_, index) => index),
+        windowSize: 8,
+        itemGeometry: {
+          offsets: () => Array.from({ length: 51 }, (_, index) => index * 40),
+          measure,
+        },
+      });
+      return <div ref={state.setAnchorRef}>{state.visibleItems().length}</div>;
+    };
+    try {
+      const { unmount } = render(() => <Fixture />);
+      const initial = measure.mock.calls.length;
+      notify();
+      notify();
+      expect(measure).toHaveBeenCalledTimes(initial);
+      expect(requestFrame).toHaveBeenCalledTimes(1);
+      frames[0](0);
+      expect(measure).toHaveBeenCalledTimes(initial + 1);
+      notify();
+      expect(requestFrame).toHaveBeenCalledTimes(2);
+      unmount();
+      expect(cancelFrame).toHaveBeenCalledWith(2);
+      expect(disconnect).toHaveBeenCalledOnce();
+    } finally {
+      cleanup();
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('mounts small tables in full without virtual spacer rows', () => {
     const items = () => Array.from({ length: 20 }, (_, index) => index);
     const { container } = render(() => (

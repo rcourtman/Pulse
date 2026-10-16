@@ -147,9 +147,8 @@ const postureExplanation = (row: WorkloadCoverageRow): string => {
 // expanding to its restore evidence. Presentational — the parent owns the
 // filtered+sorted memo, shared filters, and the expansion set. table-fixed + a
 // colgroup keeps the columns from ballooning; the inner evidence table stays
-// content-sized. Rows are single-line with one datum per column — identity
-// (Type / Target ID / Node) gets its own columns, mirroring the by-date
-// recoverable table, instead of stacking under the workload name.
+// content-sized. When identity columns disappear, their facts stay under the
+// name. Connections are always explicit: names and VMIDs can repeat in a fleet.
 export function ProxmoxCoverageTable(props: {
   rows: WorkloadCoverageRow[];
   hasAnyRows: boolean;
@@ -191,6 +190,7 @@ export function ProxmoxCoverageTable(props: {
     () => [...stableRows],
     () => props.expandedKeys,
     () => [props.rows, props.expandedKeys, layoutMode()],
+    () => props.layoutWidth?.() ?? observedWidth.width(),
   );
 
   return (
@@ -329,9 +329,42 @@ export function ProxmoxCoverageTable(props: {
                               onToggle={() => props.onToggleExpand(row.key)}
                             />
                             <div class="min-w-0">
-                              <div class="truncate font-semibold">
+                              <div class="truncate font-semibold" title={row.workload.label}>
                                 {row.workload.name || row.workload.label}
                               </div>
+                              <Show when={!columnVisible('targetId')}>
+                                <div
+                                  class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted"
+                                  data-backup-workload-target
+                                >
+                                  {row.workload.typeLabel} {row.workload.vmid || '—'}
+                                </div>
+                              </Show>
+                              <Show when={row.workload.instance}>
+                                {(connection) => (
+                                  <div
+                                    class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted"
+                                    data-backup-workload-connection
+                                  >
+                                    Connection: {connection()}
+                                  </div>
+                                )}
+                              </Show>
+                              <Show
+                                when={
+                                  !columnVisible('node') &&
+                                  (row.workload.nativeNode || row.workload.node)
+                                }
+                              >
+                                {(node) => (
+                                  <div
+                                    class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted"
+                                    data-backup-workload-node
+                                  >
+                                    Node: {node()}
+                                  </div>
+                                )}
+                              </Show>
                             </div>
                           </div>
                         </TableCell>
@@ -492,6 +525,10 @@ export function ProxmoxCoverageTable(props: {
                           data-inline-detail-for={row.key}
                         >
                           <div class="mb-2 grid grid-cols-2 gap-x-3 gap-y-1 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] sm:grid-cols-4">
+                            <span class="min-w-0 wrap-anywhere">
+                              <span class="font-medium text-base-content">Connection:</span>{' '}
+                              <span class="text-muted">{row.workload.instance || 'Unknown'}</span>
+                            </span>
                             <span>
                               <span class="font-medium text-base-content">Type:</span>{' '}
                               <span class="text-muted">{row.workload.typeLabel}</span>
