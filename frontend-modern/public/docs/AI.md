@@ -24,10 +24,15 @@ Pulse Assistant is a **protocol-driven, safety-gated LLM tool surface** that:
 
 - **Provides governed context** — attaches explicit resource mentions and recent session facts without rewriting user intent
 - **Caches session facts** — extracts bounded tool facts to avoid redundant queries during the current conversation
-- **Enforces workflow invariants** — FSM prevents dangerous state transitions
+- **Enforces tool authority** — execution profiles, permissions and the canonical action lifecycle limit available capabilities
 - **Supports parallel tool execution** — efficient batch operations with concurrency control
-- **Grounds answers in real tool work** — visible tool traces, read-after-write verification, and transcript hygiene prevent unsupported execution claims from being treated as facts
+- **Preserves outcome evidence** — action records keep planning, execution and verification separate, including the observer and recorded time
 - **Returns structured tool errors** — the model can recover from clear, machine-readable failures
+
+A visible tool trace or a completed chat is not proof of a correct diagnosis or
+a recovered workload. Review the [recorded action outcomes](AI_AUTONOMY.md#verification-after-write),
+not an assumed read-after-write sequence; do not repeat an uncertain operation
+to obtain confirmation.
 
 📖 **For a deep technical dive into the Assistant architecture, see [Assistant architecture](ASSISTANT_ARCHITECTURE.md).**
 
@@ -51,7 +56,8 @@ before enabling AI or choosing a model.
 🧪 **For independent live-fault qualification, safety gates, model comparison,
 and release-claim rules, see [AI_PATROL_QUALIFICATION.md](AI_PATROL_QUALIFICATION.md).**
 
-See [Assistant safety architecture](ASSISTANT_SAFETY.md) for the original safety architecture documentation.
+See [Assistant safety architecture](ASSISTANT_SAFETY.md) for the enforced
+authority boundaries and verification limits.
 
 ### Assistant And MCP
 
@@ -1076,11 +1082,11 @@ export, credential, new diagnostic run or paid model call is required.
 
 ### Deep Dives (Recommended for Technical Audiences)
 
-- **[Pulse Assistant Deep Dive](ASSISTANT_ARCHITECTURE.md)** — Complete technical breakdown of the model-owned tool surface: explicit context, session fact caching, FSM enforcement, parallel execution, grounded execution guardrails, structured errors
+- **[Pulse Assistant Deep Dive](ASSISTANT_ARCHITECTURE.md)** — Tool permissions and run budgets, ordered and parallel calls, recorded action outcomes and structured errors
 - **[Pulse Patrol Deep Dive](PATROL_ARCHITECTURE.md)** — Patrol runtime documentation: evidence assembly, deterministic signal extraction, model evaluation, investigation context, investigation orchestration
 
 ### Reference Documentation
 
-- [Architecture: Pulse Assistant (Safety Gates)](ASSISTANT_SAFETY.md) — Detailed FSM states, tool protocol, and invariants
+- [Assistant safety architecture](ASSISTANT_SAFETY.md) — Enforced authority, recorded outcomes and verification limits
 - [API Reference](API.md) — Complete API endpoint documentation
 - [Plans and entitlements](PULSE_PRO.md) — Community/Relay/Pro/Cloud features and licensing
