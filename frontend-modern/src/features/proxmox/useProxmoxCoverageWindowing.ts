@@ -3,29 +3,44 @@ import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js'
 import { usePlatformWindowedItems } from '@/features/platformPage/usePlatformWindowedItems';
 import type { WorkloadCoverageRow } from './proxmoxBackupRecoveryModel';
 
-// Summary height is shared; detail height belongs to an identity, not its
+// Both wrapped identity and expanded evidence belong to a workload, not its
 // sorted index. Unseen rows use estimates until their actual block is mounted.
 export function useProxmoxCoverageWindowing(
   rows: Accessor<readonly WorkloadCoverageRow[]>,
   expanded: Accessor<ReadonlySet<string>>,
   measurementKey: Accessor<unknown>,
+  layoutKey: Accessor<unknown>,
 ) {
-  const [summaryHeight, setSummaryHeight] = createSignal(32);
+  const [summaryHeights, setSummaryHeights] = createSignal<ReadonlyMap<string, number>>(new Map());
   const [detailHeights, setDetailHeights] = createSignal<ReadonlyMap<string, number>>(new Map());
+  // A width change invalidates off-screen wrapping measurements too. Keeping
+  // old phone heights after widening (or vice versa) creates false runway.
+  createEffect(() => {
+    layoutKey();
+    setSummaryHeights(new Map());
+    setDetailHeights(new Map());
+  });
   createEffect(() => {
     const keys = new Set(rows().map((row) => row.key));
-    setDetailHeights((current) => {
+    const retain = (current: ReadonlyMap<string, number>) => {
       if ([...current.keys()].every((key) => keys.has(key))) return current;
       return new Map([...current].filter(([key]) => keys.has(key)));
-    });
+    };
+    setSummaryHeights(retain);
+    setDetailHeights(retain);
   });
   const offsets = createMemo(() => {
     const heights = detailHeights();
+    const summaries = summaryHeights();
     const open = expanded();
-    const summary = summaryHeight();
+    const estimate = summaries.size
+      ? [...summaries.values()].reduce((sum, height) => sum + height, 0) / summaries.size
+      : 32;
     const result = [0];
     for (const row of rows()) {
-      const height = summary + (open.has(row.key) ? (heights.get(row.key) ?? 320) : 0);
+      const height =
+        (summaries.get(row.key) ?? estimate) +
+        (open.has(row.key) ? (heights.get(row.key) ?? 320) : 0);
       result.push(result[result.length - 1]! + height);
     }
     return result;
@@ -37,8 +52,18 @@ export function useProxmoxCoverageWindowing(
       (row): row is HTMLElement =>
         row instanceof HTMLElement && row.dataset.proxmoxBackupRow === 'coverage',
     );
-    const height = summaries[0]?.getBoundingClientRect().height;
-    if (height && Number.isFinite(height)) setSummaryHeight(height);
+    setSummaryHeights((current) => {
+      let next: Map<string, number> | undefined;
+      for (const summary of summaries) {
+        const key = summary.dataset.proxmoxCoverageKey;
+        const measured = summary.getBoundingClientRect().height;
+        if (!key || !Number.isFinite(measured) || measured <= 0 || current.get(key) === measured)
+          continue;
+        next ??= new Map(current);
+        next.set(key, measured);
+      }
+      return next ?? current;
+    });
     setDetailHeights((current) => {
       let next: Map<string, number> | undefined;
       for (const summary of summaries) {

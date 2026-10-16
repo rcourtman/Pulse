@@ -8725,3 +8725,13 @@ maintenance, remediation locking and saved-policy behaviour are unchanged.
 The connected render control and desktop/narrow workload-drawer browser proof
 cover descriptions plus discard, confirmation cancellation and synthetic
 retirement/restoration; none establishes native or installed recovery.
+
+Coverage's collapsed identity retains the actual workload connection and folds
+hidden type/target/node facts under the name. Equal names or VMIDs in separate
+connections stay visibly distinct without opening backup evidence. Missing
+connection identity is not borrowed from a repository. Per-workload summary and
+detail geometry keeps wrapped identity reachable in the bounded Coverage window;
+width changes invalidate off-screen measurements. The five-layout component and
+desktop/phone consuming checks in `coverageWorkloadIdentity.test.tsx`,
+`ProxmoxCoverageTable.test.tsx` and `coverage-workload-identity.cjs` verify this
+presentation, not a new resource identity, matching rule or native recovery.

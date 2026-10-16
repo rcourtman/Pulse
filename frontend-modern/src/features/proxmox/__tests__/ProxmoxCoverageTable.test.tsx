@@ -227,7 +227,8 @@ describe('ProxmoxCoverageTable column visibility', () => {
 
     expect(headerTexts()).toEqual(['Workload', 'Posture▲', 'Age', 'Job']);
     expect(document.body.textContent).toContain('Prot.');
-    expect(document.body.textContent).not.toContain('VM 100 · pve1');
+    expect(document.querySelector('[data-backup-workload-target]')).toHaveTextContent('VM 100');
+    expect(document.querySelector('[data-backup-workload-node]')).toHaveTextContent('Node: pve1');
   });
 
   it('keeps provider evidence in the workload drill-down instead of every table row', () => {
@@ -318,6 +319,52 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(140);
     expect(document.body.textContent).toContain('workload-0');
     expect(document.body.textContent).not.toContain('workload-599');
+  });
+
+  it('estimates unseen summaries from all measured workload heights, not the first row', () => {
+    const rectangle = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: Element) {
+        const key = this.getAttribute('data-proxmox-coverage-key');
+        const index = Number(key?.replace('sized-', '') ?? 0);
+        const height = key ? 40 + (index % 3) * 40 : 32;
+        return {
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          right: 1200,
+          bottom: height,
+          width: 1200,
+          height,
+        } as DOMRect;
+      });
+    try {
+      render(() => (
+        <ProxmoxCoverageTable
+          rows={Array.from({ length: 200 }, (_, index) => ({ ...row, key: `sized-${index}` }))}
+          hasAnyRows
+          emptyIcon={<span />}
+          emptyTitle=""
+          emptyDescription=""
+          sortKey={() => 'posture'}
+          sortDirection={() => 'asc'}
+          onSort={() => {}}
+          expandedKeys={new Set()}
+          onToggleExpand={() => {}}
+          showTaskColumn
+          layoutWidth={() => 1200}
+        />
+      ));
+      const measured = Array.from({ length: 140 }, (_, index) => 40 + (index % 3) * 40);
+      const average = measured.reduce((sum, height) => sum + height, 0) / measured.length;
+      const bottom = document.querySelector('tbody > tr[aria-hidden="true"] td')!;
+      expect(Number(bottom.getAttribute('height'))).toBeCloseTo(60 * average);
+      expect(Number(bottom.getAttribute('height'))).not.toBe(60 * measured[0]);
+    } finally {
+      cleanup();
+      rectangle.mockRestore();
+    }
   });
 
   it('keeps an expanded workload mounted and focused while its tall provider evidence is read', async () => {
