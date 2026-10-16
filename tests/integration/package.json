@@ -31,9 +31,9 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "1.56.1",
-    "@types/node": "^26.6.2",
-    "@types/ws": "^8.18.1",
+    "@types/node": "^26.6.5",
+    "@types/ws": "^8.18.2",
     "typescript": "^7.0.2",
-    "ws": "^8.21.3"
+    "ws": "^8.22.0"
   }
 }

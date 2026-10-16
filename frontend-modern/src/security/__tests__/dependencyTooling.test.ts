@@ -37,12 +37,15 @@ describe('patched transitive dependency compatibility', () => {
     'solid-js',
     'seroval',
     'seroval-plugins',
+    '@testing-library/jest-dom',
     '@types/node',
     '@typescript-eslint/eslint-plugin',
     '@typescript-eslint/parser',
     'eslint-plugin-solid',
     'globals',
+    'jscpd',
     'typescript-eslint',
+    'ws',
   ])('executes the exact committed %s version, not a stale offline install', (name) => {
     const lock = JSON.parse(
       readFileSync(new URL('../../../package-lock.json', import.meta.url), 'utf8'),
