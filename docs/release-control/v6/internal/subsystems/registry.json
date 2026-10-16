@@ -1826,6 +1826,7 @@
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/useNodeModalState.connectionTest.test.ts",
               "frontend-modern/src/utils/__tests__/nodeModalPresentation.test.ts"
             ]
           },
@@ -3261,6 +3262,7 @@
               "internal/api/availability_handlers_test.go",
               "internal/api/chartapi/history_activity_test.go",
               "internal/api/configapi/node_endpoint_diagnostics_test.go",
+              "internal/api/configapi/config_handlers_connection_test.go",
               "internal/api/contract_test.go",
               "internal/api/docker_agents_report_size_test.go",
               "internal/api/docker_container_action_executor_test.go",

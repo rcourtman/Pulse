@@ -27337,3 +27337,36 @@ func TestContract_PMGConfiguredReferenceInFullDetail(t *testing.T) {
 		}
 	}
 }
+
+func TestChartServiceInitializationIsConcurrentAndRouterScoped(t *testing.T) {
+	const requests = 64
+	router := &Router{}
+	start := make(chan struct{})
+	services := make(chan *chartapi.Service, requests)
+	for range requests {
+		go func() {
+			<-start
+			services <- router.ensureChartService()
+		}()
+	}
+	close(start)
+
+	var shared *chartapi.Service
+	for range requests {
+		service := <-services
+		if service == nil {
+			t.Fatal("chart service was not initialized")
+		}
+		if shared == nil {
+			shared = service
+		} else if service != shared {
+			t.Fatal("concurrent requests received different chart services")
+		}
+	}
+	if router.ensureChartService() != shared {
+		t.Fatal("later requests replaced the chart service")
+	}
+	if (&Router{}).ensureChartService() == shared {
+		t.Fatal("different routers shared a chart service")
+	}
+}

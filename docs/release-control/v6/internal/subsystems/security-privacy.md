@@ -3593,3 +3593,12 @@ browser is not retractable, and retiring output does not cancel an issuance,
 revoke a server token or grant stronger permissions. Monitoring-only scope,
 verified TLS defaults, credential-free command/download URLs and the silent
 separate-token prompt remain unchanged.
+### Concurrent chart service publication retains tenant boundaries (16 October 2026)
+
+`internal/api/router.go` initializes each router's chart service through the
+same guarded accessor used by concurrent history and chart requests. The
+service remains scoped to its router and resolves the monitor from the current
+request context. This synchronizes publication without changing authentication,
+authorization, tenant selection or disclosure. The concurrent initialization
+regression in `internal/api/contract_test.go` and the existing
+`TestMultiTenant_TenantIsolation` race test verify that boundary.

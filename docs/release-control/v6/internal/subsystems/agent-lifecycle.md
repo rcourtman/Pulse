@@ -10114,3 +10114,30 @@ query, resource, tenant, credential or action authority. The observer receives
 only a successful-read marker after serialization/write, and existing API
 entitlement checks remain before that boundary. Read semantics remain owned
 by api-contracts and telemetry retention/disclosure by security-privacy.
+
+### Connection edit tests retain credentials and use draft TLS (16 October 2026)
+
+The shared node modal sends its current SSL verification flag and fingerprint
+when testing with retained PVE, PBS or PMG credentials. It uses the saved-node
+probe endpoint so stored secrets do not need to be returned to the browser.
+Testing does not save the edits. Replacing credentials continues to use the
+provided-configuration probe with the edited TLS settings.
+
+`useNodeModalState.connectionTest.test.ts` covers retained and replaced credentials,
+edited pins and clearing a pin. `frontend-modern/src/api/__tests__/nodes.test.ts`
+is the direct shared transport proof. The existing node setup Settings proof
+routes remain required for the modal surface.
+
+The shared footer stacks its action groups on narrow screens and wraps controls
+within each group. Delete, Test, Pause, Cancel and Save must remain visible and
+keyboard reachable without horizontal scrolling. Desktop groups retain their
+existing ordering. Browser proof covers both narrow and desktop viewports.
+
+### Chart service initialization preserves lifecycle authority (16 October 2026)
+
+`internal/api/charts_compat.go` and the router constructor share one guarded
+chart service initialization path per router. This only synchronizes service
+publication. Tenant monitors still resolve from each request context, and chart
+reads do not gain enrollment, heartbeat or agent lifecycle authority. The
+concurrent initialization contract and tenant-isolation race tests are owned
+by api-contracts.

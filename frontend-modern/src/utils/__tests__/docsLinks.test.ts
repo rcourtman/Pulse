@@ -782,6 +782,23 @@ describe('docsLinks', () => {
     expect(setup).not.toContain('token-bearing `commandWithEnv`');
   });
 
+  it('ships the saved-credential probe TLS override contract', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shipped = readFileSync(path.join(frontendRoot, 'public', 'docs', 'API.md'), 'utf8');
+    const probe = apiReference
+      .split('### Test Node (Legacy)')[1]
+      .split('### Refresh Cluster Nodes')[0];
+
+    expect(shipped).toBe(apiReference);
+    expect(probe).toContain('`POST /api/config/nodes/{id}/test` (admin, `settings:write`)');
+    expect(probe).toContain('optional JSON body can override `verifySSL` and `fingerprint`');
+    expect(probe).toContain('without changing the saved connection or credentials');
+    expect(probe).toMatch(/Omitted fields keep their\s+saved values/);
+    expect(probe).toContain('`false` to disable CA verification or `""` to clear the saved');
+    expect(probe).toMatch(/nonempty fingerprint remains enforced regardless of\s+`verifySSL`/);
+    expect(probe).toContain('Empty-body requests keep the saved TLS settings');
+  });
+
   it('ships the per-alert snooze and resume API contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shippedAPIReference = readFileSync(
