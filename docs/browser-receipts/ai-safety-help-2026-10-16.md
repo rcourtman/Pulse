@@ -6,7 +6,8 @@
   parent: `061b2ae3df52a905fa9f3657f54530be1e740de0`.
 - Final static AI overview producer: `e18a80af9312f090996260bffee4c0de2527f1e2`;
   parent: `af1ed5ff7731642daf4d8979b6aae1716814e35d`.
-- The final receipt commit's own parent is that static producer. The actual
+- Content receipt `b367207e12b0a2e213653b2a9410fbc79f1895ab` has that
+  static producer as its own parent. The actual
   new overview content and four supplemental captures are verified, not merely
   rebound to another parent. No frontend source changes in the receipt commit.
 - The existing Docs route/router/Markdown/styles are consumed; only the outer
@@ -72,6 +73,13 @@ executor readback remains separate. No prior failed attempt was replayed.
 
 Raw executor/client output, the exact build, browser recipe/result/captures and
 per-image human-readable observations are retained with the lane outcome in
-`RECEIPTS.md`, `SOURCE-LOGS.tar.xz`, `DOCS-BUILD.tar.xz`,
+`RECEIPTS.md`, `SOURCE-LOGS.tar.xz`,
 `BROWSER-EXECUTION.tar.xz`, `BUILD-VERIFICATION.json`,
 `BROWSER-VERIFICATION.json` and `PIXEL-REVIEW.json`.
+
+The complete compiler archive is retained in the raw source protocol's
+`BROWSER_ARCHIVE` line. The same source-log archive carries the exact final
+static AI guide and binding deltas; reconstruction is hash-checked. A standalone
+duplicate build archive is intentionally not carried within the outcome's
+16 MiB evidence limit. This retention-only update changes no served input or
+content-verification binding.
