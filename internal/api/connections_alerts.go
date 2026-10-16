@@ -158,6 +158,39 @@ func snapshotConnectionsForAlerts(connections []Connection) []alerts.ConnectionS
 	return out
 }
 
+// installConnectionAlertLister gives monitor the closure its poll tick uses to
+// raise and resolve connection-degraded alerts, bound to that monitor. Every
+// path that attaches a monitor to the router calls it through
+// configureMonitorDependencies: startup, SetMonitor after a full reload
+// (node auto-registration replaces the default monitor), and the
+// multi-tenant initializer that lazily creates the default monitor. A lister
+// installed once at startup stays on the discarded monitor, so the
+// replacement would never evaluate connection alerts again until restart.
+//
+// Only the default org's monitor gets a lister: the closure reads the
+// default org's connection config, and per-org connection alerts are not
+// wired yet. Until the platform pollers exist the monitor keeps whatever
+// lister it had, so a running monitor never sees nil runtime owners.
+func (r *Router) installConnectionAlertLister(monitor *monitoring.Monitor) {
+	if r == nil || monitor == nil || r.configHandlers == nil || r.trueNASPoller == nil || r.vmwarePoller == nil {
+		return
+	}
+	if orgID := monitor.GetOrgID(); orgID != "" && orgID != "default" {
+		return
+	}
+	getCfg := r.configHandlers.Config
+	getPersist := r.configHandlers.Persistence
+	runtime := aggregatorRuntimeSources{
+		orgID:         "default",
+		truenasPoller: r.trueNASPoller,
+		vmwarePoller:  r.vmwarePoller,
+	}
+	monitor.SetConnectionsSnapshotLister(func() []alerts.ConnectionSnapshot {
+		ctx := context.Background()
+		return buildAlertConnectionSnapshotsWithRuntimeSources(ctx, getCfg(ctx), getPersist(ctx), monitor, runtime)
+	})
+}
+
 func buildAlertConnectionSnapshotsWithRuntimeSources(
 	ctx context.Context,
 	cfg *config.Config,
