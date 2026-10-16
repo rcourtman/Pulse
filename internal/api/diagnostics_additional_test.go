@@ -798,7 +798,7 @@ func TestCheckVMDiskMonitoring_Success(t *testing.T) {
 	responses := map[string]proxmoxTestResponse{
 		"/api2/json/nodes":                              {body: `{"data":[{"node":"pve1","status":"online"}]}`},
 		"/api2/json/nodes/pve1/qemu":                    {body: `{"data":[{"vmid":100,"name":"vm-100","node":"pve1","status":"running","template":0}]}`},
-		"/api2/json/nodes/pve1/qemu/100/status/current": {body: `{"data":{"agent":1}}`},
+		"/api2/json/nodes/pve1/qemu/100/status/current": {body: `{"data":{"status":"running","agent":1}}`},
 		// Guest admission must independently verify the authoritative config lock.
 		"/api2/json/nodes/pve1/qemu/100/config":           {body: `{"data":{}}`},
 		"/api2/json/nodes/pve1/qemu/100/agent/get-fsinfo": {body: `{"data":{"result":[{"name":"root","type":"ext4","mountpoint":"/","total-bytes":100,"used-bytes":50}]}}`},
@@ -912,8 +912,8 @@ func TestCheckVMDiskMonitoring_BackupAdmission(t *testing.T) {
 				case "/api2/json/nodes/pve1/qemu":
 					_, _ = w.Write([]byte(`{"data":[{"vmid":100,"name":"vm-100","node":"pve1","status":"running","template":0}]}`))
 				case "/api2/json/nodes/pve1/qemu/100/status/current":
-					// As on the failed CI fixture, current status alone has no lock field.
-					_, _ = w.Write([]byte(`{"data":{"agent":1}}`))
+					// Complete status still omits the optional lock: config is authoritative.
+					_, _ = w.Write([]byte(`{"data":{"status":"running","agent":1}}`))
 				case "/api2/json/nodes/pve1/qemu/100/config":
 					if locked.Load() {
 						_, _ = w.Write([]byte(`{"data":{"lock":"backup"}}`))
