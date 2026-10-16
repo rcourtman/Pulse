@@ -216,7 +216,7 @@ Use the existing views to distinguish what is missing:
 | Observation | Where to look next |
 | --- | --- |
 | The PBS server itself is missing | Open **Proxmox → Backups** and look for its **Backup server** row. Note any existing search or view filter. The PBS VM/LXC in **Overview** is a different resource. If Proxmox navigation is absent too, retain that fact. |
-| The server row exists, but datastores or backups are missing | Compare the affected view with the connection's existing collection scope. PVE passthrough backups do not establish that direct PBS inventory is available. Do not widen permissions or change scope just to diagnose the gap. |
+| The server row exists, but datastores or backups are missing | Check the [affected datastore and namespace](#one-pbs-namespace-is-missing-or-stops-changing). PVE passthrough backups do not establish that direct PBS inventory is available. Do not widen permissions or change scope just to diagnose the gap. |
 | Current readings exist, but a chart is empty | Use the [PBS History checks](#pbs-is-connected-but-history-stays-empty) for that server and time range. An empty chart is not the same as a missing server. |
 
 When reporting a missing server, keep the Pulse server version separate from
@@ -233,6 +233,43 @@ These actions can lose evidence or change the affected path. Keep certificate
 verification and existing access restrictions intact. If the original incident
 also involved an unresponsive guest or uncertain freeze/thaw, follow
 [Backup safety](VM_DISK_MONITORING.md#backup-safety) before any live checks.
+
+### One PBS namespace is missing or stops changing
+
+**A fresh sibling namespace does not prove that this namespace was read.**
+A PBS poll can succeed for one scope and fail for another. A visible older
+row is not a fresh inventory result, and a missing row does not establish
+that PBS deleted the backup.
+
+In **Proxmox → Backups → By date**, keep the current search and location filter
+with your observation, then clear them to distinguish a hidden row from a
+missing one. Match **Source** and **Location** with the existing PBS record:
+owning server, datastore, full namespace path (including root), guest type/ID
+and backup time. Root and nested namespaces are different scopes; the same
+guest ID in a sibling namespace is not the same stored backup. Use the
+[copy checks](#duplicate-backups) if two collection paths show the same point.
+
+| Existing evidence | What it means |
+| --- | --- |
+| PBS lists the expected point, but Pulse lacks it or shows only older points | An inventory disagreement, not proof that the backup failed. Keep the affected scope distinct from a sibling that refreshed. |
+| The scope's last read failed or timed out | Its current inventory is unknown. Retained rows can describe an earlier read; their presence is not proof of current collection or protection. |
+| Access to that scope was rejected | Missing rows are not evidence of an empty namespace. Preserve the intended access boundary; do not grant broader access to make the list agree. |
+| A successful read returned no points | That result applies only to the exact scope and filters read, not its parent, children, siblings or the whole datastore. |
+
+**Created** is the backup's time, not the time Pulse last read its namespace.
+An advancing connection time, a changing “ago” label or an OK job elsewhere
+cannot supply the missing read result. If no scope-specific error or collection
+time is available, keep it unknown rather than running a request to obtain one.
+
+For help, retain one affected scope and, if already observed, one working
+sibling, the original time, running Pulse/PBS versions, Source/Location,
+filters and relevant redacted error. Use consistent aliases that preserve the
+namespace hierarchy; keep full inventories, logs, tokens and private paths out
+of public reports. Existing observations are enough: do not run Diagnostics,
+retry the poll, restart, recreate the connection or change permissions,
+retention or backups as a test. Use PBS's existing records meanwhile; see
+[backup health](#backups-are-visible-but-coverage-says-unprotected) separately
+for a Coverage disagreement.
 
 ### "Connection Failed" Error
 

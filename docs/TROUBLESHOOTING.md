@@ -49,7 +49,9 @@ establish safe recovery.
 - **PBS is Active but missing from monitoring:** distinguish the
   [server, backup inventory and History](PBS.md#pbs-is-active-but-missing-from-monitoring).
   An Active API connection does not establish a visible PBS resource; installing
-  an agent does not prove API recovery.
+  an agent does not prove API recovery. If only one datastore or namespace is
+  affected, use the [scoped inventory checks](PBS.md#one-pbs-namespace-is-missing-or-stops-changing);
+  a fresh sibling does not prove that the missing scope was read.
 - **Backup rows look duplicated or copies are missing:** compare
   [node-local copies, shared storage and PBS collection paths](PBS.md#duplicate-backups).
   Matching filenames or VMIDs do not prove one stored copy; do not delete

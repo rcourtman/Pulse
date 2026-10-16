@@ -157,6 +157,35 @@ class PBSDocsTest(unittest.TestCase):
                 self.assertIn(phrase, guidance)
         self.assertIn("[prune protection](#prune-protection-is-not-verification)", DOC.read_text())
 
+    def test_namespace_inventory_help_keeps_unknowns_and_empty_results_scoped(self):
+        text = DOC.read_text()
+        heading = "### One PBS namespace is missing or stops changing\n"
+        self.assertEqual(text.count(heading), 1)
+        guidance = " ".join(text.split(heading, 1)[1].split("\n### ", 1)[0].split())
+        for distinction in (
+            "fresh sibling namespace does not prove that this namespace was read",
+            "Source", "Location", "full namespace path (including root)",
+            "guest ID in a sibling namespace is not the same stored backup",
+            "last read failed or timed out", "current inventory is unknown",
+            "Retained rows can describe an earlier read",
+            "Access to that scope was rejected", "intended access boundary",
+            "successful read returned no points", "exact scope and filters read",
+            "not its parent, children, siblings or the whole datastore",
+            "not the time Pulse last read its namespace",
+            "keep it unknown rather than running a request",
+            "aliases that preserve the namespace hierarchy",
+            "do not run Diagnostics, retry the poll, restart, recreate the connection",
+        ):
+            with self.subTest(distinction=distinction):
+                self.assertIn(distinction, guidance)
+        self.assertNotIn("```", guidance, "use supplied observations, not another provider probe")
+        anchor = "#one-pbs-namespace-is-missing-or-stops-changing"
+        self.assertIn(f"[affected datastore and namespace]({anchor})", text)
+        trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        self.assertIn(f"[scoped inventory checks](PBS.md{anchor})", trouble)
+        self.assertEqual((ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes(),
+                         (ROOT / "docs/TROUBLESHOOTING.md").read_bytes())
+
     def test_history_checks_cover_batched_and_single_metric_requests(self):
         history = DOC.read_text().split("### PBS is connected but History stays empty\n")[1].split("\n### ")[0]
         for phrase in ("without\n   `metric`", "do not wait for a separate `metric=cpu` request",
