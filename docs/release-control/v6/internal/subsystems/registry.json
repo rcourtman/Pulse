@@ -7843,11 +7843,11 @@
             "exact_files": [
               "internal/config/config_load_test.go",
               "internal/config/watcher_test.go",
-              "pkg/tlsutil/tlsutil_test.go",
-          "pkg/tlsutil/client_proxy_test.go",
-          "pkg/proxmox/client_proxy_test.go",
-          "pkg/pbs/client_proxy_test.go",
-          "pkg/pmg/client_proxy_test.go"
+              "pkg/pbs/client_proxy_test.go",
+              "pkg/pmg/client_proxy_test.go",
+              "pkg/proxmox/client_proxy_test.go",
+              "pkg/tlsutil/client_proxy_test.go",
+              "pkg/tlsutil/tlsutil_test.go"
             ]
           },
           {
