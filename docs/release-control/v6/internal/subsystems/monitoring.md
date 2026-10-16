@@ -36,6 +36,25 @@ request encodings, ordinary node/version results and ticket/CSRF semantics remai
 No resource model, monitoring health verdict, saved trust or frontend field/state
 changes. Guest/backup guards and separately owned native recovery remain required.
 
+### PBS job health requires explicit successful completion
+
+PBS job-health evidence grants `healthy` only for a trimmed, case-insensitive
+`OK` or `success` state. Arbitrary status text (including `token`, `not OK` or
+`unsuccessful`) must not acquire a Healthy badge through substring matching.
+An exact `running` state remains unknown completion, not a successful last run.
+Explicit failure/error text outranks warning and overdue scheduling evidence;
+warning text remains warning even when it mentions OK/success. Partial reads
+remain unknown. Raw status, source, confidence, identity, timestamps and freshness
+are preserved separately; job failure does not turn working PBS connectivity off.
+
+`TestPBSJobHealthRequiresExplicitSuccess` covers classification and precedence.
+`TestPBSPollJobHealthStatusProjection` joins read-only synthetic PBS HTTP, the
+ordinary poll, published state and canonical Resources evidence through failed,
+warning, running, unknown, recovered and failed-again observations, with an
+independent successful verification job. Consuming proof must use these emitted
+observations in the existing PBS service drawer at desktop and narrow widths.
+This is truthful source/surface evidence, not native backup/restore, thaw,
+filesystem writes/liveness or installed recovery of the reported guests.
 
 ### Disabled PVE backup stores retain known evidence
 
