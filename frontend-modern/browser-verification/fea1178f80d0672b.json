@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "base_sha": "8c5eda5b36d8027c3c3397040f0b0bcdee1e9ae2",
+  "verified_at": "2026-10-16T02:39:56.830176Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/PBS.md",
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/public/docs/PBS.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md"
+  ],
+  "content_sha256": {
+    "docs/PBS.md": "d1ab1edd6be67168f14b973a0c24c9d18c251334f87ce9e5e6d7f7af7193efd4",
+    "docs/TROUBLESHOOTING.md": "d112205a3508d0775cd500a012ae88beb50b4039a2fb7c213913c0ac534aaf67",
+    "frontend-modern/public/docs/PBS.md": "d1ab1edd6be67168f14b973a0c24c9d18c251334f87ce9e5e6d7f7af7193efd4",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "d112205a3508d0775cd500a012ae88beb50b4039a2fb7c213913c0ac534aaf67"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING#choose-the-affected-workflow",
+    "/docs/PBS#pbs-is-active-but-missing-from-monitoring",
+    "/docs/PBS#one-pbs-namespace-is-missing-or-stops-changing"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "The production Docs page/router/Markdown/CSS consumes the exact final existing PBS and Troubleshooting Markdown, not a recreated fragment.",
+    "Fresh sibling/retained row/backup Created do not establish a successful scope read. Failed, denied and successful-empty reads stay distinct; root/children/siblings and intended access remain separate.",
+    "Desktop light and 320px dark guidance is legible with no horizontal page overflow; no real provider request or backup operation."
+  ],
+  "interactions": [
+    "Chromium keyboard Enter and WebKit touch tap activate the existing Troubleshooting link, and the existing PBS missing-inventory table link; each focuses the new H3 heading.",
+    "Browser Back returns to the original fragment with the same client shell. Re-entry through the other link and reload focus the intended heading.",
+    "Runtime-fetched Markdown hashes match final bytes. No page errors, API requests, mutations or off-origin requests; browser and server close."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "preview": "Explicit reuse of unchanged compiled Docs consumer from source-pel6m1bj/fad0fc5541. All 2,931 nonchanged frontend inputs and compiled asset hashes match; only two final runtime-fetched Markdown documents were substituted. This is not a newly executed build or a relabelled original receipt. Later source-ffcsih_c on the verified parent passes the current-source build and reproduces all 2,933 inputs and 20 exact preview artifacts; the completed browser proof is not replayed."
+  },
+  "input_hashes": {
+    "docs/PBS.md": "d1ab1edd6be67168f14b973a0c24c9d18c251334f87ce9e5e6d7f7af7193efd4",
+    "docs/TROUBLESHOOTING.md": "d112205a3508d0775cd500a012ae88beb50b4039a2fb7c213913c0ac534aaf67",
+    "frontend-modern/public/docs/PBS.md": "d1ab1edd6be67168f14b973a0c24c9d18c251334f87ce9e5e6d7f7af7193efd4",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "d112205a3508d0775cd500a012ae88beb50b4039a2fb7c213913c0ac534aaf67",
+    "frontend-modern/src/pages/Docs.tsx": "e1d181803722b38ed211517d12495d201c299cc8ebb0a14131c58ac91c7e3a6a",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "213b6216dca650aab7d3ea4c8a66af6ee128f829ba455b5f53cd00a27e62d4cb",
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c",
+    "frontend-modern/src/components/shared/PageHeader.tsx": "428d4c02380ba13a38d1ee7404c56b538562df904aecb66f11786ef0dbb8d259",
+    "frontend-modern/browser-tests/doc-command-help.tsx": "81005ed6de41f32d7a581d1115e8c52be974a41ae421eab893ffe0a3a59a42f5",
+    "frontend-modern/browser-tests/build-doc-command-help.mjs": "4bc5eed4d8030c5533a7afa36a4b33ad048b2386c40ad8490a31c231d6ca60cc",
+    "frontend-modern/package.json": "8d8da916d45b0aaf90d256787ea294b45c4aec89ee9fa3cab773bb8368c8da97",
+    "frontend-modern/package-lock.json": "927b6fd356ececa0de2d44bd68a62a7733a6bf2a93314bb24cc66d1c120e3915"
+  },
+  "input_count": 2933,
+  "compiled_consumer_source": "fad0fc55414cbb3caf8c0430dc9b7c59f9437ec1",
+  "preview_binding_sha256": "f333822e0413ea98a53a56003587f05b7c67147b3764449d2fa62d042e80307e",
+  "pixel_review": {
+    "tool": "native view_image",
+    "captures": [
+      {
+        "file": "desktop-light-entry.png",
+        "sha256": "dd966f5db2158fc2862660dba05aff1bd4c4495a34fbf12cd0d064028f0dd9b9",
+        "bytes": 283161,
+        "width": 1440,
+        "height": 1000,
+        "observation": "The existing PBS symptom entry and its scoped inventory link are legible and underlined; the added sentence fits the desktop flow."
+      },
+      {
+        "file": "desktop-light-scope.png",
+        "sha256": "d5bf77e6307d44d874067427db9cea1f24e800c249addb8047a558054ba6f95a",
+        "bytes": 222854,
+        "width": 1440,
+        "height": 1000,
+        "observation": "The focused namespace heading, same-scope identity, all four evidence cases, collection-time distinction and safe reporting guidance are legible together without clipping."
+      },
+      {
+        "file": "desktop-light-collection-time.png",
+        "sha256": "d9b7d7c0843a620c4c490ba55378432ce3aa21ad1a49e1d9907dc6a95123e1ea",
+        "bytes": 177959,
+        "width": 1440,
+        "height": 1000,
+        "observation": "Backup Created versus collection time and the no-probe reporting paragraph are readable; the next existing TLS section remains separate."
+      },
+      {
+        "file": "phone-dark-entry.png",
+        "sha256": "be7bbe619d09aab9fe0782b4f42bbe13132170bb07826715d6e856455fd34ae8",
+        "bytes": 119058,
+        "width": 320,
+        "height": 1000,
+        "observation": "At 320px the PBS entry and scoped inventory link wrap legibly inside the page, without horizontal clipping."
+      },
+      {
+        "file": "phone-dark-scope.png",
+        "sha256": "e1f82126afcc471188fdd519cf2dd96da3901c6d47462549f9c37b28fe8097f2",
+        "bytes": 105810,
+        "width": 320,
+        "height": 1000,
+        "observation": "At 320px the heading and warning wrap clearly. Root/nested/sibling identity guidance and the two-column table remain readable."
+      },
+      {
+        "file": "phone-dark-failed-read.png",
+        "sha256": "8901a29ce50b10269a58ec2eb29aa32174658d2b71f46a2570a5ddbc1cc5c597",
+        "bytes": 95793,
+        "width": 320,
+        "height": 1000,
+        "observation": "At 320px the failed/unknown read, denied access and exact-scope empty-result cases are readable; none implies fresh protection."
+      },
+      {
+        "file": "phone-dark-denied-and-empty.png",
+        "sha256": "dac060788fc1a2637fcbf250acb6744c91cfd258e1a9dd35b1b46dd62519295c",
+        "bytes": 93641,
+        "width": 320,
+        "height": 1000,
+        "observation": "At 320px the denied-access boundary and successful-empty scope limit are distinct and legible; the collection-time explanation follows below."
+      },
+      {
+        "file": "phone-dark-collection-time.png",
+        "sha256": "d2d4e9b07ac798cf851c83e7c31c2389f81faf71ecb35497c75e125a88d6729b",
+        "bytes": 99968,
+        "width": 320,
+        "height": 1000,
+        "observation": "At 320px Created is clearly distinguished from collection time; unknown evidence and existing-observation reporting remain readable."
+      },
+      {
+        "file": "phone-dark-report-without-probe.png",
+        "sha256": "2d0b14312514d70a78ff0831f134fc7cb77d8385195be5119510f473bd4914c1",
+        "bytes": 99840,
+        "width": 320,
+        "height": 1000,
+        "observation": "At 320px hierarchy-preserving aliases, no full inventories/secrets and no retry/restart/permission/backup changes are legible; the backup-health link remains visible."
+      },
+      {
+        "file": "desktop-light-parent-table-entry.png",
+        "sha256": "da134a916feab9a612b308964c1a16d2f015c197fa9ac5edcebf35e4f1d1efc9",
+        "bytes": 222613,
+        "width": 1440,
+        "height": 1000,
+        "observation": "The existing PBS missing-inventory table shows the affected datastore/namespace link legibly in its row without clipping."
+      },
+      {
+        "file": "phone-dark-parent-table-entry.png",
+        "sha256": "8326ff770b035582db060b77a94c31f2e645b7d5809a36f970410ef555865f6f",
+        "bytes": 102726,
+        "width": 320,
+        "height": 1000,
+        "observation": "At 320px the affected datastore/namespace link wraps legibly in the existing two-column table; no page overflow or overlapping text."
+      }
+    ]
+  },
+  "source_proof_receipt": "source-ffcsih_c",
+  "source_build_browser_reconciliation": "All 2,933 input and 20 artifact hashes match the newly built containing source, including both consumed final Markdown documents. Original compilation and new execution identities remain distinct."
+}
