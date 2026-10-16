@@ -1464,8 +1464,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			}
 
 			log.Debug().Msg("agentic loop complete - no tool calls")
-			resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
-			return resultMessages, nil
+			return a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 		}
 
 		// === Execute tool calls (three-phase pipeline) ===
@@ -1954,6 +1953,5 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	}
 
 	log.Warn().Int("max_turns", maxTurns).Str("session_id", sessionID).Msg("agentic loop hit max turns limit")
-	resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
-	return resultMessages, nil
+	return a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 }

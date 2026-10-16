@@ -464,6 +464,17 @@ func investigationCooldownForOutcome(outcome string) time.Duration {
 	}
 }
 
+func (f *Finding) investigationCooldown() time.Duration {
+	if InvestigationStatus(f.InvestigationStatus) == InvestigationStatusFailed &&
+		(f.InvestigationOutcome == "" || InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeTimedOut) {
+		// The run failed before producing a conclusion. The scheduled Watch
+		// cadence owns the next assessment; there is no additional cooldown.
+		// Admission, attempt limits and action authority still apply.
+		return 0
+	}
+	return investigationCooldownForOutcome(f.InvestigationOutcome)
+}
+
 func deriveLoopState(f *Finding) FindingLoopState {
 	if f == nil {
 		return FindingLoopStateDetected
@@ -575,7 +586,7 @@ func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
 	// Don't re-investigate within cooldown period
 	// Timeout failures use a shorter cooldown (10min) since they're transient
 	if f.LastInvestigatedAt != nil {
-		cooldown := investigationCooldownForOutcome(f.InvestigationOutcome)
+		cooldown := f.investigationCooldown()
 		if time.Since(*f.LastInvestigatedAt) < cooldown {
 			return false
 		}
@@ -677,7 +688,7 @@ func (f *Finding) CanRetryInvestigation() bool {
 	// Can't retry if still in cooldown
 	// Timeout failures use a shorter cooldown (10min) since they're transient
 	if f.LastInvestigatedAt != nil {
-		cooldown := investigationCooldownForOutcome(f.InvestigationOutcome)
+		cooldown := f.investigationCooldown()
 		if time.Since(*f.LastInvestigatedAt) < cooldown {
 			return false
 		}

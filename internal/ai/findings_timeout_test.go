@@ -5,9 +5,8 @@ import (
 	"time"
 )
 
-func TestShouldInvestigate_TimeoutUsesShortCooldown(t *testing.T) {
-	// Finding with timed_out outcome and LastInvestigatedAt 15 minutes ago
-	// should be eligible for re-investigation (shorter 10min cooldown)
+func TestShouldInvestigate_FailedTimeoutUsesScheduledCadence(t *testing.T) {
+	// Failed timeouts use the scheduled assessment cadence.
 	fifteenMinsAgo := time.Now().Add(-15 * time.Minute)
 	f := &Finding{
 		ID:                    "f1",
@@ -24,18 +23,18 @@ func TestShouldInvestigate_TimeoutUsesShortCooldown(t *testing.T) {
 		t.Fatalf("expected timed-out finding (15min old) to be eligible for re-investigation")
 	}
 
-	// Same finding but only 5 minutes ago — still within the 10min timeout cooldown
+	// A failed run follows the Watch cadence without an additional cooldown.
 	fiveMinsAgo := time.Now().Add(-5 * time.Minute)
 	f.LastInvestigatedAt = &fiveMinsAgo
 
-	if f.ShouldInvestigate("approval") {
-		t.Fatalf("expected timed-out finding (5min old) to still be in cooldown")
+	if !f.ShouldInvestigate("approval") {
+		t.Fatalf("failed timeout should be eligible at the next scheduled assessment")
 	}
 }
 
-func TestShouldInvestigate_NonTimeoutKeepsLongCooldown(t *testing.T) {
+func TestShouldInvestigate_FailedProviderUsesScheduledCadence(t *testing.T) {
 	// Finding with no special outcome (regular failure) at 15 minutes ago
-	// should NOT be eligible — still within the 1-hour cooldown
+	// remains eligible for the next scheduled assessment.
 	fifteenMinsAgo := time.Now().Add(-15 * time.Minute)
 	f := &Finding{
 		ID:                    "f1",
@@ -48,8 +47,8 @@ func TestShouldInvestigate_NonTimeoutKeepsLongCooldown(t *testing.T) {
 		InvestigationAttempts: 1,
 	}
 
-	if f.ShouldInvestigate("approval") {
-		t.Fatalf("expected non-timeout failure (15min old) to still be in 1hr cooldown")
+	if !f.ShouldInvestigate("approval") {
+		t.Fatalf("failed provider run should not wait another hour")
 	}
 
 	// After 2 hours, should be eligible
