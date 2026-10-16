@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "dc3c8755c84b24859c9cbf1d5c4aa90ca5f35cd8",
+  "verified_at": "2026-10-16T09:38:58.555489Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/public/docs/KUBERNETES.md",
+    "frontend-modern/public/docs/INSTALL.md",
+    "frontend-modern/public/docs/DEPLOYMENT_MODELS.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/KUBERNETES.md": "26aebca1943828ca31027f9db90dd7aac1235775ca96041e19b2fcf5b7785352",
+    "frontend-modern/public/docs/INSTALL.md": "a040b9cdaab0c5baf77de28efe3a7cd80431a3ce87f2980b582eab28d688581c",
+    "frontend-modern/public/docs/DEPLOYMENT_MODELS.md": "6b23154fe27f8b1c0a438c360963650461c463715b32a0a2e0e1417f2aa37a42"
+  },
+  "routes": [
+    "/docs/INSTALL#1-kubernetes-helm",
+    "/docs/KUBERNETES#option-a-using-helm-recommended",
+    "/docs/KUBERNETES#option-b-generating-static-manifests-for-talos--gitops",
+    "/docs/KUBERNETES#openshift-profile-helm",
+    "/docs/DEPLOYMENT_MODELS#kubernetes-helm"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Exact-source compiled production Docs/router/Markdown renderer/styles in a synthetic shell; three fetched shipped guides match committed bytes. This is documentation proof, not Helm rendering, cluster rollout or installed recovery.",
+    "Both journeys show five exact copied recipes: pinned single-writer installation, static render and explicit namespace apply, separate OpenShift installation and same-version settings change retaining saved values.",
+    "Chromium 141.0.7390.37 desktop light and WebKit 26.0 narrow dark, Playwright 1.56.1. All 12 final captures were opened with the native image viewer; text and links wrap, with long commands contained in horizontally scrollable code blocks.",
+    "No document overflow or page errors; 22 same-origin read-only GET observations and exact guide-fetch checks. Browser and local server close successfully."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and phone touch follow the actual pinned-install and existing-rollout links; Back and reload restore the correct fragment focus.",
+    "Static-manifest navigation uses the actual rendered heading ID while retaining strict focus checks. The first guessed-fragment timeout remains failed evidence, not a missing product page.",
+    "Narrow install code scrolls 75 px within its 288 px block (363 px content), without widening the document."
+  ],
+  "proof_source_sha": "dc3c8755c84b24859c9cbf1d5c4aa90ca5f35cd8",
+  "scope": "New documentation receipt at its containing source parent; no runtime frontend source changed and no previous receipt was rebound."
+}
