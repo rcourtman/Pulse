@@ -44,8 +44,8 @@ type patrolGuestMemoryReading struct {
 	mayIncludeCache bool
 }
 
-func readPatrolGuestMemory(percent float64, observation models.MemoryObservation, available, proxmoxGuest bool) patrolGuestMemoryReading {
-	e := unifiedresources.QualifyGuestMemory(percent, observation, available, proxmoxGuest, time.Now())
+func readPatrolGuestMemory(percent float64, observation models.MemoryObservation, available bool, kind unifiedresources.GuestMemoryKind) patrolGuestMemoryReading {
+	e := unifiedresources.QualifyGuestMemoryForKind(percent, observation, available, kind, time.Now())
 	return patrolGuestMemoryReading{percent: percent, available: e.Available, pressureKnown: e.PressureKnown,
 		state: e.State, source: e.Source, observedAt: e.ObservedAt, mayIncludeCache: e.MayIncludeCache}
 }

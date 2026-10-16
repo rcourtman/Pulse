@@ -20,10 +20,34 @@ type GuestMemoryEvidence struct {
 	MayIncludeCache bool      `json:"may_include_reclaimable_cache,omitempty"`
 }
 
-// QualifyGuestMemory shares the existing Patrol interpretation with its query
-// and observer inputs. State is authored by collection; consumers do not renew
-// the original observation or invent a separate collection lease.
+// GuestMemoryKind names the guest whose accounting a Proxmox memory source
+// describes. The same source name means different things for QEMU and LXC.
+type GuestMemoryKind uint8
+
+const (
+	// GuestMemoryOtherPlatform keeps a non-Proxmox platform's selected reading.
+	GuestMemoryOtherPlatform GuestMemoryKind = iota
+	// GuestMemoryProxmoxVM is a QEMU guest, or a Proxmox guest of unknown type.
+	GuestMemoryProxmoxVM
+	// GuestMemoryProxmoxContainer is an LXC (including OCI) container.
+	GuestMemoryProxmoxContainer
+)
+
+// QualifyGuestMemory qualifies a reading without knowing the Proxmox guest
+// type, so it uses the conservative QEMU interpretation. Callers that know the
+// guest is a container use QualifyGuestMemoryForKind.
 func QualifyGuestMemory(percent float64, observation models.MemoryObservation, available, proxmoxGuest bool, now time.Time) GuestMemoryEvidence {
+	kind := GuestMemoryOtherPlatform
+	if proxmoxGuest {
+		kind = GuestMemoryProxmoxVM
+	}
+	return QualifyGuestMemoryForKind(percent, observation, available, kind, now)
+}
+
+// QualifyGuestMemoryForKind shares the existing Patrol interpretation with its
+// query and observer inputs. State is authored by collection; consumers do not
+// renew the original observation or invent a separate collection lease.
+func QualifyGuestMemoryForKind(percent float64, observation models.MemoryObservation, available bool, kind GuestMemoryKind, now time.Time) GuestMemoryEvidence {
 	e := GuestMemoryEvidence{Available: available && !math.IsNaN(percent) && !math.IsInf(percent, 0) && percent >= 0 && percent <= 100}
 	if !e.Available || observation.State == "unavailable" {
 		e.Available = false
@@ -31,7 +55,7 @@ func QualifyGuestMemory(percent float64, observation models.MemoryObservation, a
 		return e
 	}
 	// Other platforms need not implement Proxmox's memory observation contract.
-	if !proxmoxGuest && observation == (models.MemoryObservation{}) {
+	if kind == GuestMemoryOtherPlatform && observation == (models.MemoryObservation{}) {
 		e.PressureKnown = true
 		return e
 	}
@@ -49,7 +73,19 @@ func QualifyGuestMemory(percent float64, observation models.MemoryObservation, a
 	case "available-field", "derived-free-buffers-cached", "guest-agent-meminfo", "guest-agent-meminfo-derived", "agent":
 		e.Source = observation.Source
 		e.PressureKnown = e.State == "current"
-	case "status-mem", "status-freemem", "cluster-resources", "derived-total-minus-used":
+	case "cluster-resources":
+		e.Source = observation.Source
+		// An LXC's listing mem is its cgroup usage minus page cache: Proxmox
+		// computes memory.current - memory.stat file (cgroup v2) or
+		// usage_in_bytes - total_cache (v1) in PVE::CGroup::get_memory_stat,
+		// and /cluster/resources reports that vmstatus value. A QEMU listing is
+		// the host's view of guest RAM, which counts the guest's own cache.
+		if kind == GuestMemoryProxmoxContainer {
+			e.PressureKnown = e.State == "current"
+		} else {
+			e.MayIncludeCache = true
+		}
+	case "status-mem", "status-freemem", "derived-total-minus-used":
 		e.Source = observation.Source
 		e.MayIncludeCache = true
 	case "previous-snapshot":
@@ -88,9 +124,23 @@ func (e GuestMemoryEvidence) Format(percent float64) string {
 // raw platform facet or resource LastSeen must never lend it provenance.
 func GuestMemoryEvidenceForResource(r *Resource, now time.Time) GuestMemoryEvidence {
 	if r == nil || r.Metrics == nil || r.Metrics.Memory == nil {
-		return QualifyGuestMemory(0, models.MemoryObservation{}, false, true, now)
+		return QualifyGuestMemoryForKind(0, models.MemoryObservation{}, false, GuestMemoryProxmoxVM, now)
 	}
 	_, hasProxmox := r.SourceStatus[SourceProxmox]
 	m := r.Metrics.Memory
-	return QualifyGuestMemory(m.Percent, m.Observation, true, r.Proxmox != nil || hasProxmox || m.Source == SourceProxmox, now)
+	kind := GuestMemoryKindFor(r.Proxmox != nil || hasProxmox || m.Source == SourceProxmox, r.Type == ResourceTypeSystemContainer)
+	return QualifyGuestMemoryForKind(m.Percent, m.Observation, true, kind, now)
+}
+
+// GuestMemoryKindFor keeps non-Proxmox guests on their own contract and tells
+// Proxmox containers apart from QEMU guests.
+func GuestMemoryKindFor(proxmoxGuest, container bool) GuestMemoryKind {
+	switch {
+	case !proxmoxGuest:
+		return GuestMemoryOtherPlatform
+	case container:
+		return GuestMemoryProxmoxContainer
+	default:
+		return GuestMemoryProxmoxVM
+	}
 }
