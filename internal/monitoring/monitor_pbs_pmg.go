@@ -149,20 +149,23 @@ func pbsJobHealthPosture(fact pbs.JobHealthEvidence, freshness models.PBSJobHeal
 	if fact.Error != "" {
 		return "unknown", strings.TrimSpace(fact.Confidence)
 	}
-	if freshness.State == "overdue" {
-		return "warning", "job-overdue"
-	}
+	// PBS exit-status text can contain arbitrary failure details. In particular,
+	// "token" contains "ok", and a warning can mention a successful operation.
+	// Only an explicit success state may earn the consumer's Healthy badge.
+	// Known failures also outrank warnings and overdue scheduling evidence.
 	switch {
-	case status == "":
-		return "unknown", "no-run-observed"
-	case strings.Contains(status, "ok") || strings.Contains(status, "success"):
-		return "healthy", "last-run-success"
-	case strings.Contains(status, "running"):
-		return "healthy", "running"
-	case strings.Contains(status, "warn"):
-		return "warning", "last-run-warning"
 	case strings.Contains(status, "fail") || strings.Contains(status, "error"):
 		return "critical", "last-run-failed"
+	case strings.Contains(status, "warn"):
+		return "warning", "last-run-warning"
+	case freshness.State == "overdue":
+		return "warning", "job-overdue"
+	case status == "":
+		return "unknown", "no-run-observed"
+	case status == "ok" || status == "success":
+		return "healthy", "last-run-success"
+	case status == "running":
+		return "unknown", "running"
 	default:
 		return "unknown", "last-run-state-" + strings.ReplaceAll(status, " ", "-")
 	}
