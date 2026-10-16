@@ -13,8 +13,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-// These are declared protocol controls, not an alternative native CORE
-// capacity source. #2510's absent pool bytes must still remain unavailable.
+// These are declared flat-field protocol controls. The native CORE source,
+// top-level vdev stats, is covered in core_pool_capacity_test.go; a pool with
+// neither flat bytes nor vdev stats must still remain unavailable.
 func TestTrueNASPoolCapacitySnapshot(t *testing.T) {
 	enableTrueNASFeatureFlag(t)
 	for _, tc := range []struct {
