@@ -294,7 +294,7 @@ async function scan(page, reverse) {
     }
     const second = rows.nth(1),
       toggle = second.locator('button').first();
-    if (spec.width === 320) await toggle.tap();
+    if (spec.width === 320) await second.tap();
     else {
       await toggle.focus();
       await page.keyboard.press('Enter');
