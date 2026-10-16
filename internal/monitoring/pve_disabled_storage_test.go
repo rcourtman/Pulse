@@ -193,3 +193,88 @@ func TestPVEDisabledBackupStorageRetainsKnownEvidence(t *testing.T) {
 		}
 	}
 }
+
+// A healthy sibling must not withdraw PBS attribution merely because the
+// source store was disabled. Re-enable and genuine empty reads still refresh
+// and remove the association through the ordinary production reader.
+func TestPVEDisabledPBSStorageRetainsAttribution(t *testing.T) {
+	for _, omitted := range []bool{false, true} {
+		t.Run(fmt.Sprint(omitted), func(t *testing.T) {
+			birth := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
+			var phase, unexpected atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				p := phase.Load()
+				if r.Method != http.MethodGet {
+					unexpected.Add(1)
+					http.Error(w, "unexpected method", 405)
+					return
+				}
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/storage"):
+					enabled := `,"enabled":1`
+					if p == 1 {
+						enabled = `,"enabled":0`
+						if omitted {
+							enabled = ""
+						}
+					}
+					fmt.Fprintf(w, `{"data":[{"storage":"archive","type":"pbs","content":"backup","active":1%s},{"storage":"other","type":"dir","content":"backup","active":1,"enabled":1}]}`, enabled)
+				case strings.HasSuffix(r.URL.Path, "/storage/archive/content"):
+					if p == 1 {
+						unexpected.Add(1)
+						http.Error(w, "disabled store queried", 500)
+						return
+					}
+					if p == 3 {
+						fmt.Fprint(w, `{"data":[]}`)
+						return
+					}
+					at := birth
+					if p == 2 {
+						at = birth.Add(30 * time.Minute)
+					}
+					fmt.Fprintf(w, `{"data":[{"volid":"archive:backup/vm/101/copy","content":"backup","format":"pbs-vm","vmid":101,"ctime":%d,"size":1024}]}`, at.Unix())
+				case strings.HasSuffix(r.URL.Path, "/storage/other/content"):
+					fmt.Fprint(w, `{"data":[]}`)
+				default:
+					unexpected.Add(1)
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!read", TokenValue: "fixture", Timeout: time.Second})
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := &Monitor{state: models.NewState(), config: &config.Config{PBSInstances: []config.PBSInstance{{Name: "direct-pbs"}}}}
+			var initial []models.PBSGuestConfirmation
+			for index := 0; index < 4; index++ {
+				phase.Store(int32(index))
+				m.pollStorageBackupsWithNodes(context.Background(), "fixture-pve", client, []proxmox.Node{{Node: "pve-a"}}, map[string]string{"pve-a": "online"})
+				got := m.state.PBSGuestConfirmationsForInstance("fixture-pve")
+				switch index {
+				case 0:
+					if len(got) != 1 {
+						t.Fatalf("missing initial attribution: %+v", got)
+					}
+					initial = got
+				case 1:
+					if !reflect.DeepEqual(got, initial) {
+						t.Errorf("skipped store lost or renewed attribution: %+v -> %+v", initial, got)
+					}
+				case 2:
+					if len(got) != 1 || got[0].Time != birth.Add(30*time.Minute).Unix() {
+						t.Errorf("ordinary re-enable did not refresh attribution: %+v", got)
+					}
+				case 3:
+					if len(got) != 0 {
+						t.Errorf("complete empty content retained removed attribution: %+v", got)
+					}
+				}
+			}
+			if unexpected.Load() != 0 {
+				t.Fatal("disabled content or unexpected operation was queried")
+			}
+		})
+	}
+}

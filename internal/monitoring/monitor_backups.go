@@ -299,12 +299,22 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			if !strings.Contains(storage.Content, "backup") {
 				continue
 			}
-			if !storageContentQueryable(storage) {
-				continue
-			}
-
 			storagesWithBackup++
 			backupScope := pveStorageBackupScope(storage, node.Node)
+			if !storageContentQueryable(storage) {
+				// Disabled/unconfirmed-enabled storage is deliberately not
+				// queried. That is unavailable content, not an empty archive
+				// list or an authorization refusal. Preserve this location
+				// unless another readable view of the same scope succeeded.
+				if _, ok := storageSuccess[storage.Storage]; !ok {
+					storagePreserveNeeded[storage.Storage] = struct{}{}
+				}
+				if _, ok := backupStorageSuccess[backupScope]; !ok {
+					backupPreserveNeeded[backupScope] = struct{}{}
+				}
+				contentFailures++
+				continue
+			}
 
 			// Get storage content
 			contents, err := client.GetStorageContent(ctx, node.Node, storage.Storage)
