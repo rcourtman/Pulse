@@ -137,7 +137,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.delivery.paused.reason.snoozed':
     'Die Zustellung von Benachrichtigungen ist zurueckgestellt.',
   'alerts.delivery.paused.reason.notActivated':
-    'Die Zustellung von Benachrichtigungen wurde fuer diese Installation noch nicht eingeschaltet.',
+    'Die Zustellung von Benachrichtigungen ist ausgeschaltet.',
   'alerts.delivery.paused.consequence.destinations':
     'Pulse erkennt weiterhin Warnmeldungen, sendet aber keine davon an die Ziele unten. Testnachrichten umgehen die Pause, ein erfolgreicher Test bedeutet also nicht, dass echte Warnmeldungen ankommen.',
   'alerts.delivery.paused.consequence.destinationsDetectionOff':

@@ -451,6 +451,19 @@ describe('i18n foundation', () => {
     }
   });
 
+  // Switching delivery off stores the same pending state as a fresh install,
+  // so the paused banner may say delivery is off but never that it was never on.
+  it('describes pending notification delivery as off, not as never turned on', () => {
+    expect(I18N_MESSAGES.en['alerts.delivery.paused.reason.notActivated']).toBe(
+      'Notification delivery is turned off.',
+    );
+    for (const locale of ['en', 'de', 'es'] as const) {
+      expect(I18N_MESSAGES[locale]['alerts.delivery.paused.reason.notActivated']).not.toMatch(
+        /yet|noch nicht|aún no/i,
+      );
+    }
+  });
+
   it('keeps external notification delivery distinct from alert detection', () => {
     // The delivery switch has one name in every state, so an off switch is
     // never labelled with a word that reads as its opposite.
