@@ -6446,6 +6446,162 @@ func TestInstallSHRegistrationRetryWindowOutlastsFirstReportCycle(t *testing.T) 
 	}
 }
 
+// Run the production waiter, completion helper and JSON emitter. The only
+// readiness/process/registration operations are closed shell functions: no
+// listener, service manager, real credential, installer main or host install.
+func TestInstallSHCompletionRequiresObservedStartup(t *testing.T) {
+	functions := extractInstallShellFunction(t, "verify_agent_started") + "\n" +
+		extractInstallShellFunction(t, "complete_installation_flow") + "\n" +
+		extractInstallShellFunction(t, "json_event")
+	tests := []struct {
+		name         string
+		healthURL    string
+		readyAfter   int
+		processRC    int
+		registration int
+		wantExit     int
+		wantHealth   int
+		wantProcess  int
+		wantRegister int
+	}{
+		{"missing-process", "http://127.0.0.1:9191/readyz", 0, 1, 0, 13, 4, 4, 0},
+		{"alive-not-ready", "http://127.0.0.1:9191/readyz", 0, 0, 0, 13, 8, 8, 0},
+		{"disabled-health-missing-process", "", 0, 1, 0, 13, 0, 8, 0},
+		{"ready", "http://127.0.0.1:9191/readyz", 1, 1, 0, 0, 1, 0, 1},
+		{"delayed-ready", "http://127.0.0.1:9191/readyz", 3, 0, 0, 0, 3, 2, 1},
+		{"registration-pending", "http://127.0.0.1:9191/readyz", 1, 0, 1, 0, 1, 0, 1},
+		{"disabled-health-running", "", 0, 0, 0, 0, 0, 1, 1},
+		{"disabled-health-registration-pending", "", 0, 0, 1, 0, 0, 1, 1},
+		{"credential-rejected", "http://127.0.0.1:9191/readyz", 1, 0, 2, 18, 1, 0, 1},
+		{"disabled-health-credential-rejected", "", 0, 0, 2, 18, 0, 1, 1},
+	}
+	for _, tc := range tests {
+		for _, upgrade := range []bool{false, true} {
+			for _, persisted := range []bool{false, true} {
+				name := fmt.Sprintf("%s/upgrade=%t/persisted=%t", tc.name, upgrade, persisted)
+				t.Run(name, func(t *testing.T) {
+					fixture := t.TempDir()
+					eventsFile := filepath.Join(fixture, "events")
+					// A failed completion must leave existing recovery material alone.
+					stateFile := filepath.Join(fixture, "saved-connection")
+					state := []byte("non-secret-fixture-state\n")
+					if err := os.WriteFile(stateFile, state, 0o600); err != nil {
+						t.Fatal(err)
+					}
+					script := fmt.Sprintf(`
+set -euo pipefail
+EXIT_SERVICE_START_FAILED=13
+EXIT_AUTH_REJECTED=18
+OUTPUT_FORMAT=json
+UPGRADE_MODE=%t
+CONNECTION_INFO_PERSISTED=%t
+SAVED_INSTALL_SCRIPT=''
+LOG_FILE="$FIXTURE/absent-log"
+health_calls=0
+record() { printf '%%s\n' "$1" >> "$FIXTURE/events"; }
+log_info() { printf 'INFO: %%s\n' "$*" >&2; }
+log_warn() { printf 'WARN: %%s\n' "$*" >&2; }
+log_error() { printf 'ERROR: %%s\n' "$*" >&2; }
+save_connection_info() { [[ "$1" == "$FIXTURE" ]]; record save; }
+resolve_agent_health_url() { printf '%%s' '%s'; }
+sleep() { [[ "$1" == 2 ]]; }
+curl() {
+    [[ "$*" == '-sf --max-time 2 http://127.0.0.1:9191/readyz' ]] || return 97
+    record health
+    health_calls=$((health_calls + 1))
+    [[ %d -gt 0 && $health_calls -ge %d ]]
+}
+agent_process_running() { record process; return %d; }
+verify_agent_server_registration_with_retry() { record registration; return %d; }
+warn_agent_token_rejected() { log_warn 'credential rejected'; }
+report_proxmox_registration_outcome() { [[ "$1" == "$FIXTURE" ]]; record proxmox; }
+trap 'record cleanup' EXIT
+%s
+# Match every platform's unconditional exit 0 after the completion call. The
+# OR-list also proves we do not accidentally rely on Bash implicit errexit.
+complete_installation_flow "$FIXTURE" INSTALL-SUCCESS UPGRADE-SUCCESS 'fixture-log-command' || record returned-failure
+record caller-success
+exit 0
+`, upgrade, persisted, tc.healthURL, tc.readyAfter, tc.readyAfter,
+						tc.processRC, tc.registration, functions)
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					cmd := exec.CommandContext(ctx, "bash", "-c", script)
+					cmd.Env = append(os.Environ(), "FIXTURE="+fixture)
+					var stdout, stderr strings.Builder
+					cmd.Stdout, cmd.Stderr = &stdout, &stderr
+					err := cmd.Run()
+					exit := 0
+					if err != nil {
+						var exitErr *exec.ExitError
+						if !errors.As(err, &exitErr) {
+							t.Fatalf("completion: %v", err)
+						}
+						exit = exitErr.ExitCode()
+					}
+					if exit != tc.wantExit {
+						t.Fatalf("completion exit=%d, want %d\n%s%s", exit, tc.wantExit, stdout.String(), stderr.String())
+					}
+					var event struct {
+						Phase    string `json:"phase"`
+						Code     string `json:"code"`
+						Message  string `json:"message"`
+						ExitCode int    `json:"exitCode"`
+					}
+					if err := json.Unmarshal([]byte(stdout.String()), &event); err != nil {
+						t.Fatalf("want one actual JSON completion: %v\n%s", err, stdout.String())
+					}
+					wantCode := "installed"
+					if upgrade {
+						wantCode = "updated"
+					}
+					if tc.wantExit == 13 {
+						wantCode += "_unhealthy"
+					}
+					if tc.wantExit == 18 {
+						wantCode = "auth_rejected"
+					}
+					if event.Phase != "complete" || event.Code != wantCode || event.ExitCode != tc.wantExit {
+						t.Fatalf("completion disagrees with process result: %+v", event)
+					}
+					if tc.wantExit == 13 {
+						if !strings.Contains(stderr.String(), "incomplete") ||
+							!strings.Contains(stderr.String(), "fixture-log-command") ||
+							strings.Contains(stderr.String(), "complete, but") {
+							t.Fatalf("unconfirmed startup lacks truthful diagnosis: %s", stderr.String())
+						}
+					}
+					events, err := os.ReadFile(eventsFile)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for marker, want := range map[string]int{
+						"health": tc.wantHealth, "process": tc.wantProcess,
+						"registration": tc.wantRegister, "cleanup": 1,
+					} {
+						if got := strings.Count(string(events), marker+"\n"); got != want {
+							t.Fatalf("%s calls=%d, want %d\n%s", marker, got, want, events)
+						}
+					}
+					if strings.Contains(string(events), "save\n") == persisted ||
+						strings.Contains(string(events), "caller-success\n") != (tc.wantExit == 0) ||
+						strings.Contains(string(events), "proxmox\n") != (tc.wantExit == 0) ||
+						strings.Contains(string(events), "returned-failure\n") {
+						t.Fatalf("completion reached the wrong caller/side effects:\n%s", events)
+					}
+					if tc.wantExit != 0 && (strings.Contains(stderr.String(), "INSTALL-SUCCESS") ||
+						strings.Contains(stderr.String(), "UPGRADE-SUCCESS")) {
+						t.Fatalf("failure printed success: %s", stderr.String())
+					}
+					if actual, err := os.ReadFile(stateFile); err != nil || string(actual) != string(state) {
+						t.Fatalf("recovery state changed: %q, %v", actual, err)
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestInstallSHRejectedCredentialPreventsSuccessfulCompletion(t *testing.T) {
 	completeFlow := extractInstallShellFunction(t, "complete_installation_flow")
 	script := `

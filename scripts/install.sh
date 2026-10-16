@@ -3580,15 +3580,19 @@ complete_installation_flow() {
         exit "$EXIT_AUTH_REJECTED"
     else
         if [[ "$UPGRADE_MODE" == "true" ]]; then
-            log_warn "Upgrade complete, but the agent may not be running correctly."
-            json_event "complete" "updated_unhealthy" "Agent updated but not responding"
+            log_error "Agent files were updated, but startup was not confirmed; the upgrade is incomplete."
+            json_event "complete" "updated_unhealthy" "Agent updated but not responding" "$EXIT_SERVICE_START_FAILED"
         else
-            log_warn "Installation complete, but the agent may not be running correctly."
-            if [[ -n "$unhealthy_log_hint" ]]; then
-                log_warn "Check logs: $unhealthy_log_hint"
-            fi
-            json_event "complete" "installed_unhealthy" "Agent installed but not responding"
+            log_error "Agent files were installed, but startup was not confirmed; installation is incomplete."
+            json_event "complete" "installed_unhealthy" "Agent installed but not responding" "$EXIT_SERVICE_START_FAILED"
         fi
+        if [[ -n "$unhealthy_log_hint" ]]; then
+            log_warn "Check logs: $unhealthy_log_hint"
+        fi
+        # Every platform caller ends with exit 0. Stop here, as for a rejected
+        # credential, so neither those callers nor an OR-list can mask failure.
+        # Keep the installed files and connection state available for repair.
+        exit "$EXIT_SERVICE_START_FAILED"
     fi
 
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then
