@@ -35,7 +35,7 @@ describe('signed-installer entrypoints', () => {
     it(`${locale} routes a standard Linux host to the actual systemd recipe`, () => {
       const link = article.querySelector('a[href="/docs/INSTALL#2-bare-metal--systemd"]');
       expect(link?.hasAttribute('data-doc-link')).toBe(true);
-      expect(install.querySelector('#2-bare-metal--systemd')).not.toBeNull();
+      expect(install.querySelector('[id="2-bare-metal--systemd"]')).not.toBeNull();
     });
   }
 
@@ -43,7 +43,7 @@ describe('signed-installer entrypoints', () => {
     const article = render(read('README.md'), 'README');
     for (const fragment of ['proxmox-ve-lxc-installer', '2-bare-metal--systemd']) {
       expect(article.querySelector(`a[href="/docs/INSTALL#${fragment}"]`)).not.toBeNull();
-      expect(install.querySelector(`#${fragment}`)).not.toBeNull();
+      expect(install.querySelector(`[id="${fragment}"]`)).not.toBeNull();
     }
     expect(article.textContent).toContain('private temporary files');
     expect(
