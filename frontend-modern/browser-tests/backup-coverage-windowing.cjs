@@ -92,7 +92,22 @@ async function visibleRows(page) {
 async function scan(page, reverse) {
   const seen = new Set();
   let maxMounted = 0;
+  const samples = [];
   for (let step = 0; step < 100; step++) {
+    const started = Date.now();
+    // Native scroll events can arrive after the compositor moves the page,
+    // especially in WebKit. Test settled reachability, not a fixed-delay race:
+    // do not advance until the mounted runway covers the visible body.
+    await page.waitForFunction(() => {
+      const root = document.querySelector('[data-proxmox-backups-table="coverage"]');
+      const rows = root?.querySelectorAll('[data-proxmox-backup-row="coverage"]');
+      if (!rows?.length) return false;
+      const body = root.querySelector('tbody').getBoundingClientRect();
+      const first = rows[0].getBoundingClientRect();
+      const last = rows[rows.length - 1].getBoundingClientRect();
+      return first.top <= Math.max(0, body.top) + 1 && last.bottom >= Math.min(innerHeight, body.bottom) - 1;
+    }, undefined, { timeout: 2000 });
+    const settledAfterMs = Date.now() - started;
     const sample = await page.evaluate((reverse) => {
       const rows = [...document.querySelectorAll('[data-proxmox-backup-row="coverage"]')];
       const max = document.documentElement.scrollHeight - innerHeight;
@@ -100,16 +115,19 @@ async function scan(page, reverse) {
         scroll: scrollY,
         max,
         count: rows.length,
+        first: rows[0]?.dataset.proxmoxCoverageKey,
+        last: rows[rows.length - 1]?.dataset.proxmoxCoverageKey,
         done: reverse ? scrollY <= 1 : scrollY >= max - 1,
       };
     }, reverse);
+    samples.push({ step, settledAfterMs, ...sample, visible: await visibleRows(page) });
     for (const label of await visibleRows(page)) seen.add(label);
     maxMounted = Math.max(maxMounted, sample.count);
     if (sample.done) break;
     await page.evaluate((reverse) => scrollBy(0, (reverse ? -1 : 1) * innerHeight * 0.55), reverse);
     await page.waitForTimeout(45);
   }
-  return { seen: [...seen].sort(), maxMounted };
+  return { seen: [...seen].sort(), maxMounted, samples };
 }
 (async () => {
   fs.mkdirSync(output, { recursive: true });
@@ -163,7 +181,7 @@ async function scan(page, reverse) {
     { name: 'desktop', engine: chromium, width: 1365, height: 900, dark: false },
     { name: 'phone', engine: chromium, width: 320, height: 760, dark: true },
     { name: 'phone-webkit', engine: webkit, width: 320, height: 760, dark: false },
-  ]) {
+  ].filter((spec) => !process.argv.includes('--webkit-only') || spec.name === 'phone-webkit')) {
     revision = 0;
     browser = await spec.engine.launch(
       spec.engine === chromium
