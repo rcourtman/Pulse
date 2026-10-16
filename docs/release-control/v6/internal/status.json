@@ -10176,6 +10176,28 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "pro-business-team-lifecycle",
+      "summary": "Guided Pro onboarding can use existing SSO discovery, stable identities and RBAC administration, but default-instance membership and named-seat accounting are not a qualified end-to-end team lifecycle. Align admission, membership, invitation semantics, existing seat limits and grandfathered unlimited grants before expanding this journey. Business reporting, controlled profile rollouts and audit/support journeys follow in priority order without changing current pricing or entitlements.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-10-16",
+      "lane_ids": [
+        "L14"
+      ],
+      "subsystem_ids": [
+        "organization-settings",
+        "security-privacy"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/pro-business-implementation-plan-2026-10-16.md",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [
@@ -10324,6 +10346,29 @@
         "user-direction: 2026-09-05 prioritise dependable Patrol and Assistant outcomes as core Pulse Pro value",
         "qualification-contract: docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md",
         "user-direction: 2026-09-05 assess the whole design, establish an executable plan and pursue its completion as an explicit goal"
+      ]
+    },
+    {
+      "id": "pro-business-team-lifecycle",
+      "name": "Pro Business Team Lifecycle",
+      "summary": "Complete default-instance team admission, identity, membership and seat accounting after guided SSO onboarding, preserving existing prices and customer grants. Follow with separately scoped reporting, agent rollout and audit/support work from the prioritised implementation plan.",
+      "status": "proposed",
+      "recorded_at": "2026-10-16",
+      "target_id": "v6-product-lane-expansion",
+      "current_lane_ids": [
+        "L14"
+      ],
+      "coverage_gap_ids": [
+        "pro-business-team-lifecycle"
+      ],
+      "subsystem_ids": [
+        "organization-settings",
+        "security-privacy"
+      ],
+      "demand_evidence": [
+        "owner-direction: prioritise business-focused Pro implementation, start team onboarding, preserve current pricing and existing customer entitlements",
+        "implementation-plan: docs/release-control/v6/internal/records/pro-business-implementation-plan-2026-10-16.md",
+        "reported-access-friction: https://github.com/rcourtman/Pulse/issues/1676"
       ]
     }
   ],

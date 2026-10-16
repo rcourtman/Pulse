@@ -1,3 +1,5 @@
+import type { SecurityStatus } from '@/types/config';
+
 export interface RBACFeatureGateCopy {
   title: string;
   body: string;
@@ -61,6 +63,70 @@ export function getUserAssignmentsEmptyStateCopy(): UserAssignmentsEmptyStateCop
     ssoHint: 'Configure SSO in Security settings',
     syncHint: 'Users sync on first login',
   };
+}
+
+export function getTeamOnboardingCopy() {
+  return {
+    title: 'Add a teammate',
+    add: 'Add teammate',
+    refresh: 'Refresh',
+    close: 'Close',
+    closeLabel: 'Close team onboarding',
+    retry: 'Retry',
+    configureSSO: 'Configure Single Sign-On',
+    authenticationSettings: 'Authentication settings',
+    reviewSSO: 'Review Single Sign-On',
+    introduction:
+      'Use your existing sign-in provider to give a teammate access to this Pulse instance.',
+    loading: 'Checking team sign-in',
+    loadError: 'Could not check team sign-in. Retry before sharing the link.',
+    setupTitle: 'Set up team sign-in first',
+    setupBody:
+      'Connect an OIDC or SAML identity provider in Single Sign-On, or configure trusted proxy authentication. Each teammate needs their own identity. Do not share the instance administrator password.',
+    configuredTitle: '1. Check who can sign in',
+    configuredBody:
+      'Confirm your teammate is allowed by your identity provider and Pulse sign-in restrictions. A configured provider does not confirm that their account has access.',
+    shareTitle: '2. Share the sign-in link',
+    shareBody:
+      'Send this link to your teammate and ask them to sign in with their own account. Use an address they can reach from their network.',
+    linkLabel: 'Pulse sign-in link',
+    invalidLink: 'Open Pulse using its normal HTTP or HTTPS address before sharing a sign-in link.',
+    copy: 'Copy link',
+    copied: 'Link copied',
+    copyError: 'Could not copy the link. Select the link above and copy it manually.',
+    reviewTitle: '3. Review their access after sign-in',
+    reviewBody:
+      'After their first successful sign-in, refresh the user list and choose Manage Access beside their name. Check their assigned roles and give only the access they need.',
+    mappings:
+      'Identity-provider group mappings apply at sign-in and can replace manually assigned roles on their next login. Change mapped access at the provider or in Single Sign-On.',
+    removal:
+      'To remove access, use Remove in the user list to clear roles and revoke active Pulse sessions. Also remove permission at the sign-in provider to prevent another login.',
+    review: 'Refresh user list',
+  };
+}
+
+export function getTeamSignInMethods(
+  status: Pick<SecurityStatus, 'ssoEnabled' | 'ssoProviders' | 'hasProxyAuth'>,
+): string[] {
+  const methods = status.ssoEnabled
+    ? (status.ssoProviders || []).map(
+        (provider) => `${provider.displayName || provider.name} (${provider.type.toUpperCase()})`,
+      )
+    : [];
+  if (status.hasProxyAuth) methods.push('Trusted proxy authentication');
+  return methods;
+}
+
+export function getTeamSignInUrl(origin: string): string | null {
+  try {
+    const url = new URL(origin);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
+    // The instance's normal login entry lets the teammate choose their provider.
+    // Never share the administrator's current route, query string, or fragment.
+    return new URL('/login', url.origin).href;
+  } catch {
+    return null;
+  }
 }
 
 export function getRolesEmptyState(): string {

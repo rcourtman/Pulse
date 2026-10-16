@@ -1,4 +1,4 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, createSignal, For, Show } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
@@ -13,23 +13,38 @@ import { SearchField } from '@/components/shared/SearchField';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import {
   getUserAssignmentsEmptyStateCopy,
+  getTeamOnboardingCopy,
   getUserIdentityDisplayName,
   getUserIdentityProviderLabel,
 } from '@/utils/rbacPresentation';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import TriangleAlert from 'lucide-solid/icons/triangle-alert';
 import { Dialog } from '@/components/shared/Dialog';
+import { TeamOnboardingDialog } from './TeamOnboarding/TeamOnboardingDialog';
 
 export const UserAssignmentsPanel: Component = () => {
   const state = useUserAssignmentsPanelState();
   const emptyStateCopy = () => getUserAssignmentsEmptyStateCopy();
+  const onboardingCopy = getTeamOnboardingCopy();
   let searchInputRef: HTMLInputElement | undefined;
+  let addTeammateRef: HTMLButtonElement | undefined;
+  const [showOnboarding, setShowOnboarding] = createSignal(false);
 
   return (
     <div class="space-y-6">
       <SettingsPanel
         title="User Access"
         action={
+          <Show when={state.featureGate.rbacEnabled()}>
+            <Button ref={addTeammateRef} variant="primary" onClick={() => setShowOnboarding(true)}>
+              {onboardingCopy.add}
+            </Button>
+          </Show>
+        }
+        noPadding
+        bodyClass="divide-y divide-border"
+      >
+        <div class="flex items-center gap-2 p-2.5 sm:px-6 sm:py-3">
           <SearchField
             inputRef={(element) => {
               searchInputRef = element;
@@ -38,13 +53,14 @@ export const UserAssignmentsPanel: Component = () => {
             value={state.searchQuery()}
             onChange={state.setSearchQuery}
             disabled={!state.featureGate.rbacEnabled() || Boolean(state.loadError())}
-            class="min-w-60"
-            inputClass="min-h-10 sm:min-h-9 py-2.5"
+            class="min-w-0 flex-1"
           />
-        }
-        noPadding
-        bodyClass="divide-y divide-border"
-      >
+          <Show when={state.featureGate.rbacEnabled()}>
+            <Button disabled={state.loading()} onClick={() => void state.loadData()}>
+              {onboardingCopy.refresh}
+            </Button>
+          </Show>
+        </div>
         <Show when={state.featureGate.paywallVisible()}>
           <RBACFeatureGateSection
             copy={state.featureGate.featureGateCopy()}
@@ -194,6 +210,18 @@ export const UserAssignmentsPanel: Component = () => {
           />
         </Show>
       </SettingsPanel>
+
+      <Show when={state.featureGate.rbacEnabled() && showOnboarding()}>
+        <TeamOnboardingDialog
+          onClose={() => setShowOnboarding(false)}
+          onReviewUsers={() => {
+            state.setSearchQuery('');
+            setShowOnboarding(false);
+            void state.loadData();
+          }}
+          returnFocus={() => addTeammateRef}
+        />
+      </Show>
 
       <UserAssignmentsDialog
         editingUser={state.editingUser()}

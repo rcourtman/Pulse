@@ -61,6 +61,8 @@ create, review, and approve cross-organization shares.
 36. `internal/api/org_handlers.go`
 37. `internal/api/org_lifecycle_handlers.go`
 38. `internal/models/organization.go`
+39. `frontend-modern/src/components/Settings/TeamOnboarding/TeamOnboardingDialog.tsx`
+40. `frontend-modern/src/components/Settings/TeamOnboarding/useTeamOnboardingState.ts`
 
 ## Shared Boundaries
 
@@ -356,6 +358,15 @@ both presentation metadata and the stable principal. User removal requires an
 explicit confirmation, calls the canonical deprovision endpoint, and explains
 that Pulse revokes assignments and active sessions but does not disable the
 upstream IdP account; a later authorized SSO login may recreate the record.
+The team-onboarding guide is owned by `Settings/TeamOnboarding`. It consumes
+the existing security-status sign-in discovery, shares the current instance's
+normal login entry and returns to the existing user list for role assignment.
+It must not create a second account/invitation store, infer authority from an
+email address, unlock Enterprise organization invitations or change licence
+limits. No provider and failed discovery are distinct states. Group mappings
+remain authoritative at sign-in, and copy failure leaves a selectable link.
+Default-instance membership and named-seat accounting remain a separate
+governed product gap recorded in the Pro business implementation plan.
 That RBAC gate now also depends on the shared commercial navigation contract:
 `RBACFeatureGateSection.tsx` may request the canonical `rbac` destination from
 the shared license boundary, but it must render that destination through the

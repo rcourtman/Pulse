@@ -46,6 +46,25 @@ user merely because no local administrator is configured.
 
 ## Managing Roles
 
+### Adding a Teammate
+
+In **Settings → Security → Users**, choose **Add teammate**. The guide checks
+whether SSO or trusted proxy sign-in is configured and shows this instance's
+sign-in link. Share it with a teammate who is allowed by your identity provider
+and Pulse sign-in restrictions. Each person should use their own account.
+
+After their first successful sign-in, choose **Refresh user list**, find their
+name and choose **Manage Access**. Review their roles before granting more
+access. Identity-provider group mappings apply at sign-in and can replace
+manual role assignments on the next login. Change mapped access at the
+provider or in **Single Sign-On**.
+
+To remove access, use **Remove** beside their name. This clears their Pulse
+roles and revokes active Pulse sessions. Also remove their permission at the
+sign-in provider to prevent another login. This guide uses existing SSO and
+RBAC administration. It does not create an account or send an invitation.
+Enterprise organization invitations remain a separate workflow.
+
 ### Before Using the API
 
 Prefer **Settings → Security → Roles** and **Settings → Security → Users** for one-off administration.

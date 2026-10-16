@@ -6755,7 +6755,9 @@
       "id": "organization-settings",
       "lane": "L14",
       "contract": "docs/release-control/v6/internal/subsystems/organization-settings.md",
-      "owned_prefixes": [],
+      "owned_prefixes": [
+        "frontend-modern/src/components/Settings/TeamOnboarding/"
+      ],
       "owned_files": [
         "docs/RBAC.md",
         "frontend-modern/public/docs/RBAC.md",
@@ -6870,7 +6872,9 @@
           {
             "id": "organization-settings-surface",
             "label": "organization settings surface proof",
-            "match_prefixes": [],
+            "match_prefixes": [
+              "frontend-modern/src/components/Settings/TeamOnboarding/"
+            ],
             "match_files": [
               "frontend-modern/src/components/Settings/OrganizationAccessInvitationsSection.tsx",
               "frontend-modern/src/components/Settings/OrganizationAccessLoadingState.tsx",
@@ -6910,6 +6914,7 @@
               "frontend-modern/src/components/Settings/__tests__/OrganizationOverviewPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+              "frontend-modern/src/components/Settings/TeamOnboarding/TeamOnboarding.test.tsx",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
