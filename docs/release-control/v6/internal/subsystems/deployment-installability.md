@@ -892,6 +892,24 @@ community controls. `TestAutoUpdateVersionProbeHasHardDeadline` exercises a real
 TERM-resistant executable. These are source fixtures, not native systemd or
 installed customer recovery. Consent, signatures and rollback gates are unchanged.
 
+### Unattended discovery cannot report an unknown check as current
+
+The unattended updater's release selector reserves stdout for a selected tag.
+Missing-parser diagnostics go to stderr, not into the command-substitution
+value. Before comparing versions or reporting completion, `main` requires a
+successful selector exit and a nonempty stable-shaped tag. Missing `jq`, failed
+selection, empty/invalid metadata or diagnostic/preview output cannot become
+"Already running latest version" or reach the installer callback. Existing
+release-object maturity, consent, signature, service and rollback gates remain
+unchanged; the helper's existing empty-result convention remains supported.
+
+The standalone `pulse_auto_update_consent_test.go` executes the actual logger,
+selector and main with confined transport/installer callbacks. It separates
+missing-parser diagnostics from version bytes, rejects partial failed reads,
+malformed/unconfirmed metadata and failed/invalid selector output, and retains
+verified-current/newer stable controls. These source fixtures establish no
+installed timer, systemd, native replacement or reporter recovery.
+
 ### Unattended update consent comes from complete configuration
 
 When `system.json` exists, the unattended updater requires one complete JSON

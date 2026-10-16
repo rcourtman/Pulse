@@ -228,8 +228,9 @@ pick_highest_stable_tag() {
 get_latest_stable_version() {
     local endpoint="" release_json="" stable_tags="" latest_version=""
     if ! command -v jq >/dev/null 2>&1; then
-        log error "jq is required to verify release metadata; no unattended update attempted"
-        echo ""
+        # This helper's stdout is the selected tag. The ordinary logger also
+        # writes stdout; keep a missing-parser diagnostic out of that value.
+        log error "jq is required to verify release metadata; no unattended update attempted" >&2
         return 0
     fi
 
@@ -869,9 +870,12 @@ main() {
     fi
     
     # Get latest stable version
-    local latest_version=$(get_latest_stable_version)
-    
-    if [[ -z "$latest_version" ]]; then
+    local latest_version=""
+    # A local declaration masks a failed substitution. Admit a successful,
+    # stable tag before arithmetic/completion, never diagnostic text or output
+    # left by a failed selector. Unknown discovery is not "already latest".
+    if ! latest_version=$(get_latest_stable_version) ||
+       [[ -z "$latest_version" ]] || is_prerelease_tag "$latest_version"; then
         log error "Could not determine latest version from GitHub"
         exit 1
     fi

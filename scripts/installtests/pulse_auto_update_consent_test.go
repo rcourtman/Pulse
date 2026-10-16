@@ -31,6 +31,114 @@ func extractAutoUpdateAdmissionFunction(t *testing.T, name string) string {
 	return string(match)
 }
 
+func TestAutoUpdateDiscoveryParserKeepsDiagnosticsOutOfVersion(t *testing.T) {
+	updater, err := filepath.Abs(filepath.Join("..", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := `source "$UPDATER_UNDER_TEST"
+# Keep the actual log function; a stderr-only log double concealed this fault.
+logger() { :; }
+command() { if [[ "$*" == '-v jq' ]]; then return 1; fi; builtin command "$@"; }
+curl() { echo UNEXPECTED_TRANSPORT; return 97; }
+get_latest_stable_version
+`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "UPDATER_UNDER_TEST="+updater)
+	var diagnostic strings.Builder
+	cmd.Stderr = &diagnostic
+	out, err := cmd.Output()
+	if err != nil || len(out) != 0 || !strings.Contains(diagnostic.String(), "jq is required to verify release metadata") {
+		t.Fatalf("missing parser contaminated version output: %v; stdout=%q stderr=%q", err, out, diagnostic.String())
+	}
+}
+
+func TestAutoUpdateDiscoveryFailuresCannotReportLatest(t *testing.T) {
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		t.Fatal("discovery main-flow proof requires a non-Docker environment")
+	}
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Fatal("jq is required for the real release-selector controls")
+	}
+	updater, err := filepath.Abs(filepath.Join("..", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const stable = `[{"tag_name":"v6.6.0","draft":false,"prerelease":false}]`
+	for _, tc := range []struct {
+		name, document, selector string
+		curlExit, exit, reads    int
+		missingParser, install   bool
+	}{
+		{name: "missing parser", missingParser: true, exit: 1},
+		{name: "failed transport with partial valid output", document: stable, curlExit: 22, exit: 1, reads: 2},
+		{name: "malformed metadata", document: "[", exit: 1, reads: 2},
+		{name: "unconfirmed maturity", document: `[{"tag_name":"v6.6.0"}]`, exit: 1, reads: 2},
+		{name: "failed selector with valid tag", selector: `printf '%s\n' v6.6.0; return 23`, exit: 1},
+		{name: "diagnostic instead of tag", selector: `printf '%s\n' 'release lookup unavailable'`, exit: 1},
+		{name: "preview instead of stable", selector: `printf '%s\n' v6.6.0-rc.1`, exit: 1},
+		{name: "verified current stable", document: `[{"tag_name":"v6.5.0","draft":false,"prerelease":false}]`, reads: 1},
+		{name: "verified newer stable", document: stable, reads: 1, install: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			script := `source "$UPDATER_UNDER_TEST"
+logger() { :; }
+check_auto_updates_enabled() { :; }
+installed_binary_is_pulse_pro() { return 1; }
+get_current_version() { printf '%s\n' v6.5.0; }
+curl() {
+  printf 'READ\n' >> "$FIXTURE_DIR/actions"
+  printf '%s\n' "$RELEASE_DOCUMENT"
+  return "$CURL_EXIT"
+}
+perform_update() { printf 'INSTALL %s\n' "$1" >> "$FIXTURE_DIR/actions"; }
+`
+			if tc.missingParser {
+				script += "command() { if [[ \"$*\" == '-v jq' ]]; then return 1; fi; builtin command \"$@\"; }\n"
+			}
+			if tc.selector != "" {
+				script += "get_latest_stable_version() { " + tc.selector + "; }\n"
+			}
+			cmd := exec.Command("bash", "-c", script+"main\n")
+			cmd.Env = append(os.Environ(), "UPDATER_UNDER_TEST="+updater, "FIXTURE_DIR="+dir,
+				"RELEASE_DOCUMENT="+tc.document, "CURL_EXIT="+strconv.Itoa(tc.curlExit))
+			out, err := cmd.CombinedOutput()
+			exit := 0
+			if err != nil {
+				if e, ok := err.(*exec.ExitError); ok {
+					exit = e.ExitCode()
+				} else {
+					t.Fatal(err)
+				}
+			}
+			actions, readErr := os.ReadFile(filepath.Join(dir, "actions"))
+			if readErr != nil && !os.IsNotExist(readErr) {
+				t.Fatal(readErr)
+			}
+			wantActions := strings.Repeat("READ\n", tc.reads)
+			if tc.install {
+				wantActions += "INSTALL v6.6.0\n"
+			}
+			if exit != tc.exit || string(actions) != wantActions {
+				t.Fatalf("exit=%d actions=%q; want exit=%d actions=%q; output %s", exit, actions, tc.exit, wantActions, out)
+			}
+			if tc.exit != 0 {
+				for _, forbidden := range []string{"Already running latest version", "Auto-update check completed", "Update completed successfully", "Latest stable version:", "operand expected"} {
+					if strings.Contains(string(out), forbidden) {
+						t.Fatalf("failed discovery reached comparison/completion (%s): %s", forbidden, out)
+					}
+				}
+				if !strings.Contains(string(out), "Could not determine latest version from GitHub") {
+					t.Fatalf("missing useful discovery failure: %s", out)
+				}
+			} else if !strings.Contains(string(out), "Auto-update check completed") {
+				t.Fatalf("verified stable control lost normal completion: %s", out)
+			}
+		})
+	}
+}
+
 func TestAutoUpdateRequiresVerifiedCommunityEdition(t *testing.T) {
 	cases := []struct {
 		name, body, legacy string
