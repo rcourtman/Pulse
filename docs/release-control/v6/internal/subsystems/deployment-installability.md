@@ -16,6 +16,37 @@
 
 ## Purpose
 
+### Container-agent compatibility bootstrap authenticates before execution
+
+The legacy `scripts/install-container-agent.sh` wrapper continues to prefer its
+neighbouring canonical agent installer, preserving explicit local transport
+options, the downstream exit and host-plus-Docker defaults (no module flags on
+uninstall). Without that local file, it admits only HTTPS without embedded URL
+credentials, query/fragment data or controls. Remote `--insecure` stops before a
+download; an independently verified `--cacert` bundle can authenticate a private
+CA and is forwarded to the canonical installer. This adds no trust bypass or
+new installation profile.
+
+Remote curl ignores ambient configuration and proxies, follows no redirect,
+permits only HTTPS and has five-second connection and sixty-second total limits.
+Only a successful, non-empty HTTP 200 download in this invocation's private
+directory can reach Bash. Partial executable bytes, transfer errors, redirects,
+other statuses and empty bodies execute nothing; ordinary success/failure removes
+only the owned temporary file/directory. Provider output and invalid option/URL
+values are not printed. Existing legacy inline token forwarding is unchanged;
+the download receives no token. Missing option values fail without executing an
+installer. This is authenticated transport, not new installer-signature policy.
+
+`TestContainerAgentCompatibilityWrapperAuthenticatesBeforeExecuting` runs all
+21 methods in `scripts/tests/test_container_agent_wrapper.py`. They execute the
+complete wrapper with a closed curl fixture and inert canonical installer,
+checking transfer-before-execution, refusal/cleanup, private modes, exact curl
+policy, CA/argument forwarding, defaults, uninstall and downstream exits.
+The exact-parent controls must detect the streaming/unauthenticated bootstrap.
+They do not establish a real TLS handshake, installed agent recovery or native
+Proxmox renewal. Existing canonical installer, signing and lifecycle checks are
+unchanged and still required in containing CI.
+
 ### Automatic PVE registration preserves an existing monitoring credential
 
 If token creation reports that the deterministic monitoring token already exists,

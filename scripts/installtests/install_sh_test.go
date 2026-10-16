@@ -43,6 +43,20 @@ func TestContainerAgentCompatibilityWrapperDefaultsToUnifiedHostAndDockerMonitor
 	}
 }
 
+func TestContainerAgentCompatibilityWrapperAuthenticatesBeforeExecuting(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_container_agent_wrapper.py"), "-v")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("container-agent bootstrap controls: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "Ran 21 tests") || !strings.Contains(string(out), "\nOK\n") || strings.Contains(string(out), "skipped") {
+		t.Fatalf("incomplete container-agent bootstrap controls:\n%s", out)
+	}
+	t.Logf("%s", out)
+}
+
 func TestInstallSHAllowsMissingTokenForOptionalAuth(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
