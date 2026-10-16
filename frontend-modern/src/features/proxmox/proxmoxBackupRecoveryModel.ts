@@ -850,6 +850,14 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     getWorkloadRecoveryPostureLabel(row.posture),
     row.latestTask?.label,
     row.latestTask?.error,
+    ...(row.protectionPosture?.providerStates ?? []).flatMap((provider) => [
+      provider.provider,
+      provider.scope,
+      provider.source,
+      provider.jobState,
+      provider.historyCompleteness,
+      provider.permissions,
+    ]),
     ...row.artifacts.flatMap((artifact) => [
       artifact.sourceLabel,
       artifact.sourceTitle,

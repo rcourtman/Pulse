@@ -23,6 +23,16 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Provider evidence identity stays separate from guest identity
+
+Existing backup Coverage exposes each observation's scope and source alongside
+its own facts and includes them in the existing text search, even when the
+source has no current artifact. These labels are not inferred from the guest's
+connection and cannot change matching, location-facet identity or protection.
+`coverageProviderEvidence.test.tsx` and `ProxmoxCoverageTable.test.tsx` check
+identity preservation, missing values and refresh; desktop/narrow consuming
+proof is recorded separately by `backup-provider-evidence.cjs`.
+
 ### Backup source provenance does not change guest identity
 
 Restore-point presentation retains its observed source connection separately
