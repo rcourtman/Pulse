@@ -40,7 +40,13 @@ Pulse cannot choose a latest outcome and points to Proxmox job history. The
 indicator stays accessible at desktop and narrow widths, clears on ordinary
 inventory replacement and must not turn into a green success dot or an absent
 job column. The consuming table tests and `backup-task-chronology.cjs` cover
-these states and same-open read-only refresh.
+these states and same-open read-only refresh. Conflicting normalized outcomes
+at the same newest start time use that unknown indicator, with a distinct
+explanation that names the conflict instead of claiming a bad date. Agreeing
+outcomes and strictly newer results remain usable. `backup-job-outcomes.cjs`
+connects synthetic HTTP through the real reader/model and open Coverage detail
+at desktop and narrow widths, including response-order reversal and ordinary
+replacement; provider posture and independent restore evidence stay separate.
 
 
 ### Expandable backup Coverage uses per-workload geometry

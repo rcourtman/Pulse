@@ -110,6 +110,65 @@ describe('ProxmoxCoverageTable column visibility', () => {
     },
   );
 
+  it.each([320, 1200])(
+    'explains conflicting newest outcomes without inventing invalid dates at %i px',
+    (width) => {
+      const [current, setCurrent] = createSignal<WorkloadCoverageRow>({
+        ...row,
+        taskChronologyUnknown: true,
+        taskOutcomeConflict: true,
+      });
+      const { container } = render(() => (
+        <ProxmoxCoverageTable
+          rows={[current()]}
+          hasAnyRows
+          emptyIcon={<span />}
+          emptyTitle=""
+          emptyDescription=""
+          sortKey={() => 'posture'}
+          sortDirection={() => 'asc'}
+          onSort={() => {}}
+          expandedKeys={new Set(['w1'])}
+          onToggleExpand={() => {}}
+          showTaskColumn
+          layoutWidth={() => width}
+        />
+      ));
+      const marker = container.querySelector('[data-backup-task-unknown]');
+      expect(marker).toHaveAccessibleName('Latest backup job unknown');
+      expect(marker).toHaveAttribute(
+        'title',
+        expect.stringContaining('same newest start time report different outcomes'),
+      );
+      const explanation = container.querySelector('[data-backup-task-chronology]');
+      expect(explanation).toHaveTextContent('same newest start time report different outcomes');
+      expect(explanation).not.toHaveTextContent('unavailable or in the future');
+      expect(explanation).toHaveTextContent('Check the job history in Proxmox.');
+      const stable = container.querySelector('[data-proxmox-backup-row="coverage"]');
+      setCurrent({
+        ...row,
+        taskChronologyUnknown: false,
+        taskOutcomeConflict: false,
+        latestTask: {
+          id: 'new-failure',
+          label: 'Failed',
+          status: 'failed',
+          startedAt: '2026-05-25T03:00:00Z',
+        },
+      });
+      expect(container.querySelector('[data-proxmox-backup-row="coverage"]')).toBe(stable);
+      expect(container.querySelector('[data-backup-task-unknown]')).not.toBeInTheDocument();
+      expect(container.querySelector('[data-backup-task-chronology]')).not.toBeInTheDocument();
+      expect(stable).toHaveTextContent(width === 320 ? 'Latest task: Failed' : 'Failed');
+      expect(stable).toHaveTextContent(width === 320 ? 'Prot.' : 'Protected');
+      setCurrent({ ...row, taskChronologyUnknown: true, taskOutcomeConflict: true });
+      expect(container.querySelector('[data-backup-task-chronology]')).toHaveTextContent(
+        'same newest start time',
+      );
+      expect(stable).not.toHaveTextContent('Failed');
+    },
+  );
+
   it('renders single-line rows with identity columns matching the by-date table', () => {
     render(() => (
       <ProxmoxCoverageTable

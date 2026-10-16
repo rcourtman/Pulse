@@ -95,8 +95,10 @@ export interface WorkloadCoverageRow {
   /** Unknown chronology is not an absent backup, nor an older dated backup. */
   ageUnknown?: Record<'backup' | 'pbs' | 'archive' | 'snapshot', boolean>;
   latestTask?: CoverageTask;
-  /** An undated/future job prevents choosing a latest outcome for this workload. */
+  /** Unorderable dates or conflicting newest outcomes prevent a latest result. */
   taskChronologyUnknown?: boolean;
+  /** Equally recent jobs disagree; not an unavailable or future timestamp. */
+  taskOutcomeConflict?: boolean;
   pbsCount: number;
   archiveCount: number;
   snapshotCount: number;
@@ -779,6 +781,12 @@ export function buildProxmoxBackupRecoveryModel(
     });
   }
 
+  // Keep a candidate even during a tie so a strictly newer observation can
+  // supersede it. Undated/future jobs, unlike an older tie, cannot be ordered.
+  const latestTasks = new Map<
+    string,
+    { task: CoverageTask; startedMs: number; conflict: boolean }
+  >();
   for (const task of input.tasks) {
     const workload = resolveTaskWorkload(candidateIndex, pveWorkloadsByVmid, task);
     if (!workload) continue;
@@ -798,16 +806,26 @@ export function buildProxmoxBackupRecoveryModel(
     // Keep this uncertainty local to the matched workload, in either order.
     if (startedMs === undefined || getRecoveryAgeBand(startedMs, input.nowMs) === 'unknown') {
       row.taskChronologyUnknown = true;
-      row.latestTask = undefined;
-    } else if (
-      !row.taskChronologyUnknown &&
-      startedMs > (row.latestTask?.startedMs ?? Number.NEGATIVE_INFINITY)
-    ) {
-      row.latestTask = candidateTask;
+      continue;
+    }
+    const selected = latestTasks.get(row.key);
+    if (!selected || startedMs > selected.startedMs) {
+      latestTasks.set(row.key, { task: candidateTask, startedMs, conflict: false });
+    } else if (startedMs === selected.startedMs) {
+      if (normalizeKey(candidateTask.label) !== normalizeKey(selected.task.label)) {
+        selected.conflict = true;
+      }
+      // Agreeing outcomes need no invented uncertainty. Pick a stable
+      // representative, not a response-order-dependent task or end time.
+      if (candidateTask.id < selected.task.id) selected.task = candidateTask;
     }
   }
 
   for (const row of rows.values()) {
+    const selected = latestTasks.get(row.key);
+    row.taskOutcomeConflict = !row.taskChronologyUnknown && selected?.conflict === true;
+    row.taskChronologyUnknown = row.taskChronologyUnknown || row.taskOutcomeConflict;
+    row.latestTask = row.taskChronologyUnknown ? undefined : selected?.task;
     Object.assign(row, selectWorkloadRecoveryArtifacts(row.artifacts, input.nowMs));
   }
 

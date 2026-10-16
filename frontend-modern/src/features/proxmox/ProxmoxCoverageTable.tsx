@@ -52,6 +52,10 @@ import { useProxmoxCoverageWindowing } from './useProxmoxCoverageWindowing';
 const COVERAGE_EMPTY_LABEL = 'None';
 const COVERAGE_TASK_CHRONOLOGY_EXPLANATION =
   'Latest backup job unknown: one or more job start times are unavailable or in the future. Check the job history in Proxmox.';
+const coverageTaskExplanation = (row: WorkloadCoverageRow): string =>
+  row.taskOutcomeConflict
+    ? 'Latest backup job unknown: jobs with the same newest start time report different outcomes. Check the job history in Proxmox.'
+    : COVERAGE_TASK_CHRONOLOGY_EXPLANATION;
 const COVERAGE_NO_BACKUP_TITLE = 'No PBS snapshot or PVE backup file';
 // Matches the posture engine's own wording for a snapshot-only subject.
 const COVERAGE_SNAPSHOT_ONLY_TITLE =
@@ -468,7 +472,7 @@ export function ProxmoxCoverageTable(props: {
                               <span
                                 class="block truncate font-semibold text-amber-600 dark:text-amber-300"
                                 classList={{ 'text-center': layoutMode() === 'compact' }}
-                                title={COVERAGE_TASK_CHRONOLOGY_EXPLANATION}
+                                title={coverageTaskExplanation(row)}
                                 aria-label="Latest backup job unknown"
                                 data-backup-task-unknown
                               >
@@ -516,7 +520,7 @@ export function ProxmoxCoverageTable(props: {
                               class="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
                               data-backup-task-chronology
                             >
-                              {COVERAGE_TASK_CHRONOLOGY_EXPLANATION}
+                              {coverageTaskExplanation(row)}
                             </p>
                           </Show>
                           <Show when={(row.protectionPosture?.providerStates.length ?? 0) > 0}>

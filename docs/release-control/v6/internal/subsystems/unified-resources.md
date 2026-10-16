@@ -40,9 +40,12 @@ collection, resource, persistence or recovery execution paths.
 Coverage propagates unorderable job chronology through its existing canonical
 workload match, without changing identity resolution, provider protection or
 restore-point selection. One guest's undated job cannot suppress another's
-known latest result. Rebuilt rows clear the uncertainty after a corrected
-inventory, and their existing disclosure/focus identity stays stable. The
-recovery-model and Coverage tests cover isolation and replacement. No new API,
+known latest result. Conflicting normalized outcomes at the same newest start
+instant also stay Unknown only on their matched workload, with an accurate
+conflict explanation. Older ties cannot override a strictly newer result;
+agreement and duplicate observations do not fabricate uncertainty. Rebuilt
+rows clear the uncertainty after a corrected inventory, and their existing
+disclosure/focus identity stays stable. The recovery-model and Coverage tests cover isolation and replacement. No new API,
 resource, persistence or execution path is introduced.
 
 

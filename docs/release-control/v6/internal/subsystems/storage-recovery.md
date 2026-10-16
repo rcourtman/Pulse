@@ -45,8 +45,14 @@ A matched task with an unavailable, invalid or future start time prevents the
 existing Coverage summary from selecting a dated task as latest. This applies
 in either input order and only to the matched workload. Valid job chronology
 returns after ordinary inventory replacement; no tasks remains distinct from
-unknown chronology. Provider posture, restore-point evidence, collection and
-all guest/backup commands are unchanged. Recovery-model and consuming Coverage
+unknown chronology. Jobs at the newest valid start instant with conflicting
+normalized outcomes also leave that summary Unknown, in any response order;
+the disclosure explains the conflict rather than claiming a bad date. An older
+tie cannot displace a strictly newer result. Agreeing outcome aliases and duplicate
+observations remain usable with a stable ID-based representative, not a claim
+that its end time makes it newer. Invalid/future dates retain their distinct
+explanation and cannot be cleared by a dated task. Provider posture, restore-point
+evidence, collection and all guest/backup commands are unchanged. Recovery-model and consuming Coverage
 tests cover that distinction; browser fixtures establish presentation, not
 native backup completion, thaw, filesystem writes or installed recovery.
 

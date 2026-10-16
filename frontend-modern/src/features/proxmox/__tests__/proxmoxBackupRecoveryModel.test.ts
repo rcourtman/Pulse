@@ -663,3 +663,140 @@ describe('backup-date-evidence model', () => {
     expect(getRecoveryAgeBand(nowMs - 30 * 86400000 - 1, nowMs)).toBe('stale');
   });
 });
+
+describe('latest backup job outcome ties', () => {
+  const input = (tasks: BackupTask[]) => ({
+    workloads: [workload({})],
+    pbsBackups: [pbsBackup()],
+    archives: [],
+    snapshots: [],
+    tasks,
+    nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    protectionPostures: new Map([['vm-112', protectionPosture('vm-112', 'protected')]]),
+  });
+  const permutations = <T>(items: T[]): T[][] =>
+    items.length === 0
+      ? [[]]
+      : items.flatMap((item, i) =>
+          permutations(items.filter((_, j) => i !== j)).map((rest) => [item, ...rest]),
+        );
+
+  it.each(['failed', 'running', ''])(
+    'does not choose OK over a tied %j outcome in either response order',
+    (status) => {
+      for (const tasks of permutations([
+        task({ id: 'same-start-ok' }),
+        task({ id: 'same-start-other', status }),
+      ])) {
+        const originalTasks = structuredClone(tasks);
+        const model = buildProxmoxBackupRecoveryModel(input(tasks));
+        const row = model.coverageRows[0];
+        expect(row.latestTask).toBeUndefined();
+        expect(row.taskChronologyUnknown).toBe(true);
+        expect(row.taskOutcomeConflict).toBe(true);
+        expect(row.latestBackup?.nativeId).toBe(pbsBackup().id);
+        expect(row.posture).toBe('protected');
+        expect(model.coverageSummary.recoverableArtifacts).toBe(1);
+        expect(coverageRowMatchesSearch(row, 'latest backup job unknown')).toBe(true);
+        expect(tasks).toEqual(originalTasks);
+      }
+    },
+  );
+
+  it('does not hide conflicting observations of the same task ID', () => {
+    const row = buildProxmoxBackupRecoveryModel(
+      input([task({ id: 'repeated-id' }), task({ id: 'repeated-id', status: 'running' })]),
+    ).coverageRows[0];
+    expect(row.latestTask).toBeUndefined();
+    expect(row.taskOutcomeConflict).toBe(true);
+  });
+
+  it('keeps agreeing failures visible without confusing aliases with a conflict', () => {
+    for (const tasks of permutations([
+      task({ id: 'failed', status: 'failed' }),
+      task({ id: 'error', status: 'error' }),
+    ])) {
+      const row = buildProxmoxBackupRecoveryModel(input(tasks)).coverageRows[0];
+      expect(row.latestTask).toMatchObject({ id: 'error', label: 'Failed' });
+      expect(row.taskChronologyUnknown).toBe(false);
+    }
+  });
+
+  it('compares actual instants, not timestamp spellings or task end order', () => {
+    const row = buildProxmoxBackupRecoveryModel(
+      input([
+        task({ id: 'ok', endTime: '2026-05-25T03:00:00Z' }),
+        task({
+          id: 'failed',
+          status: 'error',
+          startTime: '2026-05-25T04:00:00+02:00',
+          endTime: '2026-05-25T02:01:00Z',
+        }),
+      ]),
+    ).coverageRows[0];
+    expect(row.latestTask).toBeUndefined();
+    expect(row.taskOutcomeConflict).toBe(true);
+  });
+
+  it('lets a strictly newer unambiguous result supersede an older conflict in every order', () => {
+    const jobs = [
+      task({ id: 'old-ok' }),
+      task({ id: 'old-failed', status: 'failed' }),
+      task({ id: 'new-running', status: 'running', startTime: '2026-05-25T03:00:00Z' }),
+    ];
+    for (const tasks of permutations(jobs)) {
+      const row = buildProxmoxBackupRecoveryModel(input(tasks)).coverageRows[0];
+      expect(row.latestTask).toMatchObject({ id: 'new-running', label: 'Running' });
+      expect(row.taskChronologyUnknown).toBe(false);
+      expect(row.taskOutcomeConflict).not.toBe(true);
+    }
+  });
+
+  it('keeps matching normalized outcomes and duplicate observations usable and deterministic', () => {
+    const jobs = [
+      task({ id: 'z-ok' }),
+      task({ id: 'a-completed', status: 'completed' }),
+      task({ id: 'a-completed', status: 'completed' }),
+    ];
+    for (const tasks of permutations(jobs)) {
+      const row = buildProxmoxBackupRecoveryModel(input(tasks)).coverageRows[0];
+      expect(row.latestTask).toMatchObject({ id: 'a-completed', label: 'OK' });
+      expect(row.taskChronologyUnknown).toBe(false);
+      expect(row.taskOutcomeConflict).not.toBe(true);
+    }
+  });
+
+  it('keeps conflicts local to the matched workload and clears them on a complete replacement', () => {
+    const tasks = [
+      task({ id: 'ok' }),
+      task({ id: 'failed', status: 'failed' }),
+      task({ id: 'other-vm', vmid: 113 }),
+    ];
+    const source = {
+      ...input(tasks),
+      workloads: [
+        workload({}),
+        workload({ id: 'vm-113', proxmox: { vmid: 113, node: 'minipc', instance: 'homelab' } }),
+      ],
+    };
+    const rows = buildProxmoxBackupRecoveryModel(source).coverageRows;
+    expect(rows.find((row) => row.workload.vmid === '112')?.taskOutcomeConflict).toBe(true);
+    expect(rows.find((row) => row.workload.vmid === '113')?.latestTask?.id).toBe('other-vm');
+    const updated = buildProxmoxBackupRecoveryModel({ ...source, tasks: [tasks[1]] }).coverageRows;
+    expect(updated.find((row) => row.workload.vmid === '112')?.latestTask?.label).toBe('Failed');
+    expect(updated.find((row) => row.workload.vmid === '112')?.taskChronologyUnknown).toBe(false);
+  });
+
+  it('retains the unavailable-time explanation when chronology is unorderable as well as tied', () => {
+    const row = buildProxmoxBackupRecoveryModel(
+      input([
+        task({ id: 'ok' }),
+        task({ id: 'failed', status: 'failed' }),
+        task({ id: 'undated', startTime: '' }),
+      ]),
+    ).coverageRows[0];
+    expect(row.latestTask).toBeUndefined();
+    expect(row.taskChronologyUnknown).toBe(true);
+    expect(row.taskOutcomeConflict).not.toBe(true);
+  });
+});
