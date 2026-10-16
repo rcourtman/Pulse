@@ -64,17 +64,31 @@ report later key revocation or rotation.
 ### Proxmox VE (LXC installer)
 If you run Proxmox VE, the easiest and most “Pulse-native” deployment is the official installer which creates and configures a lightweight LXC container.
 
-Replace `vX.Y.Z` with the exact release tag you want, then run this on your Proxmox host:
+Replace `vX.Y.Z` with the exact release tag you want, then run this in **Bash**
+on your Proxmox host. Both signed-installer recipes on this page ignore local
+curl configuration, allow only HTTPS (including redirects), and limit each
+download to 60 seconds, with a 10-second connection deadline. They require
+HTTP **200** for both files and a valid signature before running the installer.
+Do not remove those checks, add `--insecure` or pipe a download into a shell.
 
 ```bash
 (
-set -e
+set -eu
+umask 077
 export PULSE_VERSION=vX.Y.Z
 pulse_installer_dir="$(mktemp -d)"
 trap 'rm -rf "$pulse_installer_dir"' EXIT
 cd "$pulse_installer_dir"
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh")
+[ "$status" = 200 ]
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh.sshsig --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig")
+[ "$status" = 200 ]
 ssh-keygen -Y verify \
   -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
   -I pulse-installer \
@@ -83,6 +97,15 @@ ssh-keygen -Y verify \
 bash install.sh --version "${PULSE_VERSION}"
 )
 ```
+
+A failed or timed-out download, unexpected HTTP status or rejected signature
+stops before installation; the private temporary directory is removed on normal
+shell exit.
+Keep `--disable` first so local curl settings cannot enable tracing, retries or
+a TLS bypass. Download deadlines do not limit the installer once it starts.
+If an installer was already started and its result is uncertain, use the
+[update recovery checks](AUTO_UPDATE.md#update-failed), not another installation
+attempt. A verified script is not proof of a completed installation.
 
 The signed server installer uses the `vX.Y.Z` Pulse release, which contains the
 Linux server archive; it does not ask for a GitHub personal access token. A
@@ -170,17 +193,29 @@ helm upgrade --install pulse pulse/pulse \
 See [KUBERNETES.md](KUBERNETES.md) for ingress and persistence configuration.
 
 ### 2. Bare Metal / Systemd
-For Linux servers (VM or bare metal), use the official installer:
+For Linux servers (VM or bare metal), use the official installer in **Bash**.
+The same HTTPS, deadline, HTTP-status and signature checks from the
+[LXC recipe](#proxmox-ve-lxc-installer) apply; `sudo` runs only the verified
+script, not the downloads:
 
 ```bash
 (
-set -e
+set -eu
+umask 077
 export PULSE_VERSION=vX.Y.Z
 pulse_installer_dir="$(mktemp -d)"
 trap 'rm -rf "$pulse_installer_dir"' EXIT
 cd "$pulse_installer_dir"
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh")
+[ "$status" = 200 ]
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh.sshsig --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig")
+[ "$status" = 200 ]
 ssh-keygen -Y verify \
   -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
   -I pulse-installer \
