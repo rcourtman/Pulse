@@ -806,11 +806,11 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	cluster, err := client.GetClusterStatus(ctx, true)
-	recordReadError("pmg_cluster_status", err)
-	if err != nil {
+	cluster, clusterErr := client.GetClusterStatus(ctx, true)
+	recordReadError("pmg_cluster_status", clusterErr)
+	if clusterErr != nil {
 		if debugEnabled {
-			log.Debug().Err(err).Str("instance", instanceName).Msg("failed to retrieve PMG cluster status")
+			log.Debug().Err(clusterErr).Str("instance", instanceName).Msg("failed to retrieve PMG cluster status")
 		}
 	}
 
@@ -860,7 +860,11 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		pmgInst.Nodes = nodes
 	}
 
-	if len(backupNodes) == 0 {
+	// Fall back to the connection name only when PMG answered with no cluster
+	// entries. After a failed cluster read the name is a display label, not a
+	// node: requesting backups with it fails with a misleading hostname-lookup
+	// error on PMG (#2960) and cannot return backups.
+	if len(backupNodes) == 0 && clusterErr == nil {
 		trimmed := strings.TrimSpace(instanceName)
 		if trimmed != "" {
 			backupNodes[trimmed] = struct{}{}

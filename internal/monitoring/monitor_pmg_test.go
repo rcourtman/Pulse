@@ -536,3 +536,101 @@ func TestPMGCollectionCancelledAndUnknown(t *testing.T) {
 		t.Fatalf("cancelled/unknown requests=%v", f.calls)
 	}
 }
+
+// pollPMGIssue2960 polls one PMG instance named like the reporter's
+// connection ("PMG-01") against a server whose cluster status is served by
+// clusterStatus, and records every backup path requested.
+func pollPMGIssue2960(t *testing.T, clusterStatus func(w http.ResponseWriter)) (*Monitor, []string) {
+	t.Helper()
+	var backupPaths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api2/json/version":
+			fmt.Fprint(w, `{"data":{"version":"9.1.4","release":"1"}}`)
+		case r.URL.Path == "/api2/json/config/cluster/status":
+			clusterStatus(w)
+		case strings.HasSuffix(r.URL.Path, "/backup"):
+			backupPaths = append(backupPaths, r.URL.Path)
+			if r.URL.Path != "/api2/json/nodes/pmg-01/backup" {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, `{"message":"hostname lookup failed","data":null}`)
+				return
+			}
+			timestamp := time.Now().Add(-24 * time.Hour).Unix()
+			fmt.Fprintf(w, `{"data":[{"filename":"pmg-backup.tgz","size":2048,"timestamp":%d}]}`, timestamp)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := pmg.NewClient(pmg.ClientConfig{
+		Host:       server.URL,
+		TokenName:  "pulse@pmg!monitor",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected client error: %v", err)
+	}
+	mon, err := New(&config.Config{PMGInstances: []config.PMGInstance{{
+		Name:       "PMG-01",
+		Host:       server.URL,
+		TokenName:  "pulse@pmg!monitor",
+		TokenValue: "secret",
+		// Explicit scope with every collector off: only cluster status and
+		// backups are read.
+		MonitoringConfigured: true,
+	}}})
+	if err != nil {
+		t.Fatalf("failed to create monitor: %v", err)
+	}
+	mon.pollPMGInstance(context.Background(), "PMG-01", client)
+	return mon, backupPaths
+}
+
+// Issue #2960: PMG 9 sends the cluster id as a string. The cluster read must
+// still succeed, so backups come from the node PMG names, not the connection.
+func TestPollPMGInstanceAcceptsStringClusterID(t *testing.T) {
+	mon, backupPaths := pollPMGIssue2960(t, func(w http.ResponseWriter) {
+		fmt.Fprint(w, `{"data":[{"cid":"1","name":"pmg-01","type":"master","ip":"10.0.0.5"}]}`)
+	})
+
+	snapshot := mon.state.GetSnapshot()
+	if len(snapshot.PMGInstances) != 1 || len(snapshot.PMGInstances[0].Nodes) != 1 ||
+		snapshot.PMGInstances[0].Nodes[0].Name != "pmg-01" {
+		t.Fatalf("expected the PMG node from cluster status, got %+v", snapshot.PMGInstances)
+	}
+	if !reflect.DeepEqual(backupPaths, []string{"/api2/json/nodes/pmg-01/backup"}) {
+		t.Fatalf("expected backups from node pmg-01 only, got %v", backupPaths)
+	}
+	if len(snapshot.PMGBackups) != 1 || snapshot.PMGBackups[0].Node != "pmg-01" {
+		t.Fatalf("expected one backup on pmg-01, got %+v", snapshot.PMGBackups)
+	}
+}
+
+// Issue #2960: after a failed cluster read the connection's display name is
+// not a node, so Pulse must not request backups with it.
+func TestPollPMGInstanceDoesNotGuessNodeAfterFailedClusterRead(t *testing.T) {
+	_, backupPaths := pollPMGIssue2960(t, func(w http.ResponseWriter) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, `{"message":"cluster status unavailable","data":null}`)
+	})
+
+	if len(backupPaths) != 0 {
+		t.Fatalf("expected no backup request after a failed cluster read, got %v", backupPaths)
+	}
+}
+
+// A PMG that answers with no cluster entries keeps the connection-name
+// fallback some standalone installs rely on.
+func TestPollPMGInstanceKeepsNameFallbackForEmptyCluster(t *testing.T) {
+	_, backupPaths := pollPMGIssue2960(t, func(w http.ResponseWriter) {
+		fmt.Fprint(w, `{"data":[]}`)
+	})
+
+	if !reflect.DeepEqual(backupPaths, []string{"/api2/json/nodes/PMG-01/backup"}) {
+		t.Fatalf("expected the connection-name fallback for an empty cluster, got %v", backupPaths)
+	}
+}

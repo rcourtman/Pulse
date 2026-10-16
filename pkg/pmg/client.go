@@ -127,8 +127,9 @@ type SpamScore struct {
 	Ratio flexibleFloat `json:"ratio"`
 }
 
+// ClusterStatusEntry omits PMG's cluster id (cid): Pulse never reads it, and
+// PMG 9 sends it as a string, which failed the whole cluster read (#2960).
 type ClusterStatusEntry struct {
-	CID         int    `json:"cid"`
 	Name        string `json:"name"`
 	Type        string `json:"type"`
 	IP          string `json:"ip"`

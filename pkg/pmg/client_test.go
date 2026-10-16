@@ -677,6 +677,39 @@ func TestClientClusterStatusListSingle(t *testing.T) {
 	}
 }
 
+// PMG 9 returns the cluster id as a string (#2960). Pulse does not use it, so
+// no cid format may fail the cluster read.
+func TestClientClusterStatusIgnoresClusterIDFormat(t *testing.T) {
+	t.Parallel()
+
+	for _, cid := range []string{`1`, `"1"`, `"node-a"`, `null`} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"data":[{"cid":%s,"name":"pmg-01","type":"master","ip":"10.0.0.5"}]}`, cid)
+		}))
+
+		client, err := NewClient(ClientConfig{
+			Host:       server.URL,
+			TokenName:  "apitoken",
+			TokenValue: "secret",
+			VerifySSL:  false,
+		})
+		if err != nil {
+			server.Close()
+			t.Fatalf("unexpected error creating client: %v", err)
+		}
+
+		entries, err := client.GetClusterStatus(context.Background(), true)
+		server.Close()
+		if err != nil {
+			t.Fatalf("cid %s: GetClusterStatus failed: %v", cid, err)
+		}
+		if len(entries) != 1 || entries[0].Name != "pmg-01" || entries[0].Type != "master" {
+			t.Fatalf("cid %s: unexpected entries %+v", cid, entries)
+		}
+	}
+}
+
 func TestClientListBackupsEscapesNode(t *testing.T) {
 	t.Parallel()
 
