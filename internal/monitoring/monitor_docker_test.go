@@ -316,8 +316,10 @@ func newTestMonitor(t *testing.T) *Monitor {
 	t.Helper()
 
 	m := &Monitor{
-		state:               models.NewState(),
-		alertManager:        alerts.NewManager(),
+		state: models.NewState(),
+		// Each fixture owns its persisted alerts, including the final Stop flush.
+		// Do not restore or overwrite another fixture's suite-global history.
+		alertManager:        alerts.NewManagerWithDataDir(t.TempDir()),
 		removedDockerHosts:  make(map[string]time.Time),
 		rateTracker:         NewRateTracker(),
 		metricsHistory:      NewMetricsHistory(1000, 24*time.Hour),
