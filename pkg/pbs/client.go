@@ -1191,19 +1191,14 @@ func (c *Client) ListRunningDataTasks(ctx context.Context) ([]RunningDataTask, e
 			if err != nil {
 				return nil, err
 			}
-			var result struct {
-				Data []map[string]interface{} `json:"data"`
-			}
-			decodeErr := json.NewDecoder(resp.Body).Decode(&result)
-			closeErr := resp.Body.Close()
-			if decodeErr != nil {
-				return nil, fmt.Errorf("failed to decode running PBS %s tasks: %w", requestedType, decodeErr)
-			}
-			if closeErr != nil {
-				return nil, fmt.Errorf("failed to close running PBS %s task response: %w", requestedType, closeErr)
+			rows, err := readPBSJobList(resp, pbsTaskFields, func(row map[string]interface{}) bool {
+				return stringJobField(row, "worker-type", "worker_type", "type") != ""
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to read running PBS %s tasks: %w", requestedType, err)
 			}
 
-			for _, raw := range result.Data {
+			for _, raw := range rows {
 				workerType := strings.ToLower(stringJobField(raw, "worker-type", "worker_type", "type"))
 				if workerType != requestedType {
 					continue
@@ -1214,7 +1209,7 @@ func (c *Client) ListRunningDataTasks(ctx context.Context) ([]RunningDataTask, e
 					StartTime:  int64JobField(raw, "starttime", "start-time", "start_time"),
 				})
 			}
-			if len(result.Data) < limit {
+			if len(rows) < limit {
 				break
 			}
 			if page == maxPages-1 {
@@ -1422,15 +1417,10 @@ func (c *Client) listJobConfigMaps(ctx context.Context, path string) ([]map[stri
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []map[string]interface{} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	return result.Data, nil
+	return readPBSJobList(resp, pbsJobConfigFields, func(row map[string]interface{}) bool {
+		fact := jobEvidenceFromConfigMap("", row)
+		return firstNonEmptyString(fact.ID, fact.Store, fact.LastRunUPID) != ""
+	})
 }
 
 func (c *Client) getJobConfigMap(ctx context.Context, path string) (map[string]interface{}, error) {
@@ -1438,18 +1428,13 @@ func (c *Client) getJobConfigMap(ctx context.Context, path string) (map[string]i
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data map[string]interface{} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	data, err := readPBSJobData(resp)
+	if err != nil {
 		return nil, err
 	}
-	if result.Data == nil {
-		result.Data = map[string]interface{}{}
-	}
-	return result.Data, nil
+	// An explicit empty GC object is valid config-only evidence. Missing/null
+	// data is not such an observation and was rejected before this point.
+	return decodePBSJobObject(data, pbsJobConfigFields)
 }
 
 type taskHistoryQuery struct {
@@ -1640,17 +1625,15 @@ func (c *Client) listTaskHistoryPage(ctx context.Context, query taskHistoryQuery
 		}
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []map[string]interface{} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	rows, err := readPBSJobList(resp, pbsTaskFields, func(row map[string]interface{}) bool {
+		return firstNonEmptyString(stringJobField(row, "upid"), stringJobField(row, "worker-type", "worker_type", "type"), stringJobField(row, "worker-id", "worker_id", "id")) != ""
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	tasks := make([]JobHealthEvidence, 0, len(result.Data))
-	for _, raw := range result.Data {
+	tasks := make([]JobHealthEvidence, 0, len(rows))
+	for _, raw := range rows {
 		task := JobHealthEvidence{
 			UPID:           stringJobField(raw, "upid"),
 			WorkerType:     stringJobField(raw, "worker-type", "worker_type", "type"),
