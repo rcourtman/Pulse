@@ -26,6 +26,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	pkgsecurityutil "github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -3800,8 +3801,25 @@ func (n *NotificationManager) validateWebhookURL(webhookURL string, diagnosticUR
 	return nil
 }
 
-// isPrivateIP checks if an IP address is in a private range
+// isPrivateIP reports whether ip, or any IPv4 destination an IPv6 transition
+// address (NAT64, 6to4, Teredo and friends) embeds in it, is in a private or
+// special-use range. Without the embedded check 64:ff9b::a9fe:a9fe passes as a
+// public address while a NAT64 gateway delivers it to 169.254.169.254.
 func isPrivateIP(ip net.IP) bool {
+	if isPrivateIPLiteral(ip) {
+		return true
+	}
+	for _, embedded := range pkgsecurityutil.EmbeddedIPv4Candidates(ip) {
+		if isPrivateIPLiteral(embedded) {
+			return true
+		}
+	}
+	return false
+}
+
+// isPrivateIPLiteral checks the address exactly as given against the private
+// and special-use ranges.
+func isPrivateIPLiteral(ip net.IP) bool {
 	// Private and special-use ranges that should not be reachable via webhooks.
 	privateRanges := []string{
 		"10.0.0.0/8",      // RFC1918
