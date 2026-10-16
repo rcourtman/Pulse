@@ -1479,11 +1479,20 @@ Readable chart metadata alone is not a successful convergence receipt. The OCI
 manifest digest hashes a different object and must not be compared directly with
 the archive. A byte mismatch fails immediately; unavailable downloads retain the
 bounded retry, with previous downloaded files removed before each attempt.
+Pages publication is asynchronous: RC.2's index commit reached `gh-pages` at
+16:03:21 UTC on 16 October 2026, while its successful Pages build completed at
+16:04:21 UTC. The former 30 two-second polls exhausted verification before the
+new index could propagate. Verification now allows 60 five-second polls (five
+minutes of retry delays, plus bounded job/transport time). Index absence still
+fails when that window expires, and a different archive still fails immediately.
 Activation bindings, publication authority and containment remain prerequisites.
 The executed-shell fixtures in `scripts/release_control/helm_pages_retry_test.py`
-cover matching, mismatched, missing and unavailable public packages without
-network or publication writes. They are not installed Helm qualification or proof
-that any historical published chart was wrong or has been repaired.
+cover matching, mismatched, missing and unavailable public packages, a delayed
+index after 75 simulated seconds, delayed wrong bytes and permanent index absence,
+without network or publication writes. The release-policy test
+`test_helm_pages_waits_for_pages_build_without_weakening_receipt` exercises the
+delayed success and mismatch paths too. They are not installed Helm qualification,
+live convergence recovery or proof that any historical published chart was wrong.
 
 
 The shell-owned multi-tenant integration suite uses a dedicated desktop-only

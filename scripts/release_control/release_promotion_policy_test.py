@@ -857,6 +857,16 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("--json isDraft,publishedAt,tagName", floating_tags)
         self.assertIn("Floating-tag promotion refuses inactive release", floating_tags)
 
+    def test_helm_pages_waits_for_pages_build_without_weakening_receipt(self) -> None:
+        runner = helm_pages_retry_test.PublicReceiptTests()
+        result = runner.receipt('match', ready_after=75)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('[OK]', result.stdout)
+        result = runner.receipt('wrong', ready_after=75)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Public Helm chart bytes differ', result.stdout)
+        self.assertNotIn('[OK]', result.stdout)
+
     def test_helm_pages_retry_requires_explicitly_published_chart(self) -> None:
         runner = helm_pages_retry_test.HelmPagesRetryTests()
         for draft, digest in ((True, helm_pages_retry_test.DIGEST), (True, ""),
