@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "5fa017a52809126713b52a9657113b6edacd753e",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useProtectionPostures.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useProtectionPostures.ts": "115764ec8678f1c115bf62d01ab12f1df15b0dcf7ed4a70bc7a5818e340bdca6"
+  },
+  "routes": [
+    "/proxmox/backups/coverage through the production API client, useProtectionPostures, query cache, model, summary and expanded Coverage table; synthetic loopback HTTP"
+  ],
+  "states": [
+    "Valid Protected result -> HTTP 200 contradictory Attention/Protected rows -> unavailable notice, 0 protected / 1 unknown, no rule and unchanged expanded restore evidence.",
+    "Unknown remains through a pending retry; corrected Attention response restores the rule and full explanation without rereading either backup inventory.",
+    "Unreadable policy and provider evidence fail to Unknown without raw body text or a page error; unreadable initial evaluation is also unavailable."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter expands the real row and invokes posture-only Retry; 320px WebKit touch does the same. Disabled pending Retry does not issue another request.",
+    "Four retained unknown/recovered desktop/phone captures were opened with native view_image. No pixels were inferred from a viewed flag or hashes."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "browsers": [
+    "Chromium 141.0.7390.37 / Playwright 1.56.1",
+    "WebKit 26.0 / Playwright 1.56.1"
+  ],
+  "verified_at": "2026-10-16T16:26:33Z",
+  "limits": [
+    "Fresh complete desktop and phone protocols both finish in this committed-source run with browser client exit 0 and observed browser/server cleanup. Earlier selector failures and the invalidly named/timestamped receipt remain retained and unchanged.",
+    "Synthetic HTTP fixtures and a production reader/table fixture compilation only, not the containing application production/embed/budget build. No native provider, thaw/writes/restore, installed recovery or protected availability is claimed."
+  ]
+}
