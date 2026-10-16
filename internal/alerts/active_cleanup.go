@@ -253,6 +253,14 @@ func shouldPreserveAlertOutsideNodeCleanup(alertID string, alert *Alert) bool {
 	if IsSystemAlert(alert) {
 		return true
 	}
+	// Backup conditions belong to the backup inventory, not the current PVE
+	// node list. Retained PBS/PVE backups can outlive a renamed/deleted node
+	// or be unattributed. Dropping them here hides an already-notified alert
+	// and lets the next backup evaluation dispatch it again as newly active.
+	// CheckBackups owns recovery, disappearance and orphan-policy changes.
+	if alert.Type == "backup-age" {
+		return true
+	}
 	if strings.HasPrefix(alertID, "docker-") || strings.HasPrefix(alert.ResourceID, "docker:") {
 		return true
 	}
