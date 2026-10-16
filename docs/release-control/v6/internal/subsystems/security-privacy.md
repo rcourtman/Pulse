@@ -791,6 +791,13 @@ off, tells the operator to set `PULSE_TELEMETRY=false` and restart
 because removing the variable would restore the default (on), and keeps the
 generic failure only when it cannot tell. It never claims statistics are off without reading that they are.
 
+The Alerts overview control for external notification delivery is labelled
+**Send notifications** in every state, so an off switch is never described
+with a word that reads as "on". Turning it off still pauses only outbound
+delivery (email, webhooks, Apprise); detection and the in-product alert view
+continue, and the paused banner and toast say so. No payload, destination or
+delivery behaviour changes.
+
 Docker and Podman container CPU normalization may expose numeric raw per-core
 CPU percent, normalized capacity percent, and reporting host CPU count in
 resource or alert metadata. Those fields are operational usage telemetry only;

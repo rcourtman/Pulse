@@ -172,7 +172,7 @@ describe('Alerts read-only presentation', () => {
       expect(screen.getByTestId('overview-tab')).toBeInTheDocument();
     });
 
-    expect(screen.queryByLabelText('Toggle external notifications')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Send notifications')).not.toBeInTheDocument();
     expect(screen.getAllByText('Overview').length).toBeGreaterThan(0);
     expect(screen.getAllByText('History').length).toBeGreaterThan(0);
     expect(screen.queryByText('Thresholds')).not.toBeInTheDocument();
@@ -206,7 +206,7 @@ describe('Alerts read-only presentation', () => {
     await waitFor(() => {
       expect(screen.getByTestId('alerts-config-surface')).toBeInTheDocument();
     });
-    expect(screen.queryByLabelText('Toggle external notifications')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Send notifications')).not.toBeInTheDocument();
     expect(screen.getAllByText('Thresholds').length).toBeGreaterThan(0);
     expect(navigateSpy).not.toHaveBeenCalledWith('/alerts/overview', { replace: true });
   });
@@ -219,10 +219,23 @@ describe('Alerts read-only presentation', () => {
 
     expect(await screen.findByTestId('overview-tab')).toBeInTheDocument();
     expect(screen.getByTestId('alerts-config-surface')).toBeInTheDocument();
-    expect(screen.getByLabelText('Toggle external notifications')).not.toBeChecked();
-    expect(screen.getByText('Notifications paused')).toBeInTheDocument();
+    // The switch keeps one name; its position says delivery is off. A label
+    // reading "Notifications paused" beside an off switch read as "not paused".
+    expect(screen.getByRole('checkbox', { name: 'Send notifications' })).not.toBeChecked();
+    expect(screen.queryByText('Notifications paused')).not.toBeInTheDocument();
     expect(screen.getAllByText('Thresholds').length).toBeGreaterThan(0);
     expect(screen.queryByText('Alerts are paused')).not.toBeInTheDocument();
     expect(overviewTabSpy.mock.calls.at(-1)?.[0].alertsDisabled()).toBe(false);
+  });
+
+  it('names the delivery switch the same way whether it is on or off', async () => {
+    presentationPolicyIsReadOnlyMock.mockReturnValue(false);
+    activationStateMock.mockReturnValue('active');
+
+    render(() => <Alerts />);
+
+    expect(await screen.findByTestId('overview-tab')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Send notifications' })).toBeChecked();
+    expect(screen.queryByText('Notifications enabled')).not.toBeInTheDocument();
   });
 });

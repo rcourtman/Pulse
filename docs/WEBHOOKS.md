@@ -159,8 +159,8 @@ batch retries to diagnose rate limiting. A receiver can see a duplicate if an
 earlier request was accepted but Pulse did not receive its response; preserve
 [receiver deduplication](#receiver-correlation-and-deduplication).
 
-Global **Notifications paused** cancels pending alert deliveries and clears
-buffered groups; turning delivery back on does not replay those cancelled
+Turning off the global **Send notifications** switch cancels pending alert
+deliveries and clears buffered groups; turning delivery back on does not replay those cancelled
 items. This differs from scheduled quiet-hours holds. Disabling or removing a
 destination can block queued work, but **does not recall a request already in
 flight**, revoke a provider credential or delete the receiver's copy. Follow

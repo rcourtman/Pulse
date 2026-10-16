@@ -452,22 +452,22 @@ describe('i18n foundation', () => {
   });
 
   it('keeps external notification delivery distinct from alert detection', () => {
-    expect(I18N_MESSAGES.en['alerts.activation.label.enabled']).toBe('Notifications enabled');
-    expect(I18N_MESSAGES.en['alerts.activation.label.disabled']).toBe('Notifications paused');
+    // The delivery switch has one name in every state, so an off switch is
+    // never labelled with a word that reads as its opposite.
+    expect(I18N_MESSAGES.en['alerts.activation.switchLabel']).toBe('Send notifications');
+    for (const locale of ['en', 'de', 'es'] as const) {
+      expect(I18N_MESSAGES[locale]['alerts.activation.switchLabel']).not.toMatch(
+        /paus|enabled|aktiviert|activad/i,
+      );
+    }
     expect(I18N_MESSAGES.en['alerts.activation.toast.deactivated']).toContain(
       'keep detecting and showing active alerts',
     );
 
-    expect(I18N_MESSAGES.de['alerts.activation.label.enabled']).toBe(
-      'Benachrichtigungen aktiviert',
-    );
-    expect(I18N_MESSAGES.de['alerts.activation.label.disabled']).toBe(
-      'Benachrichtigungen pausiert',
-    );
+    expect(I18N_MESSAGES.de['alerts.activation.switchLabel']).toBe('Benachrichtigungen senden');
     expect(I18N_MESSAGES.de['alerts.activation.toast.deactivated']).toContain('weiterhin');
 
-    expect(I18N_MESSAGES.es['alerts.activation.label.enabled']).toBe('Notificaciones activadas');
-    expect(I18N_MESSAGES.es['alerts.activation.label.disabled']).toBe('Notificaciones pausadas');
+    expect(I18N_MESSAGES.es['alerts.activation.switchLabel']).toBe('Enviar notificaciones');
     expect(I18N_MESSAGES.es['alerts.activation.toast.deactivated']).toContain('seguira');
   });
 

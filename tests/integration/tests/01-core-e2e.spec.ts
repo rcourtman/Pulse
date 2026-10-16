@@ -39,7 +39,7 @@ test.describe.serial('Core E2E flows', () => {
     await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
 
     const alertsToggleOnOverview = page.getByRole('checkbox', {
-      name: 'Toggle external notifications',
+      name: 'Send notifications',
     });
     await expect(alertsToggleOnOverview).toBeVisible();
     const alertsInitiallyEnabled = await alertsToggleOnOverview.isChecked();
@@ -199,7 +199,7 @@ test.describe.serial('Core E2E flows', () => {
       await page.goto('/alerts/overview');
       await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
       const toggle = page.getByRole('checkbox', {
-        name: 'Toggle external notifications',
+        name: 'Send notifications',
       });
       await expect(toggle).toBeVisible();
       await toggle.click({ force: true });
@@ -231,11 +231,11 @@ test.describe.serial('Core E2E flows', () => {
       await page.goto('/alerts/overview');
       await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
       const alertsToggleRestore = page.getByRole('checkbox', {
-        name: 'Toggle external notifications',
+        name: 'Send notifications',
       });
       await expect(alertsToggleRestore).toBeVisible();
       await alertsToggleRestore.click({ force: true });
-      await expect(page.getByText('Notifications paused', { exact: true })).toBeVisible();
+      await expect(alertsToggleRestore).not.toBeChecked({ timeout: 30_000 });
     }
   });
 
