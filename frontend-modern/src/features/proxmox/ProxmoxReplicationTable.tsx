@@ -30,7 +30,7 @@ import {
   PlatformResourceDetailToggleButton,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
-import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
+import type { ReplicationJob } from '@/types/api';
 import { buildPlatformSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
 import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 
@@ -264,6 +264,67 @@ export const compactReplicationNextSyncText = (text: string, tone: NextSyncTone)
   return text.replace(/^in /, '');
 };
 
+const replicationFormatError = () =>
+  new Error(
+    'The replication response format is invalid. Job availability is unknown; missing rows do not mean no jobs exist.',
+  );
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+// Check the fields the table consumes, without coercing enabled/failure state,
+// dropping malformed rows, guessing dates or rejecting new provider fields.
+const isReplicationJob = (value: unknown): value is ReplicationJob => {
+  if (!isRecord(value)) return false;
+  if (
+    typeof value.id !== 'string' ||
+    !value.id.trim() ||
+    typeof value.instance !== 'string' ||
+    typeof value.jobId !== 'string' ||
+    typeof value.enabled !== 'boolean'
+  ) {
+    return false;
+  }
+  const strings = [
+    'guest',
+    'guestName',
+    'sourceNode',
+    'targetNode',
+    'schedule',
+    'lastSyncStatus',
+    'lastSyncDurationHuman',
+    'error',
+    'comment',
+  ];
+  if (strings.some((key) => value[key] !== undefined && typeof value[key] !== 'string'))
+    return false;
+  for (const key of [
+    'guestId',
+    'failCount',
+    'lastSyncDurationSeconds',
+    'lastSyncUnix',
+    'nextSyncUnix',
+  ]) {
+    const field = value[key];
+    if (field !== undefined && (typeof field !== 'number' || !Number.isFinite(field) || field < 0))
+      return false;
+  }
+  if (
+    ['guestId', 'failCount'].some(
+      (key) => value[key] !== undefined && !Number.isSafeInteger(value[key]),
+    )
+  )
+    return false;
+  return ['lastSyncTime', 'nextSyncTime'].every((key) => {
+    const field = value[key];
+    return (
+      field === undefined ||
+      typeof field === 'string' ||
+      (typeof field === 'number' && Number.isFinite(field))
+    );
+  });
+};
+
 export async function fetchReplicationJobs(signal?: AbortSignal): Promise<ReplicationJob[]> {
   const response = await apiFetch('/api/replication/jobs?platform=proxmox-pve', { signal });
   if (!response.ok) {
@@ -274,8 +335,18 @@ export async function fetchReplicationJobs(signal?: AbortSignal): Promise<Replic
       `Failed to load replication jobs (${response.status})`,
     );
   }
-  const payload = (await response.json()) as ReplicationJobsResponse;
-  return Array.isArray(payload?.data) ? payload.data : [];
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    // A proxy/login response is not an empty inventory. Never render its body
+    // or the JSON parser's text, which can contain private response contents.
+    throw replicationFormatError();
+  }
+  if (!isRecord(payload) || !Array.isArray(payload.data) || !payload.data.every(isReplicationJob))
+    throw replicationFormatError();
+  return payload.data;
 }
 
 // The jobs resource lives in ProxmoxPageSurface (it also gates the
