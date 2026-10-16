@@ -710,13 +710,12 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 		if router == nil {
 			return nil
 		}
-		previous := router.ssoConfig
-		router.ssoConfig = toCoreSSOConfig(snapshot)
-		if err := router.saveSSOConfig(); err != nil {
-			router.ssoConfig = previous
-			return err
-		}
-		return nil
+		// Publish the replacement only once it is persisted.
+		_, err := router.commitSSOConfig(func(cfg *config.SSOConfig) error {
+			*cfg = *toCoreSSOConfig(snapshot)
+			return nil
+		})
+		return err
 	}
 	runtime.GetPublicURL = func() string {
 		if router == nil || router.config == nil {

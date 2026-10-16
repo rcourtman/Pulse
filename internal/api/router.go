@@ -138,6 +138,7 @@ type Router struct {
 	oidcService                     *OIDCService
 	oidcManager                     *OIDCServiceManager
 	samlManager                     *SAMLServiceManager
+	ssoMu                           sync.RWMutex // guards ssoConfig; a published config is never mutated (see commitSSOConfig)
 	ssoConfig                       *config.SSOConfig
 	ssoAuthLoadFailed               atomic.Bool
 	sessionStore                    *SessionStore

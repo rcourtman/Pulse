@@ -820,24 +820,23 @@ func extractSAMLProviderID(path, endpoint string) string {
 	return ""
 }
 
-// getSSOProvider retrieves an SSO provider by ID from the current configuration
+// getSSOProvider retrieves an SSO provider by ID from the current configuration.
+// The result belongs to a published snapshot and must be treated as read-only.
 func (r *Router) getSSOProvider(providerID string) *config.SSOProvider {
-	if r.ssoConfig == nil {
-		return nil
-	}
-	return r.ssoConfig.GetProvider(providerID)
+	return r.currentSSOConfig().GetProvider(providerID)
 }
 
 // InitializeSAMLProviders initializes all enabled SAML providers
 func (r *Router) InitializeSAMLProviders(ctx context.Context) error {
-	if r.ssoConfig == nil {
+	ssoCfg := r.currentSSOConfig()
+	if ssoCfg == nil {
 		return nil
 	}
 	if err := r.syncSAMLPublicURL(); err != nil {
 		return fmt.Errorf("sync saml public url: %w", err)
 	}
 
-	for _, provider := range r.ssoConfig.Providers {
+	for _, provider := range ssoCfg.Providers {
 		if provider.Type == config.SSOProviderTypeSAML && provider.Enabled && provider.SAML != nil {
 			if err := r.samlManager.InitializeProvider(ctx, provider.ID, provider.SAML); err != nil {
 				log.Error().
