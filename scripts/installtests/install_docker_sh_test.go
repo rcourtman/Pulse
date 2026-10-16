@@ -353,6 +353,15 @@ func TestInstallDockerScriptUsesConfiguredImageRepoDefault(t *testing.T) {
 	if !strings.Contains(envText, "PULSE_IMAGE=example/pulse-enterprise:"+version) {
 		t.Fatalf(".env missing configured image default:\n%s", envText)
 	}
+	for _, path := range []string{composePath, envPath} {
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+			t.Fatalf("generated configuration must be a private regular file: %s (%v, %v)", path, info, err)
+		}
+	}
+	if staging, err := filepath.Glob(filepath.Join(workDir, ".pulse-docker.*")); err != nil || len(staging) != 0 {
+		t.Fatalf("completed generation retained private staging inputs: %v, %v", staging, err)
+	}
 }
 
 func TestInstallDockerGeneratorPreservesExistingConfiguration(t *testing.T) {
