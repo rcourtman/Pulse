@@ -36,6 +36,40 @@ request encodings, ordinary node/version results and ticket/CSRF semantics remai
 No resource model, monitoring health verdict, saved trust or frontend field/state
 changes. Guest/backup guards and separately owned native recovery remain required.
 
+### PBS job and writer replies require complete observations
+
+PBS running-writer, bounded task-history and job-configuration reads consume the
+complete bounded HTTP 200 body and close it before admitting evidence. Missing
+or null data, non-object rows, identity-less list entries, duplicate/case-variant
+consumed keys, provider errors, trailing JSON/bytes, invalid UTF-8 and read/close
+failures are not successful empty observations. Complete empty lists and an
+explicit empty GC configuration object remain valid; supported field aliases,
+additive metadata, bounded pagination and HTTP permission/404 handling remain.
+Malformed body contents do not enter errors or served partial-read evidence.
+Unobserved optional PBS job end/next-run timestamps are omitted on the wire,
+not serialized as year-0001 dates. The existing drawer can therefore show the
+actual observation time. Known timestamps, age/state and JSON round-trip meaning
+are pinned by `TestPBSJobHealthFreshnessJSONDoesNotInventRunTimes`.
+
+An unreadable enabled job family emits existing unknown/partial-error evidence,
+not an empty ledger or an invented permission denial. An unreadable live-writer
+view leaves an incomplete snapshot's write visibility unknown: it cannot clear
+the conservative guest backup-running flag, advance completed-backup time, or
+claim that a writer stopped. Complete empty writer reads can still clear that
+flag, and ordinary readable recovery restores direct job/task evidence.
+
+`TestPBSJobReadersRequireCompleteResponse` and
+`TestPBSRejectedJobListingsRemainPartialEvidence` cover all four readers and
+all enabled families. `TestPBSJobResponseGapReachesResources` joins ordinary
+polling to served Resources through failure, missing/null/trailing replies,
+confirmed empty, explicit success and failure again, preserving independent
+verification and connectivity. `TestPBSWriterResponseGapCannotClearGuestActivity`
+joins snapshot/cache polling, write correlation, guest backup times and served
+Resources while a completed peer remains unchanged. Consuming proof uses those
+emitted observations in the existing PBS and workload drawers at desktop and
+narrow widths. These synthetic read-only checks establish neither native
+backup/restore, guest thaw/liveness nor installed recovery.
+
 ### PBS job health requires explicit successful completion
 
 PBS job-health evidence grants `healthy` only for a trimmed, case-insensitive
