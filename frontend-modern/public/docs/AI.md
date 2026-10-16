@@ -1081,6 +1081,6 @@ export, credential, new diagnostic run or paid model call is required.
 
 ### Reference Documentation
 
-- [Architecture: Pulse Assistant (Safety Gates)](ASSISTANT_SAFETY.md) — Detailed FSM states, tool protocol, and invariants
+- [Assistant safety architecture](ASSISTANT_SAFETY.md) — Enforced authority, recorded outcomes and verification limits
 - [API Reference](API.md) — Complete API endpoint documentation
 - [Plans and entitlements](PULSE_PRO.md) — Community/Relay/Pro/Cloud features and licensing

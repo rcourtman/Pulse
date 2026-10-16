@@ -1,6 +1,8 @@
 # Pulse Intelligence Modes and Safety Configuration
 
-This guide covers how to configure Patrol mode, Pulse Assistant command access, and the safety guardrails that apply before Pulse can change infrastructure.
+This guide covers Patrol mode, Assistant action planning and
+[what the guardrails establish](#safety-guardrails). Permission to plan or run
+an action is not a guarantee of a correct diagnosis or a recovered workload.
 
 For a general overview of Pulse Intelligence, see [AI.md](AI.md). For plan-level feature availability, see [PULSE_PRO.md](PULSE_PRO.md).
 
@@ -11,9 +13,12 @@ For a general overview of Pulse Intelligence, see [AI.md](AI.md). For plan-level
 Pulse separates AI permissions into two independent axes:
 
 1. **Patrol Mode** — What Patrol may handle automatically after it finds an issue: watch only, ask before changes, handle safe fixes, or use policy autopilot.
-2. **Assistant Command Access** — Whether the interactive chat assistant can execute commands during a chat session.
+2. **Assistant Action Planning** — Whether the interactive chat assistant may
+   plan infrastructure actions for review in **Actions**. Chat does not execute
+   those plans.
 
-Patrol mode is configured on the **Patrol** page. Assistant command access is configured in **Settings → Pulse Intelligence → Assistant**.
+Patrol mode is configured on the **Patrol** page. Assistant action planning is
+configured in **Settings → Pulse Intelligence → Assistant → Chat action mode**.
 
 ---
 
@@ -167,30 +172,68 @@ The following limits are fixed and cannot be changed: up to 3 investigations run
 
 ## Safety Guardrails
 
-Regardless of Patrol mode, Pulse enforces multiple safety layers:
+These controls constrain authority; they do not establish that a proposed fix
+is appropriate or that the original problem is resolved. Review the existing
+action and its evidence before relying on a success message. Do not run a
+command, change mode or provoke a failure just to test a safety claim.
 
 ### Blocked Commands
 
-Certain destructive commands are always blocked (defined in `pkg/aicontracts/safety.go`):
-- Disk format/partition operations
-- Cluster-wide destructive operations
-- Commands that could cause data loss
+Command-policy paths use a fixed list of blocked patterns, including disk
+formatting and destructive cluster commands. This is not a proof that every
+other operation is safe. Typed lifecycle capabilities have their own target,
+permission and policy checks: an authorised action can intentionally stop or
+restart a workload. A blocked shell-command pattern is not a promise that the
+corresponding typed capability can never run.
 
 ### Risk Classification
 
-Proposed fixes are classified by risk level in the approval system. Risk classification is surfaced in approval requests so operators can make informed decisions.
+Review the target, capability, parameters, risk and applicable approval policy
+in **Actions**. A low-risk classification or approval is not an execution
+receipt, a recovery guarantee or permission to bypass a resource lock. A
+Patrol mode that allows automatic fixes does not turn Assistant chat into an
+execution path.
 
 ### Circuit Breaker
 
-If the AI provider experiences consecutive failures, the circuit breaker (`internal/ai/circuit/breaker.go`) trips and temporarily disables AI operations. It auto-resets after a cooldown period.
+Consecutive AI-provider failures can trip the provider circuit breaker and
+temporarily prevent further model requests until its cooldown permits another
+attempt. This does not reverse an action already dispatched or establish the
+workload's current state.
 
 ### Discovery-Before-Action
 
-The assistant cannot operate on resources it hasn't first discovered. This prevents hallucinated resource IDs from reaching infrastructure commands.
+Pulse resolves action targets to canonical resources and advertised
+capabilities; the action lifecycle checks current authority before execution.
+A discovered name or an earlier read is not permission to act, proof of the
+right diagnosis or a guarantee that the recorded state is still current.
 
 ### Verification-After-Write
 
-After executing any control action, the assistant must verify the result with a read operation before reporting success. This is enforced by the FSM — the assistant cannot return to idle state without verification.
+**Execution and verification are separate results.** A completed chat, saved
+plan, approval or successful executor result does not establish independent
+verification. Reading something after a write does not by itself verify that
+write either; Pulse does not enforce a blanket chat-state-machine sequence
+that guarantees recovery.
+
+Review the existing action in **Actions**, keeping these observations separate:
+
+| Recorded observation | What it establishes |
+| --- | --- |
+| Plan or approval | An intended operation or authority decision, not proof that it ran. |
+| Execution succeeded | The executor reported success; check verification separately. |
+| **Confirmed by independent observer** | The recorded postcondition at its observation time, not current health or resolution of every original symptom. |
+| **Confirmed by executing agent** | The executing agent's observation, not an independent observer's confirmation. |
+| **Outcome not verified** or **Outcome inconclusive** | Verification is absent or cannot establish the postcondition; unknown is not success. |
+| **Outcome contradicted** | The recorded observation does not confirm the intended postcondition, even if execution succeeded. |
+
+Use the existing outcome's target, evidence source and time, alongside safe
+observations of the original problem. Do not repeat an uncertain operation or
+send a new infrastructure probe merely to obtain a green result. Missing access
+or an unavailable action record leaves the outcome unknown; a quiet timeline
+does not prove that nothing ran. See the
+[Assistant safety architecture](ASSISTANT_SAFETY.md) for the recorded boundaries
+and their limits.
 
 ### Keep a Resource Off-Limits
 
