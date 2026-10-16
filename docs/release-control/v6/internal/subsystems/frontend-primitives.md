@@ -20,6 +20,21 @@
 
 ## Purpose
 
+### Expandable backup Coverage uses per-workload geometry
+
+The opt-in platform window geometry maps native scroll positions to cumulative
+logical-item offsets. Coverage measures each summary plus its own expanded
+panel, keyed by workload identity rather than sorted index. A tall open detail
+must remain mounted while its evidence is being read; a fleet-wide average must
+not evict it. Scroll, element resize and accepted row/layout changes remeasure
+mounted blocks. Other platform consumers retain their uniform-height path.
+`PlatformWindowedRows.test.tsx` checks offsets, tall-item positions, collapse,
+row bounds and listener disposal. `ProxmoxCoverageTable.test.tsx` checks the
+consuming expanded row and focus. `backup-coverage-windowing.cjs` exercises the
+real HTTP readers and Coverage at desktop/320px, requiring actual provider-label
+and workload-summary viewport reachability in both directions.
+
+
 ### Backup provider evidence remains readable and attributable
 
 Expanded Coverage renders observation scope/source as labelled text that wraps

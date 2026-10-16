@@ -44,7 +44,7 @@ import {
   selectCoverageRestoreEvidence,
   type CoverageColumnId,
 } from './proxmoxBackupsTablePresentation';
-import { useProxmoxBackupTableWindowing } from './useProxmoxBackupTableWindowing';
+import { useProxmoxCoverageWindowing } from './useProxmoxCoverageWindowing';
 
 // Each evidence column is already named by its header, so an empty cell says
 // "None" instead of restating the source ("No PVE backup file"). The long form
@@ -181,7 +181,11 @@ export function ProxmoxCoverageTable(props: {
   // Solid does not replace the focused toggle (or the browser's scroll anchor).
   const [stableRows, setStableRows] = createStore<WorkloadCoverageRow[]>([]);
   createEffect(() => setStableRows(reconcile([...props.rows], { key: 'key' })));
-  const tableWindow = useProxmoxBackupTableWindowing(() => [...stableRows]);
+  const tableWindow = useProxmoxCoverageWindowing(
+    () => [...stableRows],
+    () => props.expandedKeys,
+    () => [props.rows, props.expandedKeys, layoutMode()],
+  );
 
   return (
     <Show
@@ -306,6 +310,7 @@ export function ProxmoxCoverageTable(props: {
                           onToggle: () => props.onToggleExpand(row.key),
                         })}
                         data-proxmox-backup-row="coverage"
+                        data-proxmox-coverage-key={row.key}
                       >
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('name')} text-base-content`}

@@ -15,6 +15,19 @@
 
 ## Purpose
 
+### Coverage expansion keeps the existing mounted-workload budget
+
+Expandable Coverage uses cumulative summary/detail heights, with measurements
+cached by workload key and retired when an identity leaves the result set.
+The existing directional runway still bounds mounted workloads to 140 on
+desktop and 36 on phones; expanding a long evidence panel does not disable
+windowing or mount the whole fleet. Native scrolling through a tall panel
+retains that logical workload instead of interpreting detail pixels as dozens
+of subsequent workloads. Uniform consumers and the date-feed measurement path
+are unchanged. The shared window tests and source-bound 200-workload consuming
+browser regression protect bounds and viewport reachability, not just mounting.
+
+
 ### Backup block measurement preserves bounded windowing
 
 The backup date feed opts into measuring its complete logical item blocks:

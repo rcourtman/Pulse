@@ -1,5 +1,5 @@
-import { cleanup, render } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Accessor } from 'solid-js';
 
 import { ProxmoxCoverageTable } from '../ProxmoxCoverageTable';
@@ -202,6 +202,65 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(140);
     expect(document.body.textContent).toContain('workload-0');
     expect(document.body.textContent).not.toContain('workload-599');
+  });
+
+  it('keeps an expanded workload mounted and focused while its tall provider evidence is read', async () => {
+    let scrollTop = 0;
+    const rectangle = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: Element) {
+        const isRoot = this.getAttribute('data-proxmox-backups-table') === 'coverage';
+        const height = this.hasAttribute('data-inline-detail-for') ? 6000 : 32;
+        return {
+          x: 0,
+          y: isRoot ? -scrollTop : 0,
+          top: isRoot ? -scrollTop : 0,
+          left: 0,
+          right: 1200,
+          bottom: height,
+          width: 1200,
+          height,
+        } as DOMRect;
+      });
+    const rows = Array.from({ length: 200 }, (_, index) => ({
+      ...row,
+      key: `fleet-${index}`,
+      workload: { ...row.workload, key: `fleet-${index}`, label: `fleet-${index}` },
+    }));
+    try {
+      render(() => (
+        <ProxmoxCoverageTable
+          rows={rows}
+          hasAnyRows
+          emptyIcon={<span />}
+          emptyTitle=""
+          emptyDescription=""
+          sortKey={() => 'posture'}
+          sortDirection={() => 'asc'}
+          onSort={() => undefined}
+          expandedKeys={new Set(['fleet-0'])}
+          onToggleExpand={() => undefined}
+          showTaskColumn={false}
+          layoutWidth={() => 1200}
+        />
+      ));
+      const toggle = document.querySelector<HTMLButtonElement>(
+        'button[aria-controls="proxmox-coverage-evidence-fleet-0"]',
+      )!;
+      toggle.focus();
+      scrollTop = 3000;
+      await fireEvent.scroll(window);
+      expect(document.querySelector('[data-inline-detail-for="fleet-0"]')).not.toBeNull();
+      expect(document.activeElement).toBe(toggle);
+      expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(140);
+      scrollTop = 10000;
+      await fireEvent.scroll(window);
+      expect(document.querySelector('[data-inline-detail-for="fleet-0"]')).toBeNull();
+      expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(140);
+    } finally {
+      cleanup();
+      rectangle.mockRestore();
+    }
   });
 
   it('marks an empty evidence cell with a short label and the full reason on hover', () => {

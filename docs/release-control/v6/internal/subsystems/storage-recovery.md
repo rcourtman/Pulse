@@ -41,6 +41,18 @@ proof uses these actual observations in the existing date/Coverage views.
 This does not establish archive availability, backup/restore execution or
 native guest thaw, filesystem liveness or installed recovery.
 
+### Backup Coverage evidence stays reachable in large inventories
+
+The existing Coverage disclosure is a variable-height logical workload block.
+Measured provider/restore evidence stays attached to that workload while it is
+read, including wrapped narrow-screen paths. Scrolling away and back retains
+its expansion identity without changing provider, protection or guest state.
+The 200-workload synthetic consuming regression checks complete labels entering
+the actual viewport, ordinary refresh and both scroll directions under the
+existing mounted-workload bounds. This is presentation proof, not independent
+thaw, filesystem writes, workload liveness, installation or release acceptance.
+
+
 ### PVE archive removal requires complete storage inventories
 
 Node/all-storage lists and storage-content lists become authoritative only
