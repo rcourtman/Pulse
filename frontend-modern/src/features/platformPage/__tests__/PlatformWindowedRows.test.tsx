@@ -1,10 +1,10 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, onCleanup } from 'solid-js';
+import { createMemo, createSignal, onCleanup } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PlatformWindowedRows } from '../PlatformWindowedRows';
 import { PlatformWindowedList } from '../PlatformWindowedList';
-import { usePlatformWindowedItems } from '../usePlatformWindowedItems';
+import { findWindowedItemIndex, usePlatformWindowedItems } from '../usePlatformWindowedItems';
 import platformWindowedItemsSource from '../usePlatformWindowedItems.ts?raw';
 
 describe('PlatformWindowedRows', () => {
@@ -315,6 +315,70 @@ describe('PlatformWindowedRows', () => {
       } else {
         Reflect.deleteProperty(Element.prototype, 'checkVisibility');
       }
+    }
+  });
+});
+
+describe('opt-in nonuniform platform windowing', () => {
+  it('maps exact edges and positions inside a tall logical item, never the terminal offset', () => {
+    const offsets = [0, 2000, 2040, 2080];
+    expect([-1, 0, 1000, 1999, 2000, 2039, 2040, 2080, 9000].map((position) =>
+      findWindowedItemIndex(offsets, position),
+    )).toEqual([0, 0, 0, 0, 1, 1, 2, 2, 2]);
+    expect(findWindowedItemIndex([0], 100)).toBe(0);
+  });
+
+  it('keeps a tall detail mounted while read, uses cumulative spacers and retains bounds through collapse', async () => {
+    const [detailHeight, setDetailHeight] = createSignal(2400);
+    let scrollTop = 1000;
+    const measure = vi.fn();
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 0, y: -scrollTop, top: -scrollTop, bottom: 4000 - scrollTop,
+      left: 0, right: 320, width: 320, height: 4000,
+    }) as DOMRect);
+    const height = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 240 });
+    const Fixture = () => {
+      const offsets = createMemo(() => [0, ...Array.from({ length: 50 }, (_, index) => detailHeight() + (index + 1) * 40)]);
+      const state = usePlatformWindowedItems({
+        items: () => Array.from({ length: 50 }, (_, index) => index),
+        windowSize: 8,
+        itemGeometry: { offsets, measure },
+        measurementKey: detailHeight,
+      });
+      return (
+        <div ref={state.setAnchorRef}>
+          <span data-testid="first">{state.visibleItems()[0]}</span>
+          <span data-testid="count">{state.visibleItems().length}</span>
+          <span data-testid="top">{state.topSpacerHeight()}</span>
+          <span data-testid="bottom">{state.bottomSpacerHeight()}</span>
+        </div>
+      );
+    };
+    try {
+      render(() => <Fixture />);
+      expect(screen.getByTestId('first')).toHaveTextContent('0');
+      expect(screen.getByTestId('top')).toHaveTextContent('0');
+      expect(screen.getByTestId('bottom')).toHaveTextContent('1680');
+      scrollTop = 3200;
+      await fireEvent.scroll(window);
+      const first = Number(screen.getByTestId('first').textContent);
+      expect(first).toBeGreaterThan(0);
+      expect(Number(screen.getByTestId('top').textContent)).toBe(2400 + first * 40);
+      expect(screen.getByTestId('count')).toHaveTextContent('8');
+      // Collapsing the first row changes real geometry, not the item count.
+      scrollTop = 0;
+      setDetailHeight(0);
+      expect(screen.getByTestId('first')).toHaveTextContent('0');
+      expect(screen.getByTestId('top')).toHaveTextContent('0');
+      expect(screen.getByTestId('bottom')).toHaveTextContent('1680');
+      cleanup();
+      const calls = measure.mock.calls.length;
+      await fireEvent.scroll(window);
+      expect(measure).toHaveBeenCalledTimes(calls);
+    } finally {
+      cleanup(); rect.mockRestore();
+      if (height) Object.defineProperty(window, 'innerHeight', height);
     }
   });
 });

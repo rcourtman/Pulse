@@ -23,6 +23,17 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Coverage window geometry follows workload identity
+
+Expanded backup detail measurements are associated with the same canonical row
+key as the existing reconciled workload/disclosure, not the array index. A
+viewport offset inside that detail cannot advance the mounted runway past its
+own workload. Inventory replacement, filtering and sorting keep their existing
+identity/ownership semantics; no collection or recovery operation is added.
+The connected Coverage and shared window tests plus the 200-workload browser
+regression verify bounded, reachable presentation separately from native use.
+
+
 ### Provider evidence identity stays separate from guest identity
 
 Existing backup Coverage exposes each observation's scope and source alongside

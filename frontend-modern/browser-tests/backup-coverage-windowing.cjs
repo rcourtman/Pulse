@@ -35,7 +35,7 @@ async function visibleRows(page) {
   return page.locator('[data-proxmox-backup-row="coverage"]').evaluateAll((rows) => rows.filter((row) => {
     const box = row.getBoundingClientRect();
     return box.top >= 0 && box.bottom <= innerHeight;
-  }).map((row) => row.querySelector('button[aria-controls]').getAttribute('aria-label')));
+  }).map((row) => row.querySelector('.font-semibold').textContent.trim()));
 }
 async function scan(page, reverse) {
   const seen = new Set();
@@ -46,7 +46,7 @@ async function scan(page, reverse) {
       const max = document.documentElement.scrollHeight - innerHeight;
       return { scroll: scrollY, max, count: rows.length, done: reverse ? scrollY <= 1 : scrollY >= max - 1 };
     }, reverse);
-    for (const label of await visibleRows(page)) seen.add(label.replace(/^(Show|Hide) details for /, ''));
+    for (const label of await visibleRows(page)) seen.add(label);
     maxMounted = Math.max(maxMounted, sample.count);
     if (sample.done) break;
     await page.evaluate((reverse) => scrollBy(0, (reverse ? -1 : 1) * innerHeight * 0.55), reverse);
@@ -92,11 +92,11 @@ async function scan(page, reverse) {
     const page = await context.newPage();
     page.on('pageerror', (error) => result.errors.push(String(error)));
     page.on('console', (message) => { if (message.type() === 'error') result.errors.push(message.text()); });
-    if (spec.dark) await page.addInitScript(() => document.documentElement.classList.add('dark'));
+    if (spec.dark) await page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => document.documentElement.classList.add('dark'), { once: true }));
     await page.goto(origin + '/proxmox/backups/coverage', { waitUntil: 'networkidle' });
-    const toggle = page.getByRole('button', { name: 'Show details for workload-000', exact: true });
+    const toggle = page.getByRole('button', { name: /^Expand details for workload-000/ });
     await toggle.waitFor();
-    if (spec.width < 640) await toggle.tap(); else { await toggle.focus(); await page.keyboard.press('Enter'); }
+    if (spec.width < 640) await page.locator('[data-proxmox-backup-row="coverage"]').first().tap(); else { await toggle.focus(); await page.keyboard.press('Enter'); }
     await page.locator('[data-backup-provider-evidence]').last().waitFor();
     await capture(page, spec.name + '-expanded');
     const detail = page.locator('[data-inline-detail-for]').first();
@@ -117,8 +117,11 @@ async function scan(page, reverse) {
     result.cases.push(account);
     if (!baseline) { assert(!lost, `${spec.name}: expanded detail disappeared while reading`); assert.equal(detailSeen.size, 16, `${spec.name}: provider labels never reached viewport`); }
     await page.evaluate(() => scrollTo(0, 0)); await page.waitForTimeout(150);
-    const hide = page.getByRole('button', { name: 'Hide details for workload-000', exact: true });
-    if (await hide.count()) await hide.click();
+    const hide = page.getByRole('button', { name: /^Collapse details for workload-000/ });
+    if (await hide.count()) {
+      if (spec.width < 640) await page.locator('[data-proxmox-backup-row="coverage"]').first().tap();
+      else await hide.click();
+    }
     account.forward = await scan(page, false);
     await capture(page, spec.name + '-last');
     account.reverse = await scan(page, true);
