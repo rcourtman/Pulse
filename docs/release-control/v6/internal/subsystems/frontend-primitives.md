@@ -8849,6 +8849,15 @@ a neighbouring feature: the alerts Schedule page is "Delivery Schedule" in
 every locale, and `i18n.test.ts` refuses a maintenance word in any locale's
 title because maintenance windows live elsewhere.
 
+### Repeated parent cells show once per group
+
+When a table keeps one row per child so each child keeps its own figures,
+toggle and link (PBS datastores under a server), the parent's own readings
+render once, on the group's first row. Later rows keep the parent's name,
+muted, and leave the parent cells empty, so one parent never reads as several
+identical ones. The rows must already be grouped; the Backups "Backup server"
+table follows this through `BackupServerRow.continuesServer`.
+
 ### A refused setting reports the state the server kept
 
 When a write is refused because the server owns the value (an environment

@@ -408,6 +408,11 @@ server health or the other source's artifacts. Fixed diagnostics expose no
 response body. The inventory parser, mounted table and
 `browser-tests/backup-inventory-format.cjs` exercise that combined boundary.
 
+`BackupServerRow.continuesServer` is presentation only: every row still
+carries the server's host readings and resource snapshot, and the model test
+pins the readings on every row while the flag is true only for a server's
+later datastore rows.
+
 ### Guest disk freshness presentation
 
 Existing workload disk evidence retains its source reason through the row,
