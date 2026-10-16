@@ -437,38 +437,58 @@ than assuming a later hash removed those copies.
 
 #### Usage
 
-For automation, first follow the
-[API guide's private header-file preparation](docs/API.md#-authentication) on
-the machine running curl. It supports either `X-API-Token` or Bearer
-authentication without putting the token in arguments. Keep `--disable` first
-to ignore local curl defaults that could enable credential-bearing trace
-output; do not add verbose/trace options or follow redirects with credentials.
-These requests need curl 7.76 or later.
+For automation, follow the
+[API guide's private header-file preparation and `pulse_api` helper](docs/API.md#api-token-recommended)
+on the machine running curl. Define the helper in the **same Bash session**
+before using these examples; it is local example code, not an installed Pulse
+command. It supports either `X-API-Token` or Bearer authentication without
+putting the token in arguments and requires curl 7.76 or later.
+
+The helper makes **one request**, prints only its HTTP status and private
+response-file path, and saves the body in a new owner-only file. Open that file
+privately, including on failure; configuration, infrastructure and error bodies
+can contain sensitive information. Share only a locally reviewed, redacted
+excerpt, not the full response or header file.
 
 Check protected access with a `monitoring:read` token:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/state/summary
+pulse_api GET /api/state/summary
 ```
 
 `/api/health` is public, so a successful response there does **not** validate a
-token. The loopback URLs here apply only on the Pulse host. For remote access,
-substitute your verified HTTPS address in each request; use a separately
-verified private CA where necessary, not `--insecure`. Do not share unredacted
-infrastructure responses, credential files or configuration exports.
+token. The helper's loopback origin applies only on the Pulse host and explicitly
+bypasses proxy environment settings, which `--disable` alone does not ignore.
+For remote access, follow the API guide's **HTTPS origin and protocol changes
+in the helper**, using a separately verified private CA where necessary, not
+`--insecure`. Keep certificate verification, `--disable` first, `--globoff`,
+the five-second connection and twenty-second total deadlines, and no redirects
+or automatic retries. Do not add verbose/trace output.
 
 For an encrypted configuration export, use a separate `settings:read` token in
 the header file. Prepare the private request file without placing the
 passphrase in a command:
 
 ```bash
-umask 077
-mkdir -p "$HOME/.config/pulse"
-chmod 700 "$HOME/.config/pulse"
-touch "$HOME/.config/pulse/export-request.json"
-chmod 600 "$HOME/.config/pulse/export-request.json"
-vi "$HOME/.config/pulse/export-request.json"
+(
+  set -eu
+  umask 077
+  auth_dir="$HOME/.config/pulse"
+  request_file="$auth_dir/export-request.json"
+  if [ -L "$HOME/.config" ] || [ -L "$auth_dir" ] || [ -L "$request_file" ]; then
+    printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  if [ -e "$request_file" ] && [ ! -f "$request_file" ]; then
+    printf 'Request file must be a regular file.\n' >&2
+    exit 1
+  fi
+  mkdir -p "$auth_dir"
+  chmod 700 "$auth_dir"
+  touch "$request_file"
+  chmod 600 "$request_file"
+  vi "$request_file"
+)
 ```
 
 In the editor, save this JSON with a strong, unique passphrase of at least
@@ -478,29 +498,21 @@ In the editor, save this JSON with a strong, unique passphrase of at least
 {"passphrase":"replace-with-a-strong-unique-passphrase"}
 ```
 
-Then send the private file and save the response in a new private directory:
+Preparation preserves an existing file and stops on failure; do not continue
+with a partial or unedited request. Then send the private file through the
+same helper:
 
 ```bash
-umask 077
-export_dir=$(mktemp -d "$HOME/pulse-export.XXXXXX")
-if curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --request POST --header "Content-Type: application/json" \
-  --data-binary "@$HOME/.config/pulse/export-request.json" \
-  --output "$export_dir/config-export.json" \
-  http://127.0.0.1:7655/api/config/export; then
-  printf 'Export response saved to %s\n' "$export_dir/config-export.json"
-else
-  status=$?
-  printf 'Export failed; do not import the response in %s\n' "$export_dir" >&2
-  exit "$status"
-fi
+pulse_api POST /api/config/export < "$HOME/.config/pulse/export-request.json"
 ```
 
 The successful response contains the encrypted bundle in `data`; it is not a
-plain configuration file. A failed response may contain an error instead of a
-bundle: never import it or treat file creation as success. Keep the passphrase
-separate from the export. Remove the temporary request file when no longer
-needed; do not include it in a diagnostics archive.
+plain configuration file. A failed or partial response may contain an error
+instead of a bundle: never import it or treat file creation or HTTP success
+alone as a verified backup. Inspect the saved response privately before using
+the [configuration-transfer procedure](docs/MIGRATION.md#transfer-the-included-configuration).
+Keep the passphrase separate from the export. Remove the temporary request
+file when no longer needed; do not include it in a diagnostics archive.
 
 Configuration export accepts a token with `settings:read`; import accepts a
 token with `settings:write`. Both `X-API-Token` and `Authorization: Bearer`
@@ -629,13 +641,13 @@ Notes:
 
 #### Endpoint
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/monitoring/scheduler/health
+pulse_api GET /api/monitoring/scheduler/health
 ```
 
-Use the [private header-file preparation](#usage) and a `monitoring:read`
-token. The non-zero HTTP-error exit matters; piping an unauthenticated error
-straight to `jq` can make a failed request look successful.
+Use the [private header-file and helper setup](#usage) with a `monitoring:read`
+token. Read the saved response privately. The non-zero HTTP-error exit matters;
+piping an unauthenticated error straight to `jq` can make a failed request look
+successful.
 
 #### Security Use Cases
 1. **Anomaly Detection**
@@ -746,22 +758,24 @@ security audit, and absence from one excerpt is not proof that no secret leaked.
 
 ### Manual Recovery (Admin)
 Administrators with API access can manually reset a temporary lockout; this does
-not reset a password or bypass SSO. Use the [private header file](#usage) with a
-`settings:write` token. Session-authenticated API requests also require CSRF
+not reset a password or bypass SSO. Use the [private header file and helper](#usage)
+with a `settings:write` token. Session-authenticated API requests also require CSRF
 protection; do not copy a session cookie into a command.
+
+Choose only the identifier that needs resetting; these are separate examples,
+not a batch. A timeout or lost response can occur **after the reset was applied**.
+Check the existing lockout state before deciding whether another request is
+needed; do not repeat a reset merely because its response is incomplete. A
+saved file or a 2xx status does not prove that login has recovered.
 
 ```bash
 # Reset lockout for a specific username
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --request POST --header "Content-Type: application/json" --data-binary @- \
-  http://127.0.0.1:7655/api/security/reset-lockout <<'JSON'
+pulse_api POST /api/security/reset-lockout <<'JSON'
 {"identifier":"username"}
 JSON
 
 # Reset lockout for an IP address
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --request POST --header "Content-Type: application/json" --data-binary @- \
-  http://127.0.0.1:7655/api/security/reset-lockout <<'JSON'
+pulse_api POST /api/security/reset-lockout <<'JSON'
 {"identifier":"198.51.100.100"}
 JSON
 ```
