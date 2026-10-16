@@ -538,6 +538,20 @@ class PBSJobEvidenceHelpTest(unittest.TestCase):
             with self.subTest(distinction=distinction):
                 self.assertIn(distinction, guidance)
 
+    def test_symptom_index_reaches_the_job_evidence_not_inventory_diagnostics(self):
+        hub = ROOT / "docs/TROUBLESHOOTING.md"
+        self.assertEqual(hub.read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes())
+        workflow = hub.read_text().split("## Choose the affected workflow\n", 1)[1].split("\n## ", 1)[0]
+        entry = next((item for item in workflow.split("\n- ")
+                      if item.startswith("**A PBS job says Healthy")), "")
+        self.assertTrue(entry, "A misleading job badge needs its own symptom entry, not missing-inventory checks")
+        self.assertIn(f"[the same task's status evidence](PBS.md{self.anchor})", entry)
+        for distinction in ("error, warning or running status", "not completed success",
+                            "Use existing PBS records", "do not run another job or verification"):
+            self.assertIn(distinction, " ".join(entry.split()))
+        self.assertNotIn("```", entry)
+
     def test_disagreement_uses_existing_evidence_without_new_workload_actions(self):
         guidance = self.guidance()
         self.assertNotIn("```", guidance, "No new live command is needed to compare existing job records")
