@@ -976,7 +976,7 @@ persistence operations and history semantics; this repair does not delete or
 rewrite recovery stores, change database internals, or establish crash-recovery
 qualification.
 
-### Shared Docker-update verification boundary
+### Shared Docker lifecycle and update verification boundary
 
 The shared API result converter classifies independent Docker update readback
 using replacement identity, state/running agreement and running health, rather
@@ -990,6 +990,18 @@ retention or recovery authority is added. The focused
 `internal/api/docker_container_action_result_test.go` asserts that independent
 verification changes never rewrite successful execution history, including
 stopped replacements and missing readback.
+
+Start/restart readback in the same converter treats a running container with
+`starting` health as inconclusive for both agent and independent observations,
+not a contradicted final postcondition. A later healthy readback can confirm
+verification without changing an uncertain mutation acknowledgement into
+successful execution. The action summary retains the agent's sanitized error.
+Neither readback nor a container restart establishes filesystem writes, backup
+completion, guest thaw or storage recovery. The existing
+`TestDockerContainerExecutionResultStartingHealthRemainsInconclusive` checks
+the independent observer through that shared classifier;
+`TestDockerContainerExecutionResultDerivesTruthOnlyFromFacts`
+preserves the distinct execution, verification and unavailable-compensation axes.
 
 
 Recovery consumers of security status must distinguish currentUsername (the validated caller identity) from privileged authUsername (administrator configuration). Presence of currentUsername in a scoped response does not authorise export, import, recovery or unprotected backup transfer; existing settings capabilities and backend enforcement still gate those operations.
