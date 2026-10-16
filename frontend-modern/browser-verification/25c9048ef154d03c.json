@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "base_sha": "852e1ce1665a697a3ae502e130d09ff44cb41f3d",
+  "verified_at": "2026-10-16T08:46:50.624020Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/useProxmoxCoverageWindowing.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts": "09adf2b9731b9525b1d0578be9f66de2436b2186afa4649f5ae491a8355291d1",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "e563e71d7ea7de71be5bd0c2df617953944bcad9910e16acfec137769091cb3b",
+    "frontend-modern/src/features/proxmox/useProxmoxCoverageWindowing.ts": "df250d0495a1fb77cb6144a7797c4782edc75bd79f7597c823b6856cabf9b9a6"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 760
+    }
+  ],
+  "states": [
+    "The first Coverage disclosure remains mounted throughout reading all 16 observed provider labels at desktop and 320px; a complete scope must enter the viewport, not merely be mounted.",
+    "An ordinary same-open HTTP refresh expands the existing panel to 20 independently attributable provider observations without changing the Unknown posture or inventing restore evidence.",
+    "A single settled forward scan and a single reverse scan each bring every one of 200 workload summaries into the viewport, within 140-desktop/36-phone mounted-workload bounds."
+  ],
+  "interactions": [
+    "Keyboard Enter expands the actual desktop disclosure; native phone row taps expand/collapse it in Chromium and WebKit.",
+    "Refresh backups is keyboard-activated and retains focus while the actual posture/inventory readers accept new fixtures; the existing panel stays open.",
+    "Native page scroll events advance the existing window; the scan waits at most two seconds for mounted rows to cover the actual visible table body before advancing. No event injection, threshold change, repeated favourable pass selection, mutating request or off-origin request. Browser/server both close, and no page/console error is observed."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "observed_source": "852e1ce1665a697a3ae502e130d09ff44cb41f3d",
+    "compiler_source": "984857a1e5b57e5834243986ffc09b60c2893239",
+    "compiler_receipt": "source-5zdl19fs",
+    "compiled_artifact_reuse": "Only the non-imported CJS observation runner changed after exact984 compilation; all 299 declared source inputs and five assets were hash-checked against the containing workspace. PREVIEW-BINDING.json retains the compiler/runner distinction.",
+    "full_frontend_tests_passed": 24300,
+    "full_frontend_tests_skipped": 3,
+    "settled_scan_max_wait_ms": {
+      "desktop": 21,
+      "phone": 3,
+      "phone-webkit": 170
+    }
+  },
+  "pixel_review": {
+    "reviewed_at": "2026-10-16T08:46:50.624020Z",
+    "observed_source": "852e1ce1665a697a3ae502e130d09ff44cb41f3d",
+    "compiler_source": "984857a1e5b57e5834243986ffc09b60c2893239",
+    "actual_image_content_presented_to_model": true,
+    "captures": [
+      {
+        "file": "pixels/desktop-expanded.png",
+        "sha256": "1a60186ba171d0fa6f0c0b749c2f8cc48a926c008e04a1d282bb7516dc1d7bc4",
+        "tool": "native view_image",
+        "reviewed": true,
+        "observation": "The actual Coverage table shows 200 targets as Unknown and workload-000 expanded. The identity and explicit statement that backup evidence is not a restore or guest thaw are readable. No protection or restore point is invented."
+      },
+      {
+        "file": "pixels/desktop-detail-scroll.png",
+        "sha256": "efc6eb8b09c917f766bb67c1ab64f738eb988b1cdfe694b14de283a409a674cb",
+        "tool": "native view_image",
+        "reviewed": true,
+        "observation": "The same open panel remains on screen while scrolling through its middle, with complete wrapped pbs source scopes and their own Result/History/Access facts. It has not been replaced by unrelated workload summaries."
+      },
+      {
+        "file": "pixels/desktop-refreshed-detail.png",
+        "sha256": "1b7a8ca17ac0d75bd334e52de541a03808a2f513f90038204ef4e6ddac0fef03",
+        "tool": "native view_image",
+        "reviewed": true,
+        "observation": "After ordinary same-open refresh, the panel remains visible and readable; the new pbs-16 through pbs-19 observations are visible with their own Result/History/Access facts, followed by the explicit absence of restore evidence."
+      },
+      {
+        "file": "pixels/desktop-last.png",
+        "sha256": "d9709650bd3d0dc9b071aab7300461d47aa819cdb72fcd7553d9c804ba170226",
+        "tool": "native view_image",
+        "reviewed": true,
+        "observation": "The final workload rows through workload-199 are visible in the real viewport, with aligned Unknown posture and None age, not a blank runway or the removed first detail."
+      },
+      {
+        "file": "pixels/phone-expanded.png",
+        "sha256": "c635831700699c9d47e081a7046eba720113d610ae0d250209dcb9ca911c30cc",
+        "tool": "native view_image",
+        "reviewed": true,
+        "observation": "The actual Coverage table shows 200 targets as Unknown and workload-000 expanded. The identity and explicit statement that backup evidence is not a restore or guest thaw are readable. No protection or restore point is invented. At 320px the panel and path text fit the narrow surface without horizontal clipping; dark Chromium and light WebKit were inspected separately."
+      },
+      {
+        "file": "pixels/phone-detail-scroll.png",
+        "sha256": "833a8047424fd7b812ebe3ca2bc497c4bd32d4be73d5c33402aaa1ab99884362",
+        "tool": "native view_image",
+        "reviewed": true,
+        "observation": "The same open panel remains on screen while scrolling through its middle, with complete wrapped pbs source scopes and their own Result/History/Access facts. It has not been replaced by unrelated workload summaries. At 320px the panel and path text fit the narrow surface without horizontal clipping; dark Chromium and light WebKit were inspected separately."
+      },
+      {
+        "file": "pixels/phone-refreshed-detail.png",
+        "sha256": "833a8047424fd7b812ebe3ca2bc497c4bd32d4be73d5c33402aaa1ab99884362",
+        "tool": "native view_image",
+        "reviewed": true,
+        "observation": "The same open panel remains on screen while scrolling through its middle, with complete wrapped pbs source scopes and their own Result/History/Access facts. It has not been replaced by unrelated workload summaries. This capture shows the still-readable common middle observations after refresh; reaching all twenty is established by the retained viewport scan, not all twenty in this single image. At 320px the panel and path text fit the narrow surface without horizontal clipping; dark Chromium and light WebKit were inspected separately."
+      },
+      {
+        "file": "pixels/phone-last.png",
+        "sha256": "09b3c25549fc94d165e13f709a50c92d0d35069ec29beb52bf69eb5a0232c20b",
+        "tool": "native view_image",
+        "reviewed": true,
+        "observation": "The final workload rows through workload-199 are visible in the real viewport, with aligned Unknown posture and None age, not a blank runway or the removed first detail. At 320px the panel and path text fit the narrow surface without horizontal clipping; dark Chromium and light WebKit were inspected separately."
+      },
+      {
+        "file": "pixels/phone-webkit-expanded.png",
+        "sha256": "567b467e99c4a9867b4df9710c8f5562c45c30b562a9372f5631ab92ef541d05",
+        "tool": "native view_image",
+        "reviewed": true,
+        "observation": "The actual Coverage table shows 200 targets as Unknown and workload-000 expanded. The identity and explicit statement that backup evidence is not a restore or guest thaw are readable. No protection or restore point is invented. At 320px the panel and path text fit the narrow surface without horizontal clipping; dark Chromium and light WebKit were inspected separately."
+      },
+      {
+        "file": "pixels/phone-webkit-detail-scroll.png",
+        "sha256": "c0bf6e0d712fe651a4eb3b450070ecaefd2848a6b5b08ddec269dbce9477e9de",
+        "tool": "native view_image",
+        "reviewed": true,
+        "observation": "The same open panel remains on screen while scrolling through its middle, with complete wrapped pbs source scopes and their own Result/History/Access facts. It has not been replaced by unrelated workload summaries. At 320px the panel and path text fit the narrow surface without horizontal clipping; dark Chromium and light WebKit were inspected separately."
+      },
+      {
+        "file": "pixels/phone-webkit-refreshed-detail.png",
+        "sha256": "c0bf6e0d712fe651a4eb3b450070ecaefd2848a6b5b08ddec269dbce9477e9de",
+        "tool": "native view_image",
+        "reviewed": true,
+        "observation": "The same open panel remains on screen while scrolling through its middle, with complete wrapped pbs source scopes and their own Result/History/Access facts. It has not been replaced by unrelated workload summaries. This capture shows the still-readable common middle observations after refresh; reaching all twenty is established by the retained viewport scan, not all twenty in this single image. At 320px the panel and path text fit the narrow surface without horizontal clipping; dark Chromium and light WebKit were inspected separately."
+      },
+      {
+        "file": "pixels/phone-webkit-last.png",
+        "sha256": "795e90f523d1235acc967fc48fcb5aa93f2fd2117f904ecf3a699dc7b3e0e35a",
+        "tool": "native view_image",
+        "reviewed": true,
+        "observation": "The final workload rows through workload-199 are visible in the real viewport, with aligned Unknown posture and None age, not a blank runway or the removed first detail. At 320px the panel and path text fit the narrow surface without horizontal clipping; dark Chromium and light WebKit were inspected separately."
+      }
+    ],
+    "limits": "Pixels show selected viewport moments. Complete 16/20 provider and 200-workload reachability is separately measured by actual viewport geometry; no physical swipe, continuous-frame latency, native guest, installed or release acceptance is inferred."
+  },
+  "limits": [
+    "The original 45ms scan sampled delayed WebKit runway updates and missed rows; both original and diagnostic failures are retained. Final proof establishes bounded settled reachability, not continuous-scroll frame latency.",
+    "Source/fixture/browser proof is not independent guest thaw, every-filesystem writes, workload liveness, prior-active restoration, fresh-install recovery, protected delivery, release availability or reporter confirmation."
+  ]
+}
