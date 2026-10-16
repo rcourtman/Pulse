@@ -24,7 +24,7 @@ const inlineTypeFilter = (setValue = vi.fn(), value = 'all'): FilterDef => ({
   ],
 });
 
-const menuNodeFilter = (setValue = vi.fn(), value = ''): FilterDef => ({
+const menuNodeFilter = (setValue: FilterDef['setValue'] = vi.fn(), value = ''): FilterDef => ({
   id: 'node',
   label: 'Node',
   group: 'scope',
