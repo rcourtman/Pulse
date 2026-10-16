@@ -25,6 +25,55 @@ const owners = (result: ReturnType<typeof model>) =>
   result.recoverableArtifacts.map((artifact) => artifact.workload.resourceId);
 
 describe('backup-identity: native ownership rather than first label match', () => {
+  it('keeps copied local archives and their location filters independent of guest placement', () => {
+    const result = model({
+      workloads: [identityGuest('east-100', 'east', 'current-guest-node')],
+      archives: [
+        identityArchive({ id: 'copy-a', node: 'current-guest-node', storageNode: 'node-a' }),
+        identityArchive({ id: 'copy-b', node: 'current-guest-node', storageNode: 'node-b' }),
+        identityArchive({ id: 'shared', node: 'current-guest-node' }),
+      ],
+    });
+    expect(owners(result)).toEqual(['east-100', 'east-100', 'east-100']);
+    expect(result.coverageRows).toHaveLength(1);
+    expect(result.coverageRows[0].archiveCount).toBe(3);
+    expect(result.recoverableArtifacts.map((artifact) => artifact.location)).toEqual([
+      'local / node-a',
+      'local / node-b',
+      'local',
+    ]);
+    expect(result.recoverableArtifacts.map((artifact) => artifact.locationLabel)).toEqual([
+      'east / local / node-a',
+      'east / local / node-b',
+      'east / local',
+    ]);
+    expect(new Set(result.recoverableArtifacts.map((artifact) => artifact.locationKey)).size).toBe(
+      3,
+    );
+    expect(result.recoverableArtifacts[0].locationGroupKey).toBe(
+      result.recoverableArtifacts[2].locationKey,
+    );
+    expect(result.recoverableArtifacts[1].locationGroupKey).toBe(
+      result.recoverableArtifacts[2].locationKey,
+    );
+  });
+
+  it('does not discard a storage-node identity because its label equals the connection', () => {
+    const result = model({
+      archives: [
+        identityArchive({ id: 'local', storageNode: 'east' }),
+        identityArchive({ id: 'shared' }),
+      ],
+    });
+    expect(new Set(result.recoverableArtifacts.map((artifact) => artifact.locationKey)).size).toBe(
+      2,
+    );
+    expect(result.recoverableArtifacts.map((artifact) => artifact.locationLabel)).toEqual([
+      'east / local / east',
+      'east / local',
+    ]);
+  });
+
   it.each([false, true])('is independent of inventory order (reversed: %s)', (reversed) => {
     const workloads = [
       identityGuest('west-100', 'west', 'pve-10'),

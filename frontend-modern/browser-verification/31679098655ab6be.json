@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "032f42de53537ff27ba476b4be416e3899f55e6a",
+  "verified_at": "2026-10-15T23:51:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupInventory.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "1c12f6d559ebfe3cae95b34cc69c34294f6b6a0fae16b135e00cd95edcc7523a",
+    "frontend-modern/src/features/proxmox/proxmoxBackupInventory.ts": "d714e8d709f787797cb553953948dd8b72cd09d33adf46f36238f071d6442aa7",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "2777b9ea95853a9f3d5cea5738cee2bd045987c426fcba855845e16f9c0d443a",
+    "frontend-modern/src/types/api.ts": "5339578e27dd5a4091f99fe8f24efe8dca418a17505561edeab50194a1aea334"
+  },
+  "routes": [
+    "/tmp/pve-backup-scope/index.html",
+    "/tmp/pve-backup-scope/index.html?location=archive%3Aestate%3Aarchive"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 950
+    },
+    {
+      "width": 320,
+      "height": 950
+    }
+  ],
+  "states": [
+    "Real read-only PVE collector and persisted-point proof source-208tdcee at 9dc2be061d emits the inventory frames consumed by the production ProxmoxBackupsTable/model/styles in a dedicated static fixture, not hand-written archive rows. The containing frontend source is 032f42de53.",
+    "Desktop: three archives include two equal-volume-ID local copies with distinct node-a/node-b locations; the existing store-wide saved filter selects both copies and the local node-b filter selects only one.",
+    "A failed node-b read plus successful empty node-a read preserves node-b original 2KB / 2h evidence; ordinary node-b recovery changes it to 4KB / 1h. A complete empty estate inventory leaves only the independent other-connection archive.",
+    "At 320px the real Filters disclosure exposes the location chip and native add-filter select; the compact table keeps one selected archive, original held age, recovered age and the independent connection after clearing the deleted estate scope. No document-level horizontal overflow in the checked states.",
+    "Twelve final captures (six per viewport) were presented through native view_image and inspected. Earlier development-navigation timeouts, a collapsed-filter fixture mistake and an original image-read refusal are retained as adverse first-attempt evidence, not counted as passing proof. No permission, reader identity or product check was changed.",
+    "This fixture has no live workload/posture/server props. Zero protected/target counts and orphan labels are not native recovery, healthy-estate acceptance or release availability. The existing narrow source-facet rail still scrolls internally."
+  ],
+  "interactions": [
+    "Followed a Router saved-store-wide query link; cleared that filter; selected the distinct node-b archive through the production location filter.",
+    "Expanded the production Filters disclosure at 320px and used its native select and filter-chip removal.",
+    "Used Refresh backups to consume producer failure, empty-A/failed-B, ordinary B recovery and complete estate deletion frames without guest/backup commands.",
+    "Cleared the selected deleted scope and confirmed the independent connection archive remained."
+  ]
+}

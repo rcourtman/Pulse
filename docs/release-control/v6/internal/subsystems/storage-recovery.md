@@ -21,6 +21,27 @@
 
 ## Purpose
 
+### Independent copies on node-local PVE storage
+
+Equal volume IDs on different non-shared storage nodes remain distinct
+archives and recovery points. Optional `storageNode` identifies the physical
+local archive location; `node` and subject references continue to follow guest
+placement. Recovery repository references use the explicit storage node when
+present and retain the old fallback for shared/legacy evidence. Shared archive
+IDs are unchanged. `TestPVEArchiveRepositoryKeepsStorageHostSeparateFromGuest`
+and `TestPVEBackupStorageScopeFailureAndRecovery` protect identity, partial
+failure, ordinary recovery, scoped empty inventories and other connections.
+No backup/restore execution or native recovery authority is added.
+
+The existing Backups table includes local storage-node provenance in its
+location text and saved location-filter identity. Two copied archives remain
+independently selectable even when their guest, store name and volume ID
+match. Guest attribution is unchanged; shared/legacy location labels and keys
+stay compatible. Existing saved store-wide filters keep matching all local
+copies in that store without silently selecting one host. A node label equal to another dimension cannot collapse its
+identity. `ProxmoxBackupsTable.test.tsx` and the recovery-model identity tests
+cover distinct locations and refresh while preserving the selected scope.
+
 ### Backup activity follows local calendar dates
 
 The existing Backups activity chart and its date filter share local date keys.

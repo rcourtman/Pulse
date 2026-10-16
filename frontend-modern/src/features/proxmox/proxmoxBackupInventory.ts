@@ -52,6 +52,7 @@ const archiveShape: RowShape = {
   ...pveGuestShape,
   time: isString,
   storage: optional(isString),
+  storageNode: optional(isString),
   format: optional(isString),
   volid: optional(isString),
   size: optional(isNonnegativeNumber),

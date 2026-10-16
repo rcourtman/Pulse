@@ -24,6 +24,24 @@ import (
 	pveapi "github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
+func TestPVEBackupStorageIdentityRequiresExplicitSharedScope(t *testing.T) {
+	localA := pveStorageBackupScope(pveapi.Storage{Storage: "archive"}, "node-a")
+	localB := pveStorageBackupScope(pveapi.Storage{Storage: "archive"}, "node-b")
+	sharedA := pveStorageBackupScope(pveapi.Storage{Storage: "archive", Shared: 1}, "node-a")
+	sharedB := pveStorageBackupScope(pveapi.Storage{Storage: "archive", Shared: 1}, "node-b")
+	if localA == localB || sharedA != sharedB || localA == sharedA || localB == sharedB {
+		t.Fatal("storage name replaced explicit shared/local ownership")
+	}
+	if pveStorageBackupID("estate", localA, "archive:copy") == pveStorageBackupID("estate", localB, "archive:copy") ||
+		pveStorageBackupID("estate", sharedA, "archive:copy") != "estate-archive:copy" {
+		t.Fatal("local copies collapsed or shared identity changed")
+	}
+	if pveStorageBackupID("a-b", pveBackupStorageScope{node: "c"}, "archive:copy") ==
+		pveStorageBackupID("a", pveBackupStorageScope{node: "b-c"}, "archive:copy") {
+		t.Fatal("delimiter ambiguity merged independent storage identities")
+	}
+}
+
 type canonicalBackupStorageClient struct {
 	mockPVEClientExtra
 }

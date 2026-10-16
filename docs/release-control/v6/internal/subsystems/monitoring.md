@@ -17,6 +17,20 @@
 
 ## Purpose
 
+### Local PVE archive identity and partial-read scope
+
+Volume IDs identify one archive only inside its storage location. PVE's
+`shared` flag permits cross-node deduplication; otherwise IDs and failure
+preservation include the queried storage node. `StorageBackup.storageNode`
+retains that local host independently of the guest's current `node`, including
+after migration. An empty successful local-store inventory removes only its
+own rows; an unreadable or offline peer keeps its prior archives without
+renewing their dates. A successful shared view still replaces that shared
+inventory regardless of node order. PBS attribution confirmations retain their
+existing separate scope. `TestPVEBackupStorageScopeFailureAndRecovery` exercises
+real read-only HTTP collection, migration, persisted recovery points and
+connection isolation. This is not native backup, guest thaw or restore proof.
+
 ### Snapshot inventories distinguish unavailable from empty
 
 PVE QEMU/LXC snapshot reads authorise removal only after a complete bounded

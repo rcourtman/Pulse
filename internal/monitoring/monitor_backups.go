@@ -179,21 +179,37 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	var allBackups []models.StorageBackup
 	var pbsConfirmations []models.PBSGuestConfirmation
 	hasPBSDirectConnection := m.config != nil && len(m.config.PBSInstances) > 0
-	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
-	hadSuccessfulNode := false          // Track if at least one node responded successfully
-	successfulNodeQueries := 0          // Number of nodes whose storage list was enumerated
-	storagesWithBackup := 0             // Number of storages that should contain backups
-	contentSuccess := 0                 // Number of successful storage content fetches
-	contentFailures := 0                // Number of failed storage content fetches
-	storageQueryErrors := 0             // Number of nodes where storage list could not be queried
-	hadPermissionError := false         // Track if any permission errors occurred this cycle
-	permissionFailureCount := 0         // Number of node/storage reads rejected by authorization
+	seenBackups := make(map[string]bool) // Deduplicate shared views, not independent local copies
+	hadSuccessfulNode := false           // Track if at least one node responded successfully
+	successfulNodeQueries := 0           // Number of nodes whose storage list was enumerated
+	storagesWithBackup := 0              // Number of storages that should contain backups
+	contentSuccess := 0                  // Number of successful storage content fetches
+	contentFailures := 0                 // Number of failed storage content fetches
+	storageQueryErrors := 0              // Number of nodes where storage list could not be queried
+	hadPermissionError := false          // Track if any permission errors occurred this cycle
+	permissionFailureCount := 0          // Number of node/storage reads rejected by authorization
 	storagePreserveNeeded := map[string]struct{}{}
 	storageSuccess := map[string]struct{}{}
+	backupPreserveNeeded := map[pveBackupStorageScope]struct{}{}
+	backupStorageSuccess := map[pveBackupStorageScope]struct{}{}
 	readState := m.backupReadStateForInstance(instanceName)
 
 	// Build guest lookup map to find actual node for each VMID
 	snapshot := m.state.GetSnapshot()
+	// A failed/offline node cannot remove archives it previously supplied.
+	// Shared (and legacy unscoped) rows remain held unless another view really
+	// succeeded. In particular a same-named local store is not that view.
+	preserveNodeBackups := func(node string) {
+		for _, backup := range snapshot.PVEBackups.StorageBackups {
+			if backup.Instance != instanceName || (backup.StorageNode != "" && backup.StorageNode != node) {
+				continue
+			}
+			scope := pveBackupStorageScope{storage: backup.Storage, node: backup.StorageNode}
+			if _, succeeded := backupStorageSuccess[scope]; !succeeded {
+				backupPreserveNeeded[scope] = struct{}{}
+			}
+		}
+	}
 	guestNodeMap := make(map[int]string) // VMID -> actual node name
 	populateGuestNodeMapFromReadState(readState, instanceName, guestNodeMap)
 
@@ -220,8 +236,11 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// For each node, get storage and check content
 	for _, node := range nodes {
 		if nodeEffectiveStatus[node.Node] != "online" {
+			preserveNodeBackups(node.Node)
 			for _, storageName := range storageNamesForNode(readState, instanceName, node.Node) {
-				storagePreserveNeeded[storageName] = struct{}{}
+				if _, succeeded := storageSuccess[storageName]; !succeeded {
+					storagePreserveNeeded[storageName] = struct{}{}
+				}
 			}
 			continue
 		}
@@ -261,8 +280,11 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			}
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
 			log.Warn().Err(monErr).Str("node", node.Node).Msg("failed to get storage for backups - skipping node")
+			preserveNodeBackups(node.Node)
 			for _, storageName := range storageNamesForNode(readState, instanceName, node.Node) {
-				storagePreserveNeeded[storageName] = struct{}{}
+				if _, succeeded := storageSuccess[storageName]; !succeeded {
+					storagePreserveNeeded[storageName] = struct{}{}
+				}
 			}
 			storageQueryErrors++
 			continue
@@ -282,6 +304,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			}
 
 			storagesWithBackup++
+			backupScope := pveStorageBackupScope(storage, node.Node)
 
 			// Get storage content
 			contents, err := client.GetStorageContent(ctx, node.Node, storage.Storage)
@@ -301,21 +324,27 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				if _, ok := storageSuccess[storage.Storage]; !ok {
 					storagePreserveNeeded[storage.Storage] = struct{}{}
 				}
+				if _, ok := backupStorageSuccess[backupScope]; !ok {
+					backupPreserveNeeded[backupScope] = struct{}{}
+				}
 				contentFailures++
 				continue
 			}
 
 			contentSuccess++
+			backupStorageSuccess[backupScope] = struct{}{}
+			delete(backupPreserveNeeded, backupScope)
 			storageSuccess[storage.Storage] = struct{}{}
 			delete(storagePreserveNeeded, storage.Storage)
 
 			// Convert to models
 			for _, content := range contents {
 				// Skip if we've already seen this item (shared storage duplicate)
-				if seenVolids[content.Volid] {
+				backupID := pveStorageBackupID(instanceName, backupScope, content.Volid)
+				if seenBackups[backupID] {
 					continue
 				}
-				seenVolids[content.Volid] = true
+				seenBackups[backupID] = true
 
 				// Skip templates and ISOs - they're not backups
 				if content.Content == "vztmpl" || content.Content == "iso" {
@@ -412,8 +441,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				}
 
 				backup := models.StorageBackup{
-					ID:           fmt.Sprintf("%s-%s", instanceName, content.Volid),
+					ID:           backupID,
 					Storage:      storage.Storage,
+					StorageNode:  backupScope.node,
 					Node:         backupNode,
 					Instance:     instanceName,
 					Type:         backupType,
@@ -436,7 +466,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		}
 	}
 
-	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, snapshot, storagePreserveNeeded, allBackups)
+	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, snapshot, backupPreserveNeeded, allBackups)
 	if len(preservedStorages) > 0 {
 		log.Warn().
 			Str("instance", instanceName).
@@ -497,6 +527,13 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	}
 
 	// Update state with storage backups for this instance
+	// Held local archives follow the guest for attribution without moving the
+	// storage location that owns their identity and failure-preservation scope.
+	for index := range allBackups {
+		if node, ok := guestNodeMap[allBackups[index].VMID]; ok && allBackups[index].VMID > 0 {
+			allBackups[index].Node = node
+		}
+	}
 	m.state.UpdateStorageBackupsForInstance(instanceName, allBackups)
 	m.state.UpdatePBSGuestConfirmationsForInstance(instanceName, pbsConfirmations)
 
@@ -714,7 +751,7 @@ func preserveFailedPBSGuestConfirmations(previous []models.PBSGuestConfirmation,
 	return current, storages
 }
 
-func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnapshot, storagesToPreserve map[string]struct{}, current []models.StorageBackup) ([]models.StorageBackup, []string) {
+func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnapshot, storagesToPreserve map[pveBackupStorageScope]struct{}, current []models.StorageBackup) ([]models.StorageBackup, []string) {
 	if len(storagesToPreserve) == 0 {
 		return current, nil
 	}
@@ -729,7 +766,8 @@ func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnap
 		if backup.Instance != instanceName {
 			continue
 		}
-		if _, ok := storagesToPreserve[backup.Storage]; !ok {
+		scope := pveBackupStorageScope{storage: backup.Storage, node: backup.StorageNode}
+		if _, ok := storagesToPreserve[scope]; !ok {
 			continue
 		}
 		if _, duplicate := existing[backup.ID]; duplicate {

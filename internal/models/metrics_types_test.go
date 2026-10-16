@@ -7,6 +7,34 @@ import (
 	"time"
 )
 
+func TestStorageBackupLocationSurvivesGuestPlacementAndJSON(t *testing.T) {
+	state := NewState()
+	state.UpdateGuestsForInstance("estate", []VM{{ID: "estate:current:100", Instance: "estate", Node: "current", VMID: 100}}, nil)
+	state.UpdateStorageBackupsForInstance("estate", []StorageBackup{
+		{ID: "local-a", Instance: "estate", Storage: "archive", StorageNode: "node-a", Node: "previous", VMID: 100},
+		{ID: "local-b", Instance: "estate", Storage: "archive", StorageNode: "node-b", Node: "previous", VMID: 100},
+		{ID: "shared", Instance: "estate", Storage: "shared", Node: "previous", VMID: 100},
+	})
+	backups := state.GetSnapshot().PVEBackups.StorageBackups
+	if len(backups) != 3 {
+		t.Fatalf("independent archive identities collapsed: %+v", backups)
+	}
+	for _, b := range backups {
+		wire, err := json.Marshal(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var roundTrip StorageBackup
+		if err := json.Unmarshal(wire, &roundTrip); err != nil || roundTrip != b || roundTrip.Node != "current" {
+			t.Fatalf("placement normalization or round trip lost archive location: %s / %v", wire, err)
+		}
+		want := map[string]string{"local-a": "node-a", "local-b": "node-b", "shared": ""}[b.ID]
+		if b.StorageNode != want || strings.Contains(string(wire), "storageNode") != (want != "") {
+			t.Fatalf("local and legacy/shared wire scopes changed: %s", wire)
+		}
+	}
+}
+
 func TestGuestDiskObservationIsInternalSnapshotEvidence(t *testing.T) {
 	origin := GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now().Add(-time.Minute)}
 	vm := VM{ID: "pve:node:105", VMID: 105, Type: "qemu", DiskObservation: origin,

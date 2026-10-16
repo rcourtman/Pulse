@@ -230,7 +230,7 @@ export const ProxmoxBackupsTable: Component<{
     setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.location]: value || null }, { replace: true });
   const locationMatches = (artifact: RecoverableArtifact): boolean => {
     const selected = locationFilter();
-    return !selected || artifact.locationKey === selected;
+    return !selected || artifact.locationKey === selected || artifact.locationGroupKey === selected;
   };
 
   // Type scope normalizes vm/qemu and ct/lxc to a canonical token before
@@ -359,6 +359,11 @@ export const ProxmoxBackupsTable: Component<{
     for (const artifact of recoveryModel().recoverableArtifacts) {
       if (artifact.locationKey && artifact.locationLabel) {
         locations.set(artifact.locationKey, artifact.locationLabel);
+      }
+      // Retain the meaning and label of an existing saved store-wide filter
+      // without crowding new filter choices with redundant aggregate options.
+      if (artifact.locationGroupKey === locationFilter() && artifact.locationGroupLabel) {
+        locations.set(artifact.locationGroupKey, artifact.locationGroupLabel);
       }
     }
     return [

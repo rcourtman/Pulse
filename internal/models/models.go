@@ -3486,8 +3486,11 @@ type BackupTask struct {
 
 // StorageBackup represents a backup file in storage
 type StorageBackup struct {
-	ID           string    `json:"id"`
-	Storage      string    `json:"storage"`
+	ID      string `json:"id"`
+	Storage string `json:"storage"`
+	// StorageNode is the archive's local storage host, not the guest's current
+	// placement in Node. Empty means shared storage or older unscoped evidence.
+	StorageNode  string    `json:"storageNode,omitempty"`
 	Node         string    `json:"node"`
 	Instance     string    `json:"instance"` // Unique instance identifier (for nodes with duplicate names)
 	Type         string    `json:"type"`
