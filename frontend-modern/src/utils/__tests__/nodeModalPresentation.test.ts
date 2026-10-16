@@ -71,11 +71,11 @@ describe('nodeModalPresentation', () => {
 
     expect(getNodeUsernamePlaceholder('pve')).toBe('root@pam');
     expect(getNodeUsernamePlaceholder('pbs')).toBe('admin@pbs');
-    expect(getNodeUsernamePlaceholder('pmg')).toBe('root@pam');
+    expect(getNodeUsernamePlaceholder('pmg')).toBe('pulse-monitor@pmg');
 
     expect(getNodeUsernameHelp('pve')).toBeNull();
     expect(getNodeUsernameHelp('pbs')).toContain('admin@pbs');
-    expect(getNodeUsernameHelp('pmg')).toContain('api@pmg');
+    expect(getNodeUsernameHelp('pmg')).toContain('pulse-monitor@pmg');
 
     expect(getNodeTokenIdPlaceholder('pve')).toBe('pulse-monitor@pve!pulse-token');
     expect(getNodeTokenIdPlaceholder('pbs')).toBe('pulse-monitor@pbs!pulse-token');

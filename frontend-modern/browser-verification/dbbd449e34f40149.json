@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "base_sha": "347be9195ff2efc1323e4ebdca2be6493f4b3b0c",
+  "verified_at": "2026-10-15T23:49:44.609463Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
+    "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+    "frontend-modern/src/utils/nodeModalPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx": "e259f0b2418efcccbbcfde28a794c5fc794a069f36772537dc7bda8fed4202f8",
+    "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx": "b8feddfc24aafce1c7a8e6ca9541963073be21d89a089670a9467eabc4ec2736",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "27e55aa62d721c2b299f65abc96b1b684e01064d60ed585fee2ea7b40f9b7fe0",
+    "frontend-modern/src/utils/nodeModalPresentation.ts": "28b651a30c9f7bbed19182b735ea5ce7f98ecb928697ee369a689774b979e9aa"
+  },
+  "routes": [
+    "/settings/infrastructure?fixtureType=pmg&fixtureMode=add",
+    "/settings/infrastructure?fixtureType=pmg&fixtureMode=edit"
+  ],
+  "states": [
+    "Production NodeCredentialSlot, NodeModalForm and state, password-only PMG add and saved-account edit; safe local fixture, no save/test/API action.",
+    "Desktop Chromium 141.0.7390.37 and narrow WebKit 26.0; both light and dark, add and edit (eight journeys).",
+    "Single account note with PMG-version minimum-read permissions; no root, Auditor, Privilege Separation or API-token instructions.",
+    "Blank new password required only in add; saved-account edit still offers Leave blank to keep existing. SSL verification remains checked.",
+    "Sequence says Username and password; no token inputs or assisted token/host-agent commands."
+  ],
+  "interactions": [
+    "Fill service-account username, Tab to masked password on desktop and touch-focus password on phone; fill synthetic password, clear before capture.",
+    "Read real guidance and input requirements; check absence of token UI, correct add/edit state and unchanged TLS default.",
+    "Check page/section/input widths, horizontal overflow and note clipping. No external or API requests; no console page errors.",
+    "Natively inspect all ten authentication/sequence captures with view_image; readable/wrapped content in light/dark, desktop/phone without clipping."
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 900,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "browser": "WebKit",
+      "browser_version": "26.0",
+      "has_touch": true
+    }
+  ],
+  "playwright_version": "1.56.1",
+  "browser_script": "frontend-modern/browser-tests/pmg-account-guidance.cjs",
+  "preview_builder": "frontend-modern/browser-tests/build-node-connection-test.mjs --source-sha 347be9195ff2efc1323e4ebdca2be6493f4b3b0c",
+  "source_binding": {
+    "inputs": 2916,
+    "served_artifacts": 6,
+    "method": "SHA256 for each source and served artifact, checked by browser driver before serving; final four runtime hashes listed above."
+  },
+  "captures": [
+    {
+      "file": "1360-light-add-authentication.png",
+      "sha256": "aacd4ae045fcf7b4d7a1ae5e558c4df6a54956cecc24b5e3b3ee54cd636eeeb9",
+      "bytes": 44382,
+      "viewport": {
+        "width": 1360,
+        "height": 900
+      },
+      "scheme": "light",
+      "mode": "add",
+      "engine": "chromium"
+    },
+    {
+      "file": "1360-light-add-sequence.png",
+      "sha256": "c4b373dc88b758ed4c09571a9456140a0055a01c886c751670090e897a57d76c",
+      "bytes": 10011,
+      "viewport": {
+        "width": 1360,
+        "height": 900
+      },
+      "scheme": "light",
+      "mode": "add",
+      "engine": "chromium"
+    },
+    {
+      "file": "1360-light-edit-authentication.png",
+      "sha256": "8253f9d7676c6c2ae223c0c1947a2d6d30f1e96d4b3f41150840885a9b2169c6",
+      "bytes": 45564,
+      "viewport": {
+        "width": 1360,
+        "height": 900
+      },
+      "scheme": "light",
+      "mode": "edit",
+      "engine": "chromium"
+    },
+    {
+      "file": "1360-dark-add-authentication.png",
+      "sha256": "a988f1d9501a9c3c99f9bbaaad6c771a1c416ebbdcc370371406f7f75b2b7b48",
+      "bytes": 44862,
+      "viewport": {
+        "width": 1360,
+        "height": 900
+      },
+      "scheme": "dark",
+      "mode": "add",
+      "engine": "chromium"
+    },
+    {
+      "file": "1360-dark-edit-authentication.png",
+      "sha256": "e4941937e10a6f7ce7ef3d74a5cfc97bb0bae2785d93cdd15dae4f04c2e454c2",
+      "bytes": 46239,
+      "viewport": {
+        "width": 1360,
+        "height": 900
+      },
+      "scheme": "dark",
+      "mode": "edit",
+      "engine": "chromium"
+    },
+    {
+      "file": "320-light-add-authentication.png",
+      "sha256": "bbd69f04a0bac057c34463364132e5458cb8deed115899c746f476a35a9827d3",
+      "bytes": 45658,
+      "viewport": {
+        "width": 320,
+        "height": 900
+      },
+      "scheme": "light",
+      "mode": "add",
+      "engine": "webkit"
+    },
+    {
+      "file": "320-light-add-sequence.png",
+      "sha256": "7160e18351ead18d030bdc8a716ebc9cac86ee55588b9e7574bf1167a553e367",
+      "bytes": 12104,
+      "viewport": {
+        "width": 320,
+        "height": 900
+      },
+      "scheme": "light",
+      "mode": "add",
+      "engine": "webkit"
+    },
+    {
+      "file": "320-light-edit-authentication.png",
+      "sha256": "7a542d7a0b143809b3931357ff302da0bd0bec8a9cd2154161e8981988800ae8",
+      "bytes": 46889,
+      "viewport": {
+        "width": 320,
+        "height": 900
+      },
+      "scheme": "light",
+      "mode": "edit",
+      "engine": "webkit"
+    },
+    {
+      "file": "320-dark-add-authentication.png",
+      "sha256": "9416f7359e714448a7e92d4e26663a9f65478530738a8656a1463bde4eefbf30",
+      "bytes": 45430,
+      "viewport": {
+        "width": 320,
+        "height": 900
+      },
+      "scheme": "dark",
+      "mode": "add",
+      "engine": "webkit"
+    },
+    {
+      "file": "320-dark-edit-authentication.png",
+      "sha256": "222afbc221cd31cbbb6e9723d1c34bc75435de045c2d3d1a4a275d4ca1b179b7",
+      "bytes": 46714,
+      "viewport": {
+        "width": 320,
+        "height": 900
+      },
+      "scheme": "dark",
+      "mode": "edit",
+      "engine": "webkit"
+    }
+  ],
+  "cleanup": {
+    "browserClosed": true,
+    "serverClosed": true
+  },
+  "limits": [
+    "Browser fixture establishes setup presentation/input behaviour, not live PMG permissions, token capability, producer recovery for #2960 or installation/publication."
+  ]
+}

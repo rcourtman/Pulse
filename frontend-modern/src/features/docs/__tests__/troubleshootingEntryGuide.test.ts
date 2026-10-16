@@ -226,7 +226,7 @@ describe('troubleshooting workflow entry', () => {
       if (/^H[1-3]$/.test(next.tagName)) break;
       detail.appendChild(next.cloneNode(true));
     }
-    expect(prose(detail)).toContain('Use PMG\'s own web interface');
+    expect(prose(detail)).toContain("Use PMG's own web interface");
     expect(prose(detail)).toContain('no new Test, backup, mail traffic or diagnostic run');
     expect(detail.querySelector('pre')).toBeNull();
   });

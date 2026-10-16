@@ -55,11 +55,9 @@ export const NodeModalAuthenticationSection: Component<NodeModalAuthenticationSe
           </Show>
         </div>
         <Show when={modalProps.nodeType === 'pmg'}>
-          <p class="text-xs text-muted mt-2">
-            Proxmox Mail Gateway does not support API tokens. Use a service account with password
-            authentication (for example <code>root@pam</code> or a dedicated <code>api@pmg</code>{' '}
-            user).
-          </p>
+          <div class="mt-3">
+            <NodeModalSetupGuideSection modalProps={modalProps} state={state} />
+          </div>
         </Show>
       </div>
 

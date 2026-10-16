@@ -133,8 +133,9 @@ export function getNodeUsernamePlaceholder(nodeType: NodeModalNodeType): string 
     case 'pbs':
       return 'admin@pbs';
     case 'pve':
-    case 'pmg':
       return 'root@pam';
+    case 'pmg':
+      return 'pulse-monitor@pmg';
   }
 }
 
@@ -143,7 +144,7 @@ export function getNodeUsernameHelp(nodeType: NodeModalNodeType): string | null 
     case 'pbs':
       return 'Must include realm (e.g., admin@pbs).';
     case 'pmg':
-      return 'Include realm (e.g., root@pam or api@pmg).';
+      return 'Include the service account realm (e.g., pulse-monitor@pmg).';
     case 'pve':
       return null;
   }

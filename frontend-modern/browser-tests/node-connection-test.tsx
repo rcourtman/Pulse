@@ -12,6 +12,7 @@ import '../src/index.css';
 // platform/guest calls. Saving is deliberately not part of this journey.
 const type = new URLSearchParams(location.search).get('fixtureType') as NodeSlotType;
 if (!['pve', 'pbs', 'pmg'].includes(type)) throw new Error('Expected fixtureType');
+const adding = new URLSearchParams(location.search).get('fixtureMode') === 'add';
 const settings = {
   securityStatus: () => null,
   resolveTemperatureMonitoringEnabled: () => true,
@@ -51,7 +52,7 @@ render(
       <NodeCredentialSlot
         nodeType={type}
         settings={settings}
-        editingNode={node}
+        editingNode={adding ? undefined : node}
         onCancel={() => {}}
         onSaved={() => {}}
         connectionEnabled={true}

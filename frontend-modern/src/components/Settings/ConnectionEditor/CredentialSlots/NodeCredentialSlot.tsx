@@ -182,7 +182,11 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
             </span>
             <div>
               <div class="font-medium text-base-content">Authentication</div>
-              <div class="text-xs text-muted">Assisted setup or manual token</div>
+              <div class="text-xs text-muted">
+                {props.nodeType === 'pmg'
+                  ? 'Username and password'
+                  : 'Assisted setup or manual token'}
+              </div>
             </div>
           </div>
           <div class="flex items-start gap-2">
