@@ -980,11 +980,13 @@ Review external MCP clients and their access separately.
 
 ### Usage telemetry is separate
 
-Outbound usage telemetry is enabled by default and contains aggregate counts,
-feature flags and coarse operational buckets, not prompts, chat messages,
-command text, action output, credentials or infrastructure identifiers. It can
-be disabled in **Settings → System → General → Outbound usage telemetry** or
-with `PULSE_TELEMETRY=false`.
+Outbound usage telemetry is enabled by default and can be disabled any time.
+Its payload uses a rotating pseudonymous install ID, aggregate counts, feature
+flags, and coarse Patrol mode and governed Pulse Intelligence operations
+adoption buckets and counters. There are no hostnames, credentials, prompts,
+chat messages, command text, action output, token values, IP addresses, or
+resource identifiers in the payload. Disable it in **Settings → System →
+General → Outbound usage telemetry** or with `PULSE_TELEMETRY=false`.
 
 **Disabling usage telemetry does not disable AI provider requests or external
 MCP access.** Conversely, using a local model does not turn telemetry off.

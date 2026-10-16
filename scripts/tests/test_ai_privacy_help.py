@@ -37,7 +37,10 @@ class AIPrivacyHelpTest(unittest.TestCase):
     def test_action_and_telemetry_controls_do_not_claim_to_stop_context(self):
         for boundary in ("limit actions, not model requests", "Disabling usage telemetry does not disable AI",
                          "or external MCP access", "local model does not turn telemetry off",
-                         "PULSE_TELEMETRY=false", "do not", "run a provider test merely"):
+                         "PULSE_TELEMETRY=false", "rotating pseudonymous install ID",
+                         "Patrol mode and governed Pulse Intelligence operations",
+                         "enabled by default and can be disabled any time",
+                         "run a provider test merely"):
             with self.subTest(boundary=boundary):
                 self.assertIn(boundary, self.privacy)
         self.assertIn('ariaLabel="Enable Pulse Intelligence"',
