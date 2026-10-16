@@ -106,9 +106,15 @@ const result = { source: binding.source_sha, binding_sha256: hash(bindingBytes),
       if (codeGeometry.content > codeGeometry.width) assert.ok(codeGeometry.offset > 0);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       await capture('single-writer', page.locator('article p').filter({ hasText: 'Keep a single Pulse server' }));
-      await page.goto(`${origin}/docs/KUBERNETES#option-b-generating-static-manifests-for-talos-gitops`,
+      // Use the renderer's actual GitHub-compatible ID: removing the slash
+      // from "Talos / GitOps" preserves the two surrounding spaces/hyphens.
+      const staticId = await page.getByRole('heading', {
+        name: 'Option B: Generating Static Manifests (For Talos / GitOps)', exact: true,
+      }).getAttribute('id');
+      assert.ok(staticId);
+      await page.goto(`${origin}/docs/KUBERNETES#${staticId}`,
         { waitUntil: 'domcontentloaded' });
-      await settledFragment('option-b-generating-static-manifests-for-talos-gitops');
+      await settledFragment(staticId);
       await capture('static-namespace', page.locator('article p').filter({ hasText: 'Do not apply after a render error' }));
       await page.goto(`${origin}/docs/KUBERNETES#openshift-profile-helm`, { waitUntil: 'domcontentloaded' });
       await settledFragment('openshift-profile-helm');
