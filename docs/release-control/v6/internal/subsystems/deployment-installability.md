@@ -16,6 +16,29 @@
 
 ## Purpose
 
+### Docker setup preserves existing deployment configuration
+
+`scripts/install-docker.sh` is a fresh-configuration generator, not an upgrade
+operation. Before writing either output it refuses any existing default Compose
+base or override filename, including links, dangling links and directories.
+It does not replace the deployment or overwrite its previous recovery copy.
+An existing regular `.env` is preserved byte-for-byte; a linked, dangling or
+special `.env` path stops before Compose creation. New outputs use Bash
+noclobber so a regular file or link appearing after preflight is not truncated.
+This is not a multi-file atomic transaction or a guarantee for an adversarially
+shared directory. The completion message describes configuration generation,
+not a running or installed container. Image/version/port defaults are unchanged.
+
+`TestInstallDockerGeneratorPreservesExistingConfiguration` runs the complete
+`scripts/tests/test_install_docker_generator.py` controls against the real
+generator with only root/container eligibility guards disabled in a private
+copy. Closed Docker/timezone/hostname fixtures cover repeated refusal and
+recovery-copy preservation, all default base/override names, linked outputs,
+special environment paths, fresh defaults and explicit images, and an unchanged
+regular environment file. Exact-parent controls must reproduce the destructive
+overwrite and successful exit. This is source-bound generator proof, not Docker
+startup, native installation, upgrade or installed recovery.
+
 ### Container-agent compatibility bootstrap authenticates before execution
 
 The legacy `scripts/install-container-agent.sh` wrapper continues to prefer its

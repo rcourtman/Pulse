@@ -78,14 +78,32 @@ fi
 # ============================================
 
 COMPOSE_FILE="./docker-compose.yml"
+ENV_FILE=".env"
 
-# Check if docker-compose.yml already exists (idempotency)
-if [ -f "$COMPOSE_FILE" ]; then
-    echo "⚠️  docker-compose.yml already exists"
-    echo "   Backing up to docker-compose.yml.backup"
-    cp "$COMPOSE_FILE" "${COMPOSE_FILE}.backup"
+# This is a fresh-configuration generator, not an updater. Replacing an
+# existing deployment can lose its mounts, trust and service settings; a
+# repeatedly overwritten .backup is not recovery. Also refuse Compose's other
+# default names and overrides rather than silently combining two deployments.
+for existing_compose in docker-compose.yml docker-compose.yaml compose.yml compose.yaml \
+    docker-compose.override.yml docker-compose.override.yaml compose.override.yml compose.override.yaml; do
+    if [ -e "$existing_compose" ] || [ -L "$existing_compose" ]; then
+        printf '%s\n' "ERROR: Existing Compose configuration ($existing_compose); no files changed." \
+            "Keep your existing deployment configuration, or generate a new one in an empty directory." >&2
+        exit 1
+    fi
+done
+
+# An ordinary operator-owned .env is retained. Do not follow links (including
+# dangling ones), write to a pipe, or create Compose before discovering an
+# unusable environment path.
+if { [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; } && \
+    { [ ! -f "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; }; then
+    printf '%s\n' "ERROR: .env must be a regular file, not a link or special path; no files changed." >&2
+    exit 1
 fi
 
+# Do not truncate a regular file/link created after the preflight observation.
+set -o noclobber
 cat > "$COMPOSE_FILE" << COMPOSE_EOF
 version: '3.8'
 
@@ -119,7 +137,6 @@ echo "✓ Generated docker-compose.yml"
 echo ""
 
 # Create .env file with defaults
-ENV_FILE=".env"
 if [ -f "$ENV_FILE" ]; then
     echo "⚠️  .env file already exists - not overwriting"
     echo ""
@@ -134,11 +151,11 @@ EOF
 fi
 
 # ============================================
-# Installation Complete
+# Configuration Generated (no container has been installed or started)
 # ============================================
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ Installation Complete!"
+echo "✓ Configuration generated; Pulse has not been started."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Start Pulse with:"
