@@ -223,6 +223,57 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it.each(['date', 'coverage'])(
+    'keeps point verification separate from pruning and workload posture in %s',
+    async (view) => {
+      let verified: boolean | undefined = false;
+      mockBackupAPIs('protected');
+      apiFetchMock.mockImplementation((url: string) =>
+        Promise.resolve(
+          jsonResponse(
+            url === '/api/backups/pbs'
+              ? { data: { backups: [{ ...pbsPayload.data.backups[0], verified }] } }
+              : { data: { storageBackups: [], guestSnapshots: [], backupTasks: [] } },
+          ),
+        ),
+      );
+      window.history.replaceState({}, '', `/proxmox/backups/${view}`);
+      const { container } = renderInRouter(() => (
+        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+      ));
+      const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
+      await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
+      if (view === 'coverage') {
+        await fireEvent.click(
+          screen.getByRole('button', { name: /expand details for pbs-docker/i }),
+        );
+      }
+      const primary = () => container.querySelector('[data-backup-artifact-state]');
+      expect(primary()).toHaveTextContent('Unverified');
+      expect(screen.getByText('Prune protected')).toBeInTheDocument();
+      const initialRoute = window.location.pathname;
+      for (const next of [true, undefined]) {
+        verified = next;
+        refresh.focus();
+        await fireEvent.click(refresh);
+        await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
+        await waitFor(() =>
+          expect(primary()).toHaveTextContent(next ? 'Verified' : 'Unknown verification'),
+        );
+        expect(screen.getByText('Prune protected')).toBeInTheDocument();
+        expect(window.location.pathname).toBe(initialRoute);
+        expect(refresh).toHaveFocus();
+      }
+      if (view === 'coverage') {
+        // A server-owned workload verdict is not recomputed from the point badge.
+        expect(container.querySelector('[data-proxmox-backup-row="coverage"]')).toHaveTextContent(
+          'Protected',
+        );
+        expect(screen.getByText('Restore evidence')).toBeInTheDocument();
+      }
+    },
+  );
+
   it('refreshes readable inventories and posture without leaving the filtered expanded view', async () => {
     mockBackupAPIs();
     window.history.replaceState({}, '', '/proxmox/backups/coverage?q=pbs-docker&node=pve-a');
@@ -230,7 +281,7 @@ describe('ProxmoxBackupsTable', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
     const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
-    await waitFor(() => expect(refresh).toBeEnabled());
+    await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
     await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
     const details = () => container.querySelector('[data-inline-detail-for="resource:ct-112"]');
     expect(details()).toHaveTextContent('PVE file');
@@ -257,7 +308,7 @@ describe('ProxmoxBackupsTable', () => {
     );
     refresh.focus();
     await fireEvent.click(refresh);
-    await waitFor(() => expect(refresh).toBeEnabled());
+    await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pve')).toHaveLength(2);
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(2);
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
@@ -278,7 +329,7 @@ describe('ProxmoxBackupsTable', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
     const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
-    await waitFor(() => expect(refresh).toBeEnabled());
+    await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
     const rows = () => container.querySelectorAll('[data-proxmox-backup-row="recoverable"]');
     expect(rows()).toHaveLength(3);
     let finishPVE!: (value: Response) => void;
@@ -292,23 +343,27 @@ describe('ProxmoxBackupsTable', () => {
         }),
     );
     apiFetchJSONMock.mockReturnValue(new Promise((resolve) => (finishPosture = resolve)));
+    refresh.focus();
     await fireEvent.click(refresh);
     expect(screen.getByRole('button', { name: 'Reading backups…' })).toBe(refresh);
-    expect(refresh).toBeDisabled();
+    expect(refresh).not.toBeDisabled();
+    expect(refresh).toHaveFocus();
+    expect(refresh).toHaveAttribute('aria-disabled', 'true');
     expect(rows()).toHaveLength(3);
     await fireEvent.click(refresh);
     expect(apiFetchMock).toHaveBeenCalledTimes(4);
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
     finishPVE(jsonResponse({ data: { guestSnapshots: [], storageBackups: [], backupTasks: [] } }));
     await waitFor(() => expect(rows()).toHaveLength(1));
-    expect(refresh).toBeDisabled();
+    expect(refresh).toHaveAttribute('aria-disabled', 'true');
     finishPBS(new Response('{}', { status: 503 }));
     await screen.findByText(/PBS backup inventory is unavailable/);
     expect(rows()).toHaveLength(0);
-    expect(refresh).toBeDisabled();
+    expect(refresh).toHaveAttribute('aria-disabled', 'true');
     finishPosture(posture);
-    await waitFor(() => expect(refresh).toBeEnabled());
+    await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
     expect(refresh).toHaveTextContent('Refresh backups');
+    expect(refresh).toHaveFocus();
     expect(window.location.pathname).toBe('/proxmox/backups/date');
   });
 
@@ -333,7 +388,7 @@ describe('ProxmoxBackupsTable', () => {
         <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
       ));
       const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
-      await waitFor(() => expect(refresh).toBeEnabled());
+      await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
       expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(0);
       mockBackupAPIs();
       await fireEvent.click(refresh);
@@ -358,7 +413,10 @@ describe('ProxmoxBackupsTable', () => {
     ));
     const refresh = await screen.findByRole('button', { name: 'Refresh' });
     expect(refresh).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Reading backups…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Reading backups…' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     fireEvent.click(refresh);
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
     posture.resolve({ data: [], policy: {} });
@@ -409,7 +467,15 @@ describe('ProxmoxBackupsTable', () => {
     };
     await within(table).findByText('Unavailable');
     await waitFor(() => expect(backupCount()).toBe('1'));
-    await screen.findAllByText('Protected');
+    // Point retention remains visible without hiding its verification result;
+    // neither depends on whether datastore capacity was readable.
+    await screen.findByText('Prune protected');
+    const restorePoints = container.querySelector(
+      '[data-proxmox-backups-table="recoverable"]',
+    ) as HTMLElement;
+    expect(within(restorePoints).getByText('Verified')).toHaveAttribute(
+      'data-backup-artifact-state',
+    );
     expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_ERROR_SENTINEL');
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
 

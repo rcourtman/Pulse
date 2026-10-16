@@ -34,7 +34,6 @@ import {
   ProxmoxBackupAgeText,
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
-  artifactStateLabel,
 } from './proxmoxBackupsTableShared';
 import {
   getCoverageColumns,
@@ -616,10 +615,7 @@ export function ProxmoxCoverageTable(props: {
                                         <TableCell
                                           class={getPlatformTableCellClassForKind('badge')}
                                         >
-                                          <ArtifactStateBadge
-                                            artifact={artifact}
-                                            label={artifactStateLabel(artifact)}
-                                          />
+                                          <ArtifactStateBadge artifact={artifact} />
                                         </TableCell>
                                         <Show
                                           when={isCoverageEvidenceColumnVisible(

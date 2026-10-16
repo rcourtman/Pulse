@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "7a5e254dcd1a03990dc3cf0a5bb6a2799aa39c90",
+  "verified_at": "2026-10-16T02:14:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "9687c97f51323a66cfe5a9486cf8cca676314acdf3b33f5dff3c512fdaef6e5b"
+  },
+  "routes": [
+    "/proxmox/backups/date?location=archive%3Afixture-pve%3Alocal",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Fresh containing Backups consumer after restored candidate composition with saved node-local location-group semantics",
+    "Saved aggregate local-store key displays both independently stored PVE files",
+    "Connection, datastore and node-local facets preserve their exact keys and counts; source filters remain readable at 320px",
+    "All point verification/completion categories visible By date; separate prune-protection evidence remains in Coverage",
+    "Open Coverage details survive held inventory refresh; verification readout updates and refresh control keeps keyboard focus"
+  ],
+  "interactions": [
+    "Desktop keyboard/320px taps remove saved location chip and restore11rows; each of five scope choices filters independently and chip removal restores all rows",
+    "Expand Coverage evidence; hold PBS response, activate refresh twice, release response; exactly3APIreads, detail remains open, Verified increments without losing focus",
+    "All labels/targets remain in their own rectangles without overlap or document overflow"
+  ],
+  "evidence": {
+    "command": "pulse-worker-browser tmp/backup-filter-layout/composition.cjs",
+    "runner": "frontend-modern/browser-tests/backup-filter-layout.cjs (composition mode)",
+    "result": "composition/result.json",
+    "source_binding_sha256": "5fb42762a8e02a85dd387dffd0b9df8ca608dfa73f764415ffd1f9dcf3ed7e07",
+    "captures": [
+      "composition/desktop-saved-scope.png",
+      "composition/desktop-coverage.png",
+      "composition/narrow-saved-scope.png",
+      "composition/narrow-coverage.png"
+    ],
+    "pixel_review": "All four captures opened with native view_image. Desktop single-line and phone wrapped source/posture controls are readable; location chip and independent prune/verification states remain visible.",
+    "limits": "Synthetic loopback HTTP observations through production readers/model/table/CSS, not an installed full-app, native backup/guest recovery or release result. Previous browser receipt is unchanged."
+  }
+}

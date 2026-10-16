@@ -3298,6 +3298,37 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+The backup inventory Refresh button remains focusable while it announces its
+pending read with `aria-disabled`; its existing single-flight handler refuses
+repeated activations until both inventories and posture settle. This avoids
+native disabled-button focus loss without enabling duplicate reads. Connected
+controlled-response tests and the browser fixture cover pending and completed
+focus plus a second keyboard activation. No pending read is cancelled or replayed.
+
+
+
+### Backup point pruning and verification are independent (15 October 2026)
+
+Coverage restore evidence and the By date feed show a backup point's completion
+or verification state separately from the provider's `protected` flag. The
+additional **Prune protected** badge means protection from pruning, not a
+verified point or a workload protection verdict. Verified and Unverified remain
+visible when that flag is set; absent PBS verification is **Unknown**, not a
+failed verification job. Running and incomplete points cannot acquire a Verified
+badge, and a guest snapshot remains distinct from a separate backup. Ordinary
+PVE files without a verification result retain their Backup file label.
+
+Both badges wrap within their State cell and update on the existing inventory
+refresh without losing Coverage expansion, focus or route. Sorting State uses
+completion/verification, not the pruning flag. Resource matching, API formats,
+server-owned workload posture, backup operations, retention and collection
+behaviour are unchanged. Shared component controls plus
+`ProxmoxBackupsTable.test.tsx` exercise the real parser/model consumers in both
+views; the offline `backup-point-state.cjs` browser fixture also consumes the
+shipped PBS help. These are source/consuming proofs, not native restore, guest
+thaw, every-filesystem writes, installed recovery or publication evidence.
+
+
 ### Retained Machines and Debug status (11 October 2026)
 
 The Machines row status, health chip counts and selected filter membership
