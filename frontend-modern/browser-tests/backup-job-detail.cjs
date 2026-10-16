@@ -184,7 +184,9 @@ async function geometry(page) {
     if (phone) await page.evaluate(() => document.documentElement.classList.add('dark'));
     const row = page.locator('[data-proxmox-coverage-key="resource:east-100"]');
     const toggle = row.getByRole('button', { expanded: false });
-    if (phone) await toggle.tap();
+    // The compact view deliberately makes the whole identity cell the touch
+    // target; its small keyboard disclosure is visually hidden until focused.
+    if (phone) await row.locator('td').first().tap();
     else {
       await toggle.focus();
       await page.keyboard.press('Enter');
