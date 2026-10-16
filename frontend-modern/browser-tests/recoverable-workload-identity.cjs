@@ -141,6 +141,9 @@ const posture = () => ({
   },
 });
 async function capture(page, name) {
+  await page
+    .locator('[data-proxmox-backups-table="recoverable"]')
+    .evaluate((table) => table.scrollIntoView({ block: 'start' }));
   const file = path.join(output, name + '.png');
   await page.screenshot({ path: file });
   result.captures.push({ file: path.relative(root, file), sha256: hash(fs.readFileSync(file)) });
@@ -355,12 +358,10 @@ async function scan(page, reverse, budget) {
       await page.setViewportSize({ width: spec.width, height: spec.height });
     }
     revision = 1;
-    await page.getByRole('button', { name: 'Refresh workload observations', exact: true }).click();
-    await page.waitForFunction(() =>
-      document
-        .querySelector('[data-proxmox-backup-key="artifact:archive:point-1"]')
-        ?.textContent.includes('102'),
-    );
+    await Promise.all([
+      page.waitForResponse((response) => new URL(response.url()).pathname === '/fixture/workloads'),
+      page.getByRole('button', { name: 'Refresh workload observations', exact: true }).click(),
+    ]);
     const refresh = page.getByRole('button', { name: 'Refresh backups', exact: true });
     await refresh.focus();
     const before = result.requests.length;
@@ -369,6 +370,11 @@ async function scan(page, reverse, budget) {
       () =>
         document.querySelector('button[title^="Read Pulse"]')?.getAttribute('aria-disabled') ===
         'false',
+    );
+    await page.waitForFunction(() =>
+      document
+        .querySelector('[data-proxmox-backup-key="artifact:archive:point-1"]')
+        ?.textContent.includes('102'),
     );
     const reads = result.requests.slice(before).filter((r) => r.path.startsWith('/api/'));
     assert.deepEqual(reads.map((r) => r.path).sort(), [
@@ -390,7 +396,10 @@ async function scan(page, reverse, budget) {
     await search.fill('');
     await page.locator('[data-proxmox-backup-row="recoverable"]').nth(3).waitFor();
     await capture(page, spec.name + '-refreshed');
-    await page.getByRole('button', { name: 'Load fleet observations', exact: true }).click();
+    await Promise.all([
+      page.waitForResponse((response) => new URL(response.url()).pathname === '/fixture/workloads'),
+      page.getByRole('button', { name: 'Load fleet observations', exact: true }).click(),
+    ]);
     await refresh.click();
     await page.waitForFunction(
       () =>
