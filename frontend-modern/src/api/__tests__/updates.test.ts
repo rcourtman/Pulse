@@ -4,7 +4,7 @@ vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
 }));
 
-import { UpdatesAPI } from '@/api/updates';
+import { UpdatesAPI, type ProRuntimeSwitch } from '@/api/updates';
 import type { UpdateChannel } from '@/types/config';
 import { apiFetchJSON } from '@/utils/apiClient';
 
@@ -48,6 +48,18 @@ describe('UpdatesAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/updates/pro-runtime/apply', {
       method: 'POST',
     });
+  });
+
+  it('passes a preview-only Pulse Pro refusal through with the pinned version', async () => {
+    const response: ProRuntimeSwitch = {
+      available: false,
+      reason: 'prerelease_only',
+      currentVersion: '6.5.0',
+      version: '6.6.0-rc.1',
+      installInPlace: false,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(response as any);
+    await expect(UpdatesAPI.checkProRuntimeSwitch()).resolves.toEqual(response);
   });
 
   it('fetches release notes for the running version', async () => {

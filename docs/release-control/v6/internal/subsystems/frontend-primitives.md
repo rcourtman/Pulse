@@ -9702,8 +9702,12 @@ the community build and the install is not a source build. The card composes
 the shared `CalloutCard`, `Button` and `CopyCommandBlock` primitives; its copy
 lives in `getProRuntimeSwitchPresentation` in `utils/updatesPresentation.ts`
 beside the rest of the Updates panel copy. Only `in_place`, `docker`,
-`older_release` and `unavailable` render; every other reason stays hidden, and
-the License panel keeps its own runtime notice. The in-place switch needs an
+`older_release`, `prerelease_only` and `unavailable` render; every other reason
+stays hidden, and the License panel keeps its own runtime notice.
+`prerelease_only` is an info callout without a switch button: the only Pro
+build on offer is a preview and a stable-channel install never installs one,
+so the card names that preview version and says the switch appears once a
+stable Pulse Pro release is published. The in-place switch needs an
 explicit confirm step, and progress comes from the existing update progress
 modal rather than card-local state. Command blocks pad clear of the copy
 button so long digest-pinned commands stay readable when they wrap.
