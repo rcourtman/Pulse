@@ -1125,10 +1125,13 @@ describe('Docker phone update reflow boundary', () => {
 });
 
 describe('Alert History column widths', () => {
-  // Fixed layout sizes all nine tracks against the table width before the
-  // collapsed ones are removed, so at each density the visible tracks must sum
-  // to 100% and the table width must be the sum of all nine; otherwise the
-  // visible columns stop filling the card or overflow it.
+  // Hidden tracks are collapsed and zero-width so the table is always the
+  // card's width: WebKit keeps a collapsed column's width in a fixed layout,
+  // so widening the table to compensate made Safari scroll sideways. The base
+  // density (an unmeasured card under 800px) gives every visible track a
+  // percentage summing to 100%. From an 800px card the fixed-content columns
+  // take exact pixels, resource and node a plain share of the card, and
+  // message has no width so it takes the rest.
   const columns = [
     'timestamp',
     'resource',
@@ -1140,7 +1143,8 @@ describe('Alert History column widths', () => {
     'node',
     'actions',
   ] as const;
-  const densities: Array<{ name: string; visible: readonly (typeof columns)[number][] }> = [
+  type Column = (typeof columns)[number];
+  const densities: Array<{ name: string; visible: readonly Column[] }> = [
     {
       name: 'base',
       visible: ['timestamp', 'resource', 'severity', 'message', 'status', 'actions'],
@@ -1154,43 +1158,35 @@ describe('Alert History column widths', () => {
   ];
   const blocks = [
     ...appStylesSource.matchAll(
-      /table\.alert-history-responsive-table \{\s*((?:--alert-history-[a-z]+-width: [\d.]+%;\s*)+)width: ([\d.]+)%;/g,
+      /table\.alert-history-responsive-table \{\s*((?:--alert-history-[a-z]+-width: [^;]+;\s*)+)width: ([^;]+);/g,
     ),
   ];
-
-  it('declares every track width at each density', () => {
-    expect(blocks).toHaveLength(densities.length);
-    for (const column of columns) {
-      expect(appStylesSource).toContain(
-        `col.alert-history-${column}-track {\n    width: var(--alert-history-${column}-width);`,
-      );
-    }
-  });
-
-  it('fills the card exactly with the visible tracks', () => {
-    blocks.forEach((block, index) => {
-      const widths = Object.fromEntries(
-        [...block[1].matchAll(/--alert-history-([a-z]+)-width: ([\d.]+)%;/g)].map((match) => [
-          match[1],
-          Number(match[2]),
-        ]),
-      );
-      expect(Object.keys(widths).sort()).toEqual([...columns].sort());
-      const visibleSum = densities[index].visible.reduce((sum, column) => sum + widths[column], 0);
-      const allSum = columns.reduce((sum, column) => sum + widths[column], 0);
-      expect(visibleSum).toBeCloseTo(100, 6);
-      expect(Number(block[2])).toBeCloseTo(allSum, 6);
-    });
-  });
+  const parse = (block: RegExpMatchArray) =>
+    Object.fromEntries(
+      [...block[1].matchAll(/--alert-history-([a-z]+)-width: ([^;]+);/g)].map((match) => [
+        match[1],
+        match[2].trim(),
+      ]),
+    ) as Record<Column, string>;
+  const percent = (value: string) => {
+    const match = /^(\d+(?:\.\d+)?)%$/.exec(value);
+    if (!match) throw new Error(`expected a percentage, got ${value}`);
+    return Number(match[1]);
+  };
+  const pixels = (value: string) => {
+    const match = /^(\d+(?:\.\d+)?)px$/.exec(value);
+    if (!match) throw new Error(`expected pixels, got ${value}`);
+    return Number(match[1]);
+  };
 
   // Each density is sized for the narrowest card it serves, from the natural
   // widths measured in a real browser (padding included): "08:27 AM" in a 14px
   // monospace, the Severity/Duration/Resource headers, a 119px "acknowledged"
   // badge, and the three row actions on one line (177px). Below 800px the
   // actions stack, so the base density only needs the widest single button.
-  // Message, the column that says what happened, takes what is left and may
-  // never fall under 18% of the card: equal shares had held it to the width
-  // of the timestamp. Type and Node, which appear from 1024px, get a floor too.
+  // Message, the column that says what happened, may never fall under 18% of
+  // the card. Type and Node, which appear from 1024px, get a floor too: the
+  // longest type label, "Container Health", needs 119px with its padding.
   const wideNeeds = {
     timestamp: 84,
     resource: 93,
@@ -1202,7 +1198,7 @@ describe('Alert History column widths', () => {
   const pixelNeeds: Array<{
     name: string;
     cardWidth: number;
-    needs: Partial<Record<(typeof columns)[number], number>>;
+    needs: Partial<Record<Column, number>>;
   }> = [
     {
       name: 'base',
@@ -1210,9 +1206,77 @@ describe('Alert History column widths', () => {
       needs: { timestamp: 84, resource: 93, severity: 86, status: 119, actions: 80 },
     },
     { name: '50rem', cardWidth: 800, needs: wideNeeds },
-    { name: '64rem', cardWidth: 1024, needs: { ...wideNeeds, type: 108, node: 68 } },
-    { name: '80rem', cardWidth: 1280, needs: { ...wideNeeds, type: 108, node: 68 } },
+    { name: '64rem', cardWidth: 1024, needs: { ...wideNeeds, type: 120, node: 68 } },
+    { name: '80rem', cardWidth: 1280, needs: { ...wideNeeds, type: 120, node: 68 } },
   ];
+
+  // The rendered width of each visible track at a given card width.
+  const trackWidths = (index: number, cardWidth: number): Record<string, number> => {
+    const widths = parse(blocks[index]);
+    const visible = densities[index].visible;
+    if (index === 0) {
+      return Object.fromEntries(
+        visible.map((column) => [column, (percent(widths[column]) / 100) * cardWidth]),
+      );
+    }
+    const tableWidth = cardWidth;
+    const resolved: Record<string, number> = {};
+    for (const column of visible) {
+      if (column === 'message') continue;
+      resolved[column] = widths[column].endsWith('%')
+        ? (percent(widths[column]) / 100) * tableWidth
+        : pixels(widths[column]);
+    }
+    resolved.message = cardWidth - Object.values(resolved).reduce((sum, width) => sum + width, 0);
+    return resolved;
+  };
+
+  it('declares every track width at each density', () => {
+    expect(blocks).toHaveLength(densities.length);
+    for (const column of columns) {
+      expect(appStylesSource).toContain(
+        `col.alert-history-${column}-track {\n    width: var(--alert-history-${column}-width);`,
+      );
+    }
+  });
+
+  it('keeps the table at the card width with zero-width hidden tracks', () => {
+    blocks.forEach((block, index) => {
+      const widths = parse(block);
+      const { name, visible } = densities[index];
+      expect(block[2].trim(), `${name}: table width`).toBe('100%');
+      for (const column of columns.filter((candidate) => !visible.includes(candidate))) {
+        expect(widths[column], `${name}: hidden ${column}`).toMatch(/^0(?:px|%)$/);
+      }
+    });
+  });
+
+  it('fills the narrow card exactly with the base density percentages', () => {
+    const widths = parse(blocks[0]);
+    const visibleSum = densities[0].visible.reduce(
+      (sum, column) => sum + percent(widths[column]),
+      0,
+    );
+    expect(visibleSum).toBeCloseTo(100, 6);
+  });
+
+  it('lets message take what the fixed tracks leave from an 800px card', () => {
+    blocks.slice(1).forEach((block, offset) => {
+      const index = offset + 1;
+      const widths = parse(block);
+      expect(widths.message, `${densities[index].name}: message`).toBe('auto');
+      // Content with a fixed size takes pixels. Resource and node, which hold
+      // truncating names, may take a plain share of the card; never a
+      // max() or calc() on a column, which Chromium lays out as auto.
+      for (const column of columns) {
+        if (column === 'message') continue;
+        const shared = column === 'resource' || column === 'node';
+        const read = () =>
+          shared && widths[column].endsWith('%') ? percent(widths[column]) : pixels(widths[column]);
+        expect(read, `${densities[index].name}: ${column}`).not.toThrow();
+      }
+    });
+  });
 
   it('declares each density block inside its 50rem, 64rem and 80rem container query', () => {
     const enclosing = blocks.slice(1).map((block) => {
@@ -1248,32 +1312,37 @@ describe('Alert History column widths', () => {
   });
 
   it('gives every column the pixels its content needs at the narrowest card of each density', () => {
-    blocks.forEach((block, index) => {
-      const widths = Object.fromEntries(
-        [...block[1].matchAll(/--alert-history-([a-z]+)-width: ([\d.]+)%;/g)].map((match) => [
-          match[1],
-          Number(match[2]),
-        ]),
-      );
-      const { name, cardWidth, needs } = pixelNeeds[index];
+    pixelNeeds.forEach(({ name, cardWidth, needs }, index) => {
+      const widths = trackWidths(index, cardWidth);
       for (const [column, need] of Object.entries(needs)) {
-        const pixels = (widths[column] / 100) * cardWidth;
-        expect(pixels, `${name}: ${column} track at ${cardWidth}px`).toBeGreaterThanOrEqual(
+        expect(widths[column], `${name}: ${column} track at ${cardWidth}px`).toBeGreaterThanOrEqual(
           need - 0.5,
         );
       }
     });
   });
 
-  it('keeps Message at least 18% of the card at every density', () => {
-    blocks.forEach((block, index) => {
-      const widths = Object.fromEntries(
-        [...block[1].matchAll(/--alert-history-([a-z]+)-width: ([\d.]+)%;/g)].map((match) => [
-          match[1],
-          Number(match[2]),
-        ]),
-      );
-      expect(widths.message, `${densities[index].name}: message share`).toBeGreaterThanOrEqual(18);
+  it('keeps Message at least 18% of the card at the narrowest card of every density', () => {
+    pixelNeeds.forEach(({ name, cardWidth }, index) => {
+      expect(
+        trackWidths(index, cardWidth).message / cardWidth,
+        `${name}: message share`,
+      ).toBeGreaterThanOrEqual(0.18);
     });
+  });
+
+  // Percentages handed most of every extra pixel to a badge and three buttons
+  // that already fit: at a 982px card message held 182px. Pixel tracks give
+  // the extra width to message.
+  it('gives message most of the extra width of a wider card', () => {
+    for (const [index, narrow, wide] of [
+      [1, 800, 1023],
+      [2, 1024, 1279],
+      [3, 1280, 1600],
+    ] as const) {
+      const growth = trackWidths(index, wide).message - trackWidths(index, narrow).message;
+      expect(growth, densities[index].name).toBeGreaterThanOrEqual(0.75 * (wide - narrow));
+    }
+    expect(trackWidths(1, 982).message).toBeGreaterThan(300);
   });
 });
