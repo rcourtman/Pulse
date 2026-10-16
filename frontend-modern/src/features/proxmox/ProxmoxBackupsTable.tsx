@@ -378,7 +378,9 @@ export const ProxmoxBackupsTable: Component<{
   // The task column auto-hides when no workload has task history (computed
   // over the full set so it does not flicker as filters change).
   const coverageHasTask = createMemo(() =>
-    recoveryModel().coverageRows.some((row) => Boolean(row.latestTask)),
+    recoveryModel().coverageRows.some(
+      (row) => Boolean(row.latestTask) || row.taskChronologyUnknown,
+    ),
   );
 
   const coverageRowsForLocation = createMemo<WorkloadCoverageRow[]>(() => {

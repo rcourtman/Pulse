@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Accessor } from 'solid-js';
+import { createSignal, type Accessor } from 'solid-js';
 
 import { ProxmoxCoverageTable } from '../ProxmoxCoverageTable';
 import type { WorkloadCoverageRow } from '../proxmoxBackupRecoveryModel';
@@ -53,6 +53,63 @@ const headerTexts = () =>
 afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
+  it.each([320, 1200])(
+    'keeps unknown job chronology distinct from no task at %i px and replaces it in place',
+    (width) => {
+      const [current, setCurrent] = createSignal<WorkloadCoverageRow>({
+        ...row,
+        taskChronologyUnknown: true,
+      });
+      const { container } = render(() => (
+        <ProxmoxCoverageTable
+          rows={[current()]}
+          hasAnyRows
+          emptyIcon={<span />}
+          emptyTitle=""
+          emptyDescription=""
+          sortKey={() => 'posture'}
+          sortDirection={() => 'asc'}
+          onSort={() => {}}
+          expandedKeys={new Set(['w1'])}
+          onToggleExpand={() => {}}
+          showTaskColumn
+          layoutWidth={() => width}
+        />
+      ));
+      expect(container.querySelector('[data-backup-task-unknown]')).toHaveAccessibleName(
+        'Latest backup job unknown',
+      );
+      expect(container.querySelector('[data-backup-task-unknown]')).toHaveTextContent(
+        width === 320 ? '?' : 'Unknown',
+      );
+      expect(container.querySelector('[data-backup-task-chronology]')).toHaveTextContent(
+        'one or more job start times are unavailable or in the future',
+      );
+      expect(container.querySelector('[data-backup-task-chronology]')).toHaveTextContent(
+        'Check the job history in Proxmox.',
+      );
+      const stable = container.querySelector('[data-proxmox-backup-row="coverage"]');
+      setCurrent({
+        ...row,
+        taskChronologyUnknown: false,
+        latestTask: {
+          id: 'known-failure',
+          label: 'Failed',
+          status: 'failed',
+          startedAt: '2026-05-25T02:00:00Z',
+          startedMs: Date.parse('2026-05-25T02:00:00Z'),
+        },
+      });
+      expect(container.querySelector('[data-proxmox-backup-row="coverage"]')).toBe(stable);
+      expect(container.querySelector('[data-backup-task-unknown]')).not.toBeInTheDocument();
+      expect(container.querySelector('[data-backup-task-chronology]')).not.toBeInTheDocument();
+      expect(stable).toHaveTextContent('Failed');
+      setCurrent({ ...row, taskChronologyUnknown: true });
+      expect(container.querySelector('[data-backup-task-unknown]')).toBeInTheDocument();
+      expect(stable).not.toHaveTextContent('Failed');
+    },
+  );
+
   it('renders single-line rows with identity columns matching the by-date table', () => {
     render(() => (
       <ProxmoxCoverageTable

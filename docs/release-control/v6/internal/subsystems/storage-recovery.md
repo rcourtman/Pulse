@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### Coverage must not guess the latest backup-job outcome
+
+A matched task with an unavailable, invalid or future start time prevents the
+existing Coverage summary from selecting a dated task as latest. This applies
+in either input order and only to the matched workload. Valid job chronology
+returns after ordinary inventory replacement; no tasks remains distinct from
+unknown chronology. Provider posture, restore-point evidence, collection and
+all guest/backup commands are unchanged. Recovery-model and consuming Coverage
+tests cover that distinction; browser fixtures establish presentation, not
+native backup completion, thaw, filesystem writes or installed recovery.
+
+
 ### Patrol timer checkpoints preserve run and recovery history
 
 The existing Patrol history envelope retains the next scheduled deadline and

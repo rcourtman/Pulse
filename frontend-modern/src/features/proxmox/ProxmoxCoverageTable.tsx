@@ -50,6 +50,8 @@ import { useProxmoxCoverageWindowing } from './useProxmoxCoverageWindowing';
 // "None" instead of restating the source ("No PVE backup file"). The long form
 // truncated at most widths and stays available as the hover title.
 const COVERAGE_EMPTY_LABEL = 'None';
+const COVERAGE_TASK_CHRONOLOGY_EXPLANATION =
+  'Latest backup job unknown: one or more job start times are unavailable or in the future. Check the job history in Proxmox.';
 const COVERAGE_NO_BACKUP_TITLE = 'No PBS snapshot or PVE backup file';
 // Matches the posture engine's own wording for a snapshot-only subject.
 const COVERAGE_SNAPSHOT_ONLY_TITLE =
@@ -413,50 +415,65 @@ export function ProxmoxCoverageTable(props: {
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <Show
-                              when={row.latestTask}
+                              when={row.taskChronologyUnknown}
                               fallback={
                                 <Show
-                                  when={layoutMode() !== 'compact'}
-                                  fallback={<span class="block text-center text-muted">—</span>}
+                                  when={row.latestTask}
+                                  fallback={
+                                    <Show
+                                      when={layoutMode() !== 'compact'}
+                                      fallback={<span class="block text-center text-muted">—</span>}
+                                    >
+                                      <span class="text-muted" title="No recent task">
+                                        {COVERAGE_EMPTY_LABEL}
+                                      </span>
+                                    </Show>
+                                  }
                                 >
-                                  <span class="text-muted" title="No recent task">
-                                    {COVERAGE_EMPTY_LABEL}
-                                  </span>
+                                  {(task) => (
+                                    <Show
+                                      when={layoutMode() !== 'compact'}
+                                      fallback={
+                                        <div class="flex justify-center">
+                                          <StatusDot
+                                            size="sm"
+                                            variant={taskWordVariant(task().label)}
+                                            title={`Latest task: ${task().label}`}
+                                            ariaHidden
+                                          />
+                                          <span class="sr-only">Latest task: {task().label}</span>
+                                        </div>
+                                      }
+                                    >
+                                      <div class="flex items-center gap-2">
+                                        <StatusDot
+                                          size="sm"
+                                          variant={taskWordVariant(task().label)}
+                                          title={task().label}
+                                          ariaHidden
+                                        />
+                                        <span
+                                          class={`truncate ${statusWordToneClass(
+                                            taskWordVariant(task().label),
+                                          )}`}
+                                        >
+                                          {task().label}
+                                        </span>
+                                      </div>
+                                    </Show>
+                                  )}
                                 </Show>
                               }
                             >
-                              {(task) => (
-                                <Show
-                                  when={layoutMode() !== 'compact'}
-                                  fallback={
-                                    <div class="flex justify-center">
-                                      <StatusDot
-                                        size="sm"
-                                        variant={taskWordVariant(task().label)}
-                                        title={`Latest task: ${task().label}`}
-                                        ariaHidden
-                                      />
-                                      <span class="sr-only">Latest task: {task().label}</span>
-                                    </div>
-                                  }
-                                >
-                                  <div class="flex items-center gap-2">
-                                    <StatusDot
-                                      size="sm"
-                                      variant={taskWordVariant(task().label)}
-                                      title={task().label}
-                                      ariaHidden
-                                    />
-                                    <span
-                                      class={`truncate ${statusWordToneClass(
-                                        taskWordVariant(task().label),
-                                      )}`}
-                                    >
-                                      {task().label}
-                                    </span>
-                                  </div>
-                                </Show>
-                              )}
+                              <span
+                                class="block truncate font-semibold text-amber-600 dark:text-amber-300"
+                                classList={{ 'text-center': layoutMode() === 'compact' }}
+                                title={COVERAGE_TASK_CHRONOLOGY_EXPLANATION}
+                                aria-label="Latest backup job unknown"
+                                data-backup-task-unknown
+                              >
+                                {layoutMode() === 'compact' ? '?' : 'Unknown'}
+                              </span>
                             </Show>
                           </TableCell>
                         </Show>
@@ -494,6 +511,14 @@ export function ProxmoxCoverageTable(props: {
                             </span>{' '}
                             {postureExplanation(row)}
                           </div>
+                          <Show when={row.taskChronologyUnknown}>
+                            <p
+                              class="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
+                              data-backup-task-chronology
+                            >
+                              {COVERAGE_TASK_CHRONOLOGY_EXPLANATION}
+                            </p>
+                          </Show>
                           <Show when={(row.protectionPosture?.providerStates.length ?? 0) > 0}>
                             <div class="mb-2 overflow-hidden rounded-md border border-border-subtle">
                               <div class="bg-surface-alt px-2 py-1 text-[11px] font-medium text-base-content">

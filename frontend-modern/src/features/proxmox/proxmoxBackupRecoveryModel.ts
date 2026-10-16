@@ -95,6 +95,8 @@ export interface WorkloadCoverageRow {
   /** Unknown chronology is not an absent backup, nor an older dated backup. */
   ageUnknown?: Record<'backup' | 'pbs' | 'archive' | 'snapshot', boolean>;
   latestTask?: CoverageTask;
+  /** An undated/future job prevents choosing a latest outcome for this workload. */
+  taskChronologyUnknown?: boolean;
   pbsCount: number;
   archiveCount: number;
   snapshotCount: number;
@@ -635,6 +637,7 @@ export function buildProxmoxBackupRecoveryModel(
       pbsCount: 0,
       archiveCount: 0,
       snapshotCount: 0,
+      taskChronologyUnknown: false,
     };
     rows.set(workload.key, row);
     if (pveSource) {
@@ -772,16 +775,26 @@ export function buildProxmoxBackupRecoveryModel(
     const workload = resolveTaskWorkload(candidateIndex, pveWorkloadsByVmid, task);
     if (!workload) continue;
     const row = ensureRow(workload, true);
+    const startedMs = parseTimestampMs(task.startTime);
     const candidateTask: CoverageTask = {
       id: task.id,
       status: task.status,
       label: taskLabel(task),
       startedAt: task.startTime,
-      startedMs: parseTimestampMs(task.startTime),
+      startedMs,
       durationSeconds: taskDurationSeconds(task),
       error: task.error,
     };
-    if (!row.latestTask || (candidateTask.startedMs ?? 0) > (row.latestTask.startedMs ?? 0)) {
+    // An unorderable job may be newer than the dated OK/failed job. Never
+    // treat an absent time as epoch zero or let a future time win the summary.
+    // Keep this uncertainty local to the matched workload, in either order.
+    if (startedMs === undefined || getRecoveryAgeBand(startedMs, input.nowMs) === 'unknown') {
+      row.taskChronologyUnknown = true;
+      row.latestTask = undefined;
+    } else if (
+      !row.taskChronologyUnknown &&
+      startedMs > (row.latestTask?.startedMs ?? Number.NEGATIVE_INFINITY)
+    ) {
       row.latestTask = candidateTask;
     }
   }
@@ -850,6 +863,7 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     getWorkloadRecoveryPostureLabel(row.posture),
     row.latestTask?.label,
     row.latestTask?.error,
+    row.taskChronologyUnknown ? 'Latest backup job unknown' : undefined,
     ...(row.protectionPosture?.providerStates ?? []).flatMap((provider) => [
       provider.provider,
       provider.scope,

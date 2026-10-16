@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "8bc0c1135c68bc32071320b817d2cc3d265099f2",
+  "verified_at": "2026-10-16T11:00:14.400047Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "6a5ee94fce19ac3425f9e6e013eb52af4cb228cb500cee5946f4eda108f97f62",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "a07a2e982d3bcabd2dbec4605b5494c38fcd7b9cc7de78281204a9f50d748f7f",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "5bd027d245306921b04a0b58ed6f24e852b5cf8c8c0d0df9522ed44500731abc"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Dated OK plus undated failed job is Unknown, not latest OK; unknown-only history retains the job column.",
+    "A future job cannot win or be discarded below a known job; the summary stays unknown in either order.",
+    "Expanded explanation remains readable at 1365px and 320px. Provider posture and restore-point evidence remain independent.",
+    "Ordinary read-only refresh replaces uncertainty with the latest dated failure without losing row/disclosure identity. Empty job history hides the column, and a known OK control returns the success indicator."
+  ],
+  "interactions": [
+    "Production inventory HTTP readers, model, router and Coverage table with synthetic GET-only responses.",
+    "Desktop keyboard disclosure and real 320px WebKit workload-cell tap.",
+    "Five same-open refreshes per viewport; no backup, guest probe, write or external request.",
+    "Natively inspected six final captures and the two baseline captures; unknown marker/explanation fit without overflow in light desktop and dark narrow views."
+  ],
+  "command": "pulse-worker-browser frontend-modern/browser-tests/backup-task-chronology.cjs",
+  "source_sha": "8bc0c1135c68bc32071320b817d2cc3d265099f2",
+  "playwright_version": "1.56.1",
+  "limits": "Synthetic HTTP through real consuming code. No appliance, guest, restore, installed product or release acceptance."
+}

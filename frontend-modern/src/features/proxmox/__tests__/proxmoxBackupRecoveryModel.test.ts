@@ -98,6 +98,71 @@ const protectionPosture = (resourceId: string, state: ProtectionState): Protecti
 });
 
 describe('proxmoxBackupRecoveryModel', () => {
+  it.each(['', 'not-a-date', '1970-01-01T00:00:00Z', '2026-05-27T08:00:00Z'])(
+    'does not assert a latest OK job beside an unorderable failed job (%j), in either order',
+    (startTime) => {
+      const known = task({ id: 'known-ok' });
+      const uncertain = task({ id: 'uncertain-failed', status: 'failed', startTime });
+      const point = pbsBackup();
+      const posture = protectionPosture('vm-112', 'protected');
+      for (const tasks of [
+        [known, uncertain],
+        [uncertain, known],
+      ]) {
+        const model = buildProxmoxBackupRecoveryModel({
+          workloads: [workload({})],
+          pbsBackups: [point],
+          archives: [],
+          snapshots: [],
+          tasks,
+          nowMs: Date.parse('2026-05-26T08:00:00Z'),
+          protectionPostures: new Map([['vm-112', posture]]),
+        });
+        const row = model.coverageRows[0];
+        expect(row.latestTask).toBeUndefined();
+        expect(row.taskChronologyUnknown).toBe(true);
+        expect(row.latestBackup?.nativeId).toBe(point.id);
+        expect(row.protectionPosture).toBe(posture);
+        expect(row.posture).toBe('protected');
+        expect(coverageRowMatchesSearch(row, 'latest backup job unknown')).toBe(true);
+        expect(tasks).toContain(uncertain);
+      }
+    },
+  );
+
+  it('isolates unorderable jobs to their matched workload and clears uncertainty after replacement', () => {
+    const input = {
+      workloads: [
+        workload({}),
+        workload({ id: 'vm-113', proxmox: { vmid: 113, node: 'minipc', instance: 'homelab' } }),
+      ],
+      pbsBackups: [],
+      archives: [],
+      snapshots: [],
+      tasks: [task({ startTime: 'not-a-date' }), task({ id: 'task-113', vmid: 113 })],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    };
+    const rows = buildProxmoxBackupRecoveryModel(input).coverageRows;
+    expect(rows.find((row) => row.workload.vmid === '112')).toMatchObject({
+      taskChronologyUnknown: true,
+    });
+    expect(rows.find((row) => row.workload.vmid === '113')).toMatchObject({
+      taskChronologyUnknown: false,
+      latestTask: { id: 'task-113', label: 'OK' },
+    });
+    const corrected = buildProxmoxBackupRecoveryModel({
+      ...input,
+      tasks: [task({ status: 'failed' })],
+    });
+    expect(corrected.coverageRows.find((row) => row.workload.vmid === '112')).toMatchObject({
+      taskChronologyUnknown: false,
+      latestTask: { label: 'Failed' },
+    });
+    expect(
+      corrected.coverageRows.find((row) => row.workload.vmid === '113')?.latestTask,
+    ).toBeUndefined();
+  });
+
   it('classifies backup ages for restore-point presentation', () => {
     const nowMs = Date.parse('2026-05-26T08:00:00Z');
 
