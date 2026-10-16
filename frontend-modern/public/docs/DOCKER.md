@@ -517,15 +517,49 @@ other container names, environments or registry credentials.
 
 ### Private Registries
 
-For private registries, log in with Docker on the container host **as the user the agent runs as** (the installer's systemd service runs the agent as root, so use `sudo docker login`):
+For private-registry update detection, use the credential store available to
+the **account running the agent**, including its configured paths and helpers.
+A login in your interactive account is not necessarily visible to a system
+service or container. For a planned login, Docker's interactive prompt avoids
+putting a password or token in command arguments:
 
 ```bash
 docker login registry.example.com
 ```
 
-Pulling updates goes through the Docker daemon, which reads these credentials natively. Update **detection** reads the same credential store: `config.json` `auths` entries, configured `credsStore`/`credHelpers` credential helpers, and Podman's `auth.json` (`REGISTRY_AUTH_FILE` and `DOCKER_CONFIG` overrides are honored). The agent presents the stored login to the registry when it rejects anonymous digest checks, so private images get real update detection instead of a permanent failed check. Credentials never leave the host — they are only sent to the registry itself and are never reported to the Pulse server.
+Do not switch a least-privilege agent to root, relax credential-file permissions
+or expose your whole home directory to a container just to enable these checks.
+Keep login files, credential-helper output and passwords or tokens private.
 
-To keep update detection anonymous-only (no credential store reads, no credential helper execution), set `PULSE_DISABLE_REGISTRY_CREDENTIALS=true` (or pass `--disable-registry-credentials`) on the agent.
+Update **detection** reads Docker `config.json` `auths` entries, configured
+`credsStore`/`credHelpers` helpers, and Podman authentication files selected by
+`REGISTRY_AUTH_FILE` or `XDG_RUNTIME_DIR`. `DOCKER_CONFIG` selects a Docker config
+directory; the agent also checks its own home directory's `.docker/config.json`.
+Configured helpers execute as the agent's account.
+
+**Authentication is not host-local.** Credentials are resolved locally, but the
+agent can send a stored password or token to the registry or its HTTPS token
+service. The token service can have a different hostname, such as Docker Hub's
+`auth.docker.io`. Trust both the registry and its authentication service, as
+well as the configured local helpers. Stored login entries are not included in
+the update-check report sent to the Pulse server.
+
+To prevent credential-file reads and helper execution for **detection**, set
+`PULSE_DISABLE_REGISTRY_CREDENTIALS=true` (or pass
+`--disable-registry-credentials`) on the agent. Public checks can continue
+anonymously; private checks requiring a login can fail authentication. This does
+not stop all registry traffic, revoke a login or disable container actions.
+To disable registry checks entirely, use the separate
+[agent update-check setting](#disabling-update-features).
+
+**Detection and pulling an update are separate.** The current in-app image-pull
+action does not pass detection's stored registry login to the Docker API, so a
+private pull can fail even when its digest check succeeds. Do not assume a
+successful check proves that Pulse can update that private image. Use your
+established private-registry deployment procedure for an actual update, not
+repeated Pulse actions to test the login. If an action already failed or its
+result is uncertain, [check its existing receipt and workload state](#check-a-failed-or-pending-workload-update)
+before making another change.
 
 Paid Pulse Pro Docker installs use the private Pulse Pro registry rather than
 the public `rcourtman/pulse` image. Open <https://pulserelay.pro/download.html>,
