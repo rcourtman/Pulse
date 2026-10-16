@@ -961,6 +961,22 @@ successful zero objects remain observations. `TestPMGCollectionMissingObjectData
 and `TestPMGCollectionObservedZeroData` in `pkg/pmg/client_test.go` exercise the
 real request/decoder boundary using an in-memory HTTP transport, with no listener.
 
+### PMG 9 cluster ids and backup node identity — issue #2960
+
+PMG 9 returns the cluster status `cid` as a string. `pmg.ClusterStatusEntry`
+no longer decodes the field, which Pulse never read, so no `cid` format can
+fail the cluster read and hide the node list. This supersedes the older typed
+integer decoder; node name, type, IP and fingerprint remain unchanged.
+The containing poller's existing completeness boundary stays strict: failed,
+empty or unnamed cluster enumeration cannot authorise node-specific reads.
+A connection display label is never substituted for a discovered node hostname.
+Failed enumeration retains the existing failed-collection and backup-preservation
+semantics rather than fabricating a successful empty inventory.
+`TestClusterStatusIgnoresUnusedCID`, `TestClientClusterStatusIgnoresClusterIDFormat`
+and the `TestPollPMGInstance*` issue tests preserve the upstream string-id repair
+and the containing no-guessed-node boundary. These are source regressions,
+not native appliance recovery or release availability.
+
 ### Guest configuration reads preserve installation and node identity
 
 Resolving omitted placement for the existing guest-config read honours every
