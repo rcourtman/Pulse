@@ -7878,6 +7878,41 @@ published-installer or installed-host recovery.
 
 ### Governed dependency floors for the go-minor-patch group
 
+#### Non-storage split of proposal 2939 (16 October 2026)
+
+The next candidate advances the Moby API/client pair to v1.56.1/v0.6.2,
+Prometheus client/common to v1.25.0/v0.72.0, gopsutil to v4.26.9, and
+`golang.org/x/crypto`, `x/sync`, `x/sys` and `x/term` to
+v0.58.0/v0.24.0/v0.49.0/v0.47.0. Their selected transitive updates are
+docker/go-connections v0.8.2, purego v0.11.1, perfstat
+v0.0.0-20260805114148-88456608a4f6, procfs v0.22.0, go-sysconf v0.4.0,
+numcpus v0.12.0 and x/text v0.43.0. Compiler, Kubernetes and all storage
+module versions remain unchanged. Existing checksum records are retained;
+new records come from the exact proposal and still require official acquisition
+verification. No new exporter format, API, collection policy or platform is
+enabled.
+
+`test_managed_go_patch_graph_has_reviewed_floors_and_checksums` checks the nine
+new direct-version floors and both checksum records, alongside the existing
+compress/Kubernetes controls. These are admission checks, not runtime or
+compatibility proof. This candidate needs its own exact-graph snapshot,
+affected Docker/exporter/host-metric/security/concurrency tests, real builds and
+native-platform CI before integration. A graph-only pass does not satisfy those
+obligations or establish an installed result.
+
+The SQLite v1.60.1/libc v1.77.1 part of proposal 2939 is not included. The
+existing v1.59.0/v1.75.7 pair and memory v1.12.1 remain selected. The prior
+combined proposal's advisory HistoryReadFilter/empty/legacy +11.71% (p=.001)
+is an adverse observation, not an attribution to SQLite or any other module.
+It is neither cleared by this split nor a reason to delay unrelated monitoring
+repairs. Reconsider the storage update with current containing-source runtime
+evidence and an explicit advisory disposition, without reproducing or analysing
+the excluded 6 September SQLite SIGSEGV investigation. An ordinary version
+proposal does not grant access to that investigation.
+
+The earlier qualified graph and its source-bound observations follow; they are
+not proof of the new split candidate.
+
 The managed `go-minor-patch` group advances three direct modules together with
 their required transitives: `golang.org/x/crypto` 0.56.0 -> 0.57.0,
 `golang.org/x/term` 0.45.0 -> 0.46.0 and `modernc.org/sqlite` 1.53.0 -> 1.59.0

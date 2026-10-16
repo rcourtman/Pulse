@@ -777,6 +777,15 @@ mod = Path(os.environ["GO_MOD_PATH"]).read_text(encoding="utf-8")
 sums = Path(os.environ["GO_SUM_PATH"]).read_text(encoding="ascii").splitlines()
 floors = {
     "github.com/klauspost/compress": (1, 20, 1),
+    "github.com/moby/moby/api": (1, 56, 1),
+    "github.com/moby/moby/client": (0, 6, 2),
+    "github.com/prometheus/client_golang": (1, 25, 0),
+    "github.com/prometheus/common": (0, 72, 0),
+    "github.com/shirou/gopsutil/v4": (4, 26, 9),
+    "golang.org/x/crypto": (0, 58, 0),
+    "golang.org/x/sync": (0, 24, 0),
+    "golang.org/x/sys": (0, 49, 0),
+    "golang.org/x/term": (0, 47, 0),
     "k8s.io/api": (0, 37, 1),
     "k8s.io/apimachinery": (0, 37, 1),
     "k8s.io/client-go": (0, 37, 1),
