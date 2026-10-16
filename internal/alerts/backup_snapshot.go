@@ -910,6 +910,9 @@ func (m *Manager) CheckBackupsWithInventory(
 		// Determine thresholds for this backup
 		currentBackupCfg := backupCfg
 		guestContext := guestSnapshotFromLookup(record.lookup, record.fallbackName)
+		// Remembered metadata can supply a policy identity and a last-known
+		// location, but only an inventory ResourceID proves the guest is live.
+		orphaned := record.vmID != "" && strings.TrimSpace(record.lookup.ResourceID) == ""
 		guestResourceID := strings.TrimSpace(record.lookup.ResourceID)
 		if guestResourceID == "" {
 			guestResourceID = guestContext.ID
@@ -939,7 +942,7 @@ func (m *Manager) CheckBackupsWithInventory(
 		if backupIgnoreVMID(record.vmID, currentBackupCfg.IgnoreVMIDs) {
 			continue
 		}
-		if record.vmID != "" && record.lookup.ResourceID == "" {
+		if orphaned {
 			if backupMatchesKnownPVETemplate(inventoryScope, *record) {
 				continue
 			}
@@ -1038,7 +1041,7 @@ func (m *Manager) CheckBackupsWithInventory(
 			"guestInstance":  instance,
 			"guestNode":      node,
 			"guestVmid":      metadataIntValue(record.vmID),
-			"orphaned":       record.vmID != "" && guestResourceID == "",
+			"orphaned":       orphaned,
 		}
 		specResourceID := canonicalBackupSubjectResourceID(alertKey, *record)
 		specResourceType := canonicalBackupSubjectResourceType(*record)
