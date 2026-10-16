@@ -548,7 +548,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                       </div>
                       <div class="mt-1 text-xs text-base-content">
                         {token.lastUsedAt
-                          ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
+                          ? formatRelativeTime(new Date(token.lastUsedAt).getTime(), { now: now() })
                           : 'Never'}
                       </div>
                     </div>
@@ -620,7 +620,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 render: (token) => (
                   <span class="text-muted">
                     {token.lastUsedAt
-                      ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
+                      ? formatRelativeTime(new Date(token.lastUsedAt).getTime(), { now: now() })
                       : 'Never'}
                   </span>
                 ),
