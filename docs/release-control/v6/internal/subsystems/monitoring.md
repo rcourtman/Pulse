@@ -8284,3 +8284,20 @@ and browser proof do not establish installed/native guest or restore recovery.
 with old-clock dates through the ordinary temporary-profile JSON seam and
 checks that a clock correction cannot establish recovery. It changes no system
 clock and emits the actual served frame for additional consuming proof.
+
+### Kubernetes inventory destination confidentiality (16 October 2026)
+
+Kubernetes report delivery no longer diverts plaintext Pulse traffic through
+an ambient HTTP proxy. The selected primary or explicitly admitted observer
+remains the sole plaintext recipient of both authentication headers and the
+compressed inventory. HTTPS proxy support, CA/pin verification, target admission,
+report content, timestamps and independent destination buffers are unchanged;
+this is a transport-only boundary, not a new field, health verdict or UI state.
+
+`TestKubernetesControlPlaneProxy` in `internal/kubernetesagent/multi_target_test.go`
+drives real HTTP reports and HTTPS CONNECT/TLS over in-memory connections,
+including base paths, IPv4, IPv6, service DNS, an observer, custom CA trust,
+matching/mismatched pins and an untrusted certificate. It compares the exact
+decompressed report bytes and both token headers at the admitted recipient.
+The fixture performs no DNS resolution, listener or network connection, and
+does not establish native Kubernetes or installed fleet recovery.

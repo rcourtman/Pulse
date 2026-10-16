@@ -10068,3 +10068,22 @@ re-enrolment or continuity decisions. PMG runtime IDs remain independent of
 the scoped connection-alert reference; no agent identity is re-created from it.
 
 The full PMG detail projection preserves that optional reference too; it remains outside host-agent report, removal and re-enrolment contracts. `TestContract_PMGConfiguredReferenceInFullDetail` checks absence as well as presence through the real handler.
+
+### Kubernetes report transport and ambient proxies (16 October 2026)
+
+The Kubernetes agent follows the host agent's existing direct-HTTP rule for
+Pulse control-plane traffic: an explicitly selected plaintext endpoint receives
+its report directly, never through an ambient `HTTP_PROXY`. Otherwise the
+proxy would receive both bearer headers and the complete cluster inventory.
+This applies to the primary target and each admitted report-only observer.
+It does not admit another HTTP URL, relax observer plaintext consent or change
+enrolment, update, command, identity, retry or buffering behaviour.
+
+HTTPS retains environment-selected proxies and the existing CA, certificate
+pin and explicit insecure-option settings. Proxy selection does not disable
+TLS verification or redirect refusal. `TestKubernetesControlPlaneProxy` in
+`internal/kubernetesagent/multi_target_test.go` runs the isolated, listener-free
+wire controls in `control_plane_proxy_test.go`: four plaintext report paths,
+HTTPS CONNECT with a verified custom CA or pin, and rejection before report
+transmission for an untrusted certificate or wrong pin. These controls exercise
+the production client and report sender, not installed cluster recovery.
