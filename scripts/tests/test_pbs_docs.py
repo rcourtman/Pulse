@@ -197,6 +197,38 @@ class PBSDocsTest(unittest.TestCase):
         self.assertNotIn("completed request with `metric=cpu`", history)
         self.assertIn("does\n   not prove there is no data under another target", history)
 
+    def test_deleted_guest_help_preserves_live_protection_and_stored_evidence(self):
+        heading = "### Backup-age alerts name a deleted or renamed guest\n"
+        text = DOC.read_text()
+        self.assertEqual(text.count(heading), 1)
+        section = " ".join(text.split(heading, 1)[1].split("\n### ", 1)[0].split())
+        for phrase in (
+            "retained backup is not evidence that the guest is still running",
+            "last-known name or location does not prove live ownership",
+            "**Alerts → Thresholds → Proxmox → Recovery**",
+            "**Orphaned backups**", "**Ignore VMIDs**",
+            "all orphaned guests", "live guests with the same VMID",
+            "across connected installations", "trailing `*` matches a VMID prefix",
+            "suppression, not a repaired identity or successful backup",
+            "Keep the intended policy unchanged while diagnosing",
+            "Do not edit Pulse's state files or databases",
+            "do not delete backups, clear History, rename/re-add sources or restart",
+            "already-received message's time", "not a full payload or queue export",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+        self.assertNotIn("```", section, "existing observations, not another live probe")
+        labels = (ROOT / "frontend-modern/src/utils/alertThresholdsPresentation.ts").read_text()
+        for label in ("Orphaned backups", "Ignore VMIDs"):
+            self.assertIn(f"= '{label}'", labels)
+        anchor = "PBS.md#backup-age-alerts-name-a-deleted-or-renamed-guest"
+        trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        self.assertIn(f"[retained-backup alert checks]({anchor})", trouble)
+        self.assertEqual(DOC.read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/PBS.md").read_bytes())
+        self.assertEqual((ROOT / "docs/TROUBLESHOOTING.md").read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes())
+
     def slow_loading_guidance(self):
         return " ".join(DOC.read_text().split("### Slow Backup Loading\n")[1]
                         .split("\n### ")[0].split())
