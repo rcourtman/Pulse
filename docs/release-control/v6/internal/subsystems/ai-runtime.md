@@ -8079,6 +8079,28 @@ inspection failure, stale facts, or mismatched identities remain
 continues to project only `agent_attested` evidence, so adding the production
 observer does not loosen the verification rule.
 
+### Incomplete investigation follow-up
+
+An empty or unusable final model response, provider error, or final-summary
+timeout does not constitute a model conclusion. The shared agentic loop retains
+a readable failure receipt and returns the original error identity for Patrol
+investigations. Interactive chat retains its existing best-effort fallback.
+The investigation service must not advance a captured proposal after that error.
+
+The private orchestrator clears the previous finding outcome when starting a
+new session, after retaining its prior context. Failed runs preserve evidence,
+counts and any existing action reference. They remain failed rather than being
+classified from fallback prose as a completed `needs_attention` investigation.
+Failed runs without a conclusion, including timeouts, may be assessed at the
+next scheduled Watch without another cooldown. Existing attempt limits,
+admission, autonomy and action authority still apply. A real completed model
+decision requiring human attention remains terminal.
+
+Proofs: `internal/ai/chat/agentic_final_failure_test.go`,
+`internal/ai/findings_provider_failure_test.go`, and the private
+`TestProviderFailureClearsPriorConclusionAndRetainsEvidence` regression.
+These causal tests do not themselves qualify model-owned unattended recovery.
+
 ### Proxmox guest lifecycle Patrol detector floor
 
 `internal/ai/findings_proxmox_lifecycle.go` owns the deterministic production
