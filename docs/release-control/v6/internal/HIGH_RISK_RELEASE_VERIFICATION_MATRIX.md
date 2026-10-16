@@ -8,6 +8,21 @@ A gate is only `passed` when its automated proof still passes and the manual
 scenario has been exercised in a staging-like environment with the expected
 result.
 
+## Coverage backup job diagnostics
+
+Run `ProxmoxCoverageTable.taskDetail.test.tsx` with the real inventory parser
+and recovery model, then `backup-job-detail.cjs` after preparing the existing
+Coverage fixture with `node browser-tests/build-coverage-workload-identity.mjs
+<full-source-SHA>`. On desktop and 320px touch, expand a workload with a failed
+job and read the full multiline error and start time, including long unbroken
+text and literal markup. Keep another connection's equal VMID/error separate.
+Refresh to Running, OK, an undated job, conflicting newest outcomes and no jobs:
+the old error must disappear without losing the open row/focus, and uncertain
+chronology must not fall back to an older OK result. Check wrapping, horizontal
+overflow and actual captured pixels. Only fixture GETs are allowed. This is
+stored-observation presentation, not native backup/thaw/restore or installed
+recovery acceptance.
+
 ## Automatic-update settings publication
 
 Run `TestRootInstallAutoUpdateSettingsPublication` (production shell plus

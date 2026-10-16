@@ -23,6 +23,15 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Backup job detail keeps its workload and observation owner
+
+Coverage consumes the existing selected `latestTask` fields inside that
+workload's disclosure. Another connection's equal VMID or an older task cannot
+provide its error. Missing/uncertain selection supplies no invented latest
+detail. Reconciled inventory replacement retires old errors while preserving
+the logical workload's disclosure and focus. This changes no matching,
+provider posture, wire format, collection or recovery execution.
+
 ### Incomplete backup observations retain their identity
 
 Running and failed entries remain attached to their existing workload, source

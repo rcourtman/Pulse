@@ -7,6 +7,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   formatPlatformTableBytesValue,
+  formatPlatformTableDateTimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformDetailTable,
@@ -552,6 +553,41 @@ export function ProxmoxCoverageTable(props: {
                             </span>{' '}
                             {postureExplanation(row)}
                           </div>
+                          <Show when={row.latestTask}>
+                            {(task) => (
+                              <section
+                                aria-label="Latest backup job"
+                                class="mb-2 min-w-0 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] text-base-content"
+                                data-backup-task-detail
+                              >
+                                <h4 class="mb-1 font-medium">Latest backup job</h4>
+                                <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1">
+                                  <dt class="text-muted">Result</dt>
+                                  <dd
+                                    class={`min-w-0 whitespace-pre-wrap wrap-anywhere ${statusWordToneClass(taskWordVariant(task().label))}`}
+                                  >
+                                    {task().label}
+                                  </dd>
+                                  <dt class="text-muted">Started</dt>
+                                  <dd class="min-w-0 whitespace-normal wrap-anywhere">
+                                    <time dateTime={task().startedAt}>
+                                      {formatPlatformTableDateTimeValue(task().startedAt)}
+                                    </time>
+                                  </dd>
+                                  <Show when={task().error?.trim()}>
+                                    {(error) => (
+                                      <>
+                                        <dt class="text-muted">Reported error</dt>
+                                        <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
+                                          {error()}
+                                        </dd>
+                                      </>
+                                    )}
+                                  </Show>
+                                </dl>
+                              </section>
+                            )}
+                          </Show>
                           <Show when={row.taskChronologyUnknown}>
                             <p
                               class="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"

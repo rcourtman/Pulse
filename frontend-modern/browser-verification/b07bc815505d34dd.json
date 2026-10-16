@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "717fe75987dd494429d088df3ed799fd4cf49540",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "0fc433429749e820a1a546f3b88522fe676dfedbbab6ebe4bd1c73f1c7a58a59"
+  },
+  "routes": [
+    "/proxmox/backups/coverage: synthetic loopback HTTP through the production inventory parser, recovery model, Coverage table, router and CSS; not the full application store"
+  ],
+  "states": [
+    "Selected failed job exposes Result, Started and full Reported error in the existing workload disclosure. Long multiline text and literal markup wrap without HTML execution or horizontal overflow.",
+    "Equal VMIDs/names on separate connections retain their own jobs. Provider posture and independent restore evidence remain separate.",
+    "Same-open read-only refresh to Running, OK, unorderable chronology, conflicting newest outcomes and no jobs retires the old error/detail while keeping the disclosure open. Unknown chronology never falls back to an older OK job."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter expands the workload and activates Refresh backups; keyboard focus remains on refresh. The 320px touch pass expands through the actual identity-cell target and taps refresh.",
+    "All four final captures opened with native view_image and visually inspected. The two retained partial desktop captures were also opened; the earlier phone-target protocol failure is not a passing result.",
+    "Both browser contexts finish all nine recorded check groups. Only GETs reach the finite fixture server; no off-origin, unexpected request, page or error-console observation. Browser and server close."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "browsers": [
+    "desktop: 141.0.7390.37 / Playwright 1.56.1",
+    "phone: 26.0 / Playwright 1.56.1"
+  ],
+  "verified_at": "2026-10-16T20:37:15Z",
+  "limits": [
+    "Synthetic presentation proof, not native backup completion, guest thaw/filesystem writes, installed recovery, protected landing or release availability.",
+    "Source-proof admission returned proof-capacity-low before execution. Available focused local tests/static checks pass; full production/embed and unchanged bundle-budget checks remain with ordinary containing CI. No capacity retry or release judgment."
+  ]
+}
