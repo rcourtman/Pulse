@@ -278,6 +278,11 @@ separate install choices. `--least-privilege --enable-privileged-helper`
 selects the opt-in unprivileged collector and no-network helper. Adding
 `--enable-action-runner --action-token-file <private-file>` installs the
 root-owned runner with a separately issued, host-bound action credential.
+The runner verifies HTTPS using the host's system trust store, an explicit
+`--cacert` file, or a separately verified `--server-fingerprint`. A collector's
+saved `--insecure` setting does not disable runner verification or prevent
+enrollment once the host trusts the server certificate. Adding the internal CA
+to the host trust store also lets subsequent runner updates use normal trust.
 `--disable-action-runner` and `--uninstall-action-runner` remove remediation
 without removing the collector. The runner accepts only the documented typed
 host, Proxmox guest, and container operations; shell, generic exec,

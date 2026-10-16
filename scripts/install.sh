@@ -2034,14 +2034,14 @@ write_action_runner_config() {
           -L "$ACTION_RUNNER_TOKEN_FILE" || -L "$ACTION_RUNNER_ENV_FILE" ]]; then
         fail "Refusing unsafe symlink in the action-runner config or state boundary" "$EXIT_GENERAL"
     fi
-    install -d -o root -g root -m 0700 "$ACTION_RUNNER_CONFIG_DIR"
-    install -d -o root -g root -m 0700 "$ACTION_RUNNER_STATE_DIR"
 	action_runner_url_transport_allowed "$PULSE_URL" ||
 		fail "Action runner requires HTTPS/WSS; plaintext HTTP/WS is allowed only for loopback local use" "$EXIT_MISSING_ARGS"
-	if [[ "$INSECURE" == "true" && "$PULSE_URL" =~ ^[Hh][Tt][Tt][Pp][Ss]:// &&
-	      -z "$CURL_CA_BUNDLE" && -z "$SERVER_FINGERPRINT" ]]; then
-		fail "Action runner refuses generic insecure HTTPS; configure a trusted CA bundle or exact server fingerprint" "$EXIT_MISSING_ARGS"
-	fi
+    # INSECURE belongs to collector/download continuity and may be recovered
+    # from an older install even after the host trusts the server certificate.
+    # Runner HTTPS always verifies system/custom roots or the exact pin. Never
+    # turn the collector's bypass into runner authority or reject system trust.
+    install -d -o root -g root -m 0700 "$ACTION_RUNNER_CONFIG_DIR"
+    install -d -o root -g root -m 0700 "$ACTION_RUNNER_STATE_DIR"
 
     if [[ -n "$ACTION_TOKEN" ]]; then
         persist_action_runner_replacement_token "$ACTION_TOKEN" ||
