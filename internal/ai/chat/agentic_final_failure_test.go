@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -100,5 +101,75 @@ func TestInvestigationWhitespaceSummaryIsNotAConclusion(t *testing.T) {
 	_, err := loop.ExecuteWithTools(context.Background(), "whitespace", []Message{{Role: "user", Content: "Check"}}, nil, func(StreamEvent) {})
 	if err == nil {
 		t.Fatal("whitespace summary became a completed investigation")
+	}
+}
+
+// leakedToolCallSummaryProvider makes the first turn end without text, then
+// streams a clean narrative prefix followed by a leaked textual tool call in
+// the tool-free final summary turn.
+func leakedToolCallSummaryProvider(prefix string) *stubStreamingProvider {
+	calls := 0
+	return &stubStreamingProvider{chatStream: func(ctx context.Context, req providers.ChatRequest, cb providers.StreamCallback) error {
+		calls++
+		if calls == 2 {
+			cb(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: prefix}})
+			cb(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: `pulse_read(target_host="current_resource", command="df -h")`}})
+		}
+		cb(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		return nil
+	}}
+}
+
+func streamedContent(t *testing.T, events []StreamEvent) string {
+	t.Helper()
+	var streamed strings.Builder
+	for _, event := range events {
+		if event.Type != "content" {
+			continue
+		}
+		var data ContentData
+		if err := json.Unmarshal(event.Data, &data); err != nil {
+			t.Fatalf("decode content event: %v", err)
+		}
+		streamed.WriteString(data.Text)
+	}
+	return streamed.String()
+}
+
+func TestInteractiveFinalSummaryKeepsCleanPrefixBeforeLeakedToolCall(t *testing.T) {
+	prefix := "The root filesystem on pve1 is 92% full, driven by /var/log. "
+	loop := NewAgenticLoop(leakedToolCallSummaryProvider(prefix), tools.NewPulseToolExecutor(tools.ExecutorConfig{}), "Answer the user")
+	var events []StreamEvent
+	messages, err := loop.ExecuteWithTools(context.Background(), "leaked-chat", []Message{{Role: "user", Content: "Why is pve1 alerting?"}}, nil, func(event StreamEvent) {
+		events = append(events, event)
+	})
+	if err != nil {
+		t.Fatalf("interactive chat failed on a usable narrative: %v", err)
+	}
+	if len(messages) == 0 {
+		t.Fatal("no messages returned")
+	}
+	final := messages[len(messages)-1].Content
+	if strings.TrimSpace(final) != strings.TrimSpace(prefix) {
+		t.Fatalf("persisted final message = %q, want the clean streamed prefix %q", final, prefix)
+	}
+	if streamed := streamedContent(t, events); streamed != final {
+		t.Fatalf("streamed content %q differs from persisted message %q", streamed, final)
+	}
+}
+
+func TestInvestigationFinalSummaryWithLeakedToolCallIsNotAConclusion(t *testing.T) {
+	// A textual tool call in the tool-free summary turn means the model was
+	// still investigating. The orchestrator classifies unmarked prose as
+	// NEEDS_ATTENTION, which is terminal, so the prefix must not become the
+	// investigation's conclusion.
+	loop := NewAgenticLoop(leakedToolCallSummaryProvider("I will check disk usage on pve1 next. "), tools.NewPulseToolExecutor(tools.ExecutorConfig{}), "Investigate")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	messages, err := loop.ExecuteWithTools(context.Background(), "leaked-investigation", []Message{{Role: "user", Content: "Check"}}, nil, func(StreamEvent) {})
+	if err == nil {
+		t.Fatal("leaked tool-call summary became a completed investigation")
+	}
+	if len(messages) == 0 || !strings.Contains(messages[len(messages)-1].Content, "final narrative") {
+		t.Fatalf("missing retained fallback receipt: %#v", messages)
 	}
 }

@@ -137,7 +137,14 @@ func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
 	}
 
 	summaryText := cleanToolCallArtifacts(summaryBuilder.String())
-	if summaryErr == nil && !suppressLeakedToolContent && strings.TrimSpace(summaryText) != "" {
+	// A textual tool call in this tool-free turn means the model was still
+	// investigating rather than concluding. Interactive chat keeps the clean
+	// prefix it has already streamed, so the persisted message matches what
+	// the user saw. A Patrol investigation must not: the orchestrator reads
+	// unmarked prose as NEEDS_ATTENTION, a terminal conclusion, so it takes
+	// the failure receipt and error below and stays eligible for follow-up.
+	rejectLeakedSummary := suppressLeakedToolContent && isPatrolInvestigationExecution(a.currentExecutionProfile())
+	if summaryErr == nil && !rejectLeakedSummary && strings.TrimSpace(summaryText) != "" {
 		summaryMsg := Message{
 			ID:        uuid.New().String(),
 			Role:      "assistant",
@@ -151,6 +158,8 @@ func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
 
 	if summaryErr != nil {
 		log.Error().Err(summaryErr).Str("session_id", sessionID).Msg("[AgenticLoop] Final summary call failed")
+	} else if rejectLeakedSummary {
+		log.Warn().Str("session_id", sessionID).Msg("[AgenticLoop] Final investigation summary leaked a tool call instead of concluding")
 	} else {
 		log.Warn().Str("session_id", sessionID).Msg("[AgenticLoop] Final summary call returned empty content")
 	}
