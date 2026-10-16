@@ -116,11 +116,28 @@ check_auto_updates_enabled() {
         fi
     fi
     
-    # Also check if timer is enabled (belt and suspenders)
-    if ! systemctl is-enabled --quiet "$UPDATE_TIMER_UNIT" 2>/dev/null; then
-        log info "Auto-update timer is disabled"
-        exit 0
-    fi
+    # A failed is-enabled --quiet read conflates an intentional stop with an
+    # unavailable manager. Read one bounded state/exit tuple, preserving blank
+    # records and diagnostics so a partial "enabled" cannot grant an update.
+    local timer_state="" timer_status=0
+    timer_state=$(LC_ALL=C timeout -k 1 5 systemctl is-enabled "$UPDATE_TIMER_UNIT" 2>&1;
+        result=$?; printf '.'; exit "$result") || timer_status=$?
+    timer_state="${timer_state%.}"
+    case "$timer_status:$timer_state" in
+        0:enabled$'\n'|0:enabled-runtime$'\n'|0:alias$'\n'|0:static$'\n'|0:indirect$'\n'|0:generated$'\n'|0:transient$'\n')
+            # Preserve systemd's existing successful is-enabled states.
+            ;;
+        1:disabled$'\n'|1:masked$'\n'|1:masked-runtime$'\n'|1:linked$'\n'|1:linked-runtime$'\n')
+            log info "Auto-update timer is not enabled"
+            exit 0
+            ;;
+        *)
+            # Do not expose raw manager diagnostics or call a failed read an
+            # opt-out. A missing unit or timeout needs explicit reconciliation.
+            log error "Cannot verify auto-update timer state; no unattended update attempted"
+            exit 1
+            ;;
+    esac
 }
 
 # Read version identity from the executable, never installation metadata. This
