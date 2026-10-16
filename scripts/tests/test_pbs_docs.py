@@ -137,6 +137,26 @@ class PBSDocsTest(unittest.TestCase):
                        "Do not delete backups", "Do not clear History"):
             self.assertIn(phrase, text)
 
+    def test_prune_protection_guidance_keeps_retention_and_verification_separate(self):
+        guidance = " ".join(DOC.read_text().split(
+            "#### Prune protection is not verification\n")[1].split("\n### ")[0].split())
+        for phrase in (
+            "excludes it from ordinary pruning", "retention protection",
+            "not a check of the stored data", "another backup copy",
+            "Do not remove the flag", "eligible for a later prune",
+            "same snapshot's existing record in PBS",
+            "Protected with successful verification", "Protected with failed verification",
+            "Protected with no recorded verification result",
+            "verification is unknown, not successful or failed",
+            "If Pulse shows separate prune-protection and verification labels, read both",
+            "not a flag change or a new verification job",
+            "Do not run prune, garbage collection, a backup or a restore",
+            "not a full job log or inventory",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guidance)
+        self.assertIn("[prune protection](#prune-protection-is-not-verification)", DOC.read_text())
+
     def test_history_checks_cover_batched_and_single_metric_requests(self):
         history = DOC.read_text().split("### PBS is connected but History stays empty\n")[1].split("\n### ")[0]
         for phrase in ("without\n   `metric`", "do not wait for a separate `metric=cpu` request",
