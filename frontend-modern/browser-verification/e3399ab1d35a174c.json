@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "a3027e61e2617d042e9fe4d2fb5f75cc7f26fc9d",
+  "verified_at": "2026-10-16T11:17:30.129079+00:00",
+  "result": "failed",
+  "changed_paths": [
+    "frontend-modern/public/docs/AI.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/AI.md": "9a126e096984b1d061a83b38287dac71cb9d53154367f548d0737a3618dc9905"
+  },
+  "routes": [
+    "/docs/README",
+    "/docs/AI",
+    "/docs/AI#privacy",
+    "/docs/AI#usage-telemetry-is-separate",
+    "/docs/PRIVACY"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Real production Docs/router/Markdown/styles in a synthetic surrounding shell. No provider, MCP, telemetry, setting or other application API is exercised.",
+    "source-bgni5stg compiles d678a71d; a3027e61 changes only copied AI Markdown and a root documentation assertion. All 2,958 other bound frontend inputs match. The exact final static guide is served with that unchanged consumer.",
+    "Chromium 141.0.7390.37 desktop-light completes all checks. WebKit 26.0 at 320 px dark reads all changed sections and follows the disclosure/back journey, but then crashes on reload. The overall recipe remains failed; no cause is inferred.",
+    "All eight captured images were opened with native view_image and inspected. Text, context/action/telemetry boundaries and links are readable with no document overflow before the failure."
+  ],
+  "interactions": [
+    "Keyboard Enter and phone taps follow the index, privacy and telemetry fragment links with fragment focus.",
+    "Privacy disclosure and Back complete at both widths. Desktop reload/exact fetched-guide checks pass; WebKit page.reload throws Page crashed before the phone case can complete.",
+    "No replay or weakened reload check. Web owns classification through the retained handoff; metadata-only executor accounting is separate."
+  ],
+  "proof_source_sha": "a3027e61e2617d042e9fe4d2fb5f75cc7f26fc9d",
+  "compiler_source_sha": "d678a71de626a73bf0fcefcf1f631da0d545b507",
+  "scope": "Valid changed-producer content/navigation/pixel proof, not a complete cross-engine journey pass or a product/infra crash diagnosis."
+}
