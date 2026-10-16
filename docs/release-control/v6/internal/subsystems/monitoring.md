@@ -17,6 +17,26 @@
 
 ## Purpose
 
+### Infrastructure plaintext destination confidentiality (16 October 2026)
+
+PVE/PBS/PMG's shared HTTP client does not send explicit plaintext infrastructure
+requests through inherited environment proxies, even for public-style hosts.
+The configured endpoint receives the existing token, ticket/CSRF or JSON/form
+password request directly. HTTPS CONNECT/authenticated proxying, `NO_PROXY`,
+local-target bypass and all CA/pin/explicit-opt-out verification stay unchanged.
+Public HTTP through an ambient forward proxy is deliberately no longer a route;
+use a direct path or verified HTTPS. This does not encrypt an HTTP connection.
+
+The shared factory's `TestInfrastructureProxyRouting` and all three client
+packages' `TestClientPlaintextProxyRouting` exercise actual HTTP, login/read/write
+and CONNECT/TLS bytes over listener-free pipes with isolated environment caches.
+Client tests seed password mode on the constructed transport before real login;
+they do not claim a new installed password-constructor acceptance. Host/base path,
+request encodings, ordinary node/version results and ticket/CSRF semantics remain.
+No resource model, monitoring health verdict, saved trust or frontend field/state
+changes. Guest/backup guards and separately owned native recovery remain required.
+
+
 ### Disabled PVE backup stores retain known evidence
 
 A listed backup-capable store which is disabled (or not confirmed enabled)
