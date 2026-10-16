@@ -80,6 +80,17 @@ separate native outcome; source PTYs and publishing an incoming updater do
 not establish it. `portable_bootstrap_test.go` and the serialized API contract
 cover these producer boundaries without touching stored monitoring data.
 
+### Recurring findings preserve the ownership of recovery evidence
+
+Storage and recovery findings use the same occurrence-bound investigation
+projection as other Patrol findings. A previous verified action remains
+historical evidence when the finding is re-detected; it cannot resolve the new
+occurrence or replace its investigation record. Finding-scoped investigation
+and transcript reads select the current session, including an explicit absent
+state before a new session starts. Explicit session and action history retain
+the earlier result. The shared three-occurrence and persisted-restart controls
+live in `internal/api/ai_handlers_patrol_actions_additional_test.go`.
+
 ### Recovery APIs and investigations share the org-scoped point reader
 
 `Manager.ListPointsForOrg` selects the composed recovery evidence source for

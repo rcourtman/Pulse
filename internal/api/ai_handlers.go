@@ -7630,7 +7630,15 @@ func (h *AISettingsHandler) updateFindingInvestigationOutcome(ctx context.Contex
 		return
 	}
 	outcomeChanged := existing.InvestigationOutcome != outcome
-	if outcomeChanged && !findingsStore.UpdateInvestigationOutcome(findingID, outcome) {
+	if investigation != nil {
+		var applied bool
+		applied, outcomeChanged = findingsStore.ReconcileInvestigationOutcome(findingID, investigation, outcome)
+		if !applied {
+			log.Debug().Str("findingID", findingID).Str("investigationID", investigation.ID).
+				Msg("Historical investigation result does not belong to current finding occurrence")
+			return
+		}
+	} else if outcomeChanged && !findingsStore.UpdateInvestigationOutcome(findingID, outcome) {
 		log.Warn().Str("findingID", findingID).Msg("Finding not found for outcome update")
 		return
 	}
@@ -8258,7 +8266,8 @@ func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *htt
 	}
 
 	investigation := orchestrator.GetInvestigationByFinding(findingID)
-	if investigation == nil {
+	finding := patrol.GetFindings().Get(findingID)
+	if investigation == nil || (finding != nil && !finding.IsCurrentInvestigation(investigation)) {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "No investigation found for this finding", nil)
 		return
 	}
@@ -8311,7 +8320,8 @@ func (h *AISettingsHandler) HandleGetInvestigationMessages(w http.ResponseWriter
 	}
 
 	investigation := orchestrator.GetInvestigationByFinding(findingID)
-	if investigation == nil {
+	finding := patrol.GetFindings().Get(findingID)
+	if investigation == nil || (finding != nil && !finding.IsCurrentInvestigation(investigation)) {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "No investigation found for this finding", nil)
 		return
 	}

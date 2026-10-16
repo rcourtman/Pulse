@@ -109,6 +109,18 @@ Unraid/QNAP/Linux/PowerShell, TLS/identity/repetition/cleanup and containing
 publication remain separate obligations; this source proof does not resolve
 #1099 or claim installed restoration.
 
+### Verified agent actions remain attached to their originating occurrence
+
+An agent action's execution and verification evidence belongs to its original
+action and investigation. Replaying that result after a finding reopens must
+preserve the new occurrence's investigation eligibility and current record.
+The shared findings store validates session identity and the persisted
+regression boundary atomically; current finding reads select current work
+while explicit action history retains earlier receipts. The three-occurrence
+Patrol action regression in
+`internal/api/ai_handlers_patrol_actions_additional_test.go` also reconstructs
+persisted findings and action audit state before the third occurrence.
+
 ### Collected backup evidence does not require command-agent access
 
 Guest investigation manifests include the existing read-only storage tool for
