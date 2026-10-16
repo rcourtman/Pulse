@@ -41,7 +41,10 @@ Pulse Patrol is a **scheduled and event-triggered governed operator** that:
 - **Routes governed actions** through approval, entitlement, policy, verification, and audit boundaries
 - **Preserves operator feedback** as context for future model runs without converting it into Pulse-authored fixes
 
-All while running entirely on your infrastructure with BYOK for complete privacy.
+Patrol's monitoring and orchestration run on your Pulse server; model inference
+runs at the configured provider endpoint. **BYOK means using your own provider
+key, not keeping inference local.** Read [where AI context goes](#privacy)
+before enabling AI or choosing a model.
 
 📖 **For a deep technical dive into the Patrol runtime, see [Patrol architecture](PATROL_ARCHITECTURE.md).**
 
@@ -932,8 +935,61 @@ Use this only in trusted environments.
 
 ## Privacy
 
-Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). Outbound usage telemetry (a rotating pseudonymous install ID, counts, feature flags, and coarse Patrol mode and governed Pulse Intelligence operations adoption flags and counters only; no hostnames, credentials, prompts, chat messages, command text, action output, token values, IP addresses, or resource identifiers in the payload) is enabled by default and can be disabled any time. See [Privacy](PRIVACY.md) for details.
+### Where model context goes
 
+For self-managed Pulse, the destination depends on the provider and client you
+actually configure, not where the Pulse server runs:
+
+- **Local model endpoint under your control:** context goes to that endpoint.
+  Check that it really runs locally and does not forward requests to a hosted
+  service; a provider name or local-looking address alone does not establish this.
+- **Hosted model with your own key or subscription:** the chosen provider receives
+  context from your Pulse instance. BYOK and a locally installed subscription CLI
+  do not make inference local or determine the provider's retention or training
+  policy.
+- **External agent using Pulse MCP:** the external client receives the Pulse
+  context its token permits. That client's own model, forwarding and retention
+  settings determine what it sends onwards; Pulse's built-in provider selection
+  does not configure that client.
+
+Provider-bound context can include your prompts, conversation and tool results,
+resource names and addresses, metrics, alerts, backup status, and applicable
+Patrol objective briefs and operator context. Self-managed AI prompts go directly
+to the configured provider, not through Pulse infrastructure. This is separate
+from the [outbound usage telemetry](#usage-telemetry-is-separate) described below.
+
+### Redaction and action permissions are different boundaries
+
+Pulse applies prompt-secret sanitation and resource-policy filtering on its
+non-local model path. Known **local-only** resource identifiers are redacted,
+and detailed resource sections can be omitted or replaced by policy-safe
+summaries. **Other infrastructure names and addresses can still be shared**;
+redaction is not blanket anonymisation. Review your resource privacy posture
+and the context you supply; never paste credentials, private keys or unreviewed
+logs into a prompt. Encryption of local settings or saved records does not
+prevent an authorised provider request from carrying context.
+
+**Watch-only Patrol and read-only Assistant limit actions, not model requests.**
+A model can receive context even when it cannot change infrastructure. The
+resource privacy posture is a read-only explanation, not a switch that makes
+all inference local. If a hosted provider must not receive your context, do not
+use it for that work; choose a verified local endpoint or leave built-in AI
+disabled in **Settings → Pulse Intelligence → Provider & Models**. Do not send
+a real prompt or run a provider test merely to check a privacy requirement.
+Review external MCP clients and their access separately.
+
+### Usage telemetry is separate
+
+Outbound usage telemetry is enabled by default and contains aggregate counts,
+feature flags and coarse operational buckets, not prompts, chat messages,
+command text, action output, credentials or infrastructure identifiers. It can
+be disabled in **Settings → System → General → Outbound usage telemetry** or
+with `PULSE_TELEMETRY=false`.
+
+**Disabling usage telemetry does not disable AI provider requests or external
+MCP access.** Conversely, using a local model does not turn telemetry off.
+See the [Privacy disclosure](PRIVACY.md) for the full payload, controls and
+other outbound connections.
 ---
 
 ## Why Patrol Is Different From Traditional Alerts
