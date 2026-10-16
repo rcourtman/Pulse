@@ -2544,7 +2544,7 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 				break
 			}
 			var query struct {
-				Query  map[string]any   `json:"query"`
+				Query  map[string]any   `json:"reporting_query"`
 				Graphs []map[string]any `json:"graphs"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&query); err != nil {

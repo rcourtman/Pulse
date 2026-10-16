@@ -480,13 +480,17 @@ func isReportingGraphFailure(err error) bool {
 }
 
 // getReportingDataREST issues reporting.get_data over the REST v2.0 transport.
-// The middleware method takes positional parameters (graphs, query); REST
-// serves it as a POST body keyed by parameter name.
+// The middleware method takes positional parameters (graphs, query), and REST
+// keys the POST body by each parameter's schema title, not its Python name:
+// the second is `reporting_query` on CORE 13 and SCALE 24.04
+// (middlewared/restful.py). CORE rejects a `query` key with "The following
+// attributes are not expected: query", which left every legacy REST host with
+// no CPU, memory or disk readings (#2964, #2077).
 func (c *Client) getReportingDataREST(ctx context.Context, graphs []map[string]any, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
 	var response []trueNASReportingGetDataResponse
 	err := c.postJSON(ctx, "/reporting/get_data", map[string]any{
-		"graphs": graphs,
-		"query":  query,
+		"graphs":          graphs,
+		"reporting_query": query,
 	}, &response)
 	if err != nil {
 		return nil, err

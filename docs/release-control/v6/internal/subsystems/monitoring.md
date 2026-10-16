@@ -1573,6 +1573,20 @@ snapshots and actual memory-threshold evaluation, plus stale/offline/unavailable
 samples and other-instance lookup. It is synthetic runtime proof, not a live
 FreeBSD installation, automatic identity-match or browser receipt.
 
+### Legacy REST reporting body keys — issues #2964 and #2077
+
+TrueNAS REST v2.0 keys a multi-parameter method's POST body by each
+parameter's schema title, not its Python name (`middlewared/restful.py`
+on CORE 13 and SCALE 24.04), and rejects any other key with 400. The second
+argument of `reporting.get_data` is titled `reporting_query`, so
+`getReportingDataREST` sends `{"graphs": ..., "reporting_query": ...}`. The
+earlier `query` key was rejected on every legacy REST host ("The following
+attributes are not expected: query"), so CORE 13 never received CPU, memory or
+disk readings or History, and the per-graph retry could not recover because
+every attempt carried the same key. `TestRESTReportingUsesCORESchemaTitles`
+validates the body the way CORE's REST layer does, and the synthetic
+reporting fakes now decode `reporting_query`.
+
 ### Incident-history reconciliation boundary
 
 Active-alert timeline reconciliation uses the shared error-bearing incident

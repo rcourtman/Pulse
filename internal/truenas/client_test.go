@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -2075,6 +2076,73 @@ func TestRESTSystemTelemetryReadsReportingMemory(t *testing.T) {
 	}
 }
 
+// coreRESTArgumentTransport validates reporting.get_data the way CORE 13's
+// middlewared/restful.py does: a multi-parameter method takes a POST body keyed
+// by each parameter's schema title, and any other key is rejected with 400.
+type coreRESTArgumentTransport struct {
+	routes alertArgsTransport
+	keys   [][]string
+}
+
+func (s *coreRESTArgumentTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.URL.Path != "/api/v2.0/reporting/get_data" {
+		return s.routes.RoundTrip(r)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(body))
+	for key := range body {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	s.keys = append(s.keys, keys)
+	if _, ok := body["graphs"]; !ok {
+		return (alertArgsTransport{r.URL.Path: {status: 400, body: `{"message": "graphs attribute expected."}`}}).RoundTrip(r)
+	}
+	delete(body, "graphs")
+	delete(body, "reporting_query")
+	if len(body) > 0 {
+		unexpected := make([]string, 0, len(body))
+		for key := range body {
+			unexpected = append(unexpected, key)
+		}
+		sort.Strings(unexpected)
+		return (alertArgsTransport{r.URL.Path: {status: 400, body: fmt.Sprintf(`{"message": "The following attributes are not expected: %s"}`, strings.Join(unexpected, ", "))}}).RoundTrip(r)
+	}
+	return (alertArgsTransport{r.URL.Path: {body: legacyRESTReportingMemoryBody()}}).RoundTrip(r)
+}
+
+// Issue #2964 (and the memory half of #2077): CORE 13 rejected the reporting
+// window under a `query` key, so no legacy REST host ever got CPU, memory or
+// disk readings. The request must use the schema title `reporting_query`.
+func TestRESTReportingUsesCORESchemaTitles(t *testing.T) {
+	routes := alertArgsTransport(defaultAPIResponses())
+	routes["/api/v2.0/system/info"] = apiResponse{body: `{"hostname":"core","version":"TrueNAS-13.0-U6.8","physmem":34359738368}`}
+	transport := &coreRESTArgumentTransport{routes: routes}
+
+	client := newLegacyRESTReportingClient(t, routes)
+	client.httpClient.Transport = transport
+
+	telemetry, err := client.GetSystemTelemetry(context.Background())
+	if err != nil {
+		t.Fatalf("GetSystemTelemetry() error = %v", err)
+	}
+	if telemetry == nil || telemetry.MemoryAvailableBytes != 21000000000 {
+		t.Fatalf("expected live memory from CORE reporting, got %+v", telemetry)
+	}
+	history, err := client.GetSystemMetricHistory(context.Background(), time.Hour)
+	if err != nil || history == nil || len(history.MemoryAvailableBytes) == 0 {
+		t.Fatalf("expected CORE reporting history, got %+v, %v", history, err)
+	}
+	for _, keys := range transport.keys {
+		if strings.Join(keys, ",") != "graphs,reporting_query" {
+			t.Fatalf("reporting.get_data body keys = %v, want [graphs reporting_query]", keys)
+		}
+	}
+}
+
 func TestRESTSystemMetricHistoryUsesReporting(t *testing.T) {
 	routes := alertArgsTransport(defaultAPIResponses())
 	routes["/api/v2.0/reporting/get_data"] = apiResponse{body: legacyRESTReportingMemoryBody()}
@@ -2134,7 +2202,7 @@ func (s *isolatedReportingTransport) RoundTrip(r *http.Request) (*http.Response,
 	s.calls++
 	var request struct {
 		Graphs []map[string]any `json:"graphs"`
-		Query  map[string]any   `json:"query"`
+		Query  map[string]any   `json:"reporting_query"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		return nil, err
@@ -2300,7 +2368,7 @@ func (s *nativeShapeReportingTransport) RoundTrip(r *http.Request) (*http.Respon
 	}
 	var request struct {
 		Graphs []map[string]any `json:"graphs"`
-		Query  map[string]any   `json:"query"`
+		Query  map[string]any   `json:"reporting_query"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		return nil, err
