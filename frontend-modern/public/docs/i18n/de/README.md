@@ -40,18 +40,38 @@ funktioniert auf dieser Download-Seite nicht.
 Wenn du Proxmox VE verwendest, ist der offizielle LXC-Installer der
 Pulse-native Einstieg. Er installiert den Pulse-Server. Ersetze `vX.Y.Z` durch
 den exakten Release-Tag, den du installieren möchtest, prüfe die signierte
-Installer-Datei und führe den Installer auf deinem Proxmox-Host aus:
+Installer-Datei und führe den gesamten Block in **Bash** auf deinem
+Proxmox-Host aus. Er verwendet ein privates temporäres Verzeichnis, ignoriert
+lokale curl-Einstellungen, erlaubt nur HTTPS-Weiterleitungen und verlangt
+für jede Datei innerhalb von 60 Sekunden HTTP 200 vor der Signaturprüfung.
+Für einen normalen Linux-Host verwende stattdessen die
+[systemd-Anleitung](../../INSTALL.md#2-bare-metal--systemd):
 
 ```bash
+(
+set -eu
+umask 077
 export PULSE_VERSION=vX.Y.Z
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
+pulse_installer_dir="$(mktemp -d)"
+trap 'rm -rf "$pulse_installer_dir"' EXIT
+cd "$pulse_installer_dir"
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh")
+[ "$status" = 200 ]
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh.sshsig --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig")
+[ "$status" = 200 ]
 ssh-keygen -Y verify \
   -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
   -I pulse-installer \
   -n pulse-install \
-  -s install.sh.sshsig < install.sh &&
+  -s install.sh.sshsig < install.sh
 bash install.sh --version "${PULSE_VERSION}"
+)
 ```
 
 Füge den gesamten Block ein: Schlägt ein Download oder die Signaturprüfung fehl,
