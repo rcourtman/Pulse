@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "bbf75efc03f334a9630f106e11bf0a34a82a671f",
+  "verified_at": "2026-10-16T08:58:54.416910Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/public/docs/CONFIGURATION.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/CONFIGURATION.md": "8aeee8e70e8518feb1782f595ed1514ee1d44c4467fd0a317a13d15ee9704dd2"
+  },
+  "routes": [
+    "/docs/CONFIGURATION#private-docker-authentication-file",
+    "/docs/INSTALL#step-1-get-the-token"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Exact-source compiled production Docs/router/Markdown renderer/styles with a synthetic surrounding shell; exact shipped CONFIGURATION and INSTALL bytes. This is help proof, not Docker startup or deployed authentication acceptance.",
+    "Both copied recipes match rendered Markdown exactly. Credential-owner, observed-path rejection, concurrency, Docker environment and existing-deployment limits are visible; long code stays in its own horizontal viewport.",
+    "Chromium 141.0.7390.37 / Playwright 1.56.1; desktop light and narrow dark. All eight retained captures were opened with the native image viewer.",
+    "No document overflow, page errors, off-origin or administrative API requests. Browser and local preview server close successfully."
+  ],
+  "interactions": [
+    "Keyboard Enter on desktop and touch on phone follow the actual bootstrap link; browser Back returns to the configuration section.",
+    "Launch code is horizontally scrolled on the narrow viewport without moving the whole document.",
+    "Fragment focus and reload return to the private-file heading. Exact fetched guide bytes match committed sources."
+  ],
+  "proof_source_sha": "bbf75efc03f334a9630f106e11bf0a34a82a671f",
+  "scope": "New documentation receipt; no runtime frontend source changed and no previous receipt was rebound."
+}

@@ -91,14 +91,32 @@ not a `docker run -e PULSE_AUTH_PASS=...` command, shell history or a shared
 Compose file. On the Docker host, prepare the file below. These commands do not
 erase an existing file; edit it locally, without printing its contents:
 
+Run both blocks as the credential's owner, not with `sudo`. They refuse
+symlinked paths (including `.config`), non-directory or foreign-owned parent
+paths, and non-regular or foreign-owned credential files before opening the
+editor or calling Docker. Stop on a refusal; do not remove or change an
+unrelated path to make the example continue. The launch block checks again
+because the file can have changed since preparation. These checks do not lock
+the path against concurrent changes; use a private account and directory.
+
 ```bash
 (
-  set -e
+  set -eu
   umask 077
   auth_dir="$HOME/.config/pulse"
   auth_file="$auth_dir/docker-auth.env"
-  if [ -L "$auth_dir" ] || [ -L "$auth_file" ]; then
+  if [ -L "$HOME/.config" ] || [ -L "$auth_dir" ] || [ -L "$auth_file" ]; then
     printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  for directory in "$HOME/.config" "$auth_dir"; do
+    if [ -e "$directory" ] && { [ ! -d "$directory" ] || [ ! -O "$directory" ]; }; then
+      printf 'Credential directories must belong to the current user.\n' >&2
+      exit 1
+    fi
+  done
+  if [ -e "$auth_file" ] && { [ ! -f "$auth_file" ] || [ ! -O "$auth_file" ]; }; then
+    printf 'Authentication file must be regular and owned by the current user.\n' >&2
     exit 1
   fi
   mkdir -p "$auth_dir"
@@ -125,19 +143,33 @@ tag you intend to install, then run:
 
 ```bash
 (
-  set -e
-  if [ ! -s "$HOME/.config/pulse/docker-auth.env" ]; then
+  set -eu
+  auth_dir="$HOME/.config/pulse"
+  auth_file="$auth_dir/docker-auth.env"
+  if [ -L "$HOME/.config" ] || [ -L "$auth_dir" ] || [ -L "$auth_file" ]; then
+    printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  for directory in "$HOME/.config" "$auth_dir"; do
+    if [ ! -d "$directory" ] || [ ! -O "$directory" ]; then
+      printf 'Prepare the private authentication file first.\n' >&2
+      exit 1
+    fi
+  done
+  if [ ! -f "$auth_file" ] || [ ! -O "$auth_file" ] || [ ! -r "$auth_file" ] || [ ! -s "$auth_file" ]; then
     printf 'Prepare the private authentication file first.\n' >&2
     exit 1
   fi
-docker run -d \
-  --name pulse \
-  -p 7655:7655 \
-  -v pulse_data:/data \
-  --env-file "$HOME/.config/pulse/docker-auth.env" \
-  -e PULSE_DEPLOYMENT_METHOD=docker_run \
-  --restart unless-stopped \
-  rcourtman/pulse:vX.Y.Z
+  chmod 700 "$auth_dir"
+  chmod 600 "$auth_file"
+  docker run -d \
+    --name pulse \
+    -p 7655:7655 \
+    -v pulse_data:/data \
+    --env-file "$auth_file" \
+    -e PULSE_DEPLOYMENT_METHOD=docker_run \
+    --restart unless-stopped \
+    rcourtman/pulse:vX.Y.Z
 )
 ```
 
