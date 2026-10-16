@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "fe52dbbf1e7721a54807d0b13d02318c4bc14380",
+  "verified_at": "2026-10-16T10:24:55.414757Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/public/docs/INSTALL.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/INSTALL.md": "dc0e74eec296543c4b2551d87c5a374b036db43d3b4f9b75af7f8d9e29379aef"
+  },
+  "routes": [
+    "/docs/README",
+    "/docs/INSTALL",
+    "/docs/INSTALL#verify-release-build-provenance",
+    "/docs/INSTALL#verify-on-an-offline-target"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Real production Docs/router/Markdown renderer/styles in a synthetic shell; the exact current installation guide renders both copied connected/offline provenance recipes. No native verification or install is exercised.",
+    "Fresh source-vq7juumw compile at 8c268c48 has all 25 artifacts byte-identical to the browser-served preview, including the changed guide. The later source delta is only this browser fixture selector, whose final content was executed; production consumer/style/guide/dependency inputs are unchanged.",
+    "Chromium 141.0.7390.37 desktop light and WebKit 26.0 at 320 px dark, Playwright 1.56.1 matching the integration lock. All eight final captures were opened with the native image viewer.",
+    "No page errors or document overflow, only same-origin GETs; exact fetched guide hash matches committed content. Browser and local server close successfully."
+  ],
+  "interactions": [
+    "Keyboard Enter and phone touch follow the index installation link and the native fragment-only offline link. Back/reload retain fragment focus.",
+    "Long narrow code scrolls within its own block: 288 px visible, 653 px content, 365 px offset, without widening the document.",
+    "The first guessed /docs/INSTALL#... locator timed out; it remains failed evidence. The final fixture uses the renderer's actual #... href without weakening focus assertions."
+  ],
+  "proof_source_sha": "fe52dbbf1e7721a54807d0b13d02318c4bc14380",
+  "compiler_source_sha": "8c268c480c57f321d31f0ff7f515e9f20c56c783",
+  "scope": "New changed-producer browser proof bound to its containing parent; no old receipt rebound or production frontend source changed."
+}
