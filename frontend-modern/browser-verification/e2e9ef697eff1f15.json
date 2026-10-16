@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "868ed5c642ef8659c018d5a3dcc40adccea8027d",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "7f563713f3b9e8b8e7fcd44ddf0fd6c9b7092e3dbd89aa03ba3807e8a56bb860"
+  },
+  "routes": [
+    "/proxmox/replication through the actual ProxmoxPageSurface, REST reader, createNonSuspendingQuery and table; synthetic HTTP responses"
+  ],
+  "states": [
+    "Malformed initial HTTP 200 envelope: explicit safe error, retained direct URL, not a confirmed empty inventory.",
+    "Valid healthy/failed/disabled jobs -> malformed poll rows -> valid recovery -> HTML body -> valid recovery -> genuine empty array. Contextual Replication tab remains selected on a failed poll; genuine empty retains the existing optional-tab fallback.",
+    "Raw response/parser text never reaches the page; whole malformed lists are rejected rather than coerced or silently shortened."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and 320px WebKit touch on Refresh; actual production reader consumes corrected observations.",
+    "Desktop keyboard disclosure and phone visible-row tap expose the full failed-job reason after recovery.",
+    "Four settled desktop/phone error and recovered captures were opened with native view_image. The first full protocol passed its interactions but captured error panels during fade-in; its original records remain. A capture-only completion waited for finite CSS animations/settled opacity, without replaying the poll/HTML/empty controls."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "browsers": [
+    "Chromium 141.0.7390.37 / Playwright 1.56.1",
+    "WebKit 26.0 / Playwright 1.56.1"
+  ],
+  "verified_at": "2026-10-16T14:54:45Z",
+  "limits": [
+    "Synthetic HTTP fixtures only. No native PVE replication, backup, guest/thaw, installation or reporter recovery is claimed.",
+    "The separate optional dependency graph and earlier Docs/WebKit reload limitation are not cleared."
+  ]
+}
