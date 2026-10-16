@@ -10087,3 +10087,12 @@ wire controls in `control_plane_proxy_test.go`: four plaintext report paths,
 HTTPS CONNECT with a verified custom CA or pin, and rejection before report
 transmission for an untrusted certificate or wrong pin. These controls exercise
 the production client and report sender, not installed cluster recovery.
+
+### Extended history observation preserves existing read authority
+
+The shared chart/history response writer now observes successful extended
+history delivery for the security-privacy schema-v19 aggregate. It adds no
+query, resource, tenant, credential or action authority. The observer receives
+only a successful-read marker after serialization/write, and existing API
+entitlement checks remain before that boundary. Read semantics remain owned
+by api-contracts and telemetry retention/disclosure by security-privacy.

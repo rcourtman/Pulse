@@ -24,6 +24,45 @@ import telemetry_adoption_report as report
 
 
 class TelemetryAdoptionReportTest(unittest.TestCase):
+    def test_extended_history_reports_coverage_and_latest_rolling_count(self) -> None:
+        now = datetime(2026, 10, 16, 12, tzinfo=timezone.utc)
+        base = {"received_at": "2026-10-16 11:00:00", "version": "6.6.0",
+                "monitoring_active": 1, "schema_version": 19, "paid_license": 1,
+                "successful_history_reads_over_7d_30d": 4}
+        rows = [{**base, "install_id": "nonfree"},
+                {**base, "install_id": "nonfree", "received_at": "2026-10-15 11:00:00", "successful_history_reads_over_7d_30d": 3},
+                {**base, "install_id": "legacy", "schema_version": 18, "successful_history_reads_over_7d_30d": 99},
+                {**base, "install_id": "zero", "successful_history_reads_over_7d_30d": 0},
+                {**base, "install_id": "free", "paid_license": 0, "successful_history_reads_over_7d_30d": 2},
+                {**base, "install_id": "inactive", "monitoring_active": 0},
+                {**base, "install_id": "dev", "version_is_development": 1},
+                {**base, "install_id": "mock", "kubernetes_pods": 120, "vmware_hosts": 7},
+                {**base, "install_id": "stale", "received_at": "2026-10-01 11:00:00"}]
+        summary = report.summarize_rows({}, rows, {"6.6.0"}, now=now)
+        usage = summary["extended_history_usage_7d"]
+        self.assertEqual(usage["cohorts"]["nonfree"], {
+            "reporting_ids": 3, "covered_ids": 2, "unmeasured_ids": 1,
+            "ids_with_reads": 1, "successful_reads_30d": 4})
+        self.assertEqual(usage["cohorts"]["free"]["successful_reads_30d"], 2)
+        self.assertEqual(usage["excluded_ids"], 2)
+        unavailable = report.summarize_rows({}, rows, {"6.6.0"}, now=now,
+            unavailable_columns=["successful_history_reads_over_7d_30d"])
+        self.assertEqual(unavailable["extended_history_usage_7d"]["cohorts"]["nonfree"]["covered_ids"], 0)
+        text = report.format_text(summary, "rcourtman/Pulse", 7)
+        self.assertIn("2 measured, 1 unmeasured, 1 with reads, 4 successful reads", text)
+        self.assertIn("not zero use", text)
+        self.assertIn("does not verify paying customers", text)
+
+    def test_local_report_old_receiver_marks_new_history_field_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = str(Path(directory) / "telemetry.sqlite")
+            with sqlite3.connect(db_path) as conn:
+                conn.execute("CREATE TABLE telemetry_pings (received_at TEXT, install_id TEXT, version TEXT)")
+                conn.execute("INSERT INTO telemetry_pings VALUES (datetime('now'), 'fixture', '6.6.0')")
+            source = report.fetch_rows_local(db_path, 7)
+            self.assertIn("successful_history_reads_over_7d_30d", source["unavailable_columns"])
+            self.assertEqual(source["rows"][0]["successful_history_reads_over_7d_30d"], 0)
+
     def test_normalize_reported_version_strips_v_prefix(self) -> None:
         self.assertEqual(report.normalize_reported_version("v6.0.0-rc.1"), "6.0.0-rc.1")
 

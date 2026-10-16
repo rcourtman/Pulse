@@ -7248,3 +7248,12 @@ and `TestPMGConfiguredConnectionIdentity` cover those distinct boundaries;
 connection recovery is not backup restoration or native guest safety evidence.
 
 The full PMG detail projection retains the configured connection reference without turning its presence or version read into backup completeness. Detail mapping changes no backup list, retained source time or restoration decision.
+
+### Extended history observation preserves existing read authority
+
+The shared chart/history response writer now observes successful extended
+history delivery for the security-privacy schema-v19 aggregate. It adds no
+query, resource, tenant, credential or action authority. The observer receives
+only a successful-read marker after serialization/write, and existing API
+entitlement checks remain before that boundary. Read semantics remain owned
+by api-contracts and telemetry retention/disclosure by security-privacy.

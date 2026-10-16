@@ -3058,9 +3058,40 @@ actor, and every audit row read stay on the install.
 `TestWithAuditReadActivity_RecordIsContentFree` and
 `TestRecordAuditReadActivity_RejectsUnknownActivity` pin both properties.
 
+### Extended history demand remains a content-free successful-read count
+
+Schema v19 adds only `successful_history_reads_over_7d_30d`. Authenticated
+metric-history and chart HTTP handlers observe successfully written GET
+responses only when the requested duration exceeds seven days and an actual
+returned metric point is strictly older than seven days. Empty/denied/failed,
+cancelled and mock responses are excluded. Cache hits count as reads, as do
+automatic refreshes. Background queries and range selection alone do not count.
+
+The router observer receives no request, tenant, actor, resource, range or
+metric value. Root persistence retains bounded UTC-day counts with private
+permissions and atomic replacement. Restart preserves them. The snapshot
+exports only their rolling 30-day sum including the cutoff UTC day, never the
+day buckets. Opt-out, rotating pseudonymous ID, account-join prohibition and
+receiver retention are unchanged. This is observed HTTP delivery, not proof
+that a person saw a chart or would pay for it.
+
+The receiver migrates the integer column, clamps negatives, and discards this
+field from pre-v19 payloads. The report contributes only each reporting ID's
+latest rolling count, splits coarse nonfree/free/unknown posture, excludes
+nonproduction and inactive latest states, and exposes v19 coverage separately
+from unknown old/missing measurements. Neither an initial zero nor an older
+schema establishes 30 days of nonuse. No billing identity join is introduced.
+
+Proof: `history_read_activity_test.go`, `chartapi/history_activity_test.go`,
+`telemetry_history_reads_test.go`, telemetry Preview/schema-disclosure tests,
+server snapshot tests, receiver migration/intake tests, report coverage tests,
+and `tests/integration/tests/19-telemetry-disclosure.spec.ts`. Canonical and
+shipped privacy documents must remain byte-identical. Pending release notes
+carry the schema notice for the first release that includes this field.
+
 ### Telemetry ingestion matches the released sender while storage stays compatible
 
-The active outbound contract is schema v18. Schema v8 added content-free
+The active outbound contract is schema v19. Schema v8 added content-free
 approved-action refusal counters for target change, prerequisite failure, and
 invalid typed contract so agent-side pre-mutation failures no longer collapse
 into `other`. Schema v9 completes that split with a content-free `uncoded`
