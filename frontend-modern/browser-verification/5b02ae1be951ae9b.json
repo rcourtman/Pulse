@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "7c136b646c67319f2c4fdec39160136d70bf8f79",
+  "verified_at": "2026-10-16T11:50:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/index.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/index.css": "c11a24a45d5c04e413b67c6f3b8c75e7728dd61e1dfe99b776a2fcaef110bf12"
+  },
+  "routes": [
+    "/alerts/history"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main values on the same page): Message 154px at a 835px card (1280 window), 182px at 982px (1440), 215px at 1134px (1600), 398px at 1436px (1920); WebKit scrolled sideways at 1280 and 1440 (table 1027px and 1208px in the card)",
+    "After: Message 180px, 310px, 278px and 457px; no horizontal overflow in WebKit or Chromium at any of the four widths",
+    "Clipped Message cells fell from 20 to 8 at 1280 and from 10 to 5 at 1440 (Linux fonts); other columns hold their content (Mac Chromium: 0 Type clips at 120px)",
+    "Rows keep one height per density (49px under an 80rem card, 39px from it), as the windowing hook needs",
+    "At 375px History still shows its card list (no table rendered), page scrollWidth 375"
+  ],
+  "interactions": [
+    "Signed in to a private mock stack and opened Alerts > History in the in-app browser at 1280, 1440, 1484, 1600 and 1920 widths; measured column widths, clipped cells and row heights, with main track values applied as a constructable stylesheet for the before reading",
+    "Repeated the before/after measurement in WebKit and Chromium on pulse-dev through a tunnel to the same stack"
+  ]
+}
