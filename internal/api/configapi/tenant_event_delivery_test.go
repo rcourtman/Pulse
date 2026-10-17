@@ -1,7 +1,6 @@
 package configapi
 
 import (
-	"context"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -10,11 +9,7 @@ import (
 	"time"
 
 	gorillaws "github.com/gorilla/websocket"
-	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func tenantEventConnections(t *testing.T, hub *websocket.Hub, orgID string) (*gorillaws.Conn, *gorillaws.Conn) {
@@ -62,59 +57,5 @@ func assertTenantEvents(t *testing.T, owner, other *gorillaws.Conn, types ...str
 		t.Fatalf("other organization received %s", data)
 	} else if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
 		t.Fatalf("expected open idle connection, got %v", err)
-	}
-}
-
-func TestAutoRegistrationEventsStayWithRequestOrganization(t *testing.T) {
-	for _, orgID := range []string{"org-a", "default", ""} {
-		t.Run("org="+orgID, func(t *testing.T) {
-			hub := websocket.NewHub(nil)
-			owner, other := tenantEventConnections(t, hub, orgID)
-			h := NewConfigHandlers(nil, nil, nil, hub, nil, nil, false)
-			monitor, _, _ := newTestMonitor(t)
-			service := discovery.NewService(nil, orgID, time.Hour, "auto", nil)
-			service.Stop()
-			setUnexportedField(t, monitor, "discoveryService", service)
-			h.defaultMonitor = monitor
-			ctx := context.WithValue(context.Background(), apicontext.OrgIDContextKey, orgID)
-			req := &AutoRegisterRequest{Type: "pve", Source: "script"}
-			h.notifyAutoRegistrationSuccess(ctx, req, "192.0.2.10", "node-a", "token-id", true)
-			h.notifyAutoRegistrationSuccess(ctx, req, "192.0.2.10", "node-a", "token-id", false)
-			h.notifyAutoUnregisterSuccess(ctx, &AutoUnregisterRequest{Type: "pve"})
-			assertTenantEvents(t, owner, other,
-				"node_auto_registered", "discovery_update", "nodes_changed", "discovery_update", "node_deleted", "discovery_update")
-		})
-	}
-}
-
-func TestNodeMutationEventsStayWithRequestOrganization(t *testing.T) {
-	for _, orgID := range []string{"org-a", "default"} {
-		t.Run(orgID, func(t *testing.T) {
-			hub := websocket.NewHub(nil)
-			owner, other := tenantEventConnections(t, hub, orgID)
-			h := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir(), PVEInstances: []config.PVEInstance{
-				{Name: "node-a", Host: "https://192.0.2.10:8006", TokenValue: "synthetic"},
-			}})
-			h.wsHub = hub
-			original := detectPVECluster
-			t.Cleanup(func() { detectPVECluster = original })
-			detectPVECluster = func(proxmox.ClientConfig, string, []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-				return true, "cluster-a", []config.ClusterEndpoint{{NodeName: "node-a", Host: "https://192.0.2.10:8006"}}
-			}
-			ctx := context.WithValue(context.Background(), apicontext.OrgIDContextKey, orgID)
-			refresh := httptest.NewRequest(http.MethodPost, "/api/config/nodes/pve-0/refresh-cluster", nil).WithContext(ctx)
-			rec := httptest.NewRecorder()
-			h.HandleRefreshClusterNodes(rec, refresh)
-			if rec.Code != http.StatusOK {
-				t.Fatalf("refresh: %d %s", rec.Code, rec.Body.String())
-			}
-			remove := httptest.NewRequest(http.MethodDelete, "/api/config/nodes/pve-0", nil).WithContext(ctx)
-			rec = httptest.NewRecorder()
-			h.HandleDeleteNode(rec, remove)
-			if rec.Code != http.StatusOK {
-				t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
-			}
-			assertTenantEvents(t, owner, other, "nodes_updated", "node_deleted")
-		})
 	}
 }

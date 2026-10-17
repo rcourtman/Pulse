@@ -1,20 +1,27 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	gorillaws "github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 )
 
 func TestReleaseNoteImageRouteAuthorization(t *testing.T) {
@@ -747,4 +754,103 @@ var allRouteAllowlist = []string{
 	"/api/server/info",
 	"/ws",
 	"/simple-stats",
+}
+
+func TestRegisteredTestNotificationStaysWithRequestOrganization(t *testing.T) {
+	SetMultiTenantEnabled(true)
+	t.Cleanup(func() { SetMultiTenantEnabled(false) })
+	t.Setenv("PULSE_DEV", "true")
+	for _, orgID := range []string{"org-a", "default", ""} {
+		t.Run("org="+orgID, func(t *testing.T) {
+			const writeToken = "notification-write.12345678"
+			const readToken = "notification-read.12345678"
+			writer := newTokenRecord(t, writeToken, []string{config.ScopeSettingsWrite}, nil)
+			reader := newTokenRecord(t, readToken, []string{config.ScopeSettingsRead}, nil)
+			writer.OrgID, reader.OrgID = orgID, orgID
+			cfg := newTestConfigWithTokens(t, writer, reader)
+			if orgID != "" && orgID != "default" {
+				if err := os.MkdirAll(filepath.Join(cfg.DataPath, "orgs", orgID), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			hub := websocket.NewHub(nil)
+			go hub.Run()
+			t.Cleanup(hub.Stop)
+			server := httptest.NewServer(http.HandlerFunc(hub.HandleWebSocket))
+			t.Cleanup(server.Close)
+			connect := func(org string) *gorillaws.Conn {
+				t.Helper()
+				conn, _, err := gorillaws.DefaultDialer.Dial(
+					"ws"+strings.TrimPrefix(server.URL, "http")+"?org_id="+org,
+					http.Header{"Origin": {server.URL}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { conn.Close() })
+				deadline := time.Now().Add(time.Second)
+				for hub.GetTenantClientCount(org) == 0 {
+					if time.Now().After(deadline) {
+						t.Fatalf("client for %q did not register", org)
+					}
+					time.Sleep(time.Millisecond)
+				}
+				return conn
+			}
+			ownerOrg := orgID
+			if ownerOrg == "" {
+				ownerOrg = "default"
+			}
+			owner, other := connect(ownerOrg), connect("org-b")
+			monitors := monitoring.NewMultiTenantMonitor(cfg, config.NewMultiTenantPersistence(cfg.DataPath), nil)
+			t.Cleanup(monitors.Stop)
+			router := NewRouter(cfg, nil, monitors, hub, nil, "1.0.0")
+			for _, tc := range []struct {
+				method, token string
+				status        int
+			}{
+				{http.MethodPost, "", http.StatusUnauthorized},
+				{http.MethodPost, readToken, http.StatusForbidden},
+				{http.MethodGet, writeToken, http.StatusMethodNotAllowed},
+				{http.MethodPost, writeToken, http.StatusOK},
+			} {
+				req := httptest.NewRequest(tc.method, "/api/test-notification", nil)
+				req.Header.Set("X-API-Token", tc.token)
+				if orgID != "" {
+					req.Header.Set("X-Pulse-Org-ID", orgID)
+				}
+				rec := httptest.NewRecorder()
+				router.Handler().ServeHTTP(rec, req)
+				if rec.Code != tc.status {
+					t.Fatalf("%s notification status = %d, want %d: %s", tc.method, rec.Code, tc.status, rec.Body.String())
+				}
+				if tc.status == http.StatusOK {
+					var response map[string]string
+					if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil || response["status"] != "notification sent" {
+						t.Fatalf("notification response = %s, decode error = %v", rec.Body.String(), err)
+					}
+				}
+			}
+			if err := owner.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			var event websocket.Message
+			if err := owner.ReadJSON(&event); err != nil {
+				t.Fatalf("read owning organization's notification: %v", err)
+			}
+			data, ok := event.Data.(map[string]interface{})
+			if event.Type != "node_auto_registered" || !ok || data["host"] != "test-node.example.com" || data["hasToken"] != true || event.Timestamp == "" {
+				t.Fatalf("notification payload = %#v", event)
+			}
+			for _, conn := range []*gorillaws.Conn{owner, other} {
+				if err := conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+					t.Fatal(err)
+				}
+				if _, data, err := conn.ReadMessage(); err == nil {
+					t.Fatalf("unexpected extra or cross-organization notification: %s", data)
+				} else if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
+					t.Fatalf("expected open idle connection, got %v", err)
+				}
+			}
+		})
+	}
 }

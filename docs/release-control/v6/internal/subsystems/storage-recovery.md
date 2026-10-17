@@ -6959,3 +6959,18 @@ It adds no store, persisted shape, backup, restore or migration path and does
 not turn chart history into recovery-readiness authority. Separate routers
 retain separate services. Concurrent publication and tenant-isolation proof
 remain owned by api-contracts.
+
+### Inventory notifications preserve the request organization
+
+The shared node handlers scope `node_deleted`, `nodes_updated` and post-edit
+`discovery_update` messages to the request organization. Setup handlers also
+scope auto-registration and unregistration events and their cached discovery
+refreshes to the authorized request organization, including its setup token
+binding. The registered test-notification route sends its synthetic
+`node_auto_registered` event to that same request organization. An empty
+organization ID maps to the default tenant.
+Storage and recovery consumers receive these inventory refresh signals within
+their own tenant; discovery results and successful node mutations do not
+establish backup coverage, protection freshness, restore readiness or recovery
+point evidence. The delivery change adds no persisted storage or recovery
+state and gives these events no storage mutation authority.
