@@ -5,7 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
 const root = '/workspace/frontend-modern';
-const output = '/workspace/tmp/native-guest-filesystem-power/browser-final';
+const output = '/workspace/tmp/native-guest-filesystem-power/browser-consumers';
 const origin = 'http://127.0.0.1:5361';
 const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const point = (timestamp, value) => ({timestamp, value, min: value, max: value});
@@ -16,10 +16,9 @@ function resource(state) {
     id: 'guest:site-a:105', type: state.kind || 'vm', name: 'backup-guest', displayName: 'backup-guest',
     platformId: 'site-a', platformType: 'proxmox-pve', platformScopes: ['proxmox-pve'],
     status: 'online', vmid: 105, node: 'pve-a', instance: 'site-a', lastSeen: new Date().toISOString(),
-    metrics: {
-      cpu: {percent: 10}, memory: {percent: 25, used: 1024 ** 3, total: 4 * 1024 ** 3, observation: {state: 'current', source: 'status-mem', observedAt: new Date().toISOString()}},
-      disk: state.capacity ? {total: 10 * 1024 ** 3} : {percent: disks[0].usage, used: disks[0].used, total: 10 * 1024 ** 3},
-    },
+    cpu: {current: 10},
+    memory: {current: 25, used: 1024 ** 3, total: 4 * 1024 ** 3, observation: {state: 'current', source: 'status-mem', observedAt: new Date().toISOString()}},
+    disk: state.capacity ? {total: 10 * 1024 ** 3} : {current: disks[0].usage, used: disks[0].used, total: 10 * 1024 ** 3},
     metricsTarget: {resourceType: 'vm', resourceId: 'guest:site-a:105'},
     proxmox: {vmid: 105, node: 'pve-a', instance: 'site-a', runtimeStatus: state.power, disks: state.linked ? undefined : disks, diskStatusReason: state.reason || ''},
     agent: state.linked ? {agentId: 'fixture-agent', stale: Boolean(state.stale), disks} : undefined,
@@ -34,8 +33,9 @@ const settle = page => page.evaluate(async () => {
   const runtime = 'frontend-modern/src/utils/workloadGuestPresentation.ts';
   const result = {result: 'incomplete', playwright: require('playwright/package.json').version, runtime_hashes: {[runtime]: hash('/workspace/' + runtime)}, cases: [], screenshots: [], cleanup: {browser: false, server: false}, limits: 'Synthetic HTTP/resource fixtures with real production mappers, row, full guest/canonical drawers, History and alert settings. No provider, QGA, backup, guest action, installed recovery or release proof.'};
   assert.equal(result.playwright, JSON.parse(fs.readFileSync('/workspace/tests/integration/package-lock.json')).packages['node_modules/@playwright/test'].version);
+  process.chdir(root);
   const {createServer} = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
-  const server = await createServer({root, configFile: root + '/vite.config.ts', cacheDir: output + '/vite-cache', optimizeDeps: {entries: ['browser-tests/paused-filesystem.html', 'browser-tests/resource-stopped-filesystem.html']}, server: {host: '127.0.0.1', port: 5361, strictPort: true}});
+  const server = await createServer({root, configFile: root + '/vite.config.ts', cacheDir: output + '/vite-cache', optimizeDeps: {entries: ['browser-tests/paused-filesystem.html', 'browser-tests/resource-stopped-filesystem.html']}, server: {host: '127.0.0.1', port: 5361, strictPort: true, hmr: false}});
   let browser, lastPage;
   try {
     await server.listen();
@@ -89,10 +89,9 @@ const settle = page => page.evaluate(async () => {
       await capture('workload-row', row);
       if (width < 768) await row.getByText('backup-guest', {exact: true}).tap();
       else {await row.getByRole('button', {name: 'Expand backup-guest', exact: true}).focus(); await page.keyboard.press('Enter');}
-      const drawer = page.getByRole('region', {name: 'Guest details'});
+      const drawer = page.locator('section[aria-labelledby^="guest-drawer-heading-"]');
       await drawer.waitFor();
-      const details = page.getByTestId('guest-technical-details');
-      await details.locator('summary').click();
+      const details = page.getByTestId('guest-drawer-filesystems');
       assert.match(await details.innerText(), /Last known 90%/);
       assert.match(await details.innerText(), /VM running state is unconfirmed/);
       assert.equal(await details.getByRole('progressbar', {name: 'Filesystem /data utilization'}).count(), 0);
@@ -132,8 +131,11 @@ const settle = page => page.evaluate(async () => {
       assert.match(await settings.innerText(), /95/);
       await capture('fresh-zero', details);
       record.observations.push('HTTP -> useWorkloads -> same-open row, filesystem details, History and alert settings qualify unconfirmed native values; explicit error, capacity-only, independent agent/staleness and fresh zero controls passed. Saved threshold remains 95%.');
-      await details.locator('summary').focus(); await page.keyboard.press('Enter');
-      assert.equal(await details.evaluate(el => el.open), false);
+      const technical = page.getByTestId('guest-technical-details');
+      await technical.locator('summary').focus(); await page.keyboard.press('Enter');
+      assert.equal(await technical.evaluate(el => el.open), true);
+      await page.keyboard.press('Enter');
+      assert.equal(await technical.evaluate(el => el.open), false);
       record.trustedInput = await page.evaluate(() => window.__trustedInputs);
       assert(record.trustedInput.some(event => event.trusted));
       // The canonical drawer consumes the same shared qualification independently.
