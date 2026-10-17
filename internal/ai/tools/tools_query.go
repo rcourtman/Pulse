@@ -199,13 +199,8 @@ type ContentInspector interface {
 type sqlContentInspector struct{}
 
 func (s *sqlContentInspector) Applies(cmdLower string) bool {
-	sqlCLIs := []string{"sqlite3 ", "mysql ", "mariadb ", "psql ", "mycli ", "pgcli ", "litecli "}
-	for _, cli := range sqlCLIs {
-		if strings.Contains(cmdLower, cli) || strings.HasPrefix(cmdLower, strings.TrimSuffix(cli, " ")) {
-			return true
-		}
-	}
-	return false
+	fields, _, literal := readCommandWords(stripReadRedirects(cmdLower))
+	return literal && wordIn(literalCommandBase(fields[0]), "sqlite3 mysql mariadb psql mycli pgcli litecli")
 }
 
 func (s *sqlContentInspector) IsReadOnly(cmdLower string) (bool, string) {
@@ -280,6 +275,13 @@ func classifySingleCommandWithOptions(command string, opts executionClassificati
 	if reason := checkMutationCapabilityGuards(command, cmdLower); reason != "" {
 		return IntentResult{Intent: IntentWriteOrUnknown, Reason: reason}
 	}
+	if result, handled := classifyReadPipeline(command, opts); handled {
+		return result
+	}
+	literalWords, _, literal := readCommandWords(stripReadRedirects(command))
+	if !literal {
+		return IntentResult{Intent: IntentWriteOrUnknown, Reason: "command requires literal, inspectable shell arguments"}
+	}
 
 	if result, handled := classifyTimeoutWrapper(command); handled {
 		return result
@@ -289,7 +291,7 @@ func classifySingleCommandWithOptions(command string, opts executionClassificati
 	// MUST be checked before Phase 3 (read-only by construction) because even
 	// read-only commands like `tail -f` and `journalctl -f` can hang indefinitely.
 	// pulse_read requires commands that terminate deterministically.
-	if niBlock := checkNonInteractiveGuardrails(command, cmdLower, opts); niBlock != nil {
+	if niBlock := checkNonInteractiveGuardrails(command, strings.ToLower(strings.Join(literalWords, " ")), opts); niBlock != nil {
 		return IntentResult{
 			Intent:              IntentWriteOrUnknown,
 			Reason:              niBlock.Message,
@@ -318,9 +320,9 @@ func classifySingleCommandWithOptions(command string, opts executionClassificati
 	}
 
 	// === PHASE 3: Known read-only by construction ===
-	// Commands that cannot mutate regardless of arguments.
+	// Commands with intrinsically read-only behaviour or explicitly safe arguments.
 	// Only reached if Phase 2 didn't match any write patterns.
-	if isReadOnlyByConstruction(cmdLower) {
+	if isReadOnlyByConstruction(command) {
 		return IntentResult{Intent: IntentReadOnlyCertain, Reason: "known read-only command"}
 	}
 
@@ -349,10 +351,11 @@ func classifySingleCommandWithOptions(command string, opts executionClassificati
 }
 
 func classifyTimeoutWrapper(command string) (IntentResult, bool) {
-	fields := strings.Fields(command)
-	if len(fields) == 0 || strings.ToLower(commandTokenBase(fields[0])) != "timeout" {
+	words, _, literal := readCommandWords(stripReadRedirects(command))
+	if !literal || strings.ToLower(literalCommandBase(words[0])) != "timeout" {
 		return IntentResult{}, false
 	}
+	fields := strings.Fields(command)
 
 	innerCommand, ok := timeoutInnerCommand(fields)
 	if !ok {
@@ -438,11 +441,11 @@ func isTimeoutDurationToken(token string) bool {
 }
 
 func classifyEnvCommand(command string) (IntentResult, bool) {
-	fields := strings.Fields(strings.ToLower(command))
-	if len(fields) == 0 || fields[0] != "env" {
+	fields, glob, literal := readCommandWords(stripReadRedirects(command))
+	if len(fields) == 0 || strings.ToLower(fields[0]) != "env" {
 		return IntentResult{}, false
 	}
-	if envCommandHasUtility(fields) {
+	if !literal || glob || envCommandHasUtility(fields) {
 		return IntentResult{Intent: IntentWriteOrUnknown, Reason: "env can execute wrapped commands and is not read-only by construction"}, true
 	}
 	return IntentResult{Intent: IntentReadOnlyCertain, Reason: "bare env command prints environment only"}, true
@@ -475,11 +478,11 @@ func envCommandHasUtility(fields []string) bool {
 }
 
 func classifyFindCommand(command string) (IntentResult, bool) {
-	fields := strings.Fields(strings.ToLower(command))
+	fields, glob, literal := readCommandWords(stripReadRedirects(command))
 	if len(fields) == 0 || fields[0] != "find" {
 		return IntentResult{}, false
 	}
-	if findHasWriteOrExecAction(fields) {
+	if !literal || glob || findHasWriteOrExecAction(fields) {
 		return IntentResult{Intent: IntentWriteOrUnknown, Reason: "find action can execute commands or write files"}, true
 	}
 	return IntentResult{Intent: IntentReadOnlyConditional, Reason: "find command without write or exec actions"}, true
@@ -500,12 +503,15 @@ func findHasWriteOrExecAction(fields []string) bool {
 }
 
 func classifyCurlCommand(command string) (IntentResult, bool) {
-	fields := strings.Fields(command)
-	if len(fields) == 0 || strings.ToLower(commandTokenBase(fields[0])) != "curl" {
+	fields, glob, literal := readCommandWords(stripReadRedirects(command))
+	if len(fields) == 0 || strings.ToLower(literalCommandBase(fields[0])) != "curl" {
 		return IntentResult{}, false
 	}
 	if isCurlMutationOrFileOutput(command) {
 		return IntentResult{Intent: IntentWriteOrUnknown, Reason: "curl option can mutate requests or write files"}, true
+	}
+	if !literal || glob || !isSafeCurlRead(fields[1:]) {
+		return IntentResult{Intent: IntentWriteOrUnknown, Reason: "curl options are not a supported read-only form"}, true
 	}
 	if curlHasHTTPURL(fields[1:]) {
 		return IntentResult{Intent: IntentReadOnlyConditional, Reason: "curl HTTP(S) request without mutation or file-output options"}, true
@@ -536,8 +542,8 @@ func curlHasHTTPURL(fields []string) bool {
 }
 
 func classifyWgetCommand(command string) (IntentResult, bool) {
-	fields := strings.Fields(command)
-	if len(fields) == 0 || strings.ToLower(commandTokenBase(fields[0])) != "wget" {
+	fields, glob, literal := readCommandWords(stripReadRedirects(command))
+	if len(fields) == 0 || strings.ToLower(literalCommandBase(fields[0])) != "wget" {
 		return IntentResult{}, false
 	}
 	hasSpider := false
@@ -553,6 +559,9 @@ func classifyWgetCommand(command string) (IntentResult, bool) {
 		}
 	}
 	if hasSpider {
+		if !literal || glob || !isSafeWgetSpiderRead(fields[1:]) {
+			return IntentResult{Intent: IntentWriteOrUnknown, Reason: "wget options are not a supported read-only form"}, true
+		}
 		return IntentResult{Intent: IntentReadOnlyConditional, Reason: "wget spider check is read-only"}, true
 	}
 	return IntentResult{Intent: IntentWriteOrUnknown, Reason: "wget can write downloaded content and is not on the read-only allowlist unless --spider is used"}, true
@@ -1085,140 +1094,6 @@ func checkSelfContainedGuardrails(command, cmdLower string) string {
 	return ""
 }
 
-// isReadOnlyByConstruction returns true for commands that cannot mutate by design.
-// Only matches patterns at the START of the command to avoid false positives
-// (e.g., "date " inside "UPDATE" SQL statements).
-func isReadOnlyByConstruction(cmdLower string) bool {
-	// Note: Pager tools (less, more) and live monitors (top, htop) are excluded here
-	// because they're blocked by NonInteractiveOnly guardrails in Phase 1.
-	readOnlyCommands := []string{
-		"cat", "head", "tail",
-		"ls", "ll", "dir",
-		"ps", "free", "df", "du", "iostat", "vmstat", "mpstat", "sar",
-		"grep", "locate", "which", "whereis",
-		"journalctl", "dmesg",
-		"uname", "hostname", "whoami", "id", "groups",
-		"echo", "printf",
-		"date", "uptime", "printenv", "locale",
-		"netstat", "ss", "ifconfig", "route", "arp",
-		"ping", "traceroute", "tracepath", "nslookup", "dig", "host",
-		"file", "stat", "wc", "sort", "uniq", "cut", "tr",
-		"lsof", "fuser",
-		"getent", "nproc", "lscpu", "lsmem", "lsblk", "blkid",
-		"lxc-ls", "lxc-info",
-		"zcat", "zgrep", "bzcat", "xzcat",
-		"md5sum", "sha256sum", "sha1sum",
-		"test",
-		// Process inspection
-		"pgrep", "pidof", "pstree",
-		// Login/session info
-		"last", "lastlog", "who", "w",
-		// Hardware inspection
-		"lspci", "lsusb", "dmidecode", "hwinfo", "inxi",
-		"sensors", "hddtemp", "smartctl", "nvme",
-		// Media inspection tools
-		"ffprobe", "mediainfo", "exiftool",
-		// Proxmox version
-		"pveversion",
-	}
-
-	// Multi-word patterns that must appear at the start
-	multiWordPatterns := []string{
-		// Curl read-only variants (various flag combinations)
-		"curl -s", "curl --silent", "curl -i", "curl --head",
-		"curl -k", "curl --insecure",
-		"curl -sk", "curl -ks", "curl -ki", "curl -ik",
-		"curl http", "curl https",
-		// Docker read-only
-		"docker ps", "docker logs", "docker inspect", "docker stats",
-		"docker images", "docker info", "docker version",
-		"docker top", "docker port",
-		"docker network ls", "docker network inspect",
-		"docker volume ls", "docker volume inspect",
-		"docker-compose ps", "docker compose ps",
-		// Systemd read-only
-		"systemctl status", "systemctl is-active", "systemctl is-enabled",
-		"systemctl list", "systemctl show",
-		"service status", "service --status-all",
-		// Proxmox read-only
-		"pct list", "pct status", "pct config", "pct df",
-		"qm list", "qm status", "qm config", "qm guest cmd",
-		"pvesh get",
-		"pvecm status", "pvecm nodes",
-		"pvesm status", "pvesm list",
-		// ZFS/ZPool read-only
-		"zpool status", "zpool list", "zpool get",
-		"zfs list", "zfs get",
-		// RAID inspection
-		"mdadm --detail", "mdadm -D",
-		// Network: ip with optional protocol flags (-4, -6)
-		"ip addr", "ip route", "ip link", "ip neigh", "ip neighbor",
-		"ip -4 addr", "ip -4 route", "ip -4 link", "ip -4 neigh", "ip -4 neighbor",
-		"ip -6 addr", "ip -6 route", "ip -6 link", "ip -6 neigh", "ip -6 neighbor",
-		"ip a", "ip r", "ip n",
-		// Package info (read-only)
-		"apt list", "apt show", "apt-cache",
-		"dpkg -l", "dpkg --list", "dpkg -s",
-		"rpm -q", "rpm -qa",
-		"yum list", "dnf list",
-		// Kubectl read-only commands
-		"kubectl get", "kubectl describe", "kubectl logs", "kubectl top", "kubectl cluster-info",
-		"kubectl api-resources", "kubectl api-versions", "kubectl version", "kubectl config view",
-		// Network connectivity checks (zero-I/O port scan, read-only)
-		"nc -z", "nc -vz", "nc -zv", "nc -zw", "nc -zvw",
-		"netcat -z", "netcat -zv",
-	}
-
-	// Extract first word of command
-	firstWord := cmdLower
-	if spaceIdx := strings.Index(cmdLower, " "); spaceIdx > 0 {
-		firstWord = cmdLower[:spaceIdx]
-	}
-
-	// Check single-word commands
-	for _, cmd := range readOnlyCommands {
-		if firstWord == cmd {
-			return true
-		}
-	}
-
-	// Check multi-word patterns at start
-	for _, pattern := range multiWordPatterns {
-		if strings.HasPrefix(cmdLower, pattern) {
-			return true
-		}
-	}
-
-	// Special case: nc/netcat with -z flag anywhere (zero-I/O mode is read-only regardless of flag order)
-	if (firstWord == "nc" || firstWord == "netcat") && containsFlag(cmdLower, "-z") {
-		return true
-	}
-
-	// Special case: [ (test shorthand)
-	if strings.HasPrefix(cmdLower, "[ ") {
-		return true
-	}
-
-	return false
-}
-
-// containsFlag checks whether a flag (e.g. "-z") appears as a standalone
-// token or embedded in a combined short-flag group (e.g. "-zv", "-zvw") in cmd.
-func containsFlag(cmd, flag string) bool {
-	// flag is expected to be like "-z"
-	char := strings.TrimPrefix(flag, "-")
-	for _, field := range strings.Fields(cmd) {
-		if field == flag {
-			return true
-		}
-		// Check combined flags like "-zv", "-zvw", "-wzv"
-		if strings.HasPrefix(field, "-") && !strings.HasPrefix(field, "--") && strings.Contains(field[1:], char) {
-			return true
-		}
-	}
-	return false
-}
-
 // matchesWritePatterns checks for known write-capable command patterns.
 // Returns reason if a write pattern matches.
 func matchesWritePatterns(command, cmdLower string) string {
@@ -1236,7 +1111,7 @@ func matchesWritePatterns(command, cmdLower string) string {
 		"docker rm": "container removal", "docker stop": "container stop", "docker kill": "container kill",
 		"docker restart": "container restart", "docker exec": "container exec", "kubectl exec": "container exec",
 		"kill ": "process termination", "killall ": "process termination", "pkill ": "process termination",
-		"dd ": "disk write", "mkfs": "filesystem creation", "fdisk": "disk partition", "parted": "disk partition", "mkswap": "swap creation",
+		"mkfs": "filesystem creation", "fdisk": "disk partition", "parted": "disk partition", "mkswap": "swap creation",
 		"iptables": "firewall modification", "firewall-cmd": "firewall modification", "ufw ": "firewall modification",
 		"truncate": "file truncation",
 		"chmod ":   "permission change", "chown ": "ownership change", "chgrp ": "group change",
@@ -1258,6 +1133,9 @@ func matchesWritePatterns(command, cmdLower string) string {
 	// Command-start-only patterns: these must be the first word to avoid matching
 	// substrings in arguments (e.g., "pve-daily-utils.service" contains "service",
 	// "grep /etc/passwd" contains "passwd").
+	if fields := strings.Fields(cmdLower); len(fields) > 0 && commandTokenBase(fields[0]) == "dd" {
+		return "disk write"
+	}
 	if strings.HasPrefix(cmdLower, "service ") {
 		return "service control"
 	}
@@ -1281,7 +1159,7 @@ func matchesWritePatterns(command, cmdLower string) string {
 			return reason
 		}
 	}
-	if containsCommandToken(cmdLower, "ln") || containsCommandToken(cmdLower, "link") {
+	if fields := strings.Fields(cmdLower); len(fields) > 0 && wordIn(commandTokenBase(fields[0]), "ln link") {
 		return "link creation"
 	}
 
