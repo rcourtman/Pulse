@@ -172,11 +172,6 @@ func TestResolvePatrolScopeResolvesDockerAlertResourceIDs(t *testing.T) {
 			requested    string
 			resourceType string
 		}{{containerAlertID, "app-container"}, {namedContainerAlertID, "app-container"}, {hostAlertID, "docker-host"}} {
-			if tc.requested == namedContainerAlertID && state.readState == nil {
-				// The legacy snapshot record of a container without an ID has
-				// no ID to scope by; only the unified read state can.
-				continue
-			}
 			resolved, resolution := resolvePatrolScopeState(state, PatrolScope{ResourceIDs: []string{tc.requested}})
 			if len(resolution.UnmatchedResourceIDs) != 0 || len(resolution.AmbiguousResourceIDs) != 0 {
 				t.Fatalf("alert resource ID %q did not resolve exactly: %+v", tc.requested, resolution)
@@ -186,6 +181,13 @@ func TestResolvePatrolScopeResolvesDockerAlertResourceIDs(t *testing.T) {
 			}
 			if len(resolved.resolvedResourceTypes) != 1 || resolved.resolvedResourceTypes[0] != tc.resourceType {
 				t.Fatalf("alert resource ID %q resolved types = %v, want [%s]", tc.requested, resolved.resolvedResourceTypes, tc.resourceType)
+			}
+			filtered := filterPatrolStateByScopeState(state, resolved)
+			if len(filtered.DockerHosts) != 1 || filtered.DockerHosts[0].ID != "nas" || patrolRuntimeCountResources(filtered).docker != 1 {
+				t.Fatalf("resolved alert lost its Docker host context: %+v", filtered.DockerHosts)
+			}
+			if tc.requested == namedContainerAlertID && (len(filtered.DockerHosts[0].Containers) != 1 || filtered.DockerHosts[0].Containers[0].Name != "legacy-sidecar") {
+				t.Fatalf("name-only scope selected the wrong containers: %+v", filtered.DockerHosts[0].Containers)
 			}
 		}
 	}

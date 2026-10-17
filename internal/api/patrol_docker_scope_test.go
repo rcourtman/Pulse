@@ -37,11 +37,6 @@ func TestPatrolRunAPIDockerAlertIdentityContract(t *testing.T) {
 			{name: "offline-host", hostAlert: true},
 			{name: "name-only-container", withoutID: true, acknowledged: true},
 		} {
-			// A name-only legacy snapshot has no source ID to scope by. Its
-			// supported unified projection supplies the missing stable identity.
-			if target.withoutID && !unified {
-				continue
-			}
 			t.Run(path+"/"+target.name, func(t *testing.T) {
 				container := models.DockerContainer{ID: "abc123def456", Name: "canary-app", State: "exited", Status: "Exited (0)"}
 				if target.withoutID {
@@ -190,6 +185,17 @@ func TestPatrolRunAPIDockerAlertIdentityContract(t *testing.T) {
 					t.Fatalf("fixture must retain explicit no-chat failure, not successful analysis: %+v", run)
 				}
 				t.Logf("producer=%q level=%q acknowledged=%v; HTTP=200; scope=%v; accepted run=%q; history=%s (%s)", alert.ResourceID, alert.Level, alert.Acknowledged, run.EffectiveScopeResourceIDs, run.ID, run.Status, run.ErrorDetail)
+				// Export only this synthetic producer/handler/history chain so
+				// browser proof can consume the actual JSON without replacing
+				// backend outcomes with hand-authored success fixtures.
+				proof, err := json.Marshal(map[string]any{
+					"case": path + "/" + target.name, "alert": alert, "accepted": json.RawMessage(rec.Body.Bytes()),
+					"busy": json.RawMessage(busy.Body.Bytes()), "run": run,
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("PATROL_DOCKER_PROOF=%s", proof)
 			})
 		}
 	}
