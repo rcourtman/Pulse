@@ -65,6 +65,14 @@ const baseCatalogPayload = {
 } as const;
 
 describe('reporting catalog model', () => {
+  it('offers backup health only when this runtime has the private renderer', () => {
+    expect(parseReportingCatalog(baseCatalogPayload).backupHealthAvailable).toBe(false);
+    expect(
+      parseReportingCatalog({ ...baseCatalogPayload, backupHealthAvailable: true })
+        .backupHealthAvailable,
+    ).toBe(true);
+    expect(buildLegacyReportingCatalogFallback().backupHealthAvailable).toBe(false);
+  });
   it('builds the canonical reporting catalog request', () => {
     expect(buildReportingCatalogRequest()).toEqual({
       url: '/api/admin/reports/catalog',

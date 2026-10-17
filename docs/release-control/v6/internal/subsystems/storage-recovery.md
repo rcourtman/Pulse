@@ -7354,3 +7354,47 @@ their own tenant; discovery results and successful node mutations do not
 establish backup coverage, protection freshness, restore readiness or recovery
 point evidence. The delivery change adds no persisted storage or recovery
 state and gives these events no storage mutation authority.
+
+### Durable backup execution history and observation coverage
+
+The per-organization recovery SQLite store retains backup task execution rows
+under the existing ninety-day policy. Task rows stay `KindOther`. Success never
+mints a restore artifact or protected posture. A shrinking provider task window
+does not reconcile away retained executions. Later running observations cannot
+erase a committed terminal outcome. Source identity is validated before writes.
+
+Collection-quality rows and continuous observation intervals share that store.
+Task evidence commits before collection success can extend coverage. Failed
+writes, failed/partial reads, downtime beyond the actual polling cadence and
+older observations cannot fabricate or bridge complete history. Returned old
+tasks never backdate Pulse's observation period. Report reads take outcomes and
+coverage from one database snapshot, and fail explicitly on query/decode limits.
+All early returns from point upserts release their transaction, including
+errors scoped inside a point loop.
+
+`BuildBackupHealth` scopes outcomes to current authoritative workload identities,
+using source/VMID only when unique within that selection. Ambiguous and
+unattributed multi-guest evidence reduces completeness without exposing another
+client's task details. Reports distinguish incomplete observations from an
+observed period with no attempts. Successful tasks do not prove backup retention
+or restorability. Metric retention and existing entitlements do not change.
+Proofs: `internal/recovery/store/backup_history_test.go` and
+`internal/recovery/backup_health_test.go` cover restart, shrinking inventory,
+failure/downtime boundaries, write failure, client isolation and DST/cutoffs.
+
+Backup collection starts with a bounded retained-history backfill, then uses a
+durable collection checkpoint with a day of overlap. The oldest known pending
+execution remains in range until completion, including after restart. Failed
+reads do not advance the checkpoint. A capped backfill may advance a later
+incremental read without backdating observation coverage. Another node's
+failure cannot be hidden by a truncation reason. The live API/state keeps its
+existing 200 provider tasks per node plus their guest details, while the recovery
+store retains executions beyond that live window. Checkpoint, long-running-job,
+failed-read, capped-backfill and bounded-live-payload regression tests exercise
+these boundaries.
+
+Router monitor replacement retains the shared per-organization recovery manager
+for existing and future monitors. Configuration reload must not silently stop
+durable task collection while reporting continues reading the original store.
+`internal/api/recovery_monitor_reload_test.go` and a live connection-reload report
+exercise dependency retention and actual history persistence.

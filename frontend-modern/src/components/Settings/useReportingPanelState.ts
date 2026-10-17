@@ -298,7 +298,13 @@ export const useReportingPanelState = () => {
 
   const setScheduleKind = (kind: ReportScheduleKind) => {
     setScheduleForm((current) => applyReportScheduleKind(current, kind));
-    if (kind !== 'resources') {
+    if (kind === 'backup_health') {
+      setScheduleResources((current) =>
+        current.filter(
+          (resource) => resource.type === 'vm' || resource.type === 'system-container',
+        ),
+      );
+    } else if (kind !== 'resources') {
       setScheduleResources([]);
     }
   };

@@ -116,7 +116,7 @@ describe('parseReportingCatalog (entry-point branches)', () => {
     expectInvalid({ ...baseCatalog(), description: 7 });
   });
 
-  it('round-trips the full catalog shape when vmInventoryExport is null (null arm)', () => {
+  it('normalizes the catalog when vmInventoryExport is null and backup availability is omitted', () => {
     const catalog = parseReportingCatalog(baseCatalog()) as ReportingCatalog;
     expect(catalog).toStrictEqual({
       id: 'advanced_reporting',
@@ -132,6 +132,7 @@ describe('parseReportingCatalog (entry-point branches)', () => {
       },
       performanceReport: basePerformanceReport(),
       vmInventoryExport: null,
+      backupHealthAvailable: false,
     });
     // Explicit null-arm assertion.
     expect(catalog.vmInventoryExport).toBeNull();

@@ -52,10 +52,15 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
   const performanceReport = () => reportingCatalog()?.performanceReport ?? null;
   const isDigestForm = () => scheduleForm().kind === 'patrol_digest';
   const isInventoryForm = () => scheduleForm().kind === 'vm_inventory';
+  const isBackupHealthForm = () => scheduleForm().kind === 'backup_health';
   // Existing digest schedules stay editable after Patrol is switched off.
   const inventoryAvailable = () => !!reportingCatalog()?.vmInventoryExport || isInventoryForm();
   const showReportTypeSelect = () =>
-    inventoryAvailable() || patrolDigestAvailable() || isDigestForm();
+    inventoryAvailable() ||
+    patrolDigestAvailable() ||
+    isDigestForm() ||
+    !!performanceReport() ||
+    isBackupHealthForm();
   return (
     <section class="space-y-4 border-y border-base-300 py-4">
       <Show when={showReportTypeSelect()}>
@@ -67,12 +72,17 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
             help={
               isDigestForm()
                 ? 'Emails what Patrol checked, found, fixed, and spent over the last seven days. Nothing is saved to disk.'
-                : isInventoryForm()
-                  ? 'Exports the current inventory of all VMs in this organization as CSV each time it runs, including newly discovered VMs.'
-                  : 'A performance report for the resources you pick, as a PDF or CSV.'
+                : isBackupHealthForm()
+                  ? 'Reports backup successes, failures and missing evidence for client VMs and containers over the previous seven complete days or previous calendar month. Uses Proxmox VE task history, including backups writing to PBS.'
+                  : isInventoryForm()
+                    ? 'Exports the current inventory of all VMs in this organization as CSV each time it runs, including newly discovered VMs.'
+                    : 'A performance report for the resources you pick, as a PDF or CSV.'
             }
           >
             <option value="resources">{reportScheduleKindLabel('resources')}</option>
+            <Show when={reportingCatalog()?.backupHealthAvailable || isBackupHealthForm()}>
+              <option value="backup_health">{reportScheduleKindLabel('backup_health')}</option>
+            </Show>
             <Show when={inventoryAvailable()}>
               <option value="vm_inventory">{reportScheduleKindLabel('vm_inventory')}</option>
             </Show>
@@ -94,9 +104,11 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
             placeholder={
               isDigestForm()
                 ? 'Patrol weekly summary'
-                : isInventoryForm()
-                  ? 'Monthly VM inventory'
-                  : 'Monthly client report'
+                : isBackupHealthForm()
+                  ? 'Monthly client backup health'
+                  : isInventoryForm()
+                    ? 'Monthly VM inventory'
+                    : 'Monthly client report'
             }
           />
         </FormField>
@@ -170,7 +182,7 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
             onInput={(e) => updateScheduleForm({ time: e.currentTarget.value })}
           />
         </FormField>
-        <Show when={scheduleForm().kind === 'resources'}>
+        <Show when={scheduleForm().kind === 'resources' || isBackupHealthForm()}>
           <FormSelect
             label="Format"
             value={scheduleForm().format}
@@ -184,13 +196,18 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
         </Show>
       </div>
 
-      <Show when={scheduleForm().kind === 'resources'}>
+      <Show when={scheduleForm().kind === 'resources' || isBackupHealthForm()}>
         <FormField
           label="Resources"
-          helpText="Use explicit resources, tags, or both. Scheduled reports use the previous reporting boundary."
+          helpText={
+            isBackupHealthForm()
+              ? 'Leave resources and tags empty for all current VMs and containers. Pick workloads, tags, or both for a client. Non-Proxmox workloads show unavailable task outcomes.'
+              : 'Use explicit resources, tags, or both. Scheduled reports use the previous reporting boundary.'
+          }
         >
           <ResourcePicker
-            maxSelection={performanceReport()?.multiResourceMax}
+            maxSelection={isBackupHealthForm() ? null : performanceReport()?.multiResourceMax}
+            resourceTypes={isBackupHealthForm() ? ['vm', 'system-container'] : undefined}
             selected={scheduleResources}
             onSelectionChange={setScheduleResources}
           />

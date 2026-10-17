@@ -124,6 +124,9 @@ func (p *MultiTenantStateProvider) ResourceHealthAlertsForTenant(orgID string) [
 // Used during reload.
 func (r *Router) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	r.mtMonitor = mtm
+	if mtm != nil && r.recoveryHandlers != nil {
+		mtm.SetRecoveryManager(r.recoveryHandlers.manager)
+	}
 	if r.reportingHandlers != nil {
 		r.reportingHandlers.SetMultiTenantMonitor(mtm)
 	}

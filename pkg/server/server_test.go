@@ -21,6 +21,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
 func TestRunBindsPackagedVersionIdentity(t *testing.T) {
@@ -190,6 +191,12 @@ func TestRuntimeIdentityForBusinessHooks(t *testing.T) {
 	})
 	if got.Build != pkglicensing.RuntimeBuildPro {
 		t.Fatalf("commercial admission hook runtime build=%q, want pro", got.Build)
+	}
+	got = runtimeIdentityForBusinessHooks(BusinessHooks{
+		GenerateBackupHealthReport: func(reporting.BackupHealthData, reporting.ReportFormat) ([]byte, string, error) { return nil, "", nil },
+	})
+	if got.Build != pkglicensing.RuntimeBuildPro {
+		t.Fatalf("private backup renderer hook runtime build=%q, want pro", got.Build)
 	}
 }
 

@@ -162,6 +162,9 @@ func outcomeFromTaskStatus(status string) recovery.Outcome {
 	case "":
 		return recovery.OutcomeUnknown
 	default:
+		if strings.HasPrefix(s, "warnings:") || strings.HasPrefix(s, "warning:") {
+			return recovery.OutcomeWarning
+		}
 		if strings.Contains(s, "fail") || strings.Contains(s, "error") {
 			return recovery.OutcomeFailed
 		}

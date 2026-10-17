@@ -3640,3 +3640,15 @@ the request organization opt in through `RequireOrgAdmin`,
 closed. `internal/api/org_admin_session_authority_test.go` holds the session
 matrix and `TestSettingsWriteScopeSplitsInstanceAndOrgManagerSession` the
 settings scope split.
+
+### Backup report renderer hook preserves authority
+
+The server supplies `GenerateBackupHealthReportFunc` from BusinessHooks before
+router and scheduler construction, and clears it for runtimes without the hook.
+The callback receives already-scoped recovery evidence and effective branding.
+It adds no route, organization selection, credential, action or licensing
+authority. Existing report administrator/settings scopes and advanced-reporting
+checks remain before generation and delivery. Missing private rendering fails
+explicitly. `pkg/server/server_test.go` retains runtime identity separation.
+Backup reporting tests cover missing renderer and unchanged entitlement refusal.
+The live disposable Pro runtime proof exercises actual registered rendering.

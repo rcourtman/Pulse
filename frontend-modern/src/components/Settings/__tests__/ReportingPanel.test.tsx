@@ -19,6 +19,7 @@ vi.mock('../ResourcePicker', () => ({
 }));
 
 const baseCatalog = {
+  backupHealthAvailable: true,
   id: 'advanced_reporting',
   title: 'Detailed Reporting',
   description: 'Canonical reporting surfaces',
@@ -141,6 +142,32 @@ function buildState(overrides: Record<string, unknown> = {}) {
 }
 
 describe('ReportingPanel', () => {
+  it('keeps incomplete backup evidence visible beside a successfully delivered report', () => {
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        reportSchedules: () => [
+          {
+            id: 'backup',
+            name: 'Client backups',
+            kind: 'backup_health',
+            enabled: true,
+            cadence: { type: 'weekly', weekday: 'monday', time: '09:00', timezone: 'UTC' },
+            scope: { resources: [], tags: [] },
+            format: 'pdf',
+            delivery: { method: 'email', to: [], attach: true, save_to_disk: true },
+            last_run_status: 'ok',
+            last_delivery_status: 'sent_with_attachment',
+            last_report_data_state: 'partial',
+            last_report_data_message:
+              'Backup data is incomplete. The report identifies missing evidence.',
+          },
+        ],
+      }),
+    );
+    render(() => <ReportingPanel />);
+    expect(screen.getByText('Email accepted')).toBeInTheDocument();
+    expect(screen.getByText(/Last report data: Backup data is incomplete/)).toBeInTheDocument();
+  });
   beforeEach(() => {
     useReportingPanelStateMock.mockReset();
   });
@@ -194,6 +221,7 @@ describe('ReportingPanel', () => {
     const select = screen.getByLabelText('Report type') as HTMLSelectElement;
     expect(Array.from(select.options).map((option) => option.textContent)).toEqual([
       'Performance report',
+      'Client backup health',
       'VM inventory CSV',
     ]);
     expect(screen.getByLabelText('Schedule name', { selector: 'input' })).toHaveFocus();
@@ -221,6 +249,7 @@ describe('ReportingPanel', () => {
     expect(select.value).toBe('resources');
     expect(Array.from(select.options).map((option) => option.textContent)).toEqual([
       'Performance report',
+      'Client backup health',
       'VM inventory CSV',
       'Patrol weekly summary',
     ]);

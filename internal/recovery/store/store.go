@@ -36,8 +36,9 @@ type Store struct {
 	db        *sql.DB
 	retention time.Duration
 
-	pruneMu   sync.Mutex
-	lastPrune time.Time
+	pruneMu         sync.Mutex
+	lastPrune       time.Time
+	backupHistoryMu sync.Mutex
 }
 
 type historicalSubjectIdentity struct {
@@ -586,7 +587,7 @@ func (s *Store) initSchema() error {
 		return err
 	}
 
-	schema := `
+	schema := backupHistorySchema + `
 		CREATE TABLE IF NOT EXISTS recovery_points (
 			id TEXT PRIMARY KEY,
 			provider TEXT NOT NULL,
@@ -1162,11 +1163,9 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
+	// Always release the transaction on an early return, including errors
+	// scoped inside the point loop. Rollback after Commit is harmless.
+	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx, `
 			INSERT INTO recovery_points (

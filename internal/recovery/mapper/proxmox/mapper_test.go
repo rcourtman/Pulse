@@ -240,6 +240,15 @@ func TestFromPVEStorageBackupsWithEvidenceAttachesCanonicalProviderScope(t *test
 	}
 }
 
+func TestFromPVEBackupTasksWarningExitStatus(t *testing.T) {
+	for _, status := range []string{"warning", "WARNINGS: 1", "WARNING: backup completed with warnings"} {
+		points := FromPVEBackupTasks([]models.BackupTask{{ID: "job", Instance: "site", Status: status}}, nil)
+		if len(points) != 1 || points[0].Outcome != recovery.OutcomeWarning {
+			t.Fatalf("status %q: expected warning execution evidence, got %+v", status, points)
+		}
+	}
+}
+
 func TestFromPVEBackupTasks_Empty(t *testing.T) {
 	result := FromPVEBackupTasks(nil, nil)
 	if result != nil {

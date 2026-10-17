@@ -2316,14 +2316,18 @@ func appendPBSBackupsWithinLimit(backups []models.PBSBackup, additions []models.
 func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("polling backup tasks")
 
-	tasks, err := client.GetBackupTasks(ctx)
+	tasks, collection, err := m.readBackupTaskHistory(ctx, instanceName, client)
 	if err != nil {
+		m.persistBackupTaskHistory(ctx, nil, collection)
 		monErr := errors.WrapAPIError("get_backup_tasks", instanceName, err, 0)
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get backup tasks")
 		return
 	}
 
 	var backupTasks []models.BackupTask
+	var liveTasks []models.BackupTask
+	liveByNode := make(map[string]int)
+	liveJobIDs := make(map[string]bool)
 	var jobTasks []models.BackupTask
 	jobUPIDs := make(map[string]string)
 	for _, task := range tasks {
@@ -2353,6 +2357,14 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 
 		backupTasks = append(backupTasks, backupTask)
+		// Durable reports backfill more history than the live API historically
+		// exposed. Preserve its 200 provider tasks per node rather than inflating
+		// every state/WebSocket payload with the entire retained task history.
+		if liveByNode[task.Node] < 200 {
+			liveTasks = append(liveTasks, backupTask)
+			liveByNode[task.Node]++
+			liveJobIDs[taskID] = true
+		}
 
 		// Scheduled multi-guest backup jobs run under a single UPID with an
 		// empty VMID slot, so the task alone says nothing about which guests
@@ -2363,12 +2375,20 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	backupTasks = append(backupTasks, m.synthesizeVzdumpJobGuestTasks(ctx, instanceName, client, jobTasks, jobUPIDs)...)
+	guestTasks := m.synthesizeVzdumpJobGuestTasks(ctx, instanceName, client, jobTasks, jobUPIDs)
+	backupTasks = append(backupTasks, guestTasks...)
+	for _, guest := range guestTasks {
+		parentID := strings.TrimSuffix(guest.ID, fmt.Sprintf("-vm%d", guest.VMID))
+		if liveJobIDs[parentID] {
+			liveTasks = append(liveTasks, guest)
+		}
+	}
 
 	// Update state with new backup tasks for this instance
-	m.state.UpdateBackupTasksForInstance(instanceName, backupTasks)
+	m.state.UpdateBackupTasksForInstance(instanceName, liveTasks)
 
-	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
+	// Retain execution history before qualifying collection coverage. Task rows
+	// are not reconciled against the provider's shrinking inventory window.
 	guestInfo := buildProxmoxGuestInfoIndex(m.backupReadStateForInstance(instanceName))
 	points, evidenceErr := proxmoxrecoverymapper.FromPVEBackupTasksWithEvidence(
 		backupTasks,
@@ -2382,14 +2402,16 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 			Msg("Failed to attach PVE backup-task recovery evidence; preserving existing points")
 		return
 	}
-	m.ingestRecoveryPointsAsync(points)
+	m.qualifyBackupGuestTaskDetails(instanceName, jobTasks, jobUPIDs, points)
+	m.persistBackupTaskHistory(ctx, points, collection)
 }
 
 // vzdumpJobTaskCacheEntry caches the per-guest tasks synthesized from one
 // vzdump job run's log so finished jobs are fetched at most once.
 type vzdumpJobTaskCacheEntry struct {
-	tasks []models.BackupTask
-	final bool
+	tasks           []models.BackupTask
+	final           bool
+	historyComplete bool
 }
 
 // maxVzdumpJobLogFetchesPerPoll bounds task-log requests per poll cycle so a
@@ -2453,13 +2475,15 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		// the published copy. A later failed non-final read must retain this
 		// original time rather than renew it or fall back to a zero timestamp.
 		guestTasks := refreshObservedAt(parseVzdumpJobLog(jobTask, upid, logLines), now)
+		historyComplete := backupGuestLogComplete(jobTask, logLines, guestTasks)
 		m.mu.Lock()
 		if m.vzdumpJobTaskCache == nil {
 			m.vzdumpJobTaskCache = make(map[string]vzdumpJobTaskCacheEntry)
 		}
 		m.vzdumpJobTaskCache[key] = vzdumpJobTaskCacheEntry{
-			tasks: guestTasks,
-			final: !jobTask.EndTime.IsZero(),
+			tasks:           guestTasks,
+			final:           historyComplete,
+			historyComplete: historyComplete,
 		}
 		m.mu.Unlock()
 		synthesized = append(synthesized, guestTasks...)

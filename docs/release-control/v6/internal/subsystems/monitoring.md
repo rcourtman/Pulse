@@ -8468,3 +8468,41 @@ matching/mismatched pins and an untrusted certificate. It compares the exact
 decompressed report bytes and both token headers at the admitted recipient.
 The fixture performs no DNS resolution, listener or network connection, and
 does not establish native Kubernetes or installed fleet recovery.
+### Backup history collection carries completeness
+
+`GetBackupTaskHistory` in `pkg/proxmox/backup_history.go` enumerates a bounded
+ninety-day PVE task window with pagination and a fixed collection cutoff. Offline
+nodes, failed reads, repeated/capped pages and unconfirmed `Sys.Audit` authority
+remain explicit partial evidence. A successful HTTP response alone cannot prove
+visibility of other users' backup jobs. The cluster client retains its canonical
+transport failover wrapper. Older adapters can still supply live tasks but
+cannot qualify report observation coverage.
+
+`pollBackupTasks` persists mapped task evidence synchronously through the
+organization's recovery manager before recording collection quality. The
+continuity allowance derives from the configured backup interval/cycle cadence.
+An unavailable manager or failed write cannot certify complete observation.
+Multi-guest attribution requires a nontruncated, contiguous completed task log
+with a terminal marker and parsed guests. Incomplete logs remain unqualified
+and eligible for later collection. No backup artifact or restore assurance is
+created by an execution outcome.
+
+Proofs: `pkg/proxmox/backup_history_test.go` covers pagination, permissions,
+partial reads and offline nodes. `internal/monitoring/backup_task_history_test.go`
+covers durable failures surviving an empty poll and log qualification.
+
+Backup collection starts with a bounded retained-history backfill, then uses a
+durable collection checkpoint with a day of overlap. The oldest known pending
+execution remains in range until completion, including after restart. Failed
+reads do not advance the checkpoint. A capped backfill may advance a later
+incremental read without backdating observation coverage. Another node's
+failure cannot be hidden by a truncation reason. The live API/state keeps its
+existing 200 provider tasks per node plus their guest details, while the recovery
+store retains executions beyond that live window. Checkpoint, long-running-job,
+failed-read, capped-backfill and bounded-live-payload regression tests exercise
+these boundaries.
+
+Recovery rollup and alert readers take a locked snapshot of the manager pointer,
+matching the existing setter during live monitor dependency rebinding. The
+`TestBackupHealthRecoveryRebindingCanOverlapActiveReaders` race proof exercises
+rebinding while both consumers remain active.
