@@ -2748,8 +2748,12 @@ payload shape change when the portal presents compact client rows.
     whether a community build can switch to the Pulse Pro runtime as
     `{available, reason?, currentVersion, version?, installInPlace, docker?}`,
     where `reason` is the closed set `already_pro`, `not_activated`,
-    `not_eligible`, `source_build`, `unsupported_deployment`, `older_release`
-    and `unavailable`, and `docker` reuses the `DockerUpdateCommands` shape.
+    `not_eligible`, `source_build`, `unsupported_deployment`, `older_release`,
+    `prerelease_only` and `unavailable`, and `docker` reuses the
+    `DockerUpdateCommands` shape. `prerelease_only` means the broker's pinned
+    Pro release is a prerelease while the install follows the stable channel,
+    so the answer carries the pinned `version` but offers neither an in-place
+    switch nor Docker commands; rc-channel installs are still offered the pin.
     `POST /api/updates/pro-runtime/apply` (admin plus `settings:write`) takes
     no body, re-checks that an in-place switch is offered (otherwise a plain
     conflict response, with the reason logged rather than returned), runs the

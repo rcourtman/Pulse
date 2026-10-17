@@ -1315,6 +1315,21 @@ func TestClassifyApplyUpdateStartError_ProActivation(t *testing.T) {
 	}
 }
 
+// TestClassifyApplyUpdateStartError_ProStablePrerelease keeps the Pro broker's
+// stable-channel refusal (also reached by the Pro runtime switch) a 409 whose
+// explanation reaches the UI, not the generic 500 "Failed to start update".
+func TestClassifyApplyUpdateStartError_ProStablePrerelease(t *testing.T) {
+	err := errors.New("stable channel cannot install prerelease builds (the private Pulse Pro channel currently serves 6.1.0-rc.1)")
+
+	status, msg := classifyApplyUpdateStartError(err)
+	if status != http.StatusConflict {
+		t.Fatalf("expected 409 for the stable-channel prerelease refusal, got %d", status)
+	}
+	if !strings.Contains(msg, "6.1.0-rc.1") {
+		t.Fatalf("expected the refusal message to pass through, got %q", msg)
+	}
+}
+
 func TestHandleCheckUpdatesFreshness(t *testing.T) {
 	for _, tc := range []struct {
 		query  string

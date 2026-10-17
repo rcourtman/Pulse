@@ -88,6 +88,24 @@ type proBrokerResponse struct {
 	Docker    *proBrokerDocker    `json:"docker"`
 }
 
+// isPrerelease reports whether the broker's pinned release is a prerelease,
+// by the broker's flag or by its version string.
+func (r *proBrokerResponse) isPrerelease() bool {
+	if r.Release.Prerelease {
+		return true
+	}
+	version, err := ParseVersion(r.Release.Version)
+	return err == nil && version.IsPrerelease()
+}
+
+// stableChannelRefusesProPin reports whether a stable-channel install must not
+// install the broker's pinned release. The broker pins a single release, which
+// can be a prerelease; the update check, the runtime switch check and apply
+// all judge it by this one rule so a check never offers what apply refuses.
+func stableChannelRefusesProPin(channel string, manifest *proBrokerResponse) bool {
+	return channel == "stable" && manifest.isPrerelease()
+}
+
 // proBrokerDocker mirrors the broker's docker block: the digest-pinned private
 // Pro image plus ready-to-run login/compose commands. The broker deliberately
 // never emits mutable-tag commands (a customer compose file pins the previous
@@ -340,12 +358,12 @@ func (m *Manager) checkProUpdates(ctx context.Context, channel string, currentIn
 	if err != nil {
 		return nil, fmt.Errorf("parse Pulse Pro release version %q: %w", manifest.Release.Version, err)
 	}
-	isPrerelease := manifest.Release.Prerelease || latestVer.IsPrerelease()
+	isPrerelease := manifest.isPrerelease()
 
 	// The broker pins a single release. A stable-channel install must not be
 	// offered a prerelease pin; report "no update" with an explanatory warning
 	// instead of dangling an apply that the channel guard would refuse.
-	if channel == "stable" && isPrerelease && latestVer.IsNewerThan(currentVer) {
+	if stableChannelRefusesProPin(channel, manifest) && latestVer.IsNewerThan(currentVer) {
 		return &UpdateInfo{
 			Available:      false,
 			CurrentVersion: currentInfo.Version,
@@ -406,11 +424,10 @@ func (m *Manager) resolveProUpdateArtifact(ctx context.Context, channel string) 
 		return resolvedUpdateArtifact{}, err
 	}
 
-	latestVer, err := ParseVersion(manifest.Release.Version)
-	if err != nil {
+	if _, err := ParseVersion(manifest.Release.Version); err != nil {
 		return resolvedUpdateArtifact{}, fmt.Errorf("parse Pulse Pro release version %q: %w", manifest.Release.Version, err)
 	}
-	if channel == "stable" && (manifest.Release.Prerelease || latestVer.IsPrerelease()) {
+	if stableChannelRefusesProPin(channel, manifest) {
 		return resolvedUpdateArtifact{}, fmt.Errorf("stable channel cannot install prerelease builds (the private Pulse Pro channel currently serves %s)", manifest.Release.Version)
 	}
 
