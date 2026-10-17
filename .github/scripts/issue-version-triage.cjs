@@ -316,18 +316,6 @@ function isExactVersionLabel(label) {
   return /^affects-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(label);
 }
 
-function keepOnlyReportedVersionLabel(nextLabels, reportedVersion) {
-  const keep = reportedVersion ? `${VERSION_LABEL_PREFIX}${reportedVersion}` : null;
-  for (const label of [...nextLabels]) {
-    if (
-      isExactVersionLabel(label) &&
-      label !== keep
-    ) {
-      nextLabels.delete(label);
-    }
-  }
-}
-
 // Apply only this event's classification delta. Replacing the complete label
 // set would overwrite Community changes made after the event was queued.
 async function applyLabelDelta(github, context, issue, before, after, core) {
@@ -428,17 +416,25 @@ async function syncLabels({ github, context, core }) {
     return;
   }
 
-  // Community can establish versions from free-form prose, comments and
-  // screenshots that this form parser deliberately does not interpret. An
-  // absent declaration cannot contradict those labels, nor can a title's
-  // incidental platform/upgrade version. Explicit fields still supersede old
-  // version metadata, including a correction to unknown or incomplete.
-  if (!hasDeclaredPulseVersion && [...labelNames].some(isExactVersionLabel)) {
-    core.info("No explicit Pulse version field; preserving established version metadata for Community review.");
+  // The original field is not the whole thread: Community may have established
+  // later affected versions from retests. Only a current edit that changes the
+  // declaration can correct its previous version; an unrelated edit, reopen or
+  // superseded event must not replay the original field over that evidence.
+  const previousVersion = typeof previousBody === "string"
+    ? pulseVersionEvidence("", previousBody) : null;
+  const versionCorrected = eventIsCurrent && context.payload.action === "edited" &&
+    hasDeclaredPulseVersion && previousVersion !== null &&
+    (previousVersion.declared !== hasDeclaredPulseVersion ||
+      previousVersion.version !== reportedVersion);
+  if (!versionCorrected && [...labelNames].some(isExactVersionLabel)) {
+    core.info("No current version-field correction; preserving established whole-thread version metadata.");
     await applyLabelDelta(github, context, issue, labelNames, nextLabels, core);
     return;
   }
 
+  if (versionCorrected && previousVersion.declared && previousVersion.version) {
+    nextLabels.delete(`${VERSION_LABEL_PREFIX}${previousVersion.version}`);
+  }
   if (reportedVersion) {
     await ensureLabel(
       github,
@@ -448,6 +444,10 @@ async function syncLabels({ github, context, core }) {
       `Bug reported against Pulse ${reportedVersion}`
     );
     nextLabels.add(`${VERSION_LABEL_PREFIX}${reportedVersion}`);
+    nextLabels.delete(NEEDS_VERSION_LABEL);
+  } else if ([...nextLabels].some(isExactVersionLabel)) {
+    // Correcting this field to unknown does not invalidate an independently
+    // established version from another part of the report.
     nextLabels.delete(NEEDS_VERSION_LABEL);
   } else {
     await ensureLabel(
@@ -459,11 +459,6 @@ async function syncLabels({ github, context, core }) {
     );
     nextLabels.add(NEEDS_VERSION_LABEL);
   }
-
-  // A correction to unknown or incomplete declared version evidence retires
-  // this synchronizer's old exact-version assertions too. It must not leave
-  // a known affected version beside its missing-version classification.
-  keepOnlyReportedVersionLabel(nextLabels, reportedVersion);
 
   // Retest labels are community-owned: version metadata cannot establish
   // relevant-fix availability or reconcile the live reporter conversation.
