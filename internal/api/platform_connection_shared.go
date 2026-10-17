@@ -103,7 +103,8 @@ type platformConnectionItemHandlers struct {
 
 // platformConnectionItemRoute builds the shared mux handler for platform
 // connection item routes: POST .../test, POST .../preview, DELETE, PUT — all
-// admin + settings:write gated. handlers is resolved per request so late
+// org admin + settings:write gated; the handlers act on the request
+// organization's own connections. handlers is resolved per request so late
 // handler wiring and nil-service checks keep working.
 func (r *Router) platformConnectionItemRoute(unavailableCode, unavailableMsg string, handlers func() *platformConnectionItemHandlers) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
@@ -114,13 +115,13 @@ func (r *Router) platformConnectionItemRoute(unavailableCode, unavailableMsg str
 		}
 
 		if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/test") {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, h.test))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, h.test))(w, req)
 		} else if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/preview") {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, h.preview))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, h.preview))(w, req)
 		} else if req.Method == http.MethodDelete {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, h.delete))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, h.delete))(w, req)
 		} else if req.Method == http.MethodPut {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, h.update))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, h.update))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
