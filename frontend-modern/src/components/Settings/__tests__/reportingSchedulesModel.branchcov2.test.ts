@@ -653,22 +653,22 @@ describe('reportScheduleLastRunLabel', () => {
     expect(reportScheduleLastRunLabel(schedule)).toBe('Not run yet');
   });
 
-  it('returns "Last run OK" for the ok status', () => {
-    expect(reportScheduleLastRunLabel(makeSchedule({ last_run_status: 'ok' }))).toBe('Last run OK');
+  it('does not invent delivery confirmation for a legacy ok status', () => {
+    expect(reportScheduleLastRunLabel(makeSchedule({ last_run_status: 'ok' }))).toBe('Completed');
   });
 
-  it('surfaces last_error for a failed run', () => {
+  it('uses a concise failed status label', () => {
     expect(
       reportScheduleLastRunLabel(
         makeSchedule({ last_run_status: 'failed', last_error: 'timeout' }),
       ),
-    ).toBe('Failed: timeout');
+    ).toBe('Failed');
   });
 
   it('falls back to the generic failed copy when last_error is missing', () => {
     const schedule = makeSchedule({ last_run_status: 'failed' });
     delete schedule.last_error;
-    expect(reportScheduleLastRunLabel(schedule)).toBe('Last run failed');
+    expect(reportScheduleLastRunLabel(schedule)).toBe('Failed');
   });
 });
 

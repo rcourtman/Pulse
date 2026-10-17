@@ -158,13 +158,29 @@ describe('ReportingPanel', () => {
     expect(screen.getByText('Report Title')).toBeInTheDocument();
   });
 
-  it('shows the scheduled reports table surface with an empty state', () => {
+  it('shows the scheduled reports surface with a confirmed empty state', () => {
     useReportingPanelStateMock.mockReturnValue(buildState());
 
     render(() => <ReportingPanel />);
 
     expect(screen.getByText('Scheduled reports')).toBeInTheDocument();
     expect(screen.getByText('No scheduled reports are configured yet.')).toBeInTheDocument();
+  });
+
+  it.each(['loading', 'error'])('does not claim an empty schedule list during %s', (state) => {
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        reportSchedulesLoading: () => state === 'loading',
+        reportSchedulesError: () => (state === 'error' ? 'Report schedules are unavailable' : ''),
+      }),
+    );
+    render(() => <ReportingPanel />);
+    expect(screen.queryByText('No scheduled reports are configured yet.')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        state === 'loading' ? 'Loading report schedules...' : 'Report schedules are unavailable',
+      ),
+    ).toBeVisible();
   });
 
   it('keeps the schedule form free of the report type choice while Patrol cannot run', () => {
@@ -256,7 +272,7 @@ describe('ReportingPanel', () => {
     expect(screen.queryByText('Save copy')).not.toBeInTheDocument();
   });
 
-  it('describes a digest schedule by its Patrol window in the schedules table', () => {
+  it('describes a digest schedule by its Patrol window in the schedules list', () => {
     useReportingPanelStateMock.mockReturnValue(
       buildState({
         reportSchedules: () => [
@@ -442,5 +458,38 @@ describe('ReportingPanel', () => {
     expect(exportButton).toHaveClass('px-6');
     exportButton.click();
     expect(handleExportVMInventory).toHaveBeenCalledOnce();
+  });
+  it('keeps delivery failures and the remedy visible with an explicit retry action', () => {
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        reportSchedules: () => [
+          {
+            id: 'weekly',
+            name: 'Client report',
+            enabled: true,
+            cadence: { type: 'weekly', weekday: 'monday', time: '09:00', timezone: 'UTC' },
+            scope: { resources: [], tags: [] },
+            format: 'csv',
+            delivery: { method: 'email', to: [], attach: true, save_to_disk: true },
+            last_run_status: 'failed',
+            run_window_end: '2026-10-17T09:00:00Z',
+            last_error: 'The email sender needs fixing.',
+            delivery_check: { ready: false, message: 'Email is disabled.' },
+            last_report_path: '/reports/generated/client.csv',
+          },
+        ],
+      }),
+    );
+    render(() => <ReportingPanel />);
+    expect(screen.getByText('The email sender needs fixing.')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Email settings' })).toHaveAttribute(
+      'href',
+      '/alerts/notifications',
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Retry Client report now', hidden: true }),
+    ).toHaveLength(1);
+    expect(screen.getByText('Report details')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Enable Client report' })).toBeChecked();
   });
 });

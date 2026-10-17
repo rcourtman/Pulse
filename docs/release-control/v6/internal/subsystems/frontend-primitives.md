@@ -8140,6 +8140,21 @@ flow, and `reportingSchedulesModel.ts` owns schedule payload normalization,
 labels, default form state, and cadence formatting. Schedule scope selection
 must reuse the shared `ResourcePicker` and reporting catalog types rather than
 creating a separate resource selector or browser-local schedule API contract.
+The report list distinguishes saved files, SMTP acceptance, retry scheduling,
+terminal failure and unconfirmed delivery. SMTP acceptance must not be labelled
+as inbox receipt. Actionable delivery errors and the next automatic retry stay
+visible at narrow widths. Saved server paths and previous success times belong
+in the report details disclosure. A deliberate retry of unconfirmed delivery
+requires a duplicate warning. Active attempts and pending retries refresh from
+the server, and the browser never manufactures a delivery success. The existing
+advanced-reporting capability remains the access boundary. Proofs:
+`frontend-modern/src/components/Settings/__tests__/ReportingPanel.test.tsx`,
+`frontend-modern/src/components/Settings/__tests__/reportingSchedulesModel.delivery.test.ts`,
+`frontend-modern/src/components/Settings/__tests__/useReportingPanelState.test.ts`.
+The report list keeps status and Run/Retry visible at every width. Scope,
+recipients, file paths, Edit and Delete share the full-width details disclosure.
+Keyed store reconciliation preserves row identity, open details and keyboard
+focus across background refreshes.
 The settings navigation model now exposes a single `infrastructure-systems`
 sidebar entry for the infrastructure settings area. The former
 `infrastructure-connections` and `infrastructure-install` entries have been

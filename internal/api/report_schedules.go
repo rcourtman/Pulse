@@ -26,10 +26,17 @@ const (
 	reportScheduleAttachmentLimitBytes = 15 * 1024 * 1024
 	reportScheduleTickInterval         = time.Minute
 	reportScheduleMissedRunGrace       = 24 * time.Hour
+	reportScheduleMaxAttempts          = 3
 )
 
 type reportScheduleListResponse struct {
-	Schedules []config.ReportSchedule `json:"schedules"`
+	Schedules      []config.ReportSchedule                `json:"schedules"`
+	DeliveryChecks map[string]reportScheduleDeliveryCheck `json:"delivery_checks"`
+}
+
+type reportScheduleDeliveryCheck struct {
+	Ready   bool   `json:"ready"`
+	Message string `json:"message"`
 }
 
 type reportScheduleRunResponse struct {
@@ -44,12 +51,16 @@ func (h *ReportingHandlers) HandleListReportSchedules(w http.ResponseWriter, r *
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	store, err := h.loadReportScheduleStore(r.Context())
+	persistence, store, err := h.reportSchedulePersistenceAndStore(r.Context())
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "schedule_store_unavailable", "Report schedules are unavailable", nil)
 		return
 	}
-	writeReportScheduleJSON(w, http.StatusOK, reportScheduleListResponse{Schedules: store.Schedules})
+	checks := make(map[string]reportScheduleDeliveryCheck, len(store.Schedules))
+	for _, schedule := range store.Schedules {
+		checks[schedule.ID] = checkReportScheduleDelivery(persistence, schedule)
+	}
+	writeReportScheduleJSON(w, http.StatusOK, reportScheduleListResponse{Schedules: store.Schedules, DeliveryChecks: checks})
 }
 
 func (h *ReportingHandlers) HandleCreateReportSchedule(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +72,8 @@ func (h *ReportingHandlers) HandleCreateReportSchedule(w http.ResponseWriter, r 
 	if err := decodeReportScheduleBody(w, r, &incoming); err != nil {
 		return
 	}
+	h.scheduleRunMu.Lock()
+	defer h.scheduleRunMu.Unlock()
 
 	persistence, store, err := h.reportSchedulePersistenceAndStore(r.Context())
 	if err != nil {
@@ -71,11 +84,13 @@ func (h *ReportingHandlers) HandleCreateReportSchedule(w http.ResponseWriter, r 
 	incoming.ID = uuid.NewString()
 	incoming.CreatedAt = now
 	incoming.UpdatedAt = now
+	copyReportScheduleRunState(&incoming, config.ReportSchedule{})
 	schedule, err := h.prepareReportSchedule(r.Context(), incoming, now, false)
 	if err != nil {
 		writeReportScheduleValidationError(w, err)
 		return
 	}
+	schedule.LastOccurrenceKey = currentReportScheduleOccurrenceKey(schedule, now)
 	store.Schedules = append(store.Schedules, schedule)
 	if err := persistence.SaveReportScheduleStore(*store); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "schedule_save_failed", "Failed to save report schedule", nil)
@@ -98,6 +113,8 @@ func (h *ReportingHandlers) HandleUpdateReportSchedule(w http.ResponseWriter, r 
 	if err := decodeReportScheduleBody(w, r, &incoming); err != nil {
 		return
 	}
+	h.scheduleRunMu.Lock()
+	defer h.scheduleRunMu.Unlock()
 
 	persistence, store, err := h.reportSchedulePersistenceAndStore(r.Context())
 	if err != nil {
@@ -115,15 +132,20 @@ func (h *ReportingHandlers) HandleUpdateReportSchedule(w http.ResponseWriter, r 
 	incoming.ID = existing.ID
 	incoming.CreatedAt = existing.CreatedAt
 	incoming.UpdatedAt = now
-	incoming.LastRunAt = existing.LastRunAt
-	incoming.LastRunStatus = existing.LastRunStatus
-	incoming.LastError = existing.LastError
-	incoming.LastOccurrenceKey = existing.LastOccurrenceKey
+	copyReportScheduleRunState(&incoming, existing)
 	schedule, err := h.prepareReportSchedule(r.Context(), incoming, now, false)
 	if err != nil {
 		writeReportScheduleValidationError(w, err)
 		return
 	}
+	if schedule.RetryAt != nil {
+		schedule.LastRunStatus = config.ReportScheduleLastRunFailed
+		schedule.LastError = "Automatic retry cancelled because the schedule was edited. Run a new report when ready."
+	}
+	schedule.RetryAt = nil
+	schedule.RunWindowEnd = nil
+	schedule.RunManual = false
+	schedule.LastOccurrenceKey = currentReportScheduleOccurrenceKey(schedule, now)
 	store.Schedules[index] = schedule
 	if err := persistence.SaveReportScheduleStore(*store); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "schedule_save_failed", "Failed to save report schedule", nil)
@@ -142,6 +164,8 @@ func (h *ReportingHandlers) HandleDeleteReportSchedule(w http.ResponseWriter, r 
 		writeErrorResponse(w, http.StatusBadRequest, "missing_schedule_id", "Schedule ID is required", nil)
 		return
 	}
+	h.scheduleRunMu.Lock()
+	defer h.scheduleRunMu.Unlock()
 	persistence, store, err := h.reportSchedulePersistenceAndStore(r.Context())
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "schedule_store_unavailable", "Report schedules are unavailable", nil)
@@ -170,6 +194,8 @@ func (h *ReportingHandlers) HandleRunReportSchedule(w http.ResponseWriter, r *ht
 		writeErrorResponse(w, http.StatusBadRequest, "missing_schedule_id", "Schedule ID is required", nil)
 		return
 	}
+	h.scheduleRunMu.Lock()
+	defer h.scheduleRunMu.Unlock()
 	persistence, store, err := h.reportSchedulePersistenceAndStore(r.Context())
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "schedule_store_unavailable", "Report schedules are unavailable", nil)
@@ -181,15 +207,28 @@ func (h *ReportingHandlers) HandleRunReportSchedule(w http.ResponseWriter, r *ht
 		return
 	}
 
-	result, updated := h.runReportSchedule(r.Context(), persistence, store.Schedules[index], time.Now().UTC(), true, "")
-	store.Schedules[index] = updated
-	if err := persistence.SaveReportScheduleStore(*store); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "schedule_save_failed", "Failed to save report schedule status", nil)
+	schedule := store.Schedules[index]
+	if schedule.LastRunStatus == config.ReportScheduleLastRunRunning {
+		writeErrorResponse(w, http.StatusConflict, "schedule_running", "This report is already running. Refresh its status before trying again.", nil)
+		return
+	}
+	retry := r.URL.Query().Get("retry") == "true"
+	if retry && (schedule.RunWindowEnd == nil || !reportScheduleRetryableOutcome(schedule.LastRunStatus)) {
+		writeErrorResponse(w, http.StatusConflict, "retry_unavailable", "The original failed report window is unavailable. Run a new report.", nil)
+		return
+	}
+	result, updated, err := h.executeReportSchedule(r.Context(), persistence, store, index, time.Now().UTC(), true, "", retry)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "schedule_save_failed", "The report outcome could not be saved. Check its status and the recipient before running again.", nil)
 		return
 	}
 	status := http.StatusOK
 	if updated.LastRunStatus == config.ReportScheduleLastRunFailed {
 		status = http.StatusInternalServerError
+	} else if updated.LastRunStatus == config.ReportScheduleLastRunRetrying {
+		status = http.StatusAccepted
+	} else if updated.LastRunStatus == config.ReportScheduleLastRunUnconfirmed {
+		status = http.StatusBadGateway
 	}
 	writeReportScheduleJSON(w, status, reportScheduleRunResponse{
 		Schedule: updated,
@@ -254,11 +293,6 @@ func (h *ReportingHandlers) reportSchedulePersistenceAndStore(ctx context.Contex
 	return persistence, store, nil
 }
 
-func (h *ReportingHandlers) loadReportScheduleStore(ctx context.Context) (*config.ReportScheduleStore, error) {
-	_, store, err := h.reportSchedulePersistenceAndStore(ctx)
-	return store, err
-}
-
 func (h *ReportingHandlers) reportSchedulePersistence(ctx context.Context) (*config.ConfigPersistence, error) {
 	if h == nil || h.mtMonitor == nil {
 		return nil, fmt.Errorf("multi-tenant monitor is not configured")
@@ -287,6 +321,105 @@ func findReportScheduleIndex(schedules []config.ReportSchedule, id string) int {
 	return -1
 }
 
+// Outcomes are server-owned even when older clients PUT a whole schedule.
+func copyReportScheduleRunState(dst *config.ReportSchedule, src config.ReportSchedule) {
+	dst.LastRunAt = src.LastRunAt
+	dst.LastRunStatus = src.LastRunStatus
+	dst.LastError = src.LastError
+	dst.LastDeliveryStatus = src.LastDeliveryStatus
+	dst.LastReportPath = src.LastReportPath
+	dst.LastSuccessAt = src.LastSuccessAt
+	dst.RunAttempts = src.RunAttempts
+	dst.RetryAt = src.RetryAt
+	dst.RunWindowEnd = src.RunWindowEnd
+	dst.RunManual = src.RunManual
+	dst.NextRunAt = src.NextRunAt
+	dst.LastOccurrenceKey = src.LastOccurrenceKey
+}
+
+func currentReportScheduleOccurrenceKey(schedule config.ReportSchedule, now time.Time) string {
+	_, key, _ := lastReportScheduleOccurrenceAt(schedule, now)
+	return key
+}
+
+func checkReportScheduleDelivery(persistence *config.ConfigPersistence, schedule config.ReportSchedule) reportScheduleDeliveryCheck {
+	if schedule.Delivery.Method == config.ReportScheduleDeliveryDisk {
+		return reportScheduleDeliveryCheck{Ready: true, Message: "Reports are saved on this Pulse server."}
+	}
+	_, err := scheduledReportEmailManager(persistence, schedule)
+	if err != nil {
+		return reportScheduleDeliveryCheck{Message: err.Error()}
+	}
+	return reportScheduleDeliveryCheck{Ready: true, Message: "Email configuration checked. Run the report to test delivery."}
+}
+
+func (h *ReportingHandlers) validateEnabledReportDelivery(ctx context.Context, schedule config.ReportSchedule) error {
+	if !schedule.Enabled || schedule.Delivery.Method != config.ReportScheduleDeliveryEmail {
+		return nil
+	}
+	persistence, err := h.reportSchedulePersistence(ctx)
+	if err != nil {
+		return reportScheduleValidationError{code: "email_configuration_unavailable", message: "Email configuration is unavailable. Check Alerts > Notifications."}
+	}
+	check := checkReportScheduleDelivery(persistence, schedule)
+	if !check.Ready {
+		return reportScheduleValidationError{code: "email_not_ready", message: check.Message}
+	}
+	return nil
+}
+
+func reportScheduleRetryableOutcome(status string) bool {
+	return status == config.ReportScheduleLastRunFailed || status == config.ReportScheduleLastRunRetrying || status == config.ReportScheduleLastRunUnconfirmed
+}
+
+// The caller owns scheduleRunMu across load, side effect and final persistence.
+// Persisting running first makes a lost completion record visible after restart.
+func (h *ReportingHandlers) executeReportSchedule(ctx context.Context, persistence *config.ConfigPersistence, store *config.ReportScheduleStore, index int, now time.Time, manual bool, key string, retry bool) (reportScheduleRunResult, config.ReportSchedule, error) {
+	schedule := config.NormalizeReportSchedule(store.Schedules[index])
+	if !retry {
+		windowEnd := now.UTC().Truncate(time.Second)
+		schedule.RunWindowEnd = &windowEnd
+		schedule.RunManual = manual
+		if manual && key == "" {
+			key = currentReportScheduleOccurrenceKey(schedule, now)
+		}
+	}
+	// An explicit operator retry starts a fresh bounded delivery budget.
+	if !retry || manual {
+		schedule.RunAttempts = 0
+	}
+	schedule.RunAttempts++
+	schedule.LastRunStatus = config.ReportScheduleLastRunRunning
+	schedule.LastDeliveryStatus = ""
+	schedule.LastError = ""
+	schedule.RetryAt = nil
+	schedule.LastRunAt = &now
+	schedule.UpdatedAt = now
+	if key != "" {
+		schedule.LastOccurrenceKey = key
+	}
+	if next, err := nextReportScheduleRunAt(schedule, now); err == nil {
+		schedule.NextRunAt = &next
+	}
+	store.Schedules[index] = schedule
+	if err := persistence.SaveReportScheduleStore(*store); err != nil {
+		return reportScheduleRunResult{}, schedule, err
+	}
+	started := time.Now()
+	result, updated := h.runReportSchedule(ctx, persistence, schedule, now, schedule.RunManual, "")
+	completed := now.Add(time.Since(started)).UTC()
+	updated.UpdatedAt = completed
+	if updated.RetryAt != nil {
+		retryAt := completed.Add(updated.RetryAt.Sub(now))
+		updated.RetryAt = &retryAt
+	}
+	if updated.LastRunStatus == config.ReportScheduleLastRunOK {
+		updated.LastSuccessAt = &completed
+	}
+	store.Schedules[index] = updated
+	return result, updated, persistence.SaveReportScheduleStore(*store)
+}
+
 func (h *ReportingHandlers) prepareReportSchedule(ctx context.Context, schedule config.ReportSchedule, now time.Time, statusOnly bool) (config.ReportSchedule, error) {
 	schedule = config.NormalizeReportSchedule(schedule)
 	if schedule.ID == "" {
@@ -301,7 +434,11 @@ func (h *ReportingHandlers) prepareReportSchedule(ctx context.Context, schedule 
 	switch schedule.Kind {
 	case config.ReportScheduleKindResources:
 	case config.ReportScheduleKindPatrolDigest:
-		return preparePatrolDigestSchedule(schedule, now)
+		prepared, err := preparePatrolDigestSchedule(schedule, now)
+		if err != nil {
+			return prepared, err
+		}
+		return prepared, h.validateEnabledReportDelivery(ctx, prepared)
 	default:
 		return schedule, reportScheduleValidationError{code: "invalid_kind", message: "Schedule kind must be resources or patrol_digest"}
 	}
@@ -321,6 +458,8 @@ func (h *ReportingHandlers) prepareReportSchedule(ctx context.Context, schedule 
 		schedule.Delivery.Attach = true
 		schedule.Delivery.SaveToDisk = true
 	}
+	// Resource reports have always been retained on disk, including email runs.
+	schedule.Delivery.SaveToDisk = true
 	if err := validateReportScheduleCadence(schedule.Cadence); err != nil {
 		return schedule, err
 	}
@@ -332,7 +471,7 @@ func (h *ReportingHandlers) prepareReportSchedule(ctx context.Context, schedule 
 		return schedule, err
 	}
 	schedule.NextRunAt = &next
-	return schedule, nil
+	return schedule, h.validateEnabledReportDelivery(ctx, schedule)
 }
 
 func validateReportScheduleCadence(cadence config.ReportScheduleCadence) error {
@@ -454,11 +593,11 @@ type reportScheduleRunResult struct {
 }
 
 func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *config.ConfigPersistence, schedule config.ReportSchedule, now time.Time, manual bool, occurrenceKey string) (reportScheduleRunResult, config.ReportSchedule) {
-	h.scheduleRunMu.Lock()
-	defer h.scheduleRunMu.Unlock()
-
 	schedule = config.NormalizeReportSchedule(schedule)
 	result := reportScheduleRunResult{}
+	if schedule.RunAttempts < 1 {
+		schedule.RunAttempts = 1
+	}
 	schedule.LastRunAt = &now
 	schedule.UpdatedAt = now
 	if occurrenceKey != "" {
@@ -473,13 +612,22 @@ func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *
 	if schedule.Kind == config.ReportScheduleKindPatrolDigest {
 		return h.runPatrolDigestSchedule(ctx, persistence, schedule, now)
 	}
+	if schedule.Delivery.Method == config.ReportScheduleDeliveryEmail {
+		if _, err := scheduledReportEmailManager(persistence, schedule); err != nil {
+			return result, markReportScheduleDeliveryFailed(schedule, now, err)
+		}
+	}
 
 	orgID := GetOrgID(ctx)
 	resources, err := h.resolveReportScheduleResources(ctx, orgID, schedule.Scope)
 	if err != nil {
 		return result, markReportScheduleFailed(schedule, now, err)
 	}
-	start, end, err := reportScheduleWindow(schedule, now, manual)
+	windowEnd := now
+	if schedule.RunWindowEnd != nil {
+		windowEnd = *schedule.RunWindowEnd
+	}
+	start, end, err := reportScheduleWindow(schedule, windowEnd, manual)
 	if err != nil {
 		return result, markReportScheduleFailed(schedule, now, err)
 	}
@@ -500,17 +648,22 @@ func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *
 		return result, markReportScheduleFailed(schedule, now, err)
 	}
 	result.path = path
+	schedule.LastReportPath = path
+	schedule.LastDeliveryStatus = "saved"
 
 	if schedule.Delivery.Method == config.ReportScheduleDeliveryEmail {
 		emailStatus, err := sendScheduledReportEmail(persistence, schedule, report, path)
 		if err != nil {
-			return result, markReportScheduleFailed(schedule, now, err)
+			return result, markReportScheduleDeliveryFailed(schedule, now, err)
 		}
 		result.email = emailStatus
+		schedule.LastDeliveryStatus = emailStatus
 	}
 
 	schedule.LastRunStatus = config.ReportScheduleLastRunOK
 	schedule.LastError = ""
+	schedule.RetryAt = nil
+	schedule.LastSuccessAt = &now
 	return result, schedule
 }
 
@@ -519,6 +672,49 @@ func markReportScheduleFailed(schedule config.ReportSchedule, now time.Time, err
 	schedule.LastError = strings.TrimSpace(err.Error())
 	schedule.LastRunAt = &now
 	schedule.UpdatedAt = now
+	schedule.RetryAt = nil
+	return schedule
+}
+
+func markReportScheduleDeliveryFailed(schedule config.ReportSchedule, now time.Time, err error) config.ReportSchedule {
+	schedule = markReportScheduleFailed(schedule, now, err)
+	schedule.LastDeliveryStatus = "failed"
+	var unconfirmed *notifications.EmailAcceptanceUnconfirmedError
+	if errors.As(err, &unconfirmed) {
+		schedule.LastRunStatus = config.ReportScheduleLastRunUnconfirmed
+		schedule.LastDeliveryStatus = "unconfirmed"
+		schedule.LastError = "The mail server may have accepted the report. Check the recipient before retrying to avoid a duplicate."
+		return schedule
+	}
+	class := notifications.ClassifyNotificationFailureError(err)
+	switch class {
+	case notifications.NotificationFailureAuthentication:
+		schedule.LastError = "Email authentication failed. Check the credentials in Alerts > Notifications."
+	case notifications.NotificationFailureConfiguration:
+		var setup reportScheduleValidationError
+		if errors.As(err, &setup) {
+			schedule.LastError = setup.message
+		} else {
+			schedule.LastError = "Email configuration was rejected. Check Alerts > Notifications."
+		}
+	case notifications.NotificationFailureRejected:
+		schedule.LastError = "The mail server rejected this report. Check the recipient and notification settings."
+	case notifications.NotificationFailureTLS:
+		schedule.LastError = "The secure mail connection failed. Check the server certificate and TLS settings in Alerts > Notifications."
+	default:
+		schedule.LastError = "The mail server is temporarily unavailable. Check the connection and notification settings."
+	}
+	if class.Retryable() && schedule.Enabled && schedule.RunAttempts < reportScheduleMaxAttempts {
+		delay := time.Minute
+		if schedule.RunAttempts >= 2 {
+			delay = 5 * time.Minute
+		}
+		retryAt := now.Add(delay)
+		schedule.RetryAt = &retryAt
+		schedule.LastRunStatus = config.ReportScheduleLastRunRetrying
+	} else if class.Retryable() && schedule.RunAttempts >= reportScheduleMaxAttempts {
+		schedule.LastError = "Delivery failed after 3 attempts. " + schedule.LastError
+	}
 	return schedule
 }
 
@@ -612,16 +808,23 @@ func pruneGeneratedReports(dir string, retentionCount int) {
 	}
 }
 
-// scheduledReportEmailManager builds the email manager for a schedule from the
-// tenant email config. It returns nil, nil when email is not configured or no
-// recipient can be resolved, so callers decide how to report that.
+func reportEmailConfigurationFailure(message string) error {
+	return notifications.FailWithClass(notifications.NotificationFailureConfiguration,
+		reportScheduleValidationError{code: "email_not_ready", message: message})
+}
+
+// Configuration validation and SMTP semantics remain owned by notifications.
+// Reporting persists the retry budget, so one attempt must be one SMTP send.
 func scheduledReportEmailManager(persistence *config.ConfigPersistence, schedule config.ReportSchedule) (*notifications.EnhancedEmailManager, error) {
+	if persistence == nil {
+		return nil, reportEmailConfigurationFailure("Email configuration is unavailable. Check Alerts > Notifications.")
+	}
 	emailCfg, err := persistence.LoadEmailConfig()
 	if err != nil {
-		return nil, fmt.Errorf("load email config: %w", err)
+		return nil, reportEmailConfigurationFailure("Email configuration could not be loaded. Check notification settings and server storage.")
 	}
 	if emailCfg == nil || !emailCfg.Enabled {
-		return nil, nil
+		return nil, reportEmailConfigurationFailure("Enable email notifications in Alerts > Notifications before running this report.")
 	}
 	recipients := schedule.Delivery.To
 	if len(recipients) == 0 {
@@ -631,7 +834,7 @@ func scheduledReportEmailManager(persistence *config.ConfigPersistence, schedule
 		recipients = []string{emailCfg.From}
 	}
 	if len(recipients) == 0 {
-		return nil, nil
+		return nil, reportEmailConfigurationFailure("Add report recipients or email notification recipients in Alerts > Notifications.")
 	}
 	providerConfig := notifications.EmailProviderConfig{
 		EmailConfig: notifications.EmailConfig{
@@ -647,22 +850,22 @@ func scheduledReportEmailManager(persistence *config.ConfigPersistence, schedule
 			RateLimit: emailCfg.RateLimit,
 		},
 		Provider:     emailCfg.Provider,
-		MaxRetries:   2,
-		RetryDelay:   3,
+		MaxRetries:   0,
 		RateLimit:    emailCfg.RateLimit,
 		StartTLS:     emailCfg.StartTLS,
 		AuthRequired: emailCfg.Username != "" && emailCfg.Password != "",
 	}
-	return notifications.NewEnhancedEmailManager(providerConfig), nil
+	manager := notifications.NewEnhancedEmailManager(providerConfig)
+	if err := manager.ValidateConfiguration(); err != nil {
+		return nil, reportEmailConfigurationFailure(err.Error())
+	}
+	return manager, nil
 }
 
 func sendScheduledReportEmail(persistence *config.ConfigPersistence, schedule config.ReportSchedule, report generatedMultiReport, path string) (string, error) {
 	manager, err := scheduledReportEmailManager(persistence, schedule)
 	if err != nil {
 		return "", err
-	}
-	if manager == nil {
-		return "saved_to_disk_email_unconfigured", nil
 	}
 	subject := "Pulse report: " + schedule.Name
 	htmlBody := "<p>Your scheduled Pulse report is ready.</p>"
@@ -675,8 +878,7 @@ func sendScheduledReportEmail(persistence *config.ConfigPersistence, schedule co
 			Data:        report.Data,
 		})
 	} else if schedule.Delivery.Attach && len(report.Data) > reportScheduleAttachmentLimitBytes {
-		htmlBody = "<p>Your scheduled Pulse report was generated but is too large to attach.</p><p>Saved path: " + htmlEscape(path) + "</p>"
-		textBody = "Your scheduled Pulse report was generated but is too large to attach.\nSaved path: " + path
+		return "", reportEmailConfigurationFailure("The report exceeds the 15 MiB attachment limit. Choose CSV or turn off Attach report to email a saved-path notice.")
 	} else {
 		htmlBody = "<p>Your scheduled Pulse report was generated and saved to disk.</p><p>Saved path: " + htmlEscape(path) + "</p>"
 		textBody = "Your scheduled Pulse report was generated and saved to disk.\nSaved path: " + path
@@ -921,21 +1123,81 @@ func purgeGeneratedReportsAfterDowngrade(persistence *config.ConfigPersistence) 
 }
 
 func (h *ReportingHandlers) runDueReportSchedulesForOrg(ctx context.Context, orgID string, now time.Time) {
+	h.scheduleRunMu.Lock()
+	defer h.scheduleRunMu.Unlock()
 	persistence, store, err := h.reportSchedulePersistenceAndStore(ctx)
 	if err != nil {
 		log.Warn().Err(err).Str("org_id", orgID).Msg("report schedules: load store")
 		return
 	}
-	changed := false
+	save := func(index int, schedule config.ReportSchedule) bool {
+		store.Schedules[index] = schedule
+		if err := persistence.SaveReportScheduleStore(*store); err != nil {
+			log.Warn().Err(err).Str("org_id", orgID).Msg("report schedules: save status")
+			return false
+		}
+		return true
+	}
 	for i := range store.Schedules {
+		if ctx.Err() != nil {
+			return
+		}
 		schedule := config.NormalizeReportSchedule(store.Schedules[i])
+		if schedule.LastRunStatus == config.ReportScheduleLastRunRunning {
+			schedule.UpdatedAt = now
+			schedule.RetryAt = nil
+			schedule.LastRunStatus = config.ReportScheduleLastRunFailed
+			schedule.LastError = "The previous report run ended before completion was recorded. Run it again."
+			if schedule.Delivery.Method == config.ReportScheduleDeliveryEmail {
+				schedule.LastRunStatus = config.ReportScheduleLastRunUnconfirmed
+				schedule.LastDeliveryStatus = "unconfirmed"
+				schedule.LastError = "The previous email run ended before delivery was recorded. Check the recipient before retrying to avoid a duplicate."
+			} else if schedule.Enabled && schedule.RunWindowEnd != nil && schedule.RunAttempts < reportScheduleMaxAttempts {
+				schedule.LastRunStatus = config.ReportScheduleLastRunRetrying
+				schedule.LastError = "Report generation was interrupted. Retrying the saved report window."
+				schedule.RetryAt = &now
+			}
+			if !save(i, schedule) {
+				return
+			}
+		}
 		if !schedule.Enabled {
+			if schedule.RetryAt != nil {
+				schedule.RetryAt = nil
+				schedule.RunWindowEnd = nil
+				schedule.LastRunStatus = config.ReportScheduleLastRunFailed
+				schedule.LastError = "Automatic retry cancelled because this schedule is disabled."
+				schedule.UpdatedAt = now
+				if !save(i, schedule) {
+					return
+				}
+			}
+			continue
+		}
+		if schedule.RetryAt != nil {
+			if schedule.LastRunStatus != config.ReportScheduleLastRunRetrying || schedule.RunWindowEnd == nil || schedule.RunAttempts >= reportScheduleMaxAttempts {
+				schedule.RetryAt = nil
+				schedule.LastRunStatus = config.ReportScheduleLastRunFailed
+				schedule.LastError = "The saved retry is incomplete or exhausted. Run a new report."
+				if !save(i, schedule) {
+					return
+				}
+				continue
+			}
+			if now.Before(*schedule.RetryAt) {
+				continue
+			}
+			if _, _, err := h.executeReportSchedule(ctx, persistence, store, i, now, false, "", true); err != nil {
+				log.Warn().Err(err).Str("org_id", orgID).Msg("report schedules: persist retry outcome")
+				return
+			}
 			continue
 		}
 		occurrence, key, err := lastReportScheduleOccurrenceAt(schedule, now)
 		if err != nil {
-			store.Schedules[i] = markReportScheduleFailed(schedule, now, err)
-			changed = true
+			if !save(i, markReportScheduleFailed(schedule, now, err)) {
+				return
+			}
 			continue
 		}
 		if key == "" || key == schedule.LastOccurrenceKey || occurrence.After(now) {
@@ -947,17 +1209,14 @@ func (h *ReportingHandlers) runDueReportSchedulesForOrg(ctx context.Context, org
 				schedule.NextRunAt = &next
 			}
 			schedule.UpdatedAt = now
-			store.Schedules[i] = schedule
-			changed = true
+			if !save(i, schedule) {
+				return
+			}
 			continue
 		}
-		_, updated := h.runReportSchedule(ctx, persistence, schedule, now, false, key)
-		store.Schedules[i] = updated
-		changed = true
-	}
-	if changed {
-		if err := persistence.SaveReportScheduleStore(*store); err != nil {
-			log.Warn().Err(err).Str("org_id", orgID).Msg("report schedules: save statuses")
+		if _, _, err := h.executeReportSchedule(ctx, persistence, store, i, now, false, key, false); err != nil {
+			log.Warn().Err(err).Str("org_id", orgID).Msg("report schedules: persist outcome")
+			return
 		}
 	}
 }
@@ -1004,18 +1263,18 @@ func (h *ReportingHandlers) runPatrolDigestSchedule(ctx context.Context, persist
 	}
 	manager, err := scheduledReportEmailManager(persistence, schedule)
 	if err != nil {
-		return result, markReportScheduleFailed(schedule, now, err)
-	}
-	if manager == nil {
-		return result, markReportScheduleFailed(schedule, now, errors.New("email notifications are not configured; add an email destination under Settings > Notifications or list recipients on the schedule"))
+		return result, markReportScheduleDeliveryFailed(schedule, now, err)
 	}
 	subject, htmlBody, textBody := renderPatrolDigestEmail(digest, h.patrolDigestPublicURL())
 	if err := manager.SendEmailWithRetry(subject, htmlBody, textBody); err != nil {
-		return result, markReportScheduleFailed(schedule, now, fmt.Errorf("send Patrol weekly summary: %w", err))
+		return result, markReportScheduleDeliveryFailed(schedule, now, err)
 	}
 	result.email = "sent"
 	schedule.LastRunStatus = config.ReportScheduleLastRunOK
 	schedule.LastError = ""
+	schedule.LastDeliveryStatus = result.email
+	schedule.RetryAt = nil
+	schedule.LastSuccessAt = &now
 	return result, schedule
 }
 

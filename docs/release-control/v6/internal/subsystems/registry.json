@@ -2832,6 +2832,7 @@
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
         "internal/api/configapi/setup_script_render.go",
         "internal/config/persistence_metadata_accessors.go",
+        "internal/config/report_schedules.go",
         "internal/websocket/hub.go",
         "pkg/aicontracts/action_broker.go",
         "pkg/aicontracts/fix_execution.go",
@@ -3235,6 +3236,22 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/api/route_inventory_test.go"
+            ]
+          },
+          {
+            "id": "scheduled-report-delivery",
+            "label": "scheduled report persistence, delivery and retry proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/report_schedules.go",
+              "internal/config/report_schedules.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/report_schedule_delivery_test.go",
+              "internal/api/report_schedules_test.go",
+              "internal/config/report_schedule_delivery_test.go"
             ]
           },
           {
@@ -5314,6 +5331,7 @@
         "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
         "frontend-modern/src/components/Settings/ReportingPanel.tsx",
         "frontend-modern/src/components/Settings/reportingPanelModel.ts",
+        "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
         "frontend-modern/src/components/Settings/ResourcePicker.tsx",
         "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
         "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
@@ -5682,6 +5700,7 @@
               "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
               "frontend-modern/src/components/Settings/ReportingPanel.tsx",
               "frontend-modern/src/components/Settings/reportingPanelModel.ts",
+              "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
               "frontend-modern/src/components/Settings/ResourcePicker.tsx",
               "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
               "frontend-modern/src/components/Settings/useReportingPanelState.ts",
@@ -5696,11 +5715,14 @@
             "exact_files": [
               "frontend-modern/src/__tests__/App.architecture.test.ts",
               "frontend-modern/src/components/Settings/__tests__/AvailabilitySettingsPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/ReportingPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/reportingPanelModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/reportingResourceTypes.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/reportingSchedulesModel.delivery.test.ts",
               "frontend-modern/src/components/Settings/__tests__/ResourcePicker.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/useReportingPanelState.test.ts",
               "frontend-modern/src/routing/__tests__/routePreload.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/reportableResourceTypes.test.ts",

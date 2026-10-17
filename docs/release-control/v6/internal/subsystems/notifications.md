@@ -735,9 +735,19 @@ resolved batches are not guaranteed to contain the same alert set and a
 group-level reference would attach messages to the wrong thread.
 Scheduled report delivery uses that same enhanced email boundary. Report
 attachments must be emitted as MIME attachment parts by
-`internal/notifications/email_enhanced.go`, and oversized-report fallback copy
-belongs to the reporting scheduler. SMTP transport, recipient parsing,
+`internal/notifications/email_enhanced.go`. The scheduler owns report-size
+validation and the operator's attachment choice. SMTP transport, recipient parsing,
 headers, body encoding, and attachment encoding remain notification-owned.
+`EnhancedEmailManager.ValidateConfiguration` checks the same sender/recipient
+and provider credential inputs without sending mail. A connection failure while
+awaiting the completed-message reply is a typed `EmailAcceptanceUnconfirmedError`.
+The sender stops its inner retry loop because the server may already have the
+message. Explicit SMTP replies still use the canonical failure classifier.
+`internal/notifications/email_delivery_test.go` checks configuration and a dropped
+completed-message response with an attachment. Report scheduling consumes that
+typed uncertainty rather than inferring rejection from a generic connection
+error. This does not assert inbox receipt or change the persistent alert queue's
+state vocabulary.
 That same queue ownership also governs persistent queue storage roots. The
 notifications queue database must normalize its owned data directory and
 resolve the fixed `notification_queue.db` leaf through the shared storage-path
