@@ -230,9 +230,21 @@ func (r *Router) handleSSOProvider(w http.ResponseWriter, req *http.Request) {
 }
 
 // ensureSSOConfig loads the SSO configuration from persistence on first access,
-// falling back to an empty config if nothing is persisted.
+// falling back to an empty config if nothing is persisted, and applies the
+// legacy OIDC_* environment provider.
+//
+// The returned configuration is a published snapshot that is never mutated
+// afterwards, so callers may read it without holding ssoMu but must not
+// modify it. Changes go through commitSSOConfig.
 func (r *Router) ensureSSOConfig() *config.SSOConfig {
-	if r.ssoConfig == nil {
+	r.ssoMu.Lock()
+	defer r.ssoMu.Unlock()
+	return r.ensureSSOConfigLocked()
+}
+
+func (r *Router) ensureSSOConfigLocked() *config.SSOConfig {
+	current := r.ssoConfig
+	if current == nil {
 		if r.persistence != nil {
 			cfg, err := r.persistence.LoadSSOConfig()
 			if err != nil {
@@ -241,13 +253,11 @@ func (r *Router) ensureSSOConfig() *config.SSOConfig {
 			} else {
 				r.ssoAuthLoadFailed.Store(false)
 			}
-			if cfg != nil {
-				r.ssoConfig = cfg
-			}
+			current = cfg
 		}
 
-		if r.ssoConfig == nil {
-			r.ssoConfig = config.NewSSOConfig()
+		if current == nil {
+			current = config.NewSSOConfig()
 		}
 	}
 
@@ -255,12 +265,46 @@ func (r *Router) ensureSSOConfig() *config.SSOConfig {
 	if r.config != nil {
 		publicURL = r.config.PublicURL
 	}
-	if config.ApplyLegacyOIDCEnvProvider(r.ssoConfig, publicURL) {
-		log.Info().Str("provider_id", config.LegacyOIDCProviderID).Msg("Loaded legacy OIDC environment SSO provider")
+	// The environment provider is rewritten on every call; apply it to a
+	// private copy so readers of the previous snapshot never see the write.
+	if _, ok := config.LegacyOIDCEnvProvider(publicURL); ok {
+		current = current.Clone()
+		if config.ApplyLegacyOIDCEnvProvider(current, publicURL) {
+			log.Info().Str("provider_id", config.LegacyOIDCProviderID).Msg("Loaded legacy OIDC environment SSO provider")
+		}
 	}
 
-	setSSOAuthSnapshot(r.config, r.ssoConfig)
+	r.ssoConfig = current
+	setSSOAuthSnapshot(r.config, current)
+	return current
+}
+
+// currentSSOConfig returns the published SSO configuration without loading
+// it. The result must be treated as read-only.
+func (r *Router) currentSSOConfig() *config.SSOConfig {
+	r.ssoMu.RLock()
+	defer r.ssoMu.RUnlock()
 	return r.ssoConfig
+}
+
+// commitSSOConfig applies mutate to a private copy of the SSO configuration,
+// persists the copy, and publishes it only when persistence succeeds, so
+// concurrent login and status requests never observe a partial edit or an
+// unsaved one. A mutate error is returned as applyErr and a persistence
+// failure as saveErr; either leaves the published configuration unchanged.
+func (r *Router) commitSSOConfig(mutate func(*config.SSOConfig) error) (applyErr, saveErr error) {
+	r.ssoMu.Lock()
+	defer r.ssoMu.Unlock()
+
+	next := r.ensureSSOConfigLocked().Clone()
+	if err := mutate(next); err != nil {
+		return err, nil
+	}
+	if err := r.persistSSOConfigLocked(next); err != nil {
+		return nil, err
+	}
+	r.ssoConfig = next
+	return nil, nil
 }
 
 func (r *Router) ssoAuthenticationLoadFailed() bool {
@@ -268,13 +312,13 @@ func (r *Router) ssoAuthenticationLoadFailed() bool {
 }
 
 func (r *Router) handleListSSOProviders(w http.ResponseWriter, req *http.Request) {
-	r.ensureSSOConfig()
+	ssoCfg := r.ensureSSOConfig()
 
 	response := EmptySSOProvidersListResponse()
-	response.DefaultProviderID = r.ssoConfig.DefaultProviderID
-	response.AllowMultipleProviders = r.ssoConfig.AllowMultipleProviders
+	response.DefaultProviderID = ssoCfg.DefaultProviderID
+	response.AllowMultipleProviders = ssoCfg.AllowMultipleProviders
 
-	for _, p := range r.ssoConfig.Providers {
+	for _, p := range ssoCfg.Providers {
 		response.Providers = append(response.Providers, providerToResponse(&p, r.config.PublicURL, req))
 	}
 
@@ -283,9 +327,7 @@ func (r *Router) handleListSSOProviders(w http.ResponseWriter, req *http.Request
 }
 
 func (r *Router) handleGetSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
-	r.ensureSSOConfig()
-
-	provider := r.ssoConfig.GetProvider(providerID)
+	provider := r.ensureSSOConfig().GetProvider(providerID)
 	if provider == nil {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Provider not found", nil)
 		return
@@ -379,27 +421,22 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	r.ensureSSOConfig()
-
 	// Check for duplicate ID
-	if r.ssoConfig.GetProvider(provider.ID) != nil {
+	if r.ensureSSOConfig().GetProvider(provider.ID) != nil {
 		writeErrorResponse(w, http.StatusConflict, "duplicate_id", "Provider with this ID already exists", nil)
 		return
 	}
 
-	// Add provider
-	if err := r.ssoConfig.AddProvider(provider); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "add_error", err.Error(), nil)
+	// Add and persist the provider; nothing is published if either step fails.
+	addErr, saveErr := r.commitSSOConfig(func(cfg *config.SSOConfig) error {
+		return cfg.AddProvider(provider)
+	})
+	if addErr != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "add_error", addErr.Error(), nil)
 		return
 	}
-
-	// Persist configuration
-	if err := r.saveSSOConfig(); err != nil {
-		log.Error().Err(err).Msg("Failed to persist SSO configuration")
-		// Remove the provider we just added since persistence failed
-		if err := r.ssoConfig.RemoveProvider(provider.ID); err != nil {
-			log.Warn().Err(err).Str("provider_id", provider.ID).Msg("Failed to remove provider during rollback")
-		}
+	if saveErr != nil {
+		log.Error().Err(saveErr).Msg("Failed to persist SSO configuration")
 		writeErrorResponse(w, http.StatusInternalServerError, "save_error", "Failed to save configuration", nil)
 		return
 	}
@@ -429,9 +466,9 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 }
 
 func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
-	r.ensureSSOConfig()
-
-	existing := r.ssoConfig.GetProvider(providerID)
+	// Work on a private copy: the merge below writes through existing's
+	// nested OIDC/SAML pointers, which the published snapshot must not share.
+	existing := r.ensureSSOConfig().Clone().GetProvider(providerID)
 	if existing == nil {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Provider not found", nil)
 		return
@@ -523,19 +560,16 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
-	// Update provider
-	if err := r.ssoConfig.UpdateProvider(updated); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "update_error", err.Error(), nil)
+	// Update and persist the provider; nothing is published if either step fails.
+	updateErr, saveErr := r.commitSSOConfig(func(cfg *config.SSOConfig) error {
+		return cfg.UpdateProvider(updated)
+	})
+	if updateErr != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "update_error", updateErr.Error(), nil)
 		return
 	}
-
-	// Persist configuration
-	if err := r.saveSSOConfig(); err != nil {
-		log.Error().Err(err).Msg("Failed to persist SSO configuration")
-		// Revert to existing provider
-		if err := r.ssoConfig.UpdateProvider(*existing); err != nil {
-			log.Warn().Err(err).Str("provider_id", existing.ID).Msg("Failed to revert provider during rollback")
-		}
+	if saveErr != nil {
+		log.Error().Err(saveErr).Msg("Failed to persist SSO configuration")
 		writeErrorResponse(w, http.StatusInternalServerError, "save_error", "Failed to save configuration", nil)
 		return
 	}
@@ -582,9 +616,7 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 }
 
 func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
-	r.ensureSSOConfig()
-
-	existing := r.ssoConfig.GetProvider(providerID)
+	existing := r.ensureSSOConfig().GetProvider(providerID)
 	if existing == nil {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Provider not found", nil)
 		return
@@ -594,19 +626,16 @@ func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	// Remove provider
-	if err := r.ssoConfig.RemoveProvider(providerID); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "remove_error", err.Error(), nil)
+	// Remove and persist; nothing is published if either step fails.
+	removeErr, saveErr := r.commitSSOConfig(func(cfg *config.SSOConfig) error {
+		return cfg.RemoveProvider(providerID)
+	})
+	if removeErr != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "remove_error", removeErr.Error(), nil)
 		return
 	}
-
-	// Persist configuration
-	if err := r.saveSSOConfig(); err != nil {
-		log.Error().Err(err).Msg("Failed to persist SSO configuration")
-		// Re-add the provider since persistence failed
-		if err := r.ssoConfig.AddProvider(*existing); err != nil {
-			log.Warn().Err(err).Str("provider_id", existing.ID).Msg("Failed to re-add provider during rollback")
-		}
+	if saveErr != nil {
+		log.Error().Err(saveErr).Msg("Failed to persist SSO configuration")
 		writeErrorResponse(w, http.StatusInternalServerError, "save_error", "Failed to save configuration", nil)
 		return
 	}
@@ -626,16 +655,20 @@ func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// saveSSOConfig persists the published SSO configuration as it stands.
 func (r *Router) saveSSOConfig() error {
-	if r.persistence == nil {
-		setSSOAuthSnapshot(r.config, r.ssoConfig)
-		r.ssoAuthLoadFailed.Store(false)
-		return nil
+	r.ssoMu.Lock()
+	defer r.ssoMu.Unlock()
+	return r.persistSSOConfigLocked(r.ssoConfig)
+}
+
+func (r *Router) persistSSOConfigLocked(cfg *config.SSOConfig) error {
+	if r.persistence != nil {
+		if err := r.persistence.SaveSSOConfig(cfg); err != nil {
+			return err
+		}
 	}
-	if err := r.persistence.SaveSSOConfig(r.ssoConfig); err != nil {
-		return err
-	}
-	setSSOAuthSnapshot(r.config, r.ssoConfig)
+	setSSOAuthSnapshot(r.config, cfg)
 	r.ssoAuthLoadFailed.Store(false)
 	return nil
 }
