@@ -2840,17 +2840,23 @@
         "pkg/aicontracts/orchestrator_deps.go",
         "pkg/extensions/ai_autofix.go",
         "pkg/extensions/audit_admin.go",
+        "pkg/extensions/reporting_admin.go",
         "pkg/pulsecli/actions.go",
         "pkg/pulsecli/api_client.go",
         "pkg/pulsecli/fleet.go",
         "pkg/pulsecli/root.go",
+        "pkg/reporting/backup_health.go",
+        "pkg/reporting/catalog.go",
+        "pkg/reporting/pdf_brand.go",
         "pulse-mobile:config/mobile-api-surface.json",
         "pulse-mobile:src/api/coreMobileContract.ts",
         "pulse-mobile:src/generated/coreCompatibility.ts",
         "scripts/generate-pulse-intelligence-docs.go",
         "scripts/generate-types.go",
         "scripts/release_control/generate_mobile_compatibility.py",
-        "scripts/release_control/mobile_compatibility.py"
+        "scripts/release_control/mobile_compatibility.py",
+        "scripts/repo-boundary-paid-surface.allowlist",
+        "scripts/repo-boundary-regression.py"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -2858,6 +2864,29 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "client-backup-health-reports",
+            "label": "client-scoped backup health rendering and schedule proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/enterprise_extension_reporting_admin.go",
+              "internal/api/reporting_backup_health.go",
+              "internal/api/reporting_catalog_handlers.go",
+              "pkg/extensions/reporting_admin.go",
+              "pkg/reporting/backup_health.go",
+              "pkg/reporting/catalog.go",
+              "pkg/reporting/pdf_brand.go",
+              "scripts/repo-boundary-paid-surface.allowlist",
+              "scripts/repo-boundary-regression.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/reporting_backup_health_test.go",
+              "internal/api/reporting_boundary_test.go",
+              "scripts/repo-boundary-regression.py"
+            ]
+          },
           {
             "id": "api-reference-docs",
             "label": "canonical and published API reference synchronization proof",
@@ -3252,6 +3281,7 @@
               "internal/api/report_schedule_delivery_test.go",
               "internal/api/report_schedule_inventory_test.go",
               "internal/api/report_schedules_test.go",
+              "internal/api/reporting_backup_health_test.go",
               "internal/config/report_schedule_delivery_test.go"
             ]
           },
@@ -3269,6 +3299,7 @@
             "exact_files": [
               "internal/api/report_schedule_inventory_test.go",
               "internal/api/reporting_availability_test.go",
+              "internal/api/reporting_backup_health_test.go",
               "internal/api/reporting_handlers_test.go",
               "internal/api/reporting_monitor_reload_test.go",
               "internal/api/reporting_org_scope_test.go",
@@ -3280,14 +3311,20 @@
             "label": "router dependency replacement proof",
             "match_prefixes": [],
             "match_files": [
+              "internal/api/router.go",
               "internal/api/router_helpers.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/api/contract_test.go",
               "internal/api/multi_tenant_setters_additional_test.go",
+              "internal/api/recovery_monitor_reload_test.go",
               "internal/api/reporting_monitor_reload_test.go",
-              "internal/api/router_helpers_more_test.go"
+              "internal/api/router_helpers_more_test.go",
+              "internal/api/router_resource_wiring_test.go",
+              "internal/api/router_set_monitor_agents_test.go",
+              "internal/api/router_webhook_cidr_reload_test.go"
             ]
           },
           {
@@ -5365,6 +5402,7 @@
         "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
         "frontend-modern/src/components/Settings/OperationsPanel.tsx",
         "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/reportingCatalogModel.ts",
         "frontend-modern/src/components/Settings/ReportingFormField.tsx",
         "frontend-modern/src/components/Settings/ReportingPanel.tsx",
         "frontend-modern/src/components/Settings/reportingPanelModel.ts",
@@ -5736,6 +5774,7 @@
             "match_files": [
               "frontend-modern/scripts/header-audit.mjs",
               "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/reportingCatalogModel.ts",
               "frontend-modern/src/components/Settings/ReportingFormField.tsx",
               "frontend-modern/src/components/Settings/ReportingPanel.tsx",
               "frontend-modern/src/components/Settings/reportingPanelModel.ts",
@@ -5755,9 +5794,11 @@
             "exact_files": [
               "frontend-modern/src/__tests__/App.architecture.test.ts",
               "frontend-modern/src/components/Settings/__tests__/AvailabilitySettingsPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/reportingCatalogModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/ReportingPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/reportingPanelModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/reportingResourceTypes.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/reportingSchedulesModel.backupHealth.test.ts",
               "frontend-modern/src/components/Settings/__tests__/reportingSchedulesModel.delivery.test.ts",
               "frontend-modern/src/components/Settings/__tests__/ResourcePicker.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
@@ -6176,6 +6217,7 @@
         "pkg/agents/docker/report.go",
         "pkg/agents/host/report.go",
         "pkg/agents/kubernetes/report.go",
+        "pkg/proxmox/backup_history.go",
         "pkg/proxmox/ceph.go",
         "pkg/proxmox/client.go",
         "pkg/proxmox/cluster_client.go",
@@ -6189,6 +6231,21 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "backup-history-collection",
+            "label": "paginated backup execution history and collection quality proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/backup_task_history.go",
+              "pkg/proxmox/backup_history.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/backup_task_history_test.go",
+              "pkg/proxmox/backup_history_test.go"
+            ]
+          },
           {
             "id": "maintenance-verification-runtime",
             "label": "post-maintenance verification monitoring proof",
@@ -6622,6 +6679,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/monitoring/backup_task_history_test.go",
               "internal/monitoring/monitor_alert_intent_test.go",
               "internal/monitoring/monitor_backups_dir_storage_test.go",
               "internal/monitoring/monitor_full_coverage_test.go",
@@ -6726,6 +6784,7 @@
               "internal/monitoring/proxmox_large_cluster_poll_budget_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/ratetracker_test.go",
+              "internal/monitoring/recovery_rollups_resilience_test.go",
               "internal/monitoring/reload_test.go",
               "internal/monitoring/truenas_poller_test.go",
               "internal/unifiedresources/code_standards_test.go"
@@ -7772,6 +7831,7 @@
               "internal/telemetry/service_health_test.go",
               "internal/telemetry/telemetry_test.go",
               "pkg/server/reporting_engine_test.go",
+              "pkg/server/server_test.go",
               "pkg/server/service_health_test.go",
               "pkg/server/telemetry_licensed_features_test.go",
               "pkg/server/telemetry_pulse_intelligence_test.go",
@@ -8085,11 +8145,13 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/recovery/backup_health_test.go",
               "internal/recovery/idgen/idgen_test.go",
               "internal/recovery/manager/manager_test.go",
               "internal/recovery/mapper/proxmox/mapper_test.go",
               "internal/recovery/posture_test.go",
               "internal/recovery/recovery_test.go",
+              "internal/recovery/store/backup_history_test.go",
               "internal/recovery/store/store_posture_test.go",
               "internal/recovery/store/store_queryplan_test.go",
               "internal/recovery/store/store_rollups_test.go",

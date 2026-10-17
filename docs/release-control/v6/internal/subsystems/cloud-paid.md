@@ -3704,3 +3704,18 @@ joined to billing accounts. This adds no price, entitlement, refund or billing
 behavior. Receiver intake and migration tests pin the additive schema boundary.
 Deploying the compatible receiver and release adoption remain separate from
 source verification. Count and disclosure semantics belong to security-privacy.
+
+### Business backup health report renderer
+
+New backup health PDF/CSV rendering lives in pulse-enterprise's reportingadmin
+package behind `GenerateBackupHealthReportFunc`. BusinessHooks installs that
+private callback without forking the canonical reporting handlers, scheduler or
+delivery system. Public code owns task collection, retained evidence, tenant
+scope, effective branding and the shared rendering contract. The public adapter
+fails explicitly when the private renderer is absent.
+
+Existing advanced-reporting and branding entitlements, pricing, grants and
+metric/recovery retention remain unchanged. This source change does not deploy
+a runtime or change customer subscriptions. Private renderer tests cover formats,
+missing/observed-zero distinction, formula-safe CSV and PDF generation. Runtime
+hook tests and final-source Pro browser delivery qualify registration/composition.

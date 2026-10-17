@@ -62,13 +62,14 @@ type ReportingGuidanceDefinition struct {
 }
 
 type ReportingCatalog struct {
-	ID                string                         `json:"id"`
-	Title             string                         `json:"title"`
-	Description       string                         `json:"description"`
-	LockedState       ReportingLockedStateDefinition `json:"lockedState"`
-	Guidance          ReportingGuidanceDefinition    `json:"guidance"`
-	PerformanceReport PerformanceReportDefinition    `json:"performanceReport"`
-	VMInventoryExport VMInventoryExportDefinition    `json:"vmInventoryExport"`
+	ID                    string                         `json:"id"`
+	Title                 string                         `json:"title"`
+	Description           string                         `json:"description"`
+	LockedState           ReportingLockedStateDefinition `json:"lockedState"`
+	Guidance              ReportingGuidanceDefinition    `json:"guidance"`
+	PerformanceReport     PerformanceReportDefinition    `json:"performanceReport"`
+	VMInventoryExport     VMInventoryExportDefinition    `json:"vmInventoryExport"`
+	BackupHealthAvailable bool                           `json:"backupHealthAvailable,omitempty"`
 }
 
 // SupportsFormat reports whether the performance reporting surface allows the

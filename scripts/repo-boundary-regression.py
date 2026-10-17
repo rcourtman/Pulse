@@ -17,6 +17,15 @@ class ReportingSubjectBoundaryTests(unittest.TestCase):
         variants = [
             ("shared pipeline", None, None, None),
             (
+                "backup adapter exact path", "reporting_backup_health_extra.go",
+                "package api\n", "new production paid-domain implementation files are not baselined",
+            ),
+            (
+                "backup adapter private root import", "reporting_backup_health.go",
+                'package api\nimport _ "github.com/rcourtman/pulse-go-rewrite/internal/license"\n',
+                "API root imports of internal/license remain",
+            ),
+            (
                 "new reporting implementation", "reporting_subject_alerts_extra.go",
                 "package api\n", "new production paid-domain implementation files are not baselined",
             ),

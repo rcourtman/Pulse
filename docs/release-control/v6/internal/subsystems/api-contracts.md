@@ -12161,6 +12161,57 @@ schedule persistence and retention checks do not keep using a stopped monitor.
 Clearing the dependency fails closed. `reporting_monitor_reload_test.go` covers
 replacement inventory/persistence and reads overlapping replacement.
 
+### Client backup health reports use durable execution evidence
+
+The additive `backup_health` schedule kind creates branded PDF or CSV reports
+for current organization VMs and system containers, selected explicitly, by
+current tags, or all when neither filter is supplied. It has no performance
+report resource cap. The organization snapshot and recovery store are resolved
+from the same request organization. Unavailable scope fails closed. Overlapping
+VMIDs across source connections cannot cross client scope. Historical deleted
+workloads or past tag membership are not reconstructed.
+
+Reports summarize retained Proxmox VE backup task outcomes, including jobs
+writing to PBS, rather than inferring execution from backup artifacts. Native
+PBS writer, verification and synchronization jobs are not counted again.
+Weekly backup windows use the previous seven complete local calendar days.
+Monthly windows use the previous calendar month. Daily outcomes use the schedule
+timezone and completion cutoff. Unresolved
+outcomes, source observation gaps, unsupported providers, unqualified multi-guest
+jobs and unreadable history are explicit. Unobserved zero counts remain blank
+or unavailable, and failure percentages use recorded completed attempts only.
+Task success does not certify a retained or restorable backup.
+
+`last_report_data_state` and `last_report_data_message` are server-owned,
+additive schedule fields. They describe the last generated report's evidence,
+independently of successful or failed delivery. Creation and edits cannot forge
+them. Weekly/monthly windows, original retry windows, notification preflight,
+SMTP outcomes, bounded retries, restart recovery, file retention and existing
+branding/advanced-reporting entitlement checks are shared with file reports.
+Pricing, grants and customer entitlements remain unchanged.
+
+Proofs: `internal/api/reporting_backup_health_test.go` covers retained failures,
+more than fifty workloads, current client scope, missing history, server-owned
+quality fields, entitlement rejection and retry after handler recreation.
+`pulse-enterprise/internal/reportingadmin/backup_health_test.go` covers fixed-schema
+CSV, missing versus observed zero, spreadsheet formula escaping and PDF generation. The final-source
+Reports browser receipt covers scheduling and delivered attachment contents.
+
+The public helper is a tenant/history adapter behind the existing reporting
+admin binder. `GenerateBackupHealthReportFunc` carries scoped evidence to the
+private renderer registered through `BusinessHooks` before router/scheduler
+creation. Missing rendering fails clearly rather than falling back to a public
+paid implementation. `pkg/reporting` exposes DTOs and existing PDF branding
+primitives. The new PDF/CSV implementation lives in pulse-enterprise. Exact-path
+boundary exemptions admit only that shared adapter, while Go and shell regression
+proofs continue rejecting neighboring implementations and private licensing imports.
+
+Monitor dependency replacement also rebinds the shared recovery manager for
+existing and future tenant monitors. Single-monitor replacements receive it
+through the canonical dependency initializer. This keeps unattended collection
+writing to the report's store after a connection configuration reload.
+`recovery_monitor_reload_test.go` and the live report proof cover this lifecycle.
+
 ### Explicit historical incident archives
 
 `internal/api/router.go` pins a read-only legacy archive to each organization's
@@ -12402,3 +12453,10 @@ the tenant monitor from each request context. Payload and route authority are
 unchanged. `TestChartServiceInitializationIsConcurrentAndRouterScoped` in
 `internal/api/contract_test.go` and `TestMultiTenant_TenantIsolation` are the
 direct race-detector proofs. This is a separate CI stabilization slice.
+
+The additive reporting-catalog `backupHealthAvailable` flag describes runtime
+renderer presence independently of entitlement. New backup schedules are offered
+only when it is present, while existing schedules remain editable after a runtime
+change. Legacy catalogs default to false. API and catalog-model tests cover
+absence and registration so staggered source upgrades do not offer unavailable
+rendering. No price or entitlement changes.

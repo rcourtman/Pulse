@@ -9,7 +9,20 @@ import (
 var (
 	reportingAdminBindMu          sync.RWMutex
 	reportingAdminEndpointsBinder extensions.BindReportingAdminEndpointsFunc
+	backupHealthReportGenerator   extensions.GenerateBackupHealthReportFunc
 )
+
+func SetBackupHealthReportGenerator(generator extensions.GenerateBackupHealthReportFunc) {
+	reportingAdminBindMu.Lock()
+	defer reportingAdminBindMu.Unlock()
+	backupHealthReportGenerator = generator
+}
+
+func resolveBackupHealthReportGenerator() extensions.GenerateBackupHealthReportFunc {
+	reportingAdminBindMu.RLock()
+	defer reportingAdminBindMu.RUnlock()
+	return backupHealthReportGenerator
+}
 
 // SetReportingAdminEndpointsBinder registers a binder that can replace or decorate
 // default reporting admin endpoint handlers.

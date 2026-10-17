@@ -58,6 +58,7 @@ export interface ReportingCatalog {
   guidance: ReportingGuidanceDefinition;
   performanceReport: ReportingPerformanceReportDefinition;
   vmInventoryExport: ReportingInventoryExportDefinition | null;
+  backupHealthAvailable?: boolean;
 }
 
 export function buildReportingCatalogRequest(): { url: string } {
@@ -124,6 +125,7 @@ export function buildLegacyReportingCatalogFallback(): ReportingCatalog {
       supportsCustomTitle: true,
     },
     vmInventoryExport: null,
+    backupHealthAvailable: false,
   };
 }
 
@@ -284,6 +286,7 @@ export function parseReportingCatalog(input: unknown): ReportingCatalog {
     lockedState: parseReportingLockedStateDefinition(candidate.lockedState),
     guidance: parseReportingGuidanceDefinition(candidate.guidance),
     performanceReport: parseReportingPerformanceReportDefinition(candidate.performanceReport),
+    backupHealthAvailable: candidate.backupHealthAvailable === true,
     vmInventoryExport:
       candidate.vmInventoryExport === null
         ? null

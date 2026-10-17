@@ -25,6 +25,7 @@ const (
 	ReportScheduleKindResources    = "resources"
 	ReportScheduleKindPatrolDigest = "patrol_digest"
 	ReportScheduleKindVMInventory  = "vm_inventory"
+	ReportScheduleKindBackupHealth = "backup_health"
 
 	ReportScheduleDeliveryEmail = "email"
 	ReportScheduleDeliveryDisk  = "disk"
@@ -43,30 +44,32 @@ type ReportScheduleStore struct {
 }
 
 type ReportSchedule struct {
-	ID                 string                 `json:"id"`
-	Name               string                 `json:"name"`
-	Enabled            bool                   `json:"enabled"`
-	Kind               string                 `json:"kind,omitempty"`
-	Cadence            ReportScheduleCadence  `json:"cadence"`
-	Scope              ReportScheduleScope    `json:"scope"`
-	Window             string                 `json:"window,omitempty"`
-	Format             string                 `json:"format"`
-	Delivery           ReportScheduleDelivery `json:"delivery"`
-	RetentionCount     int                    `json:"retention_count,omitempty"`
-	LastRunAt          *time.Time             `json:"last_run_at,omitempty"`
-	LastRunStatus      string                 `json:"last_run_status,omitempty"`
-	LastError          string                 `json:"last_error,omitempty"`
-	LastDeliveryStatus string                 `json:"last_delivery_status,omitempty"`
-	LastReportPath     string                 `json:"last_report_path,omitempty"`
-	LastSuccessAt      *time.Time             `json:"last_success_at,omitempty"`
-	RunAttempts        int                    `json:"run_attempts,omitempty"`
-	RetryAt            *time.Time             `json:"retry_at,omitempty"`
-	RunWindowEnd       *time.Time             `json:"run_window_end,omitempty"`
-	RunManual          bool                   `json:"run_manual,omitempty"`
-	NextRunAt          *time.Time             `json:"next_run_at,omitempty"`
-	LastOccurrenceKey  string                 `json:"last_occurrence_key,omitempty"`
-	CreatedAt          time.Time              `json:"created_at"`
-	UpdatedAt          time.Time              `json:"updated_at"`
+	ID                    string                 `json:"id"`
+	Name                  string                 `json:"name"`
+	Enabled               bool                   `json:"enabled"`
+	Kind                  string                 `json:"kind,omitempty"`
+	Cadence               ReportScheduleCadence  `json:"cadence"`
+	Scope                 ReportScheduleScope    `json:"scope"`
+	Window                string                 `json:"window,omitempty"`
+	Format                string                 `json:"format"`
+	Delivery              ReportScheduleDelivery `json:"delivery"`
+	RetentionCount        int                    `json:"retention_count,omitempty"`
+	LastRunAt             *time.Time             `json:"last_run_at,omitempty"`
+	LastRunStatus         string                 `json:"last_run_status,omitempty"`
+	LastError             string                 `json:"last_error,omitempty"`
+	LastDeliveryStatus    string                 `json:"last_delivery_status,omitempty"`
+	LastReportPath        string                 `json:"last_report_path,omitempty"`
+	LastReportDataState   string                 `json:"last_report_data_state,omitempty"`
+	LastReportDataMessage string                 `json:"last_report_data_message,omitempty"`
+	LastSuccessAt         *time.Time             `json:"last_success_at,omitempty"`
+	RunAttempts           int                    `json:"run_attempts,omitempty"`
+	RetryAt               *time.Time             `json:"retry_at,omitempty"`
+	RunWindowEnd          *time.Time             `json:"run_window_end,omitempty"`
+	RunManual             bool                   `json:"run_manual,omitempty"`
+	NextRunAt             *time.Time             `json:"next_run_at,omitempty"`
+	LastOccurrenceKey     string                 `json:"last_occurrence_key,omitempty"`
+	CreatedAt             time.Time              `json:"created_at"`
+	UpdatedAt             time.Time              `json:"updated_at"`
 }
 
 type ReportScheduleCadence struct {

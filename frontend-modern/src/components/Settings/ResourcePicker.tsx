@@ -33,7 +33,8 @@ export interface SelectedResource {
 }
 
 interface ResourcePickerProps {
-  maxSelection?: number;
+  maxSelection?: number | null;
+  resourceTypes?: ResourceType[];
   selected: Accessor<SelectedResource[]>;
   onSelectionChange: (items: SelectedResource[]) => void;
 }
@@ -43,18 +44,32 @@ export function ResourcePicker(props: ResourcePickerProps) {
   const [search, setSearch] = createSignal('');
   const [typeFilter, setTypeFilter] = createSignal<TypeFilter>('all');
   const [tagFilter, setTagFilter] = createSignal('');
-  const maxSelection = () => props.maxSelection ?? DEFAULT_MAX_SELECTION;
+  const maxSelection = () =>
+    props.maxSelection === null
+      ? Number.POSITIVE_INFINITY
+      : (props.maxSelection ?? DEFAULT_MAX_SELECTION);
+
+  // Filter to reportable resource types across infrastructure, workloads, storage, and recovery.
+  const reportableResources = createMemo(() => {
+    return resources().filter(
+      (r) =>
+        REPORTABLE_RESOURCE_TYPES.has(r.type) &&
+        (!props.resourceTypes || props.resourceTypes.includes(r.type)),
+    );
+  });
   const typeFilterOptions = createMemo<FilterOption<TypeFilter>[]>(() =>
-    RESOURCE_PICKER_TYPE_FILTERS.map((type) => ({
+    RESOURCE_PICKER_TYPE_FILTERS.filter(
+      (type) =>
+        !props.resourceTypes ||
+        type === 'all' ||
+        reportableResources().some((resource) =>
+          matchesReportableResourceTypeFilter(resource, type),
+        ),
+    ).map((type) => ({
       value: type,
       label: getResourcePickerTypeFilterLabel(type),
     })),
   );
-
-  // Filter to reportable resource types across infrastructure, workloads, storage, and recovery.
-  const reportableResources = createMemo(() => {
-    return resources().filter((r) => REPORTABLE_RESOURCE_TYPES.has(r.type));
-  });
 
   // Apply filters
   const filteredResources = createMemo(() => {
@@ -191,7 +206,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
           <Show
             when={reportableResources().length > 0}
             fallback={
-              <div class="p-8 text-center text-slate-400">
+              <div class="p-8 text-center text-muted">
                 <p class="text-sm">{getResourcePickerEmptyState(false).title}</p>
                 <p class="text-xs mt-1 text-muted">
                   {getResourcePickerEmptyState(false).description}
@@ -202,7 +217,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
             <Show
               when={filteredResources().length > 0}
               fallback={
-                <div class="p-6 text-center text-slate-400 text-sm">
+                <div class="p-6 text-center text-muted text-sm">
                   {getResourcePickerEmptyState(true).title}
                 </div>
               }
@@ -217,13 +232,16 @@ export function ResourcePicker(props: ResourcePickerProps) {
                   {(resource) => {
                     const badge = getResourceTypePresentation(resource.type) || {
                       label: resource.type,
-                      badgeClasses: 'bg-slate-500 text-slate-400',
+                      badgeClasses: 'bg-surface-alt text-base-content',
                     };
                     return (
                       <button
-                        class={`w-full flex items-start sm:items-center gap-3 px-3 py-2 text-left transition-colors border-b border-border last:border-b-0 ${
-                          isSelected(resource.id) ? 'bg-blue-600' : 'hover:bg-slate-800'
+                        class={`w-full flex items-start sm:items-center gap-3 px-3 py-2 text-left text-base-content transition-colors border-b border-border last:border-b-0 ${
+                          isSelected(resource.id)
+                            ? 'bg-blue-50 dark:bg-blue-900/25'
+                            : 'hover:bg-surface-hover'
                         }`}
+                        aria-pressed={isSelected(resource.id)}
                         onClick={() => toggleResource(resource)}
                       >
                         {/* Checkbox */}
@@ -231,7 +249,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                           class={`w-4 h-4 rounded border shrink-0 flex items-center justify-center ${
                             isSelected(resource.id)
                               ? 'bg-blue-600 border-blue-600'
-                              : 'border-slate-600'
+                              : 'border-base-content/40'
                           }`}
                         >
                           <Show when={isSelected(resource.id)}>
@@ -261,7 +279,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                         {/* Name and ID */}
                         <div class="flex-1 min-w-0">
                           <div
-                            class="text-sm text-white sm:truncate wrap-break-word"
+                            class="text-sm text-base-content sm:truncate wrap-break-word"
                             title={getPreferredInfrastructureDisplayName(resource)}
                           >
                             {getPreferredInfrastructureDisplayName(resource)}
@@ -276,7 +294,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                             <Show when={resource.tags && resource.tags.length > 0}>
                               <For each={resource.tags?.slice(0, 2)}>
                                 {(tag) => (
-                                  <span class="text-xs px-1.5 py-0.5 rounded-sm bg-surface-hover text-slate-300">
+                                  <span class="text-xs px-1.5 py-0.5 rounded-sm bg-surface-alt text-base-content">
                                     {tag}
                                   </span>
                                 )}
@@ -302,7 +320,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                           <div class="hidden sm:flex gap-1 shrink-0">
                             <For each={resource.tags?.slice(0, 2)}>
                               {(tag) => (
-                                <span class="text-xs px-1.5 py-0.5 rounded-sm bg-surface-hover text-slate-300">
+                                <span class="text-xs px-1.5 py-0.5 rounded-sm bg-surface-alt text-base-content">
                                   {tag}
                                 </span>
                               )}
@@ -351,22 +369,26 @@ export function ResourcePicker(props: ResourcePickerProps) {
         <span class="text-xs sm:text-sm text-muted">
           {props.selected().length} selected
           <Show when={props.selected().length >= maxSelection()}>
-            <span class="text-amber-400 ml-1">(max)</span>
+            <span class="text-amber-600 dark:text-amber-400 ml-1">(max)</span>
           </Show>
         </span>
       </div>
 
       {/* Selected summary chips */}
       <Show when={props.selected().length > 0}>
-        <div class="flex flex-wrap gap-1.5">
+        <div
+          class="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto py-1"
+          role="group"
+          aria-label="Selected resources"
+        >
           <For each={props.selected()}>
             {(item) => (
-              <span class="inline-flex items-center gap-1 pl-2 pr-1 py-1 rounded-md bg-blue-600 border border-blue-500 text-sm text-blue-300">
-                {item.name}
+              <span class="inline-flex max-w-full items-center gap-1 pl-2 pr-1 py-1 rounded-md bg-blue-50 dark:bg-blue-900/25 border border-blue-200 dark:border-blue-800 text-sm text-base-content">
+                <span class="min-w-0 break-all">{item.name}</span>
                 <Button
                   variant="ghost"
                   size="xs"
-                  class="min-h-0 p-0.5 text-blue-300 hover:bg-blue-500"
+                  class="min-h-0 shrink-0 p-0.5 text-base-content"
                   onClick={() => removeSelected(item.id)}
                   aria-label={`Remove ${item.name}`}
                   title={`Remove ${item.name}`}

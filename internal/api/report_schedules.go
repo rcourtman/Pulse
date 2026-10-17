@@ -329,6 +329,8 @@ func copyReportScheduleRunState(dst *config.ReportSchedule, src config.ReportSch
 	dst.LastError = src.LastError
 	dst.LastDeliveryStatus = src.LastDeliveryStatus
 	dst.LastReportPath = src.LastReportPath
+	dst.LastReportDataState = src.LastReportDataState
+	dst.LastReportDataMessage = src.LastReportDataMessage
 	dst.LastSuccessAt = src.LastSuccessAt
 	dst.RunAttempts = src.RunAttempts
 	dst.RetryAt = src.RetryAt
@@ -392,6 +394,8 @@ func (h *ReportingHandlers) executeReportSchedule(ctx context.Context, persisten
 	schedule.RunAttempts++
 	schedule.LastRunStatus = config.ReportScheduleLastRunRunning
 	schedule.LastDeliveryStatus = ""
+	schedule.LastReportDataState = ""
+	schedule.LastReportDataMessage = ""
 	schedule.LastError = ""
 	schedule.RetryAt = nil
 	schedule.LastRunAt = &now
@@ -434,6 +438,13 @@ func (h *ReportingHandlers) prepareReportSchedule(ctx context.Context, schedule 
 	}
 	switch schedule.Kind {
 	case config.ReportScheduleKindResources:
+	case config.ReportScheduleKindBackupHealth:
+		for _, resource := range schedule.Scope.Resources {
+			kind := reporting.CanonicalResourceType(resource.ResourceType)
+			if kind != "vm" && kind != "system-container" {
+				return schedule, reportScheduleValidationError{code: "invalid_scope", message: "Backup health reports support VMs and containers"}
+			}
+		}
 	case config.ReportScheduleKindVMInventory:
 		if schedule.Format == "" {
 			schedule.Format = string(reporting.DescribeVMInventoryExport().Format)
@@ -451,7 +462,7 @@ func (h *ReportingHandlers) prepareReportSchedule(ctx context.Context, schedule 
 		}
 		return prepared, h.validateEnabledReportDelivery(ctx, prepared)
 	default:
-		return schedule, reportScheduleValidationError{code: "invalid_kind", message: "Schedule kind must be resources, vm_inventory or patrol_digest"}
+		return schedule, reportScheduleValidationError{code: "invalid_kind", message: "Schedule kind must be resources, backup_health, vm_inventory or patrol_digest"}
 	}
 	if schedule.Format == "" {
 		schedule.Format = config.ReportScheduleFormatPDF
@@ -476,6 +487,10 @@ func (h *ReportingHandlers) prepareReportSchedule(ctx context.Context, schedule 
 	}
 	if schedule.Kind == config.ReportScheduleKindResources {
 		if err := h.validateReportScheduleScope(ctx, schedule.Scope); err != nil {
+			return schedule, err
+		}
+	} else if schedule.Kind == config.ReportScheduleKindBackupHealth {
+		if err := validateReportScheduleScopeFields(schedule.Scope); err != nil {
 			return schedule, err
 		}
 	}
@@ -516,6 +531,20 @@ func (h *ReportingHandlers) validateReportScheduleScope(ctx context.Context, sco
 	if len(scope.Resources) > definition.MultiResourceMax {
 		return reportScheduleValidationError{code: "too_many_resources", message: fmt.Sprintf("Maximum %d resources allowed", definition.MultiResourceMax)}
 	}
+	if err := validateReportScheduleScopeFields(scope); err != nil {
+		return err
+	}
+	if len(scope.Tags) > 0 {
+		if _, err := h.resolveReportScheduleResources(ctx, GetOrgID(ctx), scope); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Field validity is shared; scope cardinality and resolution belong to the
+// report kind. Backup health intentionally supports empty and large estates.
+func validateReportScheduleScopeFields(scope config.ReportScheduleScope) error {
 	for _, res := range scope.Resources {
 		if !validResourceID.MatchString(res.ResourceID) || len(res.ResourceID) > 128 {
 			return reportScheduleValidationError{code: "invalid_resource_id", message: "Resource IDs must match [a-zA-Z0-9._:-]+ and be 128 characters or fewer"}
@@ -527,11 +556,6 @@ func (h *ReportingHandlers) validateReportScheduleScope(ctx context.Context, sco
 	for _, tag := range scope.Tags {
 		if len(tag) > 64 || strings.ContainsAny(tag, "\r\n\t") {
 			return reportScheduleValidationError{code: "invalid_tag", message: "Tags must be 64 characters or fewer and cannot contain control characters"}
-		}
-	}
-	if len(scope.Tags) > 0 {
-		if _, err := h.resolveReportScheduleResources(ctx, GetOrgID(ctx), scope); err != nil {
-			return err
 		}
 	}
 	return nil
@@ -656,6 +680,8 @@ func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *
 		return result, markReportScheduleFailed(schedule, now, err)
 	}
 	result.path = path
+	schedule.LastReportDataState = report.DataState
+	schedule.LastReportDataMessage = report.DataMessage
 	schedule.LastReportPath = path
 	schedule.LastDeliveryStatus = "saved"
 
@@ -676,6 +702,9 @@ func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *
 }
 
 func (h *ReportingHandlers) generateScheduledFileReport(ctx context.Context, schedule config.ReportSchedule, now time.Time, manual bool) (generatedMultiReport, error) {
+	if schedule.Kind == config.ReportScheduleKindBackupHealth {
+		return h.generateBackupHealthReport(ctx, schedule, now, manual)
+	}
 	orgID := GetOrgID(ctx)
 	if schedule.Kind == config.ReportScheduleKindVMInventory {
 		snapshot, ok := h.getReportingEnrichmentSnapshot(ctx, orgID)
