@@ -562,8 +562,8 @@ type stubPVEClientLXCRRD struct {
 }
 
 // GetLXCRRDData tracks lookups of the guest RRD endpoint. It is intentionally
-// not part of PVEClientInterface anymore: guest rrddata carries only the
-// cache-inclusive mem/maxmem columns (#1634), so the LXC memory path must not
+// not part of PVEClientInterface anymore: guest rrddata carries only the same
+// mem/maxmem columns as the listing (#1634), so the LXC memory path must not
 // consult it.
 func (s *stubPVEClientLXCRRD) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
 	s.lxcRRDCalls++
@@ -780,9 +780,9 @@ func TestBuildContainerFromClusterResource_AppliesAgentLXCFilesystems(t *testing
 }
 
 // Issue #2148: a Proxmox LXC with a correlated, online Pulse agent must report
-// the agent's own memory sample instead of the cache-inclusive
-// cluster/resources fallback, which can badly under-report shared-memory
-// workloads (mirrors the #1962 VM behaviour).
+// the agent's own memory sample instead of the cluster/resources fallback,
+// whose page-cache subtraction also removes shared memory and tmpfs and so can
+// badly under-report shared-memory workloads (mirrors the #1962 VM behaviour).
 func TestIssue2148LXCPrefersLinkedAgentMemoryOverClusterResources(t *testing.T) {
 	t.Parallel()
 

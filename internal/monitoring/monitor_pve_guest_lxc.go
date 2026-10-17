@@ -13,12 +13,13 @@ import (
 func (m *Monitor) calculateLXCMemory(
 	res proxmox.ClusterResource,
 ) (uint64, uint64, string, VMMemoryRaw) {
-	// The cluster resources API returns mem from cgroup which includes
-	// cache/buffers (inflated). PVE guest RRD offers nothing better: it
-	// carries only the same cache-inclusive mem/maxmem columns — the
-	// cache-aware memused/memavailable columns exist only in node RRD — so
-	// the listing value is the best evidence available for running
-	// containers (issue #1634).
+	// The cluster resources mem for a container is its cgroup usage with page
+	// cache already subtracted: PVE::CGroup::get_memory_stat reports
+	// memory.current - memory.stat file (cgroup v2) or usage_in_bytes -
+	// total_cache (v1), and pvestatd feeds that vmstatus value to the listing.
+	// It is a cache-excluded reading against the container's own limit, unlike
+	// a QEMU guest's listing mem. Guest RRD carries the same mem/maxmem pair,
+	// so the listing value is the evidence for running containers (issue #1634).
 	memTotal := res.MaxMem
 	memUsed := uint64(0)
 	memorySource := "powered-off"

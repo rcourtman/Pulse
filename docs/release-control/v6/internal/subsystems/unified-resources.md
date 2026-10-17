@@ -207,6 +207,14 @@ absence and refreshed rows in both views. This shared interpretation changes
 no registry wire format, metric selection, guest collection, History, correlation,
 identity or permission. AI query projections own their additional evidence fields.
 
+`QualifyGuestMemoryForKind` takes the Proxmox guest kind because one source name
+covers two accountings: an LXC's `cluster-resources` reading already excludes page
+cache and establishes pressure when current, while a QEMU guest's does not.
+`GuestMemoryEvidenceForResource` derives the kind from the resource type
+(system-container versus VM). `QualifyGuestMemory` keeps the conservative QEMU
+reading for callers that do not know the type. `TestGuestMemoryClusterResourcesIsTypeAware`
+covers both kinds, retained readings and the other cache-inclusive sources.
+
 ### Selected guest memory observation in typed read state
 
 Web's shared memory presentation treats the historical `powered-off` source as

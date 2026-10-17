@@ -533,7 +533,10 @@ func TestCollectProxmoxInvalidListCannotBecomeCompleteEmpty(t *testing.T) {
 	}{
 		{"header only", header, true},
 		{"all stopped", header + "100 stopped - web\n", true},
-		{"empty output", "", false},
+		// pct list prints nothing, not even the header, on a node with no
+		// containers (pve-container src/PVE/CLI/pct.pm returns before the
+		// header printf), so empty output is the vendor's empty inventory.
+		{"empty output", "", true},
 		{"unrecognised output", "pmxcfs unavailable\n", false},
 		{"headerless rows", "100 running - web\n", false},
 		{"malformed header", "VMID Status\n", false},
