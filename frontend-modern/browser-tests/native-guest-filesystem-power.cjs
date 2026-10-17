@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
 const root = '/workspace/frontend-modern';
 const narrowOnly = process.argv.includes('--narrow-only');
-const output = '/workspace/tmp/native-guest-filesystem-power/' + (narrowOnly ? 'browser-narrow' : 'browser-all');
+const output = '/workspace/tmp/native-guest-filesystem-power/' + (narrowOnly ? 'browser-narrow-final' : 'browser-all');
 const origin = 'http://127.0.0.1:5361';
 const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const point = (timestamp, value) => ({timestamp, value, min: value, max: value});
@@ -88,7 +88,8 @@ const settle = page => page.evaluate(async () => {
       const row = page.locator('[data-guest-id]');
       await row.waitFor();
       const diskCell = row.locator('[data-workload-col="disk"]');
-      assert.match(await diskCell.innerText(), /Last known/);
+      const retainedLabel = width < 768 ? /Prior/ : /Last known/;
+      assert.match(await diskCell.innerText(), retainedLabel);
       assert.match(await diskCell.getAttribute('title'), /VM running state is unconfirmed/);
       await capture('workload-row', row);
       if (width < 768) await row.getByText('backup-guest', {exact: true}).tap();
@@ -112,7 +113,7 @@ const settle = page => page.evaluate(async () => {
       const apply = async value => {state = value; await page.evaluate(() => window.loadSnapshot()); await settle(page);};
       for (const power of ['starting', 'stopping', 'private-unrecognised-state']) {
         await apply({power});
-        assert.match(await diskCell.innerText(), /Last known/);
+        assert.match(await diskCell.innerText(), retainedLabel);
         assert.match(await details.innerText(), /VM running state is unconfirmed/);
         assert.doesNotMatch(await details.innerText(), /private-unrecognised-state/);
         assert.equal(await chart.locator('[data-history-current="disk"]').count(), 0);
@@ -132,6 +133,7 @@ const settle = page => page.evaluate(async () => {
       assert.equal(await details.getByRole('progressbar', {name: 'Filesystem /data utilization'}).getAttribute('aria-valuenow'), '0');
       assert.match(await chart.locator('[data-history-current="disk"]').innerText(), /0.0%/);
       assert.doesNotMatch(await details.innerText(), /VM running state is unconfirmed/);
+      assert.doesNotMatch(await diskCell.innerText(), /Prior|Last known/);
       assert.match(await settings.innerText(), /95/);
       await capture('fresh-zero', details);
       record.observations.push('HTTP -> useWorkloads -> same-open row, filesystem details, History and alert settings qualify unconfirmed native values; explicit error, capacity-only, independent agent/staleness and fresh zero controls passed. Saved threshold remains 95%.');
