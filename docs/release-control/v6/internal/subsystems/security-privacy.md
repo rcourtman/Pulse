@@ -483,7 +483,7 @@ administrator or settings-scope checks, expose queue contents to new callers, or
 change tenant selection. Missing owners fail with 503 rather than dereferencing
 nil.
 
-The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege. A manager of that organisation additionally receives the org-bound infrastructureRead, availabilityRead and reportingRead capabilities, because their routes admit org managers through RequireOrgAdmin / ensureOrgAdminSession and read only that organisation's state (reports read only its inventory and metrics store, and reportingRead still requires read:nodes); this never extends to authentication, SSO, API tokens, users, roles, audit, relay, system, updates, logs, diagnostics or billing surfaces, whose routes use ensureAdminSession and admit instance administrators only.
+The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege. A manager of that organisation additionally receives the org-bound infrastructureRead, availabilityRead and reportingRead capabilities, because their routes admit org managers through RequireOrgAdmin / ensureOrgAdminSession and read only that organisation's state (reports read only its inventory and metrics store, and reportingRead still requires read:nodes); this never extends to authentication, SSO, API tokens, users, roles, audit, relay, system, updates, logs, diagnostics or billing surfaces, whose routes use ensureAdminSession and admit instance administrators only, and refuse an API token bound to a tenant organization whatever its scopes.
 
 API token scope copy must match runtime authority. `ai:chat` covers Assistant
 conversation, model selection, sessions, and knowledge reads only. Knowledge
@@ -3385,7 +3385,14 @@ instance RBAC admin grant, whichever organization the request names. It used
 to admit any manager of the request's organization, which on a multi-tenant
 install let an organization owner rotate the instance administrator's API
 token and receive its secret, widen token scopes, change SSO providers and
-system settings, apply updates and restart the service. Routes that act only on
+system settings, apply updates and restart the service. API tokens follow the
+same boundary: `ensureAdminSession` and `ensureSettingsScope` refuse a token
+bound to any organization other than the default one (`tokenActsForInstance`)
+whatever its scopes. Before that, an org-bound `settings:write` token resolved
+to its own organization without naming it, passed the tenant middleware and
+reached system settings, SSO providers, token management, relay, log level,
+updates and diagnostics. `internal/api/org_bound_token_authority_test.go` holds
+the token matrix. Routes that act only on
 the request organization opt in through `RequireOrgAdmin`,
 `ensureOrgAdminSession` or `ensureOrgSettingsWriteScope`; every other route fails
 closed. `internal/api/org_admin_session_authority_test.go` holds the session

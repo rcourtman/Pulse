@@ -20,8 +20,10 @@ import (
 
 	gorillaws "github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestReleaseNoteImageRouteAuthorization(t *testing.T) {
@@ -852,5 +854,59 @@ func TestRegisteredTestNotificationStaysWithRequestOrganization(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The test notification reaches only the request organization's clients, so
+// the route is org-bound: a manager of that organization may send it, a viewer
+// may not.
+func TestRegisteredTestNotificationAdmitsRequestOrganizationManagers(t *testing.T) {
+	SetMultiTenantEnabled(true)
+	t.Cleanup(func() { SetMultiTenantEnabled(false) })
+	t.Setenv("PULSE_DEV", "true")
+
+	hashed, err := internalauth.HashPassword("Password!1")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	dataDir := t.TempDir()
+	cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir, AuthUser: "platform-admin", AuthPass: hashed}
+	mtp := config.NewMultiTenantPersistence(dataDir)
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          "org-a",
+		DisplayName: "Org A",
+		OwnerUserID: "org-owner",
+		Members: []models.OrganizationMember{
+			{UserID: "org-owner", Role: models.OrgRoleOwner, AddedAt: time.Now()},
+			{UserID: "org-viewer", Role: models.OrgRoleViewer, AddedAt: time.Now()},
+		},
+	}); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+	hub := websocket.NewHub(nil)
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+	monitors := monitoring.NewMultiTenantMonitor(cfg, mtp, nil)
+	t.Cleanup(monitors.Stop)
+	router := NewRouter(cfg, nil, monitors, hub, nil, "1.0.0")
+
+	for _, tc := range []struct {
+		user   string
+		status int
+	}{
+		{"org-owner", http.StatusOK},
+		{"org-viewer", http.StatusForbidden},
+	} {
+		session := "test-notification-" + tc.user + "-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+		GetSessionStore().CreateSession(session, time.Hour, "agent", "127.0.0.1", tc.user)
+		req := httptest.NewRequest(http.MethodPost, "/api/test-notification", nil)
+		req.Header.Set("X-CSRF-Token", generateCSRFToken(session))
+		req.Header.Set("X-Pulse-Org-ID", "org-a")
+		req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: session})
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != tc.status {
+			t.Fatalf("%s test notification status = %d, want %d: %s", tc.user, rec.Code, tc.status, rec.Body.String())
+		}
 	}
 }

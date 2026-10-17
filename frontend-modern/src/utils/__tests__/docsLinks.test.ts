@@ -247,6 +247,19 @@ describe('docsLinks', () => {
     );
   });
 
+  it('documents instance administration refusing organization-bound tokens', () => {
+    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    expect(api).toContain('tenant organization gets `403` whatever its scopes');
+    expect(api).toContain('Token management is instance administration');
+    const guard = readFileSync(
+      path.join(repoRoot, 'internal', 'api', 'security_setup_fix.go'),
+      'utf8',
+    );
+    expect(guard).toContain(
+      'ensureTokenSettingsScope(w, req, record, scope) && refuseOrgBoundToken(w, req, record)',
+    );
+  });
+
   it('documents network discovery without the removed AI Discovery routes', () => {
     const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     expect(api).toContain('`POST /api/discover` (admin, `settings:write`)');

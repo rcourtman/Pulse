@@ -4439,6 +4439,9 @@ agent link, unlink, uninstall, configuration, Docker and Kubernetes management,
 agent profiles and fleet diagnostics) declare that authority explicitly with
 `RequireOrgAdmin`. `RequireAdmin` now admits instance administrators only, so
 an agent route that does not opt in is closed to organization owners.
+Tokens follow the same split: a token bound to the organization keeps these
+routes with the listed scope, while `RequireAdmin` and the instance settings
+checks refuse it whatever its scopes.
 
 The same owner can also build reports on the hosts and agents that organization
 enrolled: the `/api/admin/reports/*` routes use `ensureOrgAdminSession`, and a

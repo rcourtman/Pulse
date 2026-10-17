@@ -145,8 +145,15 @@ func isRunningAsRoot() bool {
 // that serves only the request's own organization opts into their authority
 // explicitly with ensureOrgAdminSession or RequireOrgAdmin; the default is
 // instance administration, so a route that forgets to choose fails closed.
-// Requests without a session cookie are left to the caller's other checks.
+//
+// API tokens follow the same boundary. A token bound to a tenant organization
+// acts for that organization, like its owner, so it is refused here whatever
+// scopes it holds; the route's scope check stays with the caller. Requests
+// without a token or a session cookie are left to the caller's other checks.
 func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+	if record := getAPITokenRecordFromRequest(req); record != nil && !refuseOrgBoundToken(w, req, record) {
+		return false
+	}
 	cookie, err := readSessionCookie(req)
 	if err != nil || cookie.Value == "" || !ValidateSession(cookie.Value) {
 		return true
@@ -288,20 +295,12 @@ func sessionUserHasRBACAdminGrant(username string) bool {
 	return false
 }
 
+// ensureSettingsScope guards instance administration. A token caller needs the
+// scope and instance-wide authority (refuseOrgBoundToken); a session caller
+// must pass ensureAdminSession.
 func ensureSettingsScope(cfg *config.Config, w http.ResponseWriter, req *http.Request, scope string) bool {
-	record := getAPITokenRecordFromRequest(req)
-	if record != nil {
-		if record.HasScope(scope) {
-			return true
-		}
-
-		log.Warn().
-			Str("token_id", record.ID).
-			Str("path", req.URL.Path).
-			Str("required_scope", scope).
-			Msg("API token missing required settings scope for privileged operation")
-		respondMissingScope(w, scope)
-		return false
+	if record := getAPITokenRecordFromRequest(req); record != nil {
+		return ensureTokenSettingsScope(w, req, record, scope) && refuseOrgBoundToken(w, req, record)
 	}
 
 	if !ensureAdminSession(cfg, w, req) {
@@ -312,13 +311,42 @@ func ensureSettingsScope(cfg *config.Config, w http.ResponseWriter, req *http.Re
 }
 
 // ensureOrgSettingsScope is ensureSettingsScope for routes that act only on
-// the request organization's own state: token callers need the scope, and
-// session callers pass ensureOrgAdminSession instead of ensureAdminSession.
+// the request organization's own state: token callers need only the scope,
+// and session callers pass ensureOrgAdminSession instead of ensureAdminSession.
 func ensureOrgSettingsScope(cfg *config.Config, w http.ResponseWriter, req *http.Request, scope string) bool {
 	if record := getAPITokenRecordFromRequest(req); record != nil {
-		return ensureSettingsScope(cfg, w, req, scope)
+		return ensureTokenSettingsScope(w, req, record, scope)
 	}
 	return ensureOrgAdminSession(cfg, w, req)
+}
+
+func ensureTokenSettingsScope(w http.ResponseWriter, req *http.Request, record *config.APITokenRecord, scope string) bool {
+	if record.HasScope(scope) {
+		return true
+	}
+
+	log.Warn().
+		Str("token_id", record.ID).
+		Str("path", req.URL.Path).
+		Str("required_scope", scope).
+		Msg("API token missing required settings scope for privileged operation")
+	respondMissingScope(w, scope)
+	return false
+}
+
+// refuseOrgBoundToken admits a token on an instance route only when it acts
+// for the instance (tokenActsForInstance). It answers 403 otherwise.
+func refuseOrgBoundToken(w http.ResponseWriter, req *http.Request, record *config.APITokenRecord) bool {
+	if tokenActsForInstance(record) {
+		return true
+	}
+
+	log.Warn().
+		Str("token_id", record.ID).
+		Str("path", req.URL.Path).
+		Msg("Organization-bound API token refused for instance administration")
+	http.Error(w, "Admin privileges required", http.StatusForbidden)
+	return false
 }
 
 func ensureOrgSettingsWriteScope(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
@@ -744,10 +772,17 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 }
 
 // tokenHasInstanceWideAuthority reports whether a token holds full-access scope
-// and is not bound to any organization other than the default one. OrgIDs
-// takes precedence over OrgID, as it does for tenant access checks.
+// and acts for the instance (tokenActsForInstance).
 func tokenHasInstanceWideAuthority(record *config.APITokenRecord) bool {
-	if record == nil || !record.HasScope(config.ScopeWildcard) {
+	return record != nil && record.HasScope(config.ScopeWildcard) && tokenActsForInstance(record)
+}
+
+// tokenActsForInstance reports whether a token is not bound to any
+// organization other than the default one. Only such a token may reach
+// instance administration, with whatever scope the route requires. OrgIDs
+// takes precedence over OrgID, as it does for tenant access checks.
+func tokenActsForInstance(record *config.APITokenRecord) bool {
+	if record == nil {
 		return false
 	}
 	isDefault := func(orgID string) bool {

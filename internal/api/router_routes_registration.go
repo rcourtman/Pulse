@@ -476,8 +476,9 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/auto-unregister", r.configHandlers.HandleAutoUnregister)
 	// Discovery endpoint
 	// Test endpoint for WebSocket notifications
-	// SECURITY: Require settings:write scope for test notifications to prevent unauthenticated broadcasting
-	r.mux.HandleFunc("/api/test-notification", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
+	// SECURITY: Require settings:write scope for test notifications to prevent unauthenticated broadcasting.
+	// The event reaches only the request organization's clients, so its managers and tokens may send it.
+	r.mux.HandleFunc("/api/test-notification", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
