@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "6967c0ddc0af8fe02b42a09919cf5e15166f23ca",
+  "verified_at": "2026-10-17T19:46:01.859Z",
+  "result": "passed",
+  "verification_scope": "Fixed replication-format error copy through the actual REST reader, query owner, direct-link page and table. Not native replication, guest or alert recovery.",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "79dd67b9ff2b5229ce34aea6980097d0a119fe54db1fd4a17290e3cb629e1bd2"
+  },
+  "routes": [
+    "/browser-tests/replication-inventory.html -> /proxmox/replication, production ProxmoxPageSurface and fetchReplicationJobs with safe synthetic HTTP only"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "A malformed HTTP 200 replication payload remains an explicit Could not load replication jobs state, with the fixed three-sentence explanation. No false empty inventory, hidden direct link or raw response body is shown.",
+    "Keyboard/touch Refresh replaces the malformed snapshot through GET and renders distinct Healthy, Failed and Disabled jobs without changing validation or state handling.",
+    "All four captures were opened using native view_image. The full error copy and Refresh fit at desktop and 320px dark/touch; compact recovered table labels remain readable without horizontal page overflow."
+  ],
+  "interactions": [
+    "Desktop Refresh was focused and activated with Enter; narrow WebKit used a trusted touch tap.",
+    "The same open page recovered from malformed payload to three synthetic jobs without reload or a mutating request."
+  ],
+  "browsers": [
+    "Playwright 1.56.1 / Chromium 141.0.7390.37",
+    "Playwright 1.56.1 / WebKit 26.0"
+  ],
+  "source_binding": {
+    "source": "6967c0ddc0af8fe02b42a09919cf5e15166f23ca",
+    "producer": "fetchReplicationJobs",
+    "consumer": "ProxmoxPageSurface / ProxmoxReplicationTable",
+    "runtime_sha256": "79dd67b9ff2b5229ce34aea6980097d0a119fe54db1fd4a17290e3cb629e1bd2"
+  },
+  "execution_limits": [
+    "Browser helper exit 0 with awaited browser/server closes and no page exceptions. Both contexts logged Active alert REST recovery failed from the unrelated synthetic active-alert response; those console errors are retained, not a clean-console or alert-recovery claim.",
+    "No provider, replication, QGA, backup or guest action, installed recovery, protected landing or release claim. This is the new punctuation correction only; the original filesystem browser protocol was not replayed."
+  ],
+  "retained_evidence": [
+    "REPLICATION-BROWSER.json",
+    "PIXEL-REVIEW.json",
+    "replication-browser.log",
+    "replication-copy-driver.cjs",
+    "RECEIPTS.md"
+  ]
+}
