@@ -26,6 +26,15 @@ Secondary-topic classification still runs independently. Preserving version
 labels must not hide a new symptom or restore a completed decomposition task
 on an unrelated edit. Retest and human-ownership labels remain Community-owned.
 
+A comment or unrelated edit can overtake the event that declared a new topic.
+When that same topic field remains in the live report, a delayed declaration
+reads the complete, issue-scoped label event history before adding its review
+signal. A removal of `needs-decomposition` at or after the declaration preserves
+Community's disposition; an earlier removal cannot dispose of the new topic.
+Missing timestamps or failed history reads do not authorise a delayed addition.
+This remains a review signal, not a disposition, and the normal pre-write issue
+check still applies. Separate provider reads and writes are not atomic.
+
 ## Checks
 
 Run `npm ci --ignore-scripts` and `npm run test:triage` in this directory. The
