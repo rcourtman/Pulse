@@ -624,6 +624,27 @@ These synthetic source controls reproduce a family matching #2382's second
 operator response, not that operator's cause, the original downgrade-resolved
 regression, native appliance acceptance or release availability.
 
+### Metrics database override stays on the default organization
+
+`PULSE_METRICS_DB_PATH` names one SQLite file, so it applies only to the
+default organization's monitor. `MultiTenantMonitor.GetMonitor` clears
+`MetricsDBPath` on each non-default tenant's detached config copy after
+setting its `DataPath`, and `monitoring.New` then opens that organization's
+store at `<org data dir>/metrics.db`. Before this, the deep copy carried the
+override into every tenant and all organizations wrote to and read from one
+metrics database, so per-org charts, reports and Pulse Assistant summaries
+could return another organization's series. Keeping tenant stores inside the
+org directory also means `DeleteOrganization` removes that org's metrics with
+the rest of its data. The trade-off is that tmpfs or RAM-disk placement
+through the override covers the default org only; non-default org metrics
+stay on the data volume. The default org's override path, rollup interval and
+retention handling are unchanged. Regression coverage:
+`internal/monitoring/multi_tenant_monitor_metrics_path_test.go` sets the
+override, provisions two orgs, and proves each opens its own `metrics.db`
+and cannot read series written by the default org or by the other org.
+`TestMetricsStoreRuntimeOverridesStayOnMonitorBoundary` also requires the
+clear to sit between the tenant `DataPath` assignment and `New`.
+
 ### Lightweight detached History reads
 
 Guest, node, disk and storage History readers allocate one exact-sized snapshot
@@ -5186,7 +5207,9 @@ aggregation cadence: `internal/monitoring/monitor.go` may pass the resolved
 data path, `PULSE_METRICS_DB_PATH`, and `PULSE_METRICS_ROLLUP_INTERVAL` through
 to `pkg/metrics`, but the SQLite path normalization, rollup bounds, and write
 amplification policy stay owned by the metrics store rather than by a
-monitoring-local helper.
+monitoring-local helper. The `PULSE_METRICS_DB_PATH` handoff reaches only the
+default org's monitor; non-default tenants always resolve `metrics.db` from
+their own data path.
 Install-wide telemetry counts are also monitoring-owned now. Any telemetry or
 reporting surface that claims installation totals must aggregate across the
 provisioned tenant set through the reloadable multi-tenant monitor boundary,
