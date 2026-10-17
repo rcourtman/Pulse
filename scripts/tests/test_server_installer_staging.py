@@ -31,6 +31,7 @@ stat() {
     fi
     case "$2" in
         '%u') printf '%s\n' "$owner" ;;
+        '%u %g %a') printf '%s 1000 %s\n' "$owner" "$(command stat -c '%a' -- "$path")" ;;
         '%u %a')
             [[ "$FAULT" != stat_failure ]] || return 1
             mode=$(command stat -c '%a' -- "$path") || return 1
@@ -49,10 +50,13 @@ chown() {
             ln -s "$FIXTURE/outside" "$INSTALL_DIR"
         fi
         [[ "$FAULT" == owner_readback ]] || touch "$FIXTURE/owned"
+    elif [[ "$1" == -h && "$2" == 1000:1000 && -f "$FIXTURE/owned" ]]; then
+        command rm -- "$FIXTURE/owned"
     fi
 }
 chmod() {
     [[ "$FAULT" != chmod_failure ]] || return 1
+    [[ "$FAULT" != chmod_noop ]] || return 0
     command chmod "$@"
 }
 # Treat any candidate age sweep as old enough, without touching real clocks.
@@ -87,6 +91,8 @@ class ServerInstallerStagingTest(unittest.TestCase):
             (fixture / "ancestor/install/.pulse-extract-AbC123/live-payload").write_text("keep")
             (fixture / "outside").mkdir()
             (fixture / "outside/keep").write_text("untouched")
+            original_mode = 0o700 if fault == "private_install" else 0o755
+            (fixture / "ancestor/install").chmod(original_mode)
             if fault == "final_symlink":
                 install = fixture / "ancestor/install"
                 install.rename(fixture / "old-install")
@@ -106,6 +112,8 @@ class ServerInstallerStagingTest(unittest.TestCase):
                 "mode": stat.S_IMODE(install.stat().st_mode) if install.exists() else None,
                 "payload": (install / ".pulse-extract-AbC123/live-payload").exists(),
                 "outside": (fixture / "outside/keep").read_text(),
+                "model_root_owned": (fixture / "owned").exists(),
+                "original_mode": original_mode,
             }
             return result, observation
 
@@ -120,6 +128,12 @@ class ServerInstallerStagingTest(unittest.TestCase):
         self.assertEqual(sorted(Path(line.split(" ", 2)[2]).name for line in service_chowns), [".local", "bin"])
         self.assertNotIn("pulse:pulse " + observed["install"], observed["chowns"])
 
+    def test_private_install_does_not_gain_other_account_read_or_search(self):
+        result, observed = self.exercise("private_install", flow="ownership")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(observed["mode"], 0o1770)
+        self.assertTrue(observed["payload"])
+
     def test_unsafe_ancestry_is_rejected_before_any_ownership_change(self):
         for fault in ("ancestor_owner", "ancestor_mode", "sticky_service_owner",
                       "stat_failure", "ancestor_symlink", "final_symlink",
@@ -132,12 +146,15 @@ class ServerInstallerStagingTest(unittest.TestCase):
                 self.assertEqual(observed["outside"], "untouched")
 
     def test_failed_or_substituted_parent_is_not_returned_for_staging(self):
-        for fault in ("chown_failure", "chmod_failure", "owner_readback", "swap_symlink"):
+        for fault in ("chown_failure", "chmod_failure", "chmod_noop", "owner_readback", "swap_symlink"):
             with self.subTest(fault=fault):
                 result, observed = self.exercise(fault)
                 self.assertEqual(result.returncode, 41, result.stderr)
                 self.assertIsNone(observed["parent"])
                 self.assertEqual(observed["outside"], "untouched")
+                if fault != "swap_symlink":
+                    self.assertEqual(observed["mode"], observed["original_mode"])
+                    self.assertFalse(observed["model_root_owned"])
 
 
 if __name__ == "__main__":

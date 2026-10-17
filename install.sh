@@ -3406,13 +3406,35 @@ protect_server_install_parent() {
         print_error "Pulse install directory is not a real directory; Pulse has not been stopped"
         return 1
     fi
+    local previous_owner="" previous_group="" previous_mode="" protected_mode="" facts=""
+    if ! facts=$(stat -c '%u %g %a' -- "$INSTALL_DIR"); then
+        print_error "Cannot read install directory permissions; Pulse has not been stopped"
+        return 1
+    fi
+    read -r previous_owner previous_group previous_mode <<< "$facts"
+    if [[ ! "$previous_owner" =~ ^[0-9]+$ || ! "$previous_group" =~ ^[0-9]+$ || ! "$previous_mode" =~ ^[0-7]{3,4}$ ]]; then
+        print_error "Invalid install directory permissions; Pulse has not been stopped"
+        return 1
+    fi
+    # Preserve the operator's existing other-account read/search restriction.
+    # Pulse moves from directory owner to its service group; no public access
+    # is added when adopting an existing private (for example 0700) install.
+    printf -v protected_mode '%o' "$((01770 | (8#$previous_mode & 0005)))"
     # -h prevents a substituted final symlink changing its target's owner.
     # Once root owns the entry, its verified parent protects it from replacement.
     if ! chown -h root:pulse -- "$INSTALL_DIR" ||
        [[ -L "$INSTALL_DIR" ]] ||
        [[ "$(stat -c '%u' -- "$INSTALL_DIR")" != 0 ]] ||
-       ! chmod 1775 -- "$INSTALL_DIR" ||
+       ! chmod "$protected_mode" -- "$INSTALL_DIR" ||
+       [[ "$(stat -c '%a' -- "$INSTALL_DIR")" != "$protected_mode" ]] ||
        ! root_directory_protects_entries "$INSTALL_DIR"; then
+        # No scratch has been allocated by this caller. Restore the previous
+        # HOME permissions/owner after a failed adoption, without following a
+        # substituted link or relinquishing root ownership before chmod.
+        if [[ -d "$INSTALL_DIR" && ! -L "$INSTALL_DIR" && "$(stat -c '%u' -- "$INSTALL_DIR")" == 0 ]]; then
+            chmod "$previous_mode" -- "$INSTALL_DIR" || print_warn "Could not restore install directory mode"
+            chown -h "$previous_owner:$previous_group" -- "$INSTALL_DIR" || print_warn "Could not restore install directory owner"
+        fi
         print_error "Could not protect Pulse update staging; Pulse has not been stopped"
         return 1
     fi

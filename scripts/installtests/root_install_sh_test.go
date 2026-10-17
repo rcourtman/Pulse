@@ -2656,7 +2656,7 @@ func TestRootInstallScriptStagingParentPolicy(t *testing.T) {
 	for _, required := range []string{
 		`root_directory_protects_entries "$parent"`,
 		`chown -h root:pulse -- "$INSTALL_DIR"`,
-		`chmod 1775 -- "$INSTALL_DIR"`,
+		`chmod "$protected_mode" -- "$INSTALL_DIR"`,
 		`root_directory_protects_entries "$INSTALL_DIR"`,
 	} {
 		if !strings.Contains(body, required) {

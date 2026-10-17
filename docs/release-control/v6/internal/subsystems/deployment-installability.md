@@ -855,10 +855,14 @@ parent. Before allocating server staging, the installer verifies each absolute,
 normalised, non-symlink ancestor: root owns it and other accounts cannot replace
 root-owned entries (no group/other write, or root-owned sticky semantics). It
 refuses unsafe custom ancestors without changing them. The install directory
-itself becomes `root:pulse` mode `1775`, preserving Pulse's group-writable HOME
-for CLI/cache creation while preventing it renaming root's staging entries.
-Ownership/mode failure, symlink substitution or failed readback refuses that
-staging path. Recursion into ordinary installed children never gives the
+itself becomes root-owned and sticky with group `pulse` write/search access,
+preserving Pulse's HOME for CLI/cache creation while preventing it renaming
+root's staging entries. Existing other-account read/search restrictions are
+preserved (`1775` for the usual `0755` directory, `1770` for private `0700`);
+world access is never added. Ownership/mode failure, symlink substitution or
+failed readback refuses staging. A failed adoption attempts to restore the
+previous HOME mode/owner without following a substituted link; restoration
+failures are reported, not called success. Recursion into ordinary installed children never gives the
 root-consumed archive, extraction or executable-stage directory to Pulse.
 
 Each invocation cleans only its own reserved temporary paths. Age does not
