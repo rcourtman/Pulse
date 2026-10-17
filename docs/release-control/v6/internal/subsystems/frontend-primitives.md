@@ -5161,6 +5161,12 @@ historical performance reports and current-state VM inventory export.
 keep those as separate operator jobs with separate request builders and success
 copy, rather than collapsing inventory export back into the metrics-report
 controls.
+The schedule editor also offers `vm_inventory` as a current-state CSV job. It
+explains the whole-organization scope and new-VM discovery, hides historical
+format/resource/tag controls and keeps weekly/monthly cadence and email/disk
+delivery available. Kind switching clears stale performance selections, while
+saved inventory schedules retain their kind on reload and edit. Existing
+delivery checks, outcomes and recovery controls apply without a separate UI.
 That same settings shell must now also render both historical performance
 options and VM inventory schema from the backend-owned reporting catalog rather
 than hardcoding panel copy, routes, or range presets in the frontend. The

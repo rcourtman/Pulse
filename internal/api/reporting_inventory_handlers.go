@@ -34,19 +34,29 @@ func (h *ReportingHandlers) HandleExportVMInventory(w http.ResponseWriter, r *ht
 	}
 
 	generatedAt := time.Now().UTC()
-	data, err := reporting.GenerateVMInventoryCSV(reporting.VMInventoryData{
-		GeneratedAt: generatedAt,
-		Rows:        buildVMInventoryRows(snapshot.Resources),
-	})
+	report, err := generateVMInventoryReport(snapshot, generatedAt)
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "generation_failed", "Failed to generate VM inventory export", nil)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	filename := definition.AttachmentFilename(generatedAt)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-	_, _ = w.Write(data)
+	w.Header().Set("Content-Type", report.ContentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", report.Filename))
+	_, _ = w.Write(report.Data)
+}
+
+// Both downloads and schedules use the same current-state projection and CSV
+// contract. Inventory does not use historical metric windows or resource caps.
+func generateVMInventoryReport(snapshot reportingEnrichmentSnapshot, generatedAt time.Time) (generatedMultiReport, error) {
+	definition := reporting.DescribeVMInventoryExport()
+	data, err := reporting.GenerateVMInventoryCSV(reporting.VMInventoryData{
+		GeneratedAt: generatedAt,
+		Rows:        buildVMInventoryRows(snapshot.Resources),
+	})
+	return generatedMultiReport{
+		Data: data, Format: definition.Format, ContentType: "text/csv; charset=utf-8",
+		Filename: definition.AttachmentFilename(generatedAt),
+	}, err
 }
 
 func buildVMInventoryRows(resources []unifiedresources.Resource) []reporting.VMInventoryRow {

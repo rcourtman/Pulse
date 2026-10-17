@@ -183,7 +183,7 @@ describe('ReportingPanel', () => {
     ).toBeVisible();
   });
 
-  it('keeps the schedule form free of the report type choice while Patrol cannot run', async () => {
+  it('offers performance and inventory schedules while Patrol cannot run', async () => {
     useReportingPanelStateMock.mockReturnValue(
       buildState({ scheduleFormOpen: () => true, patrolDigestAvailable: () => false }),
     );
@@ -191,7 +191,11 @@ describe('ReportingPanel', () => {
     render(() => <ReportingPanel />);
     await screen.findByLabelText('Schedule name', { selector: 'input' });
 
-    expect(screen.queryByLabelText('Report type')).not.toBeInTheDocument();
+    const select = screen.getByLabelText('Report type') as HTMLSelectElement;
+    expect(Array.from(select.options).map((option) => option.textContent)).toEqual([
+      'Performance report',
+      'VM inventory CSV',
+    ]);
     expect(screen.getByLabelText('Schedule name', { selector: 'input' })).toHaveFocus();
     expect(screen.queryByText(/Patrol weekly summary can also be emailed/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('Cadence')).toBeInTheDocument();
@@ -217,6 +221,7 @@ describe('ReportingPanel', () => {
     expect(select.value).toBe('resources');
     expect(Array.from(select.options).map((option) => option.textContent)).toEqual([
       'Performance report',
+      'VM inventory CSV',
       'Patrol weekly summary',
     ]);
     expect(
@@ -226,6 +231,26 @@ describe('ReportingPanel', () => {
     select.value = 'patrol_digest';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     expect(setScheduleKind).toHaveBeenCalledWith('patrol_digest');
+  });
+
+  it('keeps inventory CSV scope clear and both cadences available without performance controls', async () => {
+    const state = buildState();
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        scheduleFormOpen: () => true,
+        scheduleForm: () => ({ ...state.scheduleForm(), kind: 'vm_inventory', format: 'csv' }),
+      }),
+    );
+    render(() => <ReportingPanel />);
+    await screen.findByLabelText('Schedule name', { selector: 'input' });
+    expect(screen.getByLabelText('Report type')).toHaveValue('vm_inventory');
+    expect(screen.getByLabelText('Cadence')).toHaveValue('monthly');
+    expect(screen.getByText(/including newly discovered VMs/)).toBeVisible();
+    expect(screen.queryByLabelText('Format')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Tag filter')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Mock Resource Picker')).toHaveLength(1);
+    expect(screen.getByLabelText('Delivery')).toBeVisible();
+    expect(screen.getByRole('spinbutton', { name: 'Retention' })).toBeVisible();
   });
 
   it('reduces the form to weekday, time and recipients for a Patrol weekly summary', async () => {

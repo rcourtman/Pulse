@@ -7347,6 +7347,15 @@ collections. Provider callbacks run outside wiring, publication and adapter lock
 Read refreshes share ingest publication ordering, retain fresh-generation skips
 and never queue behind a warm ingest; a cold read still builds its first registry.
 
+Canonical unified snapshot reads also enter this same read-refresh boundary,
+with a cheap fresh-store check before taking a state copy. Unattended inventory
+and reporting consumers must not depend on a dashboard `/api/state` request to
+publish polled VM data. Mock fixture projections and stores without read-refresh
+support keep their existing read semantics. The refresh retains the existing
+provider, tenant, wiring and mode fences and warm non-blocking publication gate.
+`unified_inventory_read_refresh_test.go` covers headless VM publication and a
+warm read contending with ingest publication.
+
 `resource_publication_ownership_test.go` supplies deterministic channel barriers,
 consume-once replacement-store controls, refused and skipped drains, read-provider
 re-entry, and duplicate/loss assertions, alongside the original initialization,

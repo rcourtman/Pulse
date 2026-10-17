@@ -139,7 +139,8 @@ func computeReportAvailability(changes []unifiedresources.ResourceChange, curren
 // subject. The change timeline is keyed by the canonical unified resource ID
 // (not the metrics-target ID), so this runs against req.ResourceID.
 func (h *ReportingHandlers) resolveReportAvailability(orgID string, req *reporting.MetricReportRequest, snapshot reportingEnrichmentSnapshot, start, end time.Time) {
-	if h == nil || req == nil || h.mtMonitor == nil {
+	manager := h.reportMonitorManager()
+	if manager == nil || req == nil {
 		return
 	}
 
@@ -155,7 +156,7 @@ func (h *ReportingHandlers) resolveReportAvailability(orgID string, req *reporti
 		return
 	}
 
-	monitor, err := h.mtMonitor.GetMonitor(orgID)
+	monitor, err := manager.GetMonitor(orgID)
 	if err != nil || monitor == nil {
 		return
 	}

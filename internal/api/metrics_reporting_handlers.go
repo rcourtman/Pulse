@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
@@ -98,7 +99,7 @@ func normalizeReportResourceType(raw string) (string, error) {
 
 // ReportingHandlers handles reporting-related requests
 type ReportingHandlers struct {
-	mtMonitor                 *monitoring.MultiTenantMonitor
+	mtMonitor                 atomic.Pointer[monitoring.MultiTenantMonitor]
 	recoveryManager           *recoverymanager.Manager
 	narratorResolver          func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider)
 	existingFindingsResolver  func(ctx context.Context) reporting.FindingsProvider
@@ -411,19 +412,34 @@ func (s *reportingEnrichmentSnapshot) normalizeCollections() {
 
 // NewReportingHandlers creates a new ReportingHandlers
 func NewReportingHandlers(mtMonitor *monitoring.MultiTenantMonitor, recoveryManager *recoverymanager.Manager) *ReportingHandlers {
-	return &ReportingHandlers{
-		mtMonitor:       mtMonitor,
-		recoveryManager: recoveryManager,
+	h := &ReportingHandlers{recoveryManager: recoveryManager}
+	h.SetMultiTenantMonitor(mtMonitor)
+	return h
+}
+
+// SetMultiTenantMonitor replaces the runtime dependency after a configuration
+// reload. Scheduled and on-demand reads may overlap the replacement.
+func (h *ReportingHandlers) SetMultiTenantMonitor(manager *monitoring.MultiTenantMonitor) {
+	if h != nil {
+		h.mtMonitor.Store(manager)
 	}
+}
+
+func (h *ReportingHandlers) reportMonitorManager() *monitoring.MultiTenantMonitor {
+	if h == nil {
+		return nil
+	}
+	return h.mtMonitor.Load()
 }
 
 func (h *ReportingHandlers) getReportingEnrichmentSnapshot(ctx context.Context, orgID string) (reportingEnrichmentSnapshot, bool) {
 	_ = ctx
-	if h == nil || h.mtMonitor == nil {
+	manager := h.reportMonitorManager()
+	if manager == nil {
 		return emptyReportingEnrichmentSnapshot(), false
 	}
 
-	monitor, err := h.mtMonitor.GetMonitor(orgID)
+	monitor, err := manager.GetMonitor(orgID)
 	if err != nil || monitor == nil {
 		return emptyReportingEnrichmentSnapshot(), false
 	}
@@ -864,8 +880,8 @@ func (h *ReportingHandlers) resolveReportSubject(orgID string, req *reporting.Me
 		// it explicitly, so ask the tenant monitor first and fall back to
 		// the struct field.
 		var target *unifiedresources.MetricsTarget
-		if h != nil && h.mtMonitor != nil {
-			if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+		if manager := h.reportMonitorManager(); manager != nil {
+			if monitor, err := manager.GetMonitor(orgID); err == nil && monitor != nil {
 				target = monitor.MetricsTargetForResource(req.ResourceID)
 			}
 		}

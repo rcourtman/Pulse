@@ -12139,6 +12139,28 @@ Proofs: `internal/api/report_schedule_delivery_test.go`,
 `internal/config/report_schedule_delivery_test.go`,
 `internal/notifications/email_delivery_test.go` and the Reports browser receipt.
 
+The additive `vm_inventory` schedule kind uses the same current-state unified
+VM projection and CSV generator as the on-demand inventory export. It includes
+all VMs in the current organization on each attempt, including newly discovered
+VMs, and has no historical window or performance-report resource cap. Only CSV
+and an empty resource/tag scope are accepted. Weekly/monthly cadence, file
+retention, notification preflight, delivery outcomes, bounded retry, deliberate
+uncertain-delivery recovery and current `advanced_reporting` entitlement checks
+are shared with other file reports. An unavailable organization snapshot fails
+instead of exporting the default organization or pretending an empty inventory
+is a successful read. This changes no prices or existing grants.
+`internal/api/report_schedule_inventory_test.go` covers export equivalence,
+inventories above fifty VMs, later discovery, validation, retry after reload and
+unavailable-organization/current-entitlement failure.
+The monitor-owned canonical snapshot read refreshes its shared resource
+projection for unattended consumers. Neither export nor scheduling calls the
+frontend state endpoint to make inventory appear.
+`Router.SetMultiTenantMonitor` also replaces reporting's manager after runtime
+reload. Reporting captures that dependency atomically for each read, so exports,
+schedule persistence and retention checks do not keep using a stopped monitor.
+Clearing the dependency fails closed. `reporting_monitor_reload_test.go` covers
+replacement inventory/persistence and reads overlapping replacement.
+
 ### Explicit historical incident archives
 
 `internal/api/router.go` pins a read-only legacy archive to each organization's

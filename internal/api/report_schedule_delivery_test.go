@@ -189,7 +189,7 @@ func TestReportScheduleDeliveryRetriesSurviveRestartAndKeepWindow(t *testing.T) 
 	window := engine.lastMulti.End
 	require.NotContains(t, first.LastError, "provider-verdict")
 	// A fresh handler reads only the persisted state, with no in-memory retry job.
-	restarted := NewReportingHandlers(h.mtMonitor, nil)
+	restarted := NewReportingHandlers(h.reportMonitorManager(), nil)
 	restarted.runDueReportSchedulesForOrg(ctx, "default", now.Add(30*time.Second))
 	require.EqualValues(t, 1, attempts.Load())
 	restarted.runDueReportSchedulesForOrg(ctx, "default", first.RetryAt.Add(time.Second))

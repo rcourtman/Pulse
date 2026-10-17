@@ -24,6 +24,7 @@ const (
 	// weekly rollup for the whole workspace.
 	ReportScheduleKindResources    = "resources"
 	ReportScheduleKindPatrolDigest = "patrol_digest"
+	ReportScheduleKindVMInventory  = "vm_inventory"
 
 	ReportScheduleDeliveryEmail = "email"
 	ReportScheduleDeliveryDisk  = "disk"

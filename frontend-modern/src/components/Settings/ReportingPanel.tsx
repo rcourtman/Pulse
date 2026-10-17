@@ -282,8 +282,8 @@ export function ReportingPanel() {
                 <div class="space-y-1">
                   <h4 class="text-base font-semibold text-base-content">Scheduled reports</h4>
                   <p class="text-sm text-muted">
-                    Send recurring client performance reports using the same resource scope and
-                    branding as generated reports.
+                    Schedule performance reports or a CSV of the current VM inventory, delivered by
+                    email or saved on this server.
                     <Show when={patrolDigestAvailable()}>
                       {' '}
                       A Patrol weekly summary can also be emailed: what Patrol checked, found,

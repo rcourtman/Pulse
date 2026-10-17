@@ -109,8 +109,32 @@ func resourceStaleThresholdsForIntervals(
 // does, judges by the same thresholds, so its stale pass and presentation
 // agree with the monitor's views.
 func (m *Monitor) UnifiedResourceSnapshotWithStaleThresholds() ([]unifiedresources.Resource, time.Time, map[unifiedresources.DataSource]time.Duration) {
+	m.refreshUnifiedResourceRead()
 	view := m.currentUnifiedStateView()
 	return m.applyPersistedMetadataToUnifiedResources(view.resources), view.freshness, view.staleThresholds
+}
+
+// Headless readers need the same publication freshness as frontend state reads.
+// Check the store before copying state, preserving the cheap warm-read path.
+// The existing refresh boundary owns publication, provider and mode fencing.
+func (m *Monitor) refreshUnifiedResourceRead() {
+	if m == nil || mock.IsMockEnabled() {
+		return
+	}
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	if _, ok := store.(readRefreshResourceStore); !ok {
+		return
+	}
+	if timed, ok := store.(interface{ LastRebuiltAt() time.Time }); ok {
+		last := timed.LastRebuiltAt()
+		if !last.IsZero() && time.Since(last) < readPathRegistryFreshness {
+			return
+		}
+	}
+	state, scope := m.currentStateWithScope()
+	m.updateResourceStoreForRead(state, scope)
 }
 
 // unifiedResourceThresholdProjectionLister lists a read state with the stale
