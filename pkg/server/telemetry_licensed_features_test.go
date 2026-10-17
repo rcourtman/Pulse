@@ -80,3 +80,18 @@ func TestApplyLicensedFeatureConfigSnapshotIncludesSuccessfulExtendedHistoryRead
 		t.Fatalf("extended history reads = %d, want 1", snap.SuccessfulHistoryReadsOver7d30d)
 	}
 }
+
+func TestApplyLicensedFeatureConfigSnapshotReportingOutcomes(t *testing.T) {
+	p := config.NewConfigPersistence(t.TempDir())
+	now := time.Now().UTC()
+	for _, event := range []string{"generated", "saved", "email_accepted", "delivery_failed", "delivery_unconfirmed"} {
+		if err := p.RecordReportingActivity(config.ReportingActivityEvent{At: now, Kind: config.ReportScheduleKindBackupHealth, Event: event, DataState: "partial"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var snap telemetry.Snapshot
+	applyLicensedFeatureConfigSnapshot(&snap, p, now)
+	if !snap.ReportingTelemetryAvailable || snap.ReportingObservationDays != 1 || snap.ReportingGeneratedBackupHealth30d != 1 || snap.ReportingBackupHealthActiveDays30d != 1 || snap.ReportingSaved30d != 1 || snap.ReportingEmailAccepted30d != 1 || snap.ReportingDeliveryFailed30d != 1 || snap.ReportingDeliveryUnconfirmed30d != 1 || snap.ReportingDataIncomplete30d != 1 {
+		t.Fatalf("reporting snapshot: %+v", snap)
+	}
+}

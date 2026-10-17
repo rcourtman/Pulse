@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
@@ -42,7 +43,8 @@ func (h *ReportingHandlers) HandleExportVMInventory(w http.ResponseWriter, r *ht
 
 	w.Header().Set("Content-Type", report.ContentType)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", report.Filename))
-	_, _ = w.Write(report.Data)
+	written, writeErr := w.Write(report.Data)
+	h.recordReportingDownload(r, config.ReportScheduleKindVMInventory, written, writeErr, len(report.Data))
 }
 
 // Both downloads and schedules use the same current-state projection and CSV

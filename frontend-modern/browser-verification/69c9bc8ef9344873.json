@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "0d5b87742514571594773cb69001c018c3277c30",
+  "verified_at": "2026-10-17T20:09:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/PRIVACY.md",
+    "frontend-modern/public/docs/PRIVACY.md",
+    "internal/api/metrics_reporting_handlers.go",
+    "internal/api/report_schedules.go",
+    "internal/api/reporting_activity.go",
+    "internal/api/reporting_inventory_handlers.go",
+    "internal/config/reporting_activity.go",
+    "internal/telemetry/telemetry.go",
+    "pkg/server/telemetry_licensed_features.go"
+  ],
+  "content_sha256": {
+    "docs/PRIVACY.md": "3bce3d47526225387890d07cc9e0eebedf8601faa3a39c3d903b48b6a8b82e13",
+    "frontend-modern/public/docs/PRIVACY.md": "3bce3d47526225387890d07cc9e0eebedf8601faa3a39c3d903b48b6a8b82e13",
+    "internal/api/metrics_reporting_handlers.go": "805b09b2e1b990d8521378b43c911c1556b952be19228610e5f238ce50f7dfb3",
+    "internal/api/report_schedules.go": "5a214f79a7af6b523b1cb6b7ecdfa8f2a9a072e02dabd88d8ad3104fbda016aa",
+    "internal/api/reporting_activity.go": "65b4133c68f90fa1552934a5aee6c3d34938da6fda4730382bb440fe6be0f44c",
+    "internal/api/reporting_inventory_handlers.go": "467bed9ab76bcdf7b2ccfe0de86c4b37de9a115bdb613dfb3426518be11e36e8",
+    "internal/config/reporting_activity.go": "5ddff0fe857b7e5b66c7add5be231c3163a9ec70067cf4b6ce251995fc72d494",
+    "internal/telemetry/telemetry.go": "08d34b879a387f56c76c43e57ef69c69017fa79b22b18bbc9df82db5ca774e31",
+    "pkg/server/telemetry_licensed_features.go": "4afa566c4ac00ae7bb87aed8066ee6e2729871b94326becdfe0fdfaaf72e1492"
+  },
+  "routes": [
+    "/settings/system-general",
+    "/docs/PRIVACY"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 768,
+      "height": 1024
+    }
+  ],
+  "states": [
+    "Job: see exactly which reporting usage Pulse sends and keep outbound telemetry off when chosen. Final public task source matched all 24 SHA256 entries before and after browser execution.",
+    "Owned worker core runtime, current production frontend build, mock monitoring, isolated storage and a loopback-only telemetry linker override. No production telemetry or customer infrastructure traffic. The managed backend was stopped after every run.",
+    "Schema20 preview exposes generation by report kind, distinct successful and repeat periods, saved files, SMTP accepted/failed/unconfirmed outcomes, backup source-data counts, availability, elapsed observation days and per-kind active days. Mock reporting counts remain zero and availability is true with one observation day.",
+    "The editable outbound telemetry control saved enabled and disabled preferences across page reload. The separate pixel review set the initial enabled state to off through the real control, reloaded it and inspected the actual off control, including above the fixed narrow navigation footer.",
+    "Current privacy document shows the reporting field rows and schema20 explanation. At390 the existing table scrolls horizontally to reveal readable descriptions without page overflow. At1280 and768 the new table rows and descriptions render in the normal document layout.",
+    "Raw JSON preview retains horizontal scrolling on390 for long keys and values, with no horizontal document overflow. At1280 and768 reporting keys and counts remain readable. Actual pixels were reviewed for the preview, opt-out control and privacy table across all three widths.",
+    "The three telemetry disclosure tests passed. A separate scratch interaction probe passed for centered control pixels, table descriptions and horizontal preview scrolling. Captures retained in the task reporting-telemetry-20261017 browser-evidence directory on the Development volume."
+  ],
+  "interactions": [
+    "Opened Preview payload with keyboard focus and Enter, checked the schema and aggregate fields, refreshed the payload, reset the rotating install ID and verified a new ID with unchanged zero mock counts.",
+    "Toggled the unlocked outbound usage telemetry control on and off by keyboard, waited for persistence, reloaded each state and inspected the saved off control at1280,390 and768 widths.",
+    "Opened Full details from General settings, inspected the shipped privacy popup and reporting disclosure, closed the popup and returned to settings.",
+    "Scrolled to reporting field rows and schema20 semantics, horizontally scrolled the narrow privacy table to its description column, and horizontally scrolled the narrow raw JSON pane to its values.",
+    "Inspected current screenshots with the native image viewer after the final application-source change. No application-source edits followed this browser pass."
+  ]
+}

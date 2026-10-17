@@ -27,6 +27,28 @@ no commercial offer, billing read, entitlement substitution or service change.
 `RelaySettingsPanel.runtime.test.tsx` and the current first-session/paid-settings
 browser consumers verify the readable notice and unchanged access boundaries.
 
+### Reporting measurement precedes commercial feature decisions
+
+Schema-v20 reporting usage exports only aggregate generation by closed report
+kind, distinct successful-generation days for manual and scheduled use, file-save
+and SMTP outcomes, backup source-data states, distinct successful
+saved-schedule periods and repeat periods, plus measurement availability and
+elapsed observation days. The receiver admits these fields only for schema v20
+or later with an available tally and positive observation days. It bounds counts
+and repeat/success relationships without changing billing, pricing, grants,
+customer entitlements or existing opt-out behavior.
+
+The public adoption report uses each recent active published non-mock rotating
+ID's latest rolling counts. Old senders, missing receiver columns and unavailable
+tallies are unmeasured, not zero usage. Partial elapsed observation is explicit.
+Neither rotating installation IDs nor the coarse nonfree flag establish paying
+customer identity, demand or willingness to pay. No join to license keys,
+accounts, purchases or support is introduced. `pulse-pro:license-server/telemetry_test.go`
+verifies receiver round-trip, schema/availability gates and bounds. Public
+snapshot, privacy and adoption-query tests verify the shared semantics. Receiver
+deployment and a client release are necessary before collecting fleet evidence.
+
+
 ### Opt-in confirmed-operation transport keeps paid contexts unchanged
 
 The shared frontend client adds expectedOrgID and retry:false for the existing

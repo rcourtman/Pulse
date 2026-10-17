@@ -229,6 +229,9 @@ func TestPaidDomainBoundaryAudit(t *testing.T) {
 		// Shared tenant/history adapter only. New paid PDF/CSV rendering lives
 		// in pulse-enterprise behind GenerateBackupHealthReportFunc.
 		"reporting_backup_health.go": true,
+		// Shared content-free usage observation for manual and scheduled reports.
+		// No renderer, endpoint, entitlement decision or private import.
+		"reporting_activity.go": true,
 	}
 
 	for name := range goFiles {

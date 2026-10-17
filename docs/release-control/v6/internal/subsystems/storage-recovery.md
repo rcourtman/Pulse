@@ -7425,3 +7425,11 @@ checks page and permission admission. Existing log fixtures now include the
 upstream terminal marker rather than weakening immutable-cache assertions.
 Source and consuming desktop/narrow proof do not establish installed backup,
 restore, independent guest thaw, writes/liveness or prior-active restoration.
+
+Reporting telemetry counts generated backup-health documents by their existing
+complete, incomplete or unavailable source-data state. It never reinterprets
+those counts as backup success, protection, retention or restorability. The
+separate SMTP and saved-file counters describe report delivery only. Only daily
+aggregate counts leave the installation, with no workload, task, repository,
+client scope or reporting range. Recovery evidence, observation coverage and
+collection checkpoints remain owned by the existing recovery store.
