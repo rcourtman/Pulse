@@ -1,0 +1,199 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "ddbf6f2c840e07e850eff3ff46e4ac157d9b14f6",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/utils/memoryObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "a137095e23f8dd83d8fef3abcb28141fcaa25bc1613ed00a83ef44c7a6e533dc",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "a9127787f2605a782e81a275c53a3686f0c5d3694f79722f52b4c2221c615232",
+    "frontend-modern/src/utils/memoryObservation.ts": "411c033022416f3fd863ce105a009a1c3a6d25dff3fab8a656c7228063d4afd0"
+  },
+  "routes": [
+    "/settings/infrastructure?add=agent (production dialog in a consuming synthetic fixture)",
+    "/browser-tests/composition-memory.html (real canonical delta merger, Workloads row/guest drawer and canonical resource drawer)"
+  ],
+  "states": [
+    "Advanced signing-key captions and private Unix install/removal instructions",
+    "Same found agent lookup ageing without a refetch",
+    "Retained stopped-agent memory, original source/time and zero readings",
+    "Independent Proxmox/QGA sources, LXC listing versus status-mem cache classification",
+    "Paused/suspended and unknown-freshness readings"
+  ],
+  "interactions": [
+    "Retained source-bound run: generate synthetic token, show token then hide it, copy generated Unix command without running it, expand advanced options, inspect signing captions, look up a fixture host once, advance its clock from one minute to two hours, expand saved-credential removal and close the routed dialog.",
+    "Retained source-bound run: apply source-only canonical agent delta; exercise display/basis and range controls in production rows/drawers, change independent reading sources and restore measured zero, then inspect non-running and unknown freshness.",
+    "This turn: open all 28 original capture files with native view_image and review actual pixels at desktop and narrow viewports. No test or browser execution replay."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "browser": "Chromium 141.0.7390.37",
+      "color_scheme": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "WebKit 26.0",
+      "color_scheme": "dark",
+      "touch": true
+    },
+    {
+      "width": 1365,
+      "height": 900,
+      "browser": "Chromium 141.0.7390.37",
+      "color_scheme": "light"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "browser": "WebKit 26.0",
+      "color_scheme": "dark",
+      "touch": true
+    }
+  ],
+  "verified_at": "2026-10-17T15:16:54Z",
+  "validation_source_sha": "126b44fd1e36a3abec1b097d17937755178a2342",
+  "containing_source_sha": "ddbf6f2c840e07e850eff3ff46e4ac157d9b14f6",
+  "frontend_module_git_tree": "85bf783be4e1ac068832dbeb633225f6f62afa6a",
+  "client": "Playwright 1.56.1",
+  "proof_scope": "First completed pixel review of the retained browser runs, not a newly executed browser pass or a rebind of an already valid receipt. The whole frontend module Git tree at the containing parent is identical to the recorded compiled source, and the three final content hashes match. Synthetic APIs/empty History fixtures only; no installed/native recovery, guest operation, collector, publication or release acceptance.",
+  "pixel_observations": {
+    "installer": [
+      "Desktop and phone dialog remain contained; instructions and saved-credential removal guidance are readable. Long generated commands stay in their own horizontal command fields with copy controls.",
+      "Advanced signing-variable captions wrap inside the 390px WebKit dialog rather than extending past it; TLS opt-out remains unchecked and labelled not recommended.",
+      "The same found-host card visibly ages from Last seen 1 min ago to Last seen 2 hours ago while retaining Not reporting yet and offline; removal requires no new token."
+    ],
+    "memory": [
+      "Guest and canonical drawers label stale Pulse Agent memory last known, show original source/time and stopped-reporting explanation; no stored history is not drawn as a current trend.",
+      "Current measured zero reads Memory 0.0% current; stopped-agent zero remains 0.0% last known. Non-running guests show a dash with unavailable-while-not-running copy, not healthy zero or an assertion of power-off.",
+      "LXC listing reads 35.0% current without cache/setup caveats; retained listing is last known without those caveats; retained status-mem includes the reusable-cache and defer-setup safety explanation.",
+      "Desktop and dark narrow drawer text, source/time labels, backup-safety guidance and range controls remain visible without page-width clipping. Phone row uses its intended Prior label; retained row value and freshness are separate fixture steps from the 95% drawer case."
+    ]
+  },
+  "captures": [
+    {
+      "name": "chromium-1440-install-instructions.png",
+      "sha256": "58f4b2f132d43eefb03e19e13a995691cd7348cbe65e51d0fb324dd496529a08"
+    },
+    {
+      "name": "chromium-1440-signing-captions.png",
+      "sha256": "5db4c4c925ae653424affcbd6c3ab5f00854d0317579ebaf8843398e84b0eb40"
+    },
+    {
+      "name": "chromium-1440-last-seen-before.png",
+      "sha256": "60ab9a23474fddafed58386c44fff3c732a152450090becc5d20f6fea05e196a"
+    },
+    {
+      "name": "chromium-1440-last-seen-after.png",
+      "sha256": "7897050c6b29a65ec4803b26ae7d68f826df9e583a4f8afbb8dea756fe48b2d4"
+    },
+    {
+      "name": "chromium-1440-saved-credentials.png",
+      "sha256": "405aa715f534163643d7988299c2cc92a8a74d231fd92d61dd695fa755a0aaac"
+    },
+    {
+      "name": "webkit-390-install-instructions.png",
+      "sha256": "bd1472ac51006de10fc246bb538eb0f260cfc544f03d072346aa39c3dd4601d1"
+    },
+    {
+      "name": "webkit-390-signing-captions.png",
+      "sha256": "2cec0dfff2e1e33cb0798a4c9a5f2d5dbbe46fb6a69d75fa8623e6d635bcac64"
+    },
+    {
+      "name": "webkit-390-last-seen-before.png",
+      "sha256": "5c91ff189e01d4fc93050b8514e7567a6d59a7563a2305265c145da6b8295f45"
+    },
+    {
+      "name": "webkit-390-last-seen-after.png",
+      "sha256": "27fb982313648e71fc6033ad093d88b68bdbfa657e1aed4739d16fb41dc7894e"
+    },
+    {
+      "name": "webkit-390-saved-credentials.png",
+      "sha256": "9466b6baba519d817140a248d105b9e3e829363d596efaa621d9c8406c3ebab6"
+    },
+    {
+      "name": "desktop-stale-overview.png",
+      "sha256": "39fd702c3c1a4fa1c4e7e1d0b668552005ccbce3a9429d7efa646af8a6590972"
+    },
+    {
+      "name": "desktop-stale-row.png",
+      "sha256": "9b4dc9534c2ad8d9d2e3213fa4f7b164ad16cd42605a23340bc355c61d1ac714"
+    },
+    {
+      "name": "desktop-stale-history.png",
+      "sha256": "61d7290f454608d07ef6c6ebdeb7a769eeb66ca73282db847936f931a029d93e"
+    },
+    {
+      "name": "desktop-reporting-zero.png",
+      "sha256": "a03559c220fbaa601c73f9e1a5f3da0f29923b1d3553f0c137ee62a1cab014b2"
+    },
+    {
+      "name": "desktop-container-listing-overview.png",
+      "sha256": "8ead3757ab1e2de01a139342b67d341083dd6ce36d0b169a04e5ce3e8762098a"
+    },
+    {
+      "name": "desktop-container-listing-history.png",
+      "sha256": "00e616ee1c4372b581689122ee9f91e203399d9692b10880556ae2c24f9d29fb"
+    },
+    {
+      "name": "desktop-container-status-cache-history.png",
+      "sha256": "b7e2fded3b07cfa0e7da1daf3218b06925e55fcbf02372fe388ba406e2b8702b"
+    },
+    {
+      "name": "desktop-container-stopped-agent-history.png",
+      "sha256": "806c7f29a3e0e8f8ac57cc80c52b522daedc49e639d17bb0e1ca361425127480"
+    },
+    {
+      "name": "desktop-non-running-memory.png",
+      "sha256": "565df72656e5e1650b69ef367144ca5814645b11b45bb8a81465b5b05c740630"
+    },
+    {
+      "name": "phone-stale-overview.png",
+      "sha256": "95fe9bd8d8386350a5408b75c2cfbc115339eb2b4014a4c80b8d95c5821a93fd"
+    },
+    {
+      "name": "phone-stale-row.png",
+      "sha256": "822e48186cbc7cc6d42132d5ecc7782a5f3d48331c77f18fa53c17465451fdab"
+    },
+    {
+      "name": "phone-stale-history.png",
+      "sha256": "48276e5be8cdd9a240eeeb1723cac9dea02c99b411a1aea0011bae5b38c7a52d"
+    },
+    {
+      "name": "phone-reporting-zero.png",
+      "sha256": "5f8584cd7dfaf5a8bce868c61513abcc27c90f48f1c6fce19448454f7f3fc005"
+    },
+    {
+      "name": "phone-container-listing-overview.png",
+      "sha256": "d5ed311cdfb944e794f2fe2d0133dad60679c0d01a32459509399aad0662d0d2"
+    },
+    {
+      "name": "phone-container-listing-history.png",
+      "sha256": "b9f5f62077474738aa3082b0c17ca86f68dd77fa5e0463ba43642b4f1f340251"
+    },
+    {
+      "name": "phone-container-status-cache-history.png",
+      "sha256": "b8f9b20e007e0c8c0e9794dd82301049f582097850dc142ffdb5b16daf2125f2"
+    },
+    {
+      "name": "phone-container-stopped-agent-history.png",
+      "sha256": "2aa8206398408a8737b65584db4f6447dcccfb22d167d0e27b33c325eae76ca7"
+    },
+    {
+      "name": "phone-non-running-memory.png",
+      "sha256": "093010963f2b43ede46227374c2b97de627c37a6918a4de0387db2f96966faa4"
+    }
+  ],
+  "evidence_sha256": {
+    "INSTALLER-RESULT.json": "5f3f293bd2c0b95f26cabc443e7fbf08b6d4145ca88c0dc7046366d67cdd1829",
+    "INSTALLER-BINDING.json": "efd971e9ae758c9b5e7a165f68202aceadc597eee8cb697a83bf8ef4cce6afac",
+    "MEMORY-RESULT.json": "2336fa34246178a05035401c45f5dab54d4e21b12841d41a0309454feebc535d",
+    "MEMORY-BINDING.json": "ee387c895a0a389c28943de476b02d8f214f87a4f7a64bde2406d33234c98910",
+    "BROWSER-PREPARED.tar.xz": "e033f1cf0dfed2d37012402cfe1d3699a2717bbe8258b17d0015f7f08a5f239b"
+  }
+}
