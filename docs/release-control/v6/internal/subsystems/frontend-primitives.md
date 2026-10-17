@@ -243,8 +243,9 @@ An independent qualified memory reading is not paused by a disk deferral.
 Neither Last seen, backup completion nor running power state renews memory.
 Unannotated unrelated platforms and actual zero readings retain their meaning.
 A current reading from a cache-inclusive Proxmox source (`status-mem`,
-`status-freemem`, `cluster-resources`, `derived-total-minus-used`, the same set
-the backend marks `MayIncludeCache`) keeps its numbers, colour and thresholds;
+`status-freemem`, `cluster-resources`, `derived-total-minus-used`, the same
+sources and guest kinds the backend marks `MayIncludeCache`) keeps its numbers,
+colour and thresholds;
 the shared presentation adds `mayIncludeCache` and a `cacheNote` saying a high
 percentage alone does not show memory pressure and which fix can supply the
 guest's own figure. A VM row shows `May include cache` (`Cache?` in compact
@@ -252,9 +253,13 @@ layouts) only while the guest's own memory meets its warning or critical
 threshold, the figure that colours the bar in host-share mode too, which is
 when a cache-inclusive figure reads as pressure; below that the caveat is the
 cell title, the chart's native hover title and assistive text, not a label on every
-agentless VM. A container, whose Proxmox reading is always the cgroup value,
-keeps the caveat in the bar tooltip and drawer instead of a label on every
-row. A retained or freshness-unknown reading keeps its own freshness label
+agentless VM. A container's `cluster-resources` reading is not
+cache-inclusive: Proxmox subtracts page cache from the cgroup usage
+(`PVE::CGroup::get_memory_stat`) before it reaches `/cluster/resources`, so
+`memoryObservation.ts` classifies that source by guest kind and neither row,
+tooltip nor drawer qualifies it. A QEMU guest, or a guest of unknown kind,
+keeps the caveat for it. Any other cache-inclusive container reading keeps the
+caveat in the bar tooltip and drawer instead of a label on every row. A retained or freshness-unknown reading keeps its own freshness label
 with the caveat in its explanation, an unavailable reading is never qualified,
 and the drawer states the note as visible text in `About this reading`. An
 unavailable explanation names only what is known: a powered-off guest reads

@@ -91,8 +91,12 @@ describe('guest drawer cache-inclusive memory note', () => {
     setValue(guest('agent'));
     expect(screen.queryByText('About this reading')).not.toBeInTheDocument();
     expect(screen.getByText('Memory reading').closest('tr')).not.toHaveTextContent('cache');
-    setValue(guest('cluster-resources', { type: 'lxc' }));
+    setValue(guest('status-mem', { type: 'lxc' }));
     expect(screen.getByText('About this reading').closest('tr')).toHaveTextContent('container');
+    // The container's own listing value already excludes page cache.
+    setValue(guest('cluster-resources', { type: 'lxc' }));
+    expect(screen.queryByText('About this reading')).not.toBeInTheDocument();
+    expect(screen.getByText('Memory reading').closest('tr')).not.toHaveTextContent('cache');
   });
 
   it('keeps the caveat on a retained reading', () => {
@@ -108,10 +112,18 @@ describe('guest drawer cache-inclusive memory note', () => {
     expect(screen.getByText('About this reading')).toBeInTheDocument();
   });
 
-  it('gives a container the Pulse agent only', () => {
+  it('does not call a container listing reading cache-inclusive', () => {
     render(() => (
       <GuestDrawerOverview {...overviewProps(guest('cluster-resources', { type: 'lxc' }))} />
     ));
+    expect(screen.getByText('Memory reading').closest('tr')).toHaveTextContent('Current · Proxmox');
+    expect(screen.getByText('Memory reading').closest('tr')).not.toHaveTextContent('cache');
+    expect(screen.queryByText('About this reading')).not.toBeInTheDocument();
+    expect(screen.queryByText(/may include cache/)).not.toBeInTheDocument();
+  });
+
+  it('gives a container the Pulse agent only', () => {
+    render(() => <GuestDrawerOverview {...overviewProps(guest('status-mem', { type: 'lxc' }))} />);
     const note = screen.getByText('About this reading').closest('tr')!;
     expect(note).toHaveTextContent('Pulse agent in the container');
     expect(note).not.toHaveTextContent('QEMU');
