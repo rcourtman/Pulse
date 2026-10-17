@@ -467,28 +467,9 @@ func (r *Router) setupRoutes() {
 	r.trueNASPoller.Start(r.lifecycleCtx)
 	r.vmwarePoller = monitoring.NewVMwarePoller(r.multiTenant, 0)
 	r.vmwarePoller.Start(r.lifecycleCtx)
-	if r.monitor != nil {
-		// Drive the connection-degraded alert off the same aggregator the
-		// HTTP handler uses, so the active-notification stream stays in
-		// lockstep with the Settings → Infrastructure badges. Single-tenant
-		// only for now; multi-tenant per-org wiring is a follow-up.
-		// Capture the constructed runtime owners, not the nil fields that
-		// existed earlier while handlers were being registered. The monitor
-		// may already be running, so publish only this complete snapshot source.
-		getCfg := r.configHandlers.Config
-		getPersist := r.configHandlers.Persistence
-		monitor := r.monitor
-		trueNASPoller := r.trueNASPoller
-		vmwarePoller := r.vmwarePoller
-		r.monitor.SetConnectionsSnapshotLister(func() []alerts.ConnectionSnapshot {
-			ctx := context.Background()
-			return buildAlertConnectionSnapshotsWithRuntimeSources(ctx, getCfg(ctx), getPersist(ctx), monitor, aggregatorRuntimeSources{
-				orgID:         "default",
-				truenasPoller: trueNASPoller,
-				vmwarePoller:  vmwarePoller,
-			})
-		})
-	}
+	// The connection-degraded lister is installed by
+	// configureMonitorDependencies, which runs below for the startup monitor
+	// and again for every monitor a reload or tenant initializer attaches.
 	updateHandlers := NewUpdateHandlersWithContext(r.updateManager, r.updateHistory, r.lifecycleCtx)
 	updateHandlers.SetUpdateReadinessSources(
 		r.updateReadinessConfigSnapshot,
@@ -1905,6 +1886,8 @@ func (r *Router) configureMonitorDependenciesLocked(m *monitoring.Monitor) {
 			log.Warn().Err(err).Str("org", m.GetOrgID()).Msg("Failed to load system settings for tenant monitor; webhook private CIDR allowlist not applied")
 		}
 	}
+
+	r.installConnectionAlertLister(m)
 
 	// Apply saved notification policy before the first publication, which can
 	// evaluate alerts. The combined boundary avoids one refresh per source.
