@@ -798,6 +798,42 @@ class ReconciliationTests(unittest.TestCase):
         subject.reconcile(github, github.run_id, 5)
         self.assertEqual([], github.posts)
 
+    def test_deleted_activation_owner_is_named_without_retry(self):
+        github = FakeGitHub()
+        fake_api = github.api
+
+        def api(endpoint):
+            if endpoint.endswith(f"/actions/runs/{github.owner_run_id}"):
+                raise subject.GitHubNotFound("GitHub object was not found")
+            return fake_api(endpoint)
+
+        github.api = api
+        with self.assertRaises(subject.ReconciliationError) as raised:
+            subject.reconcile(github, github.run_id, 5)
+        self.assertNotIsInstance(raised.exception, subject.GitHubNotFound)
+        self.assertIn("owner run 90 for committed v6.5.0-rc.1", str(raised.exception))
+        self.assertIn("no longer exists", str(raised.exception))
+        self.assertEqual([], github.posts)
+
+    def test_one_channel_failure_does_not_starve_the_other(self):
+        args = argparse.Namespace(repository="rcourtman/Pulse", run_id=None,
+                                  latest=True, max_attempts=5, dry_run=True)
+        attempted = []
+
+        def reconcile(github, run_id, max_attempts):
+            attempted.append(run_id)
+            if run_id == 1:
+                raise subject.ReconciliationError("stable evidence is gone")
+
+        stderr = io.StringIO()
+        with patch.object(subject, "parse_args", return_value=args), \
+                patch.object(subject, "discover", return_value=[1, 2]), \
+                patch.object(subject, "reconcile", side_effect=reconcile), \
+                contextlib.redirect_stderr(stderr):
+            self.assertEqual(1, subject.main())
+        self.assertEqual([1, 2], attempted)
+        self.assertIn("failed for run 1: stable evidence is gone", stderr.getvalue())
+
     def test_precommit_owner_is_renewed_without_using_committed_budget(self):
         github = FakeGitHub(committed=False)
         github.runs[0]["run_attempt"] = 6
