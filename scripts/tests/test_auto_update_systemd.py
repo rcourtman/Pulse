@@ -636,6 +636,10 @@ else: sys.exit(97)
                     self.assertEqual(data.count(append), 2)
                     data = data.replace(before, 'cat > "$PULSE_NATIVE_ROOT/pulse-source-updater.service" << EOF')
                     data = data.replace(append, 'cat >> "$PULSE_NATIVE_ROOT/pulse-source-updater.service" << EOF')
+                    # This connected lab models UID/chown, unlike NativeLab's
+                    # real root execution. Keep that account boundary explicit;
+                    # the separate staging-policy controls test its enforcement.
+                    data += '\nprotect_server_install_parent() { :; }\n'
                 return original_write(path, data, *args, **kwargs)
             try:
                 with patch.object(Path, "write_text", new=relocate), patch.object(native.time, "sleep"):

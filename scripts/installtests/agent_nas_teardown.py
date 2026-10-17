@@ -364,7 +364,8 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
         execution, _, events, before, after, _, _, _, _, _ = result
         self.assertEqual(execution.returncode, 1, execution.stdout + execution.stderr)
         self.assertNotIn('state:remove', events)
-        self.assertEqual('remote:remove' in events, remote)
+        self.assertEqual('remote:remove' in events, remote,
+                         'events=' + repr(events) + '\nstdout=' + execution.stdout + '\nstderr=' + execution.stderr)
         for path in before: self.assertEqual(after.get(path), before[path], path)
         self.assertNotIn('synthetic recovery only', execution.stdout + execution.stderr)
         self.assertNotIn('/synthetic/private-only', execution.stdout + execution.stderr)

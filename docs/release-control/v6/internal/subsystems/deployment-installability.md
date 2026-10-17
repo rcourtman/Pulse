@@ -881,6 +881,27 @@ not a second-account kernel test, native systemd/LXC acceptance or a diagnosis
 of issue #2785's original attachment. Existing installed recovery remains
 separate.
 
+### Documented signing proof follows the canonical installation recipe
+
+README intentionally links to `docs/INSTALL.md` rather than copying its complete
+signed-install recipe. Asset validation requires that fixed link and guide,
+extracts exactly one distinct documented `pulse-installer` key, and runs real
+`ssh-keygen -Y verify` against the installer and its sidecar with the unchanged
+identity/namespace. Missing/unlinked documentation, absent or conflicting keys,
+wrong keys, changed installer bytes and absent signatures refuse. No signing
+identity, key custody or release publication policy changes.
+
+`TestReleaseDocumentedInstallerKeyFollowsCanonicalGuide` executes the actual
+validator section with newly generated local fixture keys and inert signed
+bytes; no private project key or provider access is involved. The original
+README-only section fails its valid linked-guide control. Staging account/UID
+doubles remain explicit in the service-discovery and connected updater fixtures,
+while the native root lab keeps the real staging-parent checks. The instance
+selector's shape check follows the existing bounded timer state/exit reader,
+not the retired `is-enabled --quiet` shortcut; its behavioural refusal tests
+remain intact. NAS diagnostic assertions retain private fixture events and
+stderr on failure without changing any assertion, deadline or source behaviour.
+
 ### Existing-installation menu actions require exact target and intent
 
 The root server installer's existing-installation menu admits stable/preview

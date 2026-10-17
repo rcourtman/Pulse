@@ -914,7 +914,7 @@ func TestPulseAutoUpdateScriptSupportsInstanceScopedServerInstalls(t *testing.T)
 		`"PULSE_SERVICE_NAME=$service_name"`,
 		`"PULSE_INSTALL_DIR=$INSTALL_DIR"`,
 		`"PULSE_CONFIG_DIR=$CONFIG_DIR"`,
-		`systemctl is-enabled --quiet "$UPDATE_TIMER_UNIT"`,
+		`timeout -k 1 5 systemctl is-enabled "$UPDATE_TIMER_UNIT"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
