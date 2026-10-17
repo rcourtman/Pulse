@@ -85,7 +85,10 @@ describe('ProxmoxCoverageTable column visibility', () => {
         />
       ));
       const stable = container.querySelector('[data-proxmox-backup-row="coverage"]')!;
-      const jobCell = () => stable.querySelectorAll('td')[headerTexts().indexOf('Job')];
+      const jobCell = () =>
+        stable.querySelectorAll('td')[
+          headerTexts().findIndex((label) => /^(Task|Job)$/.test(label))
+        ];
       expect(jobCell()).toHaveTextContent('Unknown');
       expect(jobCell()).not.toHaveTextContent('OK');
       const detail = container.querySelector('[data-backup-task-detail]')!;

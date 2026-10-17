@@ -242,7 +242,7 @@ async function geometry(page) {
     const headers = await page
       .locator('[data-proxmox-backups-table="coverage"] thead th')
       .allTextContents();
-    const jobIndex = headers.findIndex((label) => label.trim() === 'Job');
+    const jobIndex = headers.findIndex((label) => /^(Task|Job)$/.test(label.trim()));
     assert(jobIndex >= 0);
     const jobCell = row.locator('td').nth(jobIndex);
     for (const status of ['OK', 'success', 'completed']) {
