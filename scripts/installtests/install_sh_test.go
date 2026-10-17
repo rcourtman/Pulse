@@ -369,7 +369,7 @@ func TestInstallSHAgentServiceSecurityDefaults(t *testing.T) {
 		`if [[ -n "${PULSE_HEALTH_ADDR+x}" ]]; then`,
 		`--health-addr <addr>    Health/metrics listener address (default: 127.0.0.1:9191; use "" to disable)`,
 		`if [[ "$HEALTH_ADDR_SET" == "true" ]]; then EXEC_ARG_ITEMS+=(--health-addr "$HEALTH_ADDR"); fi`,
-		`--health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;`,
+		`--health-addr) require_option_value "$@"; HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;`,
 		`UMask=0077`,
 		`local no_new_privileges="true"`,
 		`NoNewPrivileges=${no_new_privileges}`,
