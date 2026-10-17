@@ -750,18 +750,26 @@ func TestPMGBackupsSurviveEveryNodeBackupReadFailing(t *testing.T) {
 // A failed read on one node keeps that node's last-known backups while the
 // nodes that answered publish what they returned.
 func TestPMGBackupsKeepFailedNodeOnPartialRead(t *testing.T) {
-	m := pmgScopeMonitor(config.PMGInstance{MonitoringConfigured: true})
-	f := newPMGBackupRetentionFixture()
-	pollPMGBackupRetention(t, m, f)
+	for _, successfulEmpty := range []bool{false, true} {
+		t.Run(fmt.Sprintf("successfulEmpty=%t", successfulEmpty), func(t *testing.T) {
+			m := pmgScopeMonitor(config.PMGInstance{MonitoringConfigured: true})
+			f := newPMGBackupRetentionFixture()
+			pollPMGBackupRetention(t, m, f)
 
-	f.backupErr["one"] = errors.New("backup list timed out")
-	f.backups["two"] = []pmg.BackupEntry{{Filename: "two-new.tgz", Timestamp: 1700000200, Size: 30}}
-	pollPMGBackupRetention(t, m, f)
-	want := map[string][]string{"one": {"one.tgz"}, "two": {"two-new.tgz"}}
-	if got := pmgBackupFilesByNode(t, m); !reflect.DeepEqual(got, want) {
-		t.Fatalf("partial read backups=%v want=%v", got, want)
+			f.backupErr["one"] = errors.New("backup list timed out")
+			f.backups["two"] = []pmg.BackupEntry{{Filename: "two-new.tgz", Timestamp: 1700000200, Size: 30}}
+			want := map[string][]string{"one": {"one.tgz"}, "two": {"two-new.tgz"}}
+			if successfulEmpty {
+				f.backups["two"] = nil
+				delete(want, "two")
+			}
+			pollPMGBackupRetention(t, m, f)
+			if got := pmgBackupFilesByNode(t, m); !reflect.DeepEqual(got, want) {
+				t.Fatalf("partial read backups=%v want=%v", got, want)
+			}
+			assertPMGPollFailed(t, m)
+		})
 	}
-	assertPMGPollFailed(t, m)
 }
 
 // A complete enumeration is authoritative: nodes that answered with no

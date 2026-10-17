@@ -810,30 +810,29 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	cluster, err := client.GetClusterStatus(ctx, true)
-	if err == nil {
+	cluster, clusterErr := client.GetClusterStatus(ctx, true)
+	if clusterErr == nil {
 		if len(cluster) == 0 {
-			err = fmt.Errorf("PMG cluster response contained no nodes")
+			clusterErr = fmt.Errorf("PMG cluster response contained no nodes")
 		}
 		for _, entry := range cluster {
 			if strings.TrimSpace(entry.Name) == "" {
-				err = fmt.Errorf("PMG cluster response contained a node without a name")
+				clusterErr = fmt.Errorf("PMG cluster response contained a node without a name")
 				break
 			}
 		}
 	}
-	recordReadError("pmg_cluster_status", err)
-	if err != nil {
+	recordReadError("pmg_cluster_status", clusterErr)
+	if clusterErr != nil {
 		// Failed/incomplete enumeration cannot authorise node-specific reads.
 		// The connection display name is not a PMG node hostname (#2960).
 		cluster = nil
 		if debugEnabled {
-			log.Debug().Err(err).Str("instance", instanceName).Msg("failed to retrieve PMG cluster status")
+			log.Debug().Err(clusterErr).Str("instance", instanceName).Msg("failed to retrieve PMG cluster status")
 		}
 	}
 
 	backupNodes := make(map[string]struct{})
-	backupsComplete := err == nil
 
 	if len(cluster) > 0 {
 		nodes := make([]models.PMGNodeStatus, 0, len(cluster))
@@ -885,14 +884,12 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 	for nodeName := range backupNodes {
 		if ctx.Err() != nil {
-			backupsComplete = false
 			recordReadError("pmg_backups", ctx.Err())
 			break
 		}
 
 		backups, backupErr := client.ListBackups(ctx, nodeName)
 		if backupErr != nil {
-			backupsComplete = false
 			recordReadError("pmg_backups", backupErr)
 			if debugEnabled {
 				log.Debug().Err(backupErr).
@@ -1082,11 +1079,10 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	// Only a complete enumeration can replace accepted backup inventory.
-	// A failed read is not an empty backup list; a complete empty list is.
-	if backupsComplete {
-		m.state.UpdatePMGBackups(instanceName, pmgBackups)
-	}
+	// Each successfully read node replaces only its own accepted inventory.
+	// Unread nodes were carried above, including every node after failed or
+	// incomplete discovery; no connection label authorises a node read.
+	m.state.UpdatePMGBackups(instanceName, pmgBackups)
 	if pollErr != nil {
 		pmgInst.Status = "degraded"
 		pmgInst.ConnectionHealth = "degraded"

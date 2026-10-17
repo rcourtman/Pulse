@@ -1084,8 +1084,12 @@ no-guessed-node boundary above remains unchanged. `TestPMGBackupsSurviveFailedCl
 `TestPMGBackupsSurviveEveryNodeBackupReadFailing`,
 `TestPMGBackupsKeepFailedNodeOnPartialRead` and
 `TestPMGBackupsClearAfterCompleteEnumeration` in `monitor_pmg_test.go` cover
-the carry and the complete-enumeration clear. These are synthetic poller
-controls, not native PMG acceptance.
+the carry and the complete-enumeration clear, including a successfully read
+empty node beside an unread node. Discovery validation and unread-node carry
+use the same captured cluster-read error; later read errors cannot change
+which nodes were enumerated. The containing update publishes the combined
+per-node inventory, not an all-or-nothing replacement after any failed read.
+These are synthetic poller controls, not native PMG acceptance.
 
 ### Guest configuration reads preserve installation and node identity
 
