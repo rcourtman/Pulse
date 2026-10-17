@@ -238,9 +238,11 @@ suppression and metadata backoff are not reset to force recovery.
 
 ### QGA fallback eligibility keeps its original observation age
 
-A successful unlocked VM-status availability, usable filesystem reading or
-useful guest metadata can establish fallback query eligibility. A later poll
-that preserves optional IP/OS/version strings does not renew that evidence.
+Only an actual guest-agent reply, a usable filesystem reading or useful guest
+metadata, can establish fallback query eligibility. The `status/current` `agent`
+flag means the agent is enabled in the VM config, not that the in-guest service
+answers, so a successful VM-status read does not establish or renew it. A later
+poll that preserves optional IP/OS/version strings does not renew that evidence.
 Internal `GuestAgentEvidence` crosses model, canonical and previous-state
 snapshots, including an explicit missing origin. Legacy direct snapshots import
 their receipt once, while already annotated disk-only evidence uses its recorded
@@ -255,7 +257,10 @@ remain independent.
 `TestGuestAgentAdmissionEvidenceContract` checks the original-age boundaries,
 repeated canonical replacement and both cluster/node collectors through a
 cancelled detail cycle, unavailable status, missing status and ordinary recovery
-with measured-zero disk usage. This is synthetic source proof, not native thaw,
+with measured-zero disk usage. Its `config-flag-cannot-renew` case polls with the
+real integer `agent: 1` flag: an enabled agent that never replied admits no
+fallback command once status fails, while one that answered keeps its fallback.
+This is synthetic source proof, not native thaw,
 QEMU-only Windows acceptance or reporter resolution.
 
 
