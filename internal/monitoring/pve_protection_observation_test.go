@@ -235,7 +235,7 @@ func TestPVELogRetryDoesNotRenewRetainedEvidence(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
-			got := m.synthesizeVzdumpJobGuestTasks(ctx, "proof", client, []models.BackupTask{{ID: "parent", Node: "pve1"}}, map[string]string{"parent": "job"})
+			got := m.synthesizeVzdumpJobGuestTasks(ctx, "proof", client, []models.BackupTask{{ID: "parent", Node: "pve1"}}, map[string]string{"parent": "job"}, true)
 			if !reflect.DeepEqual(got, []models.BackupTask{task}) {
 				t.Fatalf("retained log observation renewed or lost: %+v", got)
 			}
@@ -303,6 +303,112 @@ func TestPVERunningLogCacheKeepsActualSuccessfulReceipt(t *testing.T) {
 	resumed := guestTask()
 	if !resumed.ObservedAt.After(initial.ObservedAt) {
 		t.Fatalf("ordinary successful running log did not resume: %+v", resumed)
+	}
+}
+
+// Real read-only HTTP -> ordinary polling/cache -> the served backup snapshot.
+// A broken finished log cannot overwrite the earlier guest verdict, refresh
+// its observation time, or become an immutable cache entry. No guest, QGA,
+// backup, database or installed recovery operation is performed.
+func TestPVELogSequenceRejectsFalseCompletionAndResumes(t *testing.T) {
+	for _, broken := range []struct{ name, middle string }{
+		{"missing-text", `{"n":2}`},
+		{"null-text", `{"n":2,"t":null}`},
+		{"gap", `{"n":4,"t":"fixture line"}`},
+		{"duplicate", `{"n":1,"t":"fixture line"}`},
+	} {
+		t.Run(broken.name, func(t *testing.T) {
+			var phase, logReads atomic.Int32
+			start := time.Date(2026, 10, 17, 10, 0, 0, 0, time.UTC).Unix()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.URL.Path == "/api2/json/nodes":
+					fmt.Fprint(w, `{"data":[{"node":"pve-a","status":"online"}]}`)
+				case r.URL.Path == "/api2/json/nodes/pve-a/tasks":
+					upid, status := "job", ""
+					taskStart := start
+					end := int64(0)
+					if phase.Load() > 0 {
+						status, end = "OK", start+60
+					}
+					if phase.Load() == 2 {
+						status = "job errors"
+					}
+					if phase.Load() == 3 {
+						upid = "next-job"
+						taskStart = start + 120
+						end = taskStart + 60
+					}
+					fmt.Fprintf(w, `{"data":[{"upid":%q,"node":"pve-a","type":"vzdump","status":%q,"starttime":%d,"endtime":%d}]}`, upid, status, taskStart, end)
+				case strings.HasSuffix(r.URL.Path, "/log"):
+					logReads.Add(1)
+					first := `{"n":1,"t":"INFO: Starting Backup of VM 101 (qemu)"}`
+					switch phase.Load() {
+					case 0:
+						fmt.Fprint(w, `{"data":[`+first+`]}`)
+					case 1:
+						fmt.Fprint(w, `{"data":[`+first+`,`+broken.middle+`,{"n":3,"t":"INFO: Finished Backup of VM 101 (00:01:00)"}]}`)
+					case 2:
+						fmt.Fprint(w, `{"data":[`+first+`,{"n":2,"t":"ERROR: Backup of VM 101 failed - synthetic archive failure"},{"n":3,"t":"TASK ERROR: backup job failed"}]}`)
+					case 3:
+						fmt.Fprint(w, `{"data":[`+first+`,{"n":2,"t":"INFO: Finished Backup of VM 101 (00:01:00)"},{"n":3,"t":"TASK OK"}]}`)
+					}
+				default:
+					t.Errorf("unexpected operation: %s", r.URL.Path)
+					w.WriteHeader(404)
+				}
+			}))
+			defer server.Close()
+			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := &Monitor{state: models.NewState()}
+			poll := func(label string) models.BackupTask {
+				m.pollBackupTasks(context.Background(), "fixture-pve", client)
+				snapshot := m.state.GetSnapshot().PVEBackups
+				if broken.name == "missing-text" {
+					wire, err := json.Marshal(map[string]any{"data": snapshot})
+					if err != nil {
+						t.Fatal(err)
+					}
+					t.Logf("TASK_LOG_SEQUENCE_%s=%s", label, wire)
+				}
+				for _, task := range snapshot.BackupTasks {
+					if task.VMID == 101 {
+						return task
+					}
+				}
+				t.Fatal("guest task lost")
+				return models.BackupTask{}
+			}
+			initial := poll("initial")
+			if initial.Status != "running" || initial.ObservedAt.IsZero() {
+				t.Fatalf("running baseline missing: %+v", initial)
+			}
+			phase.Store(1)
+			retained := poll("retained")
+			if !reflect.DeepEqual(retained, initial) || m.vzdumpJobTaskCache["fixture-pve|job"].final {
+				t.Fatalf("broken finished log invented a final verdict/receipt: before=%+v after=%+v", initial, retained)
+			}
+			phase.Store(2)
+			failed := poll("failed")
+			if failed.Status != "error" || failed.Error != "synthetic archive failure" || !failed.ObservedAt.After(initial.ObservedAt) || logReads.Load() != 3 || !m.vzdumpJobTaskCache["fixture-pve|job"].final {
+				t.Fatalf("ordinary complete reread failed to replace held evidence: %+v reads=%d", failed, logReads.Load())
+			}
+			poll("cached")
+			if logReads.Load() != 3 {
+				t.Fatal("completed valid log no longer uses the immutable cache")
+			}
+			phase.Store(3)
+			completed := poll("success")
+			if completed.Status != "OK" || completed.Error != "" || logReads.Load() != 4 {
+				t.Fatalf("next ordinary successful job could not recover: %+v reads=%d", completed, logReads.Load())
+			}
+			if _, exists := m.vzdumpJobTaskCache["fixture-pve|job"]; exists {
+				t.Fatal("superseded job cache was not pruned")
+			}
+		})
 	}
 }
 

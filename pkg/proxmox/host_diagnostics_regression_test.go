@@ -17,6 +17,53 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// A complete HTTP envelope is not a complete task log if a numbered line was
+// lost or its text silently decoded to a zero value. Keep errors bounded: log
+// contents may include private guest names and command output.
+func TestTaskLogRequiresNumberedTextSequence(t *testing.T) {
+	for _, tc := range []struct{ name, rows string }{
+		{"missing-number", `[{"t":"private-log-fixture"}]`},
+		{"null-number", `[{"n":null,"t":"private-log-fixture"}]`},
+		{"zero-number", `[{"n":0,"t":"private-log-fixture"}]`},
+		{"negative-number", `[{"n":-1,"t":"private-log-fixture"}]`},
+		{"prefix-missing", `[{"n":2,"t":"private-log-fixture"}]`},
+		{"gap", `[{"n":1,"t":"start"},{"n":3,"t":"private-log-fixture"}]`},
+		{"duplicate", `[{"n":1,"t":"start"},{"n":1,"t":"private-log-fixture"}]`},
+		{"reordered", `[{"n":2,"t":"start"},{"n":1,"t":"private-log-fixture"}]`},
+		{"missing-text", `[{"n":1,"t":"private-log-fixture"},{"n":2}]`},
+		{"null-text", `[{"n":1,"t":"private-log-fixture"},{"n":2,"t":null}]`},
+		{"wrong-number-type", `[{"n":"1","t":"private-log-fixture"}]`},
+		{"wrong-text-type", `[{"n":1,"t":7}]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Get("start") != "0" || r.URL.Query().Get("limit") != fmt.Sprint(taskLogLineLimit) {
+					t.Error("task log request no longer starts at the bounded origin")
+				}
+				fmt.Fprint(w, `{"data":`+tc.rows+`}`)
+			}))
+			defer server.Close()
+			lines, err := backupTestClient(t, server.URL).GetTaskLog(context.Background(), "node", "job")
+			if err == nil || lines != nil {
+				t.Fatalf("incomplete sequence published: %d rows, error=%v", len(lines), err)
+			}
+			if strings.Contains(err.Error(), "private-log-fixture") || isAuthError(err) {
+				t.Fatal("invalid log became private diagnostics or an authentication diagnosis")
+			}
+		})
+	}
+	for _, rows := range []string{`[]`, `[{"n":1,"t":""},{"n":2,"t":"  "},{"n":3,"t":"INFO: complete","metadata":true}]`} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, `{"data":`+rows+`,"errors":null,"metadata":true}`)
+		}))
+		lines, err := backupTestClient(t, server.URL).GetTaskLog(context.Background(), "node", "job")
+		server.Close()
+		if err != nil || (rows != `[]` && (len(lines) != 3 || lines[0].Text != "" || lines[1].Text != "  ")) {
+			t.Fatalf("complete empty/blank/additive log changed: %+v, %v", lines, err)
+		}
+	}
+}
+
 // Non-parallel, like the other diagnostic tests in this file. Large/additive
 // replies must not copy guest data into logs even when Debug is enabled.
 func TestGuestFilesystemResponseDiagnosticsNoPayload(t *testing.T) {

@@ -56,3 +56,25 @@ func readTaskRows[T any](resp *http.Response, fields ...string) ([]T, error) {
 func readTasks(resp *http.Response) ([]Task, error) {
 	return readTaskRows[Task](resp, "upid", "node", "pid", "pstart", "starttime", "type", "id", "user", "status", "endtime")
 }
+
+// This reader always requests start=0. Numbered, present text is necessary
+// before a job log can supply per-guest verdicts or enter the immutable cache:
+// a missing/null error line must not disappear into Go's zero-value string,
+// and a gap or reordered line must not turn a partial log into success.
+func readTaskLog(resp *http.Response) ([]TaskLogLine, error) {
+	rows, err := readTaskRows[struct {
+		Number *int64  `json:"n"`
+		Text   *string `json:"t"`
+	}](resp, "n", "t")
+	if err != nil {
+		return nil, err
+	}
+	lines := make([]TaskLogLine, 0, len(rows))
+	for i, row := range rows {
+		if row.Number == nil || *row.Number != int64(i)+1 || row.Text == nil {
+			return nil, errInvalidTaskResponse
+		}
+		lines = append(lines, TaskLogLine{LineNumber: *row.Number, Text: *row.Text})
+	}
+	return lines, nil
+}
