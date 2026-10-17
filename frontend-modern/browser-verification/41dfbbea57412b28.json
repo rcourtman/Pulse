@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "618406116d7e7828cf7541a64bf8712114bc3e00",
+  "verified_at": "2026-10-17T17:01:36.935360Z",
+  "result": "passed",
+  "verification_scope": "Completed source-bound consuming UI interactions and native pixel inspection. Not an aggregate command/descendant-cleanup certificate.",
+  "changed_paths": [
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "64f00e5c790f85cab47299a09341c804945d557b19288d377ee20ae7c0664037"
+  },
+  "routes": [
+    "/browser-tests/paused-filesystem.html: production useWorkloads, GuestRow, full GuestDrawer, filesystem details, History and alert settings from synthetic loopback HTTP snapshots",
+    "/browser-tests/resource-stopped-filesystem.html: production canonical ResourceDetailDrawer and stored History from synthetic read-only snapshots"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Explicit unknown/starting/stopping/unrecognised native VM state keeps platform filesystem values Last known (compact Prior) rather than current, with fixed wrapping explanation. Raw unrecognised state is not exposed.",
+    "No numeric disk reading is invented from capacity alone; explicit permission errors keep their own explanation. A live linked Pulse agent remains independent, and its own silence shows stopped reporting.",
+    "Ordinary same-open replacement to running with measured zero restores current 0%; saved 95% threshold and stored canonical History paths remain unchanged.",
+    "Twelve functional desktop/narrow captures were opened with native view_image; retained text, rows, chart caveats and controls fit at 320px with no horizontal page overflow."
+  ],
+  "interactions": [
+    "Chromium keyboard Enter expands the workload; WebKit touch tap opens the narrow row. Technical details are keyboard-expanded/collapsed.",
+    "Synthetic HTTP snapshots replace state in the same open surfaces. All application requests are GET, off-origin/application WebSockets blocked; the later phone driver permits only the loopback Vite tooling socket.",
+    "Canonical stored History path identity is checked across unconfirmed -> running replacement; current disk labels and the unconfirmed notice clear without altering the stored paths."
+  ],
+  "browsers": [
+    "Playwright 1.56.1 / Chromium 141.0.7390.37",
+    "Playwright 1.56.1 / WebKit 26.0"
+  ],
+  "source_binding": {
+    "desktop": "a0d67b7d7c01b77abafedc21bb488043baf43a29",
+    "narrow": "618406116d7e7828cf7541a64bf8712114bc3e00",
+    "runtime_and_consuming_inputs_unchanged": true,
+    "runtime_sha256": "64f00e5c790f85cab47299a09341c804945d557b19288d377ee20ae7c0664037"
+  },
+  "execution_limits": [
+    "Desktop command exit 1 is retained: every consuming assertion and six captures completed before its final console assertion; the only two recorded errors were the deliberately blocked Vite development socket. No application exception or failed load was recorded. Completed desktop work was not replayed.",
+    "Final narrow command returned client 143 with empty output, separately from its result.json recording passed, no errors, six captures and awaited browser/server closes. Do not infer a normal executor exit, interruption initiator or independently verified descendant teardown. Delivery request f366e635-1806-44c3-8ddf-23b1f181b2c9 owns bounded terminal metadata, with no replay.",
+    "Earlier cold-bootstrap, obsolete drawer/metric-shape and compact-label fixture failures and their inspected adverse captures are retained, not relabelled passes.",
+    "No native QGA/backup/guest action, filesystem writes, thaw, installed recovery, protected landing, release or reporter confirmation. #2439 monitoring stays stopped."
+  ],
+  "retained_evidence": [
+    "BROWSER-ASSESSMENT.json",
+    "SOURCE-BINDING.json",
+    "PIXEL-REVIEW.json",
+    "browser-desktop-result.json",
+    "browser-narrow-final-result.json",
+    "RECEIPTS.md"
+  ]
+}

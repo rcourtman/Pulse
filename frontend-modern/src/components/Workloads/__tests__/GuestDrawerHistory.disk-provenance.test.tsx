@@ -92,7 +92,7 @@ const utilization = () => screen.getAllByTestId('guest-history-group-chart')[0];
 // Actual backend provenance remains authoritative. Removing a VM lock alone
 // cannot turn retained readings into current data or prove native thaw.
 describe('GuestDrawerHistory filesystem provenance', () => {
-  it.each(['paused', 'suspended'])(
+  it.each(['paused', 'suspended', 'unknown', 'starting'])(
     'does not call the %s VM carrier current or alter stored History',
     async (status) => {
       const fetch = vi
@@ -113,7 +113,9 @@ describe('GuestDrawerHistory filesystem provenance', () => {
       expect(getGuestDrawerDeferredMetrics(value()).disk.lastKnownValue).toBe(90);
       expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
       expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
-        `while the VM is ${status}`,
+        status === 'paused' || status === 'suspended'
+          ? `while the VM is ${status}`
+          : 'VM running state is unconfirmed',
       );
       // The drawer can live inside a table cell that inherits nowrap. Long
       // safety explanations must stay within their chart, not cross its peers.

@@ -48,6 +48,24 @@ describe('canonical History filesystem source ownership', () => {
     },
   );
 
+  it.each(['unknown', 'starting', 'stopping', 'unrecognised-private-state'])(
+    'keeps unconfirmed native %s platform values distinct from the live linked agent',
+    (runtimeStatus) => {
+      const value = guest({ proxmox: { runtimeStatus, disks: [agentDisk] } });
+      expect(current(value).disk).toBeUndefined();
+      expect(current(value).usage).toBeUndefined();
+      expect(deferred(value).disk.lastKnownValue).toBe(62);
+      expect(deferred(value).disk.message).toContain('VM running state is unconfirmed');
+      expect(deferred(value).disk.message).not.toContain(runtimeStatus);
+      expect(current(value).cpu).toBe(10);
+      value.proxmox!.disks = undefined;
+      expect(current(value).disk).toBe(62);
+      value.agent!.stale = true;
+      expect(current(value).disk).toBeUndefined();
+      expect(deferred(value).disk.message).toContain('stopped reporting');
+    },
+  );
+
   it.each([
     'agent-not-running',
     'agent-error',

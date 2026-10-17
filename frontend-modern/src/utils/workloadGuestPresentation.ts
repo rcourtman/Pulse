@@ -272,7 +272,26 @@ export function getWorkloadGuestDiskRead(
         }
       : current;
   }
-  if (!reason) return current;
+  if (!reason) {
+    // No failure reason is not proof of a current platform read. Unknown and
+    // transitional VM states can still carry numbers from an earlier poll.
+    // A live linked agent above is independent; LXC storage comes from its host.
+    // Legacy canonical consumers use online/healthy for a running guest.
+    const status = guest.status?.trim().toLowerCase();
+    if (
+      isVM &&
+      current.state === 'current' &&
+      !['running', 'online', 'healthy'].includes(status ?? '')
+    ) {
+      return {
+        state: 'last-known',
+        message:
+          'Guest filesystem readings are not current because the VM running state is unconfirmed. Any displayed values are last known.',
+        needsAction: false,
+      };
+    }
+    return current;
+  }
   return {
     state: reason.startsWith('prev-') ? 'last-known' : 'unavailable',
     message: getWorkloadGuestDiskStatusMessage(reason),

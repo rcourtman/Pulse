@@ -60,7 +60,7 @@ function filesystemData(initial: Resource) {
 }
 
 describe('useThresholdsGuestData guest filesystems', () => {
-  it.each(['paused', 'suspended'])(
+  it.each(['paused', 'suspended', 'unknown', 'starting'])(
     'keeps %s filesystem values last known without changing alert overrides',
     (power) => {
       createRoot((dispose) => {
@@ -71,7 +71,11 @@ describe('useThresholdsGuestData guest filesystems', () => {
           thresholds: { disk: 95 },
           hasOverride: true,
         });
-        expect(disk.readingMessage).toContain(`while the VM is ${power}`);
+        expect(disk.readingMessage).toContain(
+          power === 'paused' || power === 'suspended'
+            ? `while the VM is ${power}`
+            : 'VM running state is unconfirmed',
+        );
         setGuest(filesystemGuest());
         expect(data.guestDisksWithOverrides()[0]).toMatchObject({
           id: disk.id,
