@@ -24,8 +24,9 @@ describe('resource identity integration help', () => {
     expect(text()).toContain('resource collection and its returned id together as the key');
     expect(text()).toContain('not interchangeable with IDs returned by Unified Resources');
     expect(text()).toContain('encode that whole ID as one path segment');
-    const link = article().querySelector('a[href="/docs/API#unified-resources"]');
+    const link = article().querySelector('a[href="#unified-resources"]');
     expect(link?.textContent).toBe('Unified Resources');
+    expect(link?.hasAttribute('data-doc-link')).toBe(true);
     const complete = document.createElement('article');
     complete.innerHTML = renderDocMarkdown(api, 'API');
     expect(complete.querySelector('#unified-resources')).not.toBeNull();

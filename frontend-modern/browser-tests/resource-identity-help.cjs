@@ -89,7 +89,7 @@ fs.mkdirSync(output, { recursive: true });
       };
       await capture('identity', page.locator('#resource-ids-and-integration-labels'));
       await capture('relationships', page.locator('article p').filter({ hasText: 'A storage row can represent' }));
-      const link = page.locator('article a[href="/docs/API#unified-resources"]').first();
+      const link = page.locator('article a[href="#unified-resources"]').first();
       if (width < 500) await link.tap(); else { await link.focus(); await page.keyboard.press('Enter'); }
       await focused('unified-resources');
       assert.equal(new URL(page.url()).hash, '#unified-resources');
