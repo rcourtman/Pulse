@@ -1174,6 +1174,8 @@ type generatedMultiReport struct {
 	Start         time.Time
 	End           time.Time
 	ResourceCount int
+	DataState     string
+	DataMessage   string
 }
 
 type reportingRequestError struct {

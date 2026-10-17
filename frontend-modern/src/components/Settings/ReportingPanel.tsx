@@ -282,8 +282,7 @@ export function ReportingPanel() {
                 <div class="space-y-1">
                   <h4 class="text-base font-semibold text-base-content">Scheduled reports</h4>
                   <p class="text-sm text-muted">
-                    Schedule performance reports or a CSV of the current VM inventory, delivered by
-                    email or saved on this server.
+                    Email reports on a schedule or save them on this server.
                     <Show when={patrolDigestAvailable()}>
                       {' '}
                       A Patrol weekly summary can also be emailed: what Patrol checked, found,
@@ -425,6 +424,21 @@ export function ReportingPanel() {
                             <p>
                               Next scheduled report:{' '}
                               {formatReportScheduleTime(schedule.next_run_at)}
+                            </p>
+                          </Show>
+                          <Show
+                            when={
+                              schedule.kind === 'backup_health' && schedule.last_report_data_message
+                            }
+                          >
+                            <p
+                              class={
+                                schedule.last_report_data_state === 'complete'
+                                  ? 'text-muted'
+                                  : 'text-amber-700 dark:text-amber-300'
+                              }
+                            >
+                              Last report data: {schedule.last_report_data_message}
                             </p>
                           </Show>
                           <details>

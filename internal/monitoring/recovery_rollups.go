@@ -34,7 +34,13 @@ func (m *Monitor) listRecoveryRollupsForAlerts(ctx context.Context, kind recover
 		return recovery.BuildRollupsFromPoints(filtered), nil
 	}
 
-	if m == nil || m.recoveryManager == nil {
+	if m == nil {
+		return nil, nil
+	}
+	m.mu.RLock()
+	manager := m.recoveryManager
+	m.mu.RUnlock()
+	if manager == nil {
 		return nil, nil
 	}
 	orgID := m.GetOrgID()
@@ -42,7 +48,7 @@ func (m *Monitor) listRecoveryRollupsForAlerts(ctx context.Context, kind recover
 		orgID = "default"
 	}
 
-	store, err := m.recoveryManager.StoreForOrg(orgID)
+	store, err := manager.StoreForOrg(orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +118,10 @@ func (m *Monitor) checkBackupAlerts(ctx context.Context) {
 		m.alertManager.ClearSystemAlert(alerts.BackupEvaluationAlertType)
 		return
 	}
-	if m.recoveryManager == nil && !mock.IsMockEnabled() {
+	m.mu.RLock()
+	hasRecoveryManager := m.recoveryManager != nil
+	m.mu.RUnlock()
+	if !hasRecoveryManager && !mock.IsMockEnabled() {
 		// Missing dependencies cannot stand in for affirmative read recovery.
 		return
 	}

@@ -9968,3 +9968,14 @@ organizations. `monitor_host_agents_test.go` exercises discovery delivery
 through both monitor initialization paths, including explicit and legacy
 default organizations. These notifications refresh inventory presentation;
 they do not grant enrollment, removal, re-enrollment or command authority.
+
+### Backup health reporting preserves lifecycle authority
+
+The reporting API's `backup_health` schedule kind reads current tenant inventory
+and retained recovery task evidence. It adds no agent enrollment, credential,
+command or remediation authority. It reuses file-report delivery/retry/restart
+handling and the existing advanced-reporting entitlement. Task history data
+quality is independent of delivery status. `reporting_backup_health_test.go`
+covers current scope, missing history, unchanged entitlement rejection and retry
+after handler recreation. Collection and persistence proofs remain owned by
+monitoring and storage-recovery.

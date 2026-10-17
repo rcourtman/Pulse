@@ -47,7 +47,7 @@ const renderPicker = (initialSelection: SelectedResource[] = []) => {
 
 const renderPickerWithOptions = (
   initialSelection: SelectedResource[] = [],
-  options: { maxSelection?: number } = {},
+  options: { maxSelection?: number | null; resourceTypes?: Resource['type'][] } = {},
 ) => {
   const onSelectionChange = vi.fn();
   render(() => {
@@ -59,6 +59,7 @@ const renderPickerWithOptions = (
     return (
       <ResourcePicker
         maxSelection={options.maxSelection}
+        resourceTypes={options.resourceTypes}
         selected={selected}
         onSelectionChange={handleSelectionChange}
       />
@@ -78,6 +79,29 @@ afterEach(() => {
 });
 
 describe('ResourcePicker', () => {
+  it('selects a whole client estate beyond the performance cap while excluding other resource types', async () => {
+    mockResources = [
+      ...Array.from({ length: 61 }, (_, index) =>
+        makeResource({ id: `vm-${index}`, name: `VM ${index}`, displayName: `VM ${index}` }),
+      ),
+      makeResource({ id: 'host', type: 'agent', name: 'Host', displayName: 'Host' }),
+    ];
+    const { onSelectionChange } = renderPickerWithOptions([], {
+      maxSelection: null,
+      resourceTypes: ['vm'],
+    });
+    await fireEvent.click(screen.getByRole('button', { name: /select all/i }));
+    expect(onSelectionChange).toHaveBeenLastCalledWith(
+      expect.arrayContaining([expect.objectContaining({ id: 'vm-60' })]),
+    );
+    expect(onSelectionChange.mock.lastCall?.[0]).toHaveLength(61);
+    expect(
+      onSelectionChange.mock.lastCall?.[0].some(
+        (resource: SelectedResource) => resource.type === 'agent',
+      ),
+    ).toBe(false);
+    expect(showWarningMock).not.toHaveBeenCalled();
+  });
   it('keeps large resource inventories on the shared bounded list renderer', () => {
     expect(resourcePickerSource).toContain('PlatformWindowedList');
     expect(resourcePickerSource).toContain('estimatedItemHeight={56}');

@@ -200,3 +200,7 @@ type ReportingAdminRuntime struct {
 // BindReportingAdminEndpointsFunc allows enterprise modules to bind replacement
 // reporting admin endpoints while retaining access to default handlers.
 type BindReportingAdminEndpointsFunc func(defaults ReportingAdminEndpoints, runtime ReportingAdminRuntime) ReportingAdminEndpoints
+
+// GenerateBackupHealthReportFunc renders already-scoped evidence. The shared
+// scheduler owns entitlement, tenancy, windows, persistence and delivery.
+type GenerateBackupHealthReportFunc func(reporting.BackupHealthData, reporting.ReportFormat) ([]byte, string, error)

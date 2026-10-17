@@ -9770,3 +9770,38 @@ WebKit exercise the real policy producer, consuming drawer, shared clock and
 existing table evidence. No route, guest check, backup, threshold, collector or
 permission changes. This presentation result does not establish thaw, covered
 filesystem writes, native restart recovery or containing released software.
+
+### Client backup report scheduling and data-quality states
+
+Reports adds Client backup health to the existing schedule editor. PDF/CSV,
+weekly/monthly cadence, current workload/tag scope and existing email/disk
+delivery controls reuse the schedule workflow. Empty selection and tags mean
+all current VMs and system containers. The picker restricts this kind to those
+workload types and has no performance-report selection cap. Its existing default
+cap remains unchanged for other consumers. Switching kinds retains only valid
+workload selections and preserves the existing digest/inventory constraints.
+
+The schedule card presents last report data quality separately from delivery
+acceptance. Missing/incomplete history never reads as zero failures or completed
+delivery failure. The browser payload cannot supply server-owned quality fields.
+Copy states the PVE task scope, PBS destinations and unsupported-provider state.
+Pricing and current advanced-reporting/branding entitlement behavior are intact.
+
+Proofs: `ReportingPanel.test.tsx`, `ResourcePicker.test.tsx` and
+`reportingSchedulesModel.backupHealth.test.ts` under Settings tests cover report
+kinds, quality/delivery coexistence, unrestricted workload selection, payloads
+and kind switching. Final-source browser proof covers the actual editor, client
+scope, reload, delivery/recovery states and narrow/desktop layouts.
+
+The shared picker uses semantic theme colours for workload names, selection,
+tags and chips. Large selections remain in a bounded scrollable summary so
+client filters and delivery controls stay reachable. Toggle rows expose pressed
+state, and keyboard removal scrolls selected chips into view. The browser matrix
+covers light and dark themes at all three widths.
+
+The additive reporting-catalog `backupHealthAvailable` flag describes runtime
+renderer presence independently of entitlement. New backup schedules are offered
+only when it is present, while existing schedules remain editable after a runtime
+change. Legacy catalogs default to false. API and catalog-model tests cover
+absence and registration so staggered source upgrades do not offer unavailable
+rendering. No price or entitlement changes.

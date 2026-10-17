@@ -1864,6 +1864,11 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 // registry, not just copying the map: a delayed initializer must not reinstall
 // an old provider after a mock switch or withdrawal has completed.
 func (r *Router) configureMonitorDependenciesLocked(m *monitoring.Monitor) {
+	// Full configuration reloads replace monitors. Their execution evidence
+	// must still reach the same per-organization store used by recovery reads.
+	if r.recoveryHandlers != nil {
+		m.SetRecoveryManager(r.recoveryHandlers.manager)
+	}
 	// Tenant monitors must inherit the persisted instance-wide notification
 	// settings. System settings are stored globally, so without this a tenant
 	// monitor created after the allowlist was saved (or after a restart)

@@ -74,6 +74,10 @@ type BusinessHooks struct {
 	// reporting admin endpoints without importing internal API packages.
 	BindReportingAdminEndpoints extensions.BindReportingAdminEndpointsFunc
 
+	// GenerateBackupHealthReport supplies private backup report rendering while
+	// the public scheduler retains evidence, entitlement and delivery ownership.
+	GenerateBackupHealthReport extensions.GenerateBackupHealthReportFunc
+
 	// BindAIAutoFixEndpoints allows enterprise modules to replace or decorate
 	// safe remediation endpoints (investigation, remediation, autonomy, fix execution).
 	BindAIAutoFixEndpoints extensions.BindAIAutoFixEndpointsFunc
@@ -129,6 +133,7 @@ func runtimeIdentityForBusinessHooks(h BusinessHooks) pkglicensing.RuntimeIdenti
 		h.BindRBACAdminEndpoints != nil ||
 		h.BindSSOAdminEndpoints != nil ||
 		h.BindReportingAdminEndpoints != nil ||
+		h.GenerateBackupHealthReport != nil ||
 		h.BindAIAutoFixEndpoints != nil ||
 		h.BindAIAlertAnalysisEndpoints != nil ||
 		h.AIInvestigationEnabled != nil ||
@@ -365,6 +370,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 	bindAuditAdminEndpoints := globalHooks.BindAuditAdminEndpoints
 	bindSSOAdminEndpoints := globalHooks.BindSSOAdminEndpoints
 	bindReportingAdminEndpoints := globalHooks.BindReportingAdminEndpoints
+	generateBackupHealthReport := globalHooks.GenerateBackupHealthReport
 	bindAIAutoFixEndpoints := globalHooks.BindAIAutoFixEndpoints
 	bindAIAlertAnalysisEndpoints := globalHooks.BindAIAlertAnalysisEndpoints
 	aiInvestigationEnabled := globalHooks.AIInvestigationEnabled
@@ -384,6 +390,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 	api.SetAuditAdminEndpointsBinder(bindAuditAdminEndpoints)
 	api.SetSSOAdminEndpointsBinder(bindSSOAdminEndpoints)
 	api.SetReportingAdminEndpointsBinder(bindReportingAdminEndpoints)
+	api.SetBackupHealthReportGenerator(generateBackupHealthReport)
 	api.SetAIAutoFixEndpointsBinder(bindAIAutoFixEndpoints)
 	api.SetAIAlertAnalysisEndpointsBinder(bindAIAlertAnalysisEndpoints)
 

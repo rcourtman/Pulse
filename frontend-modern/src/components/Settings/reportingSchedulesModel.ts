@@ -6,7 +6,7 @@ export type ReportScheduleRunStatus = '' | 'ok' | 'failed' | 'running' | 'retryi
 export type ReportScheduleDeliveryMethod = 'email' | 'disk';
 // 'resources' is the multi-resource performance report; 'patrol_digest' emails
 // the last seven days of Patrol work and has no scope, format, or disk output.
-export type ReportScheduleKind = 'resources' | 'patrol_digest' | 'vm_inventory';
+export type ReportScheduleKind = 'resources' | 'patrol_digest' | 'vm_inventory' | 'backup_health';
 // Digest schedules carry the server-assigned 'email' format: the email body is
 // the report, so there is no PDF or CSV artifact.
 export type ReportScheduleFormat = ReportingFormat | 'email';
@@ -46,6 +46,8 @@ export interface ReportSchedule {
   last_error?: string;
   last_delivery_status?: string;
   last_report_path?: string;
+  last_report_data_state?: 'complete' | 'partial' | 'not_observed' | 'unavailable';
+  last_report_data_message?: string;
   last_success_at?: string;
   run_attempts?: number;
   retry_at?: string;
@@ -122,7 +124,9 @@ export function parseReportSchedulesResponse(value: unknown): ReportSchedule[] {
 }
 
 export function normalizeReportScheduleKind(kind: unknown): ReportScheduleKind {
-  return kind === 'patrol_digest' || kind === 'vm_inventory' ? kind : 'resources';
+  return kind === 'patrol_digest' || kind === 'vm_inventory' || kind === 'backup_health'
+    ? kind
+    : 'resources';
 }
 
 export function isPatrolDigestSchedule(schedule: Pick<ReportSchedule, 'kind'>): boolean {
@@ -224,6 +228,7 @@ export function applyReportScheduleKind(
 }
 
 export function reportScheduleKindLabel(kind: unknown): string {
+  if (kind === 'backup_health') return 'Client backup health';
   if (kind === 'vm_inventory') return 'VM inventory CSV';
   return normalizeReportScheduleKind(kind) === 'patrol_digest'
     ? 'Patrol weekly summary'
@@ -315,6 +320,8 @@ export function reportScheduleScopeLabel(schedule: ReportSchedule): string {
   if (schedule.kind === 'vm_inventory') return 'All VMs in this organization';
   const resources = schedule.scope.resources?.length ?? 0;
   const tags = schedule.scope.tags?.length ?? 0;
+  if (schedule.kind === 'backup_health' && resources === 0 && tags === 0)
+    return 'All current VMs and containers';
   const parts = [];
   if (resources > 0) parts.push(`${resources} resource${resources === 1 ? '' : 's'}`);
   if (tags > 0) parts.push(`${tags} tag${tags === 1 ? '' : 's'}`);

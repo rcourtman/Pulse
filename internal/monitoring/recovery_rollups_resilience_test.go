@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +15,35 @@ import (
 
 	_ "modernc.org/sqlite"
 )
+
+func TestBackupHealthRecoveryRebindingCanOverlapActiveReaders(t *testing.T) {
+	m, _ := backupEvaluationMonitor(t)
+	manager := m.recoveryManager
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	var workers sync.WaitGroup
+	workers.Add(2)
+	go func() {
+		defer workers.Done()
+		for range 100 {
+			m.SetRecoveryManager(manager)
+			runtime.Gosched()
+		}
+	}()
+	go func() {
+		defer workers.Done()
+		for range 100 {
+			if _, err := m.listBackupRollupsForAlerts(context.Background()); err != nil {
+				t.Error(err)
+			}
+			m.checkBackupAlerts(context.Background())
+		}
+	}()
+	workers.Wait()
+}
 
 func TestMonitor_ListBackupRollupsForAlerts_ToleratesMalformedPersistedMetadata(t *testing.T) {
 	baseDir := t.TempDir()

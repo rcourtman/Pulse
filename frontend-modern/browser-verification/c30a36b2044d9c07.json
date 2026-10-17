@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "base_sha": "20fa477f4d5db803cd451fdd0f00340b058d3d6e",
+  "verified_at": "2026-10-17T16:32:43.089Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ReportScheduleEditor.tsx",
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx",
+    "frontend-modern/src/components/Settings/ResourcePicker.tsx",
+    "frontend-modern/src/components/Settings/reportingCatalogModel.ts",
+    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ReportScheduleEditor.tsx": "083ea8933986cc20d9b5b8eda7eaf77b81639d4befc2fc91a72e3be9a7f0ca74",
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx": "5436f0a25062041a057a48811d5d200922e0c3559a541abd59626de16ab5c0c8",
+    "frontend-modern/src/components/Settings/ResourcePicker.tsx": "fe272be96251301d94009aa02cb1b9f5fb24d2756db32cc259413a2fb8cf9215",
+    "frontend-modern/src/components/Settings/reportingCatalogModel.ts": "05b836ebaaced053103ab16bdf75ad5273de959117b5a6a3dc49c34e4c135f1b",
+    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts": "0339d7d04a7999a603313615f6d528353910f856859840805e8af5a04aaf0afe",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts": "17dfa24401869fb8d30db64fbf91e5aca919a97579bfdd1cdfdeb3d448fa593a"
+  },
+  "routes": [
+    "/settings/support/reporting",
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 820,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "With the extension flag omitted as on legacy/community catalogs, a new unavailable backup schedule is not offered. Remaining delivery proof uses the unmodified Pro catalog and real private renderer.",
+    "In light and dark themes at 1440/820/390 widths: editor focus, report-kind switching, PDF/CSV, weekly/monthly controls, empty/search/keyboard selection/remove, all 61 workloads beyond performance cap, bounded scrollable selected chips including keyboard removal of the last item, clear selection and delivery disabled states exercised.",
+    "Normal Proxmox polling writes real task evidence. Tag-scoped delivered CSV contains the client failure, excludes another client, includes 31 current workloads, exposes partial history and missing attempts. Accepted MIME attachment equals the saved file.",
+    "After provider task inventory becomes empty and a real server restart, retained failure evidence still appears in a new report.",
+    "Temporary SMTP rejection retries exactly once after a real restart, preserves the original backup period, and keeps data quality separate from delivery status.",
+    "Permanent rejection stops retries. Lost acknowledgement remains unconfirmed. Duplicate-risk recovery cancel sends nothing, deliberate confirmation succeeds.",
+    "Saved/reloaded client tags and backup kind survive editing. Monthly PDF saves to disk without mail. Disable persists, details survive polling and delete cancel/confirm work.",
+    "A client tag matching no current workloads produces an explicit no-observation report; period and every daily count remain blank rather than a false zero-failure result."
+  ],
+  "interactions": [
+    "Create, focus, search and keyboard-toggle workloads, select 61, scroll selected chips and keyboard-remove the final workload, clear all, switch kinds, formats, cadence and delivery in light and dark at all three widths.",
+    "Refuse missing email configuration, save a disabled draft, follow Email settings to Notifications and enable the persisted schedule.",
+    "Generate real client-scoped CSV, compare MIME attachment bytes, remove provider task inventory and restart before generating another retained-history report.",
+    "Retry temporary SMTP failure across restart with the same window, retain permanent failure and uncertain acknowledgement, cancel deliberate recovery and then confirm it.",
+    "Edit and reload a monthly PDF disk report, disable, keep expanded details through polling, cancel deletion and then confirm it.",
+    "Generate a no-matching-client report and check blank period and daily counts rather than a false zero-failure result."
+  ],
+  "environment": "Real private runtime and disposable signed Pro grant, no dev/mock modes, synthetic Proxmox and local SMTP only.",
+  "backend_content_sha256": {
+    "internal/api/router.go": "3b78ff44989f69da7c66e099fecf325d42ab8dbb84dc9934354a3411cfe346fc",
+    "internal/api/router_helpers.go": "c2c7cc946e87899df7ec60fb4320eebc88472e66fe276f46967fa4d20beec27a",
+    "internal/api/reporting_catalog_handlers.go": "ea5303f3b5f809db6127ae4334c0a0b21088266482245c3b79ca76412d6c3ca3",
+    "internal/api/enterprise_extension_reporting_admin.go": "6cfa596dbbffdd6f1e8222fd6752941b386e2178037ccfd8286e2639fce3f640",
+    "pkg/server/server.go": "89ffcd7890be7bc0d1f77e91ca2702f412235cbab4ee74599892c7371d606848",
+    "pkg/extensions/reporting_admin.go": "e4a6dba1a9b898c2a3994605259de066eddaa3d91f8ba1bab2cfa1088a0bf596",
+    "pkg/reporting/catalog.go": "9a8ee2fc320efa38ec96443b7ed8cb33ca55c4b1840e91d83dfd9b2f7bc5aed3",
+    "pkg/reporting/pdf_brand.go": "f1ed4e46302fb8a160a4add49f96e47fdf0ae48fa6a8e62b8f206fefcf184c56",
+    "internal/api/metrics_reporting_handlers.go": "cd6b2beddafbeeaeef8ff6ea2a17c287505dbfe1b4c0a6d91ad90b800d70aa7e",
+    "internal/api/report_schedules.go": "f90786da7a45b0ab68488764dd6bc778adee4fdbb74bf709b69f88a158a72760",
+    "internal/api/reporting_backup_health.go": "14e64dfc01c14f9eccac0f60936f81c13f17053b30b131ad82b473a2a9eec0fe",
+    "internal/config/report_schedules.go": "76f5e6c7da0807a842d20f85119bb341feba9ae7cc62b1d083a3838eb45808f0",
+    "internal/monitoring/monitor_backups.go": "bac66f98218d085d65459732139bbacb4b5358043cfcbf1cd39cf06dcc58eb42",
+    "internal/monitoring/backup_task_history.go": "f0bd57e866b7e74a445abda6075ea827af17850601c24ba6f6c290ef921c8e12",
+    "internal/recovery/backup_health.go": "965e0df25f048b058b8bd8bc4472fa0e1ccc761b5f59047be1f0534e9b506bd0",
+    "internal/recovery/model/backup_history.go": "06e249e7c6b5e814c3264e80059628c4b0a7208ae34cbe0f5cc5f016fd9c2df5",
+    "internal/recovery/mapper/proxmox/mapper.go": "81145147d735f506dbc66d29cbe7d409f39f8350d9fa0be4ae9c048026155d39",
+    "internal/recovery/store/backup_history.go": "9e02131d7928badb5c285317483da3f220c849c0c8354eda5819bd7c9622c93f",
+    "internal/recovery/store/store.go": "8013620f6862a4ebac44434ac50a4b15a3ce8e4e0e5b0274010acfce4609e98b",
+    "pkg/proxmox/backup_history.go": "6d946cdf375d1d1b2861c516ad4ec37dc2f7c07e30a3469bf310e4ec010c923e",
+    "pkg/reporting/backup_health.go": "d2bc8f046e513bcc3abacf89e7b33576633ac6a231b4ed3dd4ccd12c02b6c190",
+    "internal/monitoring/recovery_rollups.go": "315c163c3a684db8f6a3636ccaf46ad09c8c86d7b04eecffd98b874bff87bb8a"
+  },
+  "private_content_sha256": {
+    "internal/reportingadmin/backup_health.go": "4208478e4baf570581c1c9222ccbd52aa299b1500b6d47b64361e8aa90bb1ca7",
+    "internal/enterpriseruntime/runtime.go": "0509ac6e2724cd68bb58a3f9348013006aa350aa5c16f079db08e6aebb3e7363",
+    "go.mod": "2506c706eee4a617d3796a9b6c65145dd87785095b8f54b28eebb4b24e6abb4b",
+    "go.sum": "62d138996eb5a28047c905ec8a264354f4345f6242692dba8a0c60264649b9b7"
+  },
+  "artifact_sha256": {
+    "client-backup-health.pdf": "32f9c60029c7ca5ebd8e4b2918c26a1eb3ec6e901f5310ed01ff096eb60d8a6d",
+    "client-backup-health.csv": "8dc7b7496d14dae0c249f33d260add879ecf03404136bada6a602b13a754822b",
+    "no-matching-client.csv": "6fefcc346c80b3b61b39bef165127cba0e46b3eb1a97af2d9258050cad1435e8"
+  },
+  "evidence": "/opt/pulse-release-worker/task-proofs/client-backup-reports-20261017/browser-evidence",
+  "pixel_review": "Reviewed current desktop, intermediate and narrow screenshots of the backup editor, unselected and selected workload names, light/dark colours, search and focus states, the 61-workload scrollable selection and reachable client/delivery controls. Selected rows, names, tags and keyboard focus remain visible in both themes. Reviewed accepted delivery with a distinct amber incomplete-data message, retrying/rejected/unconfirmed states, saved PDF details and unmatched scope. Save/Cancel and expanded actions remain readable and reachable without horizontal overflow. Reviewed every page of the five-page PDF after final source, including repeated daily column headings, workload continuation headings, missing values, failure details, footer and corrected UTC metadata. No clipping, overlap or obscured controls found in the checked states."
+}
