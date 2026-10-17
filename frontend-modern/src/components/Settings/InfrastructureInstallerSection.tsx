@@ -5,6 +5,7 @@ import { FormSelect } from '@/components/shared/FormSelect';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { notificationStore } from '@/stores/notifications';
 import { getUnifiedAgentLookupStatusPresentation } from '@/utils/unifiedAgentStatusPresentation';
 import {
@@ -130,6 +131,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
   props,
 ) => {
   const state = useInfrastructureOperationsContext();
+  const now = useRelativeTimeNow();
   const [showAdvancedOptions, setShowAdvancedOptions] = createSignal(false);
   const focus = createMemo<InfrastructureInstallerFocus>(() => props.focus ?? 'agent');
   const presentation = createMemo(() => INSTALLER_FOCUS_PRESENTATION[focus()]);
@@ -821,7 +823,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       </div>
                       <div class="space-y-1">
                         <div>
-                          Last seen {formatRelativeTime(agent().lastSeen)} (
+                          Last seen {formatRelativeTime(agent().lastSeen, { now: now() })} (
                           {formatAbsoluteTime(agent().lastSeen)})
                         </div>
                         <Show when={agent().agentVersion}>
