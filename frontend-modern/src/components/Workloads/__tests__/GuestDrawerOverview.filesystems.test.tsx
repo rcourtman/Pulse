@@ -127,7 +127,7 @@ describe('GuestDrawerOverview filesystem labels', () => {
     ).toHaveAttribute('aria-valuenow', '75');
   });
 
-  it.each(['paused', 'suspended'])(
+  it.each(['paused', 'suspended', 'unknown', 'starting'])(
     'labels a %s VM filesystem as last known without relying on a read failure',
     (status) => {
       const [guest, setGuest] = createSignal({ ...props.guest, type: 'qemu' as const });
@@ -138,7 +138,9 @@ describe('GuestDrawerOverview filesystem labels', () => {
       expect(screen.getByText('Last known 50% · 5.00 GB/10.0 GB · MP0')).toBeVisible();
       expect(
         screen.getByText(
-          `Guest filesystem readings are not current while the VM is ${status}. Any displayed values are last known.`,
+          status === 'paused' || status === 'suspended'
+            ? `Guest filesystem readings are not current while the VM is ${status}. Any displayed values are last known.`
+            : 'Guest filesystem readings are not current because the VM running state is unconfirmed. Any displayed values are last known.',
         ),
       ).toBeVisible();
       for (const path of paths) expect(screen.getByText(path)).toBeInTheDocument();

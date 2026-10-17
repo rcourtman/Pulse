@@ -81,6 +81,37 @@ describe('workloadGuestPresentation', () => {
     },
   );
 
+  it.each(['unknown', 'starting', 'stopping', 'private-unrecognised-state', '', undefined])(
+    'does not promote unconfirmed VM runtime %s into a current platform filesystem reading',
+    (status) => {
+      expect(getWorkloadGuestDiskRead({ status }, true)).toEqual({
+        state: 'last-known',
+        message:
+          'Guest filesystem readings are not current because the VM running state is unconfirmed. Any displayed values are last known.',
+        needsAction: false,
+      });
+      // A live independent producer can still supply its own reading. Unknown
+      // power is not a shutdown; native paused/stopped states remain stronger.
+      expect(getWorkloadGuestDiskRead({ status, disksFromAgent: true }, true).state).toBe(
+        'current',
+      );
+      expect(getWorkloadGuestDiskRead({ status }, false).state).toBe('current');
+      expect(
+        getWorkloadGuestDiskRead({ status, diskStatusReason: 'permission-denied' }, true),
+      ).toMatchObject({ state: 'unavailable', needsAction: true });
+      expect(
+        getWorkloadGuestDiskRead({ status, diskStatusReason: 'prev-agent-busy' }, true).message,
+      ).toContain('earlier guest request');
+    },
+  );
+
+  it.each(['running', 'online', 'healthy', ' RUNNING ', ' Online '])(
+    'preserves confirmed running and legacy %s aliases',
+    (status) => {
+      expect(getWorkloadGuestDiskRead({ status }, true).state).toBe('current');
+    },
+  );
+
   it.each(['permission-denied', 'prev-permission-denied'])(
     'keeps %s separate from permission expansion and guest health',
     (reason) => {
@@ -287,7 +318,9 @@ describe('workloadGuestPresentation', () => {
       'current',
     );
     // An agent's staleness says nothing about Proxmox's own filesystems.
-    expect(getWorkloadGuestDiskRead({ agentStale: true }, true).state).toBe('current');
+    expect(getWorkloadGuestDiskRead({ status: 'running', agentStale: true }, true).state).toBe(
+      'current',
+    );
   });
   it('names the age limit that coloured a completed backup, in days when whole', () => {
     const defaults = { freshHours: 24, staleHours: 72 };
