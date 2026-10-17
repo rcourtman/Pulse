@@ -441,6 +441,78 @@ func TestParseProxmoxLXCFilesystemsValidatesAndBoundsInput(t *testing.T) {
 	); err == nil {
 		t.Fatal("expected oversized pct list error")
 	}
+}
+
+// pct list prints nothing, not even its header, on a node with no containers
+// (pve-container src/PVE/CLI/pct.pm). Blank output is a complete empty
+// inventory; any non-blank line still needs the header first.
+func TestParseProxmoxLXCRunningContainersEmptyNode(t *testing.T) {
+	for name, output := range map[string]string{
+		"empty":           "",
+		"whitespace only": " \n\t\r\n\n",
+	} {
+		containers, err := parseProxmoxLXCRunningContainers(output)
+		if err != nil || containers == nil || len(containers) != 0 {
+			t.Fatalf("%s: containers=%+v err=%v, want empty inventory", name, containers, err)
+		}
+	}
+	for name, output := range map[string]string{
+		"row without header":  "100 running - web\n",
+		"garbage":             "pct: unexpected\n",
+		"header after a row":  "100 running - web\nVMID Status Lock Name\n",
+		"truncated header":    "VMID Status\n",
+		"leading blank + row": "\n\n100 running - web\n",
+	} {
+		if containers, err := parseProxmoxLXCRunningContainers(output); err == nil || containers != nil {
+			t.Fatalf("%s: containers=%+v err=%v, want error", name, containers, err)
+		}
+	}
+	containers, err := parseProxmoxLXCRunningContainers("VMID Status Lock Name\n")
+	if err != nil || len(containers) != 0 {
+		t.Fatalf("header only: containers=%+v err=%v", containers, err)
+	}
+	containers, err = parseProxmoxLXCRunningContainers(
+		"VMID       Status     Lock         Name                \n" +
+			"101        stopped                 archive             \n" +
+			"100        running                 web                 \n",
+	)
+	if err != nil || len(containers) != 1 || containers[0].VMID != 100 || containers[0].Name != "web" {
+		t.Fatalf("normal list: containers=%+v err=%v", containers, err)
+	}
+}
+
+func TestCollectProxmoxLXCFilesystemsEmptyNodeIsComplete(t *testing.T) {
+	const pctPath = "/usr/sbin/pct"
+	var commands []string
+	collector := &mockCollector{
+		goos: "linux",
+		lookPathFn: func(file string) (string, error) {
+			if file == "pct" {
+				return pctPath, nil
+			}
+			return "", os.ErrNotExist
+		},
+		commandCombinedOutputLimitedFn: func(_ context.Context, _ int, _ string, args ...string) (string, error) {
+			commands = append(commands, strings.Join(args, " "))
+			if strings.Join(args, " ") == "list" {
+				return "", nil
+			}
+			return "", errors.New("unexpected pct query")
+		},
+	}
+
+	result := (&Agent{logger: zerolog.Nop(), collector: collector}).collectProxmoxLXCFilesystemsResult(t.Context())
+	if !result.Applicable || result.Degraded || result.FailedContainers != 0 {
+		t.Fatalf("collection result = %+v, want applicable complete empty collection", result)
+	}
+	if result.Inventory == nil || len(result.Inventory.Containers) != 0 ||
+		result.Inventory.Status != "complete" || len(result.Inventory.OmittedVMIDs) != 0 ||
+		result.Inventory.ValidateCollection() != nil {
+		t.Fatalf("inventory = %+v, want complete empty inventory", result.Inventory)
+	}
+	if len(commands) != 1 || commands[0] != "list" {
+		t.Fatalf("commands = %v, want only pct list", commands)
+	}
 
 	disks, err := parseProxmoxLXCDF(`MP Volume Size Used Avail Use% Path
 mp1 pool:valid 10.0G 4.0G 6.0G 40.0 /valid
