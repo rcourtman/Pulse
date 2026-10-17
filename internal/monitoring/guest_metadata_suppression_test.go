@@ -202,7 +202,7 @@ func TestGuestMetadataOSInfoSuppressionHTTPPollLifecycle(t *testing.T) {
 						}
 					}))
 					defer server.Close()
-					client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+					client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -257,6 +257,8 @@ func TestGuestMetadataOSInfoSuppressionHTTPPollLifecycle(t *testing.T) {
 					}
 					locked.Store(false)
 					m.guestMetadataLimiter[key] = time.Now().Add(-time.Second)
+					// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+					cycleStart := time.Now()
 					resumed := build()
 					if resumed.GuestAgentStatus != "available" || resumed.AgentVersion != "2.0" || resumed.Disk.Used != int64(300*mib) || len(resumed.Disks) != 1 || len(resumed.NetworkInterfaces) != 1 || resumed.NetworkInterfaces[0].Name != "eth1" {
 						t.Errorf("normal poll did not resume useful disk/network/version without OS-info: status=%s version=%s disks=%d", resumed.GuestAgentStatus, resumed.AgentVersion, len(resumed.Disks))
@@ -267,7 +269,7 @@ func TestGuestMetadataOSInfoSuppressionHTTPPollLifecycle(t *testing.T) {
 					if !m.guestMetadataCache[key].osInfoSkip || !m.hasRecentGuestMetadataEvidence("suppression", "node", 105, time.Now()) {
 						t.Error("resumed metadata lost suppression or useful current evidence")
 					}
-					m.recordGuestMetrics([]models.VM{resumed}, nil, time.Now().Add(-time.Second))
+					m.recordGuestMetrics([]models.VM{resumed}, nil, cycleStart)
 					if got := len(m.metricsHistory.GetGuestMetrics(resumed.ID, "disk", time.Hour)); got != 1 {
 						t.Errorf("fresh disk History points=%d, want one", got)
 					}

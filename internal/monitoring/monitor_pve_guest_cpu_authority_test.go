@@ -26,7 +26,8 @@ func TestRecordGuestMetricsKeepsLiveAndHistoricalProxmoxCPUUnitsAligned(t *testi
 	t.Cleanup(func() {
 		_ = store.Close()
 	})
-	if err := store.WaitForMaintenance(5 * time.Second); err != nil {
+	// Wait on the maintenance barrier itself; a timer only fails a busy machine.
+	if err := store.WaitForMaintenance(0); err != nil {
 		t.Fatalf("wait for metrics maintenance: %v", err)
 	}
 
@@ -71,7 +72,8 @@ func TestRecordGuestMetricsKeepsLiveAndHistoricalProxmoxCPUUnitsAligned(t *testi
 			}
 
 			now := time.Now().UTC()
-			storePoints, err := store.Query(tc.resourceType, tc.resourceID, "cpu", now.Add(-time.Minute), now.Add(time.Minute), 0)
+			// A stalled run must not age the point out; an hour stays in the raw tier.
+			storePoints, err := store.Query(tc.resourceType, tc.resourceID, "cpu", now.Add(-time.Hour), now.Add(time.Minute), 0)
 			if err != nil {
 				t.Fatalf("query persistent CPU history: %v", err)
 			}
