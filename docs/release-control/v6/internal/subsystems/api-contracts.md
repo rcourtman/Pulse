@@ -12136,8 +12136,12 @@ and repeatable customer outcomes.
 ### Report email shares the canonical SMTP retry verdict
 
 Attachment delivery through `internal/notifications/email_enhanced.go` uses
-notifications-owned `sendEmailWithOptions`; reporting must not introduce a
-separate retry classification. That transport stops on authentication,
+notifications-owned `sendEmailWithOptions`. Reporting must not introduce a
+separate retry classification. Reporting also inherits the notification-owned
+[provider authentication and per-delivery envelope boundary](notifications.md#smtp-authentication-and-envelopes-belong-to-each-delivery).
+It must not suppress a supported provider's default SMTP username or mutate
+another delivery's configuration when preparing a report.
+That transport stops on authentication,
 configuration, or rejection failures and preserves temporary-failure retries.
 Its returned failure retains the structured cause and actual attempt count.
 SMTP acceptance proves only that the configured server accepted the message,

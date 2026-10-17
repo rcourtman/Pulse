@@ -2672,30 +2672,21 @@ func (n *NotificationManager) emailDeliveryManager(config EmailConfig) (*Enhance
 		return newEmailDeliveryManager(config, recipients), recipients
 	}
 
-	manager.config.EmailConfig = EmailConfig{
-		Provider:  config.Provider,
-		From:      config.From,
-		To:        recipients,
-		SMTPHost:  config.SMTPHost,
-		SMTPPort:  config.SMTPPort,
-		Username:  config.Username,
-		Password:  config.Password,
-		TLS:       config.TLS,
-		StartTLS:  config.StartTLS,
-		RateLimit: config.RateLimit,
-	}
-	manager.config.Provider = config.Provider
-	manager.config.StartTLS = config.StartTLS
-	manager.config.RateLimit = effectiveEmailRateLimit(config.RateLimit)
-	manager.config.AuthRequired = config.Username != "" && config.Password != ""
-
-	if manager.rateLimit != nil {
-		manager.rateLimit.mu.Lock()
-		manager.rateLimit.rate = manager.config.RateLimit
-		manager.rateLimit.mu.Unlock()
-	}
-
-	return manager, recipients
+	// Concurrent queue workers and reports may share an SMTP transport while
+	// carrying different admitted envelopes. Keep the cached manager immutable:
+	// otherwise preparing one delivery changes another delivery's recipients,
+	// sender and rate policy while it is being sent or waiting to retry.
+	deliveryConfig := manager.config
+	deliveryConfig.EmailConfig = copyEmailConfig(config)
+	deliveryConfig.To = append([]string(nil), recipients...)
+	deliveryConfig.Provider = config.Provider
+	deliveryConfig.StartTLS = config.StartTLS
+	deliveryConfig.RateLimit = effectiveEmailRateLimit(config.RateLimit)
+	deliveryConfig.AuthRequired = config.Username != "" && config.Password != ""
+	delivery := NewEnhancedEmailManager(deliveryConfig)
+	// Isolating envelopes must not give every delivery a fresh rate budget.
+	delivery.rateLimit = manager.rateLimit
+	return delivery, recipients
 }
 
 // sendHTMLEmailWithError sends an HTML email with multipart content and returns any error

@@ -150,6 +150,21 @@ monitor startup test retains saved-destination restoration and its audit check.
 This changes callback sequencing only: no SQLite driver, schema/SQL, provider
 policy, credential, SSRF boundary or notification payload is changed.
 
+### SMTP authentication and envelopes belong to each delivery
+
+SMTP managers resolve the provider identity and any supported default username
+before deciding whether credentials require authentication. Explicit usernames
+take precedence. Validation, connection tests and real sends use the same
+resolved credentials without replacing the saved username. Invalid credentials
+retain the existing authentication failure and immediate dead-letter policy.
+
+Each email delivery owns its configuration snapshot, including its sender and
+recipients. Preparing a concurrent alert or report cannot change an in-flight
+delivery's envelope or retry policy. Deliveries using the cached SMTP transport
+share its rate-limit state without mutating its configuration. Saved settings
+and already-admitted queue snapshots remain independent. This does not refresh
+retained destinations or credentials after an edit, or add automatic replay.
+
 ### Delivery verdicts survive session cleanup and interrupted diagnostics
 
 A successful final SMTP DATA reply establishes server acceptance. Plain SMTP,

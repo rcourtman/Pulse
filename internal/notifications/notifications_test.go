@@ -3229,6 +3229,8 @@ func TestSendHTMLEmailWithError_NilEmailManager(t *testing.T) {
 }
 
 func TestSendHTMLEmailWithError_ExistingEmailManager(t *testing.T) {
+	receipts := make(chan isolatedSMTPReceipt, 1)
+	stubSMTPDialSuccess(t, nil, func(receipt isolatedSMTPReceipt) { receipts <- receipt })
 	// Create an email manager first
 	existingManager := NewEnhancedEmailManager(EmailProviderConfig{
 		EmailConfig: EmailConfig{
@@ -3250,16 +3252,19 @@ func TestSendHTMLEmailWithError_ExistingEmailManager(t *testing.T) {
 		SMTPPort: 25,
 	}
 
-	// Will fail but exercises the "update existing manager config" path when the
-	// passed config matches the persisted SMTP target.
+	// The submitted envelope shares the cached transport's rate budget without
+	// changing another delivery's configuration.
 	err := nm.sendHTMLEmailWithError("Test Subject", "<p>test</p>", "test", config)
-	if err == nil {
-		t.Error("expected error for invalid SMTP host")
+	if err != nil {
+		t.Fatalf("expected accepted SMTP message, got %v", err)
 	}
 
-	// Verify the manager's From/To were updated on the shared delivery path.
-	if existingManager.config.EmailConfig.From != "new@example.com" {
-		t.Errorf("expected From to be updated to 'new@example.com', got %q", existingManager.config.EmailConfig.From)
+	receipt := awaitIsolatedSMTPReceipt(t, receipts)
+	if receipt.from != "FROM:<new@example.com>" || len(receipt.recipients) != 1 || receipt.recipients[0] != "TO:<new-recipient@example.com>" {
+		t.Errorf("SMTP envelope did not use the submitted configuration: %+v", receipt)
+	}
+	if existingManager.config.EmailConfig.From != "old@example.com" {
+		t.Errorf("delivery changed the cached sender: %q", existingManager.config.EmailConfig.From)
 	}
 }
 
