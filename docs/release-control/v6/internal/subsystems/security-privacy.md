@@ -30,6 +30,22 @@ the same provider VM ID. Historical storage reads preserve source labels and
 requested time bounds. These read paths add no credential, execution or approval
 authority.
 
+### Reports and metric summaries read only the requesting organization
+
+The server's report engine (`pkg/server/server.go`) resolves the metrics store
+of each request's organization through the multi-tenant monitor
+(`EngineConfig.MetricsStoreForOrg`) and refuses a request that names no
+organization, so no report path falls back to the default organization's
+store. Report handlers also reject a resource that is not in the requesting
+organization's inventory, scheduled runs resolve their scope against their
+owning organization's inventory, and Pulse Assistant's `pulse_summarize`
+reads its executor's organization. A resource ID that exists in two
+organizations yields each organization only its own history.
+`internal/api/reporting_org_scope_test.go`,
+`TestReportingScheduledRunReadsOnlyItsOwningOrganizationsMetrics`,
+`pkg/reporting/engine_org_scope_test.go` and
+`TestSummarizeToolReadsOnlyItsOrganizationsMetrics` hold this boundary.
+
 ### Patrol maintenance coverage widens no authority
 
 Patrol inherits only maintenance from an ancestor window scoped
@@ -467,7 +483,7 @@ administrator or settings-scope checks, expose queue contents to new callers, or
 change tenant selection. Missing owners fail with 503 rather than dereferencing
 nil.
 
-The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege. A manager of that organisation additionally receives the org-bound infrastructureRead and availabilityRead capabilities, because their routes admit org managers through RequireOrgAdmin / ensureOrgAdminSession and read only that organisation's state; this never extends to reporting, authentication, SSO, API tokens, users, roles, audit, relay, system, updates, logs, diagnostics or billing surfaces, whose routes use ensureAdminSession and admit instance administrators only.
+The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege. A manager of that organisation additionally receives the org-bound infrastructureRead, availabilityRead and reportingRead capabilities, because their routes admit org managers through RequireOrgAdmin / ensureOrgAdminSession and read only that organisation's state (reports read only its inventory and metrics store, and reportingRead still requires read:nodes); this never extends to authentication, SSO, API tokens, users, roles, audit, relay, system, updates, logs, diagnostics or billing surfaces, whose routes use ensureAdminSession and admit instance administrators only.
 
 API token scope copy must match runtime authority. `ai:chat` covers Assistant
 conversation, model selection, sessions, and knowledge reads only. Knowledge

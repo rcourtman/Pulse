@@ -5449,7 +5449,7 @@ func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) 
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/reporting?resourceType=node&resourceId=node-1&metricType=+cpu+&title=+Node+report+",
@@ -5528,7 +5528,7 @@ func TestContract_SingleReportAINarrationRequiresPOST(t *testing.T) {
 	// tenant AI service; GET must use only the existing-service findings path.
 	narrator := &countingReportNarrator{}
 	var narratorResolves, findingsResolves atomic.Int32
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	handler.SetNarratorResolver(func(context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
 		narratorResolves.Add(1)
 		return narrator, nil, nil
@@ -5602,7 +5602,7 @@ func TestContract_SingleReportGETDoesNotConstructTenantAIService(t *testing.T) {
 
 	router := &Router{
 		aiSettingsHandler: NewAISettingsHandler(config.NewMultiTenantPersistence(t.TempDir()), nil, nil),
-		reportingHandlers: NewReportingHandlers(nil, nil),
+		reportingHandlers: newReportingHandlersWithInventoryForTest(t, "tenant-1", "node-1"),
 	}
 	router.wireReportingAIResolvers()
 	t.Cleanup(router.aiSettingsHandler.StopServices)
@@ -5778,7 +5778,7 @@ func TestContract_ReportingRequestCarriesEntitledReportBranding(t *testing.T) {
 	t.Cleanup(func() { SetLicenseServiceProvider(nil) })
 
 	t.Setenv("PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME", "Provider Default")
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	handler.SetSystemSettingsStore(reportBrandSettingsStore{settings: &config.SystemSettings{
 		ReportBranding: &config.ReportBrandSettings{DisplayName: "Client One"},
 	}})
@@ -5940,7 +5940,7 @@ func TestContract_PerformanceReportTransportUsesCatalogDefaultRange(t *testing.T
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	end := time.Date(2026, 3, 25, 15, 0, 0, 0, time.UTC)
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -26481,9 +26481,11 @@ func orgScopedSessionRequest(t *testing.T, user string, org *models.Organization
 // its owner. ensureOrgAdminSession lets an org manager through the org-bound
 // settings routes, but the security status snapshot reported every settings
 // capability as false for any org-scoped session, so the settings navigation
-// hid Infrastructure and the owner had no way to connect a single system.
-// Those org-bound capabilities must follow the route rule, while instance
-// administration, reporting included, stays closed to org-scoped sessions.
+// hid Infrastructure and Reporting and the owner had no way to connect a
+// single system or build its reports. Those org-bound capabilities must follow
+// the route rule, while instance administration stays closed to org-scoped
+// sessions. Reporting is org-bound because every report reads only the request
+// organization's inventory and metrics store.
 func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 	prev := authpkg.GetAuthorizer()
 	authpkg.SetAuthorizer(&authpkg.DefaultAuthorizer{})
@@ -26524,6 +26526,7 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 			orgBound := map[string]bool{
 				"infrastructureRead": caps.InfrastructureRead,
 				"availabilityRead":   caps.AvailabilityRead,
+				"reportingRead":      caps.ReportingRead,
 			}
 			for name, got := range orgBound {
 				if got != tc.manager {
@@ -26532,7 +26535,6 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 			}
 
 			instanceWide := map[string]bool{
-				"reportingRead":       caps.ReportingRead,
 				"systemSettingsRead":  caps.SystemSettingsRead,
 				"diagnosticsRead":     caps.DiagnosticsRead,
 				"systemLogsRead":      caps.SystemLogsRead,

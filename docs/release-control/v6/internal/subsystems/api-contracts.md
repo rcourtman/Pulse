@@ -5050,13 +5050,24 @@ auto-register mutation boundary.
     which also admit a manager (owner or admin) of that organization through
     `sessionUserHasSettingsAdminPrivileges`: agents, nodes, connections,
     availability, TrueNAS and VMware, agent profiles, install commands, deploy
-    status, configuration transfer and the org-bound relay mobile token. The
-    default is instance administration, so a route that does not opt in fails
-    closed. The snapshot records the org rule as `sessionManagesOrg`, never as
-    `sessionIsAdmin`, and it widens only `infrastructureRead` and
-    `availabilityRead`. Reporting stays instance administration because report
-    generation reads the instance's default metrics store. Every other
-    capability, `detailLevel` and `authUsername` stay instance administration.
+    status, configuration transfer, the org-bound relay mobile token, and the
+    `/api/admin/reports/*` routes (catalog, single and multi-resource
+    generation, VM inventory export, schedules). The default is instance
+    administration, so a route that does not opt in fails closed. The snapshot
+    records the org rule as `sessionManagesOrg`, never as `sessionIsAdmin`, and
+    it widens only `infrastructureRead`, `availabilityRead` and `reportingRead`;
+    `reportingRead` still requires the authorizer's `read` on `nodes`.
+    Reporting is org-bound because the report engine resolves the metrics store
+    of the request's `OrgID` (`EngineConfig.MetricsStoreForOrg`) and refuses a
+    request without one, and the handlers reject any resource that is not in
+    the request organization's inventory; scheduled runs resolve their scope
+    against their owning organization's inventory, and Pulse Assistant's
+    `pulse_summarize` reads its executor's organization.
+    `internal/api/reporting_org_scope_test.go`,
+    `TestReportingScheduledRunReadsOnlyItsOwningOrganizationsMetrics` and
+    `pkg/reporting/engine_org_scope_test.go` prove one organization cannot read
+    another's metrics through any report path. Every other capability,
+    `detailLevel` and `authUsername` stay instance administration.
     `internal/api/org_admin_session_authority_test.go` holds the session matrix. Before this, a provider opening a client
     workspace from the Pulse Account portal arrived as the org owner with every
     capability `false`, so Settings hid the Infrastructure and Reporting pages
@@ -11668,8 +11679,9 @@ routes on mount:
   and `/api/logs/download`;
 - `pulseIntelligenceRead` combines the handler's settings-admin/scope check
   with `RequirePermission(read, settings)` from `/api/settings/ai`;
-- `reportingRead` combines `ensureAdminSession` (instance administrators
-  only), `settings:read`, and `RequirePermission(read, nodes)` from
+- `reportingRead` combines `ensureOrgAdminSession` (instance administrators
+  and, on an org-scoped request, managers of that organization),
+  `settings:read`, and `RequirePermission(read, nodes)` from
   `/api/admin/reports/catalog`.
 
 Those last two must not collapse to `canReadSettings`: a custom authorizer can

@@ -3250,11 +3250,12 @@ withheld from every org-scoped session, so an org manager is not offered
 instance recovery or configuration transfer. See the api-contracts contract,
 rule 35.
 
-Superseded in part: `reportingRead` is no longer granted to org managers.
-Report generation reads the instance's default metrics store, so reporting
-routes stay instance administration until reporting is scoped to the
-organization's own metrics. Org managers keep `infrastructureRead` and
-`availabilityRead`.
+Superseded in part: `reportingRead` was briefly withheld from org managers
+while report generation read the instance's default metrics store. Reports now
+read only the request organization's metrics store and refuse resources outside
+its inventory, so org managers again hold `reportingRead` alongside
+`infrastructureRead` and `availabilityRead`, and the reporting routes use
+`ensureOrgAdminSession`.
 
 ### TLS verification preference survives node re-registration
 

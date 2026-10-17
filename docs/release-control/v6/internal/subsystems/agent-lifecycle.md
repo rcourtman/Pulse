@@ -4436,6 +4436,12 @@ agent profiles and fleet diagnostics) declare that authority explicitly with
 `RequireOrgAdmin`. `RequireAdmin` now admits instance administrators only, so
 an agent route that does not opt in is closed to organization owners.
 
+The same owner can also build reports on the hosts and agents that organization
+enrolled: the `/api/admin/reports/*` routes use `ensureOrgAdminSession`, and a
+report or schedule on an agent resource reads only that organization's
+inventory and metrics store. An agent ID enrolled in another organization is
+refused as not found rather than read from another store.
+
 ### Auto-register preserves the operator's stored TLS choice
 
 Re-registering an existing Proxmox node through the canonical auto-register

@@ -285,15 +285,20 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 	canReadReporting := canReadSettings &&
 		r.canAccessPermissionSurface(snapshot, internalauth.ActionRead, internalauth.ResourceNodes, config.ScopeSettingsRead)
 
-	// Infrastructure and availability are org-bound: their routes use
-	// RequireOrgAdmin / ensureOrgAdminSession, which admit an org manager
+	// Infrastructure, availability, and reporting are org-bound: their routes
+	// use RequireOrgAdmin / ensureOrgAdminSession, which admit an org manager
 	// inside their own organization, and their handlers read that
-	// organization's config and monitor state. A provider opening a client
-	// workspace lands there as the org owner, and without these the settings
-	// navigation hides the pages that connect the client's systems. Every other
-	// capability, reporting included, stays instance administration: report
-	// generation still reads metrics from the instance's default store.
+	// organization's config, monitor state and metrics store. A provider
+	// opening a client workspace lands there as the org owner, and without
+	// these the settings navigation hides the pages that connect the client's
+	// systems and build its reports. Reporting also needs read:nodes, which
+	// RequirePermission checks before the session rule. Every other capability
+	// stays instance administration.
 	canReadOrgSettings := canReadSettings || snapshot.sessionManagesOrg
+	if snapshot.sessionManagesOrg && !canReadReporting {
+		allowed, err := r.authorizer.Authorize(snapshot.request.Context(), internalauth.ActionRead, internalauth.ResourceNodes)
+		canReadReporting = err == nil && allowed
+	}
 
 	return securityStatusSettingsCapabilities{
 		InfrastructureRead:    canReadOrgSettings,
