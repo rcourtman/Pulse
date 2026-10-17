@@ -219,11 +219,16 @@ func TestReportingEnrichmentSnapshotNormalizesEmptyCollections(t *testing.T) {
 	}
 }
 
+type reportingFixtureRecords []unifiedresources.IngestRecord
+
+func (records reportingFixtureRecords) SupplementalRecords(*monitoring.Monitor, string) []unifiedresources.IngestRecord {
+	return records
+}
+
 func newReportingMonitorForTest(t *testing.T, state *models.State, resources []unifiedresources.Resource) *monitoring.Monitor {
 	t.Helper()
 
 	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(state.GetSnapshot())
 	records := make([]unifiedresources.IngestRecord, 0, len(resources))
 	for i, resource := range resources {
 		sourceID := resource.ID
@@ -236,11 +241,14 @@ func newReportingMonitorForTest(t *testing.T, state *models.State, resources []u
 			Identity: resource.Identity,
 		})
 	}
-	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
-
 	monitor := &monitoring.Monitor{}
-	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
 	setUnexportedField(t, monitor, "state", state)
+	// Use the real provider boundary so read-driven publications retain these
+	// supplemental fixtures as well as live snapshot resources.
+	monitor.SetResourceStoreAndProviders(unifiedresources.NewMonitorAdapter(registry),
+		map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{
+			unifiedresources.SourceTrueNAS: reportingFixtureRecords(records),
+		})
 	return monitor
 }
 

@@ -4966,6 +4966,10 @@ whose nested VM inventory definition owns panel copy, stable column schema,
 and filename prefix. Storage and recovery flows may read those facts when they
 need fleet context, but they must not fork their own reporting or inventory
 column contract.
+The API-owned `vm_inventory` schedule kind reuses that same exporter and the
+reporting-owned email/disk delivery and retry path. Current-state inventory
+scheduling does not add storage history, change retention entitlements or
+move generated artifacts out of their organization-local reporting storage.
 That catalog route is intentionally metadata-readable without the
 `advanced_reporting` feature gate so locked admin reporting shells can stay on
 the same API-owned definition before upsell; storage- and recovery-adjacent

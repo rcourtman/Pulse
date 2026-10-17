@@ -572,6 +572,36 @@ describe('useReportingPanelState', () => {
     dispose();
   });
 
+  it('saves an inventory CSV schedule without leaking old resources or tags', async () => {
+    apiFetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/admin/reports/schedules' && init?.method === 'POST') {
+        return Promise.resolve(jsonResponse({ ...JSON.parse(String(init.body)), id: 'inventory' }));
+      }
+      if (url === '/api/admin/reports/schedules')
+        return Promise.resolve(jsonResponse(schedulesPayload));
+      return Promise.resolve(jsonResponse(catalogPayload));
+    });
+    const { hookState, dispose } = mountHook();
+    await settleMountLoads(hookState);
+    hookState.startCreateSchedule();
+    hookState.updateScheduleForm({ name: 'Inventory', tagFilter: 'old-client' });
+    hookState.setScheduleResources([{ id: 'vm-old', name: 'Old VM', type: 'vm' }]);
+    hookState.setScheduleKind('vm_inventory');
+    expect(hookState.scheduleResources()).toEqual([]);
+    await hookState.saveReportSchedule();
+    expect(showWarningMock).not.toHaveBeenCalled();
+    const post = apiFetchMock.mock.calls.find(
+      ([url, init]) => url === '/api/admin/reports/schedules' && init?.method === 'POST',
+    );
+    expect(post).toBeDefined();
+    expect(JSON.parse(String(post![1].body))).toMatchObject({
+      kind: 'vm_inventory',
+      format: 'csv',
+      scope: { resources: [], tags: [] },
+    });
+    dispose();
+  });
+
   it('still requires a scope for a performance report schedule', async () => {
     const { hookState, dispose } = mountHook();
     await settleMountLoads(hookState);

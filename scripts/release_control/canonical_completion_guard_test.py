@@ -1342,6 +1342,39 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         other = infer_impacted_subsystems(["internal/api/access_control_handlers.go"])["api-contracts"]
         self.assertNotIn(proof, other["verification_requirements"][0]["exact_files"])
 
+    def test_unattended_reporting_proofs_do_not_satisfy_unrelated_runtime_changes(self):
+        cases = [
+            (
+                "api-contracts", "internal/api/metrics_reporting_handlers.go",
+                "internal/api/report_schedule_inventory_test.go",
+                "internal/api/access_control_handlers.go",
+            ),
+            (
+                "api-contracts", "internal/api/router_helpers.go",
+                "internal/api/reporting_monitor_reload_test.go",
+                "internal/api/access_control_handlers.go",
+            ),
+            (
+                "monitoring", "internal/monitoring/resource_stale_thresholds.go",
+                "internal/monitoring/unified_inventory_read_refresh_test.go",
+                "internal/monitoring/monitor.go",
+            ),
+        ]
+        rules = {rule["id"]: rule for rule in load_subsystem_rules()}
+        for subsystem, runtime, proof, unrelated in cases:
+            with self.subTest(runtime=runtime):
+                rule = rules[subsystem]
+                requirement = build_verification_requirements(rule, [runtime])[0]
+                self.assertEqual(
+                    staged_verification_files_for_requirement(rule, requirement, [proof]),
+                    [proof],
+                )
+                other = build_verification_requirements(rule, [unrelated])[0]
+                self.assertEqual(
+                    staged_verification_files_for_requirement(rule, other, [proof]),
+                    [],
+                )
+
     def test_organization_rbac_backend_change_requires_organization_settings_and_api_contracts(self):
         required = infer_impacted_subsystems(["internal/api/access_control_handlers.go"])
         self.assertEqual(set(required), {"api-contracts", "organization-settings"})

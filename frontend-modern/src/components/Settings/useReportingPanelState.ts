@@ -298,7 +298,7 @@ export const useReportingPanelState = () => {
 
   const setScheduleKind = (kind: ReportScheduleKind) => {
     setScheduleForm((current) => applyReportScheduleKind(current, kind));
-    if (kind === 'patrol_digest') {
+    if (kind !== 'resources') {
       setScheduleResources([]);
     }
   };
@@ -331,7 +331,7 @@ export const useReportingPanelState = () => {
       return;
     }
     if (
-      payload.kind !== 'patrol_digest' &&
+      payload.kind === 'resources' &&
       (payload.scope.resources?.length ?? 0) === 0 &&
       (payload.scope.tags?.length ?? 0) === 0
     ) {

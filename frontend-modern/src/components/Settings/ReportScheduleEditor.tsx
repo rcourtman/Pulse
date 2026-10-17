@@ -51,8 +51,11 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
   } = props.state;
   const performanceReport = () => reportingCatalog()?.performanceReport ?? null;
   const isDigestForm = () => scheduleForm().kind === 'patrol_digest';
+  const isInventoryForm = () => scheduleForm().kind === 'vm_inventory';
   // Existing digest schedules stay editable after Patrol is switched off.
-  const showReportTypeSelect = () => patrolDigestAvailable() || isDigestForm();
+  const inventoryAvailable = () => !!reportingCatalog()?.vmInventoryExport || isInventoryForm();
+  const showReportTypeSelect = () =>
+    inventoryAvailable() || patrolDigestAvailable() || isDigestForm();
   return (
     <section class="space-y-4 border-y border-base-300 py-4">
       <Show when={showReportTypeSelect()}>
@@ -64,11 +67,18 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
             help={
               isDigestForm()
                 ? 'Emails what Patrol checked, found, fixed, and spent over the last seven days. Nothing is saved to disk.'
-                : 'A performance report for the resources you pick, as a PDF or CSV.'
+                : isInventoryForm()
+                  ? 'Exports the current inventory of all VMs in this organization as CSV each time it runs, including newly discovered VMs.'
+                  : 'A performance report for the resources you pick, as a PDF or CSV.'
             }
           >
             <option value="resources">{reportScheduleKindLabel('resources')}</option>
-            <option value="patrol_digest">{reportScheduleKindLabel('patrol_digest')}</option>
+            <Show when={inventoryAvailable()}>
+              <option value="vm_inventory">{reportScheduleKindLabel('vm_inventory')}</option>
+            </Show>
+            <Show when={patrolDigestAvailable() || isDigestForm()}>
+              <option value="patrol_digest">{reportScheduleKindLabel('patrol_digest')}</option>
+            </Show>
           </FormSelect>
         </div>
       </Show>
@@ -81,7 +91,13 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
             class={formControl}
             value={scheduleForm().name}
             onInput={(e) => updateScheduleForm({ name: e.currentTarget.value })}
-            placeholder={isDigestForm() ? 'Patrol weekly summary' : 'Monthly client report'}
+            placeholder={
+              isDigestForm()
+                ? 'Patrol weekly summary'
+                : isInventoryForm()
+                  ? 'Monthly VM inventory'
+                  : 'Monthly client report'
+            }
           />
         </FormField>
         <FormField label="Timezone">
@@ -100,7 +116,9 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
         class={
           isDigestForm()
             ? 'grid grid-cols-1 gap-4 md:grid-cols-2'
-            : 'grid grid-cols-1 gap-4 md:grid-cols-4'
+            : isInventoryForm()
+              ? 'grid grid-cols-1 gap-4 md:grid-cols-3'
+              : 'grid grid-cols-1 gap-4 md:grid-cols-4'
         }
       >
         <Show when={!isDigestForm()}>
@@ -152,7 +170,7 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
             onInput={(e) => updateScheduleForm({ time: e.currentTarget.value })}
           />
         </FormField>
-        <Show when={!isDigestForm()}>
+        <Show when={scheduleForm().kind === 'resources'}>
           <FormSelect
             label="Format"
             value={scheduleForm().format}
@@ -166,7 +184,7 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
         </Show>
       </div>
 
-      <Show when={!isDigestForm()}>
+      <Show when={scheduleForm().kind === 'resources'}>
         <FormField
           label="Resources"
           helpText="Use explicit resources, tags, or both. Scheduled reports use the previous reporting boundary."
@@ -180,17 +198,21 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
       </Show>
 
       <Show when={!isDigestForm()}>
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <FormField label="Tag filter" helpText="Comma-separated tags">
-            <input
-              aria-label="Tag filter"
-              type="text"
-              class={formControl}
-              value={scheduleForm().tagFilter}
-              onInput={(e) => updateScheduleForm({ tagFilter: e.currentTarget.value })}
-              placeholder="production, customer-facing"
-            />
-          </FormField>
+        <div
+          class={`grid grid-cols-1 gap-4 ${isInventoryForm() ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}
+        >
+          <Show when={!isInventoryForm()}>
+            <FormField label="Tag filter" helpText="Comma-separated tags">
+              <input
+                aria-label="Tag filter"
+                type="text"
+                class={formControl}
+                value={scheduleForm().tagFilter}
+                onInput={(e) => updateScheduleForm({ tagFilter: e.currentTarget.value })}
+                placeholder="production, customer-facing"
+              />
+            </FormField>
+          </Show>
           <FormSelect
             label="Delivery"
             value={scheduleForm().deliveryMethod}

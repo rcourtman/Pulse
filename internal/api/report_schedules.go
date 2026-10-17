@@ -294,14 +294,15 @@ func (h *ReportingHandlers) reportSchedulePersistenceAndStore(ctx context.Contex
 }
 
 func (h *ReportingHandlers) reportSchedulePersistence(ctx context.Context) (*config.ConfigPersistence, error) {
-	if h == nil || h.mtMonitor == nil {
+	manager := h.reportMonitorManager()
+	if manager == nil {
 		return nil, fmt.Errorf("multi-tenant monitor is not configured")
 	}
 	orgID := GetOrgID(ctx)
 	if strings.TrimSpace(orgID) == "" {
 		orgID = "default"
 	}
-	monitor, err := h.mtMonitor.GetMonitor(orgID)
+	monitor, err := manager.GetMonitor(orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -433,6 +434,16 @@ func (h *ReportingHandlers) prepareReportSchedule(ctx context.Context, schedule 
 	}
 	switch schedule.Kind {
 	case config.ReportScheduleKindResources:
+	case config.ReportScheduleKindVMInventory:
+		if schedule.Format == "" {
+			schedule.Format = string(reporting.DescribeVMInventoryExport().Format)
+		}
+		if !reporting.DescribeVMInventoryExport().SupportsFormat(reporting.ReportFormat(schedule.Format)) {
+			return schedule, reportScheduleValidationError{code: "invalid_format", message: "VM inventory schedules require CSV format"}
+		}
+		if len(schedule.Scope.Resources) > 0 || len(schedule.Scope.Tags) > 0 {
+			return schedule, reportScheduleValidationError{code: "invalid_scope", message: "VM inventory includes all VMs in this organization. Resource and tag filters are not supported."}
+		}
 	case config.ReportScheduleKindPatrolDigest:
 		prepared, err := preparePatrolDigestSchedule(schedule, now)
 		if err != nil {
@@ -440,7 +451,7 @@ func (h *ReportingHandlers) prepareReportSchedule(ctx context.Context, schedule 
 		}
 		return prepared, h.validateEnabledReportDelivery(ctx, prepared)
 	default:
-		return schedule, reportScheduleValidationError{code: "invalid_kind", message: "Schedule kind must be resources or patrol_digest"}
+		return schedule, reportScheduleValidationError{code: "invalid_kind", message: "Schedule kind must be resources, vm_inventory or patrol_digest"}
 	}
 	if schedule.Format == "" {
 		schedule.Format = config.ReportScheduleFormatPDF
@@ -463,8 +474,10 @@ func (h *ReportingHandlers) prepareReportSchedule(ctx context.Context, schedule 
 	if err := validateReportScheduleCadence(schedule.Cadence); err != nil {
 		return schedule, err
 	}
-	if err := h.validateReportScheduleScope(ctx, schedule.Scope); err != nil {
-		return schedule, err
+	if schedule.Kind == config.ReportScheduleKindResources {
+		if err := h.validateReportScheduleScope(ctx, schedule.Scope); err != nil {
+			return schedule, err
+		}
 	}
 	next, err := nextReportScheduleRunAt(schedule, now)
 	if err != nil {
@@ -633,27 +646,7 @@ func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *
 		}
 	}
 
-	orgID := GetOrgID(ctx)
-	resources, err := h.resolveReportScheduleResources(ctx, orgID, schedule.Scope)
-	if err != nil {
-		return result, markReportScheduleFailed(schedule, now, err)
-	}
-	windowEnd := now
-	if schedule.RunWindowEnd != nil {
-		windowEnd = *schedule.RunWindowEnd
-	}
-	start, end, err := reportScheduleWindow(schedule, windowEnd, manual)
-	if err != nil {
-		return result, markReportScheduleFailed(schedule, now, err)
-	}
-
-	report, err := h.generateMultiReportFromBody(ctx, multiReportRequestBody{
-		Resources: resources,
-		Format:    schedule.Format,
-		Start:     start.UTC().Format(time.RFC3339),
-		End:       end.UTC().Format(time.RFC3339),
-		Title:     schedule.Name,
-	}, now)
+	report, err := h.generateScheduledFileReport(ctx, schedule, now, manual)
 	if err != nil {
 		return result, markReportScheduleFailed(schedule, now, err)
 	}
@@ -680,6 +673,33 @@ func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *
 	schedule.RetryAt = nil
 	schedule.LastSuccessAt = &now
 	return result, schedule
+}
+
+func (h *ReportingHandlers) generateScheduledFileReport(ctx context.Context, schedule config.ReportSchedule, now time.Time, manual bool) (generatedMultiReport, error) {
+	orgID := GetOrgID(ctx)
+	if schedule.Kind == config.ReportScheduleKindVMInventory {
+		snapshot, ok := h.getReportingEnrichmentSnapshot(ctx, orgID)
+		if !ok {
+			return generatedMultiReport{}, fmt.Errorf("VM inventory is unavailable. Check this organization's infrastructure connections before running again.")
+		}
+		return generateVMInventoryReport(snapshot, now)
+	}
+	resources, err := h.resolveReportScheduleResources(ctx, orgID, schedule.Scope)
+	if err != nil {
+		return generatedMultiReport{}, err
+	}
+	windowEnd := now
+	if schedule.RunWindowEnd != nil {
+		windowEnd = *schedule.RunWindowEnd
+	}
+	start, end, err := reportScheduleWindow(schedule, windowEnd, manual)
+	if err != nil {
+		return generatedMultiReport{}, err
+	}
+	return h.generateMultiReportFromBody(ctx, multiReportRequestBody{
+		Resources: resources, Format: schedule.Format,
+		Start: start.UTC().Format(time.RFC3339), End: end.UTC().Format(time.RFC3339), Title: schedule.Name,
+	}, now)
 }
 
 func markReportScheduleFailed(schedule config.ReportSchedule, now time.Time, err error) config.ReportSchedule {
@@ -1043,10 +1063,11 @@ func (h *ReportingHandlers) RunReportScheduleScheduler(ctx context.Context) {
 }
 
 func (h *ReportingHandlers) runDueReportSchedules(ctx context.Context, now time.Time) {
-	if h == nil || h.mtMonitor == nil {
+	manager := h.reportMonitorManager()
+	if manager == nil {
 		return
 	}
-	orgIDs, err := h.mtMonitor.ListOrganizationIDs()
+	orgIDs, err := manager.ListOrganizationIDs()
 	if err != nil {
 		log.Warn().Err(err).Msg("report schedules: list organizations")
 		return
@@ -1059,10 +1080,11 @@ func (h *ReportingHandlers) runDueReportSchedules(ctx context.Context, now time.
 }
 
 func (h *ReportingHandlers) syncCommercialHistoryRetention(ctx context.Context, orgID string, now time.Time) {
-	if h == nil || h.mtMonitor == nil || h.commercialLicenseResolver == nil {
+	manager := h.reportMonitorManager()
+	if manager == nil || h.commercialLicenseResolver == nil {
 		return
 	}
-	monitor, err := h.mtMonitor.GetMonitor(orgID)
+	monitor, err := manager.GetMonitor(orgID)
 	if err != nil || monitor == nil || monitor.GetMetricsStore() == nil {
 		return
 	}

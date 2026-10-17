@@ -6,7 +6,7 @@ export type ReportScheduleRunStatus = '' | 'ok' | 'failed' | 'running' | 'retryi
 export type ReportScheduleDeliveryMethod = 'email' | 'disk';
 // 'resources' is the multi-resource performance report; 'patrol_digest' emails
 // the last seven days of Patrol work and has no scope, format, or disk output.
-export type ReportScheduleKind = 'resources' | 'patrol_digest';
+export type ReportScheduleKind = 'resources' | 'patrol_digest' | 'vm_inventory';
 // Digest schedules carry the server-assigned 'email' format: the email body is
 // the report, so there is no PDF or CSV artifact.
 export type ReportScheduleFormat = ReportingFormat | 'email';
@@ -122,7 +122,7 @@ export function parseReportSchedulesResponse(value: unknown): ReportSchedule[] {
 }
 
 export function normalizeReportScheduleKind(kind: unknown): ReportScheduleKind {
-  return kind === 'patrol_digest' ? 'patrol_digest' : 'resources';
+  return kind === 'patrol_digest' || kind === 'vm_inventory' ? kind : 'resources';
 }
 
 export function isPatrolDigestSchedule(schedule: Pick<ReportSchedule, 'kind'>): boolean {
@@ -211,12 +211,20 @@ export function applyReportScheduleKind(
   return {
     ...form,
     kind,
+    format:
+      kind === 'vm_inventory'
+        ? 'csv'
+        : form.kind === 'vm_inventory'
+          ? defaults.format
+          : form.format,
+    tagFilter: kind === 'vm_inventory' ? '' : form.tagFilter,
     attach: defaults.attach,
     saveToDisk: defaults.saveToDisk,
   };
 }
 
 export function reportScheduleKindLabel(kind: unknown): string {
+  if (kind === 'vm_inventory') return 'VM inventory CSV';
   return normalizeReportScheduleKind(kind) === 'patrol_digest'
     ? 'Patrol weekly summary'
     : 'Performance report';
@@ -252,7 +260,7 @@ export function buildReportSchedulePayload(
   return {
     id: form.id,
     name: form.name.trim(),
-    kind: 'resources',
+    kind: form.kind,
     enabled: form.enabled,
     cadence: {
       type: form.cadenceType,
@@ -262,14 +270,14 @@ export function buildReportSchedulePayload(
       timezone: form.timezone.trim() || 'UTC',
     },
     scope: {
-      resources: resources.map((resource) => ({
+      resources: (form.kind === 'vm_inventory' ? [] : resources).map((resource) => ({
         resourceType: resource.type,
         resourceId: resource.id,
         name: resource.name,
       })),
-      tags: parseCommaList(form.tagFilter),
+      tags: form.kind === 'vm_inventory' ? [] : parseCommaList(form.tagFilter),
     },
-    format: form.format,
+    format: form.kind === 'vm_inventory' ? 'csv' : form.format,
     delivery: {
       method: form.deliveryMethod,
       to: parseCommaList(form.recipients),
@@ -304,6 +312,7 @@ export function reportScheduleCadenceLabel(schedule: ReportSchedule): string {
 
 export function reportScheduleScopeLabel(schedule: ReportSchedule): string {
   if (isPatrolDigestSchedule(schedule)) return 'Patrol activity, last 7 days';
+  if (schedule.kind === 'vm_inventory') return 'All VMs in this organization';
   const resources = schedule.scope.resources?.length ?? 0;
   const tags = schedule.scope.tags?.length ?? 0;
   const parts = [];

@@ -40,3 +40,13 @@ func TestLegacyReportScheduleHasNoInventedDeliveryOutcome(t *testing.T) {
 	require.Nil(t, store.Schedules[0].RetryAt)
 	require.Zero(t, store.Schedules[0].RunAttempts)
 }
+
+func TestVMInventoryScheduleKindSurvivesEncryptedReload(t *testing.T) {
+	p := NewConfigPersistence(t.TempDir())
+	s := ReportSchedule{ID: "inventory", Kind: ReportScheduleKindVMInventory, Format: "csv"}
+	require.NoError(t, p.SaveReportScheduleStore(ReportScheduleStore{Schedules: []ReportSchedule{s}}))
+	loaded, err := p.LoadReportScheduleStore()
+	require.NoError(t, err)
+	require.Equal(t, ReportScheduleKindVMInventory, loaded.Schedules[0].Kind)
+	require.Equal(t, "csv", loaded.Schedules[0].Format)
+}

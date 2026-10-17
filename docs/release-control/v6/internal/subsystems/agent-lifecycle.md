@@ -5751,6 +5751,10 @@ whose nested VM inventory definition owns panel copy, performance report
 options, export title, column schema, and filename prefixes. Lifecycle-
 adjacent install and fleet surfaces may read those facts, but they must not
 redefine reporting or inventory schema locally.
+The adjacent `vm_inventory` schedule kind uses this same current-state VM
+exporter through the reporting scheduler. Agent lifecycle does not own a
+parallel inventory report or delivery queue, and agent/installation rights
+are unchanged.
 That catalog route is intentionally metadata-readable without the
 `advanced_reporting` feature gate so locked admin reporting shells can stay on
 the same API-owned definition before upsell; lifecycle-adjacent surfaces must
