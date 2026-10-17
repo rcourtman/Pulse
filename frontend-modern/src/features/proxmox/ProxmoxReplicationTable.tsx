@@ -266,7 +266,7 @@ export const compactReplicationNextSyncText = (text: string, tone: NextSyncTone)
 
 const replicationFormatError = () =>
   new Error(
-    'The replication response format is invalid. Job availability is unknown; missing rows do not mean no jobs exist.',
+    'The replication response format is invalid. Job availability is unknown. Missing rows do not mean no jobs exist.',
   );
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

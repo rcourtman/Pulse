@@ -18,7 +18,7 @@ const output = path.join(copy, captureOnly ? 'pixel-completion' : 'browser');
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const binding = JSON.parse(fs.readFileSync(path.join(compiled, 'binding.json')));
 const message =
-  'The replication response format is invalid. Job availability is unknown; missing rows do not mean no jobs exist.';
+  'The replication response format is invalid. Job availability is unknown. Missing rows do not mean no jobs exist.';
 const result = {
   mode,
   captureOnly,
