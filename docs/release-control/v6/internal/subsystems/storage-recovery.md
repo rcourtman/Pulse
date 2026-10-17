@@ -6985,7 +6985,9 @@ scope auto-registration and unregistration events and their cached discovery
 refreshes to the authorized request organization, including its setup token
 binding. The registered test-notification route sends its synthetic
 `node_auto_registered` event to that same request organization. An empty
-organization ID maps to the default tenant.
+organization ID maps to the default tenant. Because the event stays inside the
+request organization, the route uses `RequireOrgAdmin`: that organization's
+managers, and tokens bound to it with `settings:write`, may send it.
 Storage and recovery consumers receive these inventory refresh signals within
 their own tenant; discovery results and successful node mutations do not
 establish backup coverage, protection freshness, restore readiness or recovery

@@ -692,6 +692,47 @@ func TestSettingsWriteScopeSplitsInstanceAndOrgManagerSession(t *testing.T) {
 	}
 }
 
+// A token bound to a tenant organization is held to the same split as that
+// organization's owner: its settings scope reaches the org variant only.
+func TestSettingsWriteScopeSplitsInstanceAndOrgBoundToken(t *testing.T) {
+	cfg := &config.Config{AuthUser: "platform-admin"}
+	request := func(orgID string, orgIDs ...string) *http.Request {
+		record, err := config.NewAPITokenRecord("settings-split-token.12345678", "settings", []string{config.ScopeSettingsWrite})
+		if err != nil {
+			t.Fatalf("NewAPITokenRecord: %v", err)
+		}
+		record.OrgID = orgID
+		record.OrgIDs = orgIDs
+		req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
+		attachAPITokenRecord(req, record)
+		return req
+	}
+
+	for _, tc := range []struct {
+		name     string
+		req      *http.Request
+		instance bool
+	}{
+		{"unbound", request(""), true},
+		{"default org", request("default"), true},
+		{"tenant org", request("org-a"), false},
+		{"default and tenant orgs", request("", "default", "org-a"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			if got := ensureSettingsWriteScope(cfg, rr, tc.req); got != tc.instance {
+				t.Fatalf("ensureSettingsWriteScope = %v, want %v (status %d)", got, tc.instance, rr.Code)
+			}
+			if !tc.instance && rr.Code != http.StatusForbidden {
+				t.Fatalf("expected 403 for org-bound token on instance settings, got %d", rr.Code)
+			}
+			if !ensureOrgSettingsWriteScope(cfg, httptest.NewRecorder(), tc.req) {
+				t.Fatal("ensureOrgSettingsWriteScope should allow a settings:write token")
+			}
+		})
+	}
+}
+
 func TestValidateBcryptHash(t *testing.T) {
 	tests := []struct {
 		name    string

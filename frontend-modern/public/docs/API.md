@@ -187,6 +187,14 @@ Some endpoints require admin privileges and/or scopes. Common scopes include:
 
 Endpoints that require admin access are noted below.
 
+Admin endpoints are instance administration unless they act only on the
+request organization. On instance administration an API token must not be
+bound to any organization other than the default one: a token bound to a
+tenant organization gets `403` whatever its scopes, as that organization's
+owner does. Endpoints that serve only the request organization, such as nodes
+and platform connections, agents, install commands, configuration transfer and
+reports, accept tokens bound to that organization with the listed scope.
+
 ---
 
 ## 📡 Core Endpoints
@@ -1082,6 +1090,8 @@ Returns authentication status, proxy auth state, and security posture flags.
 ```
 In Docker installs, the response includes a restart notice.
 
+Token management is instance administration, so a token bound to a tenant
+organization gets `403` on these routes. Among the tokens that remain,
 API-token callers manage only the tokens in their own organizations: every
 organization a target token is bound to must be one the caller is bound to.
 Tokens from other organizations are left out of the list and answer `404` on

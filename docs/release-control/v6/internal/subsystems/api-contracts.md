@@ -5081,6 +5081,26 @@ auto-register mutation boundary.
     `pkg/reporting/engine_org_scope_test.go` prove one organization cannot read
     another's metrics through any report path. Every other capability,
     `detailLevel` and `authUsername` stay instance administration.
+    API tokens follow the same split. On instance routes (`RequireAdmin`,
+    `ensureAdminSession` and the settings scope helpers) a token must act for
+    the instance: `tokenActsForInstance` admits only a token that is not bound
+    to any organization other than the default one, with `OrgIDs` taking
+    precedence over `OrgID`, and the route's own scope still applies. A token
+    bound to a tenant organization is refused there whatever its scopes, `*`
+    included, as that organization's owner is. The org variants keep judging
+    tokens by scope alone, so an org-bound `settings:write` token still reaches
+    the org-bound routes above, and `/api/test-notification`, which broadcasts
+    only to the request organization, is one of them.
+    `tokenHasInstanceWideAuthority` is the same binding rule plus full-access
+    scope, for quick setup and token regeneration. No path an organization
+    manager can reach mints a `settings:*` scope: the relay mobile token
+    carries only `relay:mobile:access`, install, deploy and action-runner
+    tokens carry agent and report scopes, and token management is instance
+    administration. `internal/api/org_bound_token_authority_test.go` holds the
+    token matrix, with
+    `TestSettingsWriteScopeSplitsInstanceAndOrgBoundToken`,
+    `TestContract_OrgBoundTokenCannotReachInstanceAdministration` and
+    `TestRegisteredTestNotificationAdmitsRequestOrganizationManagers`.
     `internal/api/org_admin_session_authority_test.go` holds the session matrix. Before this, a provider opening a client
     workspace from the Pulse Account portal arrived as the org owner with every
     capability `false`, so Settings hid the Infrastructure and Reporting pages
