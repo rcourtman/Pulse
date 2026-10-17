@@ -2459,7 +2459,7 @@ func (m *Monitor) startModeRuntime(ctx context.Context, wsHub *websocket.Hub, mo
 		cfgProvider := func() config.DiscoveryConfig {
 			return m.discoveryConfigSnapshot()
 		}
-		m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, discoverySubnet, cfgProvider)
+		m.discoveryService = discovery.NewService(wsHub, m.GetOrgID(), 5*time.Minute, discoverySubnet, cfgProvider)
 		if m.discoveryService != nil {
 			m.discoveryService.Start(ctx)
 			log.Info().Msg("discovery service initialized and started")
@@ -5014,7 +5014,7 @@ func (m *Monitor) StartDiscoveryService(ctx context.Context, wsHub *websocket.Hu
 		return m.discoveryConfigSnapshot()
 	}
 
-	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, subnet, cfgProvider)
+	m.discoveryService = discovery.NewService(wsHub, m.orgID, 5*time.Minute, subnet, cfgProvider)
 	if m.discoveryService != nil {
 		m.discoveryService.Start(ctx)
 		log.Info().Str("subnet", subnet).Msg("discovery service started")

@@ -97,7 +97,7 @@ func (b *blockingScanner) DiscoverServersWithCallbacks(ctx context.Context, subn
 }
 
 func TestPerformScanRecordsHistoryAndMetrics(t *testing.T) {
-	service := NewService(nil, time.Minute, "192.168.1.0/24", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "192.168.1.0/24", func() config.DiscoveryConfig {
 		cfg := config.DefaultDiscoveryConfig()
 		cfg.SubnetBlocklist = []string{"10.0.0.0/24", "172.16.0.0/24"}
 		return cfg
@@ -163,7 +163,7 @@ func TestPerformScanRecordsHistoryAndMetrics(t *testing.T) {
 }
 
 func TestPerformScanRecordsPartialFailure(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		cfg := config.DefaultDiscoveryConfig()
 		return cfg
 	})
@@ -253,7 +253,7 @@ func TestHistoryEntryAccessors(t *testing.T) {
 }
 
 func TestNewServiceDefaults(t *testing.T) {
-	service := NewService(nil, 0, "", nil)
+	service := NewService(nil, "default", 0, "", nil)
 	if service.interval != defaultScanInterval {
 		t.Fatalf("expected default interval, got %v", service.interval)
 	}
@@ -281,7 +281,7 @@ func TestNewServiceDefaultScannerFactory(t *testing.T) {
 		detectEnvironmentFn = originalDetectEnvironment
 	})
 
-	service := NewService(nil, time.Minute, "auto", nil)
+	service := NewService(nil, "default", time.Minute, "auto", nil)
 	scanner, err := service.scannerFactory(config.DefaultDiscoveryConfig())
 	if err != nil {
 		t.Fatalf("expected scannerFactory to build scanner, got error: %v", err)
@@ -292,7 +292,7 @@ func TestNewServiceDefaultScannerFactory(t *testing.T) {
 }
 
 func TestAppendHistoryTrim(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	service.historyLimit = 1
@@ -307,7 +307,7 @@ func TestAppendHistoryTrim(t *testing.T) {
 }
 
 func TestGetHistoryEmpty(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	if history := service.GetHistory(5); history != nil {
@@ -316,7 +316,7 @@ func TestGetHistoryEmpty(t *testing.T) {
 }
 
 func TestGetCachedResultEmpty(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	result, updated := service.GetCachedResult()
@@ -329,7 +329,7 @@ func TestGetCachedResultEmpty(t *testing.T) {
 }
 
 func TestGetCachedResultWithData(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	now := time.Now()
@@ -351,7 +351,7 @@ func TestGetCachedResultWithData(t *testing.T) {
 }
 
 func TestSetInterval(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	service.SetInterval(2 * time.Minute)
@@ -361,7 +361,7 @@ func TestSetInterval(t *testing.T) {
 }
 
 func TestSetIntervalNonPositiveUsesDefault(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	service.SetInterval(0)
@@ -376,7 +376,7 @@ func TestSetIntervalNonPositiveUsesDefault(t *testing.T) {
 }
 
 func TestNewServiceNormalizesInvalidInput(t *testing.T) {
-	service := NewService(nil, -1*time.Second, "not-a-subnet", nil)
+	service := NewService(nil, "default", -1*time.Second, "not-a-subnet", nil)
 	if service.interval != defaultScanInterval {
 		t.Fatalf("expected default interval for invalid input, got %v", service.interval)
 	}
@@ -386,7 +386,7 @@ func TestNewServiceNormalizesInvalidInput(t *testing.T) {
 }
 
 func TestSetSubnetNormalizesAndFallbacks(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
+	service := NewService(nil, "default", time.Minute, "auto", nil)
 
 	service.SetSubnet(" 192.168.1.10/24 , invalid ,10.0.0.0/8,192.168.1.0/24 ")
 	if service.subnet != "192.168.1.0/24,10.0.0.0/8" {
@@ -412,7 +412,7 @@ func TestNormalizeScanInterval(t *testing.T) {
 }
 
 func TestGetStatus(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	service.mu.Lock()
@@ -433,7 +433,7 @@ func TestGetStatus(t *testing.T) {
 }
 
 func TestGetStatusSnapshot(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 
@@ -488,7 +488,7 @@ func TestForceRefresh(t *testing.T) {
 		result: &pkgdiscovery.DiscoveryResult{},
 		calls:  make(chan struct{}, 1),
 	}
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	service.ctx = context.Background()
@@ -510,7 +510,7 @@ func TestForceRefreshSkippedWhenScanning(t *testing.T) {
 		result: &pkgdiscovery.DiscoveryResult{},
 		calls:  make(chan struct{}, 1),
 	}
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	service.ctx = context.Background()
@@ -535,7 +535,7 @@ func TestForceRefreshSkippedAfterStop(t *testing.T) {
 		result: &pkgdiscovery.DiscoveryResult{},
 		calls:  make(chan struct{}, 1),
 	}
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	service.ctx = context.Background()
@@ -558,7 +558,7 @@ func TestSetSubnetTriggersScan(t *testing.T) {
 		result: &pkgdiscovery.DiscoveryResult{},
 		calls:  make(chan struct{}, 1),
 	}
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	service.ctx = context.Background()
@@ -580,7 +580,7 @@ func TestSetSubnetWhileScanning(t *testing.T) {
 		result: &pkgdiscovery.DiscoveryResult{},
 		calls:  make(chan struct{}, 1),
 	}
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	service.ctx = context.Background()
@@ -601,7 +601,7 @@ func TestSetSubnetWhileScanning(t *testing.T) {
 }
 
 func TestSetSubnetPanicRecovery(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
+	service := NewService(nil, "default", time.Minute, "auto", nil)
 	service.ctx = context.Background()
 	calls := make(chan struct{}, 1)
 	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
@@ -622,7 +622,7 @@ func TestScanLoopStopsOnStopChan(t *testing.T) {
 		result: &pkgdiscovery.DiscoveryResult{},
 		calls:  make(chan struct{}, 2),
 	}
-	service := NewService(nil, 10*time.Millisecond, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", 10*time.Millisecond, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	service.ctx = context.Background()
@@ -656,7 +656,7 @@ func TestScanLoopStopsOnContextCancel(t *testing.T) {
 		result: &pkgdiscovery.DiscoveryResult{},
 		calls:  make(chan struct{}, 2),
 	}
-	service := NewService(nil, 10*time.Millisecond, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", 10*time.Millisecond, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -691,7 +691,7 @@ func TestStartAndStop(t *testing.T) {
 		result: &pkgdiscovery.DiscoveryResult{},
 		calls:  make(chan struct{}, 2),
 	}
-	service := NewService(nil, 10*time.Millisecond, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", 10*time.Millisecond, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
@@ -716,7 +716,7 @@ func TestStopCancelsInFlightScan(t *testing.T) {
 		started: make(chan struct{}, 1),
 		done:    make(chan error, 1),
 	}
-	service := NewService(nil, time.Hour, "auto", func() config.DiscoveryConfig {
+	service := NewService(nil, "default", time.Hour, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
@@ -746,7 +746,7 @@ func TestStopCancelsInFlightScan(t *testing.T) {
 }
 
 func TestStop_Idempotent(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
+	service := NewService(nil, "default", time.Minute, "auto", nil)
 	service.Stop()
 
 	defer func() {
@@ -759,7 +759,7 @@ func TestStop_Idempotent(t *testing.T) {
 }
 
 func TestStartPanicRecovery(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
+	service := NewService(nil, "default", time.Minute, "auto", nil)
 	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
 		panic("scan panic")
 	}
@@ -775,7 +775,7 @@ func TestStartPanicRecovery(t *testing.T) {
 }
 
 func TestStartScanLoopPanicRecovery(t *testing.T) {
-	service := NewService(nil, 5*time.Millisecond, "auto", nil)
+	service := NewService(nil, "default", 5*time.Millisecond, "auto", nil)
 	calls := make(chan struct{}, 4)
 	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
 		calls <- struct{}{}
@@ -790,7 +790,7 @@ func TestStartScanLoopPanicRecovery(t *testing.T) {
 }
 
 func TestPerformScan_NoContextUsesBackground(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
+	service := NewService(nil, "default", time.Minute, "auto", nil)
 	scanner := &fakeScanner{
 		result: &pkgdiscovery.DiscoveryResult{},
 	}
@@ -807,7 +807,7 @@ func TestPerformScan_NoContextUsesBackground(t *testing.T) {
 }
 
 func TestPerformScan_StatusFailure(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
+	service := NewService(nil, "default", time.Minute, "auto", nil)
 	service.ctx = context.Background()
 	scanner := &fakeScanner{
 		err: errors.New("scan failed"),
@@ -828,7 +828,7 @@ func TestPerformScan_StatusFailure(t *testing.T) {
 }
 
 func TestAppendHistory_ResetLimit(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
+	service := NewService(nil, "default", time.Minute, "auto", nil)
 	service.historyLimit = -1
 	service.appendHistory(historyEntry{status: "test"})
 	if service.historyLimit != defaultHistoryLimit {
@@ -837,7 +837,7 @@ func TestAppendHistory_ResetLimit(t *testing.T) {
 }
 
 func TestPerformScan_StructuredErrors(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
+	service := NewService(nil, "default", time.Minute, "auto", nil)
 	service.ctx = context.Background()
 	scanner := &fakeScanner{
 		result: &pkgdiscovery.DiscoveryResult{
@@ -917,7 +917,7 @@ func TestNormalizeDiscoverySubnet(t *testing.T) {
 }
 
 func TestNewServiceInvalidSubnetFallsBackToAuto(t *testing.T) {
-	service := NewService(nil, time.Minute, "invalid-subnet", nil)
+	service := NewService(nil, "default", time.Minute, "invalid-subnet", nil)
 	if service.subnet != "auto" {
 		t.Fatalf("expected fallback subnet auto, got %q", service.subnet)
 	}

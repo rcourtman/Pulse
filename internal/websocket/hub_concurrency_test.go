@@ -36,7 +36,7 @@ func TestHubConcurrentClients(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < iterations; i++ {
-			hub.BroadcastMessage(Message{Type: "test", Data: map[string]int{"iteration": i}})
+			hub.BroadcastMessageToTenant("default", Message{Type: "test", Data: map[string]int{"iteration": i}})
 			time.Sleep(time.Microsecond)
 		}
 	}()

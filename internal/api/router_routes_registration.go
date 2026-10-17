@@ -484,7 +484,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 
 		// Send a test auto-registration notification
-		r.wsHub.BroadcastMessage(websocket.Message{
+		r.wsHub.BroadcastMessageToTenant(GetOrgID(req.Context()), websocket.Message{
 			Type: "node_auto_registered",
 			Data: map[string]interface{}{
 				"type":     "pve",

@@ -1740,7 +1740,7 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 				time.Sleep(2 * time.Second)
 				result, _ := h.getMonitor(r.Context()).GetDiscoveryService().GetCachedResult()
 				if result != nil {
-					h.wsHub.BroadcastMessage(websocket.Message{
+					h.wsHub.BroadcastMessageToTenant(apicontext.OrgID(r.Context()), websocket.Message{
 						Type: "discovery_update",
 						Data: map[string]interface{}{
 							"servers":           result.Servers,
@@ -1914,7 +1914,7 @@ func (h *ConfigHandlers) handleDeleteNode(w http.ResponseWriter, r *http.Request
 	// Broadcast node deletion to refresh the frontend
 	if h.wsHub != nil {
 		// Send a node_deleted message to trigger a refresh of the nodes list
-		h.wsHub.BroadcastMessage(websocket.Message{
+		h.wsHub.BroadcastMessageToTenant(apicontext.OrgID(r.Context()), websocket.Message{
 			Type: "node_deleted",
 			Data: map[string]interface{}{
 				"nodeType": nodeType,
@@ -2041,7 +2041,7 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 
 	// Broadcast update to refresh frontend
 	if h.wsHub != nil {
-		h.wsHub.BroadcastMessage(websocket.Message{
+		h.wsHub.BroadcastMessageToTenant(apicontext.OrgID(r.Context()), websocket.Message{
 			Type: "nodes_updated",
 			Data: map[string]interface{}{
 				"nodeType": "pve",
