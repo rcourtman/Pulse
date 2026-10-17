@@ -10205,3 +10205,19 @@ quality is independent of delivery status. `reporting_backup_health_test.go`
 covers current scope, missing history, unchanged entitlement rejection and retry
 after handler recreation. Collection and persistence proofs remain owned by
 monitoring and storage-recovery.
+
+### Agent installer option-value admission (17 October 2026)
+
+Every value-taking Unix agent installer option rejects a missing value or a
+following long option/`-h` before credential reads, installed-state recovery,
+transport or service operations. The error names only the option, never the
+supplied credential/value; it exits 16 without a prompt and uses the existing
+JSON error event when `--output json` was already selected. Explicit empty
+values remain supported (notably `--health-addr ""`); their existing semantic
+validation is unchanged.
+
+`TestInstallSHValueArgumentsRejectMissingValues` exercises the complete shipped
+parser for every value-taking option in text/JSON modes, with transport and
+platform-action sentinels. `TestInstallSHValueArgumentsPreserveExplicitValues`
+retains empty, spaced and single-hyphen values through the real help path.
+These are CLI admission controls, not installed lifecycle recovery proof.

@@ -8737,3 +8737,19 @@ browser proof at desktop and phone must inspect the rendered safety boundaries,
 keyboard/touch linked recovery navigation and direct/reload fragments. These
 are help qualification, not installed upgrade, native recovery, paid deployment
 or release acceptance.
+
+### Unified agent installer syntax errors stop before host work
+
+The agent install/update/removal entrypoint validates the presence of each
+option's value before reading credentials or recovering/changing installed
+state. A following long option or `-h` cannot silently become that value.
+Syntax errors name the option without echoing values, return the existing
+missing-argument exit 16 without waiting for input, and preserve a previously
+selected JSON error format. Explicit empty values and downstream validation
+remain unchanged; no root/service/transport authority is added.
+
+The complete-parser text/JSON and valid-value controls are
+`TestInstallSHValueArgumentsRejectMissingValues` and
+`TestInstallSHValueArgumentsPreserveExplicitValues` in
+`scripts/installtests/install_sh_test.go`. They do not qualify an installed
+upgrade, rollback or removal, and do not replace native platform checks.

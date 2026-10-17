@@ -59,6 +59,116 @@ func TestContainerAgentCompatibilityWrapperAuthenticatesBeforeExecuting(t *testi
 	t.Logf("%s", out)
 }
 
+// Exercise the shipped parser, not an extracted guard, so rejection must occur
+// before credential ingress, installed-state recovery or any platform action.
+func TestInstallSHValueArgumentsRejectMissingValues(t *testing.T) {
+	options := []string{
+		"--url", "--token", "--interval", "--kubeconfig", "--proxmox-type",
+		"--cacert", "--server-fingerprint", "--observers-file", "--command-authority",
+		"--action-token-file", "--health-addr", "--agent-id", "--hostname",
+		"--report-ip", "--state-dir", "--disk-exclude", "--disk-include",
+		"--token-file", "--pulse-url", "--output",
+	}
+	for _, option := range options {
+		for _, format := range []string{"text", "json"} {
+			for _, following := range []string{"", "--uninstall", "-h"} {
+				t.Run(option+"/"+format+"/"+following, func(t *testing.T) {
+					args := []string{"--output", format, "--token", "fixture-private-token", option}
+					if following != "" {
+						args = append(args, following)
+					}
+					out, exit := runInstallSHArgumentFixture(t, args...)
+					if exit != 16 {
+						t.Fatalf("expected missing-argument exit 16, got %d:\n%s", exit, out)
+					}
+					message := "Missing value for " + option + ". Use --help for usage information."
+					if format == "json" {
+						var event struct {
+							Phase    string `json:"phase"`
+							Code     string `json:"code"`
+							Message  string `json:"message"`
+							ExitCode int    `json:"exitCode"`
+						}
+						if err := json.Unmarshal([]byte(out), &event); err != nil {
+							t.Fatalf("expected one complete JSON error: %v\n%s", err, out)
+						}
+						if event.Phase != "error" || event.Code != "install_failed" ||
+							event.ExitCode != 16 || event.Message != message {
+							t.Fatalf("wrong missing-value event: %+v", event)
+						}
+					} else if strings.TrimSpace(out) != "[ERROR] "+message {
+						t.Fatalf("wrong missing-value diagnostic:\n%s", out)
+					}
+					if strings.Contains(out, "fixture-private-token") || strings.Contains(out, "unbound variable") {
+						t.Fatal("argument diagnostic leaked a value or escaped into the shell error path")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestInstallSHValueArgumentsPreserveExplicitValues(t *testing.T) {
+	// Empty values are deliberate for optional token/TLS/listener settings.
+	// Parsing still leaves semantic validation to the existing post-parser path.
+	options := []string{
+		"--url", "--token", "--interval", "--kubeconfig", "--proxmox-type",
+		"--cacert", "--server-fingerprint", "--observers-file", "--command-authority",
+		"--action-token-file", "--health-addr", "--agent-id", "--hostname",
+		"--report-ip", "--state-dir", "--disk-exclude", "--disk-include",
+		"--token-file", "--pulse-url", "--output",
+	}
+	for _, option := range options {
+		for _, value := range []string{"", "fixture value with spaces", "-"} {
+			t.Run(option+"/"+value, func(t *testing.T) {
+				out, exit := runInstallSHArgumentFixture(t, option, value, "--help")
+				if exit != 0 || !strings.Contains(out, "Usage:") || strings.Contains(out, "Missing value") {
+					t.Fatalf("explicit value was not preserved before help: exit=%d\n%s", exit, out)
+				}
+				if strings.Contains(out, "fixture value with spaces") {
+					t.Fatal("help exposed the supplied option value")
+				}
+			})
+		}
+	}
+}
+
+func runInstallSHArgumentFixture(t *testing.T, args ...string) (string, int) {
+	t.Helper()
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "bin")
+	if err := os.Mkdir(bin, 0700); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(dir, "activity")
+	for _, name := range []string{"curl", "systemctl", "launchctl", "service", "rc-service", "sudo", "uname"} {
+		stub := "#!/bin/sh\nprintf attempted > \"$ACTIVITY_MARKER\"\nexit 125\n"
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(stub), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "bash", append([]string{repoFile("scripts", "install.sh")}, args...)...)
+	cmd.Env = []string{"PATH=" + bin + ":/usr/bin:/bin", "HOME=" + dir, "TMPDIR=" + dir,
+		"LC_ALL=C", "TERM=dumb", "ACTIVITY_MARKER=" + marker}
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("argument handling waited for input or hung: %v\n%s", ctx.Err(), out)
+	}
+	if _, err := os.Lstat(marker); !os.IsNotExist(err) {
+		t.Fatal("argument handling reached a transport or platform operation")
+	}
+	if err == nil {
+		return string(out), 0
+	}
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) {
+		t.Fatalf("execute installer argument fixture: %v", err)
+	}
+	return string(out), exit.ExitCode()
+}
+
 func TestInstallSHAllowsMissingTokenForOptionalAuth(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {

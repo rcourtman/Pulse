@@ -5950,12 +5950,22 @@ save_connection_info() {
 }
 
 # --- Parse Arguments ---
+# A malformed option must stop before reading credentials, recovering installed
+# state or changing services. Keep explicit empty values (for example disabling
+# --health-addr), but never consume the following option as a value. Syntax
+# errors are non-interactive even when --non-interactive appears later.
+require_option_value() {
+    if [[ $# -lt 2 || "${2:-}" == --* || "${2:-}" == -h ]]; then
+        NON_INTERACTIVE=true fail "Missing value for $1. Use --help for usage information." "$EXIT_MISSING_ARGS"
+    fi
+}
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --help|-h) show_help; exit 0 ;;
-        --url) PULSE_URL="$2"; shift 2 ;;
-        --token) PULSE_TOKEN="$2"; shift 2 ;;
-        --interval) INTERVAL="$2"; INTERVAL_EXPLICIT="true"; shift 2 ;;
+        --url) require_option_value "$@"; PULSE_URL="$2"; shift 2 ;;
+        --token) require_option_value "$@"; PULSE_TOKEN="$2"; shift 2 ;;
+        --interval) require_option_value "$@"; INTERVAL="$2"; INTERVAL_EXPLICIT="true"; shift 2 ;;
         --enable-host) ENABLE_HOST="true"; HOST_EXPLICIT="true"; shift ;;
         --enable-host=true) ENABLE_HOST="true"; HOST_EXPLICIT="true"; shift ;;
         --enable-host=false) ENABLE_HOST="false"; HOST_EXPLICIT="true"; shift ;;
@@ -5968,28 +5978,28 @@ while [[ $# -gt 0 ]]; do
         --enable-kubernetes=true) ENABLE_KUBERNETES="true"; KUBERNETES_EXPLICIT="true"; shift ;;
         --enable-kubernetes=false) ENABLE_KUBERNETES="false"; KUBERNETES_EXPLICIT="true"; shift ;;
         --disable-kubernetes) ENABLE_KUBERNETES="false"; KUBERNETES_EXPLICIT="true"; shift ;;
-        --kubeconfig) KUBECONFIG_PATH="$2"; KUBERNETES_EXPLICIT="true"; ENABLE_KUBERNETES="true"; shift 2 ;;
+        --kubeconfig) require_option_value "$@"; KUBECONFIG_PATH="$2"; KUBERNETES_EXPLICIT="true"; ENABLE_KUBERNETES="true"; shift 2 ;;
         --enable-proxmox) ENABLE_PROXMOX="true"; PROXMOX_EXPLICIT="true"; shift ;;
         --enable-proxmox=true) ENABLE_PROXMOX="true"; PROXMOX_EXPLICIT="true"; shift ;;
         --enable-proxmox=false) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;
         --disable-proxmox) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;
-        --proxmox-type) PROXMOX_TYPE="$2"; shift 2 ;;
+        --proxmox-type) require_option_value "$@"; PROXMOX_TYPE="$2"; shift 2 ;;
         --insecure) INSECURE="true"; INSECURE_EXPLICIT="true"; shift ;;
-        --cacert) CURL_CA_BUNDLE="$2"; shift 2 ;;
-        --server-fingerprint) SERVER_FINGERPRINT="$2"; shift 2 ;;
-        --observers-file) OBSERVERS_FILE="$2"; shift 2 ;;
+        --cacert) require_option_value "$@"; CURL_CA_BUNDLE="$2"; shift 2 ;;
+        --server-fingerprint) require_option_value "$@"; SERVER_FINGERPRINT="$2"; shift 2 ;;
+        --observers-file) require_option_value "$@"; OBSERVERS_FILE="$2"; shift 2 ;;
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
-        --command-authority) COMMAND_AUTHORITY="$2"; COMMAND_AUTHORITY_SOURCE="explicit"; shift 2 ;;
+        --command-authority) require_option_value "$@"; COMMAND_AUTHORITY="$2"; COMMAND_AUTHORITY_SOURCE="explicit"; shift 2 ;;
         --least-privilege) LEAST_PRIVILEGE="true"; shift ;;
         --enable-privileged-helper) PRIVILEGED_HELPER_ENABLED="true"; PRIVILEGED_HELPER_EXPLICIT="true"; shift ;;
         --disable-privileged-helper) PRIVILEGED_HELPER_ENABLED="false"; PRIVILEGED_HELPER_EXPLICIT="true"; shift ;;
         --enable-action-runner) ACTION_RUNNER_ENABLED="true"; ACTION_RUNNER_EXPLICIT="true"; shift ;;
         --disable-action-runner) ACTION_RUNNER_ENABLED="false"; ACTION_RUNNER_EXPLICIT="true"; shift ;;
         --uninstall-action-runner) UNINSTALL_ACTION_RUNNER="true"; shift ;;
-        --action-token-file) ACTION_TOKEN_FILE_PATH="$2"; shift 2 ;;
+        --action-token-file) require_option_value "$@"; ACTION_TOKEN_FILE_PATH="$2"; shift 2 ;;
         --grant-smart) GRANT_SMART="true"; shift ;;
         --grant-pct) GRANT_PCT="true"; shift ;;
-        --health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;
+        --health-addr) require_option_value "$@"; HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;
         --safe-profile-inspect) SAFE_PROFILE_ACTION="inspect"; shift ;;
         --safe-profile-apply) SAFE_PROFILE_ACTION="apply"; shift ;;
         --safe-profile-rollback) SAFE_PROFILE_ACTION="rollback"; shift ;;
@@ -5997,18 +6007,18 @@ while [[ $# -gt 0 ]]; do
         --update) UPDATE_ONLY="true"; shift ;;
         --retarget) RETARGET_ONLY="true"; UPDATE_ONLY="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
-        --agent-id) AGENT_ID="$2"; shift 2 ;;
-        --hostname) HOSTNAME_OVERRIDE="$2"; shift 2 ;;
-        --report-ip) REPORT_IP="$2"; shift 2 ;;
-        --state-dir) STATE_DIR="$2"; STATE_DIR_SOURCE="explicit"; STATE_DIR_REMOVAL_AUTHORITY="$2"; shift 2 ;;
+        --agent-id) require_option_value "$@"; AGENT_ID="$2"; shift 2 ;;
+        --hostname) require_option_value "$@"; HOSTNAME_OVERRIDE="$2"; shift 2 ;;
+        --report-ip) require_option_value "$@"; REPORT_IP="$2"; shift 2 ;;
+        --state-dir) require_option_value "$@"; STATE_DIR="$2"; STATE_DIR_SOURCE="explicit"; STATE_DIR_REMOVAL_AUTHORITY="$2"; shift 2 ;;
         --kube-include-all-pods) KUBE_INCLUDE_ALL_PODS="true"; shift ;;
         --kube-include-all-deployments) KUBE_INCLUDE_ALL_DEPLOYMENTS="true"; shift ;;
-        --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;
-        --disk-include) DISK_INCLUDES+=("$2"); shift 2 ;;
+        --disk-exclude) require_option_value "$@"; DISK_EXCLUDES+=("$2"); shift 2 ;;
+        --disk-include) require_option_value "$@"; DISK_INCLUDES+=("$2"); shift 2 ;;
         --non-interactive) NON_INTERACTIVE="true"; shift ;;
-        --token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;
-        --pulse-url) PULSE_URL="$2"; shift 2 ;;
-        --output) OUTPUT_FORMAT="$2"; shift 2 ;;
+        --token-file) require_option_value "$@"; TOKEN_FILE_PATH="$2"; shift 2 ;;
+        --pulse-url) require_option_value "$@"; PULSE_URL="$2"; shift 2 ;;
+        --output) require_option_value "$@"; OUTPUT_FORMAT="$2"; shift 2 ;;
         --preflight-only) PREFLIGHT_ONLY="true"; shift ;;
         *) fail "Unknown argument: $1" ;;
     esac
