@@ -39,6 +39,10 @@ changes. The activity adapter cannot block a report on tally failure. Scheduler
 restart/retry, distinct-period reuse, complete download and mock-suppression proof
 lives in `internal/api/reporting_activity_test.go`. Notifications retains SMTP
 acceptance authority, and the activity recorder never claims inbox delivery.
+The shared adapter is declared by exact path in the paid-surface allowlist.
+The real boundary regression rejects sibling reporting implementation files and
+private licensing imports added to this observer, preserving the private renderer
+and licensing bridge boundaries.
 
 
 ### Container verification distinguishes transitional health
