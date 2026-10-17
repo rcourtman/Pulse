@@ -1527,7 +1527,7 @@ func scopePatrolDockerHost(d models.DockerHost, matcher patrolScopeMatcher) (mod
 		}
 		if matcher.typeSet["app-container"] || !matcher.hasTypes {
 			for _, c := range d.Containers {
-				included = append(included, c.ID)
+				included = append(included, dockerPatrolContainerScopeIDs(d.ID, c.ID, c.Name)...)
 			}
 		}
 		return d, included, true
@@ -1535,7 +1535,7 @@ func scopePatrolDockerHost(d models.DockerHost, matcher patrolScopeMatcher) (mod
 
 	matchedContainers := make([]models.DockerContainer, 0)
 	for _, c := range d.Containers {
-		if matcher.matchesResource([]string{c.ID}, c.Name) {
+		if matcher.matchesResource(dockerPatrolContainerScopeIDs(d.ID, c.ID, c.Name), c.Name) {
 			matchedContainers = append(matchedContainers, c)
 		}
 	}
@@ -1547,7 +1547,7 @@ func scopePatrolDockerHost(d models.DockerHost, matcher patrolScopeMatcher) (mod
 		}
 		if matcher.typeSet["app-container"] || !matcher.hasTypes {
 			for _, c := range d.Containers {
-				included = append(included, c.ID)
+				included = append(included, dockerPatrolContainerScopeIDs(d.ID, c.ID, c.Name)...)
 			}
 		}
 		return d, included, true
@@ -1574,7 +1574,7 @@ func scopePatrolDockerHost(d models.DockerHost, matcher patrolScopeMatcher) (mod
 		hostCopy.Swarm = nil
 		included := make([]string, 0, len(matchedContainers))
 		for _, c := range matchedContainers {
-			included = append(included, c.ID)
+			included = append(included, dockerPatrolContainerScopeIDs(d.ID, c.ID, c.Name)...)
 		}
 		return hostCopy, included, true
 	}
