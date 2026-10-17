@@ -1,7 +1,7 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "747b7cf77667a640dd43f45466c91831e73e743a",
+  "base_sha": "e75fe0c8272fd83874ba11207d3fdb7d9c7f415a",
   "changed_paths": [
     "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
     "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
@@ -10,7 +10,7 @@
     "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "e4f316e121d052e25a66ff4402d6b6e2241e64f56bf1c671e59c13163c4902dc",
     "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "1ec43e31bc3095884111a1621e966007a4552187881ee8053091c788b54ac371"
   },
-  "verified_at": "2026-10-17T22:56:53.645997+00:00",
+  "verified_at": "2026-10-17T22:56:53.645997Z",
   "source_sha": "747b7cf77667a640dd43f45466c91831e73e743a",
   "routes": [
     "/proxmox/backups/coverage through the production inventory HTTP reader, recovery mapper, Coverage disclosure and shipped CSS; synthetic loopback fixtures"
@@ -46,5 +46,6 @@
     "Synthetic HTTP observations consumed by production frontend code, not a real provider/guest/backup operation. No installed recovery, protected landing or release acceptance.",
     "Containing source proof covers all 895 Proxmox tests and full frontend quality/build/budget checks. The prior 24,501-test complete frontend suite remains bound to 98a85939, not this runtime change.",
     "Initial source-ijm1srnx remains a complete failed run: 894 passes and one invalid desktop Task/Job test selector. The final selector-only repair and source-o059uznz are separate results."
-  ]
+  ],
+  "record_correction": "The prior record used equivalent +00:00 UTC notation, but the guard requires Z. This correction preserves the observed instant and exact verified runtime content and names its actual parent; only the prior receipt file differs from the measured containing source."
 }
