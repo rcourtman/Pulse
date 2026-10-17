@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -20,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -7308,42 +7310,127 @@ write_action_runner_config
 	}
 }
 
-func TestInstallSHActionRunnerRejectsGenericInsecureHTTPSBeforeCredentialWrite(t *testing.T) {
+func TestInstallSHActionRunnerRecoveredCollectorTrust(t *testing.T) {
 	root := t.TempDir()
-	tokenPath := filepath.Join(root, "config", "token")
-	script := `
-set -u
+	runnerBinary := filepath.Join(root, "pulse-agent-runner")
+	build := exec.Command("go", "build", "-o", runnerBinary, "./cmd/pulse-agent-runner")
+	build.Dir = filepath.Dir(repoFile("go.mod"))
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build action runner: %v\n%s", err, output)
+	}
+	const token = "fixture-runner-credential"
+	var requests atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.Header.Get("Authorization") != "Bearer "+token || r.Method != http.MethodDelete {
+			t.Errorf("unexpected credential lifecycle request")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	caFile := filepath.Join(root, "ca.pem")
+	if err := os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fingerprint := sha256.Sum256(server.Certificate().Raw)
+	for _, tc := range []struct {
+		name, ca, pin       string
+		systemTrust, wantOK bool
+	}{
+		{name: "system roots", systemTrust: true, wantOK: true},
+		{name: "recovered custom CA", ca: caFile, wantOK: true},
+		{name: "recovered exact pin", pin: hex.EncodeToString(fingerprint[:]), wantOK: true},
+		{name: "untrusted certificate"},
+		{name: "mismatched pin", pin: strings.Repeat("00", 32), systemTrust: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "system roots" && runtime.GOOS != "linux" {
+				t.Skip("process-confined system roots require the Linux root loader")
+			}
+			root := t.TempDir()
+			tokenPath := filepath.Join(root, "config", "token")
+			envFile := filepath.Join(root, "config", "runner.env")
+			script := `
+set -euo pipefail
 ACTION_RUNNER_CONFIG_DIR="` + filepath.Join(root, "config") + `"
 ACTION_RUNNER_STATE_DIR="` + filepath.Join(root, "state") + `"
 ACTION_RUNNER_TOKEN_FILE="` + tokenPath + `"
-ACTION_RUNNER_ENV_FILE="` + filepath.Join(root, "config", "runner.env") + `"
+ACTION_RUNNER_ENV_FILE="` + envFile + `"
+ACTION_RUNNER_BINARY_PATH="` + runnerBinary + `"
 ACTION_RUNNER_HEALTH_FILE="` + filepath.Join(root, "state", "health.json") + `"
 ACTION_RUNNER_ACTIVATION_NONCE="` + strings.Repeat("a", 64) + `"
 STATE_DIR="` + filepath.Join(root, "collector") + `"
 HOSTNAME_OVERRIDE="host.local"
 AGENT_ID="agent-1"
-ACTION_TOKEN="must-not-be-written"
-PULSE_URL="https://pulse.example"
+ACTION_TOKEN="` + token + `"
+PULSE_URL="` + server.URL + `"
+PULSE_TOKEN="fixture-collector-credential"
 SERVER_FINGERPRINT=""
 CURL_CA_BUNDLE=""
-INSECURE="true"
+INSECURE="false"
 EXIT_GENERAL=1
 EXIT_MISSING_ARGS=2
 fail() { printf '%s\n' "$1" >&2; exit "$2"; }
 install() { local destination="${!#}"; mkdir -p "$destination"; chmod 0700 "$destination"; }
+chown() { return 0; }
+stat() {
+    case "$1:$2" in
+        '-c:%u') printf '0\n' ;;
+        '-c:%a') printf '600\n' ;;
+        *) command stat "$@" ;;
+    esac
+}
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
 ` + extractInstallShellFunction(t, "write_action_runner_env_value") + `
 ` + extractInstallShellFunction(t, "action_runner_url_uses_loopback_http") + `
 ` + extractInstallShellFunction(t, "action_runner_url_transport_allowed") + `
+` + extractInstallShellFunction(t, "resolve_action_runner_agent_id") + `
 ` + extractInstallShellFunction(t, "persist_action_runner_replacement_token") + `
 ` + extractInstallShellFunction(t, "write_action_runner_config") + `
+` + extractInstallShellFunction(t, "cancel_pending_action_runner_credential") + `
+recover_connection_state_from_env_stream <<'SAVED_STATE'
+PULSE_INSECURE_SKIP_VERIFY=true
+PULSE_CACERT=` + tc.ca + `
+PULSE_SERVER_FINGERPRINT=` + tc.pin + `
+SAVED_STATE
+[[ "$INSECURE" == "true" ]]
 write_action_runner_config
+[[ "$INSECURE" == "true" && -z "$ACTION_TOKEN" ]]
+# Load the installed environment as systemd would, preserving machine trust
+# when no explicit CA is configured. The collector's bypass must stay absent.
+set -a
+. "$ACTION_RUNNER_ENV_FILE"
+set +a
+[[ "${PULSE_INSECURE:-false}" == "false" ]]
+cancel_pending_action_runner_credential "agent-1" "host.local" "` + token + `"
 `
-	out, err := exec.Command("bash", "-c", script).CombinedOutput()
-	if err == nil || !strings.Contains(string(out), "refuses generic insecure HTTPS") {
-		t.Fatalf("generic insecure HTTPS was not rejected: %v\n%s", err, out)
-	}
-	if _, statErr := os.Stat(tokenPath); !os.IsNotExist(statErr) {
-		t.Fatalf("runner credential was written before transport rejection: %v", statErr)
+			cmd := exec.Command("bash", "-c", script)
+			// Go's system root loader uses these paths. Confine the fixture's
+			// machine trust to this child, without changing the host trust store.
+			roots := filepath.Join(root, "empty-roots.pem")
+			mustWrite(t, roots, "")
+			if tc.systemTrust {
+				roots = caFile
+			}
+			cmd.Env = append(os.Environ(), "SSL_CERT_FILE="+roots, "SSL_CERT_DIR="+root, "PULSE_INSECURE=")
+			before := requests.Load()
+			out, err := cmd.CombinedOutput()
+			if (err == nil) != tc.wantOK {
+				t.Fatalf("recovered collector trust: error=%v, want success=%v\n%s", err, tc.wantOK, out)
+			}
+			if got := requests.Load() - before; (got == 1) != tc.wantOK || got > 1 {
+				t.Fatalf("credential-bearing requests = %d, trusted=%v", got, tc.wantOK)
+			}
+			content, readErr := os.ReadFile(envFile)
+			if readErr != nil || strings.Contains(string(content), "PULSE_INSECURE") || strings.Contains(string(content), token) {
+				t.Fatalf("runner environment contains collector bypass/credential or is missing: %v", readErr)
+			}
+			persisted, readErr := os.ReadFile(tokenPath)
+			if readErr != nil || string(persisted) != token+"\n" || strings.Contains(string(out), token) {
+				t.Fatalf("private runner credential was lost or exposed: %v", readErr)
+			}
+		})
 	}
 }
 

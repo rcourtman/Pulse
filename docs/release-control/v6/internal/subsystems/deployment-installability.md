@@ -1400,6 +1400,14 @@ credential stops and disables the runner but retains every artifact for retry or
 manual server-side revocation. Runner WS and lifecycle HTTP require HTTPS/WSS
 with system/custom CA trust or exact certificate-DER pinning; plaintext is
 loopback-only and generic installer insecure/curl `-k` is never inherited.
+Collector update recovery may retain its legacy insecure flag without blocking
+normal system-root trust for the independently configured runner. Enrollment
+must omit the HTTPS runner bypass rather than treating that collector flag as
+runner policy. `TestInstallSHActionRunnerRecoveredCollectorTrust` executes
+recovery, private config writes and the actual lifecycle binary with confined
+system roots, a custom CA and an exact pin. Untrusted and wrong-pin controls
+send no credential-bearing request. This does not establish native service
+installation, release inclusion or recovery on a reporter's host.
 The runner must retain a writable host filesystem because its closed protocol
 performs real package, storage, guest, and container mutations;
 `ProtectSystem=strict` is therefore forbidden for that unit. This exception
