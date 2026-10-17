@@ -227,7 +227,8 @@ const (
 	// updates. No version, URL, or error text is exported.
 	// Schema v19 adds only the rolling count of successfully served metric
 	// history responses containing data older than seven days.
-	TelemetrySchemaVersion = 19
+	// Schema v20 adds aggregate reporting outcomes and distinct-period reuse.
+	TelemetrySchemaVersion = 20
 )
 
 type installIDRecord struct {
@@ -553,6 +554,33 @@ type Ping struct {
 	PulseIntelligenceApprovedActionRefusalsOther30d         int    `json:"pulse_intelligence_approved_action_refusals_other_30d"`
 	PulseIntelligenceVerifiedFindingResolutions30d          int    `json:"pulse_intelligence_verified_finding_resolutions_30d"`
 	PulseIntelligenceApprovedActionLastFailureReason30d     string `json:"pulse_intelligence_approved_action_last_failure_reason_30d,omitempty"`
+
+	// Content-free reporting outcomes and measurement coverage.
+	ReportingGeneratedResources30d            int  `json:"reporting_generated_resources_30d"`
+	ReportingGeneratedVMInventory30d          int  `json:"reporting_generated_vm_inventory_30d"`
+	ReportingGeneratedBackupHealth30d         int  `json:"reporting_generated_backup_health_30d"`
+	ReportingGeneratedPatrolDigest30d         int  `json:"reporting_generated_patrol_digest_30d"`
+	ReportingSuccessfulResourcesPeriods30d    int  `json:"reporting_successful_resources_periods_30d"`
+	ReportingSuccessfulVMInventoryPeriods30d  int  `json:"reporting_successful_vm_inventory_periods_30d"`
+	ReportingSuccessfulBackupHealthPeriods30d int  `json:"reporting_successful_backup_health_periods_30d"`
+	ReportingSuccessfulPatrolDigestPeriods30d int  `json:"reporting_successful_patrol_digest_periods_30d"`
+	ReportingRepeatResourcesPeriods30d        int  `json:"reporting_repeat_resources_periods_30d"`
+	ReportingRepeatVMInventoryPeriods30d      int  `json:"reporting_repeat_vm_inventory_periods_30d"`
+	ReportingRepeatBackupHealthPeriods30d     int  `json:"reporting_repeat_backup_health_periods_30d"`
+	ReportingRepeatPatrolDigestPeriods30d     int  `json:"reporting_repeat_patrol_digest_periods_30d"`
+	ReportingSaved30d                         int  `json:"reporting_saved_30d"`
+	ReportingEmailAccepted30d                 int  `json:"reporting_email_accepted_30d"`
+	ReportingDeliveryFailed30d                int  `json:"reporting_delivery_failed_30d"`
+	ReportingDeliveryUnconfirmed30d           int  `json:"reporting_delivery_unconfirmed_30d"`
+	ReportingDataComplete30d                  int  `json:"reporting_data_complete_30d"`
+	ReportingDataIncomplete30d                int  `json:"reporting_data_incomplete_30d"`
+	ReportingDataUnavailable30d               int  `json:"reporting_data_unavailable_30d"`
+	ReportingTelemetryAvailable               bool `json:"reporting_telemetry_available"`
+	ReportingObservationDays                  int  `json:"reporting_observation_days"`
+	ReportingResourcesActiveDays30d           int  `json:"reporting_resources_active_days_30d"`
+	ReportingVMInventoryActiveDays30d         int  `json:"reporting_vm_inventory_active_days_30d"`
+	ReportingBackupHealthActiveDays30d        int  `json:"reporting_backup_health_active_days_30d"`
+	ReportingPatrolDigestActiveDays30d        int  `json:"reporting_patrol_digest_active_days_30d"`
 }
 
 // Snapshot holds the dynamic state gathered at ping time.
@@ -757,6 +785,33 @@ type Snapshot struct {
 	PulseIntelligenceApprovedActionRefusalsOther30d                      int
 	PulseIntelligenceVerifiedFindingResolutions30d                       int
 	PulseIntelligenceApprovedActionLastFailureReason30d                  string
+
+	// Content-free reporting outcomes and measurement coverage.
+	ReportingGeneratedResources30d            int
+	ReportingGeneratedVMInventory30d          int
+	ReportingGeneratedBackupHealth30d         int
+	ReportingGeneratedPatrolDigest30d         int
+	ReportingSuccessfulResourcesPeriods30d    int
+	ReportingSuccessfulVMInventoryPeriods30d  int
+	ReportingSuccessfulBackupHealthPeriods30d int
+	ReportingSuccessfulPatrolDigestPeriods30d int
+	ReportingRepeatResourcesPeriods30d        int
+	ReportingRepeatVMInventoryPeriods30d      int
+	ReportingRepeatBackupHealthPeriods30d     int
+	ReportingRepeatPatrolDigestPeriods30d     int
+	ReportingSaved30d                         int
+	ReportingEmailAccepted30d                 int
+	ReportingDeliveryFailed30d                int
+	ReportingDeliveryUnconfirmed30d           int
+	ReportingDataComplete30d                  int
+	ReportingDataIncomplete30d                int
+	ReportingDataUnavailable30d               int
+	ReportingTelemetryAvailable               bool
+	ReportingObservationDays                  int
+	ReportingResourcesActiveDays30d           int
+	ReportingVMInventoryActiveDays30d         int
+	ReportingBackupHealthActiveDays30d        int
+	ReportingPatrolDigestActiveDays30d        int
 }
 
 // PulseIntelligenceActionSnapshot is the action-governance portion of the
@@ -1298,6 +1353,36 @@ func BuildPingForSnapshot(s Snapshot) Ping {
 }
 
 // applySnapshot merges dynamic state into the base ping.
+// applyReportingActivitySnapshot maps the reporting count family without
+// adding identifiers or changing the heartbeat's existing opt-out boundary.
+func applyReportingActivitySnapshot(ping *Ping, snapshot *Snapshot) {
+	ping.ReportingGeneratedResources30d = snapshot.ReportingGeneratedResources30d
+	ping.ReportingGeneratedVMInventory30d = snapshot.ReportingGeneratedVMInventory30d
+	ping.ReportingGeneratedBackupHealth30d = snapshot.ReportingGeneratedBackupHealth30d
+	ping.ReportingGeneratedPatrolDigest30d = snapshot.ReportingGeneratedPatrolDigest30d
+	ping.ReportingSuccessfulResourcesPeriods30d = snapshot.ReportingSuccessfulResourcesPeriods30d
+	ping.ReportingSuccessfulVMInventoryPeriods30d = snapshot.ReportingSuccessfulVMInventoryPeriods30d
+	ping.ReportingSuccessfulBackupHealthPeriods30d = snapshot.ReportingSuccessfulBackupHealthPeriods30d
+	ping.ReportingSuccessfulPatrolDigestPeriods30d = snapshot.ReportingSuccessfulPatrolDigestPeriods30d
+	ping.ReportingRepeatResourcesPeriods30d = snapshot.ReportingRepeatResourcesPeriods30d
+	ping.ReportingRepeatVMInventoryPeriods30d = snapshot.ReportingRepeatVMInventoryPeriods30d
+	ping.ReportingRepeatBackupHealthPeriods30d = snapshot.ReportingRepeatBackupHealthPeriods30d
+	ping.ReportingRepeatPatrolDigestPeriods30d = snapshot.ReportingRepeatPatrolDigestPeriods30d
+	ping.ReportingSaved30d = snapshot.ReportingSaved30d
+	ping.ReportingEmailAccepted30d = snapshot.ReportingEmailAccepted30d
+	ping.ReportingDeliveryFailed30d = snapshot.ReportingDeliveryFailed30d
+	ping.ReportingDeliveryUnconfirmed30d = snapshot.ReportingDeliveryUnconfirmed30d
+	ping.ReportingDataComplete30d = snapshot.ReportingDataComplete30d
+	ping.ReportingDataIncomplete30d = snapshot.ReportingDataIncomplete30d
+	ping.ReportingDataUnavailable30d = snapshot.ReportingDataUnavailable30d
+	ping.ReportingTelemetryAvailable = snapshot.ReportingTelemetryAvailable
+	ping.ReportingObservationDays = snapshot.ReportingObservationDays
+	ping.ReportingResourcesActiveDays30d = snapshot.ReportingResourcesActiveDays30d
+	ping.ReportingVMInventoryActiveDays30d = snapshot.ReportingVMInventoryActiveDays30d
+	ping.ReportingBackupHealthActiveDays30d = snapshot.ReportingBackupHealthActiveDays30d
+	ping.ReportingPatrolDigestActiveDays30d = snapshot.ReportingPatrolDigestActiveDays30d
+}
+
 func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping := base
 	if fn == nil {
@@ -1348,6 +1433,8 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.ReportSchedules = s.ReportSchedules
 	ping.ReportSchedulesEnabled = s.ReportSchedulesEnabled
 	ping.ReportSchedulesRun30d = s.ReportSchedulesRun30d
+	applyReportingActivitySnapshot(&ping, &s)
+
 	ping.AgentProfiles = s.AgentProfiles
 	ping.UpdateAttempts30d = s.UpdateAttempts30d
 	ping.UpdateSuccesses30d = s.UpdateSuccesses30d

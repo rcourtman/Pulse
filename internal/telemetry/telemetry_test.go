@@ -337,57 +337,57 @@ func TestApplySnapshot(t *testing.T) {
 
 	snap := func() Snapshot {
 		return Snapshot{
-			PVENodes:                                   3,
-			VMs:                                        10,
-			Containers:                                 5,
-			AgentHosts:                                 2,
-			DockerContainers:                           12,
-			KubernetesPods:                             18,
-			StoragePools:                               4,
-			PhysicalDisks:                              9,
-			TrueNASSystems:                             1,
-			TrueNASApps:                                3,
-			VMwareHosts:                                2,
-			AvailabilityTargets:                        6,
-			AIEnabled:                                  true,
-			PatrolEnabled:                              true,
-			DiscoveryEnabled:                           true,
-			NotificationsEnabled:                       true,
-			AIActionsEnabled:                           true,
-			AlertAIEnabled:                             true,
-			ActiveAlerts:                               2,
-			PaidLicense:                                true,
-			HasAPITokens:                               true,
-			RBACCustomRoles:                            3,
-			RBACUserAssignments:                        7,
-			AuditReads30d:                              41,
-			ReportSchedules:                            5,
-			ReportSchedulesEnabled:                     4,
-			ReportSchedulesRun30d:                      2,
-			AgentProfiles:                              9,
-			UpdateAttempts30d:                          4,
-			UpdateSuccesses30d:                         2,
-			UpdateFailures30d:                          1,
-			UpdateLastFailureCategory:                  "download",
-			ActiveAlertsCritical:                       2,
-			ActiveAlertsAge1h24h:                       2,
-			AlertsFiredCritical30d:                     5,
-			AlertsResolvedCritical30d:                  3,
-			AlertsResolution1h24h30d:                   3,
-			AlertsRepeatOccurrences30d:                 2,
-			AlertsSnoozedOccurrences30d:                2,
-			AlertsResolvedWhileSnoozed30d:              1,
-			AlertManagerTenants:                        2,
-			AlertDeliveryActiveTenants:                 1,
-			AlertFlappingEnabledTenants:                2,
-			AlertIntentPolicyConfiguredTenants:         1,
-			AlertEventHistoryAuthoritativeTenants:      2,
-			AlertActiveStateAuthoritativeTenants:       2,
-			PulseIntelligenceLoopConfigured:            true,
-			PulseIntelligenceLoopActive30d:             true,
-			PulseIntelligenceCompleteOperationsLoop30d: true,
-			PulseIntelligenceApprovedExecutionLoop30d:  true,
-			PulseIntelligenceResolvedOperationsLoop30d: true,
+			PVENodes:                              3,
+			VMs:                                   10,
+			Containers:                            5,
+			AgentHosts:                            2,
+			DockerContainers:                      12,
+			KubernetesPods:                        18,
+			StoragePools:                          4,
+			PhysicalDisks:                         9,
+			TrueNASSystems:                        1,
+			TrueNASApps:                           3,
+			VMwareHosts:                           2,
+			AvailabilityTargets:                   6,
+			AIEnabled:                             true,
+			PatrolEnabled:                         true,
+			DiscoveryEnabled:                      true,
+			NotificationsEnabled:                  true,
+			AIActionsEnabled:                      true,
+			AlertAIEnabled:                        true,
+			ActiveAlerts:                          2,
+			PaidLicense:                           true,
+			HasAPITokens:                          true,
+			RBACCustomRoles:                       3,
+			RBACUserAssignments:                   7,
+			AuditReads30d:                         41,
+			ReportSchedules:                       5,
+			ReportSchedulesEnabled:                4,
+			ReportSchedulesRun30d:                 2,
+			AgentProfiles:                         9,
+			UpdateAttempts30d:                     4,
+			UpdateSuccesses30d:                    2,
+			UpdateFailures30d:                     1,
+			UpdateLastFailureCategory:             "download",
+			ActiveAlertsCritical:                  2,
+			ActiveAlertsAge1h24h:                  2,
+			AlertsFiredCritical30d:                5,
+			AlertsResolvedCritical30d:             3,
+			AlertsResolution1h24h30d:              3,
+			AlertsRepeatOccurrences30d:            2,
+			AlertsSnoozedOccurrences30d:           2,
+			AlertsResolvedWhileSnoozed30d:         1,
+			AlertManagerTenants:                   2,
+			AlertDeliveryActiveTenants:            1,
+			AlertFlappingEnabledTenants:           2,
+			AlertIntentPolicyConfiguredTenants:    1,
+			AlertEventHistoryAuthoritativeTenants: 2,
+			AlertActiveStateAuthoritativeTenants:  2,
+			PulseIntelligenceLoopConfigured:       true,
+			PulseIntelligenceLoopActive30d:        true,
+			PulseIntelligenceCompleteOperationsLoop30d:                     true,
+			PulseIntelligenceApprovedExecutionLoop30d:                      true,
+			PulseIntelligenceResolvedOperationsLoop30d:                     true,
 			PulseIntelligencePatrolControlCompletedOperationsLoop30d:       true,
 			PulseIntelligencePatrolControlResolvedOperationsLoop30d:        true,
 			PulseIntelligencePatrolControlPaidCompletedOperationsLoop30d:   true,
@@ -1460,5 +1460,152 @@ func TestSendAllowsRedirectedEndpointUnderTest(t *testing.T) {
 	}
 	if got := received.Load(); got != 1 {
 		t.Fatalf("redirected endpoint received %d pings, want 1", got)
+	}
+}
+
+func TestReportingTelemetryPayloadMappingAndBudget(t *testing.T) {
+	snap := Snapshot{
+		ReportingGeneratedResources30d:            100000,
+		ReportingGeneratedVMInventory30d:          100000,
+		ReportingGeneratedBackupHealth30d:         100000,
+		ReportingGeneratedPatrolDigest30d:         100000,
+		ReportingSuccessfulResourcesPeriods30d:    100000,
+		ReportingSuccessfulVMInventoryPeriods30d:  100000,
+		ReportingSuccessfulBackupHealthPeriods30d: 100000,
+		ReportingSuccessfulPatrolDigestPeriods30d: 100000,
+		ReportingRepeatResourcesPeriods30d:        100000,
+		ReportingRepeatVMInventoryPeriods30d:      100000,
+		ReportingRepeatBackupHealthPeriods30d:     100000,
+		ReportingRepeatPatrolDigestPeriods30d:     100000,
+		ReportingSaved30d:                         100000,
+		ReportingEmailAccepted30d:                 100000,
+		ReportingDeliveryFailed30d:                100000,
+		ReportingDeliveryUnconfirmed30d:           100000,
+		ReportingDataComplete30d:                  100000,
+		ReportingDataIncomplete30d:                100000,
+		ReportingDataUnavailable30d:               100000,
+		ReportingTelemetryAvailable:               true,
+		ReportingObservationDays:                  30,
+	}
+	// Exercise the receiver's count ceiling across the entire snapshot, not
+	// just the added fields, to keep the existing 16 KiB request limit intact.
+	values := reflect.ValueOf(&snap).Elem()
+	for i := 0; i < values.NumField(); i++ {
+		if values.Field(i).Kind() == reflect.Int {
+			values.Field(i).SetInt(100000)
+		}
+	}
+	snap.ReportingObservationDays = 30
+	snap.ReportingResourcesActiveDays30d = 30
+	snap.ReportingVMInventoryActiveDays30d = 30
+	snap.ReportingBackupHealthActiveDays30d = 30
+	snap.ReportingPatrolDigestActiveDays30d = 30
+	preview, err := BuildPreview(Config{Version: "6.6.0", DataDir: t.TempDir(), GetSnapshot: func() Snapshot { return snap }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(preview)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) > 16*1024 {
+		t.Fatalf("payload %d exceeds receiver limit", len(raw))
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if got := payload["reporting_generated_resources_30d"]; got != float64(100000) {
+		t.Errorf("reporting_generated_resources_30d = %v", got)
+	}
+	if got := payload["reporting_generated_vm_inventory_30d"]; got != float64(100000) {
+		t.Errorf("reporting_generated_vm_inventory_30d = %v", got)
+	}
+	if got := payload["reporting_generated_backup_health_30d"]; got != float64(100000) {
+		t.Errorf("reporting_generated_backup_health_30d = %v", got)
+	}
+	if got := payload["reporting_generated_patrol_digest_30d"]; got != float64(100000) {
+		t.Errorf("reporting_generated_patrol_digest_30d = %v", got)
+	}
+	if got := payload["reporting_successful_resources_periods_30d"]; got != float64(100000) {
+		t.Errorf("reporting_successful_resources_periods_30d = %v", got)
+	}
+	if got := payload["reporting_successful_vm_inventory_periods_30d"]; got != float64(100000) {
+		t.Errorf("reporting_successful_vm_inventory_periods_30d = %v", got)
+	}
+	if got := payload["reporting_successful_backup_health_periods_30d"]; got != float64(100000) {
+		t.Errorf("reporting_successful_backup_health_periods_30d = %v", got)
+	}
+	if got := payload["reporting_successful_patrol_digest_periods_30d"]; got != float64(100000) {
+		t.Errorf("reporting_successful_patrol_digest_periods_30d = %v", got)
+	}
+	if got := payload["reporting_repeat_resources_periods_30d"]; got != float64(100000) {
+		t.Errorf("reporting_repeat_resources_periods_30d = %v", got)
+	}
+	if got := payload["reporting_repeat_vm_inventory_periods_30d"]; got != float64(100000) {
+		t.Errorf("reporting_repeat_vm_inventory_periods_30d = %v", got)
+	}
+	if got := payload["reporting_repeat_backup_health_periods_30d"]; got != float64(100000) {
+		t.Errorf("reporting_repeat_backup_health_periods_30d = %v", got)
+	}
+	if got := payload["reporting_repeat_patrol_digest_periods_30d"]; got != float64(100000) {
+		t.Errorf("reporting_repeat_patrol_digest_periods_30d = %v", got)
+	}
+	if got := payload["reporting_saved_30d"]; got != float64(100000) {
+		t.Errorf("reporting_saved_30d = %v", got)
+	}
+	if got := payload["reporting_email_accepted_30d"]; got != float64(100000) {
+		t.Errorf("reporting_email_accepted_30d = %v", got)
+	}
+	if got := payload["reporting_delivery_failed_30d"]; got != float64(100000) {
+		t.Errorf("reporting_delivery_failed_30d = %v", got)
+	}
+	if got := payload["reporting_delivery_unconfirmed_30d"]; got != float64(100000) {
+		t.Errorf("reporting_delivery_unconfirmed_30d = %v", got)
+	}
+	if got := payload["reporting_data_complete_30d"]; got != float64(100000) {
+		t.Errorf("reporting_data_complete_30d = %v", got)
+	}
+	if got := payload["reporting_data_incomplete_30d"]; got != float64(100000) {
+		t.Errorf("reporting_data_incomplete_30d = %v", got)
+	}
+	if got := payload["reporting_data_unavailable_30d"]; got != float64(100000) {
+		t.Errorf("reporting_data_unavailable_30d = %v", got)
+	}
+	if got := payload["reporting_telemetry_available"]; got != true {
+		t.Errorf("reporting_telemetry_available = %v", got)
+	}
+	if got := payload["reporting_observation_days"]; got != float64(30) {
+		t.Errorf("reporting_observation_days = %v", got)
+	}
+
+	if got := payload["reporting_resources_active_days_30d"]; got != float64(30) {
+		t.Errorf("reporting_resources_active_days_30d = %v", got)
+	}
+	if got := payload["reporting_vm_inventory_active_days_30d"]; got != float64(30) {
+		t.Errorf("reporting_vm_inventory_active_days_30d = %v", got)
+	}
+	if got := payload["reporting_backup_health_active_days_30d"]; got != float64(30) {
+		t.Errorf("reporting_backup_health_active_days_30d = %v", got)
+	}
+	if got := payload["reporting_patrol_digest_active_days_30d"]; got != float64(30) {
+		t.Errorf("reporting_patrol_digest_active_days_30d = %v", got)
+	}
+	for _, forbidden := range []string{"schedule_id", "recipient", "report_contents", "org_id", "period_key"} {
+		if _, ok := payload[forbidden]; ok {
+			t.Errorf("identifier field %s", forbidden)
+		}
+	}
+}
+
+func TestTelemetryPrivacyReleaseNoticeCoversReporting(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "releases", "TELEMETRY_SCHEMA_V20.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"schema v20", "repeat reporting periods", "Retries do not count as repeat", "customer identifiers", "opt-out", "pricing", "entitlements", "receiver", "client release"} {
+		if !strings.Contains(string(raw), required) {
+			t.Errorf("reporting release notice must disclose %q", required)
+		}
 	}
 }

@@ -9979,3 +9979,10 @@ quality is independent of delivery status. `reporting_backup_health_test.go`
 covers current scope, missing history, unchanged entitlement rejection and retry
 after handler recreation. Collection and persistence proofs remain owned by
 monitoring and storage-recovery.
+
+Reporting outcome telemetry in the shared API observes completed response writes,
+file saves, SMTP outcomes and persisted successful schedule windows. Its local
+opaque period markers add no agent identity, enrollment, command or remediation
+path. Failure to retain a tally cannot stop delivery. The real scheduler retry,
+handler recreation and unreadable-tally cases in `reporting_activity_test.go`
+verify that measurement remains subordinate to the existing report lifecycle.

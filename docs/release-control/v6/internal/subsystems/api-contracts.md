@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### Reporting telemetry observes canonical generation and delivery boundaries
+
+`internal/api/reporting_activity.go` records best-effort content-free events to
+the root config persistence wired through the existing settings-store boundary.
+Organization context contributes only to a local opaque deduplication key. Direct
+resource and VM inventory downloads count only a full successful response write,
+excluding HEAD, cancellation and short writes. Distinct generation days cover
+returning manual use without retaining download identities. Scheduled report generation, file
+saving and existing SMTP transport outcomes each contribute their own counter.
+A successful reporting period is recorded only after final schedule state saves.
+Interrupted email recovery records uncertainty after persisting that outcome.
+Retries still use the same scheduling/delivery system and frozen reporting window.
+
+No endpoint, report payload, delivery state, retry policy, pricing or entitlement
+changes. The activity adapter cannot block a report on tally failure. Scheduler
+restart/retry, distinct-period reuse, complete download and mock-suppression proof
+lives in `internal/api/reporting_activity_test.go`. Notifications retains SMTP
+acceptance authority, and the activity recorder never claims inbox delivery.
+
+
 ### Container verification distinguishes transitional health
 
 Both agent and independent lifecycle readbacks classify a running container's

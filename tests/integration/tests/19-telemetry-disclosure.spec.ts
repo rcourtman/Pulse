@@ -10,7 +10,7 @@ import {
 import { createAuthenticatedStorageState } from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXPECTED_TELEMETRY_SCHEMA_VERSION = 19;
+const EXPECTED_TELEMETRY_SCHEMA_VERSION = 20;
 
 type WorkerFixtures = {
   authStorageStatePath: string;
@@ -55,7 +55,8 @@ async function expectPopupDoc(
   await expect(popup.locator("body")).toContainText(expectedText);
   await expect(popup.locator("body")).toContainText("successful_history_reads_over_7d_30d");
   await expect(popup.locator("body")).toContainText("Selecting a long range alone does not count");
-  await popup.getByText("Schema v19 adds", { exact: false }).scrollIntoViewIfNeeded();
+  await expect(popup.locator("body")).toContainText("reporting_repeat_backup_health_periods_30d");
+  await popup.getByText("Schema v20 adds", { exact: false }).scrollIntoViewIfNeeded();
   await popup.screenshot({ path: test.info().outputPath("privacy-history-counter.png") });
   await popup.close();
 }
@@ -74,16 +75,19 @@ async function readTelemetryPreview(page: Page) {
     update_check_outcome: string;
     update_available: boolean;
     successful_history_reads_over_7d_30d: number;
+    reporting_generated_backup_health_30d: number;
+    reporting_telemetry_available: boolean;
+    reporting_observation_days: number;
   };
 }
 
 async function showExtendedHistoryCount(page: Page) {
   await page.locator('pre[aria-label="Telemetry payload preview"]').evaluate((pre) => {
     const node = pre.firstChild!;
-    const offset = (node.textContent ?? "").indexOf("successful_history_reads_over_7d_30d");
+    const offset = (node.textContent ?? "").indexOf("reporting_generated_backup_health_30d");
     const range = document.createRange();
     range.setStart(node, offset);
-    range.setEnd(node, offset + "successful_history_reads_over_7d_30d".length);
+    range.setEnd(node, offset + "reporting_generated_backup_health_30d".length);
     for (let parent = pre.parentElement; parent; parent = parent.parentElement) {
       if (parent.scrollHeight > parent.clientHeight && /auto|scroll/.test(getComputedStyle(parent).overflowY)) {
         parent.scrollTop += range.getBoundingClientRect().top - parent.getBoundingClientRect().top - parent.clientHeight / 2;
@@ -91,7 +95,7 @@ async function showExtendedHistoryCount(page: Page) {
     }
     const rect = range.getBoundingClientRect();
     if (rect.top < 60 || rect.bottom > window.innerHeight - 60) {
-      throw new Error("Extended history count must be in the visible preview before capture");
+      throw new Error("Reporting count must be in the visible preview before capture");
     }
   });
 }
@@ -134,6 +138,36 @@ test.describe("Telemetry disclosure", () => {
       "/docs/PRIVACY",
       "Pulse has one outbound usage-data scope",
     );
+  });
+
+  test("reporting telemetry preserves the saved opt-out", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/settings/system-general", { waitUntil: "domcontentloaded" });
+    const toggle = page.getByRole("button", { name: "Outbound usage telemetry", exact: true });
+    await expect(toggle).toBeVisible();
+    // Environment overrides intentionally lock the existing control. The
+    // task-specific browser server also exercises the unlocked saved preference.
+    if (await toggle.isDisabled()) {
+      await expect(toggle).toBeDisabled();
+      return;
+    }
+    const original = await toggle.getAttribute("aria-pressed");
+    for (const state of ["true", "false"]) {
+      if ((await toggle.getAttribute("aria-pressed")) !== state) {
+        await toggle.focus();
+        await toggle.press("Enter");
+      }
+      await expect(toggle).toHaveAttribute("aria-pressed", state);
+      await expect(toggle).toBeEnabled();
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(toggle).toHaveAttribute("aria-pressed", state);
+    }
+    await page.screenshot({ path: test.info().outputPath("reporting-telemetry-opted-out.png") });
+    if (original === "true") {
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-pressed", "true");
+      await expect(toggle).toBeEnabled();
+    }
   });
 
   test("general settings lets operators preview and rotate the telemetry payload", async ({
@@ -183,6 +217,9 @@ test.describe("Telemetry disclosure", () => {
     ]).toContain(initialPreview.update_check_outcome);
     expect(typeof initialPreview.update_available).toBe("boolean");
     expect(initialPreview.successful_history_reads_over_7d_30d).toBe(0);
+    expect(initialPreview.reporting_generated_backup_health_30d).toBe(0);
+    expect(initialPreview.reporting_telemetry_available).toBe(true);
+    expect(initialPreview.reporting_observation_days).toBeGreaterThanOrEqual(1);
     await page.getByRole("button", { name: "Refresh payload" }).click();
     expect((await readTelemetryPreview(page)).successful_history_reads_over_7d_30d).toBe(0);
     // Fixture data must not create real extended-history usage.
@@ -213,5 +250,8 @@ test.describe("Telemetry disclosure", () => {
     expect((await readTelemetryPreview(page)).successful_history_reads_over_7d_30d).toBe(0);
     await showExtendedHistoryCount(page);
     await page.screenshot({ path: testInfo.outputPath("telemetry-preview-narrow.png") });
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await showExtendedHistoryCount(page);
+    await page.screenshot({ path: testInfo.outputPath("telemetry-preview-intermediate.png") });
   });
 });
