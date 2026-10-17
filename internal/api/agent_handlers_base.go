@@ -2,10 +2,13 @@ package api
 
 import (
 	"context"
+	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rs/zerolog/log"
 )
 
 // baseAgentHandlers provides the shared monitor-management and broadcast logic
@@ -53,21 +56,47 @@ func (b *baseAgentHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMon
 	}
 }
 
-// getMonitor returns the monitor for the organization in the request context,
-// falling back to the default-org monitor.
+// getMonitor returns the monitor for the organization in the request context.
+// Only the default organization may fall back to the primary monitor. Any
+// other organization whose tenant monitor cannot be resolved gets nil, so its
+// requests never read or change the default organization's agents.
 func (b *baseAgentHandlers) getMonitor(ctx context.Context) *monitoring.Monitor {
 	b.stateMu.RLock()
 	mtMonitor := b.mtMonitor
 	defaultMonitor := b.defaultMonitor
 	b.stateMu.RUnlock()
 
-	orgID := GetOrgID(ctx)
-	if mtMonitor != nil {
-		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
-			return m
+	orgID := strings.TrimSpace(GetOrgID(ctx))
+	if orgID == "" || orgID == "default" {
+		if mtMonitor != nil {
+			if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+				return m
+			}
 		}
+		return defaultMonitor
 	}
-	return defaultMonitor
+
+	if mtMonitor == nil {
+		log.Warn().Str("org_id", orgID).Msg("Tenant monitor manager unavailable for agent request")
+		return nil
+	}
+	m, err := mtMonitor.GetMonitor(orgID)
+	if err != nil || m == nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to resolve tenant monitor for agent request")
+		return nil
+	}
+	return m
+}
+
+// requireMonitor resolves the request organization's monitor, writing a 503
+// and returning nil when it is unavailable.
+func (b *baseAgentHandlers) requireMonitor(w http.ResponseWriter, r *http.Request) *monitoring.Monitor {
+	monitor := b.getMonitor(r.Context())
+	if monitor == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant monitor is not available", nil)
+		return nil
+	}
+	return monitor
 }
 
 // broadcastState pushes monitor state to tenant-scoped WebSocket clients when
