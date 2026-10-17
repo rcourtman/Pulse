@@ -9736,3 +9736,17 @@ WebKit exercise the real policy producer, consuming drawer, shared clock and
 existing table evidence. No route, guest check, backup, threshold, collector or
 permission changes. This presentation result does not establish thaw, covered
 filesystem writes, native restart recovery or containing released software.
+
+### Updates panel offers the Pulse Pro runtime switch (14 October 2026)
+
+`UpdatesSettingsPanel.tsx` mounts `ProRuntimeSwitchCard` above the version box,
+and asks `GET /api/updates/pro-runtime` only when the runtime identity reports
+the community build and the install is not a source build. The card composes
+the shared `CalloutCard`, `Button` and `CopyCommandBlock` primitives; its copy
+lives in `getProRuntimeSwitchPresentation` in `utils/updatesPresentation.ts`
+beside the rest of the Updates panel copy. Only `in_place`, `docker`,
+`older_release` and `unavailable` render; every other reason stays hidden, and
+the License panel keeps its own runtime notice. The in-place switch needs an
+explicit confirm step, and progress comes from the existing update progress
+modal rather than card-local state. Command blocks pad clear of the copy
+button so long digest-pinned commands stay readable when they wrap.

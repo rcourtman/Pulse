@@ -7,8 +7,10 @@ import {
   getUpdateCheckedLabel,
   getUpdateCheckModeLabel,
   getUpdatePrimaryStatusLabel,
+  getProRuntimeSwitchPresentation,
   UPDATES_PANEL_COPY,
 } from '../updatesPresentation';
+import type { ProRuntimeSwitch } from '@/api/updates';
 
 describe('updatesPresentation', () => {
   it('returns canonical build badges', () => {
@@ -96,4 +98,101 @@ it('omits unknown and invalid release dates while formatting known dates', () =>
   }
   const date = '2026-09-10T14:06:01Z';
   expect(formatUpdateReleaseDate(date)).toBe(new Date(date).toLocaleDateString());
+});
+
+const proRuntimeSwitchBase: ProRuntimeSwitch = {
+  available: false,
+  currentVersion: '6.5.0',
+  installInPlace: false,
+};
+
+const pinnedRef = 'registry.pulserelay.pro/pulse/pulse-pro@sha256:' + 'ab'.repeat(32);
+const proDockerCommands = {
+  version: 'v6.5.0',
+  image: 'registry.pulserelay.pro/pulse/pulse-pro',
+  imageDigest: 'sha256:' + 'ab'.repeat(32),
+  loginCommand:
+    "printf '%s' '<activation-key>' | docker login registry.pulserelay.pro -u 'lic_test' --password-stdin",
+  composePullCommand: `PULSE_IMAGE='${pinnedRef}' docker compose pull`,
+  composeUpCommand: `PULSE_IMAGE='${pinnedRef}' docker compose up -d`,
+};
+
+describe('getProRuntimeSwitchPresentation', () => {
+  it('offers an in-place switch naming the locked features and the target', () => {
+    const view = getProRuntimeSwitchPresentation({
+      ...proRuntimeSwitchBase,
+      available: true,
+      installInPlace: true,
+      version: '6.5.0',
+    });
+    expect(view.kind).toBe('in_place');
+    if (view.kind !== 'in_place') return;
+    expect(view.version).toBe('v6.5.0');
+    expect(view.body).toContain('Patrol modes, Audit Log, RBAC and Reporting');
+    expect(view.body).toContain('Pulse Pro v6.5.0');
+  });
+
+  it('gives Docker installs the broker commands in order, login first', () => {
+    const view = getProRuntimeSwitchPresentation({
+      ...proRuntimeSwitchBase,
+      available: true,
+      docker: proDockerCommands,
+    });
+    expect(view.kind).toBe('docker');
+    if (view.kind !== 'docker') return;
+    expect(view.steps.map((step) => step.command)).toEqual([
+      proDockerCommands.loginCommand,
+      proDockerCommands.composePullCommand,
+      proDockerCommands.composeUpCommand,
+    ]);
+    expect(view.steps[0].note).toContain('<activation-key>');
+    expect(view.note).toContain('PULSE_IMAGE');
+    expect(view.steps.some((step) => step.command?.includes('rcourtman/pulse'))).toBe(false);
+  });
+
+  it('skips the login step when the broker sends none', () => {
+    const view = getProRuntimeSwitchPresentation({
+      ...proRuntimeSwitchBase,
+      available: true,
+      docker: { ...proDockerCommands, loginCommand: undefined },
+    });
+    if (view.kind !== 'docker') throw new Error(`expected docker, got ${view.kind}`);
+    expect(view.steps.map((step) => step.id)).toEqual(['pro-runtime-pull', 'pro-runtime-up']);
+  });
+
+  it('explains an older Pro release with both versions', () => {
+    const view = getProRuntimeSwitchPresentation({
+      ...proRuntimeSwitchBase,
+      currentVersion: '6.6.0',
+      reason: 'older_release',
+      version: '6.5.0',
+    });
+    expect(view.kind).toBe('older_release');
+    if (view.kind !== 'older_release') return;
+    expect(view.body).toContain('v6.5.0');
+    expect(view.body).toContain('v6.6.0');
+  });
+
+  it('shows a quiet notice when the license server cannot be reached', () => {
+    expect(
+      getProRuntimeSwitchPresentation({ ...proRuntimeSwitchBase, reason: 'unavailable' }).kind,
+    ).toBe('unavailable');
+  });
+
+  it.each([
+    'already_pro',
+    'not_activated',
+    'not_eligible',
+    'source_build',
+    'unsupported_deployment',
+  ] as const)('stays hidden for %s', (reason) => {
+    expect(getProRuntimeSwitchPresentation({ ...proRuntimeSwitchBase, reason }).kind).toBe(
+      'hidden',
+    );
+  });
+
+  it('stays hidden without a result', () => {
+    expect(getProRuntimeSwitchPresentation(null).kind).toBe('hidden');
+    expect(getProRuntimeSwitchPresentation(undefined).kind).toBe('hidden');
+  });
 });

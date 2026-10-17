@@ -3145,6 +3145,9 @@ artifact-selection behaviour.
    entry keeps the normal rollback back to the community build. Docker
    installs get the broker's digest-pinned Docker command block as
    `ProRuntimeSwitch.docker` instead, never the community image.
+   Settings → Updates is the user-facing entry to that switch, and
+   `docs/UPGRADE_v6.md` and `docs/DOCKER.md` (with their shipped mirrors)
+   point paid community installs there before the download portal.
    A Docker deployment of the compiled Pro binary is part of that same
    boundary: the container cannot self-replace its binary and a Pro compose
    file pins the previous image digest, so `internal/updates/pro_update.go`

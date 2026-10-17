@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "72bfeee24697b72c003a62812f2e9d047bd4945b",
+  "verified_at": "2026-10-14T17:45:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/updates.ts",
+    "frontend-modern/src/components/Settings/ProRuntimeSwitchCard.tsx",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+    "frontend-modern/src/utils/updatesPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/updates.ts": "4ada073bce275491f8eb82b03c87b1d286290304e6d0a30ebbc680280b7006b3",
+    "frontend-modern/src/components/Settings/ProRuntimeSwitchCard.tsx": "418206926d914f43a8e5e65976212abfa9a8357af673913a014510837a9e14fc",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "ea22f43d4cd5ec7cd0c57dc26cde236c83370dc11988fbbf83a10b65b04a10f6",
+    "frontend-modern/src/utils/updatesPresentation.ts": "0ed3c3eeeac3dd7c9b013133448150ca3da2be35ce674241fb1b66ac3a8b641f"
+  },
+  "routes": [
+    "/settings/system-updates",
+    "/settings/system-general"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Production vite build embedded in a community-build backend (mock mode) built from this change, run on pulse-dev and tunnelled to localhost",
+    "Real backend, no activation: GET /api/updates/pro-runtime answers not_activated and the Updates panel shows no switch card",
+    "Stubbed check response in_place: warning card above the version box naming the locked features and the target version",
+    "In-place confirm step with restart and rollback copy",
+    "Stubbed check response docker: three numbered steps with copyable digest-pinned commands, wrapped, copy buttons clear of the text, PULSE_IMAGE note",
+    "Stubbed check response older_release: info card naming both versions",
+    "Stubbed check response unavailable: quiet one-line notice",
+    "Phone width: in-place card and Docker steps without horizontal scroll (scrollWidth equals viewport width)"
+  ],
+  "interactions": [
+    "Navigated General to Updates in the settings nav to remount the panel for each stubbed state",
+    "Clicked Switch to Pulse Pro, then Cancel and Switch now",
+    "Switch now against a stubbed 409: error toast shown and the confirm step kept",
+    "Switch now against a stubbed accept: confirm step closed and the card returned to its offer",
+    "Switch now passed through to the real backend: 409 with the plain-language refusal shown as a toast",
+    "Settings back navigation and Updates reopen at phone width"
+  ]
+}
