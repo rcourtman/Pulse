@@ -349,7 +349,7 @@ func TestContract_ConfigTransferRoutesUseCanonicalPreHandlerAuthorization(t *tes
 		"isDirectLoopbackRequest(req)",
 		"op == configTransferExport",
 		"getAPITokenRecordFromRequest(req)",
-		"ensureAdminSession(r.config, w, req)",
+		"ensureOrgAdminSession(r.config, w, req)",
 		"config.ScopeSettingsRead",
 		"config.ScopeSettingsWrite",
 	} {
@@ -22514,8 +22514,8 @@ func TestContract_AgentFleetDiagnosticsEndpointSurfacesStableShape(t *testing.T)
 	routerSrc := string(router)
 
 	if !strings.Contains(routerSrc, `"/api/agents/diagnostics"`) ||
-		!strings.Contains(routerSrc, `RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics))`) {
-		t.Error("agent fleet diagnostics route must remain admin settings:read only")
+		!strings.Contains(routerSrc, `RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics))`) {
+		t.Error("agent fleet diagnostics route must remain org admin settings:read only")
 	}
 	if !strings.Contains(handlerSrc, "GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTargetVersion, now)") ||
 		!strings.Contains(handlerSrc, "applyAgentFleetActionRunnerState(&diagnostics") {
@@ -26478,12 +26478,12 @@ func orgScopedSessionRequest(t *testing.T, user string, org *models.Organization
 }
 
 // A provider opening a client workspace lands in that client's organization as
-// its owner. ensureAdminSession has always let an org manager through the
-// org-bound settings routes, but the security status snapshot reported every
-// settings capability as false for any org-scoped session, so the settings
-// navigation hid Infrastructure and Reporting and the owner had no way to
-// connect a single system. Those org-bound capabilities must follow the route
-// rule, while instance administration stays closed to org-scoped sessions.
+// its owner. ensureOrgAdminSession lets an org manager through the org-bound
+// settings routes, but the security status snapshot reported every settings
+// capability as false for any org-scoped session, so the settings navigation
+// hid Infrastructure and the owner had no way to connect a single system.
+// Those org-bound capabilities must follow the route rule, while instance
+// administration, reporting included, stays closed to org-scoped sessions.
 func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 	prev := authpkg.GetAuthorizer()
 	authpkg.SetAuthorizer(&authpkg.DefaultAuthorizer{})
@@ -26514,8 +26514,8 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 		{name: "outsider", user: "u_outsider", manager: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := ensureAdminSession(router.config, httptest.NewRecorder(), orgScopedSessionRequest(t, tc.user, org)); got != tc.manager {
-				t.Fatalf("precondition: ensureAdminSession = %v, want %v", got, tc.manager)
+			if got := ensureOrgAdminSession(router.config, httptest.NewRecorder(), orgScopedSessionRequest(t, tc.user, org)); got != tc.manager {
+				t.Fatalf("precondition: ensureOrgAdminSession = %v, want %v", got, tc.manager)
 			}
 
 			caps := router.securityStatusSettingsCapabilitiesFromSnapshot(
@@ -26524,7 +26524,6 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 			orgBound := map[string]bool{
 				"infrastructureRead": caps.InfrastructureRead,
 				"availabilityRead":   caps.AvailabilityRead,
-				"reportingRead":      caps.ReportingRead,
 			}
 			for name, got := range orgBound {
 				if got != tc.manager {
@@ -26533,6 +26532,7 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 			}
 
 			instanceWide := map[string]bool{
+				"reportingRead":       caps.ReportingRead,
 				"systemSettingsRead":  caps.SystemSettingsRead,
 				"diagnosticsRead":     caps.DiagnosticsRead,
 				"systemLogsRead":      caps.SystemLogsRead,
@@ -26556,7 +26556,7 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 
 // With a real RBAC authorizer, reporting also needs read:nodes. An org owner
 // the authorizer refuses must not be offered the reporting surface, because
-// RequirePermission refuses the route before ensureAdminSession runs.
+// RequirePermission refuses the route before any session check runs.
 func TestSecurityStatusOrgBoundReportingRespectsAuthorizer(t *testing.T) {
 	cfg := platformAdminConfig(t, "admin")
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
@@ -26570,7 +26570,7 @@ func TestSecurityStatusOrgBoundReportingRespectsAuthorizer(t *testing.T) {
 		t.Fatal("reportingRead advertised although the authorizer refuses read:nodes")
 	}
 	if !caps.InfrastructureRead {
-		t.Fatal("infrastructureRead must still follow ensureAdminSession for the org owner")
+		t.Fatal("infrastructureRead must still follow ensureOrgAdminSession for the org owner")
 	}
 }
 

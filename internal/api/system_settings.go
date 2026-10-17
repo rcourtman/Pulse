@@ -206,13 +206,39 @@ func (h *SystemSettingsHandler) getMonitor(ctx context.Context) SystemSettingsMo
 	defaultMonitor := h.defaultMonitor
 	h.stateMu.RUnlock()
 
-	if mtMonitor != nil {
-		orgID := GetOrgID(ctx)
-		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
-			return m
+	orgID := strings.TrimSpace(GetOrgID(ctx))
+	if orgID == "" || orgID == "default" {
+		if mtMonitor != nil {
+			if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+				return m
+			}
 		}
+		return defaultMonitor
 	}
-	return defaultMonitor
+
+	// Never fall back to the default organization's runtime for another
+	// organization: its requests would read or change the wrong tenant.
+	if mtMonitor == nil {
+		log.Warn().Str("org_id", orgID).Msg("Tenant monitor manager unavailable for system settings request")
+		return nil
+	}
+	m, err := mtMonitor.GetMonitor(orgID)
+	if err != nil || m == nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to resolve tenant monitor for system settings request")
+		return nil
+	}
+	return m
+}
+
+// requireMonitor resolves the request organization's monitor, writing a 503
+// and returning nil when it is unavailable.
+func (h *SystemSettingsHandler) requireMonitor(w http.ResponseWriter, r *http.Request) SystemSettingsMonitor {
+	monitor := h.getMonitor(r.Context())
+	if monitor == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant monitor is not available", nil)
+		return nil
+	}
+	return monitor
 }
 
 // SetConfig updates the configuration reference used by the handler.

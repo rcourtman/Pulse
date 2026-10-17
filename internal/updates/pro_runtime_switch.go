@@ -27,7 +27,10 @@ const (
 	ProRuntimeSwitchReasonSourceBuild  = "source_build"
 	ProRuntimeSwitchReasonUnsupported  = "unsupported_deployment"
 	ProRuntimeSwitchReasonOlderRelease = "older_release"
-	ProRuntimeSwitchReasonUnavailable  = "unavailable"
+	// The broker's Pro pin is a prerelease and this install follows the
+	// stable channel, which never installs prereleases.
+	ProRuntimeSwitchReasonPrereleaseOnly = "prerelease_only"
+	ProRuntimeSwitchReasonUnavailable    = "unavailable"
 )
 
 const (
@@ -112,7 +115,8 @@ func (m *Manager) CheckProRuntimeSwitch(ctx context.Context, channel string) (*P
 		return result, nil
 	}
 
-	manifest, err := m.fetchProDownloadManifest(ctx, creds, m.resolveChannel(channel, currentInfo))
+	channel = m.resolveChannel(channel, currentInfo)
+	manifest, err := m.fetchProDownloadManifest(ctx, creds, channel)
 	if err != nil {
 		if isProBrokerRefusal(err) {
 			result.Reason = ProRuntimeSwitchReasonNotEligible
@@ -125,6 +129,13 @@ func (m *Manager) CheckProRuntimeSwitch(ctx context.Context, channel string) (*P
 
 	if err := ensureSwitchTargetIsNotOlder(currentInfo.Version, manifest.Release.Version); err != nil {
 		result.Reason = ProRuntimeSwitchReasonOlderRelease
+		return result, nil
+	}
+	// Apply refuses a prerelease pin on the stable channel, so the check must
+	// not offer one: not as an in-place button that would fail, and not as
+	// Docker commands that would pin a stable install to a preview image.
+	if stableChannelRefusesProPin(channel, manifest) {
+		result.Reason = ProRuntimeSwitchReasonPrereleaseOnly
 		return result, nil
 	}
 

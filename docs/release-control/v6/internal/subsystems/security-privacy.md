@@ -467,7 +467,7 @@ administrator or settings-scope checks, expose queue contents to new callers, or
 change tenant selection. Missing owners fail with 503 rather than dereferencing
 nil.
 
-The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege. A manager of that organisation additionally receives the org-bound infrastructureRead, availabilityRead and reportingRead capabilities, because their routes already admit org managers through ensureAdminSession and read only that organisation's state; this never extends to authentication, SSO, users, roles, audit, relay, system, diagnostics or billing surfaces.
+The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege. A manager of that organisation additionally receives the org-bound infrastructureRead and availabilityRead capabilities, because their routes admit org managers through RequireOrgAdmin / ensureOrgAdminSession and read only that organisation's state; this never extends to reporting, authentication, SSO, API tokens, users, roles, audit, relay, system, updates, logs, diagnostics or billing surfaces, whose routes use ensureAdminSession and admit instance administrators only.
 
 API token scope copy must match runtime authority. `ai:chat` covers Assistant
 conversation, model selection, sessions, and knowledge reads only. Knowledge
@@ -3360,3 +3360,18 @@ request context. This synchronizes publication without changing authentication,
 authorization, tenant selection or disclosure. The concurrent initialization
 regression in `internal/api/contract_test.go` and the existing
 `TestMultiTenant_TenantIsolation` race test verify that boundary.
+
+### Instance administration refuses organization owners (17 October 2026)
+
+`ensureAdminSession`, the session check behind `RequireAdmin` and the settings
+scope helpers, admits only instance administrators: the configured admin or an
+instance RBAC admin grant, whichever organization the request names. It used
+to admit any manager of the request's organization, which on a multi-tenant
+install let an organization owner rotate the instance administrator's API
+token and receive its secret, widen token scopes, change SSO providers and
+system settings, apply updates and restart the service. Routes that act only on
+the request organization opt in through `RequireOrgAdmin`,
+`ensureOrgAdminSession` or `ensureOrgSettingsWriteScope`; every other route fails
+closed. `internal/api/org_admin_session_authority_test.go` holds the session
+matrix and `TestSettingsWriteScopeSplitsInstanceAndOrgManagerSession` the
+settings scope split.

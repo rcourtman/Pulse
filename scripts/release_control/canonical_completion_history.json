@@ -97,6 +97,11 @@
       "reason": "Preserve the additive upstream narration documentation reconciliation and its dependent diagnostics authority contracts while binding the separately supplied API-reference synchronization assertions through the existing exact-pair guard. No source identity or required contract/proof gate is rewritten or waived."
     },
     {
+      "incomplete_commit": "dc2057a08c9a9a30340a6cc2bb367d502d48bbda",
+      "completion_commit": "78301b91ed21e1d32c34ce4dedbdea40ddcb6ad7",
+      "reason": "The instance-administration split shipped its route, authorization and contract changes in the first commit; the following commit adds the dependent agent-lifecycle and security-privacy contract updates and teaches the route inventory proof about RequireOrgAdmin. No source identity or required contract/proof gate is rewritten or waived."
+    },
+    {
       "incomplete_commit": "8196a5534f7eafc9905df07c961176468d13807e",
       "completion_commit": "0f3d3e8756da77adc8e035dd226f39a4ae7fe245",
       "reason": "The argument-aware read-only classifier shipped its runtime change and its proving tests in the first commit; the following commit records the pulse_read read-only contract in ai-runtime. No source identity or required contract/proof gate is rewritten or waived."

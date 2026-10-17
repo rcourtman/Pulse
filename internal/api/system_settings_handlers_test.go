@@ -619,7 +619,7 @@ func TestSystemSettingsHandler_GetMonitor_UsesTenantMonitorInterface(t *testing.
 	}
 }
 
-func TestSystemSettingsHandler_GetMonitor_FallsBackToLegacyOnTenantError(t *testing.T) {
+func TestSystemSettingsHandler_GetMonitor_TenantErrorFailsClosed(t *testing.T) {
 	defaultMonitor := &mockMonitor{}
 	provider := &mockTenantMonitorProvider{err: errors.New("boom")}
 
@@ -629,8 +629,8 @@ func TestSystemSettingsHandler_GetMonitor_FallsBackToLegacyOnTenantError(t *test
 	}
 
 	got := handler.getMonitor(context.WithValue(context.Background(), OrgIDContextKey, "acme"))
-	if got != defaultMonitor {
-		t.Fatalf("expected legacy monitor fallback, got %#v", got)
+	if got != nil {
+		t.Fatalf("expected nil monitor for unresolvable tenant, got %#v", got)
 	}
 	if provider.orgID != "acme" {
 		t.Fatalf("expected tenant org lookup for acme, got %q", provider.orgID)

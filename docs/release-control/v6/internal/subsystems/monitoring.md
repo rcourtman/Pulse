@@ -238,9 +238,11 @@ suppression and metadata backoff are not reset to force recovery.
 
 ### QGA fallback eligibility keeps its original observation age
 
-A successful unlocked VM-status availability, usable filesystem reading or
-useful guest metadata can establish fallback query eligibility. A later poll
-that preserves optional IP/OS/version strings does not renew that evidence.
+Only an actual guest-agent reply, a usable filesystem reading or useful guest
+metadata, can establish fallback query eligibility. The `status/current` `agent`
+flag means the agent is enabled in the VM config, not that the in-guest service
+answers, so a successful VM-status read does not establish or renew it. A later
+poll that preserves optional IP/OS/version strings does not renew that evidence.
 Internal `GuestAgentEvidence` crosses model, canonical and previous-state
 snapshots, including an explicit missing origin. Legacy direct snapshots import
 their receipt once, while already annotated disk-only evidence uses its recorded
@@ -255,7 +257,10 @@ remain independent.
 `TestGuestAgentAdmissionEvidenceContract` checks the original-age boundaries,
 repeated canonical replacement and both cluster/node collectors through a
 cancelled detail cycle, unavailable status, missing status and ordinary recovery
-with measured-zero disk usage. This is synthetic source proof, not native thaw,
+with measured-zero disk usage. Its `config-flag-cannot-renew` case polls with the
+real integer `agent: 1` flag: an enabled agent that never replied admits no
+fallback command once status fails, while one that answered keeps its fallback.
+This is synthetic source proof, not native thaw,
 QEMU-only Windows acceptance or reporter resolution.
 
 
@@ -331,10 +336,28 @@ the connection name as the backup node only when PMG answered with no
 cluster entries; after a failed cluster read that name is a display label,
 and requesting backups with it produced a misleading hostname-lookup error
 without ever returning backups. The poll still records the cluster read
-failure, and the published backup list is empty exactly as before.
+failure. It requests no backups, and the connection's last-known backups
+are kept rather than replaced by an empty list (see the next section).
 `TestClientClusterStatusIgnoresClusterIDFormat` and the
 `TestPollPMGInstance*` issue tests in `monitor_pmg_test.go` pin all three
 cases.
+
+### PMG backups keep last-known entries for unread nodes
+
+`UpdatePMGBackups` replaces a connection's whole backup list, so only a node
+whose backup list was read in this poll is authoritative for it. A node that
+was not read keeps its previous backups: every node after a failed cluster
+read, a node whose backup read failed, and a node a cancelled poll never
+reached. This is the same per-scope carry that `preserveFailedStorageBackups`
+applies to failed PVE storages. A node that answered with no backups, or that
+a successful cluster read no longer lists, still clears its entries. The
+failed read is still recorded as a poll failure, and the connection-name
+fallback above is unchanged. `TestPMGBackupsSurviveFailedClusterRead`,
+`TestPMGBackupsSurviveEveryNodeBackupReadFailing`,
+`TestPMGBackupsKeepFailedNodeOnPartialRead` and
+`TestPMGBackupsClearAfterCompleteEnumeration` in `monitor_pmg_test.go` cover
+the carry and the complete-enumeration clear. These are synthetic poller
+controls, not native PMG acceptance.
 
 ### Guest configuration reads preserve installation and node identity
 

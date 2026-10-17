@@ -123,6 +123,80 @@ func TestCheckProRuntimeSwitch(t *testing.T) {
 	})
 }
 
+// TestCheckProRuntimeSwitchHonoursStableChannel pins the switch check to the
+// channel rule apply enforces: a stable-channel install is never offered a
+// prerelease Pro pin, because apply would refuse it (and Docker commands would
+// move a stable install onto a preview image).
+func TestCheckProRuntimeSwitchHonoursStableChannel(t *testing.T) {
+	check := func(t *testing.T, fixture *proBrokerFixture, channel string) *ProRuntimeSwitch {
+		t.Helper()
+		manager := NewManager(&config.Config{DataPath: t.TempDir()})
+		manager.SetProUpdateCredentialSource(fixture.credentialSource())
+		result, err := manager.CheckProRuntimeSwitch(context.Background(), channel)
+		if err != nil {
+			t.Fatalf("CheckProRuntimeSwitch: %v", err)
+		}
+		return result
+	}
+
+	for _, tc := range []struct {
+		name       string
+		version    string
+		prerelease bool
+	}{
+		{"broker flags the pin as a prerelease", "6.1.0-rc.1", true},
+		{"pin version is a prerelease without the flag", "6.1.0-rc.1", false},
+		{"same-version pin flagged prerelease", "6.0.5", true},
+	} {
+		t.Run("stable channel: "+tc.name, func(t *testing.T) {
+			setupProRuntimeSwitchTest(t, "6.0.5")
+			fixture := newProBrokerFixture(t, tc.version, tc.prerelease)
+			result := check(t, fixture, "stable")
+			if result.Available || result.InstallInPlace || result.Docker != nil {
+				t.Fatalf("a stable install must not be offered a prerelease Pro pin, got %+v", result)
+			}
+			if result.Reason != ProRuntimeSwitchReasonPrereleaseOnly || result.Version != tc.version {
+				t.Fatalf("expected prerelease_only with the pinned version, got %+v", result)
+			}
+		})
+	}
+
+	t.Run("configured stable channel applies when none is requested", func(t *testing.T) {
+		setupProRuntimeSwitchTest(t, "6.0.5")
+		fixture := newProBrokerFixture(t, "6.1.0-rc.1", true)
+		result := check(t, fixture, "")
+		if result.Available || result.Reason != ProRuntimeSwitchReasonPrereleaseOnly {
+			t.Fatalf("expected the default stable channel to refuse the prerelease pin, got %+v", result)
+		}
+	})
+
+	t.Run("rc channel is still offered the prerelease pin", func(t *testing.T) {
+		setupProRuntimeSwitchTest(t, "6.0.5")
+		fixture := newProBrokerFixture(t, "6.1.0-rc.1", true)
+		result := check(t, fixture, "rc")
+		if !result.Available || !result.InstallInPlace || result.Reason != "" || result.Version != "6.1.0-rc.1" {
+			t.Fatalf("expected an in-place switch on the rc channel, got %+v", result)
+		}
+		if got := fixture.channelQueries[len(fixture.channelQueries)-1]; got != "rc" {
+			t.Fatalf("expected the broker to be asked for the rc channel, got %q", got)
+		}
+	})
+
+	t.Run("apply refuses the same pin with the message the API maps to 409", func(t *testing.T) {
+		setupProRuntimeSwitchTest(t, "6.0.5")
+		fixture := newProBrokerFixture(t, "6.1.0-rc.1", true)
+		manager := NewManager(&config.Config{DataPath: t.TempDir()})
+		manager.SetProUpdateCredentialSource(fixture.credentialSource())
+		err := manager.ApplyProRuntimeSwitch(context.Background(), "stable", InitiatedByUser, InitiatedViaUI)
+		if err == nil || !strings.Contains(err.Error(), "stable channel cannot install prerelease builds") {
+			t.Fatalf("expected the stable-channel prerelease refusal, got: %v", err)
+		}
+		if fixture.tarballCalls != 0 {
+			t.Fatalf("a refused prerelease pin must not be downloaded, got %d downloads", fixture.tarballCalls)
+		}
+	})
+}
+
 func TestProRuntimeSwitchMode(t *testing.T) {
 	t.Setenv("PULSE_ALLOW_DOCKER_UPDATES", "")
 	cases := []struct {
