@@ -437,9 +437,17 @@ func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error
 	return client, nil
 }
 
-// authenticate performs password-based authentication
+// authenticate owns initial password authentication. The client is not yet
+// published, so there are no other readers whose login must survive this
+// caller. In particular, a cancelled constructor must also stop its request.
+// Only renewAuthentication on an already shared client detaches the login.
 func (c *Client) authenticate(ctx context.Context) error {
-	return c.renewAuthentication(ctx, nil)
+	username := c.auth.user + "@" + c.auth.realm
+	err := c.authenticateJSON(ctx, username, c.config.Password)
+	if shouldFallbackToForm(err) {
+		err = c.authenticateForm(ctx, username, c.config.Password)
+	}
+	return err
 }
 
 // expected binds expiry or a 401 to the session actually used by that read.

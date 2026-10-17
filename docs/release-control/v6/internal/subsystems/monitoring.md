@@ -574,6 +574,16 @@ partial or nil client. Startup retry exits without publishing a new health
 outcome or advancing another provider after its monitor stops. Discarded probe
 transports close their idle connections.
 
+Initial PVE login runs synchronously on that construction context: an unpublished
+client has no other readers to preserve. This is distinct from renewal on a
+retained PVE client, whose bounded shared login survives its starter leaving.
+Restoring constructor cancellation must not abort live renewal waiters, replay
+their failed login or lose a completed renewal. The JSON and 400/415 form paths
+use the same lifetime distinction. `TestClientSessionRenewalStarterCancellation`
+checks both encodings alongside the constructor and cluster caller-budget
+controls below; it preserves the existing detached-renewal timeout and
+ticket/CSRF publication tests.
+
 The compatibility constructors retain their background-context behaviour.
 Accepted clients retain their configured full timeout, and subsequent ordinary
 reads use their own contexts, not the ended construction context. TLS pins,
