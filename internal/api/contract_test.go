@@ -23809,6 +23809,44 @@ func TestContract_OrgBoundTokenIsScopedAwayFromDefaultOrg(t *testing.T) {
 	}
 }
 
+// TestContract_OrgBoundTokenCannotReachInstanceAdministration pins the token
+// side of the instance/org split: a token bound to a tenant organization
+// resolves to that organization and keeps the org routes its scope covers,
+// but instance routes refuse it whatever its scope.
+func TestContract_OrgBoundTokenCannotReachInstanceAdministration(t *testing.T) {
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+	t.Setenv("PULSE_DEV", "true")
+
+	rawToken := "org-bound-instance-admin-token.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeWildcard}, nil)
+	record.OrgID = "org-a"
+	cfg := newTestConfigWithTokens(t, record)
+	if err := config.NewMultiTenantPersistence(cfg.DataPath).SaveOrganization(&models.Organization{ID: "org-a", DisplayName: "Org A"}); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+	router := newMultiTenantRouter(t, cfg)
+
+	serve := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := serve(http.MethodPost, "/api/system/settings/update", `{"discoveryEnabled":true}`); rec.Code != http.StatusForbidden {
+		t.Fatalf("system settings update status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if rec := serve(http.MethodGet, "/api/security/tokens", ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("token list status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if rec := serve(http.MethodGet, "/api/security/tokens/relay-mobile", ""); rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("org-bound relay mobile route status = %d, want 405 from its handler: %s", rec.Code, rec.Body.String())
+	}
+}
+
 // TestContract_ProxyAuthConfiguredRoleHeaderMissingIsNonAdmin pins the
 // proxy-auth admin boundary: once an admin role header is configured, admin
 // authorization must be proven by that header rather than inherited from

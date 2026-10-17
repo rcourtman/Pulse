@@ -1048,14 +1048,16 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 // RequireAdmin middleware checks for authentication and instance admin
 // privileges. Proxy-auth users must have the configured admin role. Session and
 // OIDC users must be instance administrators (ensureAdminSession); an
-// organization's owner or admin is refused.
+// organization's owner or admin is refused, and so is an API token bound to a
+// tenant organization, whatever scopes it holds.
 func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
 	return requireAdminSession(cfg, ensureAdminSession, handler)
 }
 
 // RequireOrgAdmin is RequireAdmin for routes whose handlers act only on the
 // request organization's own config and monitor state. Session users who can
-// manage that organization are admitted as well (ensureOrgAdminSession). Use it
+// manage that organization are admitted as well (ensureOrgAdminSession), and
+// tokens bound to it are judged by the route's scope alone. Use it
 // only after checking that the handler cannot reach instance-wide state or
 // another organization's data.
 func RequireOrgAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
