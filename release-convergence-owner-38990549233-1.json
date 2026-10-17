@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "tag": "v6.6.0-rc.2",
+  "target_commitish": "9ce6614a7f8839120e4eff93bb01adf7fa261f17",
+  "release_id": "415092447",
+  "source_release_run_id": "38917319720",
+  "r2_prefix": "v6.6.0-rc.2-pro-20261016-38917319720",
+  "activation_owner_run_id": "38927798751",
+  "activation_marker_sha256": "06d985a2e6c65458176ea02b26cf638fe676009e9bf8a27802b9838bd9a3166c",
+  "convergence_run_id": "38990549233",
+  "owner_asset_name": "release-convergence-owner-38990549233-1.json"
+}
