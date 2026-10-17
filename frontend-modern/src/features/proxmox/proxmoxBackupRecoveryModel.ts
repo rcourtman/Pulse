@@ -75,6 +75,8 @@ export interface CoverageTask {
   startedMs?: number;
   durationSeconds?: number;
   error?: string;
+  /** A successful status cannot settle a result that also reports an error. */
+  statusErrorConflict?: boolean;
 }
 
 export interface WorkloadCoverageRow {
@@ -582,7 +584,15 @@ export function selectWorkloadRecoveryArtifacts(
   };
 }
 
+function taskStatusErrorConflict(task: BackupTask): boolean {
+  return (
+    ['ok', 'success', 'completed'].includes(normalizeKey(task.status)) &&
+    Boolean(task.error?.trim())
+  );
+}
+
 function taskLabel(task: BackupTask): string {
+  if (taskStatusErrorConflict(task)) return 'Unknown';
   const normalized = normalizeKey(task.status);
   if (normalized === 'ok' || normalized === 'success' || normalized === 'completed') return 'OK';
   if (normalized === 'failed' || normalized === 'error') return 'Failed';
@@ -800,6 +810,7 @@ export function buildProxmoxBackupRecoveryModel(
       startedMs,
       durationSeconds: taskDurationSeconds(task),
       error: task.error,
+      statusErrorConflict: taskStatusErrorConflict(task),
     };
     // An unorderable job may be newer than the dated OK/failed job. Never
     // treat an absent time as epoch zero or let a future time win the summary.

@@ -76,7 +76,9 @@ async function capture(page, name) {
 async function geometry(page) {
   return page.evaluate(() => {
     const problems = [];
-    for (const node of document.querySelectorAll('[data-backup-task-detail] dd')) {
+    for (const node of document.querySelectorAll(
+      '[data-backup-task-detail] dd, [data-backup-task-status-conflict]',
+    )) {
       const box = node.getBoundingClientRect(),
         range = document.createRange();
       range.selectNodeContents(node);
@@ -183,6 +185,10 @@ async function geometry(page) {
     await page.goto(origin + '/proxmox/backups/coverage');
     if (phone) await page.evaluate(() => document.documentElement.classList.add('dark'));
     const row = page.locator('[data-proxmox-coverage-key="resource:east-100"]');
+    await row.waitFor();
+    await row.evaluate((element) => {
+      window.statusEvidenceRow = element;
+    });
     const toggle = row.getByRole('button', { expanded: false });
     // The compact view deliberately makes the whole identity cell the touch
     // target; its small keyboard disclosure is visually hidden until focused.
@@ -233,11 +239,48 @@ async function geometry(page) {
     );
     assert(!(await detail.innerText()).includes('Reported error'));
     checks.push('same-open Running removes old error and retains disclosure/keyboard focus');
+    const headers = await page
+      .locator('[data-proxmox-backups-table="coverage"] thead th')
+      .allTextContents();
+    const jobIndex = headers.findIndex((label) => label.trim() === 'Job');
+    assert(jobIndex >= 0);
+    const jobCell = row.locator('td').nth(jobIndex);
+    for (const status of ['OK', 'success', 'completed']) {
+      await refresh([task({ status, error })]);
+      await page.waitForFunction(
+        () => document.querySelector('[data-backup-task-detail] dd')?.textContent === 'Unknown',
+      );
+      assert.match(await jobCell.innerText(), /Unknown/);
+      assert.equal(await jobCell.locator('.bg-emerald-500').count(), 0);
+      assert.equal(await jobCell.locator('.bg-amber-500').count(), 1);
+      assert.equal(
+        await detail.locator('dt:has-text("Reported status") + dd').textContent(),
+        status,
+      );
+      assert.equal(await detail.locator('dd').last().textContent(), error);
+      assert.equal(await detail.locator('img, script').count(), 0);
+      assert.match(
+        await detail.locator('[data-backup-task-status-conflict]').innerText(),
+        /reported job status and error disagree.*result is unknown/s,
+      );
+      assert(await row.evaluate((element) => window.statusEvidenceRow === element));
+      assert.deepEqual(await geometry(page), { problems: [], overflow: false });
+      checks.push(
+        `${status} plus error stays Unknown, with literal original evidence and no green success`,
+      );
+    }
+    await detail.scrollIntoViewIfNeeded();
+    await capture(page, name + '-contradictory');
     await refresh([task({ status: 'OK', error: '' })]);
     await page.waitForFunction(
       () => document.querySelector('[data-backup-task-detail] dd')?.textContent === 'OK',
     );
     assert(!(await detail.innerText()).includes('Backup failed'));
+    assert(!(await detail.innerText()).includes('Reported status'));
+    assert.equal(await detail.locator('[data-backup-task-status-conflict]').count(), 0);
+    assert.equal(await jobCell.locator('.bg-emerald-500').count(), 1);
+    await detail.scrollIntoViewIfNeeded();
+    await capture(page, name + '-corrected');
     checks.push('OK result is not a stale failure');
     await refresh([
       task({ status: 'OK', error: '' }),

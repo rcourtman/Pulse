@@ -98,6 +98,56 @@ const protectionPosture = (resourceId: string, state: ProtectionState): Protecti
 });
 
 describe('proxmoxBackupRecoveryModel', () => {
+  it.each(['OK', 'success', 'completed', ' Ok '])(
+    'does not assert %j success when the same job reports an error',
+    (status) => {
+      const observed = task({ status, error: 'Synthetic backup failure' });
+      const original = structuredClone(observed);
+      const model = buildProxmoxBackupRecoveryModel({
+        workloads: [workload({})],
+        pbsBackups: [pbsBackup()],
+        archives: [],
+        snapshots: [],
+        tasks: [observed],
+        nowMs: Date.parse('2026-05-26T08:00:00Z'),
+        protectionPostures: new Map([['vm-112', protectionPosture('vm-112', 'protected')]]),
+      });
+      const row = model.coverageRows[0];
+      expect(row.latestTask).toMatchObject({
+        label: 'Unknown',
+        status,
+        error: 'Synthetic backup failure',
+        statusErrorConflict: true,
+      });
+      expect(row.taskChronologyUnknown).toBe(false);
+      expect(row.posture).toBe('protected');
+      expect(row.latestBackup?.nativeId).toBe(pbsBackup().id);
+      expect(model.coverageSummary.recoverableArtifacts).toBe(1);
+      expect(coverageRowMatchesSearch(row, 'synthetic backup failure')).toBe(true);
+      expect(observed).toEqual(original);
+    },
+  );
+
+  it.each([
+    { status: 'OK', error: undefined, label: 'OK' },
+    { status: 'success', error: '', label: 'OK' },
+    { status: 'completed', error: ' \n\t ', label: 'OK' },
+    { status: 'failed', error: 'Synthetic backup failure', label: 'Failed' },
+    { status: 'error', error: 'Synthetic backup failure', label: 'Failed' },
+    { status: 'running', error: 'Synthetic progress error', label: 'Running' },
+    { status: 'cancelled', error: 'Synthetic cancellation', label: 'cancelled' },
+  ])('keeps an uncontradicted $status result as $label', ({ status, error, label }) => {
+    const row = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [],
+      archives: [],
+      snapshots: [],
+      tasks: [task({ status, error })],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    }).coverageRows[0];
+    expect(row.latestTask).toMatchObject({ label, status, error, statusErrorConflict: false });
+  });
+
   it.each(['', 'not-a-date', '1970-01-01T00:00:00Z', '2026-05-27T08:00:00Z'])(
     'does not assert a latest OK job beside an unorderable failed job (%j), in either order',
     (startTime) => {

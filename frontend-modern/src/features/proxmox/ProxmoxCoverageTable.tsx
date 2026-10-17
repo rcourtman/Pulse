@@ -568,6 +568,12 @@ export function ProxmoxCoverageTable(props: {
                                   >
                                     {task().label}
                                   </dd>
+                                  <Show when={task().statusErrorConflict}>
+                                    <dt class="text-muted">Reported status</dt>
+                                    <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
+                                      {task().status}
+                                    </dd>
+                                  </Show>
                                   <dt class="text-muted">Started</dt>
                                   <dd class="min-w-0 whitespace-normal wrap-anywhere">
                                     <time dateTime={task().startedAt}>
@@ -585,6 +591,15 @@ export function ProxmoxCoverageTable(props: {
                                     )}
                                   </Show>
                                 </dl>
+                                <Show when={task().statusErrorConflict}>
+                                  <p
+                                    class="mt-2 text-amber-700 dark:text-amber-300"
+                                    data-backup-task-status-conflict
+                                  >
+                                    The reported job status and error disagree. This result is
+                                    unknown. Check the existing job history in Proxmox.
+                                  </p>
+                                </Show>
                               </section>
                             )}
                           </Show>
