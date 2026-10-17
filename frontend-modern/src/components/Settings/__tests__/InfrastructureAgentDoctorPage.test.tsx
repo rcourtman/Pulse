@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InfrastructureAgentDoctorPage } from '../InfrastructureAgentDoctorPage';
 import type { InfrastructureAgentDoctorTarget } from '../infrastructureAgentUpdateCommandsModel';
 
@@ -152,6 +152,25 @@ describe('InfrastructureAgentDoctorPage action-runner enrollment', () => {
     expect(
       screen.getByRole('button', { name: 'Rotate action-runner credential' }),
     ).toBeInTheDocument();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('ages a target last-seen label on the shared clock without new targets', async () => {
+    const start = Date.parse('2026-10-16T22:00:00Z');
+    vi.useFakeTimers({ now: start });
+    render(() => (
+      <InfrastructureAgentDoctorPage
+        targets={[targetFixture({ status: 'warning', lastSeen: start - 60_000 })]}
+      />
+    ));
+
+    expect(screen.getByText('1m ago')).toBeInTheDocument();
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(screen.queryByText('1m ago')).not.toBeInTheDocument();
+    expect(screen.getByText('2h ago')).toBeInTheDocument();
   });
 
   it('keeps an attention row and its host-local repair guidance available through disclosure', () => {

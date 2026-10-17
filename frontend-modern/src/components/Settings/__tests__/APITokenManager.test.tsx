@@ -143,12 +143,14 @@ const getTokenTableRow = (name: string): HTMLTableRowElement => {
   return row;
 };
 
-const createdTokenCell = (row: HTMLTableRowElement) => {
+const tokenCell = (row: HTMLTableRowElement, label: string) => {
   const headers = [...row.closest('table')!.querySelectorAll('thead th')];
-  const index = headers.findIndex((header) => header.textContent?.trim() === 'Created');
-  if (index < 0) throw new Error('Token table has no Created header');
+  const index = headers.findIndex((header) => header.textContent?.trim() === label);
+  if (index < 0) throw new Error(`Token table has no ${label} header`);
   return row.cells[index];
 };
+
+const createdTokenCell = (row: HTMLTableRowElement) => tokenCell(row, 'Created');
 
 const findTokenTableRow = async (name: string): Promise<HTMLTableRowElement> => {
   await screen.findAllByText(name);
@@ -209,6 +211,29 @@ describe('APITokenManager', () => {
     expect(updateTokenScopesMock).not.toHaveBeenCalled();
     expect(renameTokenMock).not.toHaveBeenCalled();
     expect(token.createdAt).toBe(new Date(start - 60_000).toISOString());
+    view.unmount();
+  });
+
+  it('ages Last used in both layouts without another list read', async () => {
+    const start = Date.parse('2026-10-16T22:00:00Z');
+    vi.useFakeTimers({ now: start });
+    const token = makeToken({
+      createdAt: new Date(start - 86_400_000).toISOString(),
+      lastUsedAt: new Date(start - 60_000).toISOString(),
+    });
+    listTokensMock.mockResolvedValue([token]);
+    const view = render(() => <APITokenManager canManage />);
+    await vi.advanceTimersByTimeAsync(0);
+    const row = getTokenTableRow(token.name!);
+    const card = screen.getByRole('article', { name: `API token ${token.name}` });
+    const cardLastUsed = () => within(card).getByText('Last used').nextElementSibling;
+    expect(tokenCell(row, 'Last used')).toHaveTextContent('1 min ago');
+    expect(cardLastUsed()).toHaveTextContent('1 min ago');
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(tokenCell(row, 'Last used')).toHaveTextContent('2 hours ago');
+    expect(cardLastUsed()).toHaveTextContent('2 hours ago');
+    expect(getTokenTableRow(token.name!)).toBe(row);
+    expect(listTokensMock).toHaveBeenCalledTimes(1);
     view.unmount();
   });
 

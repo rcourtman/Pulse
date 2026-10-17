@@ -13,6 +13,7 @@ import {
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { notificationStore } from '@/stores/notifications';
 import { MonitoringAPI } from '@/api/monitoring';
 import { AgentDiagnosticsAPI } from '@/api/agentDiagnostics';
@@ -81,6 +82,7 @@ const formatLastSeen = (value?: number | string | null): string | undefined => {
 export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorPageProps> = (
   props,
 ) => {
+  const now = useRelativeTimeNow();
   const operations = useInfrastructureOperationsContext();
   const summary = createMemo(() => summarizeInfrastructureAgentDoctorTargets(props.targets));
   const anyTargetNeedsRepair = createMemo(() =>
@@ -515,6 +517,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                     formatRelativeTime(target.lastSeen ?? undefined, {
                       compact: true,
                       emptyText: '—',
+                      now: now(),
                     });
                   const command = () =>
                     target.connection && target.commandPlatform

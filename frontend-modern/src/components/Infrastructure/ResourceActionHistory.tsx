@@ -3,6 +3,7 @@ import type { Component } from 'solid-js';
 import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 import type { ActionAuditRecord } from '@/types/actionAudit';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   formatActionApprovalPolicyLabel,
   formatActionCapabilityLabel,
@@ -23,6 +24,7 @@ interface ResourceActionHistoryProps {
 }
 
 const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
+  const now = useRelativeTimeNow();
   const state = () => getActionAuditRecordStatePresentation(props.audit);
   const preflight = () => props.audit.plan?.preflight;
   const resultPresentation = () => getActionAuditResultPresentation(props.audit);
@@ -39,7 +41,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
             {formatActionCapabilityLabel(props.audit.request?.capabilityName)}
           </div>
           <div class="mt-0.5 text-muted">
-            {formatRelativeTime(props.audit.updatedAt || props.audit.createdAt)}
+            {formatRelativeTime(props.audit.updatedAt || props.audit.createdAt, { now: now() })}
             <Show when={props.audit.request?.requestedBy}>
               <span class="mx-1">•</span>
               <span>{props.audit.request.requestedBy}</span>

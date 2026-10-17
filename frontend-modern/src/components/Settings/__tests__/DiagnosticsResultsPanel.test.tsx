@@ -7,6 +7,52 @@ import type { DiagnosticsData } from '@/components/Settings/diagnosticsModel';
 describe('DiagnosticsResultsPanel', () => {
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
+  });
+
+  it('ages the network discovery Last Scan label on the shared clock', async () => {
+    const start = Date.parse('2026-10-16T22:00:00Z');
+    vi.useFakeTimers({ now: start });
+    const diagnosticsData = {
+      version: '6.4.1',
+      runtime: 'go',
+      uptime: 3600,
+      nodes: [],
+      pbs: [],
+      system: {
+        os: 'linux',
+        arch: 'amd64',
+        goVersion: 'go1.26.7',
+        numCPU: 4,
+        numGoroutine: 40,
+        memoryMB: 24,
+      },
+      discovery: {
+        enabled: true,
+        lastScanStartedAt: new Date(start - 60_000).toISOString(),
+      },
+      errors: [],
+    } as DiagnosticsData;
+
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <DiagnosticsResultsPanel
+              diagnosticsData={diagnosticsData}
+              loading={false}
+              onRunDiagnostics={() => {}}
+            />
+          )}
+        />
+      </Router>
+    ));
+
+    const lastScan = () => screen.getByText('Last Scan').nextElementSibling;
+    expect(lastScan()).toHaveTextContent('1m ago');
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(lastScan()).toHaveTextContent('2h ago');
   });
 
   it('keeps the empty-state action linked to its live-check safety explanation', () => {
