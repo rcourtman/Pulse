@@ -17,6 +17,24 @@
 
 ## Purpose
 
+### PVE job logs retain their numbered text sequence
+
+The bounded task-log read starts at line zero and admits only a contiguous
+one-based sequence with present, non-null text. Missing, duplicate, reordered
+or gapped line identities and missing/null text are unavailable observations,
+not discarded log lines that can leave a false per-guest success. Empty logs,
+blank text and additive metadata remain valid; the existing body/line bounds,
+credential scope and no-guest-command behaviour are unchanged.
+
+An unreadable finished log cannot finalise the per-guest cache or renew the
+last successful running observation. An ordinary complete reread can publish
+the actual failure, then cache that immutable verdict; a later successful job
+can recover normally. `TestTaskLogRequiresNumberedTextSequence` and
+`TestPVELogSequenceRejectsFalseCompletionAndResumes` join wire admission,
+polling, cache and served snapshot. The existing Coverage view consumes those
+snapshots at desktop/narrow widths. This is truthful task evidence, not native
+backup completion, guest thaw, filesystem liveness or installed recovery.
+
 ### Infrastructure plaintext destination confidentiality (16 October 2026)
 
 PVE/PBS/PMG's shared HTTP client does not send explicit plaintext infrastructure
