@@ -112,7 +112,7 @@ func (r *Router) authorizeConfigTransfer(w http.ResponseWriter, req *http.Reques
 			validSession = requestMatchesRecoverySession(req, session)
 		}
 		if validSession {
-			if !ensureAdminSession(r.config, w, req) {
+			if !ensureOrgAdminSession(r.config, w, req) {
 				return false
 			}
 			return true

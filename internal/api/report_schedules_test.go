@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
@@ -257,7 +258,10 @@ func TestSaveGeneratedReportUsesHashedScheduleDirectory(t *testing.T) {
 }
 
 func TestPreparePatrolDigestScheduleFixesFormatScopeAndDelivery(t *testing.T) {
-	handlers, _ := newTestReportingScheduleHandlers(t)
+	handlers, persistence := newTestReportingScheduleHandlers(t)
+	if err := persistence.SaveEmailConfig(notifications.EmailConfig{Enabled: true, SMTPHost: "smtp.example.test", SMTPPort: 25, From: "pulse@example.test", To: []string{"ops@example.test"}}); err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
 	now := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
 	base := config.ReportSchedule{
@@ -348,7 +352,7 @@ func TestRunPatrolDigestScheduleFailsClearlyWithoutDigestOrEmail(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("resolver calls = %d, want 1", calls)
 	}
-	if noEmail.LastRunStatus != config.ReportScheduleLastRunFailed || !strings.Contains(noEmail.LastError, "email notifications are not configured") {
+	if noEmail.LastRunStatus != config.ReportScheduleLastRunFailed || !strings.Contains(noEmail.LastError, "Enable email notifications") {
 		t.Fatalf("run without email config = %+v, want a failure that names the missing email destination", noEmail)
 	}
 	if noEmail.NextRunAt == nil {

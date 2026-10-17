@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -533,6 +534,40 @@ func (e *EnhancedEmailManager) SendEmailWithAttachments(subject, htmlBody, textB
 	return e.sendEmailWithOptions(subject, htmlBody, textBody, attachments, "")
 }
 
+// ValidateConfiguration checks delivery inputs without contacting the server or
+// sending mail. Authentication and connectivity are established by a real send.
+func (e *EnhancedEmailManager) ValidateConfiguration() error {
+	if strings.TrimSpace(e.config.SMTPHost) == "" || e.config.SMTPPort < 1 || e.config.SMTPPort > 65535 {
+		return FailfWithClass(NotificationFailureConfiguration, "configure an SMTP server and valid port in email notification settings")
+	}
+	username := resolveProviderUsername(e.config)
+	if (username == "") != (e.config.Password == "") || (e.config.AuthRequired && username == "") {
+		return FailfWithClass(NotificationFailureConfiguration, "complete the email notification credentials")
+	}
+	if _, err := e.resolveEmailAddresses(); err != nil {
+		return FailfWithClass(NotificationFailureConfiguration, "configure valid sender and recipient email addresses")
+	}
+	return nil
+}
+
+// EmailAcceptanceUnconfirmedError means the connection ended while waiting for
+// the completed-message verdict. SMTP may already have accepted the message.
+// Callers must not assume failure is proof that another send is duplicate-free.
+type EmailAcceptanceUnconfirmedError struct{ Err error }
+
+func (e *EmailAcceptanceUnconfirmedError) Error() string {
+	return "mail server acceptance could not be confirmed"
+}
+func (e *EmailAcceptanceUnconfirmedError) Unwrap() error { return e.Err }
+
+func completedEmailError(err error) error {
+	var reply *textproto.Error
+	if errors.As(err, &reply) {
+		return err
+	}
+	return &EmailAcceptanceUnconfirmedError{Err: err}
+}
+
 func (e *EnhancedEmailManager) sendEmailWithOptions(subject, htmlBody, textBody string, attachments []EmailAttachment, threadID string) error {
 	var lastErr error
 
@@ -570,7 +605,8 @@ func (e *EnhancedEmailManager) sendEmailWithOptions(subject, htmlBody, textBody 
 			Str("provider", e.config.Provider).
 			Msg("email send attempt failed")
 
-		if !ClassifyNotificationFailureError(err).Retryable() {
+		var unconfirmed *EmailAcceptanceUnconfirmedError
+		if errors.As(err, &unconfirmed) || !ClassifyNotificationFailureError(err).Retryable() {
 			return fmt.Errorf("email failed after %d attempts: %w", attempt+1, err)
 		}
 	}
@@ -707,7 +743,7 @@ func (e *EnhancedEmailManager) sendTLS(addr string, msg []byte, addresses resolv
 
 	err = w.Close()
 	if err != nil {
-		return fmt.Errorf("message close failed: %w", err)
+		return fmt.Errorf("message close failed: %w", completedEmailError(err))
 	}
 
 	finishAcceptedSMTPSession(client)
@@ -778,7 +814,7 @@ func (e *EnhancedEmailManager) sendStartTLS(addr string, msg []byte, addresses r
 
 	err = w.Close()
 	if err != nil {
-		return fmt.Errorf("message close failed: %w", err)
+		return fmt.Errorf("message close failed: %w", completedEmailError(err))
 	}
 
 	finishAcceptedSMTPSession(client)
@@ -899,7 +935,7 @@ func (e *EnhancedEmailManager) sendPlain(addr string, msg []byte, addresses reso
 
 	err = w.Close()
 	if err != nil {
-		return fmt.Errorf("message close failed: %w", err)
+		return fmt.Errorf("message close failed: %w", completedEmailError(err))
 	}
 
 	finishAcceptedSMTPSession(client)

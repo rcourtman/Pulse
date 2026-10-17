@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "c4189614d84073ab7469d289876202187fb658f4",
+  "verified_at": "2026-10-17T10:17:31.567Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ReportScheduleEditor.tsx",
+    "frontend-modern/src/components/Settings/ReportingFormField.tsx",
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ReportScheduleEditor.tsx": "fdd8485a6466a7b03f5c2cfed56a964933d9a0d41c726f06846ba9cd7fe2357d",
+    "frontend-modern/src/components/Settings/ReportingFormField.tsx": "58abe22d28c2d7a8a3831501b32bdd861d151b28c7a28932f41c24aa84c62856",
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx": "3db3f0149262a74b12cba646098cb7421cee42c6b0db8358cda8265d42bd007b"
+  },
+  "routes": [
+    "/settings/support/reporting",
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 820,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Schedule editor absent from initial network requests while the report list remains usable",
+    "Deferred editor loading visible beside its toolbar while the module request is held",
+    "Loaded create/edit form with name-field focus, weekly and monthly controls, resource selection, disk/email and PDF/CSV choices, attachment and recipient states",
+    "Confirmed empty list, initial loading and load failure without a false empty claim",
+    "Saved disk output, accepted email, running, retrying, permanent failure and unconfirmed delivery",
+    "Real CSV email delivery, a persisted 451 retry recovering once after a process restart with its original window, deliberate recovery after 550 rejection and uncertain acknowledgement",
+    "Real disk PDF generation without mail, disabled schedule and confirmed/cancelled deletion"
+  ],
+  "interactions": [
+    "Open Create schedule: assert no editor request before the click, hold its chunk, inspect visible loading, then release and verify name-field focus before typing",
+    "Edit the existing schedule, switch delivery and format, save/cancel, enable/disable and reload",
+    "Inspect Run/Retry visibility, hover, keyboard focus and actual pointer hit testing at every width",
+    "Expand report details, saved path and controls, preserve expansion through background polling",
+    "Navigate email-configuration remedy to Notifications; refresh list loading/failure/recovery",
+    "Cancel uncertain retry without another send, accept the duplicate warning for deliberate retry, and verify successful recovery",
+    "Inspect actual desktop, intermediate and mobile screenshots for text wrapping, action placement, editor loading and form states"
+  ],
+  "environment": "Private runtime built from the verified working tree over base_sha, ephemeral signed Pro grant, dev/mock modes disabled. Synthetic infrastructure and local SMTP only.",
+  "evidence": "/opt/pulse-release-worker/task-proofs/scheduled-reporting-20261017/browser-evidence",
+  "bundle_check": "Existing bundle budget passed: ReportingPanel 10.94 kB gzip against 11.63 kB maximum. Total JS, CSS and preload checks passed.",
+  "pixel_review": "Reviewed current-build desktop list, intermediate expanded details, narrow accepted/retry/unconfirmed states and deferred-editor loading/disk/email forms. Full outcomes, controls and form fields remain readable."
+}

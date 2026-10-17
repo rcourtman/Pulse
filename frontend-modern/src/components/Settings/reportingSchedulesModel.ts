@@ -2,7 +2,7 @@ import type { SelectedResource } from '@/components/Settings/ResourcePicker';
 import type { ReportingFormat } from '@/components/Settings/reportingCatalogModel';
 
 export type ReportScheduleCadenceType = 'monthly' | 'weekly';
-export type ReportScheduleRunStatus = '' | 'ok' | 'failed';
+export type ReportScheduleRunStatus = '' | 'ok' | 'failed' | 'running' | 'retrying' | 'unconfirmed';
 export type ReportScheduleDeliveryMethod = 'email' | 'disk';
 // 'resources' is the multi-resource performance report; 'patrol_digest' emails
 // the last seven days of Patrol work and has no scope, format, or disk output.
@@ -44,6 +44,14 @@ export interface ReportSchedule {
   last_run_at?: string;
   last_run_status?: ReportScheduleRunStatus;
   last_error?: string;
+  last_delivery_status?: string;
+  last_report_path?: string;
+  last_success_at?: string;
+  run_attempts?: number;
+  retry_at?: string;
+  run_window_end?: string;
+  run_manual?: boolean;
+  delivery_check?: { ready: boolean; message: string };
   next_run_at?: string;
   created_at?: string;
   updated_at?: string;
@@ -70,6 +78,7 @@ export interface ReportScheduleFormState {
 
 export interface ReportSchedulesResponse {
   schedules?: ReportSchedule[];
+  delivery_checks?: Record<string, { ready: boolean; message: string }>;
 }
 
 const WEEKDAY_LABELS: Record<string, string> = {
@@ -104,7 +113,12 @@ export const DEFAULT_REPORT_SCHEDULE_FORM = (): ReportScheduleFormState => ({
 export function parseReportSchedulesResponse(value: unknown): ReportSchedule[] {
   if (!value || typeof value !== 'object') return [];
   const schedules = (value as ReportSchedulesResponse).schedules;
-  return Array.isArray(schedules) ? schedules.map(normalizeReportSchedule) : [];
+  const checks = (value as ReportSchedulesResponse).delivery_checks;
+  return Array.isArray(schedules)
+    ? schedules.map((schedule) =>
+        normalizeReportSchedule({ ...schedule, delivery_check: checks?.[schedule.id] }),
+      )
+    : [];
 }
 
 export function normalizeReportScheduleKind(kind: unknown): ReportScheduleKind {
@@ -308,8 +322,46 @@ export function reportScheduleDeliveryLabel(schedule: ReportSchedule): string {
 
 export function reportScheduleLastRunLabel(schedule: ReportSchedule): string {
   if (!schedule.last_run_status) return 'Not run yet';
-  if (schedule.last_run_status === 'ok') return 'Last run OK';
-  return schedule.last_error ? `Failed: ${schedule.last_error}` : 'Last run failed';
+  if (schedule.last_run_status === 'running') return 'Running';
+  if (schedule.last_run_status === 'retrying') return 'Retry scheduled';
+  if (schedule.last_run_status === 'unconfirmed') return 'Delivery unconfirmed';
+  if (schedule.last_run_status === 'ok') {
+    if (schedule.last_delivery_status === 'saved') return 'Saved to disk';
+    if (
+      schedule.last_delivery_status === 'sent_with_attachment' ||
+      schedule.last_delivery_status === 'sent'
+    )
+      return 'Email accepted';
+    if (schedule.last_delivery_status === 'sent_saved_path') return 'Email notice accepted';
+    return 'Completed';
+  }
+  return 'Failed';
+}
+
+export function reportScheduleNeedsRetry(schedule: ReportSchedule): boolean {
+  return (
+    !!schedule.run_window_end &&
+    ['failed', 'retrying', 'unconfirmed'].includes(schedule.last_run_status || '')
+  );
+}
+
+export function reportScheduleRunActionLabel(schedule: ReportSchedule): string {
+  return reportScheduleNeedsRetry(schedule) ? 'Retry' : 'Run';
+}
+
+export function reportScheduleOutcomeDetail(schedule: ReportSchedule): string {
+  if (schedule.last_run_status === 'unconfirmed')
+    return 'The connection ended before delivery was confirmed. Check the recipient before retrying to avoid a duplicate.';
+  if (schedule.last_run_status === 'running') return 'Generating the report and checking delivery.';
+  if (schedule.last_error) return schedule.last_error;
+  if (
+    schedule.last_delivery_status === 'sent_with_attachment' ||
+    schedule.last_delivery_status === 'sent'
+  )
+    return 'The mail server accepted the email. Inbox receipt is not confirmed.';
+  if (schedule.last_delivery_status === 'sent_saved_path')
+    return 'The mail server accepted a notice with the saved report path. No report was attached.';
+  return '';
 }
 
 export function formatReportScheduleTime(value?: string): string {

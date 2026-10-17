@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "2cc581428273ea3bef085445bad8a23e8308cbb9",
+  "verified_at": "2026-10-17T09:46:30.269Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx",
+    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx": "9225c7de9530a6dc236b2ecbf317f762d2ee3ef63fd95d55651e13fdd3e00eef",
+    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts": "dc38758cba08430f46263b9419bae641bfa7bcc372cf2799af0cf77756219df9",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts": "c0a400927f39ab2cb06f7944282e1f76cc71a4bd3533647530cccb0758764bf3"
+  },
+  "routes": [
+    "/settings/support/reporting",
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 820,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Confirmed empty list, initial list loading and initial load failure without a false empty-state message",
+    "Enabled email schedule refuses missing configuration; disabled draft remains saveable",
+    "Real CSV attachment accepted by local SMTP; inbox receipt remains explicitly unconfirmed",
+    "Real PDF saved on disk without sending email",
+    "451 temporary failure persists attempt count and retry deadline across a real process restart, then succeeds once on attempt 2 with the same reporting window",
+    "550 permanent rejection has no automatic retry and recovers through explicit Retry",
+    "Lost completed-message acknowledgement remains unconfirmed across reload; cancelling retry sends nothing",
+    "Controlled response fixtures additionally cover running, saved, accepted, retrying, failed and unconfirmed states"
+  ],
+  "interactions": [
+    "Create, edit, save and cancel; choose actual unified inventory resource; switch disk/email and PDF/CSV; inspect disabled recipients and attachment option",
+    "Navigate configuration remedy to Notifications; enable/disable persists through reload",
+    "Run and Retry remain visible and pointer-accessible at all three widths; hover/focus inspected and running disables Run",
+    "Expand/collapse report details, saved server path and edit/delete controls at every width; details stay open across polling",
+    "Cancel and accept the duplicate warning for uncertain delivery; inspect actual unconfirmed and rejected states",
+    "Cancel deletion preserves the schedule; confirm deletion removes it without resurrection",
+    "Refresh list failure/loading/recovery and return to page; review actual desktop, intermediate and narrow screenshots for wrapping, clipping and control placement"
+  ],
+  "environment": "Private runtime built from the verified working tree over base_sha, ephemeral signed Pro grant, dev/mock modes disabled. Synthetic infrastructure and local SMTP only.",
+  "backend_content_sha256": {
+    "internal/api/report_schedules.go": "e8f50c1f2b171134d7b9982ad46933e4b4f3f6e49dd9c381d82acfdcf206f675",
+    "internal/config/report_schedules.go": "2f19c181bd52741cc4ce720544a1d828ab64843685e9b492b2463527280643ca",
+    "internal/notifications/email_enhanced.go": "695e947fe7d9010863d7c8075d4977edde507cbb960108931e299c2c7bc67ae2"
+  },
+  "evidence": "/opt/pulse-release-worker/task-proofs/scheduled-reporting-20261017/browser-evidence",
+  "pixel_review": "Reviewed actual images for accepted delivery, pending retry, rejected and unconfirmed delivery, running, disk output, list failure, form states and expanded file details. Report names, status and recovery controls fit 1440, 820 and 390px."
+}

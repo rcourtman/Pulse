@@ -1136,6 +1136,7 @@ func TestGuestAgentAdmissionEvidenceContract(t *testing.T) {
 	t.Run("original-age", testGuestAgentEvidenceOriginalAge)
 	t.Run("canonical-continuity", testGuestAgentEvidenceCanonicalContinuity)
 	t.Run("accepted-read-origins", testGuestAgentEvidenceAcceptedReadOrigins)
+	t.Run("config-flag-cannot-renew", testGuestAgentConfigFlagCannotRenewAdmission)
 }
 
 func TestProxmoxGuestDiskInventoryPrefersCanonicalLinkedHostAgentSource(t *testing.T) {

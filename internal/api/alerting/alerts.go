@@ -132,13 +132,39 @@ func (h *AlertHandlers) getMonitor(ctx context.Context) AlertMonitor {
 	defaultMonitor := h.defaultMonitor
 	h.stateMu.RUnlock()
 
-	orgID := apicontext.OrgID(ctx)
-	if mtMonitor != nil {
-		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
-			return NewAlertMonitorWrapper(m)
+	orgID := strings.TrimSpace(apicontext.OrgID(ctx))
+	if orgID == "" || orgID == "default" {
+		if mtMonitor != nil {
+			if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+				return NewAlertMonitorWrapper(m)
+			}
 		}
+		return defaultMonitor
 	}
-	return defaultMonitor
+
+	// Never fall back to the default organization's runtime for another
+	// organization: its requests would read or change the wrong tenant.
+	if mtMonitor == nil {
+		log.Warn().Str("org_id", orgID).Msg("Tenant monitor manager unavailable for alert request")
+		return nil
+	}
+	m, err := mtMonitor.GetMonitor(orgID)
+	if err != nil || m == nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to resolve tenant monitor for alert request")
+		return nil
+	}
+	return NewAlertMonitorWrapper(m)
+}
+
+// requireMonitor resolves the request organization's monitor, writing a 503
+// and returning nil when it is unavailable.
+func (h *AlertHandlers) requireMonitor(w http.ResponseWriter, r *http.Request) AlertMonitor {
+	monitor := h.getMonitor(r.Context())
+	if monitor == nil {
+		http.Error(w, "Tenant monitor is not available", http.StatusServiceUnavailable)
+		return nil
+	}
+	return monitor
 }
 
 // MonitorForContext resolves the tenant-scoped alert runtime used by handlers.
@@ -206,7 +232,11 @@ func validateAlertIdentifier(alertIdentifier string) bool {
 
 // GetAlertConfig returns the current alert configuration
 func (h *AlertHandlers) GetAlertConfig(w http.ResponseWriter, r *http.Request) {
-	config := h.getMonitor(r.Context()).GetAlertManager().GetConfig()
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	config := monitor.GetAlertManager().GetConfig()
 
 	if err := utils.WriteJSONResponse(w, config); err != nil {
 		log.Error().Err(err).Msg("Failed to write alert config response")
@@ -216,9 +246,8 @@ func (h *AlertHandlers) GetAlertConfig(w http.ResponseWriter, r *http.Request) {
 // GetDeadManStatus returns the live external-watchdog read model without
 // echoing the secret-bearing ping URL.
 func (h *AlertHandlers) GetDeadManStatus(w http.ResponseWriter, r *http.Request) {
-	monitor := h.getMonitor(r.Context())
+	monitor := h.requireMonitor(w, r)
 	if monitor == nil {
-		http.Error(w, "Alert monitor unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	if err := utils.WriteJSONResponse(w, monitor.DeadManStatus()); err != nil {
@@ -236,9 +265,8 @@ type deadManConfigView struct {
 // GetDeadManConfig returns only a presence marker for the credential-bearing
 // ping URL. The sentinel supports an edit round-trip without disclosing it.
 func (h *AlertHandlers) GetDeadManConfig(w http.ResponseWriter, r *http.Request) {
-	monitor := h.getMonitor(r.Context())
+	monitor := h.requireMonitor(w, r)
 	if monitor == nil {
-		http.Error(w, "Alert monitor unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	configured := strings.TrimSpace(monitor.DeadManConfig().PingURL) != ""
@@ -254,9 +282,8 @@ func (h *AlertHandlers) GetDeadManConfig(w http.ResponseWriter, r *http.Request)
 // UpdateDeadManConfig validates and durably encrypts the watchdog destination
 // before its live worker is reconfigured.
 func (h *AlertHandlers) UpdateDeadManConfig(w http.ResponseWriter, r *http.Request) {
-	monitor := h.getMonitor(r.Context())
+	monitor := h.requireMonitor(w, r)
 	if monitor == nil {
-		http.Error(w, "Alert monitor unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, notifications.MaxDeadManPingURLLength+1024)
@@ -306,7 +333,11 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 
 	// Keys the client left out keep their stored values, so a thresholds
 	// save no longer turns off flapping detection or alert TTL cleanup.
-	updatedConfig, err := h.getMonitor(r.Context()).GetAlertManager().ApplyConfigUpdate(body)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	updatedConfig, err := monitor.GetAlertManager().ApplyConfigUpdate(body)
 	if errors.Is(err, alerts.ErrConfigSnapshot) {
 		log.Error().Err(err).Msg("Failed to snapshot applied alert configuration")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -318,7 +349,7 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 	}
 
 	// Update notification manager with schedule settings
-	notificationMgr := h.getMonitor(r.Context()).GetNotificationManager()
+	notificationMgr := monitor.GetNotificationManager()
 	notificationMgr.SetEnabled(updatedConfig.Enabled && updatedConfig.ActivationState == alerts.ActivationActive)
 	notificationMgr.SetCooldown(updatedConfig.Schedule.Cooldown)
 	notificationMgr.SetGroupingConfig(
@@ -335,7 +366,7 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 	// what was actually persisted. On the next restart or config reload,
 	// the override silently vanished. Surface the error so the client can
 	// show a real save-failed signal.
-	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveAlertConfig(updatedConfig); err != nil {
+	if err := monitor.GetConfigPersistence().SaveAlertConfig(updatedConfig); err != nil {
 		log.Error().Err(err).Msg("Failed to save alert configuration")
 		http.Error(w, fmt.Sprintf("Failed to save alert configuration: %v", err), http.StatusInternalServerError)
 		return
@@ -352,7 +383,11 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 // ActivateAlerts activates alert notifications
 func (h *AlertHandlers) ActivateAlerts(w http.ResponseWriter, r *http.Request) {
 	// Get current config
-	config := h.getMonitor(r.Context()).GetAlertManager().GetConfig()
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	config := monitor.GetAlertManager().GetConfig()
 
 	// Check if already active
 	if config.ActivationState == alerts.ActivationActive {
@@ -373,25 +408,25 @@ func (h *AlertHandlers) ActivateAlerts(w http.ResponseWriter, r *http.Request) {
 	config.ActivationTime = &now
 
 	// Update config
-	h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(config)
-	h.getMonitor(r.Context()).GetNotificationManager().SetEnabled(
+	monitor.GetAlertManager().UpdateConfig(config)
+	monitor.GetNotificationManager().SetEnabled(
 		config.Enabled && config.ActivationState == alerts.ActivationActive,
 	)
 
 	// Save to persistent storage
-	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveAlertConfig(config); err != nil {
+	if err := monitor.GetConfigPersistence().SaveAlertConfig(config); err != nil {
 		log.Error().Err(err).Msg("Failed to save alert configuration after activation")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
 	}
 
 	// Notify about existing critical alerts after activation
-	activeAlerts := h.getMonitor(r.Context()).GetAlertManager().GetActiveAlerts()
+	activeAlerts := monitor.GetAlertManager().GetActiveAlerts()
 	criticalCount := 0
 	for _, alert := range activeAlerts {
 		if alert.Level == alerts.AlertLevelCritical && !alert.Acknowledged {
 			// Re-dispatch critical alerts to trigger notifications
-			h.getMonitor(r.Context()).GetAlertManager().NotifyExistingAlert(alert.ID)
+			monitor.GetAlertManager().NotifyExistingAlert(alert.ID)
 			criticalCount++
 		}
 	}
@@ -416,7 +451,11 @@ func (h *AlertHandlers) ActivateAlerts(w http.ResponseWriter, r *http.Request) {
 
 // GetActiveAlerts returns all active alerts
 func (h *AlertHandlers) GetActiveAlerts(w http.ResponseWriter, r *http.Request) {
-	alerts := h.getMonitor(r.Context()).GetAlertManager().GetActiveAlerts()
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	alerts := monitor.GetAlertManager().GetActiveAlerts()
 
 	if err := utils.WriteJSONResponse(w, alerts); err != nil {
 		log.Error().Err(err).Msg("Failed to write active alerts response")
@@ -426,7 +465,11 @@ func (h *AlertHandlers) GetActiveAlerts(w http.ResponseWriter, r *http.Request) 
 func (h *AlertHandlers) GetAlertIntentPolicies(w http.ResponseWriter, r *http.Request) {
 	h.intentPolicyMu.Lock()
 	defer h.intentPolicyMu.Unlock()
-	manager, ok := h.getMonitor(r.Context()).GetAlertManager().(alertIntentPolicyManager)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	manager, ok := monitor.GetAlertManager().(alertIntentPolicyManager)
 	if !ok {
 		http.Error(w, "alert intent policies are unavailable", http.StatusServiceUnavailable)
 		return
@@ -456,7 +499,10 @@ func (h *AlertHandlers) UpdateAlertIntentPolicies(w http.ResponseWriter, r *http
 	// back a later successful update.
 	h.intentPolicyMu.Lock()
 	defer h.intentPolicyMu.Unlock()
-	monitor := h.getMonitor(r.Context())
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
 	manager, ok := monitor.GetAlertManager().(alertIntentPolicyManager)
 	if !ok {
 		http.Error(w, "alert intent policies are unavailable", http.StatusServiceUnavailable)
@@ -504,7 +550,11 @@ func (h *AlertHandlers) PreviewAlertIntentPolicy(w http.ResponseWriter, r *http.
 	}
 	h.intentPolicyMu.Lock()
 	defer h.intentPolicyMu.Unlock()
-	manager, ok := h.getMonitor(r.Context()).GetAlertManager().(alertIntentPolicyManager)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	manager, ok := monitor.GetAlertManager().(alertIntentPolicyManager)
 	if !ok {
 		http.Error(w, "alert intent policy preview is unavailable", http.StatusServiceUnavailable)
 		return
@@ -539,9 +589,8 @@ func (h *AlertHandlers) GetAlertDeliveryDiagnosis(w http.ResponseWriter, r *http
 		return
 	}
 
-	monitor := h.getMonitor(r.Context())
+	monitor := h.requireMonitor(w, r)
 	if monitor == nil {
-		http.Error(w, "monitor is not initialized", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -614,9 +663,8 @@ func (h *AlertHandlers) GetAlertEvents(w http.ResponseWriter, r *http.Request) {
 		filter.Limit = limit
 	}
 
-	monitor := h.getMonitor(r.Context())
+	monitor := h.requireMonitor(w, r)
 	if monitor == nil {
-		http.Error(w, "monitor is not initialized", http.StatusServiceUnavailable)
 		return
 	}
 	manager := monitor.GetAlertManager()
@@ -778,12 +826,12 @@ func (h *AlertHandlers) GetAlertHistory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if h.getMonitor(r.Context()) == nil {
-		http.Error(w, "monitor is not initialized", http.StatusServiceUnavailable)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
 		return
 	}
 
-	manager := h.getMonitor(r.Context()).GetAlertManager()
+	manager := monitor.GetAlertManager()
 	var history []alerts.Alert
 	if startTime != nil {
 		history = manager.GetAlertHistorySince(*startTime, fetchLimit)
@@ -825,6 +873,10 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 		}
 	}
 
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
 	if alertID != "" {
 		if !validateAlertIdentifier(alertID) {
 			http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
@@ -846,7 +898,7 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 			return
 		}
 
-		store := h.getMonitor(r.Context()).GetIncidentStore()
+		store := monitor.GetIncidentStore()
 		if store == nil {
 			http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
 			return
@@ -863,7 +915,7 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 		}
 
 		if !startedAt.IsZero() && (incident == nil || len(incident.Events) == 0) {
-			if alert, resolvedAt := findAlertOccurrenceForTimeline(h.getMonitor(r.Context()).GetAlertManager(), alertID, startedAt); alert != nil {
+			if alert, resolvedAt := findAlertOccurrenceForTimeline(monitor.GetAlertManager(), alertID, startedAt); alert != nil {
 				incident = store.EnsureAlertOccurrence(alert, resolvedAt)
 			}
 		}
@@ -885,7 +937,7 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 			}
 			return
 		}
-		store := h.getMonitor(r.Context()).GetIncidentStore()
+		store := monitor.GetIncidentStore()
 		if store == nil {
 			http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
 			return
@@ -994,7 +1046,11 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	store := h.getMonitor(r.Context()).GetIncidentStore()
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	store := monitor.GetIncidentStore()
 	if store == nil {
 		http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
 		return
@@ -1118,7 +1174,11 @@ func exportIncidents(incidents []*memory.Incident) []*incidentView {
 
 // ClearAlertHistory clears all alert history
 func (h *AlertHandlers) ClearAlertHistory(w http.ResponseWriter, r *http.Request) {
-	if err := h.getMonitor(r.Context()).GetAlertManager().ClearAlertHistory(); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.GetAlertManager().ClearAlertHistory(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1187,13 +1247,17 @@ func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Re
 		user = "unknown" // Fallback if auth header not set (shouldn't happen in normal flow)
 	}
 
-	if err := h.getMonitor(r.Context()).GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
 		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to acknowledge alert")
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	h.getMonitor(r.Context()).SyncAlertState()
+	monitor.SyncAlertState()
 
 	log.Info().Str("alertID", alertID).Str("user", user).Msg("Alert acknowledged successfully")
 
@@ -1231,13 +1295,17 @@ func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).GetAlertManager().UnacknowledgeAlert(alertID); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.GetAlertManager().UnacknowledgeAlert(alertID); err != nil {
 		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to unacknowledge alert")
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	h.getMonitor(r.Context()).SyncAlertState()
+	monitor.SyncAlertState()
 
 	log.Info().Str("alertID", alertID).Msg("Alert unacknowledged successfully")
 
@@ -1273,7 +1341,11 @@ func (h *AlertHandlers) SnoozeAlertByBody(w http.ResponseWriter, r *http.Request
 	if user == "" {
 		user = "unknown"
 	}
-	if err := h.getMonitor(r.Context()).GetAlertManager().SnoozeAlert(alertID, user, req.Until); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.GetAlertManager().SnoozeAlert(alertID, user, req.Until); err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, alerts.ErrAlertNotFound) {
 			status = http.StatusNotFound
@@ -1281,7 +1353,7 @@ func (h *AlertHandlers) SnoozeAlertByBody(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), status)
 		return
 	}
-	h.getMonitor(r.Context()).SyncAlertState()
+	monitor.SyncAlertState()
 	if err := utils.WriteJSONResponse(w, map[string]any{"success": true, "snoozedUntil": req.Until.UTC()}); err != nil {
 		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write snooze response")
 	}
@@ -1307,7 +1379,11 @@ func (h *AlertHandlers) UnsnoozeAlertByBody(w http.ResponseWriter, r *http.Reque
 	if user == "" {
 		user = "unknown"
 	}
-	if err := h.getMonitor(r.Context()).GetAlertManager().UnsnoozeAlert(alertID, user); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.GetAlertManager().UnsnoozeAlert(alertID, user); err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, alerts.ErrAlertNotFound) {
 			status = http.StatusNotFound
@@ -1315,7 +1391,7 @@ func (h *AlertHandlers) UnsnoozeAlertByBody(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), status)
 		return
 	}
-	h.getMonitor(r.Context()).SyncAlertState()
+	monitor.SyncAlertState()
 	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
 		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write unsnooze response")
 	}
@@ -1347,12 +1423,16 @@ func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !h.getMonitor(r.Context()).GetAlertManager().ClearAlert(alertID) {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if !monitor.GetAlertManager().ClearAlert(alertID) {
 		http.Error(w, "Alert not found", http.StatusNotFound)
 		return
 	}
 
-	h.getMonitor(r.Context()).SyncAlertState()
+	monitor.SyncAlertState()
 
 	log.Info().Str("alertID", alertID).Msg("Alert cleared successfully")
 
@@ -1398,12 +1478,16 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 		results    []map[string]interface{}
 		anySuccess bool
 	)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
 	for _, alertID := range alertIdentifiers {
 		result := map[string]interface{}{
 			"alertIdentifier": alertID,
 			"success":         true,
 		}
-		if err := h.getMonitor(r.Context()).GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
+		if err := monitor.GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
 			result["success"] = false
 			result["error"] = err.Error()
 		} else {
@@ -1413,7 +1497,7 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 	}
 
 	if anySuccess {
-		h.getMonitor(r.Context()).SyncAlertState()
+		monitor.SyncAlertState()
 	}
 
 	// Send response immediately
@@ -1456,12 +1540,16 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 		results    []map[string]interface{}
 		anySuccess bool
 	)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
 	for _, alertID := range alertIdentifiers {
 		result := map[string]interface{}{
 			"alertIdentifier": alertID,
 			"success":         true,
 		}
-		if h.getMonitor(r.Context()).GetAlertManager().ClearAlert(alertID) {
+		if monitor.GetAlertManager().ClearAlert(alertID) {
 			anySuccess = true
 		} else {
 			result["success"] = false
@@ -1471,7 +1559,7 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if anySuccess {
-		h.getMonitor(r.Context()).SyncAlertState()
+		monitor.SyncAlertState()
 	}
 
 	// Send response immediately
