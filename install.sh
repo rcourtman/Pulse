@@ -107,6 +107,7 @@ BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 DETECTED_CTID=""
 UPDATE_MIN_TEMP_FREE_BYTES=$((900 * 1024 * 1024))
 UPDATE_MIN_INSTALL_FREE_BYTES=$((256 * 1024 * 1024))
+SERVER_STAGING_STALE_MINUTES=360
 CONFIG_BACKUP_MIN_EXTRA_BYTES=$((64 * 1024 * 1024))
 
 release_signature_key_available() {
@@ -3349,8 +3350,62 @@ create_temp_archive_path() {
 
     # Reserving then unlinking a mktemp file does not reserve the .tar.gz or
     # sidecar name. Keep both downloads inside one owner-only directory.
+    # A hidden staging prefix still yields the canonical archive file name.
+    local archive_name="${prefix##*/}"
+    archive_name="${archive_name#.}"
     temp_dir=$(mktemp -d "${prefix}-XXXXXX") || return 1
-    printf '%s/%s.tar.gz\n' "$temp_dir" "${prefix##*/}"
+    printf '%s/%s.tar.gz\n' "$temp_dir" "$archive_name"
+}
+
+# Server archives are staged and extracted on the install filesystem. /tmp is
+# tmpfs on Debian 13 and many LXC templates, where staged bytes count against
+# the container's memory limit rather than its disk (#2785).
+prepare_server_staging_parent() {
+    if ! mkdir -p -- "$INSTALL_DIR"; then
+        print_error "Could not prepare $INSTALL_DIR for staging the Pulse update; Pulse has not been stopped"
+        return 1
+    fi
+    sweep_stale_server_staging
+    printf '%s\n' "$INSTALL_DIR"
+}
+
+# Owner-only staging names created under $INSTALL_DIR by create_temp_archive_path
+# and install_pulse_archive (mktemp's six-character suffix).
+is_server_staging_name() {
+    case "$1" in
+        .pulse-extract-??????|.pulse-v*-linux-*-??????) return 0 ;;
+    esac
+    return 1
+}
+
+# Unlike /tmp, the install filesystem keeps an interrupted run's staging
+# (~1 GB) across reboots. No installer lock exists, so remove only real
+# directories (never symlinks or files) unchanged for longer than any live run
+# takes. ctime, unlike mtime, cannot be carried back by extraction.
+sweep_stale_server_staging() {
+    local entry=""
+    for entry in "$INSTALL_DIR"/.pulse-extract-* "$INSTALL_DIR"/.pulse-v*-linux-*; do
+        [[ -d "$entry" && ! -L "$entry" ]] || continue
+        is_server_staging_name "${entry##*/}" || continue
+        if [[ -n "$(find "$entry" -maxdepth 0 -cmin "+${SERVER_STAGING_STALE_MINUTES}" -print 2>/dev/null)" ]]; then
+            rm -rf -- "$entry" 2>/dev/null || print_warn "Could not remove stale update staging at $entry"
+        fi
+    done
+    return 0
+}
+
+# Recursive pulse ownership for the install directory, excluding root-consumed
+# update staging so the extracted payload and archive are never handed to the
+# service account while the installer still reads them.
+chown_install_dir_for_pulse() {
+    local entry="" rc=0
+    chown pulse:pulse "$INSTALL_DIR" || rc=1
+    for entry in "$INSTALL_DIR"/* "$INSTALL_DIR"/.[!.]* "$INSTALL_DIR"/..?*; do
+        [[ -e "$entry" || -L "$entry" ]] || continue
+        is_server_staging_name "${entry##*/}" && continue
+        chown -R pulse:pulse "$entry" || rc=1
+    done
+    return "$rc"
 }
 
 cleanup_temp_archive_path() {
@@ -3594,7 +3649,9 @@ install_pulse_archive() {
         expected_release=$(infer_release_from_archive_name "$archive_path" 2>/dev/null || true)
     fi
 
-    if ! temp_extract=$(mktemp -d /tmp/pulse-extract-XXXXXX); then
+    local staging_parent=""
+    if ! staging_parent=$(prepare_server_staging_parent) ||
+       ! temp_extract=$(mktemp -d "$staging_parent/.pulse-extract-XXXXXX"); then
         print_error "Could not prepare archive extraction; Pulse has not been stopped"
         return 1
     fi
@@ -3672,7 +3729,7 @@ install_pulse_archive() {
 
     install_additional_agent_binaries "$expected_release" "$temp_extract"
     deploy_agent_scripts "$temp_extract"
-    chown -R pulse:pulse "$INSTALL_DIR"
+    chown_install_dir_for_pulse
 
     print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
     install_binary_symlink "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"
@@ -3711,8 +3768,15 @@ download_pulse() {
         local pulse_arch=""
         local archive_from_temp=false
         local inferred_release=""
+        local staging_parent=""
 
-        if ! ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"; then
+        # The archive download and its extraction live on the install
+        # filesystem, never /tmp. Debian 13 and many LXC templates mount /tmp
+        # as tmpfs, which the kernel charges to the container's memory limit:
+        # a ~280 MB archive plus its ~750 MB extracted tree OOM-killed a 1 GiB
+        # LXC's init mid-update and Proxmox stopped the container (#2785).
+        if ! staging_parent=$(prepare_server_staging_parent) ||
+           ! ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"; then
             # The configuration snapshot taken earlier is not needed: the update
             # never reached staging. Remove it so a retry loop on a low-space
             # filesystem does not accumulate backups and worsen the shortage
@@ -3754,7 +3818,7 @@ download_pulse() {
             print_info "Downloading Pulse..."
             resolve_target_release
 
-            archive_path=$(create_temp_archive_path "/tmp/pulse-${LATEST_RELEASE}-linux-${pulse_arch}") || {
+            archive_path=$(create_temp_archive_path "$staging_parent/.pulse-${LATEST_RELEASE}-linux-${pulse_arch}") || {
                 print_error "Failed to create temporary archive path"
                 exit 1
             }
@@ -4141,7 +4205,7 @@ build_from_source() {
     echo "$branch-$source_revision" > "$INSTALL_DIR/VERSION"
     echo "$branch" > "$BUILD_FROM_SOURCE_MARKER"
 
-    chown -R pulse:pulse "$INSTALL_DIR" 2>/dev/null || true
+    chown_install_dir_for_pulse 2>/dev/null || true
     chown pulse:pulse "$BUILD_FROM_SOURCE_MARKER" 2>/dev/null || true
 
     cd "$original_dir" >/dev/null 2>&1 || true
@@ -4162,7 +4226,7 @@ setup_directories() {
     # Set permissions (preserve existing files)
     # Use chown without -R on CONFIG_DIR to avoid changing existing file permissions
     chown pulse:pulse "$CONFIG_DIR"
-    chown -R pulse:pulse "$INSTALL_DIR"
+    chown_install_dir_for_pulse
     chmod 700 "$CONFIG_DIR"
 
     # Ensure critical config files retain proper permissions if they exist

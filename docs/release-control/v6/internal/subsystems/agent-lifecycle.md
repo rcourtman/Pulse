@@ -1183,9 +1183,20 @@ Runner WS registration and activation, cancellation, and self-revocation HTTP
 calls require HTTPS/WSS with normal trust, a configured CA, or an enforced
 certificate-DER fingerprint. Plaintext HTTP/WS accepts only exact `localhost`,
 `127/8`, or `::1` literals (not `*.localhost`) and never
-inherits generic installer insecure or curl `-k` behavior. Bearer-bearing
-activation, cancellation, and self-revocation clients connect directly and do
-not inherit ambient HTTP proxy variables.
+inherits generic installer insecure or curl `-k` behavior.
+
+The installer must also keep these trust scopes separate during enrollment:
+a recovered collector bypass cannot reject otherwise valid system-root trust.
+Generated HTTPS runner environments omit the bypass even when collector
+continuity retains it. `TestInstallSHActionRunnerRecoveredCollectorTrust`
+executes legacy environment recovery, real configuration persistence and the
+actual runner cancellation client against TLS. Process-confined system roots,
+custom CA and exact-pin controls admit the credential, while untrusted
+certificates and mismatched pins receive no HTTP request. This is source-level
+TLS/credential proof, not native installation or customer-host acceptance.
+
+Bearer-bearing activation, cancellation, and self-revocation clients connect
+directly and do not inherit ambient HTTP proxy variables.
 Runner readiness is exposed through a bounded, secret-free health marker that
 is replaced atomically only after its contents reach stable storage. The
 marker distinguishes registered/pending from activated and carries only the

@@ -107,7 +107,7 @@ func TestVMFilesystemWindowsVolumePollingHistory(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,11 +129,13 @@ func TestVMFilesystemWindowsVolumePollingHistory(t *testing.T) {
 		}
 		poll.Store(int32(phase))
 		scope := m.mockModeFence.begin()
+		// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+		cycleStart := time.Now()
 		vm, _, _, _, _, ok := m.buildVMFromClusterResource(context.Background(), "volumes", res, client, id, nil, previous)
 		if !ok || vm.Disk.Total != want.total || vm.Disk.Used != want.used || vm.Disk.Free != want.total-want.used || vm.Disk.Usage != want.usage || len(vm.Disks) != want.rows || vm.DiskStatusReason != "" {
 			t.Fatalf("poll %d did not publish complete current volume usage: %+v", phase, vm)
 		}
-		m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+		m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 		m.updateResourceStore(models.StateSnapshot{VMs: []models.VM{vm}, LastUpdate: vm.LastSeen}, scope)
 		views := m.GetUnifiedReadState().VMs()
 		if len(views) != 1 || views[0].DiskTotal() != want.total || views[0].DiskUsed() != want.used || len(views[0].Disks()) != want.rows {

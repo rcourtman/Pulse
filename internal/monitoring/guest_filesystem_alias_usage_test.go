@@ -118,7 +118,7 @@ func TestVMFilesystemAliasUsagePollingAndHistory(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -143,6 +143,8 @@ func TestVMFilesystemAliasUsagePollingAndHistory(t *testing.T) {
 					time.Sleep(1100 * time.Millisecond)
 				}
 				phase.Store(int32(step))
+				// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+				cycleStart := time.Now()
 				previous := m.previousGuestContextForInstance("aliases").vmsByID[id]
 				var vm models.VM
 				if collector == "node" {
@@ -173,7 +175,7 @@ func TestVMFilesystemAliasUsagePollingAndHistory(t *testing.T) {
 				}
 				m.state.UpdateVMs([]models.VM{vm})
 				m.updateResourceStore(m.currentStateWithScope())
-				m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+				m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 				view := m.currentModeReadState().VMs()[0]
 				if view.DiskTotal() != 1000 || view.DiskUsed() != wantUsed || view.DiskPercent() != vm.Disk.Usage || !reflect.DeepEqual(previousVMFromView(view).Disks, vm.Disks) {
 					t.Fatal("canonical state lost aggregate or individual mount evidence")

@@ -147,3 +147,72 @@ func TestDiagnosticsFiltersTokenSectionAfterTheSharedCache(t *testing.T) {
 		}
 	}
 }
+
+// Token writers change config.APITokens in place under config.Mu: scope edits,
+// delete-then-append and rotation, and every token request records LastUsedAt.
+// Diagnostics reads the inventory on every request from a scoped token, and
+// when it rebuilds the cached instance view, so both paths must read it under
+// the lock. Run with -race: an unlocked read is reported as a data race.
+func TestDiagnosticsTokenSectionReadsTheInventoryUnderTheConfigLock(t *testing.T) {
+	f := newDiagnosticsTokenFixture(t)
+	router := &Router{config: f.cfg}
+
+	diagnosticsCacheMu.Lock()
+	prevCache := diagnosticsCache
+	diagnosticsCache = map[string]cachedDiagnosticsEntry{
+		diagnosticsScopeKey(context.Background()): {
+			diag:     DiagnosticsInfo{Version: "cached", APITokens: &APITokenDiagnostic{}},
+			cachedAt: time.Now(),
+		},
+	}
+	diagnosticsCacheMu.Unlock()
+	t.Cleanup(func() {
+		diagnosticsCacheMu.Lock()
+		diagnosticsCache = prevCache
+		diagnosticsCacheMu.Unlock()
+	})
+
+	stop := make(chan struct{})
+	writerDone := make(chan struct{})
+	go func() {
+		defer close(writerDone)
+		scopeSets := [][]string{{config.ScopeWildcard}, {config.ScopeMonitoringRead, config.ScopeSettingsRead}}
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			config.Mu.Lock()
+			idx := i % len(f.cfg.APITokens)
+			edited := f.cfg.APITokens[idx]
+			edited.Scopes = append([]string(nil), scopeSets[i%len(scopeSets)]...)
+			f.cfg.APITokens = append(f.cfg.APITokens[:idx], f.cfg.APITokens[idx+1:]...)
+			f.cfg.APITokens = append(f.cfg.APITokens, edited)
+			used := time.Now().UTC()
+			f.cfg.APITokens[0].LastUsedAt = &used
+			config.Mu.Unlock()
+		}
+	}()
+
+	for i := 0; i < 200; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/diagnostics", nil)
+		attachAPITokenRecord(req, &f.orgA)
+		rec := httptest.NewRecorder()
+		router.handleDiagnostics(rec, req)
+		var payload DiagnosticsInfo
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode diagnostics: %v", err)
+		}
+		if ids := tokenIDs(payload.APITokens); len(ids) != 1 || !ids[f.orgA.ID] {
+			t.Fatalf("org-a caller saw tokens %v during concurrent token edits, want only its own", ids)
+		}
+
+		if all := buildAPITokenDiagnostic(f.cfg, nil, nil); all.TokenCount != 3 {
+			t.Fatalf("instance view counted %d tokens during concurrent token edits, want 3", all.TokenCount)
+		}
+	}
+
+	close(stop)
+	<-writerDone
+}

@@ -1421,24 +1421,27 @@ func buildDiscoveryDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *
 
 // buildAPITokenDiagnostic summarises the token inventory. A nil caller sees
 // every token; an API-token caller sees only the tokens callerTokenMayManage
-// allows, and the counts, notes and usage are computed over that view.
+// allows, and the counts, notes and usage are computed over that view. It
+// reads a snapshot taken under config.Mu, so callers must not hold that lock.
 func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor, caller *config.APITokenRecord) *APITokenDiagnostic {
 	if cfg == nil {
 		return nil
 	}
 
-	records := make([]config.APITokenRecord, 0, len(cfg.APITokens))
-	visibleIDs := make(map[string]struct{}, len(cfg.APITokens))
-	for _, record := range cfg.APITokens {
-		if !callerTokenMayManage(caller, &record) {
+	inventory := snapshotAPITokenRecords(cfg)
+	records := make([]config.APITokenRecord, 0, len(inventory))
+	visibleIDs := make(map[string]struct{}, len(inventory))
+	for i := range inventory {
+		record := &inventory[i]
+		if !callerTokenMayManage(caller, record) {
 			continue
 		}
-		records = append(records, record)
+		records = append(records, *record)
 		visibleIDs[record.ID] = struct{}{}
 	}
 
 	diag := &APITokenDiagnostic{
-		Enabled:    cfg.HasAPITokens(),
+		Enabled:    len(inventory) > 0,
 		TokenCount: len(records),
 	}
 
@@ -1449,7 +1452,7 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor, ca
 		diag.Notes = append(diag.Notes, note)
 	}
 
-	diag.RecommendTokenSetup = !cfg.HasAPITokens()
+	diag.RecommendTokenSetup = len(inventory) == 0
 
 	if diag.RecommendTokenSetup {
 		appendNote("No API tokens are configured. Open Settings → Security to generate dedicated tokens for each automation or agent.")

@@ -19,6 +19,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
+// guestPollFixtureHangGuard is the proxmox client deadline for the loopback
+// guest poll fixtures. They answer every request at once, so the deadline only
+// stops a hung test. A tight one makes the result depend on the machine: one
+// late reply defers the poll (lock-unverified) or fences the guest after an
+// agent-timeout, and the History and command counts the tests assert change.
+const guestPollFixtureHangGuard = 15 * time.Minute
+
 func guestHistoryObservationMonitor(t *testing.T) *Monitor {
 	t.Helper()
 	wasMock := mock.IsMockEnabled()
@@ -93,8 +100,10 @@ func TestGuestHistoryObservationContinuity(t *testing.T) {
 	ct := models.Container{ID: "history:node:106", Status: "running", LastSeen: now, CPU: .2, Memory: vm.Memory, Disk: vm.Disk}
 	record := func() {
 		t.Helper()
+		// The cycle starts before the guests are observed, as in production.
+		cycleStart := time.Now()
 		vm.LastSeen, ct.LastSeen = time.Now(), time.Now()
-		m.recordGuestMetrics([]models.VM{vm}, []models.Container{ct}, time.Now().Add(-time.Second))
+		m.recordGuestMetrics([]models.VM{vm}, []models.Container{ct}, cycleStart)
 	}
 	record()
 	type series struct{ kind, id, metric string }
@@ -186,8 +195,10 @@ func TestGuestHistoryPreservesIndependentCurrentMemory(t *testing.T) {
 	// producer observations, not a change to numeric/display availability,
 	// are what let independently current memory bypass that legacy heuristic.
 	m := guestHistoryObservationMonitor(t)
+	// The cycle starts before the guest is observed, as in production.
+	cycleStart := time.Now()
 	vm := models.VM{ID: "legacy-deferred", Status: "running", LastSeen: time.Now(), GuestAgentStatus: "deferred", Memory: models.Memory{Total: 100, Used: 25, Free: 75, Usage: 25}}
-	m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+	m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 	for _, metric := range []string{"memory", "memoryused"} {
 		if got := m.metricsHistory.GetGuestMetrics(vm.ID, metric, time.Hour); len(got) != 0 {
 			t.Errorf("unannotated deferral lost its historical guard: %s", metric)
@@ -236,7 +247,7 @@ func TestGuestHistoryPollFailureAndRecovery(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,12 +260,14 @@ func TestGuestHistoryPollFailureAndRecovery(t *testing.T) {
 	var previous *models.VM
 	build := func() models.VM {
 		t.Helper()
+		// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+		cycleStart := time.Now()
 		vm, raw, source, notes, at, ok := m.buildVMFromClusterResource(context.Background(), "poll-history", res, client, id, nil, previous)
 		if !ok {
 			t.Fatal("guest disappeared")
 		}
 		m.recordGuestSnapshot("poll-history", "qemu", res.Node, res.VMID, GuestMemorySnapshot{Status: vm.Status, RetrievedAt: at, MemorySource: source, Memory: vm.Memory, Raw: raw, Notes: notes})
-		m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+		m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 		registry.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
 		next := previousVMFromView(registry.VMs()[0])
 		previous = &next
@@ -278,11 +291,13 @@ func TestGuestHistoryPollFailureAndRecovery(t *testing.T) {
 	// positive number is not filesystem evidence, even without prev- prefix.
 	other := res
 	other.VMID = 106
+	// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+	cycleStart := time.Now()
 	newVM, _, _, _, _, ok := m.buildVMFromClusterResource(context.Background(), "poll-history", other, client, makeGuestID("poll-history", "node", 106), nil, nil)
 	if !ok || newVM.DiskStatusReason != "no-status" || newVM.Disk.Usage <= 0 {
 		t.Fatalf("fixture did not retain the unverified positive allocation: %+v", newVM)
 	}
-	m.recordGuestMetrics([]models.VM{newVM}, nil, time.Now().Add(-time.Second))
+	m.recordGuestMetrics([]models.VM{newVM}, nil, cycleStart)
 	if got := m.metricsHistory.GetGuestMetrics(newVM.ID, "disk", time.Hour); len(got) != 0 {
 		t.Error("unverified cluster disk allocation became a filesystem History sample")
 	}

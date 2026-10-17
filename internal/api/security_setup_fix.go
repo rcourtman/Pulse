@@ -152,6 +152,33 @@ func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Req
 	return true
 }
 
+// ensureInstanceAdminSession is ensureAdminSession for routes that replace the
+// instance's own credentials: the administrator login and the whole API token
+// inventory. Those belong to the instance, not to any organization, so the
+// caller must be an instance administrator. The org management rule
+// ensureAdminSession applies to org-scoped sessions does not count here: an
+// organization owner who names their organization in the request would
+// otherwise rotate the instance administrator credentials and take the
+// instance over. Requests without a session cookie are left to the caller's
+// other checks, as in ensureAdminSession.
+func ensureInstanceAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+	cookie, err := readSessionCookie(req)
+	if err != nil || cookie.Value == "" || !ValidateSession(cookie.Value) {
+		return true
+	}
+	sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
+	if !sessionIsOrgScoped(req) && sessionUserCarriesAdminPrivileges(cfg, sessionUser) {
+		return true
+	}
+
+	log.Warn().
+		Str("path", req.URL.Path).
+		Str("user", sessionUser).
+		Msg("Session without instance administrator privileges attempted to replace instance credentials")
+	http.Error(w, "Instance administrator privileges required. Organization owners and admins cannot change the instance administrator login or API tokens.", http.StatusForbidden)
+	return false
+}
+
 // sessionUserHasSettingsAdminPrivileges is the session rule ensureAdminSession
 // enforces for settings-bound routes: the configured local admin; on an
 // org-scoped request, a user who can manage that organization; otherwise an
@@ -453,6 +480,9 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			http.Error(w, "Security setup replaces the administrator credentials and every API token, so it needs a full-access token that is not bound to any non-default organization.", http.StatusForbidden)
 			return
 		}
+		if authConfigured && !recoveryAuthorized && getAPITokenRecordFromRequest(req) == nil && !ensureInstanceAdminSession(r.config, w, req) {
+			return
+		}
 
 		if setupRequest.Force {
 			log.Info().Msg("Quick security setup invoked with force=true - rotating credentials")
@@ -751,6 +781,9 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 			Str("ip", GetClientIP(rq)).
 			Msg("API token without instance-wide authority attempted to regenerate every token")
 		http.Error(w, "Regenerating API tokens replaces every token, so it needs a full-access token that is not bound to any non-default organization. Use POST /api/security/tokens/{id}/rotate to replace one token.", http.StatusForbidden)
+		return
+	}
+	if getAPITokenRecordFromRequest(rq) == nil && !ensureInstanceAdminSession(r.config, w, rq) {
 		return
 	}
 

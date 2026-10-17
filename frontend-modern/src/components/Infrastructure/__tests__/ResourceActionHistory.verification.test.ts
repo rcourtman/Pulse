@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@solidjs/testing-library';
 
 import { ResourceActionHistory } from '../ResourceActionHistory';
@@ -151,6 +151,33 @@ describe('ResourceActionHistory verification rendering', () => {
     expect(history.queryByText('legacy command must not render')).toBeNull();
     expect(history.queryByText('Legacy check failed (source unclassified)')).toBeNull();
     expect(screen.getAllByTestId('resource-action-recovery-truth')).toHaveLength(1);
+  });
+});
+
+describe('ResourceActionHistory row age', () => {
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('ages the row timestamp on the shared clock without new audits', async () => {
+    const start = Date.parse('2026-10-16T22:00:00Z');
+    vi.useFakeTimers({ now: start });
+    render(() =>
+      ResourceActionHistory({
+        audits: [{ ...actionAudit(), updatedAt: new Date(start - 60_000).toISOString() }],
+        count: 1,
+        loadingLabel: 'Actions loaded',
+        error: '',
+        onRetry: () => undefined,
+      }),
+    );
+
+    const history = within(screen.getByTestId('resource-action-history-section'));
+    expect(history.getByText('1 min ago')).toBeInTheDocument();
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(history.queryByText('1 min ago')).toBeNull();
+    expect(history.getByText('2 hours ago')).toBeInTheDocument();
   });
 });
 

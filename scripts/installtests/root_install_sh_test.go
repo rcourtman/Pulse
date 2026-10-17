@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -78,7 +79,7 @@ func TestRootInstallScriptArchiveSupportContract(t *testing.T) {
 		`ensure_update_disk_headroom()`,
 		`UPDATE_MIN_TEMP_FREE_BYTES=$((900 * 1024 * 1024))`,
 		`UPDATE_MIN_INSTALL_FREE_BYTES=$((256 * 1024 * 1024))`,
-		`ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`,
+		`ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"`,
 		`prefetch_pulse_archive_for_container()`,
 		`download_release_archive()`,
 		`install_pulse_archive()`,
@@ -111,7 +112,7 @@ func TestRootInstallSystemdServiceExposesOnlyPulseOwnedSubscriptionCLIHome(t *te
 func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 	downloadPulse := extractRootInstallShellFunction(t, "download_pulse")
 	orderedSteps := []string{
-		`ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`,
+		`ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"`,
 		`download_release_archive "$LATEST_RELEASE" "$pulse_arch" "$archive_path"`,
 		`run_upgrade_readiness_preflight "$CURRENT_VERSION" "$expected_release"`,
 		`install_pulse_archive "$archive_path" "$expected_release"`,
@@ -536,7 +537,7 @@ func TestRootInstallScriptDiscardsUnneededConfigBackup(t *testing.T) {
 // backups while the filesystem is short of space (#2127).
 func TestRootInstallScriptDiscardsBackupWhenStagingHeadroomFails(t *testing.T) {
 	downloadPulse := extractRootInstallShellFunction(t, "download_pulse")
-	headroom := strings.Index(downloadPulse, `ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`)
+	headroom := strings.Index(downloadPulse, `ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"`)
 	discard := strings.Index(downloadPulse, `discard_last_config_backup`)
 	if headroom < 0 || discard < 0 {
 		t.Fatalf("download_pulse must check staging headroom and discard the unneeded config backup (headroom=%d discard=%d)", headroom, discard)
@@ -2647,5 +2648,133 @@ func TestRootInstallResetBoundsEverySystemdObservationAndMutation(t *testing.T) 
 				t.Fatalf("%s has unbounded systemctl call: %s", name, line)
 			}
 		}
+	}
+}
+
+// Server update staging lives under the install directory (#2785), which keeps
+// an interrupted run's ~1 GB extract across reboots. The sweep removes only
+// owner-only staging directories older than any live run, never symlinks,
+// files, look-alike names or anything else in the install directory.
+func TestRootInstallScriptSweepsOnlyStaleServerStaging(t *testing.T) {
+	installDir := filepath.Join(t.TempDir(), "install")
+	outside := filepath.Join(t.TempDir(), "outside")
+	for _, dir := range []string{
+		filepath.Join(installDir, "bin"),
+		filepath.Join(installDir, ".pulse-extract-AbC123", "bin"),
+		filepath.Join(installDir, ".pulse-v6.6.0-linux-amd64-XyZ789"),
+		filepath.Join(installDir, ".pulse-extract-toolong1"),
+		outside,
+	} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files := []string{
+		filepath.Join(installDir, ".pulse-extract-AbC123", "bin", "pulse"),
+		filepath.Join(installDir, ".pulse-v6.6.0-linux-amd64-XyZ789", "pulse-v6.6.0-linux-amd64.tar.gz"),
+		filepath.Join(installDir, ".pulse-extract-file01"),
+		filepath.Join(installDir, "bin", "pulse"),
+		filepath.Join(outside, "keep"),
+	}
+	for _, file := range files {
+		if err := os.WriteFile(file, []byte("fixture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(outside, filepath.Join(installDir, ".pulse-extract-link01")); err != nil {
+		t.Fatal(err)
+	}
+
+	sweep := func(minutes string) {
+		t.Helper()
+		script := `
+			set -euo pipefail
+			print_warn() { echo "$*" >&2; }
+			INSTALL_DIR="$1"
+			SERVER_STAGING_STALE_MINUTES="$2"
+` + extractRootInstallShellFunction(t, "is_server_staging_name") + `
+` + extractRootInstallShellFunction(t, "sweep_stale_server_staging") + `
+			sweep_stale_server_staging
+		`
+		if out, err := exec.Command("bash", "-c", script, "bash", installDir, minutes).CombinedOutput(); err != nil {
+			t.Fatalf("sweep: %v\n%s", err, out)
+		}
+	}
+
+	// A live run's staging is fresh: the production age keeps it.
+	sweep("360")
+	for _, file := range files {
+		if _, err := os.Stat(file); err != nil {
+			t.Fatalf("fresh staging or unrelated file removed: %s", file)
+		}
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+	sweep("0")
+	for _, removed := range []string{".pulse-extract-AbC123", ".pulse-v6.6.0-linux-amd64-XyZ789"} {
+		if _, err := os.Lstat(filepath.Join(installDir, removed)); !os.IsNotExist(err) {
+			t.Fatalf("stale staging %s was not removed (err=%v)", removed, err)
+		}
+	}
+	for _, kept := range []string{".pulse-extract-toolong1", ".pulse-extract-file01", ".pulse-extract-link01", "bin/pulse"} {
+		if _, err := os.Lstat(filepath.Join(installDir, kept)); err != nil {
+			t.Fatalf("sweep removed non-staging entry %s: %v", kept, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(outside, "keep")); err != nil {
+		t.Fatalf("sweep followed a staging-named symlink: %v", err)
+	}
+}
+
+// The recursive pulse ownership pass must not hand root-consumed update
+// staging (verified archive, extracted payload) to the service account, and
+// every recursive install-dir chown goes through that one helper.
+func TestRootInstallScriptPulseOwnershipExcludesServerStaging(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if regexp.MustCompile(`chown -R [^\n]*"\$INSTALL_DIR"`).Match(content) {
+		t.Fatal(`install.sh must use chown_install_dir_for_pulse, not chown -R on "$INSTALL_DIR"`)
+	}
+
+	installDir := filepath.Join(t.TempDir(), "install")
+	for _, dir := range []string{"bin", "scripts", ".pulse-extract-AbC123", ".pulse-v6.6.0-linux-amd64-XyZ789", ".hidden"} {
+		if err := os.MkdirAll(filepath.Join(installDir, dir), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(installDir, "VERSION"), []byte("v6.6.0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	calls := filepath.Join(t.TempDir(), "calls")
+	script := `
+		set -euo pipefail
+		INSTALL_DIR="$1"
+		CALLS="$2"
+		chown() { printf '%s\n' "$*" >> "$CALLS"; }
+` + extractRootInstallShellFunction(t, "is_server_staging_name") + `
+` + extractRootInstallShellFunction(t, "chown_install_dir_for_pulse") + `
+		chown_install_dir_for_pulse
+	`
+	if out, err := exec.Command("bash", "-c", script, "bash", installDir, calls).CombinedOutput(); err != nil {
+		t.Fatalf("chown_install_dir_for_pulse: %v\n%s", err, out)
+	}
+	recorded, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(strings.TrimSpace(string(recorded)), "\n")
+	want := []string{
+		"pulse:pulse " + installDir,
+		"-R pulse:pulse " + filepath.Join(installDir, "VERSION"),
+		"-R pulse:pulse " + filepath.Join(installDir, "bin"),
+		"-R pulse:pulse " + filepath.Join(installDir, "scripts"),
+		"-R pulse:pulse " + filepath.Join(installDir, ".hidden"),
+	}
+	sort.Strings(got)
+	sort.Strings(want)
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("ownership calls:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }

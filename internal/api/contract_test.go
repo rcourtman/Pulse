@@ -21,6 +21,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27368,5 +27369,120 @@ func TestChartServiceInitializationIsConcurrentAndRouterScoped(t *testing.T) {
 	}
 	if (&Router{}).ensureChartService() == shared {
 		t.Fatal("different routers shared a chart service")
+	}
+}
+
+// Login, status and middleware reads of the SSO configuration run on every
+// request goroutine while an administrator edits providers, and the legacy
+// OIDC_* provider is re-applied on every read. Run under -race.
+func TestSSOConfigConcurrentReadsAndAdminWrites(t *testing.T) {
+	t.Setenv("OIDC_ENABLED", "true")
+	t.Setenv("OIDC_ISSUER_URL", "https://issuer.example.com")
+	t.Setenv("OIDC_CLIENT_ID", "pulse-env")
+
+	router, _ := setupTestRouter(t)
+	router.ensureSSOConfig()
+
+	const (
+		readers = 4
+		writers = 4
+		rounds  = 6
+	)
+
+	stop := make(chan struct{})
+	var readersWG sync.WaitGroup
+	for range readers {
+		readersWG.Add(1)
+		go func() {
+			defer readersWG.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				// /api/security/status and the CSRF middleware.
+				_ = router.ensureSSOConfig().GetEnabledProviders()
+				// OIDC and SAML login handlers.
+				if provider := router.getSSOProvider(config.LegacyOIDCProviderID); provider == nil || provider.OIDC == nil || provider.OIDC.ClientID != "pulse-env" {
+					t.Error("environment OIDC provider missing during concurrent edits")
+					return
+				}
+				w := httptest.NewRecorder()
+				router.handleListSSOProviders(w, httptest.NewRequest(http.MethodGet, "/api/security/sso/providers", nil))
+				if w.Code != http.StatusOK {
+					t.Errorf("list providers: status %d", w.Code)
+					return
+				}
+			}
+		}()
+	}
+
+	create := func(id string) int {
+		body, _ := json.Marshal(config.SSOProvider{
+			ID:   id,
+			Name: "Provider " + id,
+			Type: config.SSOProviderTypeOIDC,
+			OIDC: &config.OIDCProviderConfig{
+				IssuerURL: "https://issuer.example.com",
+				ClientID:  id,
+			},
+		})
+		w := httptest.NewRecorder()
+		router.handleCreateSSOProvider(w, httptest.NewRequest(http.MethodPost, "/api/security/sso/providers", bytes.NewReader(body)))
+		return w.Code
+	}
+	remove := func(id string) int {
+		w := httptest.NewRecorder()
+		router.handleSSOProvider(w, httptest.NewRequest(http.MethodDelete, "/api/security/sso/providers/"+id, nil))
+		return w.Code
+	}
+
+	var writersWG sync.WaitGroup
+	for i := range writers {
+		writersWG.Add(1)
+		go func() {
+			defer writersWG.Done()
+			for j := range rounds {
+				id := fmt.Sprintf("race-%d-%d", i, j)
+				if code := create(id); code != http.StatusCreated {
+					t.Errorf("create %s: status %d", id, code)
+					return
+				}
+				if code := remove(id); code != http.StatusNoContent {
+					t.Errorf("delete %s: status %d", id, code)
+					return
+				}
+			}
+			if id := fmt.Sprintf("keep-%d", i); create(id) != http.StatusCreated {
+				t.Errorf("create %s failed", id)
+			}
+		}()
+	}
+	writersWG.Wait()
+	close(stop)
+	readersWG.Wait()
+
+	providerIDs := func(cfg *config.SSOConfig) []string {
+		ids := make([]string, 0, len(cfg.Providers))
+		for _, provider := range cfg.Providers {
+			ids = append(ids, provider.ID)
+		}
+		sort.Strings(ids)
+		return ids
+	}
+
+	want := []string{"keep-0", "keep-1", "keep-2", "keep-3", config.LegacyOIDCProviderID}
+	sort.Strings(want)
+	if got := providerIDs(router.ensureSSOConfig()); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("published providers = %v, want %v", got, want)
+	}
+
+	persisted, err := router.persistence.LoadSSOConfig()
+	if err != nil {
+		t.Fatalf("load persisted SSO config: %v", err)
+	}
+	if got := providerIDs(persisted); fmt.Sprint(got) != fmt.Sprint(want[:writers]) {
+		t.Fatalf("persisted providers = %v, want %v", got, want[:writers])
 	}
 }

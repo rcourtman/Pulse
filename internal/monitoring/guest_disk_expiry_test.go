@@ -180,7 +180,7 @@ func testGuestDiskOrdinaryDeferralExpiryAndRecovery(t *testing.T) {
 					}
 				}))
 				defer server.Close()
-				client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+				client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -206,6 +206,8 @@ func testGuestDiskOrdinaryDeferralExpiryAndRecovery(t *testing.T) {
 				}
 				build := func(ctx context.Context) models.VM {
 					t.Helper()
+					// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+					cycleStart := time.Now()
 					previous := m.previousGuestContextForInstance("disk-expiry").vmsByID[id]
 					var vm models.VM
 					if path == "node" {
@@ -223,7 +225,7 @@ func testGuestDiskOrdinaryDeferralExpiryAndRecovery(t *testing.T) {
 						m.checkGuestAlertsForVM("disk-expiry", vm)
 					}
 					publish(vm)
-					m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+					m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 					view := m.currentModeReadState().VMs()[0]
 					if view.DiskStatusReason() != vm.DiskStatusReason || view.DiskObservation() != vm.DiskObservation {
 						t.Fatal("source disk observation changed at canonical read boundary")

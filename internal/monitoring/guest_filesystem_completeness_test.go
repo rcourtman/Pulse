@@ -101,7 +101,7 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -283,7 +283,7 @@ func TestVMFilesystemIncompleteColdPollRemainsUnavailable(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 	if err != nil {
 		t.Fatal(err)
 	}
