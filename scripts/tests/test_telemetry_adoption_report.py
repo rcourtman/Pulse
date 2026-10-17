@@ -32,26 +32,41 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 "reporting_telemetry_available": 1, "reporting_observation_days": 30,
                 "reporting_generated_backup_health_30d": 4,
                 "reporting_backup_health_active_days_30d": 2,
+                "reporting_successful_backup_health_periods_30d": 2,
                 "reporting_repeat_backup_health_periods_30d": 1}
         rows = [{**base, "install_id": "measured"},
                 {**base, "install_id": "measured", "received_at": "2026-10-16 11:00:00", "reporting_generated_backup_health_30d": 3},
-                {**base, "install_id": "new", "reporting_observation_days": 1},
+                {**base, "install_id": "new", "reporting_observation_days": 1, "reporting_backup_health_active_days_30d": 1},
                 {**base, "install_id": "legacy", "schema_version": 19},
                 {**base, "install_id": "unavailable", "reporting_telemetry_available": 0},
                 {**base, "install_id": "inactive", "monitoring_active": 0},
                 {**base, "install_id": "dev", "version_is_development": 1}]
-        usage = report.summarize_rows({}, rows, {"6.6.0"}, now=now)["reporting_usage_7d"]
+        summary = report.summarize_rows({}, rows, {"6.6.0"}, now=now)
+        usage = summary["reporting_usage_7d"]
         cohort = usage["cohorts"]["nonfree"]
         self.assertEqual((cohort["covered_ids"], cohort["unmeasured_ids"]), (2, 2))
         self.assertEqual((cohort["full_30d_observation_ids"], cohort["partial_observation_ids"]), (1, 1))
         self.assertEqual(cohort["counts"]["reporting_generated_backup_health_30d"], 8)
         self.assertEqual(cohort["ids_with_repeat_periods"], 2)
-        self.assertEqual(cohort["ids_with_repeat_use"], 2)
-        manual = {**base, "install_id": "manual", "reporting_repeat_backup_health_periods_30d": 0}
-        manual_cohort = report.summarize_reporting_usage(
-            {"manual": manual}, {"6.6.0"}, now=now)["cohorts"]["nonfree"]
-        self.assertEqual(manual_cohort["ids_with_repeat_periods"], 0)
-        self.assertEqual(manual_cohort["ids_with_repeat_use"], 1)
+        self.assertEqual(cohort["ids_with_multiple_generation_days"], 1)
+        generation_only = {**base, "install_id": "generation-only",
+                           "reporting_successful_backup_health_periods_30d": 0,
+                           "reporting_repeat_backup_health_periods_30d": 0,
+                           "reporting_delivery_failed_30d": 4}
+        activity_cohort = report.summarize_reporting_usage(
+            {"generation-only": generation_only}, {"6.6.0"}, now=now)["cohorts"]["nonfree"]
+        self.assertEqual(activity_cohort["ids_with_repeat_periods"], 0)
+        self.assertEqual(activity_cohort["ids_with_multiple_generation_days"], 1)
+        self.assertNotIn("ids_with_repeat_use", activity_cohort)
+        same_day_periods = {**base, "reporting_backup_health_active_days_30d": 1}
+        periods_cohort = report.summarize_reporting_usage(
+            {"same-day-periods": same_day_periods}, {"6.6.0"}, now=now)["cohorts"]["nonfree"]
+        self.assertEqual(periods_cohort["ids_with_repeat_periods"], 1)
+        self.assertEqual(periods_cohort["ids_with_multiple_generation_days"], 0)
+        text = report.format_text(summary, "rcourtman/Pulse", 7)
+        self.assertIn("generating on multiple days", text)
+        self.assertIn("Cross-day generation may include retries", text)
+        self.assertNotIn("with repeat use", text)
         self.assertEqual(usage["excluded_ids"], 2)
         unavailable = report.summarize_rows({}, rows, {"6.6.0"}, now=now,
             unavailable_columns=["reporting_saved_30d"])["reporting_usage_7d"]

@@ -30,12 +30,15 @@ the installation through the existing opt-out-controlled heartbeat. Local tally
 errors never fail reporting. Mock mode never records real reporting activity.
 
 Generation counts include separate attempts and complete direct response writes.
-Distinct successful-generation days also measure returning manual use, with
-same-day attempts counted once. Saved files, SMTP acceptance, definite failures
-and uncertain acceptance remain
-separate. Persisted successful saved-schedule windows count once. Repeat use
-requires a different window on that schedule within 90 days, including monthly
-reuse, so retries and same-period reruns do not inflate adoption. The aggregate
+Distinct successful-generation days measure activity, including manual downloads
+and scheduled retries, with same-day attempts counted once. Multiple days alone
+cannot establish a fresh successful period or returning manual use. The adoption
+summary keeps multi-day generation separate from successful repeat periods.
+Saved files, SMTP acceptance, definite failures and uncertain acceptance remain
+separate. Persisted successful saved-schedule windows count once. A successful
+repeat period requires a different window on that schedule within 90 days,
+including monthly reuse, so retries and same-period reruns do not inflate that
+period metric. The aggregate
 query uses only each eligible rotating ID's latest counts and marks old-schema,
 missing-column and unavailable-tally data unmeasured. Elapsed observation days do
 not establish continuous uptime, and SMTP acceptance does not prove inbox receipt.

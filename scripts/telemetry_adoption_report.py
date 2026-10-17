@@ -2885,7 +2885,7 @@ def summarize_reporting_usage(
     cohorts = {
         posture: {"reporting_ids": 0, "covered_ids": 0, "unmeasured_ids": 0,
                   "partial_observation_ids": 0, "full_30d_observation_ids": 0,
-                  "ids_with_generated_reports": 0, "ids_with_repeat_periods": 0, "ids_with_repeat_use": 0,
+                  "ids_with_generated_reports": 0, "ids_with_repeat_periods": 0, "ids_with_multiple_generation_days": 0,
                   "counts": dict.fromkeys(REPORTING_USAGE_COUNT_FIELDS, 0)}
         for posture in ("nonfree", "free", "unknown")
     }
@@ -2920,9 +2920,10 @@ def summarize_reporting_usage(
             cohort["ids_with_generated_reports"] += 1
         if any(count for field, count in counts.items() if field.startswith("reporting_repeat_")):
             cohort["ids_with_repeat_periods"] += 1
-        if (any(count for field, count in counts.items() if field.startswith("reporting_repeat_"))
-                or any(count > 1 for field, count in counts.items() if "_active_days_" in field)):
-            cohort["ids_with_repeat_use"] += 1
+        # Cross-day retries can generate again without another successful
+        # reporting period. Keep generation-day activity separate from reuse.
+        if any(count > 1 for field, count in counts.items() if "_active_days_" in field):
+            cohort["ids_with_multiple_generation_days"] += 1
     return {"window": "7d", "minimum_schema_version": 20,
             "counter_window_utc_days": 30, "repeat_marker_retention_days": 90,
             "source_available": source_available, "excluded_ids": excluded, "cohorts": cohorts}
@@ -3790,8 +3791,8 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
                 f"{cohort['unmeasured_ids']} unmeasured, "
                 f"{cohort['full_30d_observation_ids']} with 30 elapsed observation days, "
                 f"{cohort['ids_with_generated_reports']} generating reports, "
-                f"{cohort['ids_with_repeat_periods']} with repeat reporting periods, "
-                f"{cohort['ids_with_repeat_use']} with repeat use"
+                f"{cohort['ids_with_repeat_periods']} with repeat successful reporting periods, "
+                f"{cohort['ids_with_multiple_generation_days']} generating on multiple days"
             )
             for field, count in cohort["counts"].items():
                 lines.append(f"  - {field}: {count}")
@@ -3799,7 +3800,8 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
             "- interpretation: schema v20+ and available tally only. Missing measurements are unknown, "
             "not zero use. Latest rolling 30 UTC-day totals only, never summed heartbeats. "
             "Active-day counts show distinct UTC days with successful generation, including manual downloads. "
-            "Multiple attempts in one day count as one active day. "
+            "Multiple attempts in one day count as one active day. Cross-day generation may include "
+            "retries, so multiple active days alone do not establish a fresh successful period or returning manual use. "
             "Generation and delivery counts include separate attempts. Successful periods require a persisted "
             "successful saved-schedule run. Repeat periods require another distinct window on the same schedule "
             "within 90 days, so retries and same-period reruns do not qualify. "
