@@ -1,5 +1,5 @@
-// Actual shipped Docs/router/Markdown/styles. The only API is the fixture's
-// shell is a fixture. No API request, customer state or MQTT server is used.
+// Actual shipped Docs/router/Markdown/styles inside a fixture shell.
+// No API request, customer state or MQTT server is used.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -14,6 +14,7 @@ const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const preview = path.join(workspace, 'tmp/doc-command-help/static');
 const binding = JSON.parse(fs.readFileSync(path.join(preview, 'binding.json')));
 const result = { result: 'incomplete', source: binding, cases: [], captures: [], errors: [], cleanup: {} };
+fs.mkdirSync(output, { recursive: true });
 
 (async () => {
   let browser, server;
@@ -22,7 +23,7 @@ const result = { result: 'incomplete', source: binding, cases: [], captures: [],
     assert.equal(result.playwright, '1.56.1');
     assert.equal(result.playwright, JSON.parse(fs.readFileSync(path.join(workspace,
       'tests/integration/package-lock.json'))).packages['node_modules/@playwright/test'].version);
-    for (const [file, hash] of Object.entries(binding.files))
+    for (const [file, hash] of Object.entries(binding.sources))
       assert.equal(digest(fs.readFileSync(path.join(root, file))), hash, file);
     for (const [file, hash] of Object.entries(binding.artifacts))
       assert.equal(digest(fs.readFileSync(path.join(preview, file))), hash, file);
@@ -111,6 +112,8 @@ const result = { result: 'incomplete', source: binding, cases: [], captures: [],
     result.verifiedAt = new Date().toISOString();
     result.limits = 'Shipped documentation only; no MQTT/HA installation, API collection repair or metadata migration acceptance.';
     fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n');
-    console.log(JSON.stringify(result));
+    console.log(JSON.stringify({ source: binding.source_sha, result: result.result,
+      cases: result.cases.length, captures: result.captures.length,
+      errors: result.errors, cleanup: result.cleanup, failure: result.failure }));
   }
 })();
