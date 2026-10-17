@@ -286,8 +286,8 @@ async function ensureLabel(github, context, name, color, description) {
       // Only GitHub's explicit duplicate-name conflict can be reconciled; an
       // access, validation or uncertain transport failure must remain a failure.
       const errors = creationError.response?.data?.errors;
-      if (creationError.status !== 422 || !Array.isArray(errors) ||
-          !errors.some((detail) => detail?.resource === "Label" &&
+      if (creationError.status !== 422 || !Array.isArray(errors) || !errors.length ||
+          !errors.every((detail) => detail?.resource === "Label" &&
             detail.field === "name" && detail.code === "already_exists")) {
         throw creationError;
       }

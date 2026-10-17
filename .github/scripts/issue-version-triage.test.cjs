@@ -2285,6 +2285,10 @@ for (const [scenario, error] of [
   ["unspecified validation", Object.assign(new Error("Validation failed"), { status: 422 })],
   ["malformed validation details", Object.assign(duplicateLabelError(), { response: { data: { errors: "already_exists" } } })],
   ["different validation", Object.assign(duplicateLabelError(), { response: { data: { errors: [{ resource: "Label", field: "color", code: "invalid" }] } } })],
+  ["mixed duplicate and validation", Object.assign(duplicateLabelError(), { response: { data: { errors: [
+    { resource: "Label", field: "name", code: "already_exists" },
+    { resource: "Label", field: "color", code: "invalid" },
+  ] } } })],
 ]) {
   test(`label creation preserves ${scenario} without another provider read or write`, async () => {
     const issue = { number: 2922, title: "Report", body: "### Pulse version\n6.6.0-rc.2\n", labels: [{ name: "bug" }] };
