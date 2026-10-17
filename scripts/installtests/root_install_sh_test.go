@@ -2430,6 +2430,21 @@ start_pulse
 	}
 }
 
+func TestRootInstallAutoUpdateReloadCompletion(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "auto_update_reload.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("connected automatic-update reload controls: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "Ran 6 tests in ") || !strings.Contains(string(out), "\nOK\n") || strings.Contains(string(out), "skipped") {
+		t.Fatalf("incomplete automatic-update reload controls:\n%s", out)
+	}
+	t.Logf("%s", out)
+}
+
 func TestRootInstallAutoUpdateSettingsPublication(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

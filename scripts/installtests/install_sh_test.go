@@ -3213,12 +3213,13 @@ func extractSetupAutoUpdatesShellFunctions(t *testing.T) string {
 // install_auto_update_assets delegates its writability probe, its staged-helper
 // sanity check and the sandbox-escape migration to sibling functions, so every
 // harness that executes it has to pull those in alongside it. These isolated
-// asset-rendering tests admit an unmasked inventory; the whole-installer Python
-// controls below exercise the actual effective-mask guard and all its callers.
+// asset-rendering tests admit an unmasked inventory and a confirmed manager
+// reload; the connected Python controls exercise the real guard and reload.
 func extractInstallAutoUpdateAssetsShellFunctions(t *testing.T) string {
 	t.Helper()
 
 	return "auto_update_units_refreshable() { return 0; }\n" +
+		"reload_auto_update_manager() { return 0; }\n" +
 		extractRootInstallShellFunction(t, "auto_update_dir_writable") + "\n" +
 		extractRootInstallShellFunction(t, "auto_update_helper_is_sane") + "\n" +
 		extractRootInstallShellFunction(t, "migrate_auto_update_assets_outside_sandbox") + "\n" +

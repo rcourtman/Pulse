@@ -4771,6 +4771,17 @@ auto_update_units_refreshable() {
     return 0
 }
 
+# Unlike the legacy service wrapper, asset refresh must not hide a failed
+# reload. The files are already installed at this point, but the manager may
+# still be using the old units. Do not retry an uncertain operation or undo
+# installed files: leave reconciliation to the operator before activation.
+reload_auto_update_manager() {
+    if ! timeout -k 1 5 systemctl daemon-reload >/dev/null 2>&1; then
+        print_warn "Auto-update files were installed, but systemd reload was not confirmed. No settings write or timer enable/start was attempted; check systemd before retrying."
+        return 1
+    fi
+}
+
 # Installs the auto-update helper script and rewrites the systemd
 # service/timer units. Shared by setup_auto_updates (first-time enable) and
 # refresh_auto_updates (updates/reinstalls where the timer already exists).
@@ -4967,8 +4978,7 @@ EOF
         return 1
     fi
 
-    # Reload systemd daemon
-    safe_systemctl daemon-reload
+    reload_auto_update_manager
 }
 
 setup_auto_updates() {
@@ -4994,7 +5004,7 @@ setup_auto_updates() {
     fi
 
     if ! install_auto_update_assets; then
-        print_warn "Continuing without automatic updates. Review the reported unit state or asset error before retrying."
+        print_warn "Automatic-update setup is incomplete. Review the reported unit state or asset error before retrying."
         ENABLE_AUTO_UPDATES=false
         return 0
     fi

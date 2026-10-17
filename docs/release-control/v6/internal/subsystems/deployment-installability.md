@@ -6393,10 +6393,27 @@ whole body, so an unchecked `cp` fell through and
 `configure_auto_update_script_repo`'s awk turned the empty file into a
 plausible one-line shebang-less "helper" that silently disabled updates), and
 both unit renders, which are staged to `${path}.tmp` and committed by rename
-rather than written with a truncating `cat >` — the function's last statement
-is `safe_systemctl daemon-reload`, which returns 0 by design, so an unchecked
-write reported success over a truncated unit. The staged helper must also be
+rather than written with a truncating `cat >` — the former final permissive
+`safe_systemctl daemon-reload` masked errors, so an unchecked write reported
+success over a truncated unit. The staged helper must also be
 rejected before the swap unless it is non-empty and begins with `#!`.
+
+After publishing the three complete files, asset installation requires one
+confirmed `systemctl daemon-reload`, bounded to five seconds with a one-second
+kill grace. Failure, interruption or timeout returns failure to setup/refresh
+without a retry, file rollback or timer mutation. Setup does not publish consent
+or enable/start the timer after that failure; refresh leaves settings and timer
+state alone. The diagnostic distinguishes installed files from unconfirmed
+manager activation and asks for state reconciliation, never claiming the old
+files survived. The legacy main-service wrapper's container tolerance is
+unchanged. `TestRootInstallAutoUpdateReloadCompletion` runs all six connected
+`auto_update_reload.py` methods through the actual asset/setup/refresh producers,
+real file staging and GNU timeout, with closed manager/ownership doubles. They
+cover all three callers, suppressed errexit, enabled/disabled intent, failure,
+signal, TERM-resistant timeout, successful ordering and legacy compatibility;
+the exact parent must fail the predeclared failure/interruption controls.
+Isolated asset-rendering tests explicitly double reload admission, not this
+completion proof. These controls do not establish native or installed recovery.
 
 Every update-shaped flow over an existing box (the `--version` path and the
 interactive update action, like the reinstall action before them) must repair
