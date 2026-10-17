@@ -9290,6 +9290,9 @@ counts projected from existing action audit records.
 The `patrol_digest` report schedule kind in `internal/api/report_schedules.go`
 only reads the digest and sends an email. It issues no agent commands, plans
 no actions, and changes no capability, token, or binding state.
+Persisted report attempts and email retries retain that boundary. Recovery of a
+report delivery never replays an infrastructure action or grants an agent new
+execution authority.
 
 ### Independent module CPU sampling baselines
 

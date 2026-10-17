@@ -13,6 +13,7 @@
     "agent-lifecycle",
     "ai-runtime",
     "cloud-paid",
+    "notifications",
     "patrol-intelligence"
   ]
 }
@@ -825,10 +826,7 @@ failure retention require their own owner result, not source acceptance.
 43. `internal/api/relay_hosted_runtime.go`
 44. `internal/api/ai_hosted_runtime.go`
 45. `internal/api/router_routes_licensing.go`
-46. `internal/api/reporting_inventory_handlers.go`
-    46a. `internal/api/report_schedules.go`
-    46b. `internal/config/report_schedules.go`
-    46c. `internal/notifications/email_enhanced.go`
+46. `internal/api/reporting_inventory_handlers.go`, `internal/api/report_schedules.go`, `internal/config/report_schedules.go` and the notification-owned delivery boundary in `internal/notifications/email_enhanced.go`
 47. `internal/cloudcp/portal/bootstrap.go`
 48. `internal/cloudcp/portal/handlers.go`
 49. `internal/cloudcp/portal/page.go`
@@ -923,6 +921,12 @@ engine's `summary`), typed once as `AlertResolution` in
 `frontend-modern/src/types/api.ts`. Its absence means an ordinary recovery.
 
 ## Shared Boundaries
+
+Scheduled reporting owns report generation, persisted attempts and scheduling.
+Notifications owns SMTP configuration validation, MIME construction, structured
+failure classification and the completed-message acceptance boundary. Report
+retries must consume those shared verdicts rather than parse SMTP prose or
+create another transport retry loop.
 
 - Quick security setup must synchronise the router-captured configurable authorizer when committing the local administrator identity, before establishing its session. The resulting Settings capabilities must grant both administrator-session surfaces and API Access/Pulse Intelligence permission surfaces without requiring a process restart. Permission checks and token scopes remain enforced for other identities.
 
@@ -12066,14 +12070,49 @@ Attachment delivery through `internal/notifications/email_enhanced.go` uses
 notifications-owned `sendEmailWithOptions`; reporting must not introduce a
 separate retry classification. That transport stops on authentication,
 configuration, or rejection failures and preserves temporary-failure retries.
-Its returned failure retains the structured cause and actual attempt count;
-this does not change report API schemas or prove recipient acceptance.
+Its returned failure retains the structured cause and actual attempt count.
+SMTP acceptance proves only that the configured server accepted the message,
+not that it reached the recipient's inbox.
 `internal/notifications/email_retry_class_test.go` verifies the shared transport
 failure boundary with in-memory SMTP replies, not end-to-end report delivery.
 The transaction-stage regression matrix additionally checks MAIL, RCPT, DATA
 command and completed-message rejections, including transient-then-accepted
 termination. It exercises the shared sender with plain SMTP and no attachments;
 it is not separate qualification of report rendering, TLS or report receipt.
+
+### Scheduled reports persist delivery outcomes and bounded retries
+
+`internal/config/report_schedules.go` owns the additive persisted schedule
+outcome fields. The report API distinguishes `running`, `retrying`, `ok`,
+`failed` and `unconfirmed`, records attempt count, next retry, last successful
+run, saved artifact and delivery result, and tolerates older schedules without
+those fields. Server-owned run fields cannot be supplied through schedule
+creation or overwritten through edits. The existing `advanced_reporting`
+capability, pricing, grants and retention limits remain unchanged.
+
+The list response adds per-schedule `delivery_checks`. Enabled email schedules
+require valid current notification configuration. A disabled draft can be
+saved for later. Static configuration checks do not prove connectivity or
+delivery. Every actual run rechecks the current entitlement and delivery
+configuration. Missing email configuration fails rather than masquerading as a
+successful disk fallback, and a requested attachment above the size limit
+fails clearly rather than silently sending a path-only notice.
+
+The scheduler persists the active attempt before external delivery. Safe
+transient email failures use the notification-owned retry verdict with a
+three-attempt budget and delays of one and five minutes. Pending retries
+survive restart. Resource report retries retain the original reporting window.
+Edits, disablement and deletion cancel pending retries. A completed-message
+connection loss, or a previous email run whose completion was not recorded,
+stays unconfirmed without automatic resend. The existing manual run endpoint
+accepts `retry=true` for deliberate recovery. A full schedule read/modify/write
+and execution share the reporting mutex so concurrent operations cannot
+overwrite a completed status or resurrect removed work.
+
+Proofs: `internal/api/report_schedule_delivery_test.go`,
+`internal/api/report_schedules_test.go`,
+`internal/config/report_schedule_delivery_test.go`,
+`internal/notifications/email_delivery_test.go` and the Reports browser receipt.
 
 ### Explicit historical incident archives
 

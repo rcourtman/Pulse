@@ -1215,6 +1215,12 @@ PDF/CSV files are not recovery points, backup artifacts, storage-health
 evidence, restore manifests, or cross-client storage inventory. Storage and
 recovery flows may preserve them as normal tenant data during backup/restore,
 but must not interpret their presence as infrastructure protection.
+Report attempt counts, retry deadlines and delivery outcomes are persisted
+alongside the tenant's schedule definitions. A saved report file is separate
+from an SMTP acceptance record and does not establish recipient receipt.
+Restart recovery preserves pending safe retries and marks an interrupted email
+attempt unconfirmed. These fields are normal tenant configuration data, not
+restore verification or independent proof of an external delivery.
 Commercial downgrade preserves the schedule definitions as inert tenant
 configuration and blocks background generation when `advanced_reporting` is
 absent. Existing generated files outside the lower entitlement become hidden

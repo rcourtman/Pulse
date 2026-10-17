@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -134,7 +135,7 @@ func TestSMTPDeliveryAcceptanceSurvivesCleanup(t *testing.T) {
 			{"auth prose at QUIT", "535 private-cleanup-token", 250, "", 1},
 			{"message rejected", "221 Bye", 550, NotificationFailureRejected, 1},
 			{"temporary message failure", "221 Bye", 451, NotificationFailureServerError, 3},
-			{"missing acceptance", "221 Bye", 0, NotificationFailureUnknown, 3},
+			{"missing acceptance", "221 Bye", 0, NotificationFailureUnknown, 1},
 		} {
 			t.Run(mode+"/"+tc.name, func(t *testing.T) {
 				manager, connections, accepted := acceptanceSMTPServer(t, mode, tc.dataCode, tc.quit)
@@ -145,6 +146,12 @@ func TestSMTPDeliveryAcceptanceSurvivesCleanup(t *testing.T) {
 				}
 				if tc.class != "" && ClassifyNotificationFailureError(err) != tc.class {
 					t.Errorf("failure class = %q; want %q", ClassifyNotificationFailureError(err), tc.class)
+				}
+				if tc.dataCode == 0 {
+					var unconfirmed *EmailAcceptanceUnconfirmedError
+					if !errors.As(err, &unconfirmed) {
+						t.Errorf("missing acceptance must retain typed uncertainty: %v", err)
+					}
 				}
 				if got := connections.Load(); got != tc.attempts {
 					t.Errorf("connections = %d; want %d", got, tc.attempts)
