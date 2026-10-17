@@ -247,7 +247,9 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	}))
 
 	r.mux.HandleFunc("/api/security/tokens/relay-mobile", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureSettingsWriteScope(r.config, w, req) {
+		// The token minted here is bound to the request organization and carries
+		// only the relay mobile scope, so an org manager may issue it.
+		if !ensureOrgSettingsWriteScope(r.config, w, req) {
 			return
 		}
 		if req.Method != http.MethodPost {

@@ -402,18 +402,10 @@ func Run(ctx context.Context, version string) (runErr error) {
 
 	// Initialize reporting engine if not already set by enterprise hooks.
 	// This ensures Pro license holders get reporting even with the standard binary.
-	// Uses a dynamic store getter so the engine always queries the current monitor's
-	// metrics store, even after monitor reloads (which close and recreate the store).
+	// Each report reads only its own organization's metrics store.
 	if reporting.GetEngine() == nil {
-		if store := reloadableMonitor.GetMonitor().GetMetricsStore(); store != nil {
-			engine := reporting.NewReportEngine(reporting.EngineConfig{
-				MetricsStoreGetter: func() *metrics.Store {
-					return reloadableMonitor.GetMonitor().GetMetricsStore()
-				},
-			})
-			reporting.SetEngine(engine)
-			log.Info().Msg("Advanced Infrastructure Reporting (PDF/CSV) initialized")
-		}
+		reporting.SetEngine(newOrgScopedReportEngine(reloadableMonitor.GetMultiTenantMonitor))
+		log.Info().Msg("Advanced Infrastructure Reporting (PDF/CSV) initialized")
 	}
 
 	// WebSocket state ownership is tenant-aware by construction, including default-org state.

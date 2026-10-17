@@ -179,7 +179,7 @@ func TestReportingHandlers_GenerateReport(t *testing.T) {
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 
 	start := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
 	end := time.Now().UTC().Format(time.RFC3339)
@@ -234,7 +234,7 @@ func TestReportingHandlers_AttachesEntitledReportBranding(t *testing.T) {
 	SetLicenseServiceProvider(reportBrandLicenseProvider{service: service})
 	t.Cleanup(func() { SetLicenseServiceProvider(nil) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	handler.SetSystemSettingsStore(reportBrandSettingsStore{settings: &config.SystemSettings{
 		ReportBranding: &config.ReportBrandSettings{
 			DisplayName: "Client Alpha MSP",
@@ -283,7 +283,7 @@ func TestReportingHandlers_StripsWorkspaceReportBrandLogoPath(t *testing.T) {
 	SetLicenseServiceProvider(reportBrandLicenseProvider{service: service})
 	t.Cleanup(func() { SetLicenseServiceProvider(nil) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	handler.SetSystemSettingsStore(reportBrandSettingsStore{settings: &config.SystemSettings{
 		ReportBranding: &config.ReportBrandSettings{
 			DisplayName: "Client Path",
@@ -313,7 +313,7 @@ func TestReportingHandlers_GenerateReport_TrimsOptionalFields(t *testing.T) {
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/reporting?format=pdf&resourceType=node&resourceId=node-1&metricType=+cpu+&title=+Node+report+",
@@ -395,7 +395,7 @@ func TestReportingHandlers_GenerateReport_AcceptsCanonicalAppContainerType(t *te
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "docker-1")
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/reporting?format=pdf&resourceType=app-container&resourceId=docker-1",
@@ -527,7 +527,7 @@ func TestReportingHandlers_GenerateMultiReport_TrimsOptionalFieldsAndUsesCanonic
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "vm-1")
 	body := `{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"csv","metricType":" cpu ","title":" Fleet report "}`
 	req := httptest.NewRequest(http.MethodPost, "/api/reporting/generate-multi", strings.NewReader(body))
 	rr := httptest.NewRecorder()
@@ -561,7 +561,7 @@ func TestReportingHandlers_GenerateReport_UsesCatalogDefaultRangeDuration(t *tes
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	end := time.Date(2026, 3, 25, 15, 0, 0, 0, time.UTC)
 	req := httptest.NewRequest(
 		http.MethodGet,

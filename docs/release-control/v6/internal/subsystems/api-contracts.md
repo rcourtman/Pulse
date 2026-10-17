@@ -13,6 +13,7 @@
     "agent-lifecycle",
     "ai-runtime",
     "cloud-paid",
+    "notifications",
     "patrol-intelligence"
   ]
 }
@@ -859,10 +860,7 @@ failure retention require their own owner result, not source acceptance.
 43. `internal/api/relay_hosted_runtime.go`
 44. `internal/api/ai_hosted_runtime.go`
 45. `internal/api/router_routes_licensing.go`
-46. `internal/api/reporting_inventory_handlers.go`
-    46a. `internal/api/report_schedules.go`
-    46b. `internal/config/report_schedules.go`
-    46c. `internal/notifications/email_enhanced.go`
+46. `internal/api/reporting_inventory_handlers.go`, `internal/api/report_schedules.go`, `internal/config/report_schedules.go` and the notification-owned delivery boundary in `internal/notifications/email_enhanced.go`
 47. `internal/cloudcp/portal/bootstrap.go`
 48. `internal/cloudcp/portal/handlers.go`
 49. `internal/cloudcp/portal/page.go`
@@ -957,6 +955,12 @@ engine's `summary`), typed once as `AlertResolution` in
 `frontend-modern/src/types/api.ts`. Its absence means an ordinary recovery.
 
 ## Shared Boundaries
+
+Scheduled reporting owns report generation, persisted attempts and scheduling.
+Notifications owns SMTP configuration validation, MIME construction, structured
+failure classification and the completed-message acceptance boundary. Report
+retries must consume those shared verdicts rather than parse SMTP prose or
+create another transport retry loop.
 
 - Quick security setup must synchronise the router-captured configurable authorizer when committing the local administrator identity, before establishing its session. The resulting Settings capabilities must grant both administrator-session surfaces and API Access/Pulse Intelligence permission surfaces without requiring a process restart. Permission checks and token scopes remain enforced for other identities.
 
@@ -2782,8 +2786,12 @@ payload shape change when the portal presents compact client rows.
     whether a community build can switch to the Pulse Pro runtime as
     `{available, reason?, currentVersion, version?, installInPlace, docker?}`,
     where `reason` is the closed set `already_pro`, `not_activated`,
-    `not_eligible`, `source_build`, `unsupported_deployment`, `older_release`
-    and `unavailable`, and `docker` reuses the `DockerUpdateCommands` shape.
+    `not_eligible`, `source_build`, `unsupported_deployment`, `older_release`,
+    `prerelease_only` and `unavailable`, and `docker` reuses the
+    `DockerUpdateCommands` shape. `prerelease_only` means the broker's pinned
+    Pro release is a prerelease while the install follows the stable channel,
+    so the answer carries the pinned `version` but offers neither an in-place
+    switch nor Docker commands; rc-channel installs are still offered the pin.
     `POST /api/updates/pro-runtime/apply` (admin plus `settings:write`) takes
     no body, re-checks that an in-place switch is offered (otherwise a plain
     conflict response, with the reason logged rather than returned), runs the
@@ -4242,6 +4250,19 @@ fake persistent loggers, including query non-execution and tenant isolation;
 
 ## Completion Obligations
 
+WebSocket events derived from tenant infrastructure use
+`Hub.BroadcastMessageToTenant` or `Hub.BroadcastToTenant` with the owning org.
+Setup registration uses the setup-token org already bound to the request;
+node changes and test notifications use the request org. Empty org IDs target
+only `default`; custom and alert broadcasts require an explicit org argument.
+`BroadcastMessage` permits
+only the instance heartbeat (`ping`), shared system theme (`settingsUpdate`),
+and server update progress (`update:progress`); other types are refused.
+`internal/websocket/hub_event_boundary_test.go` and
+`internal/api/configapi/tenant_event_delivery_test.go` cover cross-org refusal,
+scoped delivery and default-org compatibility, including the existing custom
+discovery envelope.
+
 ### Docker update agent-attested running verification
 
 In `internal/api/docker_container_action_result.go`, a matching replacement
@@ -5067,16 +5088,34 @@ auto-register mutation boundary.
     `TestActionRoutesRequireExplicitSSOAdminOnSSOOnlyInstance`.
 
     Org-bound settings are the one place an org-scoped session is not
-    withheld. `ensureAdminSession` admits the configured administrator or a
-    manager (owner or admin) of the request's organization inside an
-    org-scoped request, and that rule is `sessionUserHasSettingsAdminPrivileges`
-    for both the route gate and the snapshot. The snapshot records it as
-    `sessionManagesOrg`, never as `sessionIsAdmin`, and it widens only
-    `infrastructureRead`, `availabilityRead` and `reportingRead`, whose routes
-    pass `ensureAdminSession` and whose handlers read that organization's own
-    config and monitor state; `reportingRead` still requires the authorizer's
-    `read` on `nodes`. Every other capability, `detailLevel` and `authUsername`
-    stay instance administration. Before this, a provider opening a client
+    withheld. `ensureAdminSession`, the session check behind `RequireAdmin` and
+    the settings scope helpers, admits only instance administrators (the
+    configured administrator or an instance RBAC admin grant) whatever
+    organization the request names. Routes whose handlers act only on the
+    request organization's own config and monitor state opt into
+    `RequireOrgAdmin` / `ensureOrgAdminSession` / `ensureOrgSettingsWriteScope`,
+    which also admit a manager (owner or admin) of that organization through
+    `sessionUserHasSettingsAdminPrivileges`: agents, nodes, connections,
+    availability, TrueNAS and VMware, agent profiles, install commands, deploy
+    status, configuration transfer, the org-bound relay mobile token, and the
+    `/api/admin/reports/*` routes (catalog, single and multi-resource
+    generation, VM inventory export, schedules). The default is instance
+    administration, so a route that does not opt in fails closed. The snapshot
+    records the org rule as `sessionManagesOrg`, never as `sessionIsAdmin`, and
+    it widens only `infrastructureRead`, `availabilityRead` and `reportingRead`;
+    `reportingRead` still requires the authorizer's `read` on `nodes`.
+    Reporting is org-bound because the report engine resolves the metrics store
+    of the request's `OrgID` (`EngineConfig.MetricsStoreForOrg`) and refuses a
+    request without one, and the handlers reject any resource that is not in
+    the request organization's inventory; scheduled runs resolve their scope
+    against their owning organization's inventory, and Pulse Assistant's
+    `pulse_summarize` reads its executor's organization.
+    `internal/api/reporting_org_scope_test.go`,
+    `TestReportingScheduledRunReadsOnlyItsOwningOrganizationsMetrics` and
+    `pkg/reporting/engine_org_scope_test.go` prove one organization cannot read
+    another's metrics through any report path. Every other capability,
+    `detailLevel` and `authUsername` stay instance administration.
+    `internal/api/org_admin_session_authority_test.go` holds the session matrix. Before this, a provider opening a client
     workspace from the Pulse Account portal arrived as the org owner with every
     capability `false`, so Settings hid the Infrastructure and Reporting pages
     that the routes would have served and the handoff to
@@ -11702,8 +11741,10 @@ routes on mount:
   and `/api/logs/download`;
 - `pulseIntelligenceRead` combines the handler's settings-admin/scope check
   with `RequirePermission(read, settings)` from `/api/settings/ai`;
-- `reportingRead` combines `ensureAdminSession`, `settings:read`, and
-  `RequirePermission(read, nodes)` from `/api/admin/reports/catalog`.
+- `reportingRead` combines `ensureOrgAdminSession` (instance administrators
+  and, on an org-scoped request, managers of that organization),
+  `settings:read`, and `RequirePermission(read, nodes)` from
+  `/api/admin/reports/catalog`.
 
 Those last two must not collapse to `canReadSettings`: a custom authorizer can
 deny the route even when the caller has the settings scope. Reporting's
@@ -12103,14 +12144,71 @@ Attachment delivery through `internal/notifications/email_enhanced.go` uses
 notifications-owned `sendEmailWithOptions`; reporting must not introduce a
 separate retry classification. That transport stops on authentication,
 configuration, or rejection failures and preserves temporary-failure retries.
-Its returned failure retains the structured cause and actual attempt count;
-this does not change report API schemas or prove recipient acceptance.
+Its returned failure retains the structured cause and actual attempt count.
+SMTP acceptance proves only that the configured server accepted the message,
+not that it reached the recipient's inbox.
 `internal/notifications/email_retry_class_test.go` verifies the shared transport
 failure boundary with in-memory SMTP replies, not end-to-end report delivery.
 The transaction-stage regression matrix additionally checks MAIL, RCPT, DATA
 command and completed-message rejections, including transient-then-accepted
 termination. It exercises the shared sender with plain SMTP and no attachments;
 it is not separate qualification of report rendering, TLS or report receipt.
+
+### Scheduled reports persist delivery outcomes and bounded retries
+
+`internal/config/report_schedules.go` owns the additive persisted schedule
+outcome fields. The report API distinguishes `running`, `retrying`, `ok`,
+`failed` and `unconfirmed`, records attempt count, next retry, last successful
+run, saved artifact and delivery result, and tolerates older schedules without
+those fields. Server-owned run fields cannot be supplied through schedule
+creation or overwritten through edits. The existing `advanced_reporting`
+capability, pricing, grants and retention limits remain unchanged.
+
+The list response adds per-schedule `delivery_checks`. Enabled email schedules
+require valid current notification configuration. A disabled draft can be
+saved for later. Static configuration checks do not prove connectivity or
+delivery. Every actual run rechecks the current entitlement and delivery
+configuration. Missing email configuration fails rather than masquerading as a
+successful disk fallback, and a requested attachment above the size limit
+fails clearly rather than silently sending a path-only notice.
+
+The scheduler persists the active attempt before external delivery. Safe
+transient email failures use the notification-owned retry verdict with a
+three-attempt budget and delays of one and five minutes. Pending retries
+survive restart. Resource report retries retain the original reporting window.
+Edits, disablement and deletion cancel pending retries. A completed-message
+connection loss, or a previous email run whose completion was not recorded,
+stays unconfirmed without automatic resend. The existing manual run endpoint
+accepts `retry=true` for deliberate recovery. A full schedule read/modify/write
+and execution share the reporting mutex so concurrent operations cannot
+overwrite a completed status or resurrect removed work.
+
+Proofs: `internal/api/report_schedule_delivery_test.go`,
+`internal/api/report_schedules_test.go`,
+`internal/config/report_schedule_delivery_test.go`,
+`internal/notifications/email_delivery_test.go` and the Reports browser receipt.
+
+The additive `vm_inventory` schedule kind uses the same current-state unified
+VM projection and CSV generator as the on-demand inventory export. It includes
+all VMs in the current organization on each attempt, including newly discovered
+VMs, and has no historical window or performance-report resource cap. Only CSV
+and an empty resource/tag scope are accepted. Weekly/monthly cadence, file
+retention, notification preflight, delivery outcomes, bounded retry, deliberate
+uncertain-delivery recovery and current `advanced_reporting` entitlement checks
+are shared with other file reports. An unavailable organization snapshot fails
+instead of exporting the default organization or pretending an empty inventory
+is a successful read. This changes no prices or existing grants.
+`internal/api/report_schedule_inventory_test.go` covers export equivalence,
+inventories above fifty VMs, later discovery, validation, retry after reload and
+unavailable-organization/current-entitlement failure.
+The monitor-owned canonical snapshot read refreshes its shared resource
+projection for unattended consumers. Neither export nor scheduling calls the
+frontend state endpoint to make inventory appear.
+`Router.SetMultiTenantMonitor` also replaces reporting's manager after runtime
+reload. Reporting captures that dependency atomically for each read, so exports,
+schedule persistence and retention checks do not keep using a stopped monitor.
+Clearing the dependency fails closed. `reporting_monitor_reload_test.go` covers
+replacement inventory/persistence and reads overlapping replacement.
 
 ### Explicit historical incident archives
 

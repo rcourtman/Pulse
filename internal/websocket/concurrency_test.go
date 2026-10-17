@@ -27,7 +27,7 @@ func TestBroadcastAlertConcurrentMutation(t *testing.T) {
 			select {
 			case <-done:
 				return
-			case _, ok := <-hub.broadcast:
+			case _, ok := <-hub.tenantBroadcast:
 				if !ok {
 					return
 				}
@@ -71,7 +71,7 @@ func TestBroadcastAlertConcurrentMutation(t *testing.T) {
 			mu.Lock()
 			alertCopy := alert.Clone()
 			mu.Unlock()
-			hub.BroadcastAlert(alertCopy)
+			hub.BroadcastAlertToTenant("default", alertCopy)
 		}
 	}()
 

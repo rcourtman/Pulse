@@ -1,22 +1,18 @@
-import { For, JSX, Show } from 'solid-js';
+import { For, Show, Suspense, lazy } from 'solid-js';
 import FileText from 'lucide-solid/icons/file-text';
 import Download from 'lucide-solid/icons/download';
 import BarChart from 'lucide-solid/icons/bar-chart';
 import TableProperties from 'lucide-solid/icons/table-properties';
 import Plus from 'lucide-solid/icons/plus';
-import EllipsisVertical from 'lucide-solid/icons/ellipsis-vertical';
 import Pencil from 'lucide-solid/icons/pencil';
 import Play from 'lucide-solid/icons/play';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Trash2 from 'lucide-solid/icons/trash-2';
-import Save from 'lucide-solid/icons/save';
-import X from 'lucide-solid/icons/x';
 import OperationsPanel from '@/components/Settings/OperationsPanel';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
-import { formControl, formField, formHelpText, formLabel } from '@/components/shared/Form';
+import { formControl } from '@/components/shared/Form';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { FormSelect } from '@/components/shared/FormSelect';
 import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
 import { useReportingPanelState } from '@/components/Settings/useReportingPanelState';
 import type { ReportingFormat } from '@/components/Settings/reportingCatalogModel';
@@ -25,47 +21,25 @@ import {
   formatReportScheduleTime,
   reportScheduleCadenceLabel,
   reportScheduleDeliveryLabel,
-  reportScheduleKindLabel,
   reportScheduleLastRunLabel,
+  reportScheduleOutcomeDetail,
+  reportScheduleRunActionLabel,
   reportScheduleScopeLabel,
-  type ReportScheduleKind,
+  type ReportSchedule,
 } from '@/components/Settings/reportingSchedulesModel';
 import { ResourcePicker } from './ResourcePicker';
+import { ReportingFormField as FormField } from './ReportingFormField';
 
 const REPORTING_FORMAT_ICONS: Record<ReportingFormat, typeof FileText> = {
   csv: BarChart,
   pdf: FileText,
 };
 
-interface FormFieldProps {
-  label: string;
-  helpText?: string;
-  children: JSX.Element;
-}
-
-function FormField(props: FormFieldProps) {
-  return (
-    <div class={formField} role="group" aria-label={props.label}>
-      <span class={formLabel}>{props.label}</span>
-      {props.children}
-      {props.helpText && <span class={formHelpText}>{props.helpText}</span>}
-    </div>
-  );
-}
-
-const WEEKDAY_OPTIONS = [
-  'monday',
-  'tuesday',
-  'wednesday',
-  'thursday',
-  'friday',
-  'saturday',
-  'sunday',
-];
+const ReportScheduleEditor = lazy(() => import('./ReportScheduleEditor'));
 
 export function ReportingPanel() {
+  const state = useReportingPanelState();
   const {
-    closeScheduleForm,
     deleteReportSchedule,
     deletingScheduleID,
     exportingInventory,
@@ -88,17 +62,11 @@ export function ReportingPanel() {
     reloadReportSchedules,
     runReportScheduleNow,
     runningScheduleID,
-    saveReportSchedule,
-    savingSchedule,
-    scheduleForm,
     scheduleFormOpen,
-    scheduleResources,
     selectedResources,
     setFormat,
     setMetricType,
     setRange,
-    setScheduleKind,
-    setScheduleResources,
     setSelectedResources,
     setTitle,
     showUpgradePrompts,
@@ -106,15 +74,14 @@ export function ReportingPanel() {
     startEditSchedule,
     title,
     toggleReportSchedule,
-    updateScheduleForm,
     upgradeDestination,
-  } = useReportingPanelState();
+  } = state;
+  const visibleOutcome = (schedule: ReportSchedule): ReportSchedule =>
+    runningScheduleID() === schedule.id
+      ? { ...schedule, last_run_status: 'running', last_error: '' }
+      : schedule;
 
   const performanceReport = () => reportingCatalog()?.performanceReport ?? null;
-  const isDigestForm = () => scheduleForm().kind === 'patrol_digest';
-  // Offer the Patrol weekly summary only while Patrol can run; an existing
-  // digest schedule still shows its type so it can be edited after AI is off.
-  const showReportTypeSelect = () => patrolDigestAvailable() || isDigestForm();
   const inventoryDefinition = () => reportingCatalog()?.vmInventoryExport ?? null;
   const lockedState = () => {
     const catalog = reportingCatalog();
@@ -315,8 +282,8 @@ export function ReportingPanel() {
                 <div class="space-y-1">
                   <h4 class="text-base font-semibold text-base-content">Scheduled reports</h4>
                   <p class="text-sm text-muted">
-                    Send recurring client performance reports using the same resource scope and
-                    branding as generated reports.
+                    Schedule performance reports or a CSV of the current VM inventory, delivered by
+                    email or saved on this server.
                     <Show when={patrolDigestAvailable()}>
                       {' '}
                       A Patrol weekly summary can also be emailed: what Patrol checked, found,
@@ -341,6 +308,12 @@ export function ReportingPanel() {
                 </div>
               </div>
 
+              <Show when={scheduleFormOpen()}>
+                <Suspense fallback={<p class="text-sm text-muted">Loading schedule editor...</p>}>
+                  <ReportScheduleEditor state={state} />
+                </Suspense>
+              </Show>
+
               <Show when={reportSchedulesLoading()}>
                 <p class="text-sm text-muted">Loading report schedules...</p>
               </Show>
@@ -351,435 +324,169 @@ export function ReportingPanel() {
               <Show
                 when={reportSchedules().length > 0}
                 fallback={
-                  <div class="flex flex-col gap-3 border border-dashed border-base-300 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <p class="text-sm text-muted">No scheduled reports are configured yet.</p>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      class="gap-2"
-                      onClick={startCreateSchedule}
-                    >
-                      <Plus size={16} />
-                      Create schedule
-                    </Button>
-                  </div>
+                  <Show when={!reportSchedulesLoading() && !reportSchedulesError()}>
+                    <div class="flex flex-col gap-3 border border-dashed border-base-300 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <p class="text-sm text-muted">No scheduled reports are configured yet.</p>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        class="gap-2"
+                        onClick={startCreateSchedule}
+                      >
+                        <Plus size={16} />
+                        Create schedule
+                      </Button>
+                    </div>
+                  </Show>
                 }
               >
-                <div class="table-scroll-shell overflow-x-auto rounded-md border border-base-300">
-                  <table class="w-full min-w-0 table-fixed text-left text-sm">
-                    <thead class="border-b border-base-300 bg-base-200/50 text-xs uppercase text-muted">
-                      <tr>
-                        <th class="w-[56%] px-3 py-2 font-semibold sm:w-[18%]">Name</th>
-                        <th class="hidden w-[16%] px-3 py-2 font-semibold sm:table-cell">
-                          Cadence
-                        </th>
-                        <th class="report-schedule-detail-column w-[14%] px-3 py-2 font-semibold">
-                          Scope
-                        </th>
-                        <th class="report-schedule-detail-column w-[14%] px-3 py-2 font-semibold">
-                          Delivery
-                        </th>
-                        <th class="hidden w-[16%] px-3 py-2 font-semibold sm:table-cell">
-                          Last run
-                        </th>
-                        <th class="w-[16%] px-3 py-2 font-semibold sm:w-[8%]">Enabled</th>
-                        <th class="w-[28%] px-3 py-2 text-right font-semibold sm:w-[14%]">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-base-300">
-                      <For each={reportSchedules()}>
-                        {(schedule) => (
-                          <tr>
-                            <td
-                              class="truncate px-3 py-2 font-medium text-base-content"
-                              title={schedule.name}
-                            >
-                              {schedule.name}
-                              <span class="mt-0.5 block truncate text-xs font-normal text-muted sm:hidden">
-                                {reportScheduleCadenceLabel(schedule)}
-                              </span>
-                            </td>
-                            <td
-                              class="hidden truncate px-3 py-2 text-muted sm:table-cell"
-                              title={reportScheduleCadenceLabel(schedule)}
-                            >
+                <ul
+                  class="divide-y divide-base-300 rounded-md border border-base-300 text-sm"
+                  aria-label="Scheduled reports"
+                >
+                  <For each={reportSchedules()}>
+                    {(schedule) => (
+                      <li class="space-y-3 p-3">
+                        <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-3">
+                          <div class="min-w-0 whitespace-normal break-words">
+                            <div class="font-medium text-base-content">{schedule.name}</div>
+                            <div class="mt-1 text-xs text-muted">
                               {reportScheduleCadenceLabel(schedule)}
-                            </td>
-                            <td
-                              class="report-schedule-detail-column truncate px-3 py-2 text-muted"
-                              title={reportScheduleScopeLabel(schedule)}
+                            </div>
+                            <div class="mt-1 text-sm">
+                              {reportScheduleLastRunLabel(visibleOutcome(schedule))}
+                            </div>
+                            <Show when={schedule.last_run_at}>
+                              <div class="mt-0.5 text-xs text-muted">
+                                {formatReportScheduleTime(schedule.last_run_at)}
+                              </div>
+                            </Show>
+                          </div>
+                          <label class="flex min-h-11 cursor-pointer flex-col items-center gap-2 text-xs text-muted">
+                            Enabled
+                            <input
+                              type="checkbox"
+                              class="h-4 w-4"
+                              checked={schedule.enabled}
+                              aria-label={`Enable ${schedule.name}`}
+                              onChange={() => toggleReportSchedule(schedule)}
+                            />
+                          </label>
+                          <div class="w-20">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              class="min-h-11 w-full gap-1 px-1"
+                              aria-label={`${reportScheduleRunActionLabel(schedule)} ${schedule.name} now`}
+                              isLoading={runningScheduleID() === schedule.id}
+                              disabled={
+                                runningScheduleID() !== '' || schedule.last_run_status === 'running'
+                              }
+                              onClick={() => runReportScheduleNow(schedule)}
                             >
-                              {reportScheduleScopeLabel(schedule)}
-                            </td>
-                            <td
-                              class="report-schedule-detail-column truncate px-3 py-2 text-muted"
-                              title={reportScheduleDeliveryLabel(schedule)}
-                            >
-                              {reportScheduleDeliveryLabel(schedule)}
-                            </td>
-                            <td
-                              class="hidden truncate px-3 py-2 text-muted sm:table-cell"
-                              title={schedule.last_error || ''}
-                            >
-                              <div class="truncate">{reportScheduleLastRunLabel(schedule)}</div>
-                              <Show when={schedule.last_run_at}>
-                                <div class="truncate text-xs text-muted">
-                                  {formatReportScheduleTime(schedule.last_run_at)}
-                                </div>
+                              <Show when={runningScheduleID() !== schedule.id}>
+                                <Play size={15} />
                               </Show>
-                            </td>
-                            <td class="px-3 py-2">
-                              <label class="inline-flex items-center">
-                                <input
-                                  type="checkbox"
-                                  class="h-4 w-4"
-                                  checked={schedule.enabled}
-                                  onChange={() => toggleReportSchedule(schedule)}
-                                />
-                              </label>
-                            </td>
-                            <td class="px-3 py-2">
-                              <details class="group sm:hidden">
-                                <summary
-                                  class="ml-auto flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-md text-base-content hover:bg-surface-hover"
-                                  aria-label={`Actions for ${schedule.name}`}
-                                >
-                                  <EllipsisVertical size={18} />
-                                </summary>
-                                <div class="mt-1 flex flex-col gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    class="min-h-11 w-full gap-2 px-2"
-                                    aria-label={`Run ${schedule.name} now`}
-                                    isLoading={runningScheduleID() === schedule.id}
-                                    disabled={runningScheduleID() !== ''}
-                                    onClick={() => runReportScheduleNow(schedule)}
-                                  >
-                                    <Show when={runningScheduleID() !== schedule.id}>
-                                      <Play size={15} />
-                                    </Show>
-                                    Run
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    class="min-h-11 w-full gap-2 px-2"
-                                    aria-label={`Edit ${schedule.name}`}
-                                    onClick={() => startEditSchedule(schedule)}
-                                  >
-                                    <Pencil size={15} />
-                                    Edit
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    class="min-h-11 w-full gap-2 px-2"
-                                    aria-label={`Delete ${schedule.name}`}
-                                    isLoading={deletingScheduleID() === schedule.id}
-                                    disabled={deletingScheduleID() !== ''}
-                                    onClick={() => deleteReportSchedule(schedule)}
-                                  >
-                                    <Trash2 size={15} />
-                                    Delete
-                                  </Button>
-                                </div>
-                              </details>
-                              <div class="hidden justify-end gap-1 sm:flex">
+                              {reportScheduleRunActionLabel(schedule)}
+                            </Button>
+                          </div>
+                        </div>
+                        <div
+                          class="space-y-1 whitespace-normal break-words text-xs text-muted"
+                          aria-live="polite"
+                        >
+                          <Show when={reportScheduleOutcomeDetail(visibleOutcome(schedule))}>
+                            <p
+                              class={
+                                visibleOutcome(schedule).last_run_status === 'failed' ||
+                                visibleOutcome(schedule).last_run_status === 'unconfirmed'
+                                  ? 'text-warning'
+                                  : ''
+                              }
+                            >
+                              {reportScheduleOutcomeDetail(visibleOutcome(schedule))}
+                            </p>
+                          </Show>
+                          <Show when={schedule.delivery_check && !schedule.delivery_check.ready}>
+                            <p class="text-warning">
+                              {schedule.delivery_check?.message}{' '}
+                              <a href="/alerts/notifications" class="underline">
+                                Email settings
+                              </a>
+                            </p>
+                          </Show>
+                          <Show when={schedule.retry_at && schedule.enabled}>
+                            <p>
+                              Automatic retry: {formatReportScheduleTime(schedule.retry_at)}.{' '}
+                              {schedule.run_attempts} of 3 attempts used.
+                            </p>
+                          </Show>
+                          <Show when={schedule.enabled && schedule.next_run_at}>
+                            <p>
+                              Next scheduled report:{' '}
+                              {formatReportScheduleTime(schedule.next_run_at)}
+                            </p>
+                          </Show>
+                          <details>
+                            <summary
+                              class="cursor-pointer py-2"
+                              aria-label={`Details for ${schedule.name}`}
+                            >
+                              Report details
+                            </summary>
+                            <div class="space-y-2 pb-1 pt-2">
+                              <p>
+                                <span>{reportScheduleScopeLabel(schedule)}</span> ·{' '}
+                                <span>{reportScheduleDeliveryLabel(schedule)}</span> ·{' '}
+                                {schedule.format.toUpperCase()}
+                              </p>
+                              <Show when={(schedule.delivery.to?.length ?? 0) > 0}>
+                                <p class="break-all">
+                                  Recipients: {schedule.delivery.to?.join(', ')}
+                                </p>
+                              </Show>
+                              <Show when={schedule.last_success_at}>
+                                <p>
+                                  Last successful run:{' '}
+                                  {formatReportScheduleTime(schedule.last_success_at)}
+                                </p>
+                              </Show>
+                              <Show when={schedule.last_report_path}>
+                                <p class="break-all">
+                                  Last saved report on this server: {schedule.last_report_path}
+                                </p>
+                              </Show>
+                              <div class="flex flex-wrap gap-2 pt-1">
                                 <Button
-                                  variant="ghost"
+                                  variant="secondary"
                                   size="sm"
-                                  class="gap-1 px-2"
-                                  title="Run now"
-                                  aria-label={`Run ${schedule.name} now`}
-                                  isLoading={runningScheduleID() === schedule.id}
-                                  disabled={runningScheduleID() !== ''}
-                                  onClick={() => runReportScheduleNow(schedule)}
-                                >
-                                  <Show when={runningScheduleID() !== schedule.id}>
-                                    <Play size={15} />
-                                  </Show>
-                                  Run
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="gap-1 px-2"
-                                  title="Edit"
+                                  class="min-h-11 gap-2"
                                   aria-label={`Edit ${schedule.name}`}
                                   onClick={() => startEditSchedule(schedule)}
                                 >
                                   <Pencil size={15} />
-                                  Edit
+                                  Edit schedule
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  class="gap-1 px-2"
-                                  title="Delete"
+                                  class="min-h-11 gap-2"
                                   aria-label={`Delete ${schedule.name}`}
                                   isLoading={deletingScheduleID() === schedule.id}
                                   disabled={deletingScheduleID() !== ''}
                                   onClick={() => deleteReportSchedule(schedule)}
                                 >
                                   <Trash2 size={15} />
-                                  Delete
+                                  Delete schedule
                                 </Button>
                               </div>
-                            </td>
-                          </tr>
-                        )}
-                      </For>
-                    </tbody>
-                  </table>
-                </div>
-              </Show>
-
-              <Show when={scheduleFormOpen()}>
-                <section class="space-y-4 border-y border-base-300 py-4">
-                  <Show when={showReportTypeSelect()}>
-                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <FormSelect
-                        label="Report type"
-                        value={scheduleForm().kind}
-                        onChange={(e) =>
-                          setScheduleKind(e.currentTarget.value as ReportScheduleKind)
-                        }
-                        help={
-                          isDigestForm()
-                            ? 'Emails what Patrol checked, found, fixed, and spent over the last seven days. Nothing is saved to disk.'
-                            : 'A performance report for the resources you pick, as a PDF or CSV.'
-                        }
-                      >
-                        <option value="resources">{reportScheduleKindLabel('resources')}</option>
-                        <option value="patrol_digest">
-                          {reportScheduleKindLabel('patrol_digest')}
-                        </option>
-                      </FormSelect>
-                    </div>
-                  </Show>
-                  <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <FormField label="Schedule name">
-                      <input
-                        aria-label="Schedule name"
-                        type="text"
-                        class={formControl}
-                        value={scheduleForm().name}
-                        onInput={(e) => updateScheduleForm({ name: e.currentTarget.value })}
-                        placeholder={
-                          isDigestForm() ? 'Patrol weekly summary' : 'Monthly client report'
-                        }
-                      />
-                    </FormField>
-                    <FormField label="Timezone">
-                      <input
-                        aria-label="Timezone"
-                        type="text"
-                        class={formControl}
-                        value={scheduleForm().timezone}
-                        onInput={(e) => updateScheduleForm({ timezone: e.currentTarget.value })}
-                        placeholder="Europe/London"
-                      />
-                    </FormField>
-                  </div>
-
-                  <div
-                    class={
-                      isDigestForm()
-                        ? 'grid grid-cols-1 gap-4 md:grid-cols-2'
-                        : 'grid grid-cols-1 gap-4 md:grid-cols-4'
-                    }
-                  >
-                    <Show when={!isDigestForm()}>
-                      <FormSelect
-                        label="Cadence"
-                        value={scheduleForm().cadenceType}
-                        onChange={(e) =>
-                          updateScheduleForm({
-                            cadenceType: e.currentTarget.value as 'monthly' | 'weekly',
-                          })
-                        }
-                      >
-                        <option value="monthly">Monthly</option>
-                        <option value="weekly">Weekly</option>
-                      </FormSelect>
-                    </Show>
-                    <Show
-                      when={scheduleForm().cadenceType === 'monthly' && !isDigestForm()}
-                      fallback={
-                        <FormSelect
-                          label="Weekday"
-                          value={scheduleForm().weekday}
-                          onChange={(e) => updateScheduleForm({ weekday: e.currentTarget.value })}
-                        >
-                          <For each={WEEKDAY_OPTIONS}>
-                            {(day) => (
-                              <option value={day}>{day[0].toUpperCase() + day.slice(1)}</option>
-                            )}
-                          </For>
-                        </FormSelect>
-                      }
-                    >
-                      <FormField label="Day of month">
-                        <input
-                          aria-label="Day of month"
-                          type="number"
-                          min="1"
-                          max="28"
-                          class={formControl}
-                          value={scheduleForm().dayOfMonth}
-                          onInput={(e) =>
-                            updateScheduleForm({ dayOfMonth: Number(e.currentTarget.value) })
-                          }
-                        />
-                      </FormField>
-                    </Show>
-                    <FormField label="Time">
-                      <input
-                        aria-label="Time"
-                        type="time"
-                        class={formControl}
-                        value={scheduleForm().time}
-                        onInput={(e) => updateScheduleForm({ time: e.currentTarget.value })}
-                      />
-                    </FormField>
-                    <Show when={!isDigestForm()}>
-                      <FormSelect
-                        label="Format"
-                        value={scheduleForm().format}
-                        onChange={(e) =>
-                          updateScheduleForm({ format: e.currentTarget.value as ReportingFormat })
-                        }
-                      >
-                        <option value="pdf">PDF</option>
-                        <option value="csv">CSV</option>
-                      </FormSelect>
-                    </Show>
-                  </div>
-
-                  <Show when={!isDigestForm()}>
-                    <FormField
-                      label="Resources"
-                      helpText="Use explicit resources, tags, or both. Scheduled reports use the previous reporting boundary."
-                    >
-                      <ResourcePicker
-                        maxSelection={performanceReport()?.multiResourceMax}
-                        selected={scheduleResources}
-                        onSelectionChange={setScheduleResources}
-                      />
-                    </FormField>
-                  </Show>
-
-                  <Show when={!isDigestForm()}>
-                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      <FormField label="Tag filter" helpText="Comma-separated tags">
-                        <input
-                          aria-label="Tag filter"
-                          type="text"
-                          class={formControl}
-                          value={scheduleForm().tagFilter}
-                          onInput={(e) => updateScheduleForm({ tagFilter: e.currentTarget.value })}
-                          placeholder="production, customer-facing"
-                        />
-                      </FormField>
-                      <FormSelect
-                        label="Delivery"
-                        value={scheduleForm().deliveryMethod}
-                        onChange={(e) =>
-                          updateScheduleForm({
-                            deliveryMethod: e.currentTarget.value as 'email' | 'disk',
-                          })
-                        }
-                      >
-                        <option value="email">Email recipients</option>
-                        <option value="disk">Save to disk</option>
-                      </FormSelect>
-                      <FormField label="Retention">
-                        <input
-                          aria-label="Retention"
-                          type="number"
-                          min="1"
-                          max="120"
-                          class={formControl}
-                          value={scheduleForm().retentionCount}
-                          onInput={(e) =>
-                            updateScheduleForm({ retentionCount: Number(e.currentTarget.value) })
-                          }
-                        />
-                      </FormField>
-                    </div>
-                  </Show>
-
-                  <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <FormField
-                      label="Email recipients"
-                      helpText="Blank uses the existing email notification recipients"
-                    >
-                      <input
-                        aria-label="Email recipients"
-                        type="text"
-                        class={formControl}
-                        value={scheduleForm().recipients}
-                        onInput={(e) => updateScheduleForm({ recipients: e.currentTarget.value })}
-                        placeholder="client@example.com, ops@example.com"
-                        disabled={scheduleForm().deliveryMethod !== 'email'}
-                      />
-                    </FormField>
-                    <div class="grid grid-cols-1 gap-3 pt-6 sm:grid-cols-3">
-                      <label class="inline-flex items-center gap-2 text-sm text-muted">
-                        <input
-                          type="checkbox"
-                          checked={scheduleForm().enabled}
-                          onChange={(e) => updateScheduleForm({ enabled: e.currentTarget.checked })}
-                        />
-                        Enabled
-                      </label>
-                      <Show when={!isDigestForm()}>
-                        <label class="inline-flex items-center gap-2 text-sm text-muted">
-                          <input
-                            type="checkbox"
-                            checked={scheduleForm().attach}
-                            onChange={(e) =>
-                              updateScheduleForm({ attach: e.currentTarget.checked })
-                            }
-                            disabled={scheduleForm().deliveryMethod !== 'email'}
-                          />
-                          Attach
-                        </label>
-                        <label class="inline-flex items-center gap-2 text-sm text-muted">
-                          <input
-                            type="checkbox"
-                            checked={scheduleForm().saveToDisk}
-                            onChange={(e) =>
-                              updateScheduleForm({ saveToDisk: e.currentTarget.checked })
-                            }
-                          />
-                          Save copy
-                        </label>
-                      </Show>
-                    </div>
-                  </div>
-
-                  <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                    <Button variant="secondary" size="md" class="gap-2" onClick={closeScheduleForm}>
-                      <X size={16} />
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="md"
-                      class="gap-2"
-                      isLoading={savingSchedule()}
-                      disabled={savingSchedule()}
-                      onClick={saveReportSchedule}
-                    >
-                      <Save size={16} />
-                      Save schedule
-                    </Button>
-                  </div>
-                </section>
+                            </div>
+                          </details>
+                        </div>
+                      </li>
+                    )}
+                  </For>
+                </ul>
               </Show>
             </section>
 

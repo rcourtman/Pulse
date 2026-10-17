@@ -166,12 +166,22 @@ const isProxmoxGuest = (resource: Resource): boolean =>
   (resource.platformType === 'proxmox-pve' ||
     resource.platformScopes?.includes('proxmox-pve') === true);
 
+// The guest kind decides whether a Proxmox listing reading counts cache, the
+// same distinction the Workloads drawer makes.
 const memoryReading = (resource: Resource) =>
   getMemoryObservationPresentation(
     resource.memory ? finiteMetric(getMemoryPercent(resource)) : undefined,
     resource.memory?.observation,
     isProxmoxGuest(resource),
-    { agentStale: resource.agent?.stale === true },
+    {
+      agentStale: resource.agent?.stale === true,
+      guestKind:
+        resource.type === 'vm'
+          ? 'vm'
+          : resource.type === 'system-container'
+            ? 'container'
+            : undefined,
+    },
   );
 
 const guestDiskReading = (resource: Resource) => {

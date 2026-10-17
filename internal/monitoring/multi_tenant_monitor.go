@@ -220,6 +220,14 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 		return nil, fmt.Errorf("failed to get persistence for org %s: %w", orgID, err)
 	}
 	tenantConfig.DataPath = tenantPersistence.GetConfigDir()
+	if orgID != "default" {
+		// PULSE_METRICS_DB_PATH names one database file. Inherited by every
+		// tenant it would put all organizations' series in the same store, so
+		// the override applies to the default org only. Other orgs keep
+		// metrics.db under their own data directory, where org deletion also
+		// removes it.
+		tenantConfig.MetricsDBPath = ""
+	}
 
 	// Load tenant-specific nodes from <orgDir>/nodes.enc
 	nodesConfig, err := tenantPersistence.LoadNodesConfig()

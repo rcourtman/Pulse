@@ -1453,6 +1453,12 @@ PDF/CSV files are not recovery points, backup artifacts, storage-health
 evidence, restore manifests, or cross-client storage inventory. Storage and
 recovery flows may preserve them as normal tenant data during backup/restore,
 but must not interpret their presence as infrastructure protection.
+Report attempt counts, retry deadlines and delivery outcomes are persisted
+alongside the tenant's schedule definitions. A saved report file is separate
+from an SMTP acceptance record and does not establish recipient receipt.
+Restart recovery preserves pending safe retries and marks an interrupted email
+attempt unconfirmed. These fields are normal tenant configuration data, not
+restore verification or independent proof of an external delivery.
 Commercial downgrade preserves the schedule definitions as inert tenant
 configuration and blocks background generation when `advanced_reporting` is
 absent. Existing generated files outside the lower entitlement become hidden
@@ -3534,6 +3540,13 @@ withheld from every org-scoped session, so an org manager is not offered
 instance recovery or configuration transfer. See the api-contracts contract,
 rule 35.
 
+Superseded in part: `reportingRead` was briefly withheld from org managers
+while report generation read the instance's default metrics store. Reports now
+read only the request organization's metrics store and refuse resources outside
+its inventory, so org managers again hold `reportingRead` alongside
+`infrastructureRead` and `availabilityRead`, and the reporting routes use
+`ensureOrgAdminSession`.
+
 ### TLS verification preference survives node re-registration
 
 A PVE or PBS node whose operator disabled certificate verification keeps that
@@ -5243,6 +5256,10 @@ whose nested VM inventory definition owns panel copy, stable column schema,
 and filename prefix. Storage and recovery flows may read those facts when they
 need fleet context, but they must not fork their own reporting or inventory
 column contract.
+The API-owned `vm_inventory` schedule kind reuses that same exporter and the
+reporting-owned email/disk delivery and retry path. Current-state inventory
+scheduling does not add storage history, change retention entitlements or
+move generated artifacts out of their organization-local reporting storage.
 That catalog route is intentionally metadata-readable without the
 `advanced_reporting` feature gate so locked admin reporting shells can stay on
 the same API-owned definition before upsell; storage- and recovery-adjacent
@@ -7320,3 +7337,18 @@ It adds no store, persisted shape, backup, restore or migration path and does
 not turn chart history into recovery-readiness authority. Separate routers
 retain separate services. Concurrent publication and tenant-isolation proof
 remain owned by api-contracts.
+
+### Inventory notifications preserve the request organization
+
+The shared node handlers scope `node_deleted`, `nodes_updated` and post-edit
+`discovery_update` messages to the request organization. Setup handlers also
+scope auto-registration and unregistration events and their cached discovery
+refreshes to the authorized request organization, including its setup token
+binding. The registered test-notification route sends its synthetic
+`node_auto_registered` event to that same request organization. An empty
+organization ID maps to the default tenant.
+Storage and recovery consumers receive these inventory refresh signals within
+their own tenant; discovery results and successful node mutations do not
+establish backup coverage, protection freshness, restore readiness or recovery
+point evidence. The delivery change adds no persisted storage or recovery
+state and gives these events no storage mutation authority.

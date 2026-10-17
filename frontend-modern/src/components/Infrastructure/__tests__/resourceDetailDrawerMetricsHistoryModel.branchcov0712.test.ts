@@ -89,6 +89,47 @@ describe('canonical drawer History honours selected guest observation provenance
     },
   );
 
+  it('qualifies a retained Proxmox listing reading by the guest kind', () => {
+    const listing = (type: 'vm' | 'system-container') => {
+      const value = { ...resource('last-known'), type };
+      value.memory!.observation!.source = 'cluster-resources';
+      return getResourceMetricsHistoryDeferredMetrics(value).memory.message;
+    };
+    // A QEMU listing counts the guest's cache; a container's has it removed.
+    expect(listing('vm')).toContain('cached memory the VM can reuse');
+    expect(listing('system-container')).not.toContain('cached memory');
+    expect(listing('system-container')).toContain('Source: Proxmox.');
+  });
+
+  it.each(['vm', 'system-container'] as const)(
+    'composes %s cache classification with stopped-agent freshness',
+    (type) => {
+      for (const source of ['agent', 'cluster-resources', 'status-mem', 'guest-agent-meminfo']) {
+        const value = { ...resource('current'), type, agent: { stale: true } };
+        value.memory!.observation!.source = source;
+        const original = structuredClone(value);
+        const current = getResourceMetricsHistoryCurrentMetrics(value).memory;
+        const deferred = getResourceMetricsHistoryDeferredMetrics(value).memory;
+        if (source === 'agent') {
+          expect(current).toBeUndefined();
+          expect(deferred.lastKnownValue).toBe(25);
+          expect(deferred.message).toContain('stopped reporting');
+          expect(deferred.message).toContain('2026-10-04 12:00:00 UTC');
+        } else {
+          expect(current).toBe(25);
+          expect(deferred).toBeUndefined();
+          value.memory!.observation!.state = 'last-known';
+          const retained = getResourceMetricsHistoryDeferredMetrics(value).memory.message;
+          const includesCache = source === 'status-mem' || (source === 'cluster-resources' && type === 'vm');
+          expect(retained.includes('cached memory')).toBe(includesCache);
+          expect(retained).not.toContain('stopped reporting');
+          value.memory!.observation!.state = 'current';
+        }
+        expect(value).toEqual(original);
+      }
+    },
+  );
+
   it.each([-1, 101, NaN, Infinity])('withdraws invalid retained memory %s', (value) => {
     expect(
       getResourceMetricsHistoryDeferredMetrics(resource('last-known', value)).memory.lastKnownValue,

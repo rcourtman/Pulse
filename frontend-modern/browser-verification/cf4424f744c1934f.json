@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "1a3e62d33559aa772551cf09eeef75c2391d40e4",
+  "verified_at": "2026-10-17T00:09:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "6a8416cbb3ab30264d197ea40926c72e8a73d738d7b09e11388f7a6f2e52a4f5"
+  },
+  "routes": [
+    "/settings/infrastructure?add=agent"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production vite builds of origin/main 9fb704e0e8 with and without this change, each served by vite preview and proxied to the pulse-dev :7699 mock-estate rig, signed in through /api/login",
+    "Add Pulse Agent dialog (Install on a host) after generating an install token and dismissing the API token ready modal; install commands unlocked",
+    "Check installation status result for a found but not-reporting agent (Not reporting yet / offline badges, Agent version 6.3.0) with Last seen one minute before the page clock"
+  ],
+  "interactions": [
+    "Installed the Playwright page clock, clicked Generate token, Dismiss, typed a hostname into the lookup field and clicked Check status",
+    "Jumped the page clock forward two hours with no navigation, refetch or other input",
+    "With this change Last seen advanced '1 min ago' -> '2 hours ago' at 1440 and 390; the same steps on the main build left it at '1 min ago' at both widths"
+  ],
+  "browser": {
+    "client": "1.62.1",
+    "engine": "Chromium",
+    "version": "151.0.7922.34"
+  },
+  "scope": "Real authenticated app against the synthetic mock rig. The install-token POST and the agent lookup response were fulfilled with page.route (no rig agent is in the found-but-not-reporting state, and the stub avoids minting a real token on the rig); everything else came from the rig."
+}

@@ -1595,7 +1595,7 @@ describe('GuestRow', () => {
           guest: makeGuest({
             type: 'lxc',
             memory: {
-              ...observation('current', observedAt, 'cluster-resources'),
+              ...observation('current', observedAt, 'status-mem'),
               used: 0.9 * 4294967296,
               usage: 90,
             },
@@ -1661,7 +1661,7 @@ describe('GuestRow', () => {
         const { container } = renderGuestRow({
           guest: makeGuest({
             type: 'lxc',
-            memory: observation('current', observedAt, 'cluster-resources'),
+            memory: observation('current', observedAt, 'status-mem'),
           }),
           metricDisplayMode: mode,
           visibleColumnIds: ['name', 'memory'],
@@ -1673,6 +1673,28 @@ describe('GuestRow', () => {
           expect(message).toContain('cached memory the container can reuse');
           expect(message).toContain('Pulse agent in the container');
           expect(message).not.toContain('QEMU');
+        }
+      });
+
+      it(`reads a container's own ${mode} listing value as cache-excluded`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'lxc',
+            memory: {
+              ...observation('current', observedAt, 'cluster-resources'),
+              used: 0.9 * 4294967296,
+              usage: 90,
+            },
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        expect(container.querySelector(noticeSelector)).toBeNull();
+        expect(container.querySelector('[data-workload-col="memory"]')).not.toHaveTextContent(
+          /cache/i,
+        );
+        if (mode === 'bars') {
+          expect(screen.getByTestId('memory-bar')).not.toHaveAttribute('data-reading-message');
         }
       });
 

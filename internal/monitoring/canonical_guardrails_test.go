@@ -690,6 +690,19 @@ func TestMetricsStoreRuntimeOverridesStayOnMonitorBoundary(t *testing.T) {
 			t.Fatalf("monitor.go must contain %q", snippet)
 		}
 	}
+
+	// The override names one file, so non-default tenants must not inherit it.
+	data, err = os.ReadFile("multi_tenant_monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read multi_tenant_monitor.go: %v", err)
+	}
+	tenantSource := string(data)
+	dataPathIdx := strings.Index(tenantSource, "tenantConfig.DataPath = tenantPersistence.GetConfigDir()")
+	clearIdx := strings.Index(tenantSource, "tenantConfig.MetricsDBPath = \"\"")
+	newIdx := strings.Index(tenantSource, "monitor, err = New(tenantConfig)")
+	if dataPathIdx < 0 || clearIdx < 0 || newIdx < 0 || !(dataPathIdx < clearIdx && clearIdx < newIdx) {
+		t.Fatal("multi_tenant_monitor.go must clear MetricsDBPath for non-default tenants after setting DataPath and before New")
+	}
 }
 
 func TestEscalationDeliveryDefersToCanonicalAlertSuppression(t *testing.T) {
@@ -1145,6 +1158,7 @@ func TestGuestAgentAdmissionEvidenceContract(t *testing.T) {
 	t.Run("original-age", testGuestAgentEvidenceOriginalAge)
 	t.Run("canonical-continuity", testGuestAgentEvidenceCanonicalContinuity)
 	t.Run("accepted-read-origins", testGuestAgentEvidenceAcceptedReadOrigins)
+	t.Run("config-flag-cannot-renew", testGuestAgentConfigFlagCannotRenewAdmission)
 }
 
 func TestProxmoxGuestDiskInventoryPrefersCanonicalLinkedHostAgentSource(t *testing.T) {

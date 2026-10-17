@@ -189,6 +189,8 @@ func (e *PulseToolExecutor) summarizeResource(
 	}
 	req.Start = start
 	req.End = end
+	// Read only this executor's organization's retained metrics.
+	req.OrgID = e.orgID
 	evidence, err := engine.MetricEvidenceFor(ctx, req)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("metric evidence query failed: %w", err)), nil
@@ -516,6 +518,7 @@ func (e *PulseToolExecutor) summarizeFleet(
 	evidence := make([]*reporting.MetricEvidence, 0, len(resources))
 	for _, req := range resources {
 		req.Start, req.End = start, end
+		req.OrgID = e.orgID
 		item, err := engine.MetricEvidenceFor(ctx, req)
 		if err != nil {
 			return NewErrorResult(fmt.Errorf("metric evidence query failed for %s: %w", req.ResourceID, err)), nil

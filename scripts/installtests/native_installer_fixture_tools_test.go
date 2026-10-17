@@ -160,7 +160,7 @@ func TestNativeInstallerPhasesKeepNASBeforeFrontendAndAllChecksGating(t *testing
 
 func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
 	supply, preflight, installer := nativeInstallerFixtureSteps(t)
-	for _, scenario := range []string{"real tools", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing mv", "non-GNU mv", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
+	for _, scenario := range []string{"real tools", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			bin, prefix, tarPrefix, runnerTemp := filepath.Join(root, "bin"), filepath.Join(root, "brew with spaces"), filepath.Join(root, "gnu tar with spaces"), filepath.Join(root, "runner temp")
@@ -182,7 +182,7 @@ esac
 			if err := os.WriteFile(filepath.Join(bin, "brew"), []byte(brew), 0700); err != nil {
 				t.Fatal(err)
 			}
-			tools := []string{"bash", "stat", "chmod", "chown", "mv", "tar", "awk"}
+			tools := []string{"bash", "stat", "chmod", "chown", "mv", "ln", "tar", "awk"}
 			installed := make(map[string]string)
 			for _, name := range tools {
 				leaf, toolPrefix := name, prefix
@@ -269,7 +269,7 @@ esac
 			}
 			entries, err := os.ReadDir(fixtureBin)
 			if err != nil || len(entries) != len(tools) {
-				t.Fatal("fixture supply must select only Bash/stat/chmod/chown/mv/tar/awk")
+				t.Fatal("fixture supply must select only Bash/stat/chmod/chown/mv/ln/tar/awk")
 			}
 			for _, name := range tools {
 				if target, err := os.Readlink(filepath.Join(fixtureBin, name)); err != nil || target != installed[name] {
@@ -285,7 +285,7 @@ esac
 set -eu
 test "$*" = "scripts/installtests/run_unix_contracts.py --phase $EXPECTED_PHASE" || exit 91
 test "$(command -v bash)" = "$PULSE_INSTALLER_FIXTURE_BIN/bash" || exit 92
-for tool in stat chmod chown mv tar awk; do
+for tool in stat chmod chown mv ln tar awk; do
   test "$(command -v "$tool")" = "$PULSE_INSTALLER_FIXTURE_BIN/$tool" || exit 93
 done
 # Exercise the actual Linux-only flags with real executables and file bytes.
@@ -311,9 +311,26 @@ for file in boot-nul boot-control; do
     exit 94
   fi
 done
+
+# DSM Upstart removal links its manual override and restores retired config
+# with GNU ln -T: a hard link that never replaces or descends into a target.
+links="$PROBE_ROOT/links-$EXPECTED_PHASE-${SUITE_EXIT:-0}"
+mkdir "$links" "$links/occupied-directory"
+ln -T -- "$PROBE_ROOT/published" "$links/linked"
+cmp "$PROBE_ROOT/source" "$links/linked"
+printf 'concurrent\n' > "$links/occupied"
+if ln -T -- "$PROBE_ROOT/published" "$links/occupied" 2>/dev/null; then exit 94; fi
+test "$(cat "$links/occupied")" = concurrent
+if ln -T -- "$PROBE_ROOT/published" "$links/occupied-directory" 2>/dev/null; then exit 95; fi
+test ! -e "$links/occupied-directory/published"
 exit "${SUITE_EXIT:-0}"
 `
 			if err := os.WriteFile(filepath.Join(bin, "python3"), []byte(probe), 0700); err != nil {
+				t.Fatal(err)
+			}
+			// The supply step itself links with the native ln; only the installer
+			// step must resolve the supplied GNU ln ahead of a native one.
+			if err := os.WriteFile(filepath.Join(bin, "ln"), []byte("#!/bin/sh\nprintf 'native BSD utility reached\\n' >&2\nexit 64\n"), 0700); err != nil {
 				t.Fatal(err)
 			}
 			for phase, step := range map[string]nativeGuidanceStep{"preflight": preflight, "remaining": installer} {
