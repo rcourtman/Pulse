@@ -7398,3 +7398,30 @@ for existing and future monitors. Configuration reload must not silently stop
 durable task collection while reporting continues reading the original store.
 `internal/api/recovery_monitor_reload_test.go` and a live connection-reload report
 exercise dependency retention and actual history persistence.
+
+### Live backup inventory and report backfill have separate admission
+
+The unwindowed, bounded `GetBackupTasks` read remains the replacement boundary
+for live backup tasks: every online node must return a complete valid response.
+A failed live collection preserves the entire instance's rows, original
+observation times and unseen job-log caches. A complete empty live inventory
+may clear them. Report backfill may still retain independently observed task
+executions while its collection quality is explicitly incomplete. An empty
+incremental report window, missing audit confirmation or failed history page
+cannot delete live tasks or certify complete report history.
+
+Both task-page and audit-authority admission consume the complete bounded
+HTTP body; a valid JSON prefix, null/duplicate envelope, provider error or
+ambiguous privilege cannot qualify observation coverage. The existing live
+200-task-per-node and shared 25-log-read budgets remain. Log finalisation still
+requires contiguous numbered, present-text lines and a terminal marker; a
+failed running-log reread retains its successful-read timestamp.
+
+`TestBackupHistoryCollectionCannotReplaceLiveInventory` joins the real HTTP
+readers, polling/cache, live snapshots and durable execution/coverage APIs
+through node/body/history/authority failures, incremental emptiness, recovery
+and authoritative live emptiness. `TestBackupHistoryRejectsIncompletePagesAndAuditEvidence`
+checks page and permission admission. Existing log fixtures now include the
+upstream terminal marker rather than weakening immutable-cache assertions.
+Source and consuming desktop/narrow proof do not establish installed backup,
+restore, independent guest thaw, writes/liveness or prior-active restoration.

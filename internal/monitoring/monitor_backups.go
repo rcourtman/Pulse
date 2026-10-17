@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	proxmoxrecoverymapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
+	recoverymodel "github.com/rcourtman/pulse-go-rewrite/internal/recovery/model"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -2316,11 +2317,46 @@ func appendPBSBackupsWithinLimit(backups []models.PBSBackup, additions []models.
 func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("polling backup tasks")
 
-	tasks, collection, err := m.readBackupTaskHistory(ctx, instanceName, client)
-	if err != nil {
-		m.persistBackupTaskHistory(ctx, nil, collection)
-		monErr := errors.WrapAPIError("get_backup_tasks", instanceName, err, 0)
+	// Live inventory replacement and durable history backfill have different
+	// completeness requirements. The history reader deliberately returns valid
+	// rows from partial collections; those must not erase unreadable live rows.
+	// Keep the unwindowed, all-online-nodes read as the live replacement boundary.
+	tasks, liveErr := client.GetBackupTasks(ctx)
+	if liveErr != nil {
+		monErr := errors.WrapAPIError("get_backup_tasks", instanceName, liveErr, 0)
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get backup tasks")
+	}
+	liveIDs := make(map[string]bool, len(tasks))
+	for _, task := range tasks {
+		liveIDs[task.UPID] = true
+	}
+	m.mu.RLock()
+	hasHistoryStore := m.recoveryManager != nil
+	m.mu.RUnlock()
+	var collection recoverymodel.BackupHistoryCollection
+	if hasHistoryStore {
+		history, observation, historyErr := m.readBackupTaskHistory(ctx, instanceName, client)
+		collection = observation
+		if historyErr != nil {
+			log.Error().Err(historyErr).Str("instance", instanceName).Msg("failed to collect backup task history")
+		}
+		// The later history read may update a live task's outcome, but only
+		// membership of the complete live read permits live publication. Each
+		// parent is expanded once, sharing the existing bounded log-read budget.
+		indices := make(map[string]int, len(tasks))
+		for i, task := range tasks {
+			indices[task.UPID] = i
+		}
+		for _, task := range history {
+			if i, ok := indices[task.UPID]; ok {
+				tasks[i] = task
+			} else {
+				indices[task.UPID] = len(tasks)
+				tasks = append(tasks, task)
+			}
+		}
+	}
+	if liveErr != nil && !hasHistoryStore {
 		return
 	}
 
@@ -2360,7 +2396,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		// Durable reports backfill more history than the live API historically
 		// exposed. Preserve its 200 provider tasks per node rather than inflating
 		// every state/WebSocket payload with the entire retained task history.
-		if liveByNode[task.Node] < 200 {
+		if liveIDs[task.UPID] && liveByNode[task.Node] < 200 {
 			liveTasks = append(liveTasks, backupTask)
 			liveByNode[task.Node]++
 			liveJobIDs[taskID] = true
@@ -2375,7 +2411,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	guestTasks := m.synthesizeVzdumpJobGuestTasks(ctx, instanceName, client, jobTasks, jobUPIDs)
+	guestTasks := m.synthesizeVzdumpJobGuestTasks(ctx, instanceName, client, jobTasks, jobUPIDs, liveErr == nil)
 	backupTasks = append(backupTasks, guestTasks...)
 	for _, guest := range guestTasks {
 		parentID := strings.TrimSuffix(guest.ID, fmt.Sprintf("-vm%d", guest.VMID))
@@ -2385,7 +2421,12 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	}
 
 	// Update state with new backup tasks for this instance
-	m.state.UpdateBackupTasksForInstance(instanceName, liveTasks)
+	if liveErr == nil {
+		m.state.UpdateBackupTasksForInstance(instanceName, liveTasks)
+	}
+	if !hasHistoryStore {
+		return
+	}
 
 	// Retain execution history before qualifying collection coverage. Task rows
 	// are not reconciled against the provider's shrinking inventory window.
@@ -2424,9 +2465,11 @@ const maxVzdumpJobLogFetchesPerPoll = 25
 // cached by instance|UPID; logs of finished jobs are immutable, so those are
 // fetched only once. Running jobs are re-parsed every cycle to pick up guests
 // as the job progresses.
-func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceName string, client PVEClientInterface, jobTasks []models.BackupTask, jobUPIDs map[string]string) []models.BackupTask {
+func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceName string, client PVEClientInterface, jobTasks []models.BackupTask, jobUPIDs map[string]string, prune bool) []models.BackupTask {
 	if len(jobTasks) == 0 {
-		m.pruneVzdumpJobTaskCache(instanceName, nil)
+		if prune {
+			m.pruneVzdumpJobTaskCache(instanceName, nil)
+		}
 		return nil
 	}
 
@@ -2489,7 +2532,9 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		synthesized = append(synthesized, guestTasks...)
 	}
 
-	m.pruneVzdumpJobTaskCache(instanceName, seen)
+	if prune {
+		m.pruneVzdumpJobTaskCache(instanceName, seen)
+	}
 	return synthesized
 }
 

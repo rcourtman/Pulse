@@ -100,7 +100,7 @@ func TestPVEFinishedLogRejectionDoesNotPoisonCache(t *testing.T) {
 			if !healthy.Load() {
 				w.Header().Set("Content-Length", "1000")
 			}
-			fmt.Fprint(w, `{"data":[{"n":1,"t":"INFO: Starting Backup of VM 100 (qemu)"},{"n":2,"t":"INFO: Finished Backup of VM 100 (00:01:00)"}]}`)
+			fmt.Fprint(w, `{"data":[{"n":1,"t":"INFO: Starting Backup of VM 100 (qemu)"},{"n":2,"t":"INFO: Finished Backup of VM 100 (00:01:00)"},{"n":3,"t":"TASK OK"}]}`)
 		default:
 			t.Errorf("unexpected request %s", r.URL.Path)
 			w.WriteHeader(404)

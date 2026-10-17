@@ -69,3 +69,63 @@ func TestBackupHistoryPaginationAndCollectionQuality(t *testing.T) {
 		})
 	}
 }
+
+func TestBackupHistoryRejectsIncompletePagesAndAuditEvidence(t *testing.T) {
+	for _, test := range []struct {
+		name, body, reason string
+		audit, truncated   bool
+	}{
+		{"page-truncated-body", `{"data":[]}`, "collection_failed", false, true},
+		{"page-null", `{"data":null}`, "collection_failed", false, false},
+		{"page-missing", `{}`, "collection_failed", false, false},
+		{"page-duplicate", `{"data":[],"data":[]}`, "collection_failed", false, false},
+		{"page-trailing", `{"data":[]} {}`, "collection_failed", false, false},
+		{"page-errors", `{"data":[],"errors":{"fixture":"denied"}}`, "collection_failed", false, false},
+		{"page-bad-row", `{"data":[null]}`, "collection_failed", false, false},
+		{"audit-truncated-body", `{"data":{"/nodes/node":{"Sys.Audit":1}}}`, "audit_permission_unconfirmed", true, true},
+		{"audit-duplicate-path", `{"data":{"/nodes/node":{"Sys.Audit":0},"/nodes/node":{"Sys.Audit":1}}}`, "audit_permission_unconfirmed", true, false},
+		{"audit-duplicate-privilege", `{"data":{"/nodes/node":{"Sys.Audit":0,"Sys.Audit":1}}}`, "audit_permission_unconfirmed", true, false},
+		{"audit-trailing", `{"data":{"/nodes/node":{"Sys.Audit":1}}} {}`, "audit_permission_unconfirmed", true, false},
+		{"audit-errors", `{"data":{"/nodes/node":{"Sys.Audit":1}},"errors":{"fixture":"denied"}}`, "audit_permission_unconfirmed", true, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/api2/json/nodes":
+					fmt.Fprint(w, `{"data":[{"node":"node","status":"online"}]}`)
+				case "/api2/json/nodes/node/tasks":
+					if test.audit {
+						fmt.Fprint(w, `{"data":[{"upid":"valid","type":"vzdump","id":"100","status":"OK"}]}`)
+						return
+					}
+					if test.truncated {
+						w.Header().Set("Content-Length", "1000")
+					}
+					fmt.Fprint(w, test.body)
+				case "/api2/json/access/permissions":
+					require.True(t, test.audit, "invalid page must not be qualified by audit authority")
+					if test.truncated {
+						w.Header().Set("Content-Length", "1000")
+					}
+					fmt.Fprint(w, test.body)
+				default:
+					t.Errorf("unexpected request %s", r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer server.Close()
+			client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+			require.NoError(t, err)
+			history, err := client.GetBackupTaskHistory(context.Background(), time.Now().Add(-time.Hour))
+			require.NoError(t, err, "valid earlier observations can still be returned with incomplete quality")
+			require.Len(t, history.Nodes, 1)
+			require.False(t, history.Nodes[0].Complete)
+			require.Equal(t, test.reason, history.Nodes[0].Reason)
+			if test.audit {
+				require.Len(t, history.Tasks, 1, "failed authority confirmation must not discard observed executions")
+			} else {
+				require.Empty(t, history.Tasks, "an incomplete page supplies no task evidence")
+			}
+		})
+	}
+}

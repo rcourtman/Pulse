@@ -1,11 +1,13 @@
 package proxmox
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"time"
+	"unicode/utf8"
 )
 
 // BackupTaskHistory preserves collection quality alongside execution evidence.
@@ -45,17 +47,15 @@ func (c *Client) GetBackupTaskHistory(ctx context.Context, since time.Time) (Bac
 				observation.Reason = "collection_failed"
 				break
 			}
-			var result struct {
-				Data []Task `json:"data"`
-			}
-			readErr = json.NewDecoder(resp.Body).Decode(&result)
-			resp.Body.Close()
+			// A decoded JSON prefix is not a completed page. Use the same
+			// bounded, unambiguous full-response admission as live task reads.
+			pageTasks, readErr := readTasks(resp)
 			if readErr != nil {
 				observation.Reason = "collection_failed"
 				break
 			}
 			added := 0
-			for _, task := range result.Data {
+			for _, task := range pageTasks {
 				if task.Type != "vzdump" || task.UPID == "" || seen[task.UPID] {
 					continue
 				}
@@ -66,7 +66,7 @@ func (c *Client) GetBackupTaskHistory(ctx context.Context, since time.Time) (Bac
 				history.Tasks = append(history.Tasks, task)
 				added++
 			}
-			if len(result.Data) < 200 {
+			if len(pageTasks) < 200 {
 				observation.Complete = true
 				break
 			}
@@ -90,14 +90,28 @@ func (c *Client) backupHistoryAuditPermission(ctx context.Context, node string) 
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
-	var result struct {
-		Data map[string]map[string]int `json:"data"`
-	}
-	if json.NewDecoder(resp.Body).Decode(&result) != nil {
+	body, readErr := readResponseBodyLimited(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil || closeErr != nil || !utf8.Valid(body) {
 		return false
 	}
-	return result.Data[path]["Sys.Audit"] == 1
+	envelope, ok := inventoryResponseObject(body, "data", "errors")
+	if !ok {
+		return false
+	}
+	if failure, exists := envelope["errors"]; exists && !bytes.Equal(bytes.TrimSpace(failure), []byte("null")) {
+		return false
+	}
+	paths, ok := inventoryResponseObject(envelope["data"], path)
+	if !ok {
+		return false
+	}
+	privileges, ok := inventoryResponseObject(paths[path], "Sys.Audit")
+	if !ok {
+		return false
+	}
+	var audit int
+	return json.Unmarshal(privileges["Sys.Audit"], &audit) == nil && audit == 1
 }
 
 func (cc *ClusterClient) GetBackupTaskHistory(ctx context.Context, since time.Time) (BackupTaskHistory, error) {

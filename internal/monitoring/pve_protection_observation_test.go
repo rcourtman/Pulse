@@ -235,7 +235,7 @@ func TestPVELogRetryDoesNotRenewRetainedEvidence(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
-			got := m.synthesizeVzdumpJobGuestTasks(ctx, "proof", client, []models.BackupTask{{ID: "parent", Node: "pve1"}}, map[string]string{"parent": "job"})
+			got := m.synthesizeVzdumpJobGuestTasks(ctx, "proof", client, []models.BackupTask{{ID: "parent", Node: "pve1"}}, map[string]string{"parent": "job"}, true)
 			if !reflect.DeepEqual(got, []models.BackupTask{task}) {
 				t.Fatalf("retained log observation renewed or lost: %+v", got)
 			}
@@ -349,9 +349,9 @@ func TestPVELogSequenceRejectsFalseCompletionAndResumes(t *testing.T) {
 					case 1:
 						fmt.Fprint(w, `{"data":[`+first+`,`+broken.middle+`,{"n":3,"t":"INFO: Finished Backup of VM 101 (00:01:00)"}]}`)
 					case 2:
-						fmt.Fprint(w, `{"data":[`+first+`,{"n":2,"t":"ERROR: Backup of VM 101 failed - synthetic archive failure"}]}`)
+						fmt.Fprint(w, `{"data":[`+first+`,{"n":2,"t":"ERROR: Backup of VM 101 failed - synthetic archive failure"},{"n":3,"t":"TASK ERROR: backup job failed"}]}`)
 					case 3:
-						fmt.Fprint(w, `{"data":[`+first+`,{"n":2,"t":"INFO: Finished Backup of VM 101 (00:01:00)"}]}`)
+						fmt.Fprint(w, `{"data":[`+first+`,{"n":2,"t":"INFO: Finished Backup of VM 101 (00:01:00)"},{"n":3,"t":"TASK OK"}]}`)
 					}
 				default:
 					t.Errorf("unexpected operation: %s", r.URL.Path)
