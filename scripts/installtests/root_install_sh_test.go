@@ -856,8 +856,8 @@ func TestRootInstallScriptSupportsInstanceScopedServerInstalls(t *testing.T) {
 		`if [[ "$SERVICE_NAME_EXPLICIT" == "true" ]]; then`,
 		`install_binary_symlink "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"`,
 		`ln -sf "$target" "$link_path"`,
-		`safe_systemctl enable "$update_timer_unit" || true`,
-		`safe_systemctl start "$update_timer_unit" || true`,
+		`if ! safe_systemctl enable "$update_timer_unit"; then`,
+		`if ! safe_systemctl start "$update_timer_unit"; then`,
 		`Environment="PULSE_SERVICE_NAME=$service_name"`,
 		`Environment="PULSE_INSTALL_DIR=$install_dir"`,
 		`Environment="PULSE_CONFIG_DIR=$config_dir"`,
@@ -2449,12 +2449,16 @@ func TestRootInstallAutoUpdateSettingsPublication(t *testing.T) {
 		"test_interrupted_publication_cleans_its_private_staging_file",
 		"test_raced_destination_directory_is_not_written_inside",
 		"test_refused_assets_keep_saved_settings_and_never_enable_the_timer",
+		"test_enable_failure_does_not_start_retry_or_claim_success",
+		"test_start_failure_does_not_retry_roll_back_or_claim_success",
+		"test_readbacks_require_persistent_enablement_and_active_timer",
+		"test_each_hung_manager_operation_keeps_the_five_second_bound",
 	} {
 		if !strings.Contains(string(out), name+" (__main__.AutoUpdateSettings."+name+") ... ok") {
 			t.Fatalf("settings publication control %s did not pass:\n%s", name, out)
 		}
 	}
-	if !strings.Contains(string(out), "\nRan 9 tests in ") || !strings.Contains(string(out), "\nOK\n") {
+	if !strings.Contains(string(out), "\nRan 13 tests in ") || !strings.Contains(string(out), "\nOK\n") {
 		t.Fatalf("incomplete settings publication verdict:\n%s", out)
 	}
 }

@@ -5031,11 +5031,31 @@ setup_auto_updates() {
         return 0
     fi
 
-    # Settings must be safely persisted before changing timer activation.
-    safe_systemctl enable "$update_timer_unit" || true
+    # Settings record the user's choice, not proof that systemd accepted it.
+    # Stop after an unconfirmed operation: it may have taken effect despite
+    # the failed response, so neither retry nor disable/stop it as rollback.
+    if ! safe_systemctl enable "$update_timer_unit"; then
+        print_warn "Automatic-update settings were saved, but timer enablement was not confirmed for ${update_timer_unit}. Check its systemd state before retrying."
+        ENABLE_AUTO_UPDATES=false
+        return 0
+    fi
+    local timer_state=""
+    if ! timer_state=$(timeout 5 systemctl is-enabled -- "$update_timer_unit" 2>/dev/null) || [[ "$timer_state" != "enabled" ]]; then
+        print_warn "Automatic-update settings were saved, but persistent timer enablement was not confirmed for ${update_timer_unit}. Check its systemd state before retrying."
+        ENABLE_AUTO_UPDATES=false
+        return 0
+    fi
 
-    # Start the timer
-    safe_systemctl start "$update_timer_unit" || true
+    if ! safe_systemctl start "$update_timer_unit"; then
+        print_warn "Automatic-update settings were saved, but timer startup was not confirmed for ${update_timer_unit}. Check its systemd state before retrying."
+        ENABLE_AUTO_UPDATES=false
+        return 0
+    fi
+    if ! timer_state=$(timeout 5 systemctl is-active -- "$update_timer_unit" 2>/dev/null) || [[ "$timer_state" != "active" ]]; then
+        print_warn "Automatic-update settings were saved, but timer activity was not confirmed for ${update_timer_unit}. Check its systemd state before retrying."
+        ENABLE_AUTO_UPDATES=false
+        return 0
+    fi
 
     print_success "Automatic updates enabled (daily check between 02:00 and 06:00)"
 }

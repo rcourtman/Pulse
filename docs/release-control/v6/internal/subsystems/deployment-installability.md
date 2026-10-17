@@ -38,6 +38,23 @@ activation, installed upgrade/recovery, or any release outcome. Successful
 settings retain the existing consumed values; no API or frontend rendering
 contract changes.
 
+Settings publication alone must not produce the installer's "Automatic updates
+enabled" message. After explicit opt-in, enable/start must each return success,
+and separate bounded readbacks must report persistent `enabled` and `active`
+for that exact instance timer. Failed, timed-out, malformed, runtime-only or
+non-active observations stop the sequence with an unconfirmed-activation warning.
+No later operation, retry, disable or stop is used to conceal or reverse an
+uncertain result. The ordinary installation can continue; the saved preference
+and unrelated settings remain intact, rather than misreporting the live timer
+or changing application-consumed values. Native activation remains distinct.
+
+The same 13-method fixture executes the actual `safe_systemctl` and setup
+functions with a closed manager. It requires ordered positive readback and
+checks command refusals, misleading/nonzero readbacks, runtime-only/unknown
+states, suppressed-errexit callers, all four real five-second timeout paths,
+private diagnostic suppression and absence of retry/rollback. The exact parent
+must fail the command/refused-readback controls; no installed manager is contacted.
+
 ### Schema-v19 release disclosure follows receiver compatibility
 
 `docs/releases/TELEMETRY_SCHEMA_V19.md` carries the extended-history telemetry notice for

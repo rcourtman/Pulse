@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the installer's settings publication using private real files.
+"""Exercise installer settings publication and truthful timer activation.
 
 Only service/ownership commands are closed doubles. jq, mktemp and rename use
 their real implementations; no manager, network or installed configuration is
@@ -26,7 +26,10 @@ class AutoUpdateSettings(unittest.TestCase):
     def exercise(self, *, content='{"autoUpdateEnabled":false,"keep":{"text":"café"}}',
                  fault="", target="regular", channel="rc", conditional=False):
         source = SOURCE.read_text()
-        function = "setup_auto_updates() {" + source.split("setup_auto_updates() {", 1)[1].split("\n}\n", 1)[0] + "\n}\n"
+        function = ""
+        for name in ("safe_systemctl", "setup_auto_updates"):
+            start = name + "() {"
+            function += start + source.split(start, 1)[1].split("\n}\n", 1)[0] + "\n}\n"
         function = function.replace('/tmp/system_$$.json', '${FIXTURE}/shared/system_$$.json')
         with tempfile.TemporaryDirectory(prefix="pulse-update-settings-") as temporary:
             root = Path(temporary)
@@ -39,6 +42,42 @@ class AutoUpdateSettings(unittest.TestCase):
             elif target == "dangling": saved.symlink_to(root / "absent")
             elif content is not None: saved.write_text(content); saved.chmod(0o640)
             before = saved.read_bytes() if saved.is_file() else None
+            binary = root / "bin"; binary.mkdir()
+            manager = binary / "systemctl"
+            manager.write_text(r'''#!/usr/bin/env bash
+set -eu
+printf 'manager:%s\n' "$*" >> "$FIXTURE/events"
+case "$1" in
+    enable|start)
+        if [[ "$FAULT" == "$1-hang" ]]; then exec sleep 30; fi
+        [[ "$FAULT" != "$1-failed" ]] || exit 7
+        ;;
+    is-enabled|is-active)
+        [[ "$#" == 3 && "$2" == -- && "$3" == pulse-fixture-update.timer ]] || exit 97
+        if [[ "$FAULT" == "$1-hang" ]]; then exec sleep 30; fi
+        if [[ "$FAULT" == "$1-failed" ]]; then
+            printf 'SYSTEMCTL_PRIVATE\n' >&2
+            if [[ "$1" == is-enabled ]]; then echo enabled; else echo active; fi
+            exit 7
+        fi
+        if [[ "$FAULT" == "$1-malformed" ]]; then
+            printf 'SYSTEMCTL_PRIVATE\n'
+        elif [[ "$1" == is-enabled ]]; then
+            case "$FAULT" in
+                disabled|enabled-runtime|static) printf '%s\n' "$FAULT" ;;
+                *) echo enabled ;;
+            esac
+        else
+            case "$FAULT" in
+                inactive|activating|failed) printf '%s\n' "$FAULT" ;;
+                *) echo active ;;
+            esac
+        fi
+        ;;
+    *) exit 98 ;;
+esac
+''')
+            manager.chmod(0o755)
             setup = r'''
 set -euo pipefail
 umask 022
@@ -49,7 +88,6 @@ print_warn() { printf 'WARN: %s\n' "$*"; }
 print_success() { printf 'SUCCESS: %s\n' "$*"; }
 selected_update_channel() { printf '%s\n' "$CHANNEL"; }
 install_auto_update_assets() { printf 'assets\n' >> "$FIXTURE/events"; [[ "$FAULT" != assets ]]; }
-safe_systemctl() { printf 'manager:%s\n' "$*" >> "$FIXTURE/events"; }
 chown() { printf 'owner\n' >> "$FIXTURE/events"; [[ "$FAULT" != owner ]]; }
 command() {
     if [[ "$FAULT" == missing-jq && "$*" == '-v jq' ]]; then return 1; fi
@@ -81,7 +119,7 @@ ln -s "$FIXTURE/unrelated" "$FIXTURE/shared/system_$$.json"
             invoke = ("if ! setup_auto_updates; then exit 99; fi\n" if conditional
                       else "setup_auto_updates\n") + 'printf "FLAG:%s\\n" "$ENABLE_AUTO_UPDATES"\n'
             env = dict(os.environ, FIXTURE=str(root), FIXTURE_PYTHON=sys.executable,
-                       FAULT=fault, CHANNEL=channel)
+                       FAULT=fault, CHANNEL=channel, PATH=str(binary) + os.pathsep + os.environ["PATH"])
             result = subprocess.run(["bash", "-c", setup + function + invoke], cwd=root,
                                     env=env, capture_output=True, text=True, timeout=10)
             final = saved.read_bytes() if saved.is_file() else None
@@ -117,7 +155,12 @@ ln -s "$FIXTURE/unrelated" "$FIXTURE/shared/system_$$.json"
                 self.assertEqual(o["staged"], [])
                 self.assertEqual(o["unrelated"], "unrelated file must survive\n")
                 self.assertIn("SUCCESS:", r.stdout)
-                self.assertLess(o["events"].index("rename"), o["events"].index("manager:enable pulse-fixture-update.timer"))
+                self.assertIn("FLAG:true", r.stdout)
+                self.assertEqual(o["events"], ["assets", "owner", "rename",
+                    "manager:enable pulse-fixture-update.timer",
+                    "manager:is-enabled -- pulse-fixture-update.timer",
+                    "manager:start pulse-fixture-update.timer",
+                    "manager:is-active -- pulse-fixture-update.timer"])
 
     def test_fresh_settings_are_private_and_keep_the_existing_defaults(self):
         for fault in ("", "missing-jq"):
@@ -127,6 +170,54 @@ ln -s "$FIXTURE/unrelated" "$FIXTURE/shared/system_$$.json"
                 self.assertEqual(json.loads(o["final"]), dict(autoUpdateEnabled=True, updateChannel="rc", pollingInterval=5))
                 self.assertEqual(o["mode"], 0o600)
                 self.assertEqual(o["staged"], [])
+
+    def assert_activation_unconfirmed(self, result, observed, manager_calls):
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("FLAG:false", result.stdout)
+        self.assertNotIn("SUCCESS:", result.stdout)
+        self.assertIn("settings were saved", result.stdout)
+        self.assertIn("not confirmed for pulse-fixture-update.timer", result.stdout)
+        self.assertIn("Check its systemd state before retrying", result.stdout)
+        self.assertNotIn("SYSTEMCTL_PRIVATE", result.stdout + result.stderr)
+        self.assertEqual(json.loads(observed["final"]), dict(autoUpdateEnabled=True,
+                         updateChannel="rc", keep=dict(text="café")))
+        self.assertEqual(observed["mode"], 0o600)
+        self.assertEqual(observed["staged"], [])
+        self.assertEqual(observed["unrelated"], "unrelated file must survive\n")
+        self.assertEqual([e for e in observed["events"] if e.startswith("manager:")],
+                         ["manager:" + call for call in manager_calls])
+
+    def test_enable_failure_does_not_start_retry_or_claim_success(self):
+        for conditional in (False, True):
+            with self.subTest(conditional=conditional):
+                r, o = self.exercise(fault="enable-failed", conditional=conditional)
+                self.assert_activation_unconfirmed(r, o, ["enable pulse-fixture-update.timer"])
+
+    def test_start_failure_does_not_retry_roll_back_or_claim_success(self):
+        for conditional in (False, True):
+            with self.subTest(conditional=conditional):
+                r, o = self.exercise(fault="start-failed", conditional=conditional)
+                self.assert_activation_unconfirmed(r, o, ["enable pulse-fixture-update.timer",
+                    "is-enabled -- pulse-fixture-update.timer", "start pulse-fixture-update.timer"])
+
+    def test_readbacks_require_persistent_enablement_and_active_timer(self):
+        for fault in ("disabled", "enabled-runtime", "static", "is-enabled-failed", "is-enabled-malformed",
+                      "inactive", "activating", "failed", "is-active-failed", "is-active-malformed"):
+            for conditional in (False, True):
+                with self.subTest(fault=fault, conditional=conditional):
+                    r, o = self.exercise(fault=fault, conditional=conditional)
+                    calls = ["enable pulse-fixture-update.timer", "is-enabled -- pulse-fixture-update.timer"]
+                    if fault in ("inactive", "activating", "failed", "is-active-failed", "is-active-malformed"):
+                        calls += ["start pulse-fixture-update.timer", "is-active -- pulse-fixture-update.timer"]
+                    self.assert_activation_unconfirmed(r, o, calls)
+
+    def test_each_hung_manager_operation_keeps_the_five_second_bound(self):
+        operations = ["enable pulse-fixture-update.timer", "is-enabled -- pulse-fixture-update.timer",
+                      "start pulse-fixture-update.timer", "is-active -- pulse-fixture-update.timer"]
+        for index, operation in enumerate(operations):
+            with self.subTest(operation=operation):
+                r, o = self.exercise(fault=operation.split()[0] + "-hang", conditional=True)
+                self.assert_activation_unconfirmed(r, o, operations[:index + 1])
 
     def test_missing_parser_preserves_existing_configuration_without_text_substitution(self):
         r, o = self.exercise(fault="missing-jq")
