@@ -231,6 +231,8 @@ class ServerInstallerStopTest(unittest.TestCase):
                 "originals": {str(p.relative_to(fixture)): b for p, b in originals.items()},
                 "calls": (fixture / "calls").read_text() if (fixture / "calls").exists() else "",
                 "archive_retained": (fixture / "archive.tgz").exists(),
+                "temporary_paths": (fixture / "temporary-paths").read_text().splitlines() if (fixture / "temporary-paths").exists() else [],
+                "install_dir": installed,
             }
 
     def test_refused_replacements_preserve_installed_bytes_and_modes(self):
@@ -352,6 +354,19 @@ class ServerInstallerStopTest(unittest.TestCase):
         self.assertEqual(observation["stage_paths"], [])
         self.assertEqual(observation["temporary_paths_remaining"], [])
         self.assertNotIn("start pulse-custom", calls)
+
+    def test_archive_extraction_stages_on_the_install_filesystem(self):
+        # /tmp is tmpfs on Debian 13 and many LXC templates: an extracted
+        # release there is charged to the container's memory limit and
+        # OOM-killed a 1 GiB LXC mid-update (#2785).
+        for flow in ("archive", "local_archive"):
+            with self.subTest(flow=flow):
+                observation = self.exercise(REPLACEMENT, flow, "active")
+                self.assertEqual(observation["result"].returncode, 0, observation["result"].stderr)
+                extracts = [Path(p) for p in observation["temporary_paths"] if "pulse-extract-" in p]
+                self.assertEqual(len(extracts), 1, observation["temporary_paths"])
+                self.assertEqual(extracts[0].parent, observation["install_dir"])
+                self.assertEqual(observation["temporary_paths_remaining"], [])
 
     def test_all_manual_update_flows_leave_service_running_when_staging_fails(self):
         for flow in ("version", "update", "reinstall"):
