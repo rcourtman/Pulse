@@ -14,26 +14,46 @@ func TestPatrolGuestMemoryReadingBoundaries(t *testing.T) {
 	at := time.Now().UTC().Add(-time.Minute)
 	obs := models.MemoryObservation{State: "current", Source: "available-field", ObservedAt: at}
 	for _, percent := range []float64{math.NaN(), math.Inf(1), math.Inf(-1), -1, 101} {
-		reading := readPatrolGuestMemory(percent, obs, true, true)
+		reading := readPatrolGuestMemory(percent, obs, true, unifiedresources.GuestMemoryProxmoxVM)
 		if reading.pressureKnown || reading.available || !strings.HasPrefix(reading.display(), "N/A") {
 			t.Errorf("invalid percent became live pressure: %+v", reading)
 		}
 	}
 	for _, source := range []string{"available-field", "derived-free-buffers-cached", "guest-agent-meminfo", "guest-agent-meminfo-derived", "agent"} {
 		obs.Source = source
-		if r := readPatrolGuestMemory(96, obs, true, true); !r.pressureKnown {
+		if r := readPatrolGuestMemory(96, obs, true, unifiedresources.GuestMemoryProxmoxVM); !r.pressureKnown {
 			t.Errorf("current cache-aware positive rejected: %s", source)
 		}
 	}
 	for _, state := range []string{"", "future", "last-known", "unavailable"} {
 		obs.State = state
-		if r := readPatrolGuestMemory(96, obs, true, true); r.pressureKnown {
+		if r := readPatrolGuestMemory(96, obs, true, unifiedresources.GuestMemoryProxmoxVM); r.pressureKnown {
 			t.Errorf("non-current state became current: %s", state)
 		}
 	}
-	obs.State = "current"
-	obs.ObservedAt = time.Unix(0, 0)
-	if r := readPatrolGuestMemory(96, obs, true, true); r.pressureKnown || !r.observedAt.IsZero() {
+	// Proxmox's listing mem means different things per guest type: a QEMU
+	// guest's counts its own page cache, an LXC's has page cache subtracted.
+	obs = models.MemoryObservation{State: "current", Source: "cluster-resources", ObservedAt: at}
+	if r := readPatrolGuestMemory(97, obs, true, unifiedresources.GuestMemoryProxmoxVM); r.pressureKnown || !r.mayIncludeCache {
+		t.Errorf("QEMU cluster-resources memory became pressure: %+v", r)
+	}
+	ct := readPatrolGuestMemory(97, obs, true, unifiedresources.GuestMemoryProxmoxContainer)
+	if !ct.pressureKnown || ct.mayIncludeCache || !strings.Contains(ct.display(), "cache-aware guest usage") {
+		t.Errorf("LXC cluster-resources memory lost its pressure meaning: %+v %s", ct, ct.display())
+	}
+	for _, source := range []string{"status-mem", "status-freemem", "derived-total-minus-used"} {
+		obs.Source = source
+		if r := readPatrolGuestMemory(97, obs, true, unifiedresources.GuestMemoryProxmoxContainer); r.pressureKnown {
+			t.Errorf("container kind widened another cache-inclusive source: %s", source)
+		}
+	}
+	obs.Source = "cluster-resources"
+	obs.State = "last-known"
+	if r := readPatrolGuestMemory(97, obs, true, unifiedresources.GuestMemoryProxmoxContainer); r.pressureKnown {
+		t.Error("retained LXC listing reading became current pressure")
+	}
+	obs = models.MemoryObservation{State: "current", Source: "available-field", ObservedAt: time.Unix(0, 0)}
+	if r := readPatrolGuestMemory(96, obs, true, unifiedresources.GuestMemoryProxmoxVM); r.pressureKnown || !r.observedAt.IsZero() {
 		t.Fatal("invalid observation origin became current")
 	}
 	if status := patrolGuestRuntimeStatus("paused", unifiedresources.StatusOffline); status != "paused" {
