@@ -183,21 +183,23 @@ describe('ReportingPanel', () => {
     ).toBeVisible();
   });
 
-  it('keeps the schedule form free of the report type choice while Patrol cannot run', () => {
+  it('keeps the schedule form free of the report type choice while Patrol cannot run', async () => {
     useReportingPanelStateMock.mockReturnValue(
       buildState({ scheduleFormOpen: () => true, patrolDigestAvailable: () => false }),
     );
 
     render(() => <ReportingPanel />);
+    await screen.findByLabelText('Schedule name', { selector: 'input' });
 
     expect(screen.queryByLabelText('Report type')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Schedule name', { selector: 'input' })).toHaveFocus();
     expect(screen.queryByText(/Patrol weekly summary can also be emailed/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('Cadence')).toBeInTheDocument();
     // One picker for on-demand reports, one in the schedule form.
     expect(screen.getAllByText('Mock Resource Picker')).toHaveLength(2);
   });
 
-  it('offers the Patrol weekly summary as a report type when Patrol can run', () => {
+  it('offers the Patrol weekly summary as a report type when Patrol can run', async () => {
     const setScheduleKind = vi.fn();
     useReportingPanelStateMock.mockReturnValue(
       buildState({
@@ -208,6 +210,7 @@ describe('ReportingPanel', () => {
     );
 
     render(() => <ReportingPanel />);
+    await screen.findByLabelText('Schedule name', { selector: 'input' });
 
     expect(screen.getByText(/Patrol weekly summary can also be emailed/)).toBeInTheDocument();
     const select = screen.getByLabelText('Report type') as HTMLSelectElement;
@@ -225,7 +228,7 @@ describe('ReportingPanel', () => {
     expect(setScheduleKind).toHaveBeenCalledWith('patrol_digest');
   });
 
-  it('reduces the form to weekday, time and recipients for a Patrol weekly summary', () => {
+  it('reduces the form to weekday, time and recipients for a Patrol weekly summary', async () => {
     const base = buildState();
     useReportingPanelStateMock.mockReturnValue(
       buildState({
@@ -244,6 +247,7 @@ describe('ReportingPanel', () => {
     );
 
     render(() => <ReportingPanel />);
+    await screen.findByLabelText('Schedule name', { selector: 'input' });
 
     // An existing digest schedule stays editable even when Patrol is off now.
     const select = screen.getByLabelText('Report type') as HTMLSelectElement;

@@ -1507,7 +1507,7 @@ removal/failure retention and containing publication remain separate evidence.
 44. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
 45. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 46. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
-47. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
+47. `frontend-modern/src/components/Settings/ReportingPanel.tsx`, `frontend-modern/src/components/Settings/ReportScheduleEditor.tsx` and `frontend-modern/src/components/Settings/ReportingFormField.tsx`
 48. `frontend-modern/src/components/Settings/reportingPanelModel.ts`
     48a. `frontend-modern/src/components/Settings/reportingSchedulesModel.ts`
 49. `frontend-modern/src/components/Settings/reportingInventoryExportModel.ts`
@@ -8155,6 +8155,14 @@ The report list keeps status and Run/Retry visible at every width. Scope,
 recipients, file paths, Edit and Delete share the full-width details disclosure.
 Keyed store reconciliation preserves row identity, open details and keyboard
 focus across background refreshes.
+The schedule editor is loaded only when a schedule is created or edited, with a
+visible loading state. It shares the reporting field primitive with the main
+report builder. Edit-only code stays out of the initial ReportingPanel bundle,
+and the existing bundle budget remains enforced. The Reports browser proof covers
+the deferred editor and its full form after the chunk loads.
+Responsive reporting actions are verified through the rendered reporting tests
+and browser interactions. Architecture checks do not require the retired
+schedule table columns or separate mobile action menu.
 The settings navigation model now exposes a single `infrastructure-systems`
 sidebar entry for the infrastructure settings area. The former
 `infrastructure-connections` and `infrastructure-install` entries have been
