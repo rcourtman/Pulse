@@ -120,7 +120,8 @@ describe('canonical drawer History honours selected guest observation provenance
           expect(deferred).toBeUndefined();
           value.memory!.observation!.state = 'last-known';
           const retained = getResourceMetricsHistoryDeferredMetrics(value).memory.message;
-          const includesCache = source === 'status-mem' || (source === 'cluster-resources' && type === 'vm');
+          const includesCache =
+            source === 'status-mem' || (source === 'cluster-resources' && type === 'vm');
           expect(retained.includes('cached memory')).toBe(includesCache);
           expect(retained).not.toContain('stopped reporting');
           value.memory!.observation!.state = 'current';

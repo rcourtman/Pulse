@@ -823,7 +823,7 @@ describe('GuestRow', () => {
     );
 
     it.each(['bars', 'sparklines'] as const)(
-      'keeps paused and suspended VM disk readings last known in %s',
+      'keeps paused and unconfirmed VM disk readings last known in %s',
       (mode) => {
         const [guest, setGuest] = createSignal(makeGuest());
         const { container } = render(() => (
@@ -838,11 +838,15 @@ describe('GuestRow', () => {
           </table>
         ));
         const row = container.querySelector('tr');
-        for (const status of ['paused', 'suspended']) {
+        for (const status of ['paused', 'suspended', 'unknown', 'starting']) {
           setGuest(makeGuest({ status, diskStatusReason: undefined }));
           const cell = container.querySelector('[data-workload-col="disk"]')!;
           expect(cell).toHaveTextContent('Last known');
-          expect(cell.getAttribute('title')).toContain(`while the VM is ${status}`);
+          expect(cell.getAttribute('title')).toContain(
+            status === 'paused' || status === 'suspended'
+              ? `while the VM is ${status}`
+              : 'VM running state is unconfirmed',
+          );
           if (mode === 'bars')
             expect(screen.getByTestId('disk-bar')).toHaveAttribute(
               'data-reading-state',

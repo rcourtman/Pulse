@@ -20,6 +20,26 @@
 
 ## Purpose
 
+### Unconfirmed VM power does not make filesystem values current
+
+The shared filesystem presenter qualifies platform-owned VM values as last
+known when running state is unknown, transitional, missing or unrecognised
+and no explicit read outcome is available. It uses fixed explanatory copy,
+not the raw state. Explicit read errors/deferrals keep their own explanations;
+stopped/paused semantics are unchanged. Live linked-agent filesystem readings
+remain independent, and host-reported LXC storage is not downgraded by guest
+power. Legacy online/healthy aliases retain their running meaning.
+
+Rows (bars/sparklines), filesystem details, stored-History carriers, canonical
+History and guest-filesystem alert settings consume this one rule. Capacity
+alone does not invent a retained zero; fresh measured zero remains current and
+saved thresholds and stored series remain untouched. The corresponding
+presenter, row, Overview, History, canonical and threshold tests and
+`native-guest-filesystem-power.cjs` cover source/consumer transitions on desktop and
+narrow touch layouts. This is read-only presentation, not a power/guest command,
+backup thaw, workload recovery, alert evaluation change or new route.
+
+
 ### Backup job errors are readable in Coverage details
 
 The existing workload disclosure exposes its selected latest backup job's
