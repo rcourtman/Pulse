@@ -336,10 +336,28 @@ the connection name as the backup node only when PMG answered with no
 cluster entries; after a failed cluster read that name is a display label,
 and requesting backups with it produced a misleading hostname-lookup error
 without ever returning backups. The poll still records the cluster read
-failure, and the published backup list is empty exactly as before.
+failure. It requests no backups, and the connection's last-known backups
+are kept rather than replaced by an empty list (see the next section).
 `TestClientClusterStatusIgnoresClusterIDFormat` and the
 `TestPollPMGInstance*` issue tests in `monitor_pmg_test.go` pin all three
 cases.
+
+### PMG backups keep last-known entries for unread nodes
+
+`UpdatePMGBackups` replaces a connection's whole backup list, so only a node
+whose backup list was read in this poll is authoritative for it. A node that
+was not read keeps its previous backups: every node after a failed cluster
+read, a node whose backup read failed, and a node a cancelled poll never
+reached. This is the same per-scope carry that `preserveFailedStorageBackups`
+applies to failed PVE storages. A node that answered with no backups, or that
+a successful cluster read no longer lists, still clears its entries. The
+failed read is still recorded as a poll failure, and the connection-name
+fallback above is unchanged. `TestPMGBackupsSurviveFailedClusterRead`,
+`TestPMGBackupsSurviveEveryNodeBackupReadFailing`,
+`TestPMGBackupsKeepFailedNodeOnPartialRead` and
+`TestPMGBackupsClearAfterCompleteEnumeration` in `monitor_pmg_test.go` cover
+the carry and the complete-enumeration clear. These are synthetic poller
+controls, not native PMG acceptance.
 
 ### Guest configuration reads preserve installation and node identity
 
