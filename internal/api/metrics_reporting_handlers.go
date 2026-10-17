@@ -820,7 +820,8 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	safeResourceID := sanitizeFilename(resourceID)
 	filename := definition.SingleAttachmentFilename(safeResourceID, time.Now().UTC(), format)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-	w.Write(data)
+	written, writeErr := w.Write(data)
+	h.recordReportingDownload(r, config.ReportScheduleKindResources, written, writeErr, len(data))
 }
 
 // sanitizeFilename removes or replaces characters that could cause issues in filenames or headers
@@ -1365,7 +1366,8 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 
 	w.Header().Set("Content-Type", report.ContentType)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", report.Filename))
-	w.Write(report.Data)
+	written, writeErr := w.Write(report.Data)
+	h.recordReportingDownload(r, config.ReportScheduleKindResources, written, writeErr, len(report.Data))
 }
 
 // enrichContainerReport adds container-specific data to the report request

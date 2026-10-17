@@ -7037,3 +7037,11 @@ for existing and future monitors. Configuration reload must not silently stop
 durable task collection while reporting continues reading the original store.
 `internal/api/recovery_monitor_reload_test.go` and a live connection-reload report
 exercise dependency retention and actual history persistence.
+
+Reporting telemetry counts generated backup-health documents by their existing
+complete, incomplete or unavailable source-data state. It never reinterprets
+those counts as backup success, protection, retention or restorability. The
+separate SMTP and saved-file counters describe report delivery only. Only daily
+aggregate counts leave the installation, with no workload, task, repository,
+client scope or reporting range. Recovery evidence, observation coverage and
+collection checkpoints remain owned by the existing recovery store.

@@ -24,6 +24,55 @@ import telemetry_adoption_report as report
 
 
 class TelemetryAdoptionReportTest(unittest.TestCase):
+    def test_reporting_usage_requires_measurement_and_counts_latest_only(self) -> None:
+        now = datetime(2026, 10, 17, 12, tzinfo=timezone.utc)
+        base = {"received_at": "2026-10-17 11:00:00", "version": "6.6.0",
+                "monitoring_active": 1, "schema_version": 20, "paid_license": 1,
+                **dict.fromkeys(report.REPORTING_USAGE_COUNT_FIELDS, 0),
+                "reporting_telemetry_available": 1, "reporting_observation_days": 30,
+                "reporting_generated_backup_health_30d": 4,
+                "reporting_backup_health_active_days_30d": 2,
+                "reporting_successful_backup_health_periods_30d": 2,
+                "reporting_repeat_backup_health_periods_30d": 1}
+        rows = [{**base, "install_id": "measured"},
+                {**base, "install_id": "measured", "received_at": "2026-10-16 11:00:00", "reporting_generated_backup_health_30d": 3},
+                {**base, "install_id": "new", "reporting_observation_days": 1, "reporting_backup_health_active_days_30d": 1},
+                {**base, "install_id": "legacy", "schema_version": 19},
+                {**base, "install_id": "unavailable", "reporting_telemetry_available": 0},
+                {**base, "install_id": "inactive", "monitoring_active": 0},
+                {**base, "install_id": "dev", "version_is_development": 1}]
+        summary = report.summarize_rows({}, rows, {"6.6.0"}, now=now)
+        usage = summary["reporting_usage_7d"]
+        cohort = usage["cohorts"]["nonfree"]
+        self.assertEqual((cohort["covered_ids"], cohort["unmeasured_ids"]), (2, 2))
+        self.assertEqual((cohort["full_30d_observation_ids"], cohort["partial_observation_ids"]), (1, 1))
+        self.assertEqual(cohort["counts"]["reporting_generated_backup_health_30d"], 8)
+        self.assertEqual(cohort["ids_with_repeat_periods"], 2)
+        self.assertEqual(cohort["ids_with_multiple_generation_days"], 1)
+        generation_only = {**base, "install_id": "generation-only",
+                           "reporting_successful_backup_health_periods_30d": 0,
+                           "reporting_repeat_backup_health_periods_30d": 0,
+                           "reporting_delivery_failed_30d": 4}
+        activity_cohort = report.summarize_reporting_usage(
+            {"generation-only": generation_only}, {"6.6.0"}, now=now)["cohorts"]["nonfree"]
+        self.assertEqual(activity_cohort["ids_with_repeat_periods"], 0)
+        self.assertEqual(activity_cohort["ids_with_multiple_generation_days"], 1)
+        self.assertNotIn("ids_with_repeat_use", activity_cohort)
+        same_day_periods = {**base, "reporting_backup_health_active_days_30d": 1}
+        periods_cohort = report.summarize_reporting_usage(
+            {"same-day-periods": same_day_periods}, {"6.6.0"}, now=now)["cohorts"]["nonfree"]
+        self.assertEqual(periods_cohort["ids_with_repeat_periods"], 1)
+        self.assertEqual(periods_cohort["ids_with_multiple_generation_days"], 0)
+        text = report.format_text(summary, "rcourtman/Pulse", 7)
+        self.assertIn("generating on multiple days", text)
+        self.assertIn("Cross-day generation may include retries", text)
+        self.assertNotIn("with repeat use", text)
+        self.assertEqual(usage["excluded_ids"], 2)
+        unavailable = report.summarize_rows({}, rows, {"6.6.0"}, now=now,
+            unavailable_columns=["reporting_saved_30d"])["reporting_usage_7d"]
+        self.assertFalse(unavailable["source_available"])
+        self.assertEqual(unavailable["cohorts"]["nonfree"]["covered_ids"], 0)
+
     def test_extended_history_reports_coverage_and_latest_rolling_count(self) -> None:
         now = datetime(2026, 10, 16, 12, tzinfo=timezone.utc)
         base = {"received_at": "2026-10-16 11:00:00", "version": "6.6.0",
@@ -61,6 +110,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 conn.execute("INSERT INTO telemetry_pings VALUES (datetime('now'), 'fixture', '6.6.0')")
             source = report.fetch_rows_local(db_path, 7)
             self.assertIn("successful_history_reads_over_7d_30d", source["unavailable_columns"])
+            self.assertIn("reporting_telemetry_available", source["unavailable_columns"])
             self.assertEqual(source["rows"][0]["successful_history_reads_over_7d_30d"], 0)
 
     def test_normalize_reported_version_strips_v_prefix(self) -> None:

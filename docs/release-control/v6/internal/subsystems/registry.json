@@ -2865,6 +2865,19 @@
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
+            "id": "reporting-activity",
+            "label": "reporting aggregate outcome proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/reporting_activity.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/reporting_activity_test.go"
+            ]
+          },
+          {
             "id": "client-backup-health-reports",
             "label": "client-scoped backup health rendering and schedule proof",
             "match_prefixes": [],
@@ -3281,6 +3294,7 @@
               "internal/api/report_schedule_delivery_test.go",
               "internal/api/report_schedule_inventory_test.go",
               "internal/api/report_schedules_test.go",
+              "internal/api/reporting_activity_test.go",
               "internal/api/reporting_backup_health_test.go",
               "internal/config/report_schedule_delivery_test.go"
             ]
@@ -3298,6 +3312,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/api/report_schedule_inventory_test.go",
+              "internal/api/reporting_activity_test.go",
               "internal/api/reporting_availability_test.go",
               "internal/api/reporting_backup_health_test.go",
               "internal/api/reporting_handlers_test.go",
@@ -4842,11 +4857,12 @@
             ]
           },
           {
-            "id": "telemetry-schema-v19-release-disclosure",
-            "label": "telemetry schema v19 release disclosure proof",
+            "id": "telemetry-schema-release-disclosures",
+            "label": "telemetry schema release disclosure proof",
             "match_prefixes": [],
             "match_files": [
-              "docs/releases/TELEMETRY_SCHEMA_V19.md"
+              "docs/releases/TELEMETRY_SCHEMA_V19.md",
+              "docs/releases/TELEMETRY_SCHEMA_V20.md"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -7771,6 +7787,7 @@
         "internal/cloudcp/auth/magiclink_store.go",
         "internal/config/config.go",
         "internal/config/history_read_activity.go",
+        "internal/config/reporting_activity.go",
         "internal/config/watcher.go",
         "internal/crypto/crypto.go",
         "internal/logging/logging.go",
@@ -7847,6 +7864,7 @@
               "docs/PRIVACY.md",
               "frontend-modern/public/docs/PRIVACY.md",
               "internal/config/history_read_activity.go",
+              "internal/config/reporting_activity.go",
               "internal/telemetry/service_health.go",
               "internal/telemetry/telemetry.go",
               "pkg/server/service_health.go",
@@ -7859,9 +7877,11 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
+              "internal/api/reporting_activity_test.go",
               "internal/api/system_settings_telemetry_test.go",
               "internal/api/telemetry_history_reads_test.go",
               "internal/config/history_read_activity_test.go",
+              "internal/config/reporting_activity_test.go",
               "internal/telemetry/service_health_test.go",
               "internal/telemetry/telemetry_test.go",
               "pkg/server/service_health_test.go",

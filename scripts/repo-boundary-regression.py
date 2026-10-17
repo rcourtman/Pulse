@@ -17,6 +17,20 @@ class ReportingSubjectBoundaryTests(unittest.TestCase):
         variants = [
             ("shared pipeline", None, None, None),
             (
+                "activity observer exact path", "reporting_activity_extra.go",
+                "package api\n", "new production paid-domain implementation files are not baselined",
+            ),
+            (
+                "activity observer private root import", "reporting_activity.go",
+                'package api\nimport _ "github.com/rcourtman/pulse-go-rewrite/internal/license"\n',
+                "API root imports of internal/license remain",
+            ),
+            (
+                "activity observer licensing bridge required", "reporting_activity.go",
+                'package api\nimport _ "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"\n',
+                "API files outside bridge allowlist still import pkg/licensing",
+            ),
+            (
                 "backup adapter exact path", "reporting_backup_health_extra.go",
                 "package api\n", "new production paid-domain implementation files are not baselined",
             ),

@@ -27,6 +27,20 @@ func TestReportingSubjectBoundaryExemptionIsExact(t *testing.T) {
 	}{
 		{name: "shared subject pipeline"},
 		{
+			name: "activity observer exemption is exact", file: "reporting_activity_extra.go", content: "package api\n",
+			goMarker: "untracked paid-domain file reporting_activity_extra.go",
+		},
+		{
+			name: "activity observer private import denied", file: "reporting_activity.go",
+			content:  "package api\nimport _ \"github.com/rcourtman/pulse-go-rewrite/internal/license\"\n",
+			goMarker: "direct internal/license import",
+		},
+		{
+			name: "activity observer licensing bridge required", file: "reporting_activity.go",
+			content:  "package api\nimport _ \"github.com/rcourtman/pulse-go-rewrite/pkg/licensing\"\n",
+			goMarker: "reporting_activity.go",
+		},
+		{
 			name: "backup adapter exemption is exact", file: "reporting_backup_health_extra.go", content: "package api\n",
 			goMarker: "untracked paid-domain file reporting_backup_health_extra.go",
 		},

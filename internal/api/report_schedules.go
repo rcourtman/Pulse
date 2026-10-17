@@ -422,7 +422,11 @@ func (h *ReportingHandlers) executeReportSchedule(ctx context.Context, persisten
 		updated.LastSuccessAt = &completed
 	}
 	store.Schedules[index] = updated
-	return result, updated, persistence.SaveReportScheduleStore(*store)
+	if err := persistence.SaveReportScheduleStore(*store); err != nil {
+		return result, updated, err
+	}
+	h.recordReportingSuccessfulPeriod(ctx, updated, result.usagePeriod, completed)
+	return result, updated, nil
 }
 
 func (h *ReportingHandlers) prepareReportSchedule(ctx context.Context, schedule config.ReportSchedule, now time.Time, statusOnly bool) (config.ReportSchedule, error) {
@@ -640,8 +644,9 @@ func resourceHasAnyReportScheduleTag(resource unifiedresources.Resource, tags ma
 }
 
 type reportScheduleRunResult struct {
-	path  string
-	email string
+	path        string
+	email       string
+	usagePeriod string
 }
 
 func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *config.ConfigPersistence, schedule config.ReportSchedule, now time.Time, manual bool, occurrenceKey string) (reportScheduleRunResult, config.ReportSchedule) {
@@ -666,7 +671,9 @@ func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *
 	}
 	if schedule.Delivery.Method == config.ReportScheduleDeliveryEmail {
 		if _, err := scheduledReportEmailManager(persistence, schedule); err != nil {
-			return result, markReportScheduleDeliveryFailed(schedule, now, err)
+			failed := markReportScheduleDeliveryFailed(schedule, now, err)
+			h.recordReportingDeliveryFailure(schedule.Kind, failed.LastDeliveryStatus, now)
+			return result, failed
 		}
 	}
 
@@ -674,12 +681,15 @@ func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *
 	if err != nil {
 		return result, markReportScheduleFailed(schedule, now, err)
 	}
+	h.recordReportingActivity(config.ReportingActivityEvent{At: now, Kind: schedule.Kind, Event: "generated", DataState: report.DataState})
+	result.usagePeriod = reportingActivityPeriod(schedule, report.Start, report.End, now)
 
 	path, err := saveGeneratedReport(persistence, schedule, report)
 	if err != nil {
 		return result, markReportScheduleFailed(schedule, now, err)
 	}
 	result.path = path
+	h.recordReportingActivity(config.ReportingActivityEvent{At: now, Kind: schedule.Kind, Event: "saved"})
 	schedule.LastReportDataState = report.DataState
 	schedule.LastReportDataMessage = report.DataMessage
 	schedule.LastReportPath = path
@@ -688,10 +698,13 @@ func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *
 	if schedule.Delivery.Method == config.ReportScheduleDeliveryEmail {
 		emailStatus, err := sendScheduledReportEmail(persistence, schedule, report, path)
 		if err != nil {
-			return result, markReportScheduleDeliveryFailed(schedule, now, err)
+			failed := markReportScheduleDeliveryFailed(schedule, now, err)
+			h.recordReportingDeliveryFailure(schedule.Kind, failed.LastDeliveryStatus, now)
+			return result, failed
 		}
 		result.email = emailStatus
 		schedule.LastDeliveryStatus = emailStatus
+		h.recordReportingActivity(config.ReportingActivityEvent{At: now, Kind: schedule.Kind, Event: "email_accepted"})
 	}
 
 	schedule.LastRunStatus = config.ReportScheduleLastRunOK
@@ -1226,6 +1239,9 @@ func (h *ReportingHandlers) runDueReportSchedulesForOrg(ctx context.Context, org
 			if !save(i, schedule) {
 				return
 			}
+			if schedule.LastRunStatus == config.ReportScheduleLastRunUnconfirmed {
+				h.recordReportingDeliveryFailure(schedule.Kind, schedule.LastDeliveryStatus, now)
+			}
 		}
 		if !schedule.Enabled {
 			if schedule.RetryAt != nil {
@@ -1329,12 +1345,19 @@ func (h *ReportingHandlers) runPatrolDigestSchedule(ctx context.Context, persist
 	}
 	manager, err := scheduledReportEmailManager(persistence, schedule)
 	if err != nil {
-		return result, markReportScheduleDeliveryFailed(schedule, now, err)
+		failed := markReportScheduleDeliveryFailed(schedule, now, err)
+		h.recordReportingDeliveryFailure(schedule.Kind, failed.LastDeliveryStatus, now)
+		return result, failed
 	}
 	subject, htmlBody, textBody := renderPatrolDigestEmail(digest, h.patrolDigestPublicURL())
+	h.recordReportingActivity(config.ReportingActivityEvent{At: now, Kind: schedule.Kind, Event: "generated"})
+	result.usagePeriod = reportingActivityPeriod(schedule, time.Time{}, time.Time{}, now)
 	if err := manager.SendEmailWithRetry(subject, htmlBody, textBody); err != nil {
-		return result, markReportScheduleDeliveryFailed(schedule, now, err)
+		failed := markReportScheduleDeliveryFailed(schedule, now, err)
+		h.recordReportingDeliveryFailure(schedule.Kind, failed.LastDeliveryStatus, now)
+		return result, failed
 	}
+	h.recordReportingActivity(config.ReportingActivityEvent{At: now, Kind: schedule.Kind, Event: "email_accepted"})
 	result.email = "sent"
 	schedule.LastRunStatus = config.ReportScheduleLastRunOK
 	schedule.LastError = ""

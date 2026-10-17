@@ -18,6 +18,40 @@
 
 ## Purpose
 
+### Reporting usage remains content-free and distinguishable from missing measurements
+
+`internal/config/reporting_activity.go` is the canonical durable count store.
+It retains 30 UTC-day buckets of closed report kinds and outcomes. Local opaque
+schedule/period SHA-256 markers expire after 90 days and use existing config
+storage encryption when configured. No raw report, recipient, schedule, scope,
+organization identifier, range or error content enters the tally. Only schema
+v20 scalar counters, measurement availability and elapsed observation days leave
+the installation through the existing opt-out-controlled heartbeat. Local tally
+errors never fail reporting. Mock mode never records real reporting activity.
+
+Generation counts include separate attempts and complete direct response writes.
+Distinct successful-generation days measure activity, including manual downloads
+and scheduled retries, with same-day attempts counted once. Multiple days alone
+cannot establish a fresh successful period or returning manual use. The adoption
+summary keeps multi-day generation separate from successful repeat periods.
+Saved files, SMTP acceptance, definite failures and uncertain acceptance remain
+separate. Persisted successful saved-schedule windows count once. A successful
+repeat period requires a different window on that schedule within 90 days,
+including monthly reuse, so retries and same-period reruns do not inflate that
+period metric. The aggregate
+query uses only each eligible rotating ID's latest counts and marks old-schema,
+missing-column and unavailable-tally data unmeasured. Elapsed observation days do
+not establish continuous uptime, and SMTP acceptance does not prove inbox receipt.
+No customer/account joins or paying-customer census are permitted.
+
+`internal/config/reporting_activity_test.go`,
+`internal/api/reporting_activity_test.go`, the telemetry payload/disclosure tests,
+the server snapshot tests and the adoption-report tests verify this boundary.
+Both privacy document copies and `docs/releases/TELEMETRY_SCHEMA_V20.md` disclose
+the payload. Client source landing and compatible receiver activation remain
+separate from release and installed fleet measurement.
+
+
 ### Investigation evidence retains tenant and runtime-source boundaries
 
 Recovery HTTP and tool reads share `Manager.ListPointsForOrg`: a nonblank tenant
