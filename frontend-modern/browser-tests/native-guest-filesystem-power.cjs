@@ -5,7 +5,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
 const root = '/workspace/frontend-modern';
-const output = '/workspace/tmp/native-guest-filesystem-power/browser-consumers';
+const narrowOnly = process.argv.includes('--narrow-only');
+const output = '/workspace/tmp/native-guest-filesystem-power/' + (narrowOnly ? 'browser-narrow' : 'browser-all');
 const origin = 'http://127.0.0.1:5361';
 const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const point = (timestamp, value) => ({timestamp, value, min: value, max: value});
@@ -35,11 +36,12 @@ const settle = page => page.evaluate(async () => {
   assert.equal(result.playwright, JSON.parse(fs.readFileSync('/workspace/tests/integration/package-lock.json')).packages['node_modules/@playwright/test'].version);
   process.chdir(root);
   const {createServer} = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
-  const server = await createServer({root, configFile: root + '/vite.config.ts', cacheDir: output + '/vite-cache', optimizeDeps: {entries: ['browser-tests/paused-filesystem.html', 'browser-tests/resource-stopped-filesystem.html']}, server: {host: '127.0.0.1', port: 5361, strictPort: true, hmr: false}});
+  const server = await createServer({root, configFile: root + '/vite.config.ts', cacheDir: output + '/vite-cache', optimizeDeps: {entries: ['browser-tests/paused-filesystem.html', 'browser-tests/resource-stopped-filesystem.html']}, server: {host: '127.0.0.1', port: 5361, strictPort: true}});
   let browser, lastPage;
   try {
     await server.listen();
-    for (const [name, engine, width, height, dark] of [['desktop', chromium, 1440, 1000, false], ['narrow', webkit, 320, 900, true]]) {
+    const viewports = [['desktop', chromium, 1440, 1000, false], ['narrow', webkit, 320, 900, true]];
+    for (const [name, engine, width, height, dark] of (narrowOnly ? viewports.slice(1) : viewports)) {
       browser = await engine.launch(engine === chromium ? {headless: true, channel: 'chromium', args: ['--no-sandbox']} : {headless: true});
       const context = await browser.newContext({viewport: {width, height}, isMobile: width < 768, hasTouch: width < 768, locale: 'en-GB', timezoneId: 'UTC'});
       const page = await context.newPage();
@@ -52,7 +54,9 @@ const settle = page => page.evaluate(async () => {
       record.failedLoads = [];
       page.on('requestfailed', request => record.failedLoads.push({path: new URL(request.url()).pathname, failure: request.failure()}));
       page.on('console', message => {if (message.type() === 'error') record.errors.push(message.text());});
-      await page.routeWebSocket(/.*/, socket => socket.close());
+      // Only Vite's loopback development socket is real; application and
+      // off-origin sockets remain blocked. Blocking HMR creates fixture noise.
+      await page.routeWebSocket(url => url.origin !== origin.replace('http:', 'ws:') || url.pathname === '/ws', socket => socket.close());
       await page.addInitScript(dark => {
         document.addEventListener('DOMContentLoaded', () => document.documentElement.classList.toggle('dark', dark));
         window.__trustedInputs = [];
