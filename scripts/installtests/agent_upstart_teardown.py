@@ -124,7 +124,10 @@ class AgentUpstartTeardown(unittest.TestCase):
             for name in ("ps", "initctl"):
                 p = tools / name; p.write_text(MODEL); p.chmod(0o700)
             if fault == "missing-initctl": (tools / "initctl").unlink()
-            init = root / "init"; init.mkdir()
+            # The installer refuses a group- or world-writable job directory.
+            # Give it an explicit mode so a caller umask of 002 cannot make
+            # the trusted fixture look untrusted.
+            init = root / "init"; init.mkdir(mode=0o755)
             config = init / "pulse-agent.conf"
             unrelated = root / "unrelated"; unrelated.write_text("retain unrelated recovery\n")
             if conf == "linked": config.symlink_to(unrelated)
