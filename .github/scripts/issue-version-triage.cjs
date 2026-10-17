@@ -146,7 +146,8 @@ function normalizeVersion(value) {
 }
 
 function normalizeLegacyVersionValue(value) {
-  const visible = String(value).trim().replace(/^[`*_]+/, "");
+  const rawValue = String(value).trim();
+  const visible = rawValue.replace(/^[`*_]+/, "");
   // Failed-install forms explicitly accept an attempted server archive. Its
   // packaging suffix is not part of the release version. Recognise only the
   // server archive names; companion binaries and signatures cannot establish
@@ -160,9 +161,22 @@ function normalizeLegacyVersionValue(value) {
       /-linux-(?:386|amd64|arm64|armv6|armv7)$/i, ""
     )) : null;
   }
+  // Both community and private Pro images carry the server. Read the tag of
+  // that image only: "latest" plus a later agent version is not server-version
+  // evidence, and companion images/binaries must not supply it either.
+  const image = visible.match(/^(?:[a-z0-9._/-]+\/)?pulse(?:-pro)?:([^\s`*]+)/i);
+  if (image) {
+    // Unlike backticks/asterisks, underscores can occur in a Docker tag. Strip
+    // them only when they close the field value's matching Markdown wrapper.
+    const wrapper = rawValue.match(/^_+/)?.[0];
+    const imageTag = wrapper && image[1].endsWith(wrapper)
+      ? image[1].slice(0, -wrapper.length) : image[1];
+    const tag = imageTag.match(/^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:@sha256:[a-f0-9]{64})?$/i);
+    return tag ? normalizeVersion(tag[1]) : null;
+  }
   // Keep an explicitly shared server/agent version (as in #1788), without
   // mining a sentence such as "unknown; agent version 6.5.0" for a number.
-  return /^(?:v?\d+\.\d+\.\d+\b|(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+v?\d+\.\d+\.\d+\b|(?:[a-z0-9._/-]+\/)?pulse:|pulse[-_])/i.test(visible)
+  return /^(?:v?\d+\.\d+\.\d+\b|(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+v?\d+\.\d+\.\d+\b|pulse[-_]v?\d+\.\d+\.\d+\b)/i.test(visible)
     ? normalizeVersion(visible) : null;
 }
 
