@@ -364,6 +364,49 @@ async function applyLabelDelta(github, context, issue, before, after, core) {
   }
 }
 
+async function newlyDeclaredTopics({ github, context, issue, eventIsCurrent, core }) {
+  const eventIssue = context.payload.issue;
+  const previousBody = context.payload.changes?.body?.from;
+  const eventTopics = normalizedTopicField(eventIssue.body);
+  const declared = classifyAdditionalActionableTopics(eventIssue.body) === true && (
+    context.payload.action === "opened" ||
+    (context.payload.action === "edited" && typeof previousBody === "string" &&
+      normalizedTopicField(previousBody) !== eventTopics)
+  );
+  if (!declared || eventTopics !== normalizedTopicField(issue.body)) return false;
+  if (eventIsCurrent) return true;
+
+  // A comment or unrelated edit can overtake a queued declaration. That does
+  // not dispose of its topics, but an explicit label removal may have done so.
+  // Read every page of this issue's events rather than guessing from its age
+  // or checking only the latest page. Missing/failed history must not authorise
+  // a mutation. Keep the normal fresh pre-write issue check as well.
+  const timestamp = (value) => typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value) ? Date.parse(value) : NaN;
+  const declaredAt = timestamp(eventIssue.updated_at);
+  const currentAt = timestamp(issue.updated_at);
+  if (!Number.isFinite(declaredAt) || !Number.isFinite(currentAt) || currentAt < declaredAt ||
+      (issue.labels || []).some((label) => label.name === NEEDS_DECOMPOSITION_LABEL)) return false;
+
+  const events = await github.paginate(github.rest.issues.listEvents, {
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    issue_number: issue.number,
+    per_page: 100,
+  });
+  if (!Array.isArray(events)) throw new Error("Issue event history was unavailable");
+  const reviewed = events.some((event) => {
+    if (event.event !== "unlabeled" || event.label?.name !== NEEDS_DECOMPOSITION_LABEL) return false;
+    const removedAt = timestamp(event.created_at);
+    return !Number.isFinite(removedAt) || removedAt >= declaredAt;
+  });
+  if (reviewed) {
+    core.info("Community removed the decomposition label after this declaration; preserving its disposition.");
+    return false;
+  }
+  return true;
+}
+
 async function syncLabels({ github, context, core }) {
   const eventIssue = context.payload.issue;
   // Jobs can start after another edit, comment or Community disposition.
@@ -400,14 +443,12 @@ async function syncLabels({ github, context, core }) {
   // A new or materially edited nonempty field needs review even if the old
   // declaration already had topics. Comparing only its boolean classification
   // loses an added symptom after Community disposed of the earlier topics.
-  // Ignore case/whitespace and hidden comments; unrelated and superseded edits
-  // must not restore a cleared task. This flags review, not a new issue or an
-  // automatic judgment about whether two descriptions are the same problem.
-  const newlyDeclared = eventIsCurrent && hasAdditionalActionableTopics === true && (
-    context.payload.action === "opened" ||
-    (context.payload.action === "edited" && previousBody !== undefined &&
-      normalizedTopicField(previousBody) !== normalizedTopicField(issue.body))
-  );
+  // Ignore case/whitespace and hidden comments. A delayed declaration can still
+  // need review; use explicit label history to distinguish that from a task
+  // Community has cleared. This flags review, not a new issue or a disposition.
+  const newlyDeclared = hasAdditionalActionableTopics === true && await newlyDeclaredTopics({
+    github, context, issue, eventIsCurrent, core,
+  });
   if (newlyDeclared) {
     core.info("Issue newly declares additional actionable topics; decomposition is required.");
     nextLabels.add(NEEDS_DECOMPOSITION_LABEL);

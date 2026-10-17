@@ -66,6 +66,7 @@ function createGithub({
   latestVersion = "6.0.1",
   existingLabels = new Set(),
   existingComments = [],
+  issueEvents = [],
   issues = [],
   currentIssue = null,
 } = {}) {
@@ -75,6 +76,7 @@ function createGithub({
     getLabel: [],
     getLatestRelease: [],
     paginate: [],
+    eventHistory: [],
     addLabels: [],
     removeLabel: [],
     getIssue: [],
@@ -116,6 +118,7 @@ function createGithub({
         },
         listForRepo: Symbol("listForRepo"),
         listComments: Symbol("listComments"),
+        listEvents: Symbol("listEvents"),
       },
       repos: {
         async getLatestRelease() {
@@ -124,8 +127,12 @@ function createGithub({
         },
       },
     },
-    async paginate(endpoint) {
+    async paginate(endpoint, parameters) {
       calls.paginate.push(endpoint);
+      if (endpoint === github.rest.issues.listEvents) {
+        calls.eventHistory.push(parameters);
+        return issueEvents;
+      }
       return endpoint === github.rest.issues.listForRepo ? issues : existingComments;
     },
   };
@@ -327,7 +334,7 @@ test("unchanged visible topics cannot restore a completed task on unrelated or p
   }
 });
 
-test("a populated-field edit still requires a current event and a fresh pre-write read", async () => {
+test("a populated-field edit respects explicit review and a fresh pre-write read", async () => {
   const previousBody = "### Additional actionable topics\nHistory is also empty.\n";
   const issue = { number: 2928, title: "Mixed report", state: "open", labels: [{ name: "enhancement" }],
     updated_at: "2026-10-15T20:30:00Z",
@@ -336,7 +343,9 @@ test("a populated-field edit still requires a current event and a fresh pre-writ
     const current = structuredClone(issue);
     if (scenario === "superseded event") current.updated_at = "2026-10-15T20:31:00Z";
     if (scenario === "already queued") current.labels.push({ name: "needs-decomposition" });
-    const { github, calls } = createGithub({ currentIssue: current });
+    const { github, calls } = createGithub({ currentIssue: current, issueEvents: [
+      { event: "unlabeled", label: { name: "needs-decomposition" }, created_at: current.updated_at },
+    ] });
     if (scenario === "closed during preparation") {
       github.rest.issues.getLabel = async () => {
         github.currentIssue = { ...current, state: "closed" };
@@ -353,7 +362,7 @@ test("a populated-field edit still requires a current event and a fresh pre-writ
     assert.deepEqual(calls.removeLabel, [], scenario);
     assert.deepEqual(calls.createComment, [], scenario);
     assert.deepEqual(calls.getLatestRelease, [], scenario);
-    assert.deepEqual(calls.paginate, [], scenario);
+    assert.deepEqual(calls.paginate, scenario === "superseded event" ? [github.rest.issues.listEvents] : [], scenario);
   }
 });
 
@@ -1428,7 +1437,9 @@ test("a delayed declaration cannot restore a cleared decomposition task", async 
   for (const body of [eventIssue.body, "### Additional actionable topics\nNone\n"]) {
     const { github, calls } = createGithub({ currentIssue: {
       ...eventIssue, state: "open", body, updated_at: "2026-10-08T11:00:00Z",
-    } });
+    }, issueEvents: [
+      { event: "unlabeled", label: { name: "needs-decomposition" }, created_at: "2026-10-08T10:30:00Z" },
+    ] });
     await syncLabels({ github, context: createContext({ issue: eventIssue }), core: createCore() });
     assert.equal(calls.addLabels.length, 0);
     assert.equal(calls.removeLabel.length, 0);
@@ -2066,3 +2077,137 @@ test("preserved form versions do not hide a newly declared secondary symptom", a
   assert.deepEqual(calls.removeLabel, []);
   assert.deepEqual(calls.createComment, []);
 });
+
+function delayedTopicContext(action = "edited") {
+  const previousBody = "### Additional actionable topics\nNone\n\n### Additional context\nOriginal logs.";
+  const issue = {
+    number: 3030, title: "Mixed report", state: "open",
+    body: previousBody.replace("None", "History is also missing."),
+    labels: ["bug", "affects-6.6.0", "needs-human", "needs-retest-on-latest", "operator-reviewed"]
+      .map(name => ({ name })),
+    updated_at: "2026-10-17T02:00:00Z",
+  };
+  return createContext({ action, issue, previousBody });
+}
+
+for (const laterActivity of ["comment", "title edit", "unrelated body edit"]) {
+  test(`delayed topic declaration survives a later ${laterActivity}`, async () => {
+    const context = delayedTopicContext();
+    const currentIssue = { ...context.payload.issue, updated_at: "2026-10-17T02:01:00Z" };
+    if (laterActivity === "title edit") currentIssue.title = "Clarified mixed report";
+    if (laterActivity === "unrelated body edit") currentIssue.body = currentIssue.body.replace("Original logs.", "Later logs.");
+    const { github, calls } = createGithub({ currentIssue, issueEvents: [
+      // A previous task was cleared before this new symptom was declared.
+      { event: "unlabeled", label: { name: "needs-decomposition" }, created_at: "2026-10-17T01:59:59Z" },
+      { event: "unlabeled", label: { name: "needs-input" }, created_at: currentIssue.updated_at },
+    ] });
+    await syncLabels({ github, context, core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+    assert.deepEqual(calls.eventHistory, [{ owner: "rcourtman", repo: "Pulse", issue_number: 3030, per_page: 100 }]);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.equal(calls.getIssue.length, 2);
+
+    // A subsequent unrelated edit cannot be relied on to rescue the original
+    // declaration: it adds no task itself and must not reset Community state.
+    github.currentIssue = { ...currentIssue, labels: [...currentIssue.labels, { name: "needs-decomposition" }] };
+    await syncLabels({ github, core: createCore(), context: createContext({
+      action: "edited", issue: github.currentIssue, previousBody: context.payload.issue.body,
+    }) });
+    assert.equal(calls.addLabels.length, 1);
+    assert.equal(calls.eventHistory.length, 1);
+  });
+}
+
+test("delayed topic declaration survives an opening overtaken by a comment", async () => {
+  const context = delayedTopicContext("opened");
+  const { github, calls } = createGithub({ currentIssue: {
+    ...context.payload.issue, updated_at: "2026-10-17T02:01:00Z",
+  } });
+  await syncLabels({ github, context, core: createCore() });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
+for (const removedAt of ["2026-10-17T02:00:00Z", "2026-10-17T02:00:30Z", undefined, "invalid"]) {
+  test(`delayed topic review is not restored after an explicit removal at ${removedAt}`, async () => {
+    const context = delayedTopicContext();
+    const { github, calls } = createGithub({ currentIssue: {
+      ...context.payload.issue, updated_at: "2026-10-17T02:01:00Z",
+    }, issueEvents: [
+      ...Array.from({ length: 125 }, () => ({ event: "renamed", created_at: "2026-10-17T02:00:20Z" })),
+      { event: "unlabeled", label: { name: "needs-decomposition" }, created_at: removedAt },
+    ] });
+    await syncLabels({ github, context, core: createCore() });
+    assert.equal(calls.eventHistory.length, 1, "inspect the complete paginated aggregate, including a late removal");
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+for (const scenario of ["changed topic", "cleared topic", "reopen", "unrelated event", "missing previous body", "missing event time", "missing current time", "future event", "already queued"]) {
+  test(`delayed topic history is not consulted for ${scenario}`, async () => {
+    const context = delayedTopicContext();
+    const currentIssue = structuredClone(context.payload.issue);
+    currentIssue.updated_at = "2026-10-17T02:01:00Z";
+    if (scenario === "changed topic") currentIssue.body = currentIssue.body.replace("History is also missing.", "A different problem.");
+    if (scenario === "cleared topic") currentIssue.body = currentIssue.body.replace("History is also missing.", "None");
+    if (scenario === "reopen") context.payload.action = "reopened";
+    if (scenario === "unrelated event") context.payload.changes.body.from = context.payload.issue.body;
+    if (scenario === "missing previous body") delete context.payload.changes;
+    if (scenario === "missing event time") delete context.payload.issue.updated_at;
+    if (scenario === "missing current time") delete currentIssue.updated_at;
+    if (scenario === "future event") context.payload.issue.updated_at = "2026-10-17T02:02:00Z";
+    if (scenario === "already queued") currentIssue.labels.push({ name: "needs-decomposition" });
+    const { github, calls } = createGithub({ currentIssue });
+    await syncLabels({ github, context, core: createCore() });
+    assert.deepEqual(calls.eventHistory, []);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+for (const failure of ["access error", "unavailable history"]) {
+  test(`delayed topic declaration fails closed on ${failure}`, async () => {
+    const context = delayedTopicContext();
+    const { github, calls } = createGithub({ currentIssue: {
+      ...context.payload.issue, updated_at: "2026-10-17T02:01:00Z",
+    } });
+    github.paginate = async () => {
+      if (failure === "access error") throw Object.assign(new Error("Forbidden"), { status: 403 });
+      return undefined;
+    };
+    await assert.rejects(syncLabels({ github, context, core: createCore() }));
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+for (const change of ["close", "body edit", "label review"]) {
+  test(`delayed topic declaration keeps the pre-write guard after a concurrent ${change}`, async () => {
+    const context = delayedTopicContext();
+    const currentIssue = { ...context.payload.issue, updated_at: "2026-10-17T02:01:00Z" };
+    const { github, calls } = createGithub({ currentIssue, existingLabels: new Set(["needs-decomposition"]) });
+    github.paginate = async () => {
+      const changed = { ...currentIssue, updated_at: "2026-10-17T02:02:00Z" };
+      if (change === "close") changed.state = "closed";
+      if (change === "body edit") changed.body = changed.body.replace("History is also missing.", "None");
+      if (change === "label review") changed.labels = [...changed.labels, { name: "needs-input" }];
+      github.currentIssue = changed;
+      return [];
+    };
+    await syncLabels({ github, context, core: createCore() });
+    assert.equal(calls.getIssue.length, 2);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
