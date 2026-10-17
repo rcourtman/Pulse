@@ -2211,3 +2211,76 @@ for (const change of ["close", "body edit", "label review"]) {
     assert.deepEqual(calls.createComment, []);
   });
 }
+
+const serverReferenceDigest = "a".repeat(64);
+const serverReferenceCases = [
+  ["rcourtman/pulse:6.5.0", "6.5.0"],
+  ["rcourtman/pulse:v6.6.0-rc.2", "6.6.0-rc.2"],
+  ["license.pulserelay.pro/pulse-pro:6.6.0-beta.3", "6.6.0-beta.3"],
+  [`license.pulserelay.pro/pulse-pro:6.6.0-rc.2@sha256:${serverReferenceDigest}`, "6.6.0-rc.2"],
+  [`rcourtman/pulse:6.5.0@sha256:${serverReferenceDigest}`, "6.5.0"],
+  ["pulse-pro:6.5.0", "6.5.0"],
+  ["pulse-v6.5.0", "6.5.0"],
+  ["pulse_6.6.0-rc.2", null],
+  ["pulse-agent:6.5.0", null],
+  ["pulse-agent-v6.5.0-linux-amd64", null],
+  ["pulse-agent-helper-v6.5.0-linux-amd64", null],
+  ["pulse-agent-runner-v6.5.0-linux-amd64", null],
+  ["pulse-mcp-v6.5.0", null],
+  ["pulse-provider-msp-v6.5.0", null],
+  ["rcourtman/pulse-agent:6.5.0", null],
+  ["license.pulserelay.pro/pulse-pro:latest; agent 6.5.0", null],
+  ["rcourtman/pulse:latest (agent version 6.5.0)", null],
+  ["rcourtman/pulse:6 (last known working server 6.5.0)", null],
+  ["rcourtman/pulse:6.5.0_custom", null],
+  [`license.pulserelay.pro/pulse-pro@sha256:${serverReferenceDigest} (agent 6.5.0)`, null],
+  ["another-product:6.5.0", null],
+];
+
+for (const [reference, version] of serverReferenceCases) {
+  test(`server reference identity: ${reference}`, () => {
+    for (const body of [
+      `### Pulse version\n${reference}\n\n### Agent version\n6.4.5`,
+      `Pulse version: **\`${reference}\`**`,
+      `Pulse | Version\n\`${reference}\`\nAgent version: 6.4.5`,
+      ...(reference.includes(":") ? [`### Pulse version\n_${reference}_`] : []),
+    ]) {
+      assert.equal(triage.internals.extractPulseVersion("Upgrade from v6.4.5", body), version, body);
+    }
+  });
+}
+
+for (const [reference, version] of serverReferenceCases.filter(([reference]) =>
+  reference.includes(":") || reference.includes("mcp") || reference.includes("agent"))) {
+  test(`server reference silent intake: ${reference}`, async () => {
+    const { github, calls } = createGithub();
+    const issue = { number: 2933, title: "[Bug]: Missing readings",
+      body: `### Pulse version\n${reference}\n\n### Agent version\n6.4.5`,
+      labels: ["bug", "needs-human", "needs-retest-on-latest", "operator-reviewed"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    const expected = version ? `affects-${version}` : "needs-version-info";
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [[expected]]);
+    assert.deepEqual(calls.createLabel.map(call => call.name), [expected]);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.equal(calls.getIssue.length, 2);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+  });
+}
+
+test("server reference correction preserves independent whole-thread evidence", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2934, title: "[Bug]: Missing readings",
+    body: "### Pulse version\nlicense.pulserelay.pro/pulse-pro:6.6.0-beta.3",
+    labels: ["bug", "affects-6.4.5", "affects-6.7.0", "needs-version-info", "needs-human",
+      "needs-retest-on-latest"].map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", issue,
+    previousBody: "### Pulse version\nrcourtman/pulse:6.4.5" }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.6.0-beta.3"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
+  assert.equal(calls.getIssue.length, 2);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+});
