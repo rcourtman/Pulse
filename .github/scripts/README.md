@@ -22,6 +22,13 @@ whether a fix is available. Community reconciles comments, images and releases.
   body, update time and label set. Separate GitHub label APIs are not atomic;
   this check narrows that race but cannot eliminate it.
 
+Repository label definitions can be created by concurrent issue jobs. A definite
+GitHub duplicate-name conflict gets one readback of that exact label, not another
+creation attempt. Other access, validation and transport failures remain failures;
+a missing or mismatched readback cannot authorise issue metadata. The normal fresh
+pre-write issue check still runs afterwards. This avoids losing an intake signal
+merely because another report first needed the same label.
+
 Secondary-topic classification still runs independently. Preserving version
 labels must not hide a new symptom or restore a completed decomposition task
 on an unrelated edit. Retest and human-ownership labels remain Community-owned.

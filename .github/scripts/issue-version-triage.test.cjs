@@ -2211,3 +2211,151 @@ for (const change of ["close", "body edit", "label review"]) {
     assert.deepEqual(calls.createComment, []);
   });
 }
+
+
+function duplicateLabelError() {
+  return Object.assign(new Error("Repository label already exists"), {
+    status: 422,
+    response: { data: { errors: [{ resource: "Label", field: "name", code: "already_exists" }] } },
+  });
+}
+
+for (const [label, labels, body] of [
+  ["affects-6.6.0-rc.2", ["bug"], "### Pulse version\n6.6.0-rc.2\n"],
+  ["needs-version-info", ["bug"], "### Pulse version\nunknown\n"],
+  ["needs-decomposition", ["enhancement"], "### Additional actionable topics\nA separate History failure\n"],
+]) {
+  test(`concurrent issue jobs both complete after creating the same ${label} label`, async () => {
+    const definitions = new Set();
+    let missingReads = 0;
+    let releaseReads;
+    const bothMissing = new Promise(resolve => { releaseReads = resolve; });
+    const jobs = [2920, 2921].map(number => {
+      const issue = { number, title: "Report", body, labels: labels.map(name => ({ name })) };
+      const { github, calls } = createGithub({ existingLabels: definitions });
+      const readLabel = github.rest.issues.getLabel;
+      github.rest.issues.getLabel = async payload => {
+        try {
+          return await readLabel(payload);
+        } catch (error) {
+          if (error.status === 404) {
+            missingReads += 1;
+            if (missingReads === 2) releaseReads();
+            await bothMissing;
+          }
+          throw error;
+        }
+      };
+      github.rest.issues.createLabel = async payload => {
+        calls.createLabel.push(payload);
+        if (definitions.has(payload.name)) throw duplicateLabelError();
+        definitions.add(payload.name);
+        return { data: payload };
+      };
+      return { github, calls, context: createContext({ issue }) };
+    });
+
+    const results = await Promise.allSettled(jobs.map(job => syncLabels({ ...job, core: createCore() })));
+    assert.deepEqual(results.map(result => result.status), ["fulfilled", "fulfilled"]);
+    assert.equal(missingReads, 2, "both jobs must observe the initial missing definition");
+    assert.deepEqual([...definitions], [label]);
+    assert.deepEqual(jobs.map(job => job.calls.getLabel.length).sort(), [1, 2], "one conflict readback, no write retry");
+    for (const { calls, context } of jobs) {
+      assert.equal(calls.createLabel.length, 1);
+      assert.deepEqual(calls.createLabel[0], {
+        owner: "rcourtman", repo: "Pulse", name: label,
+        color: label.startsWith("affects-") ? "0e8a16" : "fbca04",
+        description: label.startsWith("affects-") ? "Bug reported against Pulse 6.6.0-rc.2"
+          : label === "needs-version-info" ? "Issue is missing required Pulse version metadata"
+            : "Issue declares additional actionable topics that need linked dispositions",
+      });
+      assert.equal(calls.getIssue.length, 2, "normal fresh pre-write check still runs");
+      assert.deepEqual(calls.addLabels, [{ owner: "rcourtman", repo: "Pulse", issue_number: context.payload.issue.number, labels: [label] }]);
+      assert.deepEqual(calls.removeLabel, []);
+      assert.deepEqual(calls.createComment, []);
+      assert.deepEqual(calls.getLatestRelease, []);
+    }
+  });
+}
+
+for (const [scenario, error] of [
+  ["forbidden", Object.assign(new Error("Forbidden"), { status: 403 })],
+  ["transport uncertainty", new Error("Connection closed")],
+  ["server error", Object.assign(new Error("Server error"), { status: 500 })],
+  ["unspecified validation", Object.assign(new Error("Validation failed"), { status: 422 })],
+  ["malformed validation details", Object.assign(duplicateLabelError(), { response: { data: { errors: "already_exists" } } })],
+  ["different validation", Object.assign(duplicateLabelError(), { response: { data: { errors: [{ resource: "Label", field: "color", code: "invalid" }] } } })],
+]) {
+  test(`label creation preserves ${scenario} without another provider read or write`, async () => {
+    const issue = { number: 2922, title: "Report", body: "### Pulse version\n6.6.0-rc.2\n", labels: [{ name: "bug" }] };
+    const { github, calls } = createGithub();
+    github.rest.issues.createLabel = async payload => { calls.createLabel.push(payload); throw error; };
+    await assert.rejects(syncLabels({ github, context: createContext({ issue }), core: createCore() }), received => received === error);
+    assert.equal(calls.getLabel.length, 1);
+    assert.equal(calls.createLabel.length, 1);
+    assert.equal(calls.getIssue.length, 1);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+for (const status of [403, 404, 500]) {
+  test(`a duplicate-label conflict requires successful definition readback (${status})`, async () => {
+    const issue = { number: 2923, title: "Report", body: "### Pulse version\n6.6.0-rc.2\n", labels: [{ name: "bug" }] };
+    const { github, calls } = createGithub();
+    const readbackError = Object.assign(new Error("Readback failed"), { status });
+    github.rest.issues.getLabel = async payload => {
+      calls.getLabel.push(payload.name);
+      throw calls.getLabel.length === 1 ? Object.assign(new Error("Missing"), { status: 404 }) : readbackError;
+    };
+    github.rest.issues.createLabel = async payload => { calls.createLabel.push(payload); throw duplicateLabelError(); };
+    await assert.rejects(syncLabels({ github, context: createContext({ issue }), core: createCore() }), error => error === readbackError);
+    assert.equal(calls.getLabel.length, 2);
+    assert.equal(calls.createLabel.length, 1);
+    assert.equal(calls.getIssue.length, 1);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+for (const existing of [null, { name: "affects-6.5.0" }]) {
+  test(`duplicate-label readback cannot substitute an unavailable or different definition: ${JSON.stringify(existing)}`, async () => {
+    const issue = { number: 2924, title: "Report", body: "### Pulse version\n6.6.0-rc.2\n", labels: [{ name: "bug" }] };
+    const { github, calls } = createGithub();
+    const conflict = duplicateLabelError();
+    github.rest.issues.getLabel = async payload => {
+      calls.getLabel.push(payload.name);
+      if (calls.getLabel.length === 1) throw Object.assign(new Error("Missing"), { status: 404 });
+      return { data: existing };
+    };
+    github.rest.issues.createLabel = async payload => { calls.createLabel.push(payload); throw conflict; };
+    await assert.rejects(syncLabels({ github, context: createContext({ issue }), core: createCore() }), error => error === conflict);
+    assert.equal(calls.getLabel.length, 2);
+    assert.equal(calls.createLabel.length, 1);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+test("duplicate-label readback cannot override a newer Community disposition", async () => {
+  const issue = { number: 2925, state: "open", title: "Report", updated_at: "2026-10-08T10:00:00Z",
+    body: "### Pulse version\n6.6.0-rc.2\n", labels: [{ name: "bug" }] };
+  const { github, calls } = createGithub({ currentIssue: structuredClone(issue) });
+  github.rest.issues.getLabel = async payload => {
+    calls.getLabel.push(payload.name);
+    if (calls.getLabel.length === 1) throw Object.assign(new Error("Missing"), { status: 404 });
+    github.currentIssue = { ...issue, state: "closed" };
+    return { data: { name: payload.name } };
+  };
+  github.rest.issues.createLabel = async payload => { calls.createLabel.push(payload); throw duplicateLabelError(); };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.getLabel.length, 2);
+  assert.equal(calls.createLabel.length, 1);
+  assert.equal(calls.getIssue.length, 2);
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
