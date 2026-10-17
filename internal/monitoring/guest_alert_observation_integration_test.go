@@ -61,7 +61,7 @@ func TestGuestBackupDeferralAlertObservationLifecycle(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,12 +81,14 @@ func TestGuestBackupDeferralAlertObservationLifecycle(t *testing.T) {
 	var previous *models.VM
 	build := func() models.VM {
 		t.Helper()
+		// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+		cycleStart := time.Now()
 		vm, raw, source, notes, at, ok := m.buildVMFromClusterResource(context.Background(), "alert-observation", res, client, identity, nil, previous)
 		if !ok {
 			t.Fatal("VM disappeared")
 		}
 		m.recordGuestSnapshot("alert-observation", "qemu", "node", 105, GuestMemorySnapshot{Status: vm.Status, RetrievedAt: at, MemorySource: source, Memory: vm.Memory, Raw: raw, Notes: notes})
-		m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+		m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 		registry.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
 		next := previousVMFromView(registry.VMs()[0])
 		previous = &next

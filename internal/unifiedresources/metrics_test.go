@@ -620,3 +620,46 @@ func TestGuestMemoryEvidenceQualification(t *testing.T) {
 		t.Fatal("other platform contract changed")
 	}
 }
+
+// Proxmox's listing mem is page-cache-excluded cgroup usage for an LXC
+// (PVE::CGroup::get_memory_stat) but the host's view of guest RAM for QEMU.
+func TestGuestMemoryClusterResourcesIsTypeAware(t *testing.T) {
+	now := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+	at := now.Add(-time.Minute)
+	current := models.MemoryObservation{State: "current", Source: "cluster-resources", ObservedAt: at}
+	ct := QualifyGuestMemoryForKind(97, current, true, GuestMemoryProxmoxContainer, now)
+	if !ct.PressureKnown || ct.MayIncludeCache || ct.Source != "cluster-resources" || !strings.Contains(ct.Format(97), "cache-aware guest usage") {
+		t.Errorf("LXC listing memory lost its pressure meaning: %+v", ct)
+	}
+	if e := QualifyGuestMemoryForKind(97, current, true, GuestMemoryProxmoxVM, now); e.PressureKnown || !e.MayIncludeCache {
+		t.Errorf("QEMU listing memory became pressure: %+v", e)
+	}
+	if e := QualifyGuestMemory(97, current, true, true, now); e.PressureKnown || !e.MayIncludeCache {
+		t.Errorf("type-unknown Proxmox guest dropped the conservative reading: %+v", e)
+	}
+	for _, state := range []string{"last-known", ""} {
+		obs := current
+		obs.State = state
+		if e := QualifyGuestMemoryForKind(97, obs, true, GuestMemoryProxmoxContainer, now); e.PressureKnown {
+			t.Errorf("retained LXC listing reading became current: %s: %+v", state, e)
+		}
+	}
+	for _, source := range []string{"status-mem", "status-freemem", "derived-total-minus-used"} {
+		obs := current
+		obs.Source = source
+		if e := QualifyGuestMemoryForKind(97, obs, true, GuestMemoryProxmoxContainer, now); e.PressureKnown || !e.MayIncludeCache {
+			t.Errorf("container kind widened %s: %+v", source, e)
+		}
+	}
+	// Typed read state picks the kind from the resource type.
+	for _, tc := range []struct {
+		typ  ResourceType
+		want bool
+	}{{ResourceTypeSystemContainer, true}, {ResourceTypeVM, false}} {
+		r := &Resource{Type: tc.typ, Proxmox: &ProxmoxData{VMID: 101},
+			Metrics: &ResourceMetrics{Memory: &MetricValue{Percent: 97, Source: SourceProxmox, Observation: current}}}
+		if e := GuestMemoryEvidenceForResource(r, now); e.PressureKnown != tc.want {
+			t.Errorf("%s listing memory pressure=%t, want %t", tc.typ, e.PressureKnown, tc.want)
+		}
+	}
+}

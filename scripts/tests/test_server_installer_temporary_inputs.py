@@ -26,6 +26,7 @@ mktemp() {
     [[ "$FAULT" != allocation ]] || return 1
     local template="${@: -1}" created
     local -a args=("$@")
+    printf '%s\n' "$template" >> "$FIXTURE/templates"
     args[${#args[@]}-1]="$FIXTURE/shared/${template##*/}"
     created=$(command mktemp "${args[@]}") || return 1
     printf '%s\n' "$created" >> "$FIXTURE/created"
@@ -66,7 +67,7 @@ BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 CURRENT_VERSION=v6.5.0
 LATEST_RELEASE=v6.6.0
 detect_pulse_architecture() { echo amd64; }
-ensure_update_disk_headroom() { return 0; }
+ensure_update_disk_headroom() { printf '%s\n' "$1" > "$FIXTURE/headroom-path"; }
 resolve_target_release() { :; }
 download_release_archive() {
     printf '%s\n' "$3" > "$FIXTURE/archive-path"
@@ -204,7 +205,8 @@ class ServerInstallerTemporaryInputsTest(unittest.TestCase):
             result = subprocess.run(command, env=env, text=True,
                                     capture_output=True, timeout=15)
             observed = {}
-            for name in ("archive-path", "returned", "inferred", "calls", "transport", "directory-modes"):
+            for name in ("archive-path", "returned", "inferred", "calls", "transport", "directory-modes",
+                         "templates", "headroom-path"):
                 p = fixture / name
                 observed[name] = p.read_text().splitlines() if p.exists() else []
             archive_path = Path(observed["archive-path"][0]) if observed["archive-path"] else None
@@ -257,6 +259,18 @@ class ServerInstallerTemporaryInputsTest(unittest.TestCase):
                 self.assertEqual(r.returncode, 1 if fault else 0, r.stderr)
                 self.assertEqual(o["shared_entries"], [], o)
                 self.assertEqual(o["calls"], ["INSTALL"] if fault in ("", "archive_admission") else [])
+
+    def test_download_stages_archive_on_the_install_filesystem(self):
+        # /tmp is tmpfs on Debian 13 and many LXC templates, where a staged
+        # release is charged to the container's memory limit (#2785).
+        r, o = self.exercise("download")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(len(o["templates"]), 1, o)
+        template = Path(o["templates"][0])
+        self.assertEqual(template.parent.name, "install", o)
+        self.assertEqual(template.name, ".pulse-v6.6.0-linux-amd64-XXXXXX")
+        self.assertEqual(Path(o["headroom-path"][0]), template.parent)
+        self.assertEqual(Path(o["archive-path"][0]).name, "pulse-v6.6.0-linux-amd64.tar.gz")
 
     def test_explicit_archive_and_sidecar_are_never_owned_or_deleted(self):
         for fault in ("", "readiness", "archive_admission"):

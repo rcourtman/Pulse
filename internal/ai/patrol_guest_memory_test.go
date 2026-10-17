@@ -54,6 +54,13 @@ func TestPatrolGuestMemoryEvidence(t *testing.T) {
 		for _, kind := range []string{"vm", "system-container"} {
 			for _, path := range []string{"legacy", "canonical"} {
 				t.Run(tc.name+"/"+kind+"/"+path, func(t *testing.T) {
+					tc := tc
+					if tc.source == "cluster-resources" && kind == "system-container" {
+						// An agentless LXC's listing mem already excludes page
+						// cache (PVE::CGroup::get_memory_stat), so a current
+						// reading at 96% of its limit is real pressure.
+						tc.label, tc.pressure = "cache-aware guest usage", true
+					}
 					mem := patrolMemoryFixture(tc.percent, tc.state, tc.source, tc.at)
 					mem.UsageUnavailable = tc.unavailable
 					snapshot := models.StateSnapshot{}
@@ -228,5 +235,45 @@ func TestIssue2762NamedMemoryFields(t *testing.T) {
 	}
 	if _, err := proxmox.ParseLinuxMemoryAvailability("MemTotal: 20971520 kB\nMemFree: 838860 kB", true); err == nil {
 		t.Error("partial free-only payload manufactured available memory")
+	}
+}
+
+// An LXC without a linked Pulse agent only has Proxmox's listing reading. That
+// value is cgroup usage with page cache subtracted, so it keeps its pressure
+// meaning; a QEMU guest's listing reading counts guest cache and stays unknown.
+func TestPatrolAgentlessLXCListingMemoryIsPressure(t *testing.T) {
+	now := time.Now().UTC()
+	mem := patrolMemoryFixture(97, "current", "cluster-resources", now.Add(-30*time.Second))
+	snapshot := models.StateSnapshot{
+		VMs:        []models.VM{{ID: "vm", Name: "vm", VMID: 100, Type: "qemu", Instance: "pve", Node: "node", Status: "running", Memory: mem}},
+		Containers: []models.Container{{ID: "ct", Name: "ct", VMID: 101, Type: "lxc", Instance: "pve", Node: "node", Status: "running", Memory: mem}},
+	}
+	for _, path := range []string{"legacy", "canonical"} {
+		t.Run(path, func(t *testing.T) {
+			snap := newPatrolRuntimeState(snapshot)
+			if path == "canonical" {
+				registry := unifiedresources.NewRegistry(nil)
+				registry.IngestSnapshot(snapshot)
+				snap = patrolRuntimeState{readState: registry}
+			}
+			flags := triageThresholdChecksState(snap, nil, DefaultPatrolThresholds())
+			if triageFindFlag(flags, func(f TriageFlag) bool { return f.Metric == "memory" && f.ResourceName == "ct" }) == nil {
+				t.Errorf("agentless LXC at 97%% of its limit raised no memory flag: %+v", flags)
+			}
+			if flag := triageFindFlag(flags, func(f TriageFlag) bool { return f.Metric == "memory" && f.ResourceName == "vm" }); flag != nil {
+				t.Errorf("QEMU listing memory became pressure: %+v", flag)
+			}
+			ps := NewPatrolService(nil, nil)
+			if got := ps.getCurrentMetricValueState(AlertInfo{Type: "memory", ResourceID: "ct", ResourceName: "ct", ResourceType: "system-container"}, snap); got != 97 {
+				t.Errorf("LXC memory alert review lost the current reading: %v", got)
+			}
+			if got := ps.getCurrentMetricValueState(AlertInfo{Type: "memory", ResourceID: "vm", ResourceName: "vm", ResourceType: "vm"}, snap); got != -1 {
+				t.Errorf("QEMU memory alert review read listing memory as pressure: %v", got)
+			}
+			gaps := patrolGuestMemoryGaps(patrolGuestInventoryRows(snap, nil, nil))
+			if !strings.Contains(gaps, "vm:") || strings.Contains(gaps, "ct:") {
+				t.Errorf("pressure-unknown rollup misclassified guests: %s", gaps)
+			}
+		})
 	}
 }

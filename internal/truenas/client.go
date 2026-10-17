@@ -619,7 +619,7 @@ func parsePoolState(item map[string]any, isBoot bool) (Pool, bool) {
 	}
 	vdevs, diskMembers := poolTopologyFromTopology(topology)
 	readErrors, writeErrors, checksumErrors := poolErrorTotals(topology)
-	total, used, free := poolCapacity(item, properties)
+	total, used, free := poolCapacity(item, properties, topology)
 
 	pool := Pool{
 		ID:             id,
@@ -951,12 +951,7 @@ func (c *Client) getPoolsREST(ctx context.Context) ([]Pool, error) {
 		if id == "0" && strings.TrimSpace(item.Name) != "" {
 			id = strings.TrimSpace(item.Name)
 		}
-		var topology any
-		if len(item.Topology) > 0 {
-			if err := json.Unmarshal(item.Topology, &topology); err != nil {
-				topology = nil
-			}
-		}
+		topology := decodePoolTopology(item.Topology)
 		var scan any
 		if len(item.Scan) > 0 {
 			if err := json.Unmarshal(item.Scan, &scan); err != nil {
@@ -965,7 +960,7 @@ func (c *Client) getPoolsREST(ctx context.Context) ([]Pool, error) {
 		}
 		vdevs, diskMembers := poolTopologyFromTopology(topology)
 		readErrors, writeErrors, checksumErrors := poolErrorTotals(topology)
-		total, used, free := poolRESTCapacity(item)
+		total, used, free := poolRESTCapacity(item, topology)
 
 		pools = append(pools, Pool{
 			ID:             id,

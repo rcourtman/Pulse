@@ -399,7 +399,7 @@ class GuestMemoryInterpretationDocsTest(unittest.TestCase):
         # Patrol delegates interpretation and display to the shared selected-
         # sample formatter. Keep the guide bound to that implementation, not
         # the former location of its warning strings.
-        self.assertIn("unifiedresources.QualifyGuestMemory(", patrol)
+        self.assertIn("unifiedresources.QualifyGuestMemoryForKind(", patrol)
         self.assertIn("unifiedresources.GuestMemoryEvidence{", patrol)
         self.assertIn("}).Format(r.percent)", patrol)
         self.assertIn('"guest pressure unknown"', evidence)

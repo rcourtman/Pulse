@@ -23,15 +23,33 @@ var poolTotalKeys = []string{"size", "total", "total_bytes", "totalBytes"}
 var poolUsedKeys = []string{"allocated", "used", "used_bytes", "usedBytes"}
 var poolFreeKeys = []string{"free", "free_bytes", "freeBytes", "available"}
 
+// poolCapacityTopologyGroups are the top-level vdev classes that zpool's own
+// size/allocated properties count. OpenZFS spa_prop_get_config sums the
+// normal, special, dedup and embedded-log metaslab classes (embedded-log
+// metaslabs live on normal vdevs); separate log, cache and spare vdevs are
+// not pool capacity.
+var poolCapacityTopologyGroups = []string{"data", "special", "dedup"}
+
 // poolCapacity accepts a coherent pool-specific reading, not a dataset/disk
 // sum. Missing or invalid total/allocated bytes mean unknown usage, not an
 // empty pool. Free may be derived from those two pool bytes only when absent;
-// a supplied free reading must agree. Never mix flat and property sources,
-// or replace an explicitly supplied zero/null/invalid field via a fallback.
-func poolCapacity(item, properties map[string]any) (total, used, free int64) {
+// a supplied free reading must agree. Never mix flat, property and topology
+// sources, or replace an explicitly supplied zero/null/invalid field via a
+// fallback.
+//
+// Sources in order: flat pool.query fields (SCALE), zpool properties
+// (zfs.pool.query, which boot.get_state returns), then the top-level vdev
+// stats of the pool topology. CORE 13's pool.query (REST GET /pool) returns
+// neither flat bytes nor properties; its pool_extend only attaches the
+// libzfs vdev groups, whose top-level stats carry vs_space/vs_alloc as
+// size/allocated (#2510).
+func poolCapacity(item, properties map[string]any, topology any) (total, used, free int64) {
 	source := item
 	nested := false
 	if !hasPoolCapacityFields(item) {
+		if !hasPoolCapacityFields(properties) {
+			return poolTopologyCapacity(topology)
+		}
 		source = properties
 		nested = true
 	}
@@ -107,7 +125,69 @@ func poolByteValue(value any) (int64, bool) {
 	return parsed, parsed >= 0
 }
 
-func poolRESTCapacity(item poolResponse) (int64, int64, int64) {
+// poolTopologyCapacity sums the size/allocated stats of the top-level data,
+// special and dedup vdevs, which equals zpool's size/allocated properties.
+// Leaf vdevs carry no space accounting and are never read. Every counted
+// top-level vdev must supply both readings: a partial sum would understate
+// the pool, so it is reported as unknown instead.
+func poolTopologyCapacity(topology any) (int64, int64, int64) {
+	groups, ok := topology.(map[string]any)
+	if !ok {
+		return 0, 0, 0
+	}
+	if data, ok := groups["data"].([]any); !ok || len(data) == 0 {
+		return 0, 0, 0
+	}
+	var total, used int64
+	for _, groupName := range poolCapacityTopologyGroups {
+		raw, present := groups[groupName]
+		if !present || raw == nil {
+			continue
+		}
+		nodes, ok := raw.([]any)
+		if !ok {
+			return 0, 0, 0
+		}
+		for _, node := range nodes {
+			vdev, ok := node.(map[string]any)
+			if !ok {
+				return 0, 0, 0
+			}
+			stats, ok := vdev["stats"].(map[string]any)
+			if !ok {
+				return 0, 0, 0
+			}
+			size, sizeOK, _ := poolByteField(stats, []string{"size"}, false)
+			allocated, allocatedOK, _ := poolByteField(stats, []string{"allocated"}, false)
+			if !sizeOK || !allocatedOK || total > math.MaxInt64-size || used > math.MaxInt64-allocated {
+				return 0, 0, 0
+			}
+			total += size
+			used += allocated
+		}
+	}
+	if total <= 0 || used > total {
+		return 0, 0, 0
+	}
+	return total, used, total - used
+}
+
+// decodePoolTopology keeps native integer bytes exact; an intermediate
+// float64 cannot represent every vdev size above 2^53.
+func decodePoolTopology(raw json.RawMessage) any {
+	if len(raw) == 0 {
+		return nil
+	}
+	var topology any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&topology); err != nil {
+		return nil
+	}
+	return topology
+}
+
+func poolRESTCapacity(item poolResponse, topology any) (int64, int64, int64) {
 	fields := make(map[string]any, 3)
 	for key, raw := range map[string]json.RawMessage{"size": item.Size, "allocated": item.Allocated, "free": item.Free} {
 		if len(raw) == 0 {
@@ -123,5 +203,5 @@ func poolRESTCapacity(item poolResponse) (int64, int64, int64) {
 		}
 		fields[key] = value
 	}
-	return poolCapacity(fields, nil)
+	return poolCapacity(fields, nil, topology)
 }

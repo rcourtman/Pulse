@@ -178,6 +178,17 @@ parser. These controls do not establish issue #2762's installed input or cause,
 a cleared finding, or a containing release. Monitoring collection, guest-agent
 admission, configured alert thresholds, history storage and access are unchanged.
 
+The `cluster-resources` source is read by guest type. For an LXC, Proxmox's
+listing `mem` is cgroup usage with page cache subtracted (`PVE::CGroup::get_memory_stat`:
+`memory.current` minus `memory.stat` `file` on cgroup v2, `usage_in_bytes` minus
+`total_cache` on v1), measured against the container's own limit, so a current
+dated reading on an agentless container keeps its pressure meaning for flags,
+forecasts, anomalies and alert review. A QEMU guest's listing value is the host's
+view of guest RAM and stays cache-inclusive and pressure-unknown, as do
+`status-mem`, `status-freemem` and `derived-total-minus-used` for every guest.
+`TestPatrolAgentlessLXCListingMemoryIsPressure` checks both guest types through
+legacy and canonical read state.
+
 Legacy Assistant mode echo and stored-preference compatibility follow the
 [API settings contract](api-contracts.md#assistant-control_level-is-an-interactive-projection).
 

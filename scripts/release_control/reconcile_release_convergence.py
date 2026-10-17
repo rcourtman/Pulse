@@ -617,7 +617,17 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
     owner_run_id = validate_marker(
         marker, release=release, tag=tag, source_run_id=source_run_id
     )
-    owner_run = github.api(f"repos/{repository}/actions/runs/{owner_run_id}")
+    try:
+        owner_run = github.api(f"repos/{repository}/actions/runs/{owner_run_id}")
+    except GitHubNotFound as exc:
+        # The immutable marker outlives Actions history. Once its owner run is
+        # deleted, release-convergence.yml can never adopt the tag (it waits
+        # for that owner to read "completed"), so a retry would only time out.
+        raise ReconciliationError(
+            f"activation marker owner run {owner_run_id} for committed {tag} no longer "
+            "exists in Actions history; convergence cannot adopt this release until an "
+            "operator resolves it. No retry was dispatched."
+        ) from exc
     require_run_identity(
         owner_run,
         repository=repository,
@@ -753,19 +763,29 @@ def main() -> int:
     )
     try:
         run_ids = discover(github) if args.latest else [args.run_id]
-        if not run_ids:
-            report_decision(
-                "No failed run selected for retry among current immutable channel heads. "
-                "Mutable releases and missing convergence runs are not qualified by this check."
-            )
-            return 0
-        for run_id in run_ids:
-            assert run_id is not None
-            reconcile(github, run_id, args.max_attempts)
     except (OSError, ReconciliationError) as exc:
         print(f"release convergence reconciliation failed: {exc}", file=sys.stderr)
         return 1
-    return 0
+    if not run_ids:
+        report_decision(
+            "No failed run selected for retry among current immutable channel heads. "
+            "Mutable releases and missing convergence runs are not qualified by this check."
+        )
+        return 0
+    # Each selected run is a separate channel's debt. One channel's broken
+    # evidence must not starve the other channel's retry; it still fails the job.
+    failed = False
+    for run_id in run_ids:
+        assert run_id is not None
+        try:
+            reconcile(github, run_id, args.max_attempts)
+        except (OSError, ReconciliationError) as exc:
+            failed = True
+            print(
+                f"release convergence reconciliation failed for run {run_id}: {exc}",
+                file=sys.stderr,
+            )
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
