@@ -12,7 +12,7 @@ const job = {
   failCount: 0,
 };
 const message =
-  'The replication response format is invalid. Job availability is unknown; missing rows do not mean no jobs exist.';
+  'The replication response format is invalid. Job availability is unknown. Missing rows do not mean no jobs exist.';
 const respond = (payload: unknown) =>
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(payload)));
 

@@ -54,6 +54,69 @@ afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
   it.each([320, 1200])(
+    'keeps a contradictory job Unknown with literal evidence at %i px, then recovers in place',
+    (width) => {
+      const error = 'Synthetic failure <img src="/unexpected" onerror="unsafe()">';
+      const [current, setCurrent] = createSignal<WorkloadCoverageRow>({
+        ...row,
+        latestTask: {
+          id: 'contradictory',
+          status: 'completed',
+          label: 'Unknown',
+          startedAt: '2026-05-25T02:00:00Z',
+          error,
+          statusErrorConflict: true,
+        },
+      });
+      const { container } = render(() => (
+        <ProxmoxCoverageTable
+          rows={[current()]}
+          hasAnyRows
+          emptyIcon={<span />}
+          emptyTitle=""
+          emptyDescription=""
+          sortKey={() => 'posture'}
+          sortDirection={() => 'asc'}
+          onSort={() => {}}
+          expandedKeys={new Set(['w1'])}
+          onToggleExpand={() => {}}
+          showTaskColumn
+          layoutWidth={() => width}
+        />
+      ));
+      const stable = container.querySelector('[data-proxmox-backup-row="coverage"]')!;
+      const jobCell = () =>
+        stable.querySelectorAll('td')[
+          headerTexts().findIndex((label) => /^(Task|Job)$/.test(label))
+        ];
+      expect(jobCell()).toHaveTextContent('Unknown');
+      expect(jobCell()).not.toHaveTextContent('OK');
+      const detail = container.querySelector('[data-backup-task-detail]')!;
+      expect(detail).toHaveTextContent('Reported statuscompleted');
+      expect(detail).toHaveTextContent(error);
+      expect(detail.querySelector('img')).toBeNull();
+      expect(detail.querySelector('[data-backup-task-status-conflict]')).toHaveTextContent(
+        'The reported job status and error disagree. This result is unknown. Check the existing job history in Proxmox.',
+      );
+      setCurrent({
+        ...row,
+        latestTask: {
+          id: 'corrected',
+          status: 'OK',
+          label: 'OK',
+          startedAt: '2026-05-25T03:00:00Z',
+        },
+      });
+      expect(container.querySelector('[data-proxmox-backup-row="coverage"]')).toBe(stable);
+      expect(jobCell()).toHaveTextContent('OK');
+      expect(container.querySelector('[data-backup-task-detail]')).toBe(detail);
+      expect(detail).not.toHaveTextContent('Reported status');
+      expect(detail).not.toHaveTextContent(error);
+      expect(detail.querySelector('[data-backup-task-status-conflict]')).toBeNull();
+    },
+  );
+
+  it.each([320, 1200])(
     'keeps unknown job chronology distinct from no task at %i px and replaces it in place',
     (width) => {
       const [current, setCurrent] = createSignal<WorkloadCoverageRow>({
