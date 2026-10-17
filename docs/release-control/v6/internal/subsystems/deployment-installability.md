@@ -840,6 +840,43 @@ copy failures, interruption and caller-owned-file preservation. These are
 ordinary-user source controls, not root, native PVE/LXC or installed acceptance;
 complete exact-source CI and the existing safe native routes remain separate.
 
+### Server staging has a protected parent on the install filesystem
+
+Server archive downloads, extraction and the executable's pre-stop version
+probe use private directories on the install filesystem instead of implicitly
+using tmpfs-prone `/tmp`. Container-host prefetch and its small signed installer
+remain on their existing private temporary-input route. Headroom is measured on
+the selected staging filesystem; unreadable or different executable-destination
+device identities refuse before stopping Pulse rather than relying on a
+cross-filesystem copy as an atomic rename.
+
+A private child alone is not a privilege boundary beneath a service-owned
+parent. Before allocating server staging, the installer verifies each absolute,
+normalised, non-symlink ancestor: root owns it and other accounts cannot replace
+root-owned entries (no group/other write, or root-owned sticky semantics). It
+refuses unsafe custom ancestors without changing them. The install directory
+itself becomes `root:pulse` mode `1775`, preserving Pulse's group-writable HOME
+for CLI/cache creation while preventing it renaming root's staging entries.
+Ownership/mode failure, symlink substitution or failed readback refuses that
+staging path. Recursion into ordinary installed children never gives the
+root-consumed archive, extraction or executable-stage directory to Pulse.
+
+Each invocation cleans only its own reserved temporary paths. Age does not
+prove that a different installer's staging is abandoned, so there is no
+age-based recursive sweep. Interrupted leftovers remain visible to the disk
+headroom check, not guessed safe to erase. The installer remains executable.
+
+`TestRootInstallScriptProtectedStagingControls` executes
+`scripts/tests/test_server_installer_staging.py`: real private directories,
+permissions, symlinks and live payloads with explicit UID/chown doubles. It
+covers unsafe ancestry, ownership/mode/readback failure and final symlink
+substitution. The replacement and temporary-input suites separately exercise
+actual download/local/source paths, device-read/cross-device refusal,
+pre-stop admission and owned cleanup. These are source/ordinary-user controls,
+not a second-account kernel test, native systemd/LXC acceptance or a diagnosis
+of issue #2785's original attachment. Existing installed recovery remains
+separate.
+
 ### Existing-installation menu actions require exact target and intent
 
 The root server installer's existing-installation menu admits stable/preview
