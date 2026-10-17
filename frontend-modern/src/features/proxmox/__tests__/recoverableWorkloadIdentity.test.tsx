@@ -68,6 +68,9 @@ describe('By date workload identity without hover', () => {
       const { container } = render(() => <Table artifacts={buildArtifacts()} width={width} />);
       const rows = [...container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')];
       expect(rows).toHaveLength(3);
+      // At full width the target ID moves to its own column. The complete
+      // rendered row must still distinguish east-100 from east-101.
+      expect(new Set(rows.map((row) => row.textContent)).size).toBe(3);
       expect(new Set(rows.map((row) => row.querySelector('td')!.textContent)).size).toBe(
         width >= 880 ? 2 : 3,
       );
@@ -86,8 +89,16 @@ describe('By date workload identity without hover', () => {
         expect(connection).toHaveClass('whitespace-normal', 'wrap-anywhere');
         expect(node).toHaveClass('whitespace-normal', 'wrap-anywhere');
         const target = identity.querySelector('[data-backup-point-workload-target]');
-        if (width < 880) expect(target).toHaveTextContent(`VM ${targetID}`);
-        else expect(target).toBeNull();
+        if (width < 880) {
+          expect(target).toHaveTextContent(`VM ${targetID}`);
+        } else {
+          expect(target).toBeNull();
+          const targetColumn = [...container.querySelectorAll('thead th')].findIndex(
+            (heading) => heading.textContent?.trim() === 'Target ID',
+          );
+          expect(targetColumn).toBeGreaterThanOrEqual(0);
+          expect(row.querySelectorAll('td')[targetColumn].textContent?.trim()).toBe(targetID);
+        }
       }
       // The PBS repository connection is not substituted for the matched workload.
       expect(
