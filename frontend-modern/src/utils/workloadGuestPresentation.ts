@@ -278,7 +278,11 @@ export function getWorkloadGuestDiskRead(
     // A live linked agent above is independent; LXC storage comes from its host.
     // Legacy canonical consumers use online/healthy for a running guest.
     const status = guest.status?.trim().toLowerCase();
-    if (isVM && current.state === 'current' && !['running', 'online', 'healthy'].includes(status ?? '')) {
+    if (
+      isVM &&
+      current.state === 'current' &&
+      !['running', 'online', 'healthy'].includes(status ?? '')
+    ) {
       return {
         state: 'last-known',
         message:

@@ -5,7 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
 const root = '/workspace/frontend-modern';
-const output = '/workspace/tmp/native-guest-filesystem-power/browser';
+const output = '/workspace/tmp/native-guest-filesystem-power/browser-final';
 const origin = 'http://127.0.0.1:5361';
 const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const point = (timestamp, value) => ({timestamp, value, min: value, max: value});
@@ -36,18 +36,22 @@ const settle = page => page.evaluate(async () => {
   assert.equal(result.playwright, JSON.parse(fs.readFileSync('/workspace/tests/integration/package-lock.json')).packages['node_modules/@playwright/test'].version);
   const {createServer} = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
   const server = await createServer({root, configFile: root + '/vite.config.ts', cacheDir: output + '/vite-cache', optimizeDeps: {entries: ['browser-tests/paused-filesystem.html', 'browser-tests/resource-stopped-filesystem.html']}, server: {host: '127.0.0.1', port: 5361, strictPort: true}});
-  let browser;
+  let browser, lastPage;
   try {
     await server.listen();
     for (const [name, engine, width, height, dark] of [['desktop', chromium, 1440, 1000, false], ['narrow', webkit, 320, 900, true]]) {
       browser = await engine.launch(engine === chromium ? {headless: true, channel: 'chromium', args: ['--no-sandbox']} : {headless: true});
       const context = await browser.newContext({viewport: {width, height}, isMobile: width < 768, hasTouch: width < 768, locale: 'en-GB', timezoneId: 'UTC'});
       const page = await context.newPage();
+      lastPage = page;
       page.setDefaultTimeout(12000);
       const record = {name, width, height, dark, browser: browser.version(), errors: [], requests: [], observations: []};
       result.cases.push(record);
       let state = {power: 'unknown'}, stored = false;
       page.on('pageerror', error => record.errors.push(error.message));
+      record.failedLoads = [];
+      page.on('requestfailed', request => record.failedLoads.push({path: new URL(request.url()).pathname, failure: request.failure()}));
+      page.on('console', message => {if (message.type() === 'error') record.errors.push(message.text());});
       await page.routeWebSocket(/.*/, socket => socket.close());
       await page.addInitScript(dark => {
         document.addEventListener('DOMContentLoaded', () => document.documentElement.classList.toggle('dark', dark));
@@ -74,6 +78,9 @@ const settle = page => page.evaluate(async () => {
         result.screenshots.push({file, sha256: hash(path.join(output, file)), label, name});
       };
       await page.goto(origin + '/browser-tests/paused-filesystem.html', {waitUntil: 'commit'});
+      // Vite's first offline transform can outlast an interaction timeout.
+      // Wait for fixture bootstrap explicitly, not a longer click timeout.
+      await page.waitForFunction(() => typeof window.loadSnapshot === 'function', null, {timeout: 45000});
       const row = page.locator('[data-guest-id]');
       await row.waitFor();
       const diskCell = row.locator('[data-workload-col="disk"]');
@@ -150,7 +157,14 @@ const settle = page => page.evaluate(async () => {
       await context.close(); await browser.close(); browser = null;
     }
     result.result = 'passed';
-  } catch (error) {result.error = String(error.stack || error); throw error;}
+  } catch (error) {
+    result.error = String(error.stack || error);
+    if (lastPage && !lastPage.isClosed()) {
+      result.diagnostic = {url: lastPage.url(), body: await lastPage.locator('body').innerText().catch(() => 'unavailable')};
+      await lastPage.screenshot({path: path.join(output, 'failure.png'), fullPage: true}).catch(() => {});
+    }
+    throw error;
+  }
   finally {
     if (browser) await browser.close(); result.cleanup.browser = true;
     await server.close(); result.cleanup.server = true;
