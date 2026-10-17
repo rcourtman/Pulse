@@ -506,6 +506,14 @@ type RateLimiter struct {
 
 // NewEnhancedEmailManager creates an enhanced email manager
 func NewEnhancedEmailManager(config EmailProviderConfig) *EnhancedEmailManager {
+	config.EmailConfig = copyEmailConfig(config.EmailConfig)
+	if config.Provider == "" {
+		config.Provider = config.EmailConfig.Provider
+	}
+	// Provider defaults (for example SendGrid's "apikey") are credentials too.
+	// Delivery and connection tests must make the same authentication decision
+	// as validation and negotiateAuth, without rewriting the saved username.
+	config.AuthRequired = config.AuthRequired || (resolveProviderUsername(config) != "" && config.Password != "")
 	return &EnhancedEmailManager{
 		config: config,
 		rateLimit: &RateLimiter{

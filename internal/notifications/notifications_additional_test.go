@@ -597,6 +597,8 @@ func TestSendResolvedWebhookNtfyValidationAndRateLimit(t *testing.T) {
 }
 
 func TestSendResolvedNotificationsDirectDispatchesEnabledTargets(t *testing.T) {
+	receipts := make(chan isolatedSMTPReceipt, 1)
+	stubSMTPDialSuccess(t, nil, func(receipt isolatedSMTPReceipt) { receipts <- receipt })
 	origSpawn := spawnAsync
 	spawnAsync = func(f func()) { f() }
 	t.Cleanup(func() { spawnAsync = origSpawn })
@@ -677,8 +679,9 @@ func TestSendResolvedNotificationsDirectDispatchesEnabledTargets(t *testing.T) {
 	if !appriseCalled {
 		t.Fatalf("expected resolved Apprise branch to be called")
 	}
-	if manager.emailManager.config.EmailConfig.From != "new@example.com" {
-		t.Fatalf("expected email manager config update from resolved-email send, got %q", manager.emailManager.config.EmailConfig.From)
+	receipt := awaitIsolatedSMTPReceipt(t, receipts)
+	if receipt.from != "FROM:<new@example.com>" || len(receipt.recipients) != 1 || receipt.recipients[0] != "TO:<new@example.com>" {
+		t.Fatalf("resolved email did not use its submitted SMTP envelope: %+v", receipt)
 	}
 }
 
