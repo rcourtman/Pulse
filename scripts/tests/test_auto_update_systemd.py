@@ -639,7 +639,14 @@ else: sys.exit(97)
                     # This connected lab models UID/chown, unlike NativeLab's
                     # real root execution. Keep that account boundary explicit;
                     # the separate staging-policy controls test its enforcement.
-                    data += '\nprotect_server_install_parent() { :; }\n'
+                    protection = "protect_server_install_parent() {"
+                    self.assertEqual(data.count(protection), 1)
+                    start = data.index(protection)
+                    end = data.index("\n}\n", start) + 3
+                    # Replace only the modelled account boundary in place:
+                    # appending after install.sh's source guard is unreachable.
+                    # Keep that guard and NativeLab's real definitions intact.
+                    data = data[:start] + protection + " :; }\n" + data[end:]
                 return original_write(path, data, *args, **kwargs)
             try:
                 with patch.object(Path, "write_text", new=relocate), patch.object(native.time, "sleep"):
