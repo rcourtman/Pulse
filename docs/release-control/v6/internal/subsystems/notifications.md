@@ -157,6 +157,8 @@ before deciding whether credentials require authentication. Explicit usernames
 take precedence. Validation, connection tests and real sends use the same
 resolved credentials without replacing the saved username. Invalid credentials
 retain the existing authentication failure and immediate dead-letter policy.
+The actual SMTP attempt reports `hasAuth` from that resolved manager. Queue
+admission does not infer authentication from the unexpanded saved username.
 
 Each email delivery owns its configuration snapshot, including its sender and
 recipients. Preparing a concurrent alert or report cannot change an in-flight

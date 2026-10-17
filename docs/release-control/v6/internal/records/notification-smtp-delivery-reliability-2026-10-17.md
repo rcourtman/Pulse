@@ -31,6 +31,8 @@ for the cached transport. It does not rewrite admitted queue configuration,
 refresh old credentials, replay retained failures or change transport retries.
 The notification contract owns this rule; the reporting API contract references
 that shared delivery boundary.
+The SMTP attempt's `hasAuth` diagnostic uses the resolved manager. The earlier
+dispatch log no longer infers authentication from the unexpanded saved username.
 
 `email_delivery_isolation_test.go` exercises real SMTP authentication, accepted
 envelopes, overlapping preparation, eight concurrent sends, the shared rate
@@ -47,8 +49,11 @@ Verification uses the exact source copy on `pulse-dev`, selected Go toolchain
 - Focused SMTP controls passed, including provider-default authentication,
   independent envelopes, concurrent sends, shared rate limits, queue restart,
   and the existing grouped/direct/recovery envelope paths.
-- `go test ./internal/notifications -count=1 -timeout=15m` passed in 192.179s.
-- The same focused controls with `go test -race` passed in 1.628s.
+- `go test ./internal/notifications -count=1 -timeout=15m` passed in 118.909s.
+- The same focused controls with `go test -race` passed in 1.710s.
+- The valid and rejected provider-default queue controls both report
+  `hasAuth=true` at the actual SMTP attempt, while preserving their different
+  acceptance and authentication-failure verdicts.
 
 The focused selection for both ordinary and race execution was:
 
@@ -58,7 +63,7 @@ The focused selection for both ordinary and race execution was:
 
 Both commands used `./internal/notifications`, `-count=1`, and respective
 timeouts of 90s and 180s. The ordinary focused run used `-json`. Retained logs
-are `focused.jsonl`, `notifications.log` and `race.log` under
+are `final-focused.jsonl`, `final-notifications.log` and `final-race.log` under
 `/opt/pulse-release-worker/task-proofs/notification-failures-20261017/` on
 `pulse-dev`. The verification wrapper exited zero.
 
@@ -66,7 +71,7 @@ Runtime source SHA-256 bindings:
 
 ```text
 e8550b65718c0c6456bc0a0811bf5886c9c1bc8ff5fa3ff1165b62c180e1f0d5  internal/notifications/email_enhanced.go
-981c8c445ed885f93c4eafc7ff8772da5b3e06c19af5c74f2c65b14f71a6c705  internal/notifications/notifications.go
+53a0d39c5cefd1fb83b20cf0326c8f82c861a156dc405797d381e28f868481b1  internal/notifications/notifications.go
 ```
 
 ## Limits and residual work

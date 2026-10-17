@@ -2108,7 +2108,6 @@ func (n *NotificationManager) dispatchNotificationJobsAsync(jobs []notificationD
 				Str("smtpHost", job.EmailConfig.SMTPHost).
 				Int("smtpPort", job.EmailConfig.SMTPPort).
 				Strs("recipients", job.EmailConfig.To).
-				Bool("hasAuth", job.EmailConfig.Username != "" && job.EmailConfig.Password != "").
 				Msg("email notifications enabled - dispatching delivery job")
 		}
 		n.dispatchNotificationJobAsync(job, "failed to send notification")
@@ -2712,7 +2711,7 @@ func (n *NotificationManager) sendThreadedHTMLEmailWithError(subject, htmlBody, 
 		Str("smtp", fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)).
 		Str("from", config.From).
 		Strs("to", recipients).
-		Bool("hasAuth", config.Username != "" && config.Password != "").
+		Bool("hasAuth", manager.config.AuthRequired).
 		Bool("startTLS", manager.config.StartTLS).
 		Msg("attempting to send email via SMTP with enhanced support")
 
