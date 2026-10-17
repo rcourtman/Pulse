@@ -9025,3 +9025,26 @@ paths keep the buckets, the final delta does not double them),
 `patrol_cost_projection_test.go` and `cost_persistence_test.go`. This repairs
 the lost accounting data from Pulse #2350; it is not a measured provider bill
 or a claim of savings across six-hourly runs.
+
+### pulse_read admits only argument-validated read forms
+
+`pulse_read` runs commands on monitored hosts, usually as root, without an
+approval prompt at any control level, so `ClassifyExecutionIntent` is the only
+gate between a model-proposed command and the agent. The classifier used to
+approve a command from its first word and checked arguments only for `find`,
+`curl` and `timeout`, which admitted state-changing forms such as `date -s`,
+`sort -o`, `journalctl --vacuum-time`/`--rotate`, `fuser -k`, `dmesg -C`,
+`sar -o`, `ss -K`, `hostname NAME` and interface, ARP and route setters.
+`internal/ai/tools/tools_query_readonly.go` now owns the read-only forms:
+commands are parsed as literal shell words (expansions, chaining, redirects
+other than the fixed fd ones, and globs on validated programs are refused),
+every pipeline stage must itself be read-only, intrinsically read-only
+programs are listed by name, and every other allowlisted program accepts only
+explicitly listed options and subcommands, failing closed on anything unknown.
+`route` is judged on purpose rather than through the `dd` substring rule, and
+plain `blkid` needs `-p` because without it blkid updates its cache. Ordinary
+diagnostics (`journalctl -u ... --since`, `dmesg -T`, `ss -tlnp`, `ip addr`,
+`sar 1 1`, `docker ps`/`logs`, `smartctl -a`, `systemctl status`) stay
+read-only. Proof: `TestExecutionIntent_ArgumentAwareReadCommands` and
+`TestExecutionIntent_RouteOperationBoundary` in
+`internal/ai/tools/tools_query_readonly_test.go`.
