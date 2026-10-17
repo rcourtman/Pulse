@@ -18,6 +18,12 @@ whether a fix is available. Community reconciles comments, images and releases.
   that independently established labels were wrong.
 - Correcting the field to unknown or incomplete adds `needs-version-info` only
   when no other affected-version evidence remains.
+- An explicit versioned `pulse` or `pulse-pro` server image can supply this
+  field's version, including a tag pinned to a digest. An agent, helper or MCP
+  artifact cannot. A mutable tag such as `latest` or a digest alone does not
+  supply a release version; do not borrow a later number from adjacent prose.
+  This parses supplied metadata, not proof that the image is running or that
+  a tag currently resolves to those bytes. It performs no registry lookup.
 - Preserve the immediate pre-write check of issue identity, open state, title,
   body, update time and label set. Separate GitHub label APIs are not atomic;
   this check narrows that race but cannot eliminate it.
