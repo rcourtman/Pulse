@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"slices"
@@ -14,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	gorillaws "github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -24,6 +27,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
@@ -8562,5 +8566,102 @@ func TestRetiredQGAMemoryCannotAlterIndependentAgentEvidence(t *testing.T) {
 	total, used, source, deferred := m.resolveGuestStatusMemory(context.Background(), nil, instance, "guest", "node", 105, id, &proxmox.VMStatus{MaxMem: 8192, Mem: 8192}, map[string]models.Host{id: host}, 8192, "", nil)
 	if total != 8192 || used != 1024 || source != "agent" || deferred {
 		t.Errorf("independent linked-agent fallback changed after QGA retirement: %d/%d/%s/%t", total, used, source, deferred)
+	}
+}
+
+func TestMonitorDiscoveryEventsStayWithOwningOrganization(t *testing.T) {
+	for _, start := range []string{"startup", "explicit"} {
+		for _, orgID := range []string{"org-a", "default", ""} {
+			t.Run(start+"/org="+orgID, func(t *testing.T) {
+				hub := websocket.NewHub(nil)
+				go hub.Run()
+				t.Cleanup(hub.Stop)
+				server := httptest.NewServer(http.HandlerFunc(hub.HandleWebSocket))
+				t.Cleanup(server.Close)
+				connect := func(org string) *gorillaws.Conn {
+					t.Helper()
+					conn, _, err := gorillaws.DefaultDialer.Dial(
+						"ws"+strings.TrimPrefix(server.URL, "http")+"?org_id="+org,
+						http.Header{"Origin": {server.URL}})
+					if err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() { conn.Close() })
+					deadline := time.Now().Add(time.Second)
+					for hub.GetTenantClientCount(org) == 0 {
+						if time.Now().After(deadline) {
+							t.Fatalf("client for %q did not register", org)
+						}
+						time.Sleep(time.Millisecond)
+					}
+					return conn
+				}
+				ownerOrg := orgID
+				if ownerOrg == "" {
+					ownerOrg = "default"
+				}
+				owner, other := connect(ownerOrg), connect("org-b")
+				const subnet = "127.0.0.1/32"
+				monitor := &Monitor{config: &config.Config{DiscoveryEnabled: true, DiscoverySubnet: subnet}}
+				monitor.SetOrgID(orgID)
+				t.Cleanup(monitor.StopDiscoveryService)
+				// A canceled scan still emits its start/completion envelopes but
+				// cannot probe hosts. Exercise the real monitor/service/hub wiring.
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				if start == "startup" {
+					monitor.startModeRuntime(ctx, hub, false)
+				} else {
+					monitor.StartDiscoveryService(ctx, hub, subnet)
+				}
+				if monitor.GetDiscoveryService() == nil {
+					t.Fatal("discovery service was not initialized")
+				}
+				if err := owner.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+					t.Fatal(err)
+				}
+				readDiscoveryEvent := func() (string, map[string]interface{}) {
+					t.Helper()
+					var message websocket.Message
+					if err := owner.ReadJSON(&message); err != nil {
+						t.Fatalf("read discovery event for %q: %v", ownerOrg, err)
+					}
+					envelope, ok := message.Data.(map[string]interface{})
+					if message.Type != "custom" || !ok {
+						t.Fatalf("discovery envelope = %#v", message)
+					}
+					kind, ok := envelope["type"].(string)
+					if !ok {
+						t.Fatalf("discovery event type = %#v", envelope["type"])
+					}
+					data, ok := envelope["data"].(map[string]interface{})
+					if !ok {
+						t.Fatalf("discovery event payload = %#v", envelope["data"])
+					}
+					return kind, data
+				}
+				kind, data := readDiscoveryEvent()
+				if kind != "discovery_started" || data["subnet"] != subnet || data["scanning"] != true {
+					t.Fatalf("discovery start = %q %#v", kind, data)
+				}
+				for {
+					kind, data = readDiscoveryEvent()
+					if kind == "discovery_complete" {
+						if data["scanning"] != false {
+							t.Fatalf("discovery completion = %#v", data)
+						}
+						break
+					}
+				}
+				if err := other.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+					t.Fatal(err)
+				}
+				if _, data, err := other.ReadMessage(); err == nil {
+					t.Fatalf("other organization received discovery event: %s", data)
+				} else if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
+					t.Fatalf("expected open idle connection, got %v", err)
+				}
+			})
+		}
 	}
 }

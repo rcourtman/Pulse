@@ -5,6 +5,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -880,6 +881,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 	pmgBackups := make([]models.PMGBackup, 0)
 	seenBackupIDs := make(map[string]struct{})
+	readBackupNodes := make(map[string]struct{}, len(backupNodes))
 
 	for nodeName := range backupNodes {
 		if ctx.Err() != nil {
@@ -900,6 +902,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 			}
 			continue
 		}
+		readBackupNodes[nodeName] = struct{}{}
 
 		for _, b := range backups {
 			timestamp := b.Timestamp.Int64()
@@ -917,6 +920,24 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 				BackupTime: backupTime,
 				Size:       b.Size.Int64(),
 			})
+		}
+	}
+
+	// Only a node whose backup list was read is authoritative this cycle. A
+	// failed cluster read, a failed per-node read or a cancelled poll observed
+	// nothing, so those nodes keep their last-known backups instead of being
+	// published as having none; the failed read is already in pollErr.
+	if clusterErr != nil || len(readBackupNodes) < len(backupNodes) {
+		var preservedBackupNodes []string
+		pmgBackups, preservedBackupNodes = preserveUnreadPMGNodeBackups(
+			instanceName, m.state.GetSnapshot().PMGBackups, pmgBackups,
+			clusterErr != nil, backupNodes, readBackupNodes)
+		if len(preservedBackupNodes) > 0 {
+			log.Warn().
+				Str("instance", instanceName).
+				Strs("nodes", preservedBackupNodes).
+				Bool("clusterReadFailed", clusterErr != nil).
+				Msg("PMG backup list unavailable for some nodes; keeping their previous backups")
 		}
 	}
 
@@ -1082,6 +1103,47 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	if m.alertManager != nil {
 		m.alertManager.CheckPMG(pmgInst)
 	}
+}
+
+// preserveUnreadPMGNodeBackups carries forward previous backups for nodes
+// whose backup list was not read this cycle, mirroring
+// preserveFailedStorageBackups for PVE storages. When the cluster read failed
+// no node was enumerated, so every previous node is unread. When the cluster
+// read succeeded, a node it no longer lists is gone and its backups drop.
+func preserveUnreadPMGNodeBackups(instanceName string, previous, current []models.PMGBackup, clusterUnread bool, enumeratedNodes, readNodes map[string]struct{}) ([]models.PMGBackup, []string) {
+	existing := make(map[string]struct{}, len(current))
+	for _, backup := range current {
+		existing[backup.ID] = struct{}{}
+	}
+
+	preserved := make(map[string]struct{})
+	for _, backup := range previous {
+		if backup.Instance != instanceName {
+			continue
+		}
+		if _, read := readNodes[backup.Node]; read {
+			continue
+		}
+		if _, enumerated := enumeratedNodes[backup.Node]; !enumerated && !clusterUnread {
+			continue
+		}
+		if _, duplicate := existing[backup.ID]; duplicate {
+			continue
+		}
+		current = append(current, backup)
+		existing[backup.ID] = struct{}{}
+		preserved[backup.Node] = struct{}{}
+	}
+
+	if len(preserved) == 0 {
+		return current, nil
+	}
+	nodes := make([]string, 0, len(preserved))
+	for node := range preserved {
+		nodes = append(nodes, node)
+	}
+	sort.Strings(nodes)
+	return current, nodes
 }
 
 // GetState returns the current state

@@ -70,10 +70,9 @@ func (m *Monitor) applyVMStatusDetails(
 	res.Lock = status.Lock
 	state.detailedStatus = status
 	state.guestAgentStatus, state.guestAgentExpected = vmGuestAgentRuntimeState(status, recentGuestAgentEvidence)
-	if status.Lock == "" && status.Agent.IsAvailable() {
-		now := time.Now()
-		renewGuestAgentEvidence(&state.guestAgentEvidence, observedAtOr(status.ObservedAt, now), now)
-	}
+	// status/current reports agent=1 whenever the VM config enables the guest
+	// agent, not when the in-guest service answers. Fallback eligibility is
+	// renewed only by an actual reply (filesystems below, metadata at the end).
 	// Filesystem usage is cross-platform. Read it before optional Linux memory
 	// and metadata commands can start a shared uncertainty pause. Every command
 	// still verifies the same operation lock and is admitted only once.

@@ -2040,6 +2040,10 @@ update, profile rollout, command reachability, or fleet-control authority.
     own alert and names that agent as display text, but the link itself stays
     the agent lifecycle's, and the field cannot create, change or authorize it.
 27. `internal/monitoring/monitor.go` shared with `monitoring`: monitor construction owns both monitoring runtime initialization and fail-closed agent lifecycle journal hydration before report admission.
+    Both live-mode startup and explicit discovery startup bind the discovery
+    service to this monitor's organization. Discovery start, progress, found
+    server, update and completion events stay within that organization; a
+    monitor with no organization uses the default tenant delivery boundary.
 28. `internal/monitoring/monitor_agents.go` shared with `monitoring`: server-side Unified Agent report, removal, token binding, tombstone expiry, and re-enrollment semantics are jointly owned by agent lifecycle authority and monitoring ingest.
 29. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
     Every current agent process authors a process-unique report stream and a
@@ -4559,6 +4563,18 @@ install tokens it generates stay bound to that organization; nothing about token
 scope, agent registration or reporting identity changes. See the api-contracts
 contract, rule 35, for the capability rule.
 
+Since 17 October 2026 these agent routes (install command, setup script URL,
+agent link, unlink, uninstall, configuration, Docker and Kubernetes management,
+agent profiles and fleet diagnostics) declare that authority explicitly with
+`RequireOrgAdmin`. `RequireAdmin` now admits instance administrators only, so
+an agent route that does not opt in is closed to organization owners.
+
+The same owner can also build reports on the hosts and agents that organization
+enrolled: the `/api/admin/reports/*` routes use `ensureOrgAdminSession`, and a
+report or schedule on an agent resource reads only that organization's
+inventory and metrics store. An agent ID enrolled in another organization is
+refused as not found rather than read from another store.
+
 ### Auto-register preserves the operator's stored TLS choice
 
 Re-registering an existing Proxmox node through the canonical auto-register
@@ -5868,6 +5884,10 @@ whose nested VM inventory definition owns panel copy, performance report
 options, export title, column schema, and filename prefixes. Lifecycle-
 adjacent install and fleet surfaces may read those facts, but they must not
 redefine reporting or inventory schema locally.
+The adjacent `vm_inventory` schedule kind uses this same current-state VM
+exporter through the reporting scheduler. Agent lifecycle does not own a
+parallel inventory report or delivery queue, and agent/installation rights
+are unchanged.
 That catalog route is intentionally metadata-readable without the
 `advanced_reporting` feature gate so locked admin reporting shells can stay on
 the same API-owned definition before upsell; lifecycle-adjacent surfaces must
@@ -9443,6 +9463,9 @@ counts projected from existing action audit records.
 The `patrol_digest` report schedule kind in `internal/api/report_schedules.go`
 only reads the digest and sends an email. It issues no agent commands, plans
 no actions, and changes no capability, token, or binding state.
+Persisted report attempts and email retries retain that boundary. Recovery of a
+report delivery never replays an infrastructure action or grants an agent new
+execution authority.
 
 ### Independent module CPU sampling baselines
 
@@ -10152,3 +10175,19 @@ publication. Tenant monitors still resolve from each request context, and chart
 reads do not gain enrollment, heartbeat or agent lifecycle authority. The
 concurrent initialization contract and tenant-isolation race tests are owned
 by api-contracts.
+
+### Registration notifications retain organization ownership
+
+Successful auto-registration emits `node_auto_registered` for a new node or
+`nodes_changed` for an existing node, and auto-unregistration emits
+`node_deleted`. Those notifications and their cached `discovery_update`
+refreshes use the organization carried by the authorized request context,
+including the setup token's organization. Empty organization IDs resolve to
+the default tenant; none of these lifecycle events uses global delivery.
+
+`config_handlers_auto_register_test.go` exercises both registration outcomes,
+unregistration and cached discovery refreshes against two connected
+organizations. `monitor_host_agents_test.go` exercises discovery delivery
+through both monitor initialization paths, including explicit and legacy
+default organizations. These notifications refresh inventory presentation;
+they do not grant enrollment, removal, re-enrollment or command authority.

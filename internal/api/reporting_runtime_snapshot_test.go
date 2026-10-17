@@ -219,11 +219,16 @@ func TestReportingEnrichmentSnapshotNormalizesEmptyCollections(t *testing.T) {
 	}
 }
 
+type reportingFixtureRecords []unifiedresources.IngestRecord
+
+func (records reportingFixtureRecords) SupplementalRecords(*monitoring.Monitor, string) []unifiedresources.IngestRecord {
+	return records
+}
+
 func newReportingMonitorForTest(t *testing.T, state *models.State, resources []unifiedresources.Resource) *monitoring.Monitor {
 	t.Helper()
 
 	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(state.GetSnapshot())
 	records := make([]unifiedresources.IngestRecord, 0, len(resources))
 	for i, resource := range resources {
 		sourceID := resource.ID
@@ -236,11 +241,14 @@ func newReportingMonitorForTest(t *testing.T, state *models.State, resources []u
 			Identity: resource.Identity,
 		})
 	}
-	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
-
 	monitor := &monitoring.Monitor{}
-	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
 	setUnexportedField(t, monitor, "state", state)
+	// Use the real provider boundary so read-driven publications retain these
+	// supplemental fixtures as well as live snapshot resources.
+	monitor.SetResourceStoreAndProviders(unifiedresources.NewMonitorAdapter(registry),
+		map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{
+			unifiedresources.SourceTrueNAS: reportingFixtureRecords(records),
+		})
 	return monitor
 }
 
@@ -252,4 +260,22 @@ func newReportingMTMForTest(t *testing.T, monitor *monitoring.Monitor) *monitori
 		"default": monitor,
 	})
 	return mtm
+}
+
+// newReportingHandlersWithInventoryForTest returns handlers whose orgID
+// organization holds nodes with the given IDs, so report requests for them
+// pass the check that a reported resource belongs to the requesting
+// organization.
+func newReportingHandlersWithInventoryForTest(t *testing.T, orgID string, resourceIDs ...string) *ReportingHandlers {
+	t.Helper()
+
+	state := models.NewState()
+	for _, id := range resourceIDs {
+		state.Nodes = append(state.Nodes, models.Node{ID: id, Name: id})
+	}
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, nil, nil)
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{
+		orgID: newReportingMonitorForTest(t, state, nil),
+	})
+	return NewReportingHandlers(mtm, nil)
 }

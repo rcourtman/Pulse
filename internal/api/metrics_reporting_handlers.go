@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
@@ -98,7 +99,7 @@ func normalizeReportResourceType(raw string) (string, error) {
 
 // ReportingHandlers handles reporting-related requests
 type ReportingHandlers struct {
-	mtMonitor                 *monitoring.MultiTenantMonitor
+	mtMonitor                 atomic.Pointer[monitoring.MultiTenantMonitor]
 	recoveryManager           *recoverymanager.Manager
 	narratorResolver          func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider)
 	existingFindingsResolver  func(ctx context.Context) reporting.FindingsProvider
@@ -411,19 +412,34 @@ func (s *reportingEnrichmentSnapshot) normalizeCollections() {
 
 // NewReportingHandlers creates a new ReportingHandlers
 func NewReportingHandlers(mtMonitor *monitoring.MultiTenantMonitor, recoveryManager *recoverymanager.Manager) *ReportingHandlers {
-	return &ReportingHandlers{
-		mtMonitor:       mtMonitor,
-		recoveryManager: recoveryManager,
+	h := &ReportingHandlers{recoveryManager: recoveryManager}
+	h.SetMultiTenantMonitor(mtMonitor)
+	return h
+}
+
+// SetMultiTenantMonitor replaces the runtime dependency after a configuration
+// reload. Scheduled and on-demand reads may overlap the replacement.
+func (h *ReportingHandlers) SetMultiTenantMonitor(manager *monitoring.MultiTenantMonitor) {
+	if h != nil {
+		h.mtMonitor.Store(manager)
 	}
+}
+
+func (h *ReportingHandlers) reportMonitorManager() *monitoring.MultiTenantMonitor {
+	if h == nil {
+		return nil
+	}
+	return h.mtMonitor.Load()
 }
 
 func (h *ReportingHandlers) getReportingEnrichmentSnapshot(ctx context.Context, orgID string) (reportingEnrichmentSnapshot, bool) {
 	_ = ctx
-	if h == nil || h.mtMonitor == nil {
+	manager := h.reportMonitorManager()
+	if manager == nil {
 		return emptyReportingEnrichmentSnapshot(), false
 	}
 
-	monitor, err := h.mtMonitor.GetMonitor(orgID)
+	monitor, err := manager.GetMonitor(orgID)
 	if err != nil || monitor == nil {
 		return emptyReportingEnrichmentSnapshot(), false
 	}
@@ -726,7 +742,9 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		return
 	}
 
+	orgID := GetOrgID(r.Context())
 	req := reporting.MetricReportRequest{
+		OrgID:        orgID,
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
 		MetricType:   metricType,
@@ -737,11 +755,18 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		Branding:     h.resolveReportBranding(r.Context()),
 	}
 
-	// Enrich with resource data if monitor is available
-	orgID := GetOrgID(r.Context())
-	if snapshot, ok := h.getReportingEnrichmentSnapshot(r.Context(), orgID); ok {
-		h.enrichReportRequest(r.Context(), orgID, &req, snapshot, start, end)
+	// The resource must belong to the requesting organization; the engine
+	// then reads only that organization's metrics store.
+	snapshot, ok := h.getReportingEnrichmentSnapshot(r.Context(), orgID)
+	if !ok {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "inventory_unavailable", "Resource inventory for this organization is not available", nil)
+		return
 	}
+	if !reportSubjectInInventory(resourceID, snapshot) {
+		writeErrorResponse(w, http.StatusNotFound, "resource_not_found", "Resource not found in this organization", nil)
+		return
+	}
+	h.enrichReportRequest(r.Context(), orgID, &req, snapshot, start, end)
 
 	// Wire the per-tenant AI narrator and Patrol findings provider when
 	// configured. Both are nil-safe at the engine layer; absence falls
@@ -855,8 +880,8 @@ func (h *ReportingHandlers) resolveReportSubject(orgID string, req *reporting.Me
 		// it explicitly, so ask the tenant monitor first and fall back to
 		// the struct field.
 		var target *unifiedresources.MetricsTarget
-		if h != nil && h.mtMonitor != nil {
-			if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+		if manager := h.reportMonitorManager(); manager != nil {
+			if monitor, err := manager.GetMonitor(orgID); err == nil && monitor != nil {
 				target = monitor.MetricsTargetForResource(req.ResourceID)
 			}
 		}
@@ -876,6 +901,38 @@ func (h *ReportingHandlers) resolveReportSubject(orgID string, req *reporting.Me
 		}
 		return
 	}
+}
+
+// reportSubjectInInventory reports whether resourceID names a resource in an
+// organization's inventory snapshot: a canonical unified resource ID, or the
+// legacy state-model ID of one of its nodes, VMs or containers, which the
+// report enrichment also accepts. A report is only generated for a resource
+// the requesting organization owns.
+func reportSubjectInInventory(resourceID string, snapshot reportingEnrichmentSnapshot) bool {
+	if resourceID == "" {
+		return false
+	}
+	for i := range snapshot.Resources {
+		if snapshot.Resources[i].ID == resourceID {
+			return true
+		}
+	}
+	for i := range snapshot.Nodes {
+		if snapshot.Nodes[i].ID == resourceID {
+			return true
+		}
+	}
+	for i := range snapshot.VMs {
+		if snapshot.VMs[i].ID == resourceID {
+			return true
+		}
+	}
+	for i := range snapshot.Containers {
+		if snapshot.Containers[i].ID == resourceID {
+			return true
+		}
+	}
+	return false
 }
 
 // reportSubjectIDMatches reports whether a legacy state-model ID refers to
@@ -1186,7 +1243,9 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 		return generatedMultiReport{}, &reportingRequestError{status: http.StatusBadRequest, code: "invalid_time_range", message: err.Error()}
 	}
 
+	orgID := GetOrgID(ctx)
 	multiReq := reporting.MultiReportRequest{
+		OrgID:      orgID,
 		Format:     format,
 		Start:      start,
 		End:        end,
@@ -1195,8 +1254,14 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 		Branding:   h.resolveReportBranding(ctx),
 	}
 
-	orgID := GetOrgID(ctx)
 	snapshot, hasSnapshot := h.getReportingEnrichmentSnapshot(ctx, orgID)
+	if !hasSnapshot {
+		return generatedMultiReport{}, &reportingRequestError{
+			status:  http.StatusServiceUnavailable,
+			code:    "inventory_unavailable",
+			message: "Resource inventory for this organization is not available",
+		}
+	}
 	for _, res := range body.Resources {
 		if !validResourceID.MatchString(res.ResourceType) || len(res.ResourceType) > 64 {
 			return generatedMultiReport{}, &reportingRequestError{
@@ -1217,7 +1282,16 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 			return generatedMultiReport{}, &reportingRequestError{status: http.StatusBadRequest, code: "invalid_resource_type", message: err.Error()}
 		}
 
+		if !reportSubjectInInventory(res.ResourceID, snapshot) {
+			return generatedMultiReport{}, &reportingRequestError{
+				status:  http.StatusNotFound,
+				code:    "resource_not_found",
+				message: fmt.Sprintf("Resource not found in this organization: %s", res.ResourceID),
+			}
+		}
+
 		req := reporting.MetricReportRequest{
+			OrgID:        orgID,
 			ResourceType: resourceType,
 			ResourceID:   res.ResourceID,
 			MetricType:   metricType,
@@ -1227,9 +1301,7 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 			Title:        title,
 			Branding:     multiReq.Branding,
 		}
-		if hasSnapshot {
-			h.enrichReportRequest(ctx, orgID, &req, snapshot, start, end)
-		}
+		h.enrichReportRequest(ctx, orgID, &req, snapshot, start, end)
 		multiReq.Resources = append(multiReq.Resources, req)
 	}
 

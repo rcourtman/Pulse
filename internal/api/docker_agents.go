@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -131,7 +130,11 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 	}
 
 	tokenRecord := getAPITokenRecordFromRequest(r)
-	host, err := h.getMonitor(r.Context()).ApplyDockerReport(report, tokenRecord)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	host, err := monitor.ApplyDockerReport(report, tokenRecord)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)
 		return
@@ -152,7 +155,7 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 		"lastSeen":   host.LastSeen,
 	}
 
-	if payload, cmd := h.getMonitor(r.Context()).FetchDockerCommandForHost(host.ID); cmd != nil {
+	if payload, cmd := monitor.FetchDockerCommandForHost(host.ID); cmd != nil {
 		commandResponse := map[string]any{
 			"id":   cmd.ID,
 			"type": cmd.Type,
@@ -271,14 +274,17 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	mon := h.getMonitor(r.Context())
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
 	agentID := strings.TrimSpace(req.AgentID)
 	if agentID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
 	}
 
-	commandStatus, agentID, shouldRemove, err := mon.AcknowledgeDockerHostCommand(commandID, agentID, status, req.Message)
+	commandStatus, agentID, shouldRemove, err := monitor.AcknowledgeDockerHostCommand(commandID, agentID, status, req.Message)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "docker_command_ack_failed", err.Error(), nil)
 		return
@@ -292,7 +298,7 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 		oldContainerID = strings.TrimSpace(oldContainerID)
 		newContainerID = strings.TrimSpace(newContainerID)
 		if oldContainerID != "" && newContainerID != "" && oldContainerID != newContainerID {
-			if err := mon.CopyDockerContainerMetadata(agentID, oldContainerID, newContainerID); err != nil {
+			if err := monitor.CopyDockerContainerMetadata(agentID, oldContainerID, newContainerID); err != nil {
 				log.Warn().
 					Err(err).
 					Str("dockerAgentID", agentID).
@@ -304,12 +310,12 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 	}
 
 	if shouldRemove {
-		if _, removeErr := mon.RemoveDockerHost(agentID); removeErr != nil {
+		if _, removeErr := monitor.RemoveDockerHost(agentID); removeErr != nil {
 			log.Error().Err(removeErr).Str("dockerAgentID", agentID).Str("commandID", commandID).Msg("Failed to remove docker host after command completion")
 		} else {
 			// Clear the removal block since the agent has confirmed it stopped successfully.
 			// This allows immediate re-enrollment without waiting for the 24-hour TTL.
-			if reenrollErr := mon.AllowDockerHostReenroll(agentID); reenrollErr != nil {
+			if reenrollErr := monitor.AllowDockerHostReenroll(agentID); reenrollErr != nil {
 				log.Warn().Err(reenrollErr).Str("dockerAgentID", agentID).Msg("Failed to clear removal block after successful stop")
 			}
 		}
@@ -346,14 +352,18 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 	forceParam := strings.ToLower(r.URL.Query().Get("force"))
 	force := forceParam == "true" || strings.ToLower(r.URL.Query().Get("mode")) == "force"
 
-	priorHost, hostExists := h.getMonitor(r.Context()).GetDockerHost(agentID)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	priorHost, hostExists := monitor.GetDockerHost(agentID)
 
 	if shouldHide {
 		if !hostExists {
 			writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", "Docker / Podman module not found", nil)
 			return
 		}
-		host, err := h.getMonitor(r.Context()).HideDockerHost(agentID)
+		host, err := monitor.HideDockerHost(agentID)
 		if err != nil {
 			writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", err.Error(), nil)
 			return
@@ -392,7 +402,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	host, err := h.getMonitor(r.Context()).RemoveDockerHost(agentID)
+	host, err := monitor.RemoveDockerHost(agentID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", err.Error(), nil)
 		return
@@ -422,7 +432,11 @@ func (h *DockerAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).AllowDockerHostReenroll(agentID); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.AllowDockerHostReenroll(agentID); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "docker_agent_reenroll_failed", err.Error(), nil)
 		return
 	}
@@ -447,7 +461,7 @@ func (h *DockerAgentHandlers) handleHostLifecycleAction(
 	pathSuffix string,
 	successMsg string,
 	logMsg string,
-	action func(ctx context.Context, agentID string) (string, error),
+	action func(monitor *monitoring.Monitor, agentID string) (string, error),
 ) {
 	if r.Method != http.MethodPut {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
@@ -460,7 +474,11 @@ func (h *DockerAgentHandlers) handleHostLifecycleAction(
 		return
 	}
 
-	hostID, err := action(r.Context(), agentID)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	hostID, err := action(monitor, agentID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", err.Error(), nil)
 		return
@@ -480,8 +498,8 @@ func (h *DockerAgentHandlers) handleHostLifecycleAction(
 // HandleUnhideHost unhides a previously hidden Docker / Podman host.
 func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Request) {
 	h.handleHostLifecycleAction(w, r, "/unhide", "Docker / Podman module unhidden", "Failed to serialize docker host unhide response",
-		func(ctx context.Context, agentID string) (string, error) {
-			host, err := h.getMonitor(ctx).UnhideDockerHost(agentID)
+		func(monitor *monitoring.Monitor, agentID string) (string, error) {
+			host, err := monitor.UnhideDockerHost(agentID)
 			if err != nil {
 				return "", err
 			}
@@ -492,8 +510,8 @@ func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Re
 // HandleMarkPendingUninstall marks a Docker / Podman host as pending uninstall.
 func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, r *http.Request) {
 	h.handleHostLifecycleAction(w, r, "/pending-uninstall", "Docker / Podman module marked as pending uninstall", "Failed to serialize docker host pending uninstall response",
-		func(ctx context.Context, agentID string) (string, error) {
-			host, err := h.getMonitor(ctx).MarkDockerHostPendingUninstall(agentID)
+		func(monitor *monitoring.Monitor, agentID string) (string, error) {
+			host, err := monitor.MarkDockerHostPendingUninstall(agentID)
 			if err != nil {
 				return "", err
 			}
@@ -528,7 +546,11 @@ func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, 
 
 	customName := strings.TrimSpace(req.DisplayName)
 
-	host, err := h.getMonitor(r.Context()).SetDockerHostCustomDisplayName(agentID, customName)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	host, err := monitor.SetDockerHostCustomDisplayName(agentID, customName)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", err.Error(), nil)
 		return
@@ -612,7 +634,11 @@ func (h *DockerAgentHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.
 	}
 
 	// Queue the check updates command
-	commandStatus, err := h.getMonitor(r.Context()).QueueDockerCheckUpdatesCommand(agentID)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	commandStatus, err := monitor.QueueDockerCheckUpdatesCommand(agentID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "check_updates_command_failed", err.Error(), nil)
 		return

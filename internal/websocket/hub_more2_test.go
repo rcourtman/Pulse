@@ -50,9 +50,16 @@ func TestBroadcastStateEnqueuesRawData(t *testing.T) {
 func TestBroadcastAlertResolvedAndCustom(t *testing.T) {
 	hub := NewHub(nil)
 
-	hub.BroadcastAlertResolved("alert-1")
+	hub.BroadcastAlertResolvedToTenant("", "alert-1")
 	select {
-	case data := <-hub.broadcast:
+	case event := <-hub.tenantBroadcast:
+		if event.OrgID != "default" {
+			t.Fatalf("unexpected org: %s", event.OrgID)
+		}
+		data, err := json.Marshal(event.Message)
+		if err != nil {
+			t.Fatal(err)
+		}
 		var msg Message
 		if err := json.Unmarshal(data, &msg); err != nil {
 			t.Fatalf("unmarshal message: %v", err)
@@ -68,9 +75,16 @@ func TestBroadcastAlertResolvedAndCustom(t *testing.T) {
 		t.Fatal("expected alertResolved broadcast")
 	}
 
-	hub.Broadcast(map[string]string{"status": "ok"})
+	hub.BroadcastToTenant("", map[string]string{"status": "ok"})
 	select {
-	case data := <-hub.broadcast:
+	case event := <-hub.tenantBroadcast:
+		if event.OrgID != "default" {
+			t.Fatalf("unexpected org: %s", event.OrgID)
+		}
+		data, err := json.Marshal(event.Message)
+		if err != nil {
+			t.Fatal(err)
+		}
 		var msg Message
 		if err := json.Unmarshal(data, &msg); err != nil {
 			t.Fatalf("unmarshal message: %v", err)

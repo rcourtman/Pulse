@@ -28,7 +28,8 @@ export interface MemoryObservationPresentation {
 
 // Proxmox's own listing and status values. Pulse selects them only when no
 // cache-aware source (guest agent, linked Pulse agent, node meminfo) answered;
-// the same four sources set MayIncludeCache in unifiedresources.QualifyGuestMemory.
+// unifiedresources.QualifyGuestMemoryForKind sets MayIncludeCache for the same
+// sources and guest kinds.
 const cacheInclusiveMemorySources = new Set([
   'status-mem',
   'status-freemem',
@@ -37,6 +38,14 @@ const cacheInclusiveMemorySources = new Set([
 ]);
 
 export type MemoryGuestKind = 'vm' | 'container';
+
+// A container's cluster-resources mem is its cgroup usage with page cache
+// already subtracted (PVE::CGroup::get_memory_stat), so it is not
+// cache-inclusive. A QEMU listing, or one whose guest kind is unknown, is the
+// host's view of guest RAM and counts the guest's own cache.
+const isCacheInclusiveMemorySource = (source: string, kind: MemoryGuestKind | undefined): boolean =>
+  cacheInclusiveMemorySources.has(source) &&
+  !(source === 'cluster-resources' && kind === 'container');
 
 const getCacheNote = (kind: MemoryGuestKind | undefined): string => {
   const noun = kind === 'vm' ? 'VM' : kind === 'container' ? 'container' : 'guest';
@@ -161,7 +170,7 @@ export const getMemoryObservationPresentation = (
   const mayIncludeCache =
     state !== 'unavailable' &&
     observation !== undefined &&
-    cacheInclusiveMemorySources.has(observation.source);
+    isCacheInclusiveMemorySource(observation.source, options.guestKind);
   // Most table rows are current and need no cue. Qualify them identically,
   // but avoid building source/date strings that will never be rendered. A
   // current reading from a cache-inclusive source still carries its caveat.

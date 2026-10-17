@@ -52,7 +52,11 @@ func (h *KubernetesAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Re
 	}
 
 	tokenRecord := getAPITokenRecordFromRequest(r)
-	cluster, err := h.getMonitor(r.Context()).ApplyKubernetesReport(report, tokenRecord)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	cluster, err := monitor.ApplyKubernetesReport(report, tokenRecord)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)
 		return
@@ -138,7 +142,11 @@ func (h *KubernetesAgentHandlers) HandleDeleteCluster(w http.ResponseWriter, r *
 		return
 	}
 
-	cluster, err := h.getMonitor(r.Context()).RemoveKubernetesCluster(clusterID)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	cluster, err := monitor.RemoveKubernetesCluster(clusterID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
 		return
@@ -170,7 +178,11 @@ func (h *KubernetesAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).AllowKubernetesClusterReenroll(clusterID); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.AllowKubernetesClusterReenroll(clusterID); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "k8s_cluster_reenroll_failed", err.Error(), nil)
 		return
 	}
@@ -192,7 +204,7 @@ func (h *KubernetesAgentHandlers) handleClusterLifecycleAction(
 	pathSuffix string,
 	successMsg string,
 	logMsg string,
-	action func(ctx context.Context, clusterID string) (string, error),
+	action func(monitor *monitoring.Monitor, clusterID string) (string, error),
 ) {
 	if r.Method != http.MethodPut {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
@@ -207,7 +219,11 @@ func (h *KubernetesAgentHandlers) handleClusterLifecycleAction(
 		return
 	}
 
-	canonicalID, err := action(r.Context(), clusterID)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	canonicalID, err := action(monitor, clusterID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
 		return
@@ -227,8 +243,8 @@ func (h *KubernetesAgentHandlers) handleClusterLifecycleAction(
 // HandleUnhideCluster unhides a previously hidden kubernetes cluster.
 func (h *KubernetesAgentHandlers) HandleUnhideCluster(w http.ResponseWriter, r *http.Request) {
 	h.handleClusterLifecycleAction(w, r, "/unhide", "Kubernetes cluster unhidden", "Failed to serialize kubernetes cluster unhide response",
-		func(ctx context.Context, clusterID string) (string, error) {
-			cluster, err := h.getMonitor(ctx).UnhideKubernetesCluster(clusterID)
+		func(monitor *monitoring.Monitor, clusterID string) (string, error) {
+			cluster, err := monitor.UnhideKubernetesCluster(clusterID)
 			if err != nil {
 				return "", err
 			}
@@ -239,8 +255,8 @@ func (h *KubernetesAgentHandlers) HandleUnhideCluster(w http.ResponseWriter, r *
 // HandleMarkPendingUninstall marks a cluster as pending uninstall.
 func (h *KubernetesAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, r *http.Request) {
 	h.handleClusterLifecycleAction(w, r, "/pending-uninstall", "Kubernetes cluster marked as pending uninstall", "Failed to serialize kubernetes cluster pending uninstall response",
-		func(ctx context.Context, clusterID string) (string, error) {
-			cluster, err := h.getMonitor(ctx).MarkKubernetesClusterPendingUninstall(clusterID)
+		func(monitor *monitoring.Monitor, clusterID string) (string, error) {
+			cluster, err := monitor.MarkKubernetesClusterPendingUninstall(clusterID)
 			if err != nil {
 				return "", err
 			}
@@ -277,7 +293,11 @@ func (h *KubernetesAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWrit
 
 	customName := strings.TrimSpace(req.DisplayName)
 
-	cluster, err := h.getMonitor(r.Context()).SetKubernetesClusterCustomDisplayName(clusterID, customName)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	cluster, err := monitor.SetKubernetesClusterCustomDisplayName(clusterID, customName)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
 		return

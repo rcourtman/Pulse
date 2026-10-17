@@ -3628,6 +3628,12 @@ artifact-selection behaviour.
    entry keeps the normal rollback back to the community build. Docker
    installs get the broker's digest-pinned Docker command block as
    `ProRuntimeSwitch.docker` instead, never the community image.
+   The switch check applies the same stable-channel guard as the Pro update
+   check and apply (`stableChannelRefusesProPin` in `pro_update.go`): a
+   stable-channel install whose broker pin is a prerelease is answered
+   `prerelease_only` with the pinned version and is offered neither the
+   in-place switch nor the Docker command block, so a stable install is never
+   moved onto a preview Pro build; rc-channel installs are still offered it.
    A Docker deployment of the compiled Pro binary is part of that same
    boundary: the container cannot self-replace its binary and a Pro compose
    file pins the previous image digest, so `internal/updates/pro_update.go`

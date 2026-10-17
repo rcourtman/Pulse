@@ -653,7 +653,9 @@ func TestEnsureSettingsWriteScopeAllowsConfiguredAdminSession(t *testing.T) {
 	}
 }
 
-func TestEnsureSettingsWriteScopeAllowsOrgManagerSession(t *testing.T) {
+// Settings scope guards instance-wide settings, so an organization's owner is
+// refused there; routes that serve only that organization use the org variant.
+func TestSettingsWriteScopeSplitsInstanceAndOrgManagerSession(t *testing.T) {
 	cfg := &config.Config{
 		AuthUser: "platform-admin",
 	}
@@ -674,10 +676,16 @@ func TestEnsureSettingsWriteScopeAllowsOrgManagerSession(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	result := ensureSettingsWriteScope(cfg, rr, req)
+	if ensureSettingsWriteScope(cfg, rr, req) {
+		t.Fatal("ensureSettingsWriteScope must refuse an org manager who is not an instance admin")
+	}
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for org manager session on instance settings, got %d", rr.Code)
+	}
 
-	if !result {
-		t.Fatal("ensureSettingsWriteScope should allow org manager session users")
+	rr = httptest.NewRecorder()
+	if !ensureOrgSettingsWriteScope(cfg, rr, req) {
+		t.Fatal("ensureOrgSettingsWriteScope should allow org manager session users")
 	}
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for org manager session, got %d", rr.Code)

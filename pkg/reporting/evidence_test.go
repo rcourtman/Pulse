@@ -65,3 +65,24 @@ func TestMetricEvidenceRetainsObservedCoverageAcrossRestart(t *testing.T) {
 	_, err = engine.MetricEvidenceFor(ctx, req)
 	require.ErrorIs(t, err, context.Canceled)
 }
+
+// Retained metric evidence backs Pulse Assistant's pulse_summarize, so it
+// must read only the requesting organization's store, as reports do.
+func TestReportEngineReadsOnlyTheRequestOrganizationsMetrics(t *testing.T) {
+	now := time.Now()
+	engine := newOrgScopedTestEngine(t, now)
+
+	for orgID, want := range map[string]float64{"org-a": 11, "org-b": 77} {
+		evidence, err := engine.MetricEvidenceFor(context.Background(), orgScopeTestRequest(orgID, now))
+		if err != nil {
+			t.Fatalf("%s: evidence: %v", orgID, err)
+		}
+		stats, ok := evidence.Metrics["cpu"]
+		if !ok || stats.RetainedPoints == 0 {
+			t.Fatalf("%s: expected cpu points from its own store, got %#v", orgID, evidence.Metrics)
+		}
+		if stats.Min != want || stats.Max != want {
+			t.Fatalf("%s: read cpu %v..%v, want only its own value %v", orgID, stats.Min, stats.Max, want)
+		}
+	}
+}

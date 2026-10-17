@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -633,5 +634,150 @@ func TestPollPMGInstanceDoesNotGuessNodeForEmptyCluster(t *testing.T) {
 
 	if len(backupPaths) != 0 {
 		t.Fatalf("expected no backup request for an empty cluster, got %v", backupPaths)
+	}
+}
+
+// pmgBackupRetentionFixture drives the real PMG poll consumer with a cluster
+// listing and per-node backup answers chosen by each test.
+type pmgBackupRetentionFixture struct {
+	*pmgScopeFixture
+	clusterErr error
+	nodes      []string
+	backupErr  map[string]error
+	backups    map[string][]pmg.BackupEntry
+}
+
+func newPMGBackupRetentionFixture() *pmgBackupRetentionFixture {
+	return &pmgBackupRetentionFixture{
+		pmgScopeFixture: &pmgScopeFixture{calls: map[string]int{}},
+		nodes:           []string{"one", "two"},
+		backupErr:       map[string]error{},
+		backups: map[string][]pmg.BackupEntry{
+			"one": {{Filename: "one.tgz", Timestamp: 1700000000, Size: 10}},
+			"two": {{Filename: "two.tgz", Timestamp: 1700000100, Size: 20}},
+		},
+	}
+}
+
+func (f *pmgBackupRetentionFixture) GetClusterStatus(context.Context, bool) ([]pmg.ClusterStatusEntry, error) {
+	f.calls["cluster"]++
+	if f.clusterErr != nil {
+		return nil, f.clusterErr
+	}
+	entries := make([]pmg.ClusterStatusEntry, 0, len(f.nodes))
+	for _, node := range f.nodes {
+		entries = append(entries, pmg.ClusterStatusEntry{Name: node, Type: "node"})
+	}
+	return entries, nil
+}
+
+func (f *pmgBackupRetentionFixture) ListBackups(_ context.Context, node string) ([]pmg.BackupEntry, error) {
+	f.calls["backup/"+node]++
+	if err := f.backupErr[node]; err != nil {
+		return nil, err
+	}
+	return f.backups[node], nil
+}
+
+func pmgBackupFilesByNode(t *testing.T, m *Monitor) map[string][]string {
+	t.Helper()
+	out := map[string][]string{}
+	for _, backup := range m.state.GetSnapshot().PMGBackups {
+		if backup.Instance != "gateway" {
+			t.Fatalf("unexpected instance on PMG backup: %+v", backup)
+		}
+		out[backup.Node] = append(out[backup.Node], backup.Filename)
+	}
+	for node := range out {
+		sort.Strings(out[node])
+	}
+	return out
+}
+
+func pollPMGBackupRetention(t *testing.T, m *Monitor, f *pmgBackupRetentionFixture) {
+	t.Helper()
+	m.pollPMGInstance(context.Background(), "gateway", f)
+}
+
+func assertPMGPollFailed(t *testing.T, m *Monitor) {
+	t.Helper()
+	status := m.pollStatusMap["pmg::gateway"]
+	if status == nil || status.ConsecutiveFailures == 0 || status.LastErrorMessage == "" {
+		t.Fatalf("failed backup enumeration not recorded as a poll failure: %+v", status)
+	}
+}
+
+// A failed cluster read cannot enumerate backups, so it must not publish an
+// empty list over the backups the last good poll found.
+func TestPMGBackupsSurviveFailedClusterRead(t *testing.T) {
+	m := pmgScopeMonitor(config.PMGInstance{MonitoringConfigured: true})
+	f := newPMGBackupRetentionFixture()
+	pollPMGBackupRetention(t, m, f)
+	want := map[string][]string{"one": {"one.tgz"}, "two": {"two.tgz"}}
+	if got := pmgBackupFilesByNode(t, m); !reflect.DeepEqual(got, want) {
+		t.Fatalf("first poll backups=%v want=%v", got, want)
+	}
+
+	f.clusterErr = errors.New("cluster status unavailable")
+	f.calls = map[string]int{}
+	pollPMGBackupRetention(t, m, f)
+	if f.calls["backup/one"] != 0 || f.calls["backup/two"] != 0 {
+		t.Fatalf("backups requested without a node list: %v", f.calls)
+	}
+	if got := pmgBackupFilesByNode(t, m); !reflect.DeepEqual(got, want) {
+		t.Fatalf("failed cluster read replaced backups: got=%v want=%v", got, want)
+	}
+	assertPMGPollFailed(t, m)
+}
+
+// When every per-node backup read fails, nothing was observed this poll and
+// the last-known list stays.
+func TestPMGBackupsSurviveEveryNodeBackupReadFailing(t *testing.T) {
+	m := pmgScopeMonitor(config.PMGInstance{MonitoringConfigured: true})
+	f := newPMGBackupRetentionFixture()
+	pollPMGBackupRetention(t, m, f)
+
+	f.backupErr["one"] = errors.New("backup list timed out")
+	f.backupErr["two"] = errors.New("backup list timed out")
+	pollPMGBackupRetention(t, m, f)
+	want := map[string][]string{"one": {"one.tgz"}, "two": {"two.tgz"}}
+	if got := pmgBackupFilesByNode(t, m); !reflect.DeepEqual(got, want) {
+		t.Fatalf("failed backup reads replaced backups: got=%v want=%v", got, want)
+	}
+	assertPMGPollFailed(t, m)
+}
+
+// A failed read on one node keeps that node's last-known backups while the
+// nodes that answered publish what they returned.
+func TestPMGBackupsKeepFailedNodeOnPartialRead(t *testing.T) {
+	m := pmgScopeMonitor(config.PMGInstance{MonitoringConfigured: true})
+	f := newPMGBackupRetentionFixture()
+	pollPMGBackupRetention(t, m, f)
+
+	f.backupErr["one"] = errors.New("backup list timed out")
+	f.backups["two"] = []pmg.BackupEntry{{Filename: "two-new.tgz", Timestamp: 1700000200, Size: 30}}
+	pollPMGBackupRetention(t, m, f)
+	want := map[string][]string{"one": {"one.tgz"}, "two": {"two-new.tgz"}}
+	if got := pmgBackupFilesByNode(t, m); !reflect.DeepEqual(got, want) {
+		t.Fatalf("partial read backups=%v want=%v", got, want)
+	}
+	assertPMGPollFailed(t, m)
+}
+
+// A complete enumeration is authoritative: nodes that answered with no
+// backups, and nodes no longer in the cluster, clear their entries.
+func TestPMGBackupsClearAfterCompleteEnumeration(t *testing.T) {
+	m := pmgScopeMonitor(config.PMGInstance{MonitoringConfigured: true})
+	f := newPMGBackupRetentionFixture()
+	pollPMGBackupRetention(t, m, f)
+
+	f.nodes = []string{"one"}
+	f.backups["one"] = nil
+	pollPMGBackupRetention(t, m, f)
+	if got := pmgBackupFilesByNode(t, m); len(got) != 0 {
+		t.Fatalf("complete enumeration with no backups left entries: %v", got)
+	}
+	if status := m.pollStatusMap["pmg::gateway"]; status == nil || status.ConsecutiveFailures != 0 {
+		t.Fatalf("complete enumeration recorded as failed: %+v", status)
 	}
 }

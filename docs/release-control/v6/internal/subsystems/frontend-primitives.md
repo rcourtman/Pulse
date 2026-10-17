@@ -498,8 +498,9 @@ An independent qualified memory reading is not paused by a disk deferral.
 Neither Last seen, backup completion nor running power state renews memory.
 Unannotated unrelated platforms and actual zero readings retain their meaning.
 A current reading from a cache-inclusive Proxmox source (`status-mem`,
-`status-freemem`, `cluster-resources`, `derived-total-minus-used`, the same set
-the backend marks `MayIncludeCache`) keeps its numbers, colour and thresholds;
+`status-freemem`, `cluster-resources`, `derived-total-minus-used`, the same
+sources and guest kinds the backend marks `MayIncludeCache`) keeps its numbers,
+colour and thresholds;
 the shared presentation adds `mayIncludeCache` and a `cacheNote` saying a high
 percentage alone does not show memory pressure and which fix can supply the
 guest's own figure. A VM row shows `May include cache` (`Cache?` in compact
@@ -507,9 +508,13 @@ layouts) only while the guest's own memory meets its warning or critical
 threshold, the figure that colours the bar in host-share mode too, which is
 when a cache-inclusive figure reads as pressure; below that the caveat is the
 cell title, the chart's native hover title and assistive text, not a label on every
-agentless VM. A container, whose Proxmox reading is always the cgroup value,
-keeps the caveat in the bar tooltip and drawer instead of a label on every
-row. A retained or freshness-unknown reading keeps its own freshness label
+agentless VM. A container's `cluster-resources` reading is not
+cache-inclusive: Proxmox subtracts page cache from the cgroup usage
+(`PVE::CGroup::get_memory_stat`) before it reaches `/cluster/resources`, so
+`memoryObservation.ts` classifies that source by guest kind and neither row,
+tooltip nor drawer qualifies it. A QEMU guest, or a guest of unknown kind,
+keeps the caveat for it. Any other cache-inclusive container reading keeps the
+caveat in the bar tooltip and drawer instead of a label on every row. A retained or freshness-unknown reading keeps its own freshness label
 with the caveat in its explanation, an unavailable reading is never qualified,
 and the drawer states the note as visible text in `About this reading`. An
 unavailable explanation names only what is known: a powered-off guest reads
@@ -1757,7 +1762,7 @@ removal/failure retention and containing publication remain separate evidence.
 44. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
 45. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 46. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
-47. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
+47. `frontend-modern/src/components/Settings/ReportingPanel.tsx`, `frontend-modern/src/components/Settings/ReportScheduleEditor.tsx` and `frontend-modern/src/components/Settings/ReportingFormField.tsx`
 48. `frontend-modern/src/components/Settings/reportingPanelModel.ts`
     48a. `frontend-modern/src/components/Settings/reportingSchedulesModel.ts`
 49. `frontend-modern/src/components/Settings/reportingInventoryExportModel.ts`
@@ -5458,6 +5463,12 @@ historical performance reports and current-state VM inventory export.
 keep those as separate operator jobs with separate request builders and success
 copy, rather than collapsing inventory export back into the metrics-report
 controls.
+The schedule editor also offers `vm_inventory` as a current-state CSV job. It
+explains the whole-organization scope and new-VM discovery, hides historical
+format/resource/tag controls and keeps weekly/monthly cadence and email/disk
+delivery available. Kind switching clears stale performance selections, while
+saved inventory schedules retain their kind on reload and edit. Existing
+delivery checks, outcomes and recovery controls apply without a separate UI.
 That same settings shell must now also render both historical performance
 options and VM inventory schema from the backend-owned reporting catalog rather
 than hardcoding panel copy, routes, or range presets in the frontend. The
@@ -8441,6 +8452,29 @@ flow, and `reportingSchedulesModel.ts` owns schedule payload normalization,
 labels, default form state, and cadence formatting. Schedule scope selection
 must reuse the shared `ResourcePicker` and reporting catalog types rather than
 creating a separate resource selector or browser-local schedule API contract.
+The report list distinguishes saved files, SMTP acceptance, retry scheduling,
+terminal failure and unconfirmed delivery. SMTP acceptance must not be labelled
+as inbox receipt. Actionable delivery errors and the next automatic retry stay
+visible at narrow widths. Saved server paths and previous success times belong
+in the report details disclosure. A deliberate retry of unconfirmed delivery
+requires a duplicate warning. Active attempts and pending retries refresh from
+the server, and the browser never manufactures a delivery success. The existing
+advanced-reporting capability remains the access boundary. Proofs:
+`frontend-modern/src/components/Settings/__tests__/ReportingPanel.test.tsx`,
+`frontend-modern/src/components/Settings/__tests__/reportingSchedulesModel.delivery.test.ts`,
+`frontend-modern/src/components/Settings/__tests__/useReportingPanelState.test.ts`.
+The report list keeps status and Run/Retry visible at every width. Scope,
+recipients, file paths, Edit and Delete share the full-width details disclosure.
+Keyed store reconciliation preserves row identity, open details and keyboard
+focus across background refreshes.
+The schedule editor is loaded only when a schedule is created or edited, with a
+visible loading state. It shares the reporting field primitive with the main
+report builder. Edit-only code stays out of the initial ReportingPanel bundle,
+and the existing bundle budget remains enforced. The Reports browser proof covers
+the deferred editor and its full form after the chunk loads.
+Responsive reporting actions are verified through the rendered reporting tests
+and browser interactions. Architecture checks do not require the retired
+schedule table columns or separate mobile action menu.
 The settings navigation model now exposes a single `infrastructure-systems`
 sidebar entry for the infrastructure settings area. The former
 `infrastructure-connections` and `infrastructure-install` entries have been

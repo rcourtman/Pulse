@@ -2832,6 +2832,7 @@
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
         "internal/api/configapi/setup_script_render.go",
         "internal/config/persistence_metadata_accessors.go",
+        "internal/config/report_schedules.go",
         "internal/websocket/hub.go",
         "pkg/aicontracts/action_broker.go",
         "pkg/aicontracts/fix_execution.go",
@@ -3235,6 +3236,58 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/api/route_inventory_test.go"
+            ]
+          },
+          {
+            "id": "scheduled-report-delivery",
+            "label": "scheduled report persistence, delivery and retry proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/report_schedules.go",
+              "internal/config/report_schedules.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/report_schedule_delivery_test.go",
+              "internal/api/report_schedule_inventory_test.go",
+              "internal/api/report_schedules_test.go",
+              "internal/config/report_schedule_delivery_test.go"
+            ]
+          },
+          {
+            "id": "reporting-runtime-reads",
+            "label": "reporting inventory, enrichment and reload proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/metrics_reporting_handlers.go",
+              "internal/api/reporting_availability.go",
+              "internal/api/reporting_inventory_handlers.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/report_schedule_inventory_test.go",
+              "internal/api/reporting_availability_test.go",
+              "internal/api/reporting_handlers_test.go",
+              "internal/api/reporting_monitor_reload_test.go",
+              "internal/api/reporting_org_scope_test.go",
+              "internal/api/reporting_runtime_snapshot_test.go"
+            ]
+          },
+          {
+            "id": "router-runtime-wiring",
+            "label": "router dependency replacement proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/router_helpers.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/multi_tenant_setters_additional_test.go",
+              "internal/api/reporting_monitor_reload_test.go",
+              "internal/api/router_helpers_more_test.go"
             ]
           },
           {
@@ -5313,8 +5366,11 @@
         "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
         "frontend-modern/src/components/Settings/OperationsPanel.tsx",
         "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/ReportingFormField.tsx",
         "frontend-modern/src/components/Settings/ReportingPanel.tsx",
         "frontend-modern/src/components/Settings/reportingPanelModel.ts",
+        "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
+        "frontend-modern/src/components/Settings/ReportScheduleEditor.tsx",
         "frontend-modern/src/components/Settings/ResourcePicker.tsx",
         "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
         "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
@@ -5681,8 +5737,11 @@
             "match_files": [
               "frontend-modern/scripts/header-audit.mjs",
               "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/ReportingFormField.tsx",
               "frontend-modern/src/components/Settings/ReportingPanel.tsx",
               "frontend-modern/src/components/Settings/reportingPanelModel.ts",
+              "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
+              "frontend-modern/src/components/Settings/ReportScheduleEditor.tsx",
               "frontend-modern/src/components/Settings/ResourcePicker.tsx",
               "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
               "frontend-modern/src/components/Settings/useReportingPanelState.ts",
@@ -5697,11 +5756,14 @@
             "exact_files": [
               "frontend-modern/src/__tests__/App.architecture.test.ts",
               "frontend-modern/src/components/Settings/__tests__/AvailabilitySettingsPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/ReportingPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/reportingPanelModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/reportingResourceTypes.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/reportingSchedulesModel.delivery.test.ts",
               "frontend-modern/src/components/Settings/__tests__/ResourcePicker.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/useReportingPanelState.test.ts",
               "frontend-modern/src/routing/__tests__/routePreload.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/reportableResourceTypes.test.ts",
@@ -6616,6 +6678,20 @@
               "internal/fleethealth/agent_test.go",
               "internal/monitoring/agent_fleet_doctor_test.go",
               "internal/monitoring/monitoring_fleet_doctor_helpers_branchcov0716_test.go"
+            ]
+          },
+          {
+            "id": "unified-read-freshness",
+            "label": "canonical resource freshness and unattended read proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/resource_stale_thresholds.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/resource_stale_thresholds_test.go",
+              "internal/monitoring/unified_inventory_read_refresh_test.go"
             ]
           },
           {
@@ -7730,6 +7806,30 @@
             ]
           },
           {
+            "id": "server-runtime-wiring",
+            "label": "server runtime wiring proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/server/server.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
+              "internal/api/system_settings_telemetry_test.go",
+              "internal/api/telemetry_history_reads_test.go",
+              "internal/config/history_read_activity_test.go",
+              "internal/telemetry/service_health_test.go",
+              "internal/telemetry/telemetry_test.go",
+              "pkg/server/reporting_engine_test.go",
+              "pkg/server/service_health_test.go",
+              "pkg/server/telemetry_licensed_features_test.go",
+              "pkg/server/telemetry_pulse_intelligence_test.go",
+              "scripts/tests/test_telemetry_adoption_report.py",
+              "tests/integration/tests/19-telemetry-disclosure.spec.ts"
+            ]
+          },
+          {
             "id": "privacy-docs-and-telemetry",
             "label": "privacy docs and telemetry proof",
             "match_prefixes": [],
@@ -7739,7 +7839,6 @@
               "internal/config/history_read_activity.go",
               "internal/telemetry/service_health.go",
               "internal/telemetry/telemetry.go",
-              "pkg/server/server.go",
               "pkg/server/service_health.go",
               "pkg/server/telemetry_licensed_features.go",
               "pkg/server/telemetry_pulse_intelligence.go",

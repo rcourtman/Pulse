@@ -349,7 +349,7 @@ func TestContract_ConfigTransferRoutesUseCanonicalPreHandlerAuthorization(t *tes
 		"isDirectLoopbackRequest(req)",
 		"op == configTransferExport",
 		"getAPITokenRecordFromRequest(req)",
-		"ensureAdminSession(r.config, w, req)",
+		"ensureOrgAdminSession(r.config, w, req)",
 		"config.ScopeSettingsRead",
 		"config.ScopeSettingsWrite",
 	} {
@@ -5449,7 +5449,7 @@ func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) 
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/reporting?resourceType=node&resourceId=node-1&metricType=+cpu+&title=+Node+report+",
@@ -5528,7 +5528,7 @@ func TestContract_SingleReportAINarrationRequiresPOST(t *testing.T) {
 	// tenant AI service; GET must use only the existing-service findings path.
 	narrator := &countingReportNarrator{}
 	var narratorResolves, findingsResolves atomic.Int32
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	handler.SetNarratorResolver(func(context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
 		narratorResolves.Add(1)
 		return narrator, nil, nil
@@ -5602,7 +5602,7 @@ func TestContract_SingleReportGETDoesNotConstructTenantAIService(t *testing.T) {
 
 	router := &Router{
 		aiSettingsHandler: NewAISettingsHandler(config.NewMultiTenantPersistence(t.TempDir()), nil, nil),
-		reportingHandlers: NewReportingHandlers(nil, nil),
+		reportingHandlers: newReportingHandlersWithInventoryForTest(t, "tenant-1", "node-1"),
 	}
 	router.wireReportingAIResolvers()
 	t.Cleanup(router.aiSettingsHandler.StopServices)
@@ -5778,7 +5778,7 @@ func TestContract_ReportingRequestCarriesEntitledReportBranding(t *testing.T) {
 	t.Cleanup(func() { SetLicenseServiceProvider(nil) })
 
 	t.Setenv("PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME", "Provider Default")
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	handler.SetSystemSettingsStore(reportBrandSettingsStore{settings: &config.SystemSettings{
 		ReportBranding: &config.ReportBrandSettings{DisplayName: "Client One"},
 	}})
@@ -5940,7 +5940,7 @@ func TestContract_PerformanceReportTransportUsesCatalogDefaultRange(t *testing.T
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	end := time.Date(2026, 3, 25, 15, 0, 0, 0, time.UTC)
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -22511,8 +22511,8 @@ func TestContract_AgentFleetDiagnosticsEndpointSurfacesStableShape(t *testing.T)
 	routerSrc := string(router)
 
 	if !strings.Contains(routerSrc, `"/api/agents/diagnostics"`) ||
-		!strings.Contains(routerSrc, `RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics))`) {
-		t.Error("agent fleet diagnostics route must remain admin settings:read only")
+		!strings.Contains(routerSrc, `RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics))`) {
+		t.Error("agent fleet diagnostics route must remain org admin settings:read only")
 	}
 	if !strings.Contains(handlerSrc, "GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTargetVersion, now)") ||
 		!strings.Contains(handlerSrc, "applyAgentFleetActionRunnerState(&diagnostics") {
@@ -26475,12 +26475,14 @@ func orgScopedSessionRequest(t *testing.T, user string, org *models.Organization
 }
 
 // A provider opening a client workspace lands in that client's organization as
-// its owner. ensureAdminSession has always let an org manager through the
-// org-bound settings routes, but the security status snapshot reported every
-// settings capability as false for any org-scoped session, so the settings
-// navigation hid Infrastructure and Reporting and the owner had no way to
-// connect a single system. Those org-bound capabilities must follow the route
-// rule, while instance administration stays closed to org-scoped sessions.
+// its owner. ensureOrgAdminSession lets an org manager through the org-bound
+// settings routes, but the security status snapshot reported every settings
+// capability as false for any org-scoped session, so the settings navigation
+// hid Infrastructure and Reporting and the owner had no way to connect a
+// single system or build its reports. Those org-bound capabilities must follow
+// the route rule, while instance administration stays closed to org-scoped
+// sessions. Reporting is org-bound because every report reads only the request
+// organization's inventory and metrics store.
 func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 	prev := authpkg.GetAuthorizer()
 	authpkg.SetAuthorizer(&authpkg.DefaultAuthorizer{})
@@ -26511,8 +26513,8 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 		{name: "outsider", user: "u_outsider", manager: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := ensureAdminSession(router.config, httptest.NewRecorder(), orgScopedSessionRequest(t, tc.user, org)); got != tc.manager {
-				t.Fatalf("precondition: ensureAdminSession = %v, want %v", got, tc.manager)
+			if got := ensureOrgAdminSession(router.config, httptest.NewRecorder(), orgScopedSessionRequest(t, tc.user, org)); got != tc.manager {
+				t.Fatalf("precondition: ensureOrgAdminSession = %v, want %v", got, tc.manager)
 			}
 
 			caps := router.securityStatusSettingsCapabilitiesFromSnapshot(
@@ -26553,7 +26555,7 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 
 // With a real RBAC authorizer, reporting also needs read:nodes. An org owner
 // the authorizer refuses must not be offered the reporting surface, because
-// RequirePermission refuses the route before ensureAdminSession runs.
+// RequirePermission refuses the route before any session check runs.
 func TestSecurityStatusOrgBoundReportingRespectsAuthorizer(t *testing.T) {
 	cfg := platformAdminConfig(t, "admin")
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
@@ -26567,7 +26569,7 @@ func TestSecurityStatusOrgBoundReportingRespectsAuthorizer(t *testing.T) {
 		t.Fatal("reportingRead advertised although the authorizer refuses read:nodes")
 	}
 	if !caps.InfrastructureRead {
-		t.Fatal("infrastructureRead must still follow ensureAdminSession for the org owner")
+		t.Fatal("infrastructureRead must still follow ensureOrgAdminSession for the org owner")
 	}
 }
 

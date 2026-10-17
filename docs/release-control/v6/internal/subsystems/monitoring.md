@@ -962,9 +962,11 @@ suppression and metadata backoff are not reset to force recovery.
 
 ### QGA fallback eligibility keeps its original observation age
 
-A successful unlocked VM-status availability, usable filesystem reading or
-useful guest metadata can establish fallback query eligibility. A later poll
-that preserves optional IP/OS/version strings does not renew that evidence.
+Only an actual guest-agent reply, a usable filesystem reading or useful guest
+metadata, can establish fallback query eligibility. The `status/current` `agent`
+flag means the agent is enabled in the VM config, not that the in-guest service
+answers, so a successful VM-status read does not establish or renew it. A later
+poll that preserves optional IP/OS/version strings does not renew that evidence.
 Internal `GuestAgentEvidence` crosses model, canonical and previous-state
 snapshots, including an explicit missing origin. Legacy direct snapshots import
 their receipt once, while already annotated disk-only evidence uses its recorded
@@ -979,7 +981,10 @@ remain independent.
 `TestGuestAgentAdmissionEvidenceContract` checks the original-age boundaries,
 repeated canonical replacement and both cluster/node collectors through a
 cancelled detail cycle, unavailable status, missing status and ordinary recovery
-with measured-zero disk usage. This is synthetic source proof, not native thaw,
+with measured-zero disk usage. Its `config-flag-cannot-renew` case polls with the
+real integer `agent: 1` flag: an enabled agent that never replied admits no
+fallback command once status fails, while one that answered keeps its fallback.
+This is synthetic source proof, not native thaw,
 QEMU-only Windows acceptance or reporter resolution.
 
 
@@ -1064,6 +1069,23 @@ also accepts unused textual ids through the full poller;
 `TestPMGNodeDiscoveryFailurePreservesAcceptedBackups` uses a malformed consumed
 node name, not an ignored id, to exercise decoder-failure preservation. These are source regressions,
 not native appliance recovery or release availability.
+
+### PMG backups keep last-known entries for unread nodes
+
+`UpdatePMGBackups` replaces a connection's whole backup list, so only a node
+whose backup list was read in this poll is authoritative for it. A node that
+was not read keeps its previous backups: every node after a failed cluster
+read, a node whose backup read failed, and a node a cancelled poll never
+reached. This is the same per-scope carry that `preserveFailedStorageBackups`
+applies to failed PVE storages. A node that answered with no backups, or that
+a successful cluster read no longer lists, still clears its entries. The
+failed read is still recorded as a poll failure; the stricter containing
+no-guessed-node boundary above remains unchanged. `TestPMGBackupsSurviveFailedClusterRead`,
+`TestPMGBackupsSurviveEveryNodeBackupReadFailing`,
+`TestPMGBackupsKeepFailedNodeOnPartialRead` and
+`TestPMGBackupsClearAfterCompleteEnumeration` in `monitor_pmg_test.go` cover
+the carry and the complete-enumeration clear. These are synthetic poller
+controls, not native PMG acceptance.
 
 ### Guest configuration reads preserve installation and node identity
 
@@ -1329,6 +1351,27 @@ ordinary polling supplies transport, attempt/success and observed inventory.
 These synthetic source controls reproduce a family matching #2382's second
 operator response, not that operator's cause, the original downgrade-resolved
 regression, native appliance acceptance or release availability.
+
+### Metrics database override stays on the default organization
+
+`PULSE_METRICS_DB_PATH` names one SQLite file, so it applies only to the
+default organization's monitor. `MultiTenantMonitor.GetMonitor` clears
+`MetricsDBPath` on each non-default tenant's detached config copy after
+setting its `DataPath`, and `monitoring.New` then opens that organization's
+store at `<org data dir>/metrics.db`. Before this, the deep copy carried the
+override into every tenant and all organizations wrote to and read from one
+metrics database, so per-org charts, reports and Pulse Assistant summaries
+could return another organization's series. Keeping tenant stores inside the
+org directory also means `DeleteOrganization` removes that org's metrics with
+the rest of its data. The trade-off is that tmpfs or RAM-disk placement
+through the override covers the default org only; non-default org metrics
+stay on the data volume. The default org's override path, rollup interval and
+retention handling are unchanged. Regression coverage:
+`internal/monitoring/multi_tenant_monitor_metrics_path_test.go` sets the
+override, provisions two orgs, and proves each opens its own `metrics.db`
+and cannot read series written by the default org or by the other org.
+`TestMetricsStoreRuntimeOverridesStayOnMonitorBoundary` also requires the
+clear to sit between the tenant `DataPath` assignment and `New`.
 
 ### Lightweight detached History reads
 
@@ -4375,6 +4418,12 @@ service-history reads plus denial/recovery without fabricated samples.
 
 ## Completion Obligations
 
+Discovery belongs to the monitor that constructs it. Both initial startup and
+runtime enablement pass that monitor's org into the service constructor; every
+scan callback retains it. `internal/discovery/service_event_tenant_test.go`
+checks started, found-server, progress, update and completion callbacks for
+named and default organizations. The custom event envelope stays unchanged.
+
 `internal/monitoring/monitor_host_agents_test.go` and `pkg/agents/host/proxmox_lxc_test.go` must prove JSON wire-report ingestion through `ApplyHostReport`, partial/complete-empty recovery, contradictory IDs, unchanged node/agent/name/TTL protection, and no invalid-list-to-healthy-empty conversion. Omitted telemetry is never zero. Source proofs are distinct from native PVE and released availability.
 
 1. Update this contract when monitoring truth ownership changes
@@ -6044,7 +6093,9 @@ aggregation cadence: `internal/monitoring/monitor.go` may pass the resolved
 data path, `PULSE_METRICS_DB_PATH`, and `PULSE_METRICS_ROLLUP_INTERVAL` through
 to `pkg/metrics`, but the SQLite path normalization, rollup bounds, and write
 amplification policy stay owned by the metrics store rather than by a
-monitoring-local helper.
+monitoring-local helper. The `PULSE_METRICS_DB_PATH` handoff reaches only the
+default org's monitor; non-default tenants always resolve `metrics.db` from
+their own data path.
 Install-wide telemetry counts are also monitoring-owned now. Any telemetry or
 reporting surface that claims installation totals must aggregate across the
 provisioned tenant set through the reloadable multi-tenant monitor boundary,
@@ -8207,6 +8258,15 @@ replacement provider's events. Poll-provider replacement also invalidates pendin
 collections. Provider callbacks run outside wiring, publication and adapter locks.
 Read refreshes share ingest publication ordering, retain fresh-generation skips
 and never queue behind a warm ingest; a cold read still builds its first registry.
+
+Canonical unified snapshot reads also enter this same read-refresh boundary,
+with a cheap fresh-store check before taking a state copy. Unattended inventory
+and reporting consumers must not depend on a dashboard `/api/state` request to
+publish polled VM data. Mock fixture projections and stores without read-refresh
+support keep their existing read semantics. The refresh retains the existing
+provider, tenant, wiring and mode fences and warm non-blocking publication gate.
+`unified_inventory_read_refresh_test.go` covers headless VM publication and a
+warm read contending with ingest publication.
 
 `resource_publication_ownership_test.go` supplies deterministic channel barriers,
 consume-once replacement-store controls, refused and skipped drains, read-provider

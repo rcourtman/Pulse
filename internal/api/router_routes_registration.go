@@ -64,14 +64,14 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	// Uninstall is a collector's self-removal by token. Anything that is not a
 	// token takes the administrative removal path inside the handler, so it must
 	// be an administrator, as for the unlink and delete routes below.
-	r.mux.HandleFunc("/api/agents/agent/uninstall", RequireAdmin(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleUninstall)))
-	r.mux.HandleFunc("/api/agents/host/uninstall", wrapLegacyHostAlias("/api/agents/host/uninstall", RequireAdmin(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleUninstall))))
+	r.mux.HandleFunc("/api/agents/agent/uninstall", RequireOrgAdmin(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleUninstall)))
+	r.mux.HandleFunc("/api/agents/host/uninstall", wrapLegacyHostAlias("/api/agents/host/uninstall", RequireOrgAdmin(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleUninstall))))
 	// SECURITY: Use settings:write (not just host_manage) to prevent compromised host tokens from manipulating other hosts
-	r.mux.HandleFunc("/api/agents/agent/unlink", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleUnlink)))
-	r.mux.HandleFunc("/api/agents/host/unlink", wrapLegacyHostAlias("/api/agents/host/unlink", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleUnlink))))
-	r.mux.HandleFunc("/api/agents/agent/link", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleLink)))
-	r.mux.HandleFunc("/api/agents/host/link", wrapLegacyHostAlias("/api/agents/host/link", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleLink))))
-	r.mux.HandleFunc("/api/agents/diagnostics", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics)))
+	r.mux.HandleFunc("/api/agents/agent/unlink", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleUnlink)))
+	r.mux.HandleFunc("/api/agents/host/unlink", wrapLegacyHostAlias("/api/agents/host/unlink", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleUnlink))))
+	r.mux.HandleFunc("/api/agents/agent/link", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleLink)))
+	r.mux.HandleFunc("/api/agents/host/link", wrapLegacyHostAlias("/api/agents/host/link", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleLink))))
+	r.mux.HandleFunc("/api/agents/diagnostics", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics)))
 	// Unified Agent management routes - config endpoint is accessible by agents (GET) and admins (PATCH)
 	unifiedAgentManagementCore := func(w http.ResponseWriter, req *http.Request) {
 		// Route /api/agents/agent/{id}/config to HandleConfig
@@ -79,7 +79,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			// GET is for agents to fetch config (agent config scope)
 			// PATCH is for UI to update config (agent_manage scope, admin only)
 			if req.Method == http.MethodPatch {
-				RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+				RequireOrgAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
 					if !ensureScope(w, req, config.ScopeAgentManage) {
 						return
 					}
@@ -93,7 +93,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		// Route POST /api/agents/agent/{id}/allow-reenroll to HandleAllowReenroll
 		if strings.HasSuffix(req.URL.Path, "/allow-reenroll") {
 			if req.Method == http.MethodPost {
-				RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+				RequireOrgAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
 					if !ensureScope(w, req, config.ScopeSettingsWrite) {
 						return
 					}
@@ -107,7 +107,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		// Route DELETE /api/agents/agent/{id} to HandleDeleteHost
 		// SECURITY: Require settings:write (not just host_manage) to prevent compromised host tokens from deleting other hosts
 		if req.Method == http.MethodDelete {
-			RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+			RequireOrgAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
 				if !ensureScope(w, req, config.ScopeSettingsWrite) {
 					return
 				}
@@ -120,11 +120,11 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/agents/agent/", RequireAuth(r.config, unifiedAgentManagementCore))
 	r.mux.HandleFunc("/api/agents/host/", wrapLegacyHostAlias("/api/agents/host/", RequireAuth(r.config, unifiedAgentManagementCore)))
 	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
-	r.mux.HandleFunc("/api/agents/docker/runtimes/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
+	r.mux.HandleFunc("/api/agents/docker/runtimes/", RequireOrgAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
 	r.mux.HandleFunc("/api/agents/docker/containers/update", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleContainerUpdate)))
-	r.mux.HandleFunc("/api/agents/kubernetes/clusters/", RequireAdmin(r.config, RequireScope(config.ScopeKubernetesManage, r.kubernetesAgentHandlers.HandleClusterActions)))
+	r.mux.HandleFunc("/api/agents/kubernetes/clusters/", RequireOrgAdmin(r.config, RequireScope(config.ScopeKubernetesManage, r.kubernetesAgentHandlers.HandleClusterActions)))
 	r.mux.HandleFunc("/api/diagnostics", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleDiagnostics)))
-	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsDockerPrepareToken)))
+	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsDockerPrepareToken)))
 	r.mux.HandleFunc("/api/config", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleConfig)))
 	r.mux.HandleFunc("/api/runtime/branding", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.systemSettingsHandler.HandleGetRuntimeBranding)))
 	r.mux.HandleFunc("/api/runtime/display", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.systemSettingsHandler.HandleGetRuntimeDisplay)))
@@ -147,12 +147,12 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/config/nodes", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.withExternalAgentCapabilityActivity(
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.withExternalAgentCapabilityActivity(
 				agentcapabilities.ListNodesCapabilityName,
 				r.configHandlers.HandleGetNodes,
 			)))(w, req)
 		case http.MethodPost:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
 				agentcapabilities.AddNodeCapabilityName,
 				r.configHandlers.HandleAddNode,
 			)))(w, req)
@@ -163,7 +163,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	// Test node configuration endpoint (for new nodes)
 	r.mux.HandleFunc("/api/config/nodes/test-config", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
 				agentcapabilities.TestNodeCredentialsCapabilityName,
 				r.configHandlers.HandleTestNodeConfig,
 			)))(w, req)
@@ -175,7 +175,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	// Test connection endpoint
 	r.mux.HandleFunc("/api/config/nodes/test-connection", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestConnection))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestConnection))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -183,24 +183,24 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/config/nodes/", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodPut:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
 				agentcapabilities.UpdateNodeCapabilityName,
 				r.configHandlers.HandleUpdateNode,
 			)))(w, req)
 		case http.MethodDelete:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
 				agentcapabilities.RemoveNodeCapabilityName,
 				r.configHandlers.HandleDeleteNode,
 			)))(w, req)
 		case http.MethodPost:
 			// Handle test endpoint and refresh-cluster endpoint
 			if strings.HasSuffix(req.URL.Path, "/test") {
-				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
 					agentcapabilities.TestNodeConnectionCapabilityName,
 					r.configHandlers.HandleTestNode,
 				)))(w, req)
 			} else if strings.HasSuffix(req.URL.Path, "/refresh-cluster") {
-				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
 					agentcapabilities.RefreshNodeClusterMembershipCapabilityName,
 					r.configHandlers.HandleRefreshClusterNodes,
 				)))(w, req)
@@ -222,7 +222,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.connectionsHandlers.HandleList))(w, req)
+		RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.connectionsHandlers.HandleList))(w, req)
 	})
 	// Workloads needs source health at the monitoring tier, but the connection
 	// ledger above is intentionally administrative. Authentication and
@@ -246,7 +246,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.connectionsHandlers.HandleProbe))(w, req)
+		RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.connectionsHandlers.HandleProbe))(w, req)
 	})
 
 	// Agentless availability target management
@@ -257,9 +257,9 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 		switch req.Method {
 		case http.MethodGet:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.availabilityHandlers.HandleList))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.availabilityHandlers.HandleList))(w, req)
 		case http.MethodPost:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleAdd))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleAdd))(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -271,7 +271,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			return
 		}
 		if req.Method == http.MethodPost {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleTestConnection))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleTestConnection))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -283,11 +283,11 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			return
 		}
 		if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/test") {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleTestSavedConnection))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleTestSavedConnection))(w, req)
 		} else if req.Method == http.MethodDelete {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleDelete))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleDelete))(w, req)
 		} else if req.Method == http.MethodPut {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleUpdate))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleUpdate))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -302,9 +302,9 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 
 		switch req.Method {
 		case http.MethodGet:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.trueNASHandlers.HandleList))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.trueNASHandlers.HandleList))(w, req)
 		case http.MethodPost:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleAdd))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleAdd))(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -317,7 +317,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 
 		if req.Method == http.MethodPost {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleTestConnection))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleTestConnection))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -330,7 +330,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 
 		if req.Method == http.MethodPost {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandlePreviewConnection))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandlePreviewConnection))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -357,9 +357,9 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 
 		switch req.Method {
 		case http.MethodGet:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.vmwareHandlers.HandleList))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.vmwareHandlers.HandleList))(w, req)
 		case http.MethodPost:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleAdd))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleAdd))(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -372,7 +372,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 
 		if req.Method == http.MethodPost {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleTestConnection))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleTestConnection))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -385,7 +385,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 
 		if req.Method == http.MethodPost {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandlePreviewConnection))(w, req)
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandlePreviewConnection))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -406,7 +406,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	// Config Profile Routes - Protected by Admin Auth, Settings Scope, and Pro License
 	// SECURITY: Require settings:write scope to prevent low-privilege tokens from modifying agent profiles
 	// r.configProfileHandler.ServeHTTP implements http.Handler, so we wrap it
-	r.mux.Handle("/api/admin/profiles/", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, RequireLicenseFeature(r.licenseHandlers, featureAgentProfilesKey, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.Handle("/api/admin/profiles/", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, RequireLicenseFeature(r.licenseHandlers, featureAgentProfilesKey, func(w http.ResponseWriter, req *http.Request) {
 		http.StripPrefix("/api/admin/profiles", r.configProfileHandler).ServeHTTP(w, req)
 	}))))
 
@@ -466,10 +466,10 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/setup-script", r.configHandlers.HandleSetupScript)
 
 	// Generate setup script URL with temporary token (for authenticated users)
-	r.mux.HandleFunc("/api/setup-script-url", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleSetupScriptURL)))
+	r.mux.HandleFunc("/api/setup-script-url", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleSetupScriptURL)))
 
 	// Generate agent install command with API token (for authenticated users)
-	r.mux.HandleFunc("/api/agent-install-command", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleAgentInstallCommand)))
+	r.mux.HandleFunc("/api/agent-install-command", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleAgentInstallCommand)))
 
 	// Auto-register route for setup scripts
 	r.mux.HandleFunc("/api/auto-register", r.configHandlers.HandleAutoRegister)
@@ -484,7 +484,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 
 		// Send a test auto-registration notification
-		r.wsHub.BroadcastMessage(websocket.Message{
+		r.wsHub.BroadcastMessageToTenant(GetOrgID(req.Context()), websocket.Message{
 			Type: "node_auto_registered",
 			Data: map[string]interface{}{
 				"type":     "pve",
@@ -530,9 +530,9 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			path := req.URL.Path
 			switch {
 			case strings.HasSuffix(path, "/events"):
-				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandlePreflightEvents))(w, req)
+				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandlePreflightEvents))(w, req)
 			default:
-				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleGetPreflight))(w, req)
+				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleGetPreflight))(w, req)
 			}
 		})
 
@@ -540,13 +540,13 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			path := req.URL.Path
 			switch {
 			case strings.HasSuffix(path, "/events"):
-				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleJobEvents))(w, req)
+				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleJobEvents))(w, req)
 			case strings.HasSuffix(path, "/cancel"):
-				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleCancelJob))(w, req)
+				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleCancelJob))(w, req)
 			case strings.HasSuffix(path, "/retry"):
 				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleRetryJob))(w, req)
 			default:
-				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleGetJob))(w, req)
+				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleGetJob))(w, req)
 			}
 		})
 	}

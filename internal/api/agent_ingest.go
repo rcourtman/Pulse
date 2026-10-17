@@ -100,8 +100,12 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 		report.Timestamp = time.Now().UTC()
 	}
 
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
 	tokenRecord := getAPITokenRecordFromRequest(r)
-	host, err := h.getMonitor(r.Context()).ApplyHostReport(report, tokenRecord)
+	host, err := monitor.ApplyHostReport(report, tokenRecord)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)
 		return
@@ -129,7 +133,7 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 	// identity before returning remote config, otherwise an old false override
 	// survives remove/reinstall and immediately shuts down an agent launched
 	// with --enable-commands (#1728).
-	if err := reconcileInstallTokenCommandPolicy(h.getMonitor(r.Context()), tokenRecord, host); err != nil {
+	if err := reconcileInstallTokenCommandPolicy(monitor, tokenRecord, host); err != nil {
 		log.Error().Err(err).
 			Str("agent_id", host.ID).
 			Str("token_id", tokenID(tokenRecord)).
@@ -145,7 +149,7 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 	h.broadcastState(r.Context())
 
 	// Include any server-side config overrides in the response
-	serverConfig := h.getMonitor(r.Context()).GetHostAgentConfig(host.ID)
+	serverConfig := monitor.GetHostAgentConfig(host.ID)
 	serverConfig = sanitizeHostAgentConfigForToken(serverConfig, tokenRecord, host)
 
 	resp := map[string]any{
@@ -280,7 +284,11 @@ func (h *UnifiedAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Reque
 
 	// Use the live host snapshot (not the global mock snapshot) so agent
 	// registrations can still be validated while Pulse is in mock/demo mode.
-	hosts := h.getMonitor(r.Context()).GetLiveHostsSnapshot()
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	hosts := monitor.GetLiveHostsSnapshot()
 
 	var (
 		host  models.Host
@@ -415,7 +423,11 @@ func (h *UnifiedAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.R
 	}
 
 	// Remove the agent from state.
-	host, err := h.getMonitor(r.Context()).RemoveHostAgent(agentID)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	host, err := monitor.RemoveHostAgent(agentID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "agent_removal_failed", err.Error(), nil)
 		return
@@ -447,7 +459,11 @@ func (h *UnifiedAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).AllowHostAgentReenroll(agentID); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.AllowHostAgentReenroll(agentID); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "agent_reenroll_failed", err.Error(), nil)
 		return
 	}
@@ -505,6 +521,9 @@ func (h *UnifiedAgentHandlers) resolveConfigAgent(ctx context.Context, agentID s
 	// Use the live host snapshot so agents can still fetch config while
 	// Pulse is running in mock/demo mode.
 	monitor := h.getMonitor(ctx)
+	if monitor == nil {
+		return models.Host{}, false
+	}
 	hosts := monitor.GetLiveHostsSnapshot()
 
 	if record == nil || record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeAgentManage) {
@@ -617,6 +636,11 @@ func (h *UnifiedAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+
 	host, ok := h.resolveConfigAgent(r.Context(), agentID, record)
 	if !ok {
 		writeErrorResponse(w, http.StatusNotFound, "agent_not_found", "Agent has not registered with Pulse yet", nil)
@@ -627,7 +651,7 @@ func (h *UnifiedAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Re
 
 	agentID = host.ID
 
-	config := h.getMonitor(r.Context()).GetHostAgentConfig(agentID)
+	config := monitor.GetHostAgentConfig(agentID)
 	config = sanitizeHostAgentConfigForToken(config, record, host)
 	signedConfig, err := h.signAgentConfig(agentID, config)
 	if err != nil {
@@ -765,7 +789,11 @@ func (h *UnifiedAgentHandlers) ensureAgentTokenMatch(w http.ResponseWriter, r *h
 	}
 
 	// Use the live host snapshot so mock/demo mode doesn't block agent auth checks.
-	hosts := h.getMonitor(r.Context()).GetLiveHostsSnapshot()
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return false
+	}
+	hosts := monitor.GetLiveHostsSnapshot()
 	for _, host := range hosts {
 		if host.ID != agentID {
 			continue
@@ -797,7 +825,11 @@ func (h *UnifiedAgentHandlers) handlePatchConfig(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).UpdateHostAgentConfig(agentID, req.CommandsEnabled); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.UpdateHostAgentConfig(agentID, req.CommandsEnabled); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "update_failed", err.Error(), nil)
 		return
 	}
@@ -849,7 +881,10 @@ func (h *UnifiedAgentHandlers) HandleUninstall(w http.ResponseWriter, r *http.Re
 
 	log.Info().Str("agentId", agentID).Msg("Received unregistration request from agent uninstaller")
 
-	monitor := h.getMonitor(r.Context())
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
 	record := getAPITokenRecordFromRequest(r)
 	var err error
 	if record != nil {
@@ -915,7 +950,11 @@ func (h *UnifiedAgentHandlers) HandleLink(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).LinkHostAgent(agentID, nodeID); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.LinkHostAgent(agentID, nodeID); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "link_failed", err.Error(), nil)
 		return
 	}
@@ -957,7 +996,11 @@ func (h *UnifiedAgentHandlers) HandleUnlink(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).UnlinkHostAgent(agentID); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.UnlinkHostAgent(agentID); err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "unlink_failed", err.Error(), nil)
 		return
 	}

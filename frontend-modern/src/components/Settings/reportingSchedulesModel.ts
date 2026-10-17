@@ -2,11 +2,11 @@ import type { SelectedResource } from '@/components/Settings/ResourcePicker';
 import type { ReportingFormat } from '@/components/Settings/reportingCatalogModel';
 
 export type ReportScheduleCadenceType = 'monthly' | 'weekly';
-export type ReportScheduleRunStatus = '' | 'ok' | 'failed';
+export type ReportScheduleRunStatus = '' | 'ok' | 'failed' | 'running' | 'retrying' | 'unconfirmed';
 export type ReportScheduleDeliveryMethod = 'email' | 'disk';
 // 'resources' is the multi-resource performance report; 'patrol_digest' emails
 // the last seven days of Patrol work and has no scope, format, or disk output.
-export type ReportScheduleKind = 'resources' | 'patrol_digest';
+export type ReportScheduleKind = 'resources' | 'patrol_digest' | 'vm_inventory';
 // Digest schedules carry the server-assigned 'email' format: the email body is
 // the report, so there is no PDF or CSV artifact.
 export type ReportScheduleFormat = ReportingFormat | 'email';
@@ -44,6 +44,14 @@ export interface ReportSchedule {
   last_run_at?: string;
   last_run_status?: ReportScheduleRunStatus;
   last_error?: string;
+  last_delivery_status?: string;
+  last_report_path?: string;
+  last_success_at?: string;
+  run_attempts?: number;
+  retry_at?: string;
+  run_window_end?: string;
+  run_manual?: boolean;
+  delivery_check?: { ready: boolean; message: string };
   next_run_at?: string;
   created_at?: string;
   updated_at?: string;
@@ -70,6 +78,7 @@ export interface ReportScheduleFormState {
 
 export interface ReportSchedulesResponse {
   schedules?: ReportSchedule[];
+  delivery_checks?: Record<string, { ready: boolean; message: string }>;
 }
 
 const WEEKDAY_LABELS: Record<string, string> = {
@@ -104,11 +113,16 @@ export const DEFAULT_REPORT_SCHEDULE_FORM = (): ReportScheduleFormState => ({
 export function parseReportSchedulesResponse(value: unknown): ReportSchedule[] {
   if (!value || typeof value !== 'object') return [];
   const schedules = (value as ReportSchedulesResponse).schedules;
-  return Array.isArray(schedules) ? schedules.map(normalizeReportSchedule) : [];
+  const checks = (value as ReportSchedulesResponse).delivery_checks;
+  return Array.isArray(schedules)
+    ? schedules.map((schedule) =>
+        normalizeReportSchedule({ ...schedule, delivery_check: checks?.[schedule.id] }),
+      )
+    : [];
 }
 
 export function normalizeReportScheduleKind(kind: unknown): ReportScheduleKind {
-  return kind === 'patrol_digest' ? 'patrol_digest' : 'resources';
+  return kind === 'patrol_digest' || kind === 'vm_inventory' ? kind : 'resources';
 }
 
 export function isPatrolDigestSchedule(schedule: Pick<ReportSchedule, 'kind'>): boolean {
@@ -197,12 +211,20 @@ export function applyReportScheduleKind(
   return {
     ...form,
     kind,
+    format:
+      kind === 'vm_inventory'
+        ? 'csv'
+        : form.kind === 'vm_inventory'
+          ? defaults.format
+          : form.format,
+    tagFilter: kind === 'vm_inventory' ? '' : form.tagFilter,
     attach: defaults.attach,
     saveToDisk: defaults.saveToDisk,
   };
 }
 
 export function reportScheduleKindLabel(kind: unknown): string {
+  if (kind === 'vm_inventory') return 'VM inventory CSV';
   return normalizeReportScheduleKind(kind) === 'patrol_digest'
     ? 'Patrol weekly summary'
     : 'Performance report';
@@ -238,7 +260,7 @@ export function buildReportSchedulePayload(
   return {
     id: form.id,
     name: form.name.trim(),
-    kind: 'resources',
+    kind: form.kind,
     enabled: form.enabled,
     cadence: {
       type: form.cadenceType,
@@ -248,14 +270,14 @@ export function buildReportSchedulePayload(
       timezone: form.timezone.trim() || 'UTC',
     },
     scope: {
-      resources: resources.map((resource) => ({
+      resources: (form.kind === 'vm_inventory' ? [] : resources).map((resource) => ({
         resourceType: resource.type,
         resourceId: resource.id,
         name: resource.name,
       })),
-      tags: parseCommaList(form.tagFilter),
+      tags: form.kind === 'vm_inventory' ? [] : parseCommaList(form.tagFilter),
     },
-    format: form.format,
+    format: form.kind === 'vm_inventory' ? 'csv' : form.format,
     delivery: {
       method: form.deliveryMethod,
       to: parseCommaList(form.recipients),
@@ -290,6 +312,7 @@ export function reportScheduleCadenceLabel(schedule: ReportSchedule): string {
 
 export function reportScheduleScopeLabel(schedule: ReportSchedule): string {
   if (isPatrolDigestSchedule(schedule)) return 'Patrol activity, last 7 days';
+  if (schedule.kind === 'vm_inventory') return 'All VMs in this organization';
   const resources = schedule.scope.resources?.length ?? 0;
   const tags = schedule.scope.tags?.length ?? 0;
   const parts = [];
@@ -308,8 +331,46 @@ export function reportScheduleDeliveryLabel(schedule: ReportSchedule): string {
 
 export function reportScheduleLastRunLabel(schedule: ReportSchedule): string {
   if (!schedule.last_run_status) return 'Not run yet';
-  if (schedule.last_run_status === 'ok') return 'Last run OK';
-  return schedule.last_error ? `Failed: ${schedule.last_error}` : 'Last run failed';
+  if (schedule.last_run_status === 'running') return 'Running';
+  if (schedule.last_run_status === 'retrying') return 'Retry scheduled';
+  if (schedule.last_run_status === 'unconfirmed') return 'Delivery unconfirmed';
+  if (schedule.last_run_status === 'ok') {
+    if (schedule.last_delivery_status === 'saved') return 'Saved to disk';
+    if (
+      schedule.last_delivery_status === 'sent_with_attachment' ||
+      schedule.last_delivery_status === 'sent'
+    )
+      return 'Email accepted';
+    if (schedule.last_delivery_status === 'sent_saved_path') return 'Email notice accepted';
+    return 'Completed';
+  }
+  return 'Failed';
+}
+
+export function reportScheduleNeedsRetry(schedule: ReportSchedule): boolean {
+  return (
+    !!schedule.run_window_end &&
+    ['failed', 'retrying', 'unconfirmed'].includes(schedule.last_run_status || '')
+  );
+}
+
+export function reportScheduleRunActionLabel(schedule: ReportSchedule): string {
+  return reportScheduleNeedsRetry(schedule) ? 'Retry' : 'Run';
+}
+
+export function reportScheduleOutcomeDetail(schedule: ReportSchedule): string {
+  if (schedule.last_run_status === 'unconfirmed')
+    return 'The connection ended before delivery was confirmed. Check the recipient before retrying to avoid a duplicate.';
+  if (schedule.last_run_status === 'running') return 'Generating the report and checking delivery.';
+  if (schedule.last_error) return schedule.last_error;
+  if (
+    schedule.last_delivery_status === 'sent_with_attachment' ||
+    schedule.last_delivery_status === 'sent'
+  )
+    return 'The mail server accepted the email. Inbox receipt is not confirmed.';
+  if (schedule.last_delivery_status === 'sent_saved_path')
+    return 'The mail server accepted a notice with the saved report path. No report was attached.';
+  return '';
 }
 
 export function formatReportScheduleTime(value?: string): string {

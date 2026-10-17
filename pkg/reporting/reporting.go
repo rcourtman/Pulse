@@ -23,6 +23,11 @@ type MetricReportRequest struct {
 	Title        string
 	Branding     ReportBranding
 
+	// OrgID is the organization the report is generated for. An engine that
+	// resolves metrics per organization reads only this organization's
+	// metrics store and refuses a request that leaves it empty.
+	OrgID string
+
 	// MetricsResourceID overrides ResourceID for metrics-store queries.
 	// The v6 API addresses resources by canonical unified ID while the
 	// metrics store is keyed by each platform's native source ID (the
@@ -192,6 +197,10 @@ type MultiReportRequest struct {
 	Title      string
 	MetricType string
 	Branding   ReportBranding
+
+	// OrgID is the organization the report is generated for. It applies to
+	// every resource in Resources, overriding any OrgID they carry.
+	OrgID string
 
 	// Optional fleet-level narrative interpretation. When FleetNarrator is
 	// non-nil the engine builds a FleetNarrativeInput from the queried

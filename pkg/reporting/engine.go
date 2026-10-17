@@ -2,6 +2,7 @@ package reporting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -21,6 +22,7 @@ const narrativeTimeout = 30 * time.Second
 type ReportEngine struct {
 	metricsStore       *metrics.Store
 	metricsStoreGetter func() *metrics.Store
+	metricsStoreForOrg func(orgID string) (*metrics.Store, error)
 	csvGen             *CSVGenerator
 	pdfGen             *PDFGenerator
 }
@@ -36,6 +38,13 @@ type EngineConfig struct {
 	// When set, this is used instead of MetricsStore, ensuring queries
 	// always target the active store even after monitor reloads.
 	MetricsStoreGetter func() *metrics.Store
+
+	// MetricsStoreForOrg resolves the metrics store of the organization a
+	// request belongs to. When set it replaces MetricsStore and
+	// MetricsStoreGetter, and a request without an OrgID is refused, so a
+	// report on a multi-tenant install can only read the metrics of the
+	// organization it was requested in.
+	MetricsStoreForOrg func(orgID string) (*metrics.Store, error)
 }
 
 // NewReportEngine creates a new reporting engine.
@@ -43,18 +52,43 @@ func NewReportEngine(cfg EngineConfig) *ReportEngine {
 	return &ReportEngine{
 		metricsStore:       cfg.MetricsStore,
 		metricsStoreGetter: cfg.MetricsStoreGetter,
+		metricsStoreForOrg: cfg.MetricsStoreForOrg,
 		csvGen:             NewCSVGenerator(),
 		pdfGen:             NewPDFGenerator(),
 	}
 }
 
-// getMetricsStore returns the current metrics store, preferring the dynamic
-// getter over the static reference.
-func (e *ReportEngine) getMetricsStore() *metrics.Store {
-	if e.metricsStoreGetter != nil {
-		return e.metricsStoreGetter()
+// ErrReportOrgRequired is returned when an engine that resolves metrics per
+// organization receives a request that does not name one.
+var ErrReportOrgRequired = errors.New("report request does not name an organization")
+
+// metricsStoreFor returns the metrics store a request for orgID reads. An
+// engine configured with MetricsStoreForOrg resolves the organization's own
+// store and refuses a request without one; otherwise the single configured
+// store is used, preferring the dynamic getter over the static reference.
+func (e *ReportEngine) metricsStoreFor(orgID string) (*metrics.Store, error) {
+	if e.metricsStoreForOrg != nil {
+		orgID = strings.TrimSpace(orgID)
+		if orgID == "" {
+			return nil, ErrReportOrgRequired
+		}
+		store, err := e.metricsStoreForOrg(orgID)
+		if err != nil {
+			return nil, fmt.Errorf("metrics store for organization %q: %w", orgID, err)
+		}
+		if store == nil {
+			return nil, fmt.Errorf("metrics store not initialized for organization %q", orgID)
+		}
+		return store, nil
 	}
-	return e.metricsStore
+	store := e.metricsStore
+	if e.metricsStoreGetter != nil {
+		store = e.metricsStoreGetter()
+	}
+	if store == nil {
+		return nil, fmt.Errorf("metrics store not initialized")
+	}
+	return store, nil
 }
 
 // CanonicalResourceType normalizes report resource type inputs to canonical v6 names.
@@ -158,8 +192,8 @@ func mergeMetricMapsByTimestamp(dst, src map[string][]metrics.MetricPoint) {
 
 // Generate creates a report in the specified format.
 func (e *ReportEngine) Generate(req MetricReportRequest) (data []byte, contentType string, err error) {
-	if e.getMetricsStore() == nil {
-		return nil, "", fmt.Errorf("metrics store not initialized")
+	if _, err := e.metricsStoreFor(req.OrgID); err != nil {
+		return nil, "", err
 	}
 
 	// Query metrics data
@@ -287,7 +321,10 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 	data.Disks = req.Disks
 	data.Availability = req.Availability
 
-	store := e.getMetricsStore()
+	store, err := e.metricsStoreFor(req.OrgID)
+	if err != nil {
+		return nil, err
+	}
 	storeTypes := metricsStoreResourceTypes(canonicalType)
 	if len(storeTypes) == 0 {
 		storeTypes = []string{canonicalType}
@@ -380,8 +417,8 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 
 // GenerateMulti creates a multi-resource report in the specified format.
 func (e *ReportEngine) GenerateMulti(req MultiReportRequest) (data []byte, contentType string, err error) {
-	if e.getMetricsStore() == nil {
-		return nil, "", fmt.Errorf("metrics store not initialized")
+	if _, err := e.metricsStoreFor(req.OrgID); err != nil {
+		return nil, "", err
 	}
 
 	multiData := &MultiReportData{
@@ -405,6 +442,7 @@ func (e *ReportEngine) GenerateMulti(req MultiReportRequest) (data []byte, conte
 		resReq.End = req.End
 		resReq.MetricType = req.MetricType
 		resReq.Branding = req.Branding
+		resReq.OrgID = req.OrgID
 		if resReq.Narrator == nil {
 			resReq.Narrator = req.Narrator
 		}
@@ -510,10 +548,6 @@ func (e *ReportEngine) attachNarrative(reportData *ReportData, req MetricReportR
 // (same length, ending at req.Start). Returns nil when the window is empty
 // or the metrics store has no data for the prior range.
 func (e *ReportEngine) priorPeriodFor(req MetricReportRequest) *PriorPeriodInput {
-	store := e.getMetricsStore()
-	if store == nil {
-		return nil
-	}
 	duration := req.End.Sub(req.Start)
 	if duration <= 0 {
 		return nil
@@ -583,8 +617,8 @@ func (e *ReportEngine) attachFleetNarrative(multiData *MultiReportData, req Mult
 // resolution, same fail-closed-to-heuristic fallback as Generate; just
 // no fpdf/csv output stage.
 func (e *ReportEngine) NarrativeFor(req MetricReportRequest) (*Narrative, error) {
-	if e.getMetricsStore() == nil {
-		return nil, fmt.Errorf("metrics store not initialized")
+	if _, err := e.metricsStoreFor(req.OrgID); err != nil {
+		return nil, err
 	}
 	reportData, err := e.queryMetrics(req)
 	if err != nil {
@@ -604,8 +638,8 @@ func (e *ReportEngine) NarrativeFor(req MetricReportRequest) (*Narrative, error)
 // subset of resources failed (the narrator is given what loaded, and
 // the failed-resource list is logged at warn level by queryMetrics).
 func (e *ReportEngine) FleetNarrativeFor(req MultiReportRequest) (*FleetNarrative, error) {
-	if e.getMetricsStore() == nil {
-		return nil, fmt.Errorf("metrics store not initialized")
+	if _, err := e.metricsStoreFor(req.OrgID); err != nil {
+		return nil, err
 	}
 	multiData := &MultiReportData{
 		Title:       req.Title,
@@ -621,6 +655,7 @@ func (e *ReportEngine) FleetNarrativeFor(req MultiReportRequest) (*FleetNarrativ
 		resReq.Start = req.Start
 		resReq.End = req.End
 		resReq.MetricType = req.MetricType
+		resReq.OrgID = req.OrgID
 		if resReq.Narrator == nil {
 			resReq.Narrator = req.Narrator
 		}

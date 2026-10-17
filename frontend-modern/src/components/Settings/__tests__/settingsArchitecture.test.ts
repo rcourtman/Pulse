@@ -821,11 +821,8 @@ describe('settings architecture guardrails', () => {
       '<span class="hidden sm:inline">Manage Access</span>',
     );
     expect(userAssignmentsPanelSource).toContain('<span class="hidden sm:inline">Remove</span>');
-    expect(reportingPanelSource).toContain('hidden w-[16%] px-3 py-2 font-semibold sm:table-cell');
-    expect(reportingPanelSource).toContain('text-xs font-normal text-muted sm:hidden');
-    expect(reportingPanelSource).toContain('<details class="group sm:hidden">');
-    expect(reportingPanelSource).toContain('aria-label={`Actions for ${schedule.name}`}');
-    expect(reportingPanelSource).toContain('class="hidden justify-end gap-1 sm:flex"');
+    // Scheduled reports use a list. ReportingPanel.test.tsx and the Reports
+    // browser matrix verify visible recovery actions instead of table markup.
   });
 
   it('keeps settings loading skeletons on the shared skeleton primitive', () => {
