@@ -1449,7 +1449,7 @@ func (c *Client) GetTaskLog(ctx context.Context, node, upid string) ([]TaskLogLi
 	if err != nil {
 		return nil, err
 	}
-	lines, err := readTaskRows[TaskLogLine](resp, "n", "t")
+	lines, err := readTaskLog(resp)
 	if err != nil {
 		return nil, err
 	}
