@@ -6636,12 +6636,26 @@ or background refreshes during JSON decoding.
 ### TrueNAS pool capacity is an observation, not a default zero
 
 `internal/truenas/pool_capacity.go` owns validation of the existing pool-specific
-byte sources. Legacy REST consumes only its flat `size`, `allocated`, and
+byte sources. Legacy REST consumes its flat `size`, `allocated`, and
 optional `free` fields. RPC retains its existing pool-state/property envelope;
 the property envelope is also used by the separate boot-pool reader. Neither
 that boot source nor a hypothetical nested REST shape establishes a supported
 CORE data-pool capacity fallback. Missing native capacity remains unavailable;
-datasets, quotas, physical disks, and vdevs must not be summed to invent it.
+datasets, quotas, physical disks, and leaf vdevs must not be summed to invent it.
+
+The one supported CORE data-pool source is the pool's own vdev space accounting
+(#2510). CORE 13 `pool.query` (REST `GET /pool`) returns neither flat bytes nor
+zpool properties; its `pool_extend` attaches the libzfs vdev groups, and
+py-libzfs gives every vdev a `stats` object whose `size`/`allocated` are
+`vs_space`/`vs_alloc`. OpenZFS maintains those on top-level vdevs only, and
+zpool's own `size`/`allocated` properties are the sum of the normal, special
+and dedup classes. Pool capacity therefore falls back, last after flat fields
+and properties, to the sum of the top-level `data`, `special` and `dedup` vdev
+stats. Log, cache and spare vdevs and leaf children are never counted. Any
+counted top-level vdev without exact valid stats, an empty data group, an
+overflowing sum, or allocated above size leaves the pool unavailable rather
+than reporting a partial total, and an explicitly null flat field never
+triggers the fallback. REST topology is decoded number-preserving.
 
 A usable reading requires exact non-negative integer total and allocated bytes,
 with a positive total and allocated no greater than total. Optional free bytes
@@ -6665,6 +6679,10 @@ remain intact, and a later valid poll resumes at that poll's observation time.
 `internal/truenas/pool_capacity_test.go` covers the TLS legacy snapshot through
 provider/registry ingestion, real empty/full pools, absent/malformed fields,
 exact RPC bytes, source separation and incomplete/overflowing aggregates.
+`internal/truenas/core_pool_capacity_test.go` drives a CORE 13 `pool_extend`
+row (mirror, special, log, cache and spare vdevs) and the CORE boot state
+through the legacy client, snapshot, provider and registry, plus the
+fail-closed topology cases.
 `internal/monitoring/truenas_pool_capacity_test.go` connects TLS collection,
 provider refresh, two same-named connection-scoped estates, canonical ingestion,
 memory and persistent History over known/unknown/malformed/recovered polls.
