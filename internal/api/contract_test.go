@@ -22514,8 +22514,8 @@ func TestContract_AgentFleetDiagnosticsEndpointSurfacesStableShape(t *testing.T)
 	routerSrc := string(router)
 
 	if !strings.Contains(routerSrc, `"/api/agents/diagnostics"`) ||
-		!strings.Contains(routerSrc, `RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics))`) {
-		t.Error("agent fleet diagnostics route must remain admin settings:read only")
+		!strings.Contains(routerSrc, `RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics))`) {
+		t.Error("agent fleet diagnostics route must remain org admin settings:read only")
 	}
 	if !strings.Contains(handlerSrc, "GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTargetVersion, now)") ||
 		!strings.Contains(handlerSrc, "applyAgentFleetActionRunnerState(&diagnostics") {
