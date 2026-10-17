@@ -69,7 +69,10 @@ func (m *Manager) evaluateMetricWindow(resourceID, resourceType, metricType stri
 
 	// Unknown telemetry is neither a trigger nor recovery evidence, including
 	// instantaneous evaluation and embedders without a history provider.
-	if !finiteMetricValue(current) {
+	// Direct filesystem and legacy callers do not pass through the unified
+	// candidate filter. Reject percentage sentinels and impossible readings
+	// here too, before they can resolve an incident or enter a rolling window.
+	if !finiteMetricValue(current) || (isPercentageMetric(metricType) && (current < 0 || current > 100)) {
 		return metricWindowObservation{CurrentValue: current, WindowSeconds: windowSeconds}
 	}
 
