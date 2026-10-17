@@ -2,11 +2,15 @@ package monitoring
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -583,4 +587,142 @@ func TestVMwarePollerStorageDiscoveryAppliesRevocationWithBrokenPeerMetadata(t *
 			}
 		})
 	}
+}
+
+// Parsing never removes the whole-refresh bound or copies arbitrary environment
+// text into a warning. Tests do not contact a vCenter or alter a live poller.
+func testVMwarePollTimeoutConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		raw     string
+		want    time.Duration
+		warning bool
+	}{
+		{"", 20 * time.Second, false}, {" \t", 20 * time.Second, false},
+		{"120s", 2 * time.Minute, false}, {" 2m ", 2 * time.Minute, false},
+		{"250ms", 250 * time.Millisecond, false},
+		{"0", 20 * time.Second, true}, {"-1s", 20 * time.Second, true},
+		{"synthetic-private-value", 20 * time.Second, true},
+		{"9999999999999999999h", 20 * time.Second, true},
+	} {
+		t.Run(fmt.Sprintf("case-%d", len(tc.raw))+"/"+tc.want.String(), func(t *testing.T) {
+			t.Setenv("PULSE_VMWARE_POLL_TIMEOUT", tc.raw)
+			captured := captureVMwarePollerLogs(t)
+			if got := vmwarePollTimeout(); got != tc.want {
+				t.Fatalf("timeout=%s want %s", got, tc.want)
+			}
+			text := captured.String()
+			if strings.Contains(text, "synthetic-private-value") {
+				t.Fatal("warning copied environment contents")
+			}
+			if strings.Contains(text, "Invalid PULSE_VMWARE_POLL_TIMEOUT") != tc.warning {
+				t.Fatalf("warning=%q want warning=%t", text, tc.warning)
+			}
+		})
+	}
+}
+
+type timedVMwarePollerProvider struct {
+	vmwarePollerProvider
+	delay             time.Duration
+	active, maxActive *int
+	order             *[]string
+	id                string
+}
+
+func (p *timedVMwarePollerProvider) Refresh(ctx context.Context) error {
+	*p.active++
+	defer func() { *p.active-- }()
+	if *p.active > *p.maxActive {
+		*p.maxActive = *p.active
+	}
+	*p.order = append(*p.order, p.id)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(p.delay):
+		return p.vmwarePollerProvider.Refresh(ctx)
+	}
+}
+
+// A real twenty-one-second refresh crosses the unchanged default twenty-second
+// outer bound under Go's virtual clock. The configured budget admits it, but
+// never lengthens the parent deadline, overlaps connections or drops the last
+// complete inventory on failure. Production provider -> registry rows are the
+// payloads consumed by the browser proof; these are not installed observations.
+func testVMwarePollRefreshBudgetAndProjection(t *testing.T) {
+	previous := vmware.IsFeatureEnabled()
+	vmware.SetFeatureEnabled(true)
+	t.Cleanup(func() { vmware.SetFeatureEnabled(previous) })
+	t.Setenv("PULSE_VMWARE_POLL_TIMEOUT", "")
+	synctest.Test(t, func(t *testing.T) {
+		connection := config.NewVMwareVCenterInstance()
+		connection.ID, connection.Name, connection.Host = "budget-vcenter", "Budget vCenter", "vcenter.example.invalid"
+		poller := NewVMwarePoller(nil, time.Minute)
+		snapshot := func(name string) vmware.InventorySnapshot {
+			return vmware.InventorySnapshot{ConnectionID: connection.ID, ConnectionName: connection.Name, VCenterHost: connection.Host, CollectedAt: time.Now().UTC(), VIRelease: "8.0.3",
+				VMs: []vmware.InventoryVM{{VM: "vm-101", Name: name, PowerState: "POWERED_ON", CPUCount: 2, MemorySizeMiB: 4096}},
+			}
+		}
+		entry := vmwarePollerProviderEntry{orgID: "default", connectionID: connection.ID, provider: vmware.NewProvider(snapshot("app-before-timeout"))}
+		poller.pollConnection(context.Background(), entry)
+		original := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+		oldRows := poller.GetCurrentRecords()
+		if original.Poll.LastSuccessAt == nil || len(oldRows) != 1 {
+			t.Fatal("fixture did not seed a complete inventory")
+		}
+		project := func(phase string) {
+			adapter := unifiedresources.NewMonitorAdapter(nil)
+			adapter.PopulateSupplementalRecords(unifiedresources.SourceVMware, poller.GetCurrentRecords())
+			payload, err := json.Marshal(struct {
+				Phase     string                      `json:"phase"`
+				Summary   VMwareConnectionSummary     `json:"summary"`
+				Resources []unifiedresources.Resource `json:"resources"`
+			}{phase, poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID], adapter.GetAll()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("VMWARE_BUDGET_PROJECTION_JSON=%s", payload)
+		}
+		active, maximum := 0, 0
+		order := []string{}
+		slow := &timedVMwarePollerProvider{vmwarePollerProvider: vmware.NewProvider(snapshot("app-after-timeout")), delay: 21 * time.Second, active: &active, maxActive: &maximum, order: &order, id: "primary"}
+		entry.provider = slow
+		started := time.Now()
+		poller.pollConnection(context.Background(), entry)
+		failed := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+		if time.Since(started) != 20*time.Second || failed.Poll.ConsecutiveFailures != 1 || failed.Poll.LastError == nil || !failed.Poll.LastSuccessAt.Equal(*original.Poll.LastSuccessAt) || !reflect.DeepEqual(oldRows, poller.GetCurrentRecords()) {
+			t.Fatalf("default timeout dropped/renewed accepted inventory or lost failure: %+v", failed)
+		}
+		project("default-timeout-retains-inventory")
+		t.Setenv("PULSE_VMWARE_POLL_TIMEOUT", "30s")
+		started = time.Now()
+		poller.pollConnection(context.Background(), entry)
+		recovered := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+		if time.Since(started) != 21*time.Second || recovered.Poll.ConsecutiveFailures != 0 || recovered.Poll.LastError != nil || !recovered.Poll.LastSuccessAt.After(*original.Poll.LastSuccessAt) || reflect.DeepEqual(oldRows, poller.GetCurrentRecords()) {
+			t.Fatalf("configured budget did not recover a complete refresh: %+v", recovered)
+		}
+		project("configured-refresh-recovers")
+		acceptedRows := poller.GetCurrentRecords()
+		parent, cancel := context.WithTimeout(context.Background(), time.Second)
+		started = time.Now()
+		poller.pollConnection(parent, entry)
+		cancel()
+		if time.Since(started) != time.Second || !reflect.DeepEqual(acceptedRows, poller.GetCurrentRecords()) {
+			t.Fatal("configured refresh ignored parent or dropped the accepted inventory")
+		}
+		cancelled := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+		if cancelled.Poll.LastError == nil || !strings.Contains(cancelled.Poll.LastError.Message, context.DeadlineExceeded.Error()) || !cancelled.Poll.LastSuccessAt.Equal(*recovered.Poll.LastSuccessAt) {
+			t.Fatalf("parent deadline renewed success: %+v", cancelled)
+		}
+		project("short-parent-retains-inventory")
+		// Two configured connections use the production serial dispatcher. A longer
+		// allowed refresh is not permission for a second simultaneous one.
+		sibling := &timedVMwarePollerProvider{vmwarePollerProvider: vmware.NewProvider(snapshot("sibling-app")), delay: time.Second, active: &active, maxActive: &maximum, order: &order, id: "sibling"}
+		poller.providersByOrg["default"] = map[string]vmwarePollerProvider{connection.ID: slow, "sibling": sibling}
+		order = nil
+		poller.pollAll(context.Background())
+		if active != 0 || maximum != 1 || !reflect.DeepEqual(order, []string{"primary", "sibling"}) {
+			t.Fatalf("polls overlap or lose serial order: active/max/order=%d/%d/%v", active, maximum, order)
+		}
+	})
 }

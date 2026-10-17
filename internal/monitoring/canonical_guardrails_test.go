@@ -3434,3 +3434,10 @@ func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
 func TestGuestMemorySampleCapacityCanonicalProjection(t *testing.T) {
 	testGuestMemorySampleCapacityPolling(t)
 }
+
+// The configurable vCenter refresh budget must retain the default, caller
+// cancellation, last complete inventory and serial multi-connection dispatch.
+func TestVMwareInventoryRefreshBudgetContract(t *testing.T) {
+	t.Run("configuration", testVMwarePollTimeoutConfiguration)
+	t.Run("refresh-and-projection", testVMwarePollRefreshBudgetAndProjection)
+}
