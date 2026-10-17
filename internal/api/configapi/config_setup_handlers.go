@@ -1487,7 +1487,7 @@ func (h *ConfigHandlers) notifyAutoUnregisterSuccess(ctx context.Context, req *A
 		return
 	}
 
-	h.wsHub.BroadcastMessage(websocket.Message{
+	h.wsHub.BroadcastMessageToTenant(apicontext.OrgID(ctx), websocket.Message{
 		Type: "node_deleted",
 		Data: map[string]interface{}{
 			"nodeType": strings.TrimSpace(req.Type),
@@ -1497,7 +1497,7 @@ func (h *ConfigHandlers) notifyAutoUnregisterSuccess(ctx context.Context, req *A
 
 	if h.getMonitor(ctx) != nil && h.getMonitor(ctx).GetDiscoveryService() != nil {
 		if result, _ := h.getMonitor(ctx).GetDiscoveryService().GetCachedResult(); result != nil {
-			h.wsHub.BroadcastMessage(websocket.Message{
+			h.wsHub.BroadcastMessageToTenant(apicontext.OrgID(ctx), websocket.Message{
 				Type: "discovery_update",
 				Data: map[string]interface{}{
 					"servers":           result.Servers,
@@ -1717,7 +1717,7 @@ func (h *ConfigHandlers) notifyAutoRegistrationSuccess(ctx context.Context, req 
 	}
 
 	nodeInfo := buildAutoRegisterEventData(req, host, actualName, tokenID)
-	h.wsHub.BroadcastMessage(websocket.Message{
+	h.wsHub.BroadcastMessageToTenant(apicontext.OrgID(ctx), websocket.Message{
 		Type:      autoRegisterWebSocketEventType(created),
 		Data:      nodeInfo,
 		Timestamp: time.Now().Format(time.RFC3339),
@@ -1726,7 +1726,7 @@ func (h *ConfigHandlers) notifyAutoRegistrationSuccess(ctx context.Context, req 
 	if h.getMonitor(ctx) != nil && h.getMonitor(ctx).GetDiscoveryService() != nil {
 		result, _ := h.getMonitor(ctx).GetDiscoveryService().GetCachedResult()
 		if result != nil {
-			h.wsHub.BroadcastMessage(websocket.Message{
+			h.wsHub.BroadcastMessageToTenant(apicontext.OrgID(ctx), websocket.Message{
 				Type: "discovery_update",
 				Data: map[string]interface{}{
 					"servers":           result.Servers,

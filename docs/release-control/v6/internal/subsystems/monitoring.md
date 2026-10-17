@@ -3608,6 +3608,12 @@ service-history reads plus denial/recovery without fabricated samples.
 
 ## Completion Obligations
 
+Discovery belongs to the monitor that constructs it. Both initial startup and
+runtime enablement pass that monitor's org into the service constructor; every
+scan callback retains it. `internal/discovery/service_event_tenant_test.go`
+checks started, found-server, progress, update and completion callbacks for
+named and default organizations. The custom event envelope stays unchanged.
+
 `internal/monitoring/monitor_host_agents_test.go` and `pkg/agents/host/proxmox_lxc_test.go` must prove JSON wire-report ingestion through `ApplyHostReport`, partial/complete-empty recovery, contradictory IDs, unchanged node/agent/name/TTL protection, and no invalid-list-to-healthy-empty conversion. Omitted telemetry is never zero. Source proofs are distinct from native PVE and released availability.
 
 1. Update this contract when monitoring truth ownership changes

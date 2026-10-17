@@ -4216,6 +4216,19 @@ fake persistent loggers, including query non-execution and tenant isolation;
 
 ## Completion Obligations
 
+WebSocket events derived from tenant infrastructure use
+`Hub.BroadcastMessageToTenant` or `Hub.BroadcastToTenant` with the owning org.
+Setup registration uses the setup-token org already bound to the request;
+node changes and test notifications use the request org. Empty org IDs target
+only `default`; custom and alert broadcasts require an explicit org argument.
+`BroadcastMessage` permits
+only the instance heartbeat (`ping`), shared system theme (`settingsUpdate`),
+and server update progress (`update:progress`); other types are refused.
+`internal/websocket/hub_event_boundary_test.go` and
+`internal/api/configapi/tenant_event_delivery_test.go` cover cross-org refusal,
+scoped delivery and default-org compatibility, including the existing custom
+discovery envelope.
+
 ### Docker update agent-attested running verification
 
 In `internal/api/docker_container_action_result.go`, a matching replacement

@@ -1928,6 +1928,10 @@ update, profile rollout, command reachability, or fleet-control authority.
     own alert and names that agent as display text, but the link itself stays
     the agent lifecycle's, and the field cannot create, change or authorize it.
 27. `internal/monitoring/monitor.go` shared with `monitoring`: monitor construction owns both monitoring runtime initialization and fail-closed agent lifecycle journal hydration before report admission.
+    Both live-mode startup and explicit discovery startup bind the discovery
+    service to this monitor's organization. Discovery start, progress, found
+    server, update and completion events stay within that organization; a
+    monitor with no organization uses the default tenant delivery boundary.
 28. `internal/monitoring/monitor_agents.go` shared with `monitoring`: server-side Unified Agent report, removal, token binding, tombstone expiry, and re-enrollment semantics are jointly owned by agent lifecycle authority and monitoring ingest.
 29. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
     Every current agent process authors a process-unique report stream and a
@@ -9935,3 +9939,19 @@ publication. Tenant monitors still resolve from each request context, and chart
 reads do not gain enrollment, heartbeat or agent lifecycle authority. The
 concurrent initialization contract and tenant-isolation race tests are owned
 by api-contracts.
+
+### Registration notifications retain organization ownership
+
+Successful auto-registration emits `node_auto_registered` for a new node or
+`nodes_changed` for an existing node, and auto-unregistration emits
+`node_deleted`. Those notifications and their cached `discovery_update`
+refreshes use the organization carried by the authorized request context,
+including the setup token's organization. Empty organization IDs resolve to
+the default tenant; none of these lifecycle events uses global delivery.
+
+`config_handlers_auto_register_test.go` exercises both registration outcomes,
+unregistration and cached discovery refreshes against two connected
+organizations. `monitor_host_agents_test.go` exercises discovery delivery
+through both monitor initialization paths, including explicit and legacy
+default organizations. These notifications refresh inventory presentation;
+they do not grant enrollment, removal, re-enrollment or command authority.
