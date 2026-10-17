@@ -107,7 +107,6 @@ BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 DETECTED_CTID=""
 UPDATE_MIN_TEMP_FREE_BYTES=$((900 * 1024 * 1024))
 UPDATE_MIN_INSTALL_FREE_BYTES=$((256 * 1024 * 1024))
-SERVER_STAGING_STALE_MINUTES=360
 CONFIG_BACKUP_MIN_EXTRA_BYTES=$((64 * 1024 * 1024))
 
 release_signature_key_available() {
@@ -3357,49 +3356,117 @@ create_temp_archive_path() {
     printf '%s/%s.tar.gz\n' "$temp_dir" "$archive_name"
 }
 
-# Server archives are staged and extracted on the install filesystem. /tmp is
-# tmpfs on Debian 13 and many LXC templates, where staged bytes count against
-# the container's memory limit rather than its disk (#2785).
-prepare_server_staging_parent() {
-    if ! mkdir -p -- "$INSTALL_DIR"; then
-        print_error "Could not prepare $INSTALL_DIR for staging the Pulse update; Pulse has not been stopped"
+# A root-owned sticky directory protects root-created staging entries while
+# still letting pulse create its CLI/cache home entries. Mode 0700 on a child
+# alone is insufficient when pulse owns (and can rename entries in) its parent.
+root_directory_protects_entries() {
+    local directory="$1" facts="" owner="" mode=""
+    [[ -d "$directory" && ! -L "$directory" ]] || return 1
+    facts=$(stat -c '%u %a' -- "$directory") || return 1
+    read -r owner mode <<< "$facts"
+    [[ "$owner" == 0 && "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    (( (8#$mode & 0022) == 0 || (8#$mode & 01000) != 0 ))
+}
+
+protect_server_install_parent() {
+    # Walk from the filesystem root without following symlinks. Every ancestor
+    # must prevent an unprivileged account replacing the next root-owned entry.
+    # Refuse unsafe custom paths; never change ownership of a shared ancestor.
+    case "$INSTALL_DIR" in
+        /*) ;;
+        *) print_error "Pulse install directory must be an absolute path; Pulse has not been stopped"; return 1 ;;
+    esac
+    case "$INSTALL_DIR" in
+        /|*/|*//*|*/./*|*/.|*/../*|*/..|*$'\n'*)
+            print_error "Pulse install directory must be a normalised non-root path; Pulse has not been stopped"
+            return 1 ;;
+    esac
+    local parent="/" component="" index=0
+    local -a components=()
+    IFS=/ read -r -a components <<< "${INSTALL_DIR#/}"
+    if ! root_directory_protects_entries "$parent"; then
+        print_error "Cannot establish trusted install ancestry; Pulse has not been stopped"
         return 1
     fi
-    sweep_stale_server_staging
+    for ((index=0; index<${#components[@]}-1; index++)); do
+        component="${components[index]}"
+        parent="${parent%/}/$component"
+        if [[ ! -e "$parent" && ! -L "$parent" ]]; then
+            mkdir -m 0755 -- "$parent" || return 1
+        fi
+        if ! root_directory_protects_entries "$parent"; then
+            print_error "Unsafe Pulse install ancestor: $parent; Pulse has not been stopped"
+            return 1
+        fi
+    done
+    if [[ ! -e "$INSTALL_DIR" && ! -L "$INSTALL_DIR" ]]; then
+        mkdir -m 0755 -- "$INSTALL_DIR" || return 1
+    fi
+    if [[ ! -d "$INSTALL_DIR" || -L "$INSTALL_DIR" ]]; then
+        print_error "Pulse install directory is not a real directory; Pulse has not been stopped"
+        return 1
+    fi
+    local previous_owner="" previous_group="" previous_mode="" protected_mode="" facts=""
+    if ! facts=$(stat -c '%u %g %a' -- "$INSTALL_DIR"); then
+        print_error "Cannot read install directory permissions; Pulse has not been stopped"
+        return 1
+    fi
+    read -r previous_owner previous_group previous_mode <<< "$facts"
+    if [[ ! "$previous_owner" =~ ^[0-9]+$ || ! "$previous_group" =~ ^[0-9]+$ || ! "$previous_mode" =~ ^[0-7]{3,4}$ ]]; then
+        print_error "Invalid install directory permissions; Pulse has not been stopped"
+        return 1
+    fi
+    # Preserve the operator's existing other-account read/search restriction.
+    # Pulse moves from directory owner to its service group; no public access
+    # is added when adopting an existing private (for example 0700) install.
+    printf -v protected_mode '%o' "$((01770 | (8#$previous_mode & 0005)))"
+    # -h prevents a substituted final symlink changing its target's owner.
+    # Once root owns the entry, its verified parent protects it from replacement.
+    if ! chown -h root:pulse -- "$INSTALL_DIR" ||
+       [[ -L "$INSTALL_DIR" ]] ||
+       [[ "$(stat -c '%u' -- "$INSTALL_DIR")" != 0 ]] ||
+       ! chmod "$protected_mode" -- "$INSTALL_DIR" ||
+       [[ "$(stat -c '%a' -- "$INSTALL_DIR")" != "$protected_mode" ]] ||
+       ! root_directory_protects_entries "$INSTALL_DIR"; then
+        # No scratch has been allocated by this caller. Restore the previous
+        # HOME permissions/owner after a failed adoption, without following a
+        # substituted link or relinquishing root ownership before chmod.
+        if [[ -d "$INSTALL_DIR" && ! -L "$INSTALL_DIR" && "$(stat -c '%u' -- "$INSTALL_DIR")" == 0 ]]; then
+            chmod "$previous_mode" -- "$INSTALL_DIR" || print_warn "Could not restore install directory mode"
+            chown -h "$previous_owner:$previous_group" -- "$INSTALL_DIR" || print_warn "Could not restore install directory owner"
+        fi
+        print_error "Could not protect Pulse update staging; Pulse has not been stopped"
+        return 1
+    fi
+}
+
+# Archive and extraction bytes stay on the install filesystem, not tmpfs-prone
+# /tmp. This uses the existing update sandbox grant, not a wider writable path.
+prepare_server_staging_parent() {
+    protect_server_install_parent || return 1
     printf '%s\n' "$INSTALL_DIR"
 }
 
-# Owner-only staging names created under $INSTALL_DIR by create_temp_archive_path
-# and install_pulse_archive (mktemp's six-character suffix).
+server_staging_matches_install_device() {
+    local staging_device="" install_device=""
+    staging_device=$(stat -c '%d' -- "$1") || return 1
+    install_device=$(stat -c '%d' -- "$INSTALL_DIR/bin") || return 1
+    [[ "$staging_device" =~ ^[0-9]+$ && "$staging_device" == "$install_device" ]]
+}
+
 is_server_staging_name() {
     case "$1" in
-        .pulse-extract-??????|.pulse-v*-linux-*-??????) return 0 ;;
+        .pulse-stage-??????|.pulse-extract-??????|.pulse-v*-linux-*-??????) return 0 ;;
     esac
     return 1
 }
 
-# Unlike /tmp, the install filesystem keeps an interrupted run's staging
-# (~1 GB) across reboots. No installer lock exists, so remove only real
-# directories (never symlinks or files) unchanged for longer than any live run
-# takes. ctime, unlike mtime, cannot be carried back by extraction.
-sweep_stale_server_staging() {
-    local entry=""
-    for entry in "$INSTALL_DIR"/.pulse-extract-* "$INSTALL_DIR"/.pulse-v*-linux-*; do
-        [[ -d "$entry" && ! -L "$entry" ]] || continue
-        is_server_staging_name "${entry##*/}" || continue
-        if [[ -n "$(find "$entry" -maxdepth 0 -cmin "+${SERVER_STAGING_STALE_MINUTES}" -print 2>/dev/null)" ]]; then
-            rm -rf -- "$entry" 2>/dev/null || print_warn "Could not remove stale update staging at $entry"
-        fi
-    done
-    return 0
-}
-
-# Recursive pulse ownership for the install directory, excluding root-consumed
-# update staging so the extracted payload and archive are never handed to the
-# service account while the installer still reads them.
+# Do not sweep by age: an old directory can still belong to a live installer.
+# Each run cleans only its own reserved paths. Interrupted leftovers remain
+# subject to the normal disk-headroom refusal, never guessed safe to delete.
 chown_install_dir_for_pulse() {
     local entry="" rc=0
-    chown pulse:pulse "$INSTALL_DIR" || rc=1
+    protect_server_install_parent || return 1
     for entry in "$INSTALL_DIR"/* "$INSTALL_DIR"/.[!.]* "$INSTALL_DIR"/..?*; do
         [[ -e "$entry" || -L "$entry" ]] || continue
         is_server_staging_name "${entry##*/}" && continue
@@ -3685,7 +3752,9 @@ install_pulse_archive() {
     # Prepare the final executable on the destination filesystem while the old
     # service keeps running. Copy/permissions/version failures must not create
     # an outage, and rename must never expose a partially copied live binary.
-    if ! mkdir -p "$INSTALL_DIR/bin" || ! binary_stage=$(mktemp -d "$INSTALL_DIR/bin/.pulse-stage-XXXXXX"); then
+    if ! mkdir -p "$INSTALL_DIR/bin" ||
+       ! server_staging_matches_install_device "$staging_parent" ||
+       ! binary_stage=$(mktemp -d "$staging_parent/.pulse-stage-XXXXXX"); then
         print_error "Could not stage the Pulse binary; Pulse has not been stopped"
         rm -rf "$temp_extract"
         return 1
@@ -3770,11 +3839,9 @@ download_pulse() {
         local inferred_release=""
         local staging_parent=""
 
-        # The archive download and its extraction live on the install
-        # filesystem, never /tmp. Debian 13 and many LXC templates mount /tmp
-        # as tmpfs, which the kernel charges to the container's memory limit:
-        # a ~280 MB archive plus its ~750 MB extracted tree OOM-killed a 1 GiB
-        # LXC's init mid-update and Proxmox stopped the container (#2785).
+        # Keep archive and extraction bytes on the install filesystem rather
+        # than implicitly charging them to memory when /tmp is tmpfs. This
+        # does not diagnose the cause of a particular interrupted update.
         if ! staging_parent=$(prepare_server_staging_parent) ||
            ! ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"; then
             # The configuration snapshot taken earlier is not needed: the update
@@ -4145,7 +4212,10 @@ build_from_source() {
     # A successful build command alone does not admit its executable. Prepare
     # it on the destination filesystem before stopping the running service,
     # just as for signed archives. Source versions may be development builds.
-    if ! mkdir -p "$INSTALL_DIR/bin" || ! binary_stage=$(mktemp -d "$INSTALL_DIR/bin/.pulse-stage-XXXXXX"); then
+    local staging_parent=""
+    if ! staging_parent=$(prepare_server_staging_parent) || ! mkdir -p "$INSTALL_DIR/bin" ||
+       ! server_staging_matches_install_device "$staging_parent" ||
+       ! binary_stage=$(mktemp -d "$staging_parent/.pulse-stage-XXXXXX"); then
         print_error "Could not stage the built Pulse binary; Pulse has not been stopped"
         cd "$original_dir" >/dev/null 2>&1 || true
         rm -rf "$temp_build"

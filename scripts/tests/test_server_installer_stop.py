@@ -71,6 +71,16 @@ detect_service_name() { echo pulse-custom; }
 # No network, package installation, signature bypass in production or root writes:
 # these fixture-only producers supply the inputs to the actual replacement path.
 ensure_update_disk_headroom() { return 0; }
+# Parent UID/sticky policy is exercised separately without privileged host writes.
+protect_server_install_parent() { [[ "$FAULT" != staging_parent ]]; }
+stat() {
+    [[ "$FAULT" != device_read ]] || return 1
+    if [[ "$FAULT" == cross_device && "${@: -1}" == "$INSTALL_DIR/bin" && "$*" == *'%d'* ]]; then
+        echo 999999
+    else
+        command stat "$@"
+    fi
+}
 detect_pulse_architecture() { echo amd64; }
 run_upgrade_readiness_preflight() { return 0; }
 resolve_target_release() { LATEST_RELEASE=v6.6.0; }
@@ -223,7 +233,7 @@ class ServerInstallerStopTest(unittest.TestCase):
             return {
                 "result": result,
                 "new_binary": new_binary,
-                "stage_paths": list(installed.glob("bin/.pulse-stage-*")),
+                "stage_paths": list(installed.glob(".pulse-stage-*")),
                 "temporary_paths_remaining": [p for p in (fixture / "temporary-paths").read_text().splitlines() if Path(p).exists()] if (fixture / "temporary-paths").exists() else [],
                 "local_archive_retained": (fixture / "input.tgz").exists(),
                 "files": {str(p.relative_to(fixture)): p.read_bytes() if p.exists() else None for p in originals},
@@ -269,7 +279,7 @@ class ServerInstallerStopTest(unittest.TestCase):
 
     def test_archive_admission_failures_never_stop_or_mutate_pulse(self):
         for flow in ("archive", "local_archive"):
-            for fault in ("missing_signature", "signature", "extract_directory", "extraction",
+            for fault in ("staging_parent", "device_read", "cross_device", "missing_signature", "signature", "extract_directory", "extraction",
                           "missing_binary", "architecture", "stage_directory", "copy",
                           "permissions", "ownership", "version_exit", "version_timeout",
                           "version_unknown", "version_mismatch"):
@@ -308,7 +318,7 @@ class ServerInstallerStopTest(unittest.TestCase):
                 self.assertFalse(observation["archive_retained"])
 
     def test_source_admission_failures_never_stop_or_mutate_pulse(self):
-        for fault in ("missing_binary", "stage_directory", "copy", "permissions",
+        for fault in ("staging_parent", "device_read", "cross_device", "missing_binary", "stage_directory", "copy", "permissions",
                       "ownership", "version_exit", "version_timeout", "version_empty",
                       "source_revision", "source_revision_empty"):
             with self.subTest(fault=fault):
@@ -356,9 +366,8 @@ class ServerInstallerStopTest(unittest.TestCase):
         self.assertNotIn("start pulse-custom", calls)
 
     def test_archive_extraction_stages_on_the_install_filesystem(self):
-        # /tmp is tmpfs on Debian 13 and many LXC templates: an extracted
-        # release there is charged to the container's memory limit and
-        # OOM-killed a 1 GiB LXC mid-update (#2785).
+        # Staging no longer implicitly selects tmpfs-prone /tmp. This is a
+        # path/lifecycle proof, not a reproduction of #2785 or a native LXC.
         for flow in ("archive", "local_archive"):
             with self.subTest(flow=flow):
                 observation = self.exercise(REPLACEMENT, flow, "active")
@@ -366,6 +375,9 @@ class ServerInstallerStopTest(unittest.TestCase):
                 extracts = [Path(p) for p in observation["temporary_paths"] if "pulse-extract-" in p]
                 self.assertEqual(len(extracts), 1, observation["temporary_paths"])
                 self.assertEqual(extracts[0].parent, observation["install_dir"])
+                binary_stages = [Path(p) for p in observation["temporary_paths"] if ".pulse-stage-" in p]
+                self.assertEqual(len(binary_stages), 1)
+                self.assertEqual(binary_stages[0].parent, observation["install_dir"])
                 self.assertEqual(observation["temporary_paths_remaining"], [])
 
     def test_all_manual_update_flows_leave_service_running_when_staging_fails(self):

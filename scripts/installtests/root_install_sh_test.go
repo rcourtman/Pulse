@@ -156,7 +156,7 @@ func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 	previous = -1
 	for _, step := range []string{
 		`make build`,
-		`mktemp -d "$INSTALL_DIR/bin/.pulse-stage-XXXXXX"`,
+		`mktemp -d "$staging_parent/.pulse-stage-XXXXXX"`,
 		`cp pulse "$binary_stage/pulse"`,
 		`chmod 755 "$binary_stage/pulse"`,
 		`chown pulse:pulse "$binary_stage/pulse"`,
@@ -914,7 +914,7 @@ func TestPulseAutoUpdateScriptSupportsInstanceScopedServerInstalls(t *testing.T)
 		`"PULSE_SERVICE_NAME=$service_name"`,
 		`"PULSE_INSTALL_DIR=$INSTALL_DIR"`,
 		`"PULSE_CONFIG_DIR=$CONFIG_DIR"`,
-		`systemctl is-enabled --quiet "$UPDATE_TIMER_UNIT"`,
+		`timeout -k 1 5 systemctl is-enabled "$UPDATE_TIMER_UNIT"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -2651,78 +2651,24 @@ func TestRootInstallResetBoundsEverySystemdObservationAndMutation(t *testing.T) 
 	}
 }
 
-// Server update staging lives under the install directory (#2785), which keeps
-// an interrupted run's ~1 GB extract across reboots. The sweep removes only
-// owner-only staging directories older than any live run, never symlinks,
-// files, look-alike names or anything else in the install directory.
-func TestRootInstallScriptSweepsOnlyStaleServerStaging(t *testing.T) {
-	installDir := filepath.Join(t.TempDir(), "install")
-	outside := filepath.Join(t.TempDir(), "outside")
-	for _, dir := range []string{
-		filepath.Join(installDir, "bin"),
-		filepath.Join(installDir, ".pulse-extract-AbC123", "bin"),
-		filepath.Join(installDir, ".pulse-v6.6.0-linux-amd64-XyZ789"),
-		filepath.Join(installDir, ".pulse-extract-toolong1"),
-		outside,
+func TestRootInstallScriptStagingParentPolicy(t *testing.T) {
+	body := extractRootInstallShellFunction(t, "protect_server_install_parent")
+	for _, required := range []string{
+		`root_directory_protects_entries "$parent"`,
+		`chown -h root:pulse -- "$INSTALL_DIR"`,
+		`chmod "$protected_mode" -- "$INSTALL_DIR"`,
+		`root_directory_protects_entries "$INSTALL_DIR"`,
 	} {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			t.Fatal(err)
+		if !strings.Contains(body, required) {
+			t.Fatalf("staging parent must enforce %s", required)
 		}
 	}
-	files := []string{
-		filepath.Join(installDir, ".pulse-extract-AbC123", "bin", "pulse"),
-		filepath.Join(installDir, ".pulse-v6.6.0-linux-amd64-XyZ789", "pulse-v6.6.0-linux-amd64.tar.gz"),
-		filepath.Join(installDir, ".pulse-extract-file01"),
-		filepath.Join(installDir, "bin", "pulse"),
-		filepath.Join(outside, "keep"),
-	}
-	for _, file := range files {
-		if err := os.WriteFile(file, []byte("fixture"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.Symlink(outside, filepath.Join(installDir, ".pulse-extract-link01")); err != nil {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
 		t.Fatal(err)
 	}
-
-	sweep := func(minutes string) {
-		t.Helper()
-		script := `
-			set -euo pipefail
-			print_warn() { echo "$*" >&2; }
-			INSTALL_DIR="$1"
-			SERVER_STAGING_STALE_MINUTES="$2"
-` + extractRootInstallShellFunction(t, "is_server_staging_name") + `
-` + extractRootInstallShellFunction(t, "sweep_stale_server_staging") + `
-			sweep_stale_server_staging
-		`
-		if out, err := exec.Command("bash", "-c", script, "bash", installDir, minutes).CombinedOutput(); err != nil {
-			t.Fatalf("sweep: %v\n%s", err, out)
-		}
-	}
-
-	// A live run's staging is fresh: the production age keeps it.
-	sweep("360")
-	for _, file := range files {
-		if _, err := os.Stat(file); err != nil {
-			t.Fatalf("fresh staging or unrelated file removed: %s", file)
-		}
-	}
-
-	time.Sleep(1100 * time.Millisecond)
-	sweep("0")
-	for _, removed := range []string{".pulse-extract-AbC123", ".pulse-v6.6.0-linux-amd64-XyZ789"} {
-		if _, err := os.Lstat(filepath.Join(installDir, removed)); !os.IsNotExist(err) {
-			t.Fatalf("stale staging %s was not removed (err=%v)", removed, err)
-		}
-	}
-	for _, kept := range []string{".pulse-extract-toolong1", ".pulse-extract-file01", ".pulse-extract-link01", "bin/pulse"} {
-		if _, err := os.Lstat(filepath.Join(installDir, kept)); err != nil {
-			t.Fatalf("sweep removed non-staging entry %s: %v", kept, err)
-		}
-	}
-	if _, err := os.Stat(filepath.Join(outside, "keep")); err != nil {
-		t.Fatalf("sweep followed a staging-named symlink: %v", err)
+	if strings.Contains(string(content), "sweep_stale_server_staging") {
+		t.Fatal("age alone must not authorise deleting another installer's staging")
 	}
 }
 
@@ -2739,7 +2685,7 @@ func TestRootInstallScriptPulseOwnershipExcludesServerStaging(t *testing.T) {
 	}
 
 	installDir := filepath.Join(t.TempDir(), "install")
-	for _, dir := range []string{"bin", "scripts", ".pulse-extract-AbC123", ".pulse-v6.6.0-linux-amd64-XyZ789", ".hidden"} {
+	for _, dir := range []string{"bin", "scripts", ".pulse-stage-AbC123", ".pulse-extract-AbC123", ".pulse-v6.6.0-linux-amd64-XyZ789", ".hidden"} {
 		if err := os.MkdirAll(filepath.Join(installDir, dir), 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -2753,6 +2699,7 @@ func TestRootInstallScriptPulseOwnershipExcludesServerStaging(t *testing.T) {
 		INSTALL_DIR="$1"
 		CALLS="$2"
 		chown() { printf '%s\n' "$*" >> "$CALLS"; }
+		protect_server_install_parent() { printf 'PROTECTED\n' >> "$CALLS"; }
 ` + extractRootInstallShellFunction(t, "is_server_staging_name") + `
 ` + extractRootInstallShellFunction(t, "chown_install_dir_for_pulse") + `
 		chown_install_dir_for_pulse
@@ -2766,7 +2713,7 @@ func TestRootInstallScriptPulseOwnershipExcludesServerStaging(t *testing.T) {
 	}
 	got := strings.Split(strings.TrimSpace(string(recorded)), "\n")
 	want := []string{
-		"pulse:pulse " + installDir,
+		"PROTECTED",
 		"-R pulse:pulse " + filepath.Join(installDir, "VERSION"),
 		"-R pulse:pulse " + filepath.Join(installDir, "bin"),
 		"-R pulse:pulse " + filepath.Join(installDir, "scripts"),
@@ -2776,5 +2723,12 @@ func TestRootInstallScriptPulseOwnershipExcludesServerStaging(t *testing.T) {
 	sort.Strings(want)
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("ownership calls:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestRootInstallScriptProtectedStagingControls(t *testing.T) {
+	cmd := exec.Command("python3", filepath.Join("..", "tests", "test_server_installer_staging.py"))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("protected staging controls: %v\n%s", err, out)
 	}
 }

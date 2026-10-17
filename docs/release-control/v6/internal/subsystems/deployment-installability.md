@@ -840,6 +840,68 @@ copy failures, interruption and caller-owned-file preservation. These are
 ordinary-user source controls, not root, native PVE/LXC or installed acceptance;
 complete exact-source CI and the existing safe native routes remain separate.
 
+### Server staging has a protected parent on the install filesystem
+
+Server archive downloads, extraction and the executable's pre-stop version
+probe use private directories on the install filesystem instead of implicitly
+using tmpfs-prone `/tmp`. Container-host prefetch and its small signed installer
+remain on their existing private temporary-input route. Headroom is measured on
+the selected staging filesystem; unreadable or different executable-destination
+device identities refuse before stopping Pulse rather than relying on a
+cross-filesystem copy as an atomic rename.
+
+A private child alone is not a privilege boundary beneath a service-owned
+parent. Before allocating server staging, the installer verifies each absolute,
+normalised, non-symlink ancestor: root owns it and other accounts cannot replace
+root-owned entries (no group/other write, or root-owned sticky semantics). It
+refuses unsafe custom ancestors without changing them. The install directory
+itself becomes root-owned and sticky with group `pulse` write/search access,
+preserving Pulse's HOME for CLI/cache creation while preventing it renaming
+root's staging entries. Existing other-account read/search restrictions are
+preserved (`1775` for the usual `0755` directory, `1770` for private `0700`);
+world access is never added. Ownership/mode failure, symlink substitution or
+failed readback refuses staging. A failed adoption attempts to restore the
+previous HOME mode/owner without following a substituted link; restoration
+failures are reported, not called success. Recursion into ordinary installed children never gives the
+root-consumed archive, extraction or executable-stage directory to Pulse.
+
+Each invocation cleans only its own reserved temporary paths. Age does not
+prove that a different installer's staging is abandoned, so there is no
+age-based recursive sweep. Interrupted leftovers remain visible to the disk
+headroom check, not guessed safe to erase. The installer remains executable.
+
+`TestRootInstallScriptProtectedStagingControls` executes
+`scripts/tests/test_server_installer_staging.py`: real private directories,
+permissions, symlinks and live payloads with explicit UID/chown doubles. It
+covers unsafe ancestry, ownership/mode/readback failure and final symlink
+substitution. The replacement and temporary-input suites separately exercise
+actual download/local/source paths, device-read/cross-device refusal,
+pre-stop admission and owned cleanup. These are source/ordinary-user controls,
+not a second-account kernel test, native systemd/LXC acceptance or a diagnosis
+of issue #2785's original attachment. Existing installed recovery remains
+separate.
+
+### Documented signing proof follows the canonical installation recipe
+
+README intentionally links to `docs/INSTALL.md` rather than copying its complete
+signed-install recipe. Asset validation requires that fixed link and guide,
+extracts exactly one distinct documented `pulse-installer` key, and runs real
+`ssh-keygen -Y verify` against the installer and its sidecar with the unchanged
+identity/namespace. Missing/unlinked documentation, absent or conflicting keys,
+wrong keys, changed installer bytes and absent signatures refuse. No signing
+identity, key custody or release publication policy changes.
+
+`TestReleaseDocumentedInstallerKeyFollowsCanonicalGuide` executes the actual
+validator section with newly generated local fixture keys and inert signed
+bytes; no private project key or provider access is involved. The original
+README-only section fails its valid linked-guide control. Staging account/UID
+doubles remain explicit in the service-discovery and connected updater fixtures,
+while the native root lab keeps the real staging-parent checks. The instance
+selector's shape check follows the existing bounded timer state/exit reader,
+not the retired `is-enabled --quiet` shortcut; its behavioural refusal tests
+remain intact. NAS diagnostic assertions retain private fixture events and
+stderr on failure without changing any assertion, deadline or source behaviour.
+
 ### Existing-installation menu actions require exact target and intent
 
 The root server installer's existing-installation menu admits stable/preview

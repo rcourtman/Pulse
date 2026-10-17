@@ -1500,15 +1500,15 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		// following the secure-install path saw "Could not verify signature".
 		// validate-release.sh must extract the README's pinned key and actually
 		// run ssh-keygen -Y verify against the signed installer.
-		`Validating README pinned signature key matches install.sh.sshsig`,
-		`grep -oE "ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer" "$readme_path"`,
+		`Validating documented installation signature key matches install.sh.sshsig`,
+		`grep -oE "ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer" "$install_guide_path"`,
 		`ssh-keygen -Y verify \`,
-		`README's pinned signature key does not verify install.sh.sshsig`,
+		`Documented installation key does not verify install.sh.sshsig`,
 	}
 
-	readmeBytes, err := os.ReadFile(repoFile("README.md"))
+	readmeBytes, err := os.ReadFile(repoFile("docs", "INSTALL.md"))
 	if err != nil {
-		t.Fatalf("read README.md: %v", err)
+		t.Fatalf("read docs/INSTALL.md: %v", err)
 	}
 	readme := string(readmeBytes)
 	// Lock in the actual signing key documented to customers. This is the public
@@ -1517,7 +1517,7 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	// regress to the stale Ds21c5 key without tripping this assertion.
 	const correctReadmeKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"
 	if !strings.Contains(readme, correctReadmeKey) {
-		t.Fatalf("README.md must pin the correct pulse-installer ed25519 key for install.sh signature verification")
+		t.Fatalf("docs/INSTALL.md must pin the correct pulse-installer ed25519 key for install.sh signature verification")
 	}
 	const staleReadmeKey = "Ds21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV"
 	if strings.Contains(readme, staleReadmeKey) {
@@ -5588,5 +5588,12 @@ func TestProviderMSPStartupWorkflowRequiresMountedDaemonAcceptance(t *testing.T)
 	}
 	if !accepted || strings.Contains(string(content), "secrets.") || strings.Contains(string(content), "pull_request_target") {
 		t.Fatal("missing mounted-daemon acceptance or unsafe credential/event scope")
+	}
+}
+
+func TestReleaseDocumentedInstallerKeyFollowsCanonicalGuide(t *testing.T) {
+	cmd := exec.Command("python3", repoFile("scripts", "tests", "test_documented_installer_key.py"), "-v")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("documented installer key controls: %v\n%s", err, out)
 	}
 }

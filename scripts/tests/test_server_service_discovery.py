@@ -137,6 +137,9 @@ case "$FLOW" in
         validate_pulse_binary_architecture() { :; }
         detect_pulse_architecture() { echo amd64; }
         chown() { :; }
+        # This family models accounts and tests service selection, not the
+        # separately exercised UID/sticky staging policy or native root setup.
+        protect_server_install_parent() { :; }
         install_additional_agent_binaries() { :; }
         deploy_agent_scripts() { :; }
         if [[ "$FLOW" == automatic ]]; then

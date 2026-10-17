@@ -699,36 +699,42 @@ success "SSH signature sidecars validated"
 # "Could not verify signature" and aborted. This check extracts the README's
 # pinned key and runs the exact verification command, so any drift between
 # documented key and actual signing key fails the release.
-info "Validating README pinned signature key matches install.sh.sshsig..."
+# README links to the complete canonical recipe instead of duplicating its key.
+# Verify the bytes users are actually directed to, with no unsigned fallback.
+info "Validating documented installation signature key matches install.sh.sshsig..."
 readme_path="$REPO_ROOT/README.md"
-if [ ! -f "$readme_path" ]; then
-    error "README.md not found at $readme_path — cannot validate documented signature key"
+install_guide_path="$REPO_ROOT/docs/INSTALL.md"
+if [ ! -f "$readme_path" ] || [ ! -f "$install_guide_path" ]; then
+    error "README.md or docs/INSTALL.md is missing; cannot validate the documented signature path"
     exit 1
 fi
-readme_signing_key=$(grep -oE "ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer" "$readme_path" | head -1)
-if [ -z "$readme_signing_key" ]; then
-    error "Could not extract ed25519 pulse-installer key from README.md secure-install snippet"
+if ! grep -Fq '(docs/INSTALL.md#' "$readme_path"; then
+    error "README.md must link to the canonical docs/INSTALL.md installation recipe"
+    exit 1
+fi
+documented_signing_key=$(grep -oE "ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer" "$install_guide_path" | sort -u)
+if [ -z "$documented_signing_key" ] || [[ "$documented_signing_key" == *$'\n'* ]]; then
+    error "docs/INSTALL.md must document exactly one pulse-installer signing key"
     exit 1
 fi
 if ! command -v ssh-keygen >/dev/null 2>&1; then
-    error "ssh-keygen not found — required to validate the README-documented signature path"
+    error "ssh-keygen not found; required to validate the documented signature path"
     exit 1
 fi
-readme_allowed_signers=$(mktemp)
-printf 'pulse-installer %s\n' "$readme_signing_key" > "$readme_allowed_signers"
+documented_allowed_signers=$(mktemp)
+printf 'pulse-installer %s\n' "$documented_signing_key" > "$documented_allowed_signers"
 if ! ssh-keygen -Y verify \
-    -f "$readme_allowed_signers" \
+    -f "$documented_allowed_signers" \
     -I pulse-installer \
     -n pulse-install \
     -s install.sh.sshsig < install.sh >/dev/null 2>&1; then
-    rm -f "$readme_allowed_signers"
-    error "README's pinned signature key does not verify install.sh.sshsig"
-    error "Customers who follow the README's secure-install ssh-keygen step will see 'Could not verify signature' and abort"
-    error "Either update README.md/docs/INSTALL.md with the correct pulse-installer pubkey, or fix the release signing key"
+    rm -f "$documented_allowed_signers"
+    error "Documented installation key does not verify install.sh.sshsig"
+    error "Keep docs/INSTALL.md and the canonical release signing key consistent"
     exit 1
 fi
-rm -f "$readme_allowed_signers"
-success "README pinned signature key verifies install.sh.sshsig"
+rm -f "$documented_allowed_signers"
+success "Documented installation key verifies install.sh.sshsig"
 
 # Validate individual .sha256 files exist and match checksums.txt
 info "Validating individual .sha256 files..."
