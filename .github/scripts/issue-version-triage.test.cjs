@@ -858,21 +858,59 @@ test("syncLabels keeps structured unknown separate from a quoted agent version",
   assert.deepEqual(calls.getLatestRelease, []);
 });
 
-test("every actionable issue form exposes the decomposition signal", () => {
+test("every actionable issue form offers secondary topics without requiring a second problem", () => {
   const templateDir = path.resolve(__dirname, "../ISSUE_TEMPLATE");
-  for (const name of [
-    "bug_report.yml",
-    "feature_request.yml",
-    "v6_rc_feedback.yml",
+  for (const [name, workaroundField] of [
+    ["bug_report.yml", "Describe the bug"],
+    ["feature_request.yml", "Alternatives considered"],
+    ["v6_rc_feedback.yml", "What happened?"],
   ]) {
     const form = fs.readFileSync(path.join(templateDir, name), "utf8");
-    assert.match(form, /id: additional_topics/);
-    assert.match(form, /label: Additional actionable topics/);
-    assert.match(
-      form,
-      /id: additional_topics[\s\S]*?validations:\s*\n\s+required: true/
-    );
+    const field = form.split(/(?=^  - type: )/m)
+      .find(block => block.includes("    id: additional_topics\n"));
+    assert.ok(field, name);
+    assert.match(field, /label: Additional actionable topics/);
+    assert.match(field, /required: false/);
+    assert.doesNotMatch(field, /required: true|Enter "None"/);
+    assert.match(field, /Leave blank for a single (?:problem|request)/);
+    assert.match(field, /Only list separate bugs, requests or workflows/);
+    assert.ok(field.includes(`in ${workaroundField} instead.`), name);
+    const target = form.split(/(?=^  - type: )/m)
+      .find(block => block.includes(`      label: ${workaroundField}\n`));
+    assert.ok(target, `${name}: named workaround field exists`);
   }
+});
+
+for (const response of ["", "_No response_", "None"]) {
+  test(`a single problem's workaround does not declare a secondary topic: ${JSON.stringify(response)}`, async () => {
+    const { github, calls } = createGithub();
+    const issue = {
+      number: 42,
+      title: "[Bug]: Login stops working after saving settings",
+      body: `### Describe the bug\nSaving settings breaks login. Re-entering the value restores access.\n\n` +
+        `### Additional actionable topics\n${response}\n\n### Pulse version\n6.5.0\n`,
+      labels: [{ name: "bug" }, { name: "affects-6.5.0" }],
+    };
+    await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+test("a genuine secondary problem still surfaces when the primary has a workaround", async () => {
+  const { github, calls } = createGithub();
+  const issue = {
+    number: 42,
+    title: "[Bug]: Login stops working after saving settings",
+    body: "### Describe the bug\nSaving settings breaks login. Re-entering the value restores access.\n\n" +
+      "### Additional actionable topics\nThe audit screen is also unreadable on a phone.\n\n### Pulse version\n6.5.0\n",
+    labels: [{ name: "bug" }, { name: "affects-6.5.0" }],
+  };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
 });
 
 test("bug and pre-release forms accept truthful evidence for installs that never started", () => {

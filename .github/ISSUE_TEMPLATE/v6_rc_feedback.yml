@@ -200,10 +200,10 @@ body:
     id: additional_topics
     attributes:
       label: Additional actionable topics
-      description: Enter "None" for a single topic. If this report also raises another bug, feature, or workflow, list each topic here; triage will preserve it with a separate linked disposition.
-      placeholder: None
+      description: Leave blank for a single problem. Only list separate bugs, requests or workflows here; triage will preserve each with a linked disposition. Put workarounds for the primary problem in What happened? instead.
+      placeholder: Optional separate problem or request
     validations:
-      required: true
+      required: false
 
   - type: markdown
     attributes:
