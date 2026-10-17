@@ -1451,6 +1451,74 @@ test("current feedback classification supersedes a queued bug declaration", asyn
   assert.equal(calls.createComment.length, 0);
 });
 
+const feedbackChoices = [
+  ["Bug / regression", "bug"],
+  ["Documentation issue", "documentation"],
+  ["UX / workflow friction", "enhancement"],
+];
+
+for (const [originalChoice, originalClass] of feedbackChoices) {
+  for (const [, establishedClass] of feedbackChoices) {
+    if (originalClass === establishedClass) continue;
+    for (const event of ["unrelated edit", "reopen", "delayed open", "delayed type edit"]) {
+      test(`established feedback classification survives ${event}: ${originalClass} to ${establishedClass}`, async () => {
+        const body = `### Feedback type\n${originalChoice}\n### Pulse version\n6.5.0\n`;
+        const labels = [establishedClass, "affects-6.5.0", "needs-human",
+          "needs-retest-on-latest", "needs-decomposition", "operator-reviewed"];
+        const issue = { number: 2806, title: "Reviewed mixed report", body,
+          state: "open", updated_at: "2026-10-17T01:00:00Z",
+          labels: labels.map(name => ({ name })) };
+        const delayed = event.startsWith("delayed");
+        const { github, calls } = createGithub({ currentIssue: issue });
+        const context = createContext({
+          issue: { ...issue, ...(delayed ? { updated_at: "2026-10-16T01:00:00Z" } : {}) },
+          action: event === "reopen" ? "reopened" : event === "delayed open" ? "opened" : "edited",
+          previousBody: event === "reopen" || event === "delayed open" ? undefined :
+            event === "delayed type edit" ? "### Feedback type\nOther actionable feedback\n" :
+              `${body}\nAn unrelated spelling correction.\n`,
+        });
+        await syncLabels({ github, context, core: createCore() });
+        assert.equal(calls.getIssue.length, 1, "no write should be prepared");
+        assert.deepEqual(calls.addLabels, []);
+        assert.deepEqual(calls.removeLabel, []);
+        assert.deepEqual(calls.createLabel, []);
+        assert.deepEqual(calls.createComment, []);
+        assert.deepEqual(calls.getLatestRelease, []);
+        assert.deepEqual(calls.paginate, []);
+      });
+    }
+  }
+}
+
+for (const [choice, expectedClass] of feedbackChoices) {
+  test(`a current feedback-type correction can add ${expectedClass} without discarding other topics`, async () => {
+    const oldChoice = expectedClass === "bug" ? "Documentation issue" : "Bug / regression";
+    const oldClass = expectedClass === "bug" ? "documentation" : "bug";
+    const previousBody = `### Feedback type\n${oldChoice}\n### Pulse version\n6.5.0\n`;
+    const issue = { number: 2807, title: "Changed feedback", state: "open",
+      body: `### Feedback type\n${choice}\n### Pulse version\n6.5.0\n`,
+      labels: [oldClass, "affects-6.5.0", "needs-human", "needs-decomposition"].map(name => ({ name })) };
+    const { github, calls } = createGithub();
+    await syncLabels({ github, core: createCore(),
+      context: createContext({ action: "edited", issue, previousBody }) });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [[expectedClass]]);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+test("an equivalent feedback-type edit preserves established classification", async () => {
+  const issue = { number: 2808, title: "Reviewed feedback", state: "open",
+    body: "### Feedback type\n  BUG / regression <!-- original choice -->\n### Pulse version\n6.5.0\n",
+    labels: [{ name: "documentation" }, { name: "affects-6.5.0" }] };
+  const { github, calls } = createGithub();
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", issue,
+    previousBody: "### Feedback type\nBug / regression\n### Pulse version\n6.5.0\n" }) });
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
 test("a failed current-issue read stops without stale classification or mutation", async () => {
   for (const status of [403, 404, 500]) {
     const { github, calls } = createGithub();

@@ -283,11 +283,18 @@ async function ensureLabel(github, context, name, color, description) {
   }
 }
 
-function buildTriageState(issue, core, latestVersion) {
+function buildTriageState(issue, core, latestVersion, feedbackTypeChanged = false) {
   const labelNames = new Set((issue.labels || []).map((label) => label.name));
   const nextLabels = new Set(labelNames);
   const v6FeedbackClass = classifyV6FeedbackType(issue.body);
-  if (v6FeedbackClass) {
+  // The form's original choice is not a whole-thread disposition. Community
+  // may have reclassified the report since intake. An unrelated edit, reopen
+  // or delayed event must not restore a conflicting form label. A current
+  // change of feedback type can add its new class, but never removes existing
+  // classes: the report may contain several independently actionable topics.
+  const hasClassification = [BUG_LABEL, DOCS_LABEL, ENHANCEMENT_LABEL]
+    .some((name) => labelNames.has(name));
+  if (v6FeedbackClass && (!hasClassification || feedbackTypeChanged)) {
     core.info(`Detected v6 feedback issue class: ${v6FeedbackClass}`);
     nextLabels.add(v6FeedbackClass);
   }
@@ -374,6 +381,13 @@ async function syncLabels({ github, context, core }) {
     core.info("Report is no longer an open issue. Skipping label sync.");
     return;
   }
+  const previousBody = context.payload.changes?.body?.from;
+  const eventIsCurrent = typeof issue.updated_at === "string" &&
+    issue.body === eventIssue.body &&
+    issue.updated_at === eventIssue.updated_at;
+  const feedbackTypeChanged = eventIsCurrent && context.payload.action === "edited" &&
+    typeof previousBody === "string" &&
+    classifyV6FeedbackType(previousBody) !== classifyV6FeedbackType(issue.body);
   const {
     labelNames,
     nextLabels,
@@ -381,7 +395,7 @@ async function syncLabels({ github, context, core }) {
     hasDeclaredPulseVersion,
     hasAdditionalActionableTopics,
     isBugLike,
-  } = buildTriageState(issue, core, null);
+  } = buildTriageState(issue, core, null, feedbackTypeChanged);
 
   // A new or materially edited nonempty field needs review even if the old
   // declaration already had topics. Comparing only its boolean classification
@@ -389,10 +403,6 @@ async function syncLabels({ github, context, core }) {
   // Ignore case/whitespace and hidden comments; unrelated and superseded edits
   // must not restore a cleared task. This flags review, not a new issue or an
   // automatic judgment about whether two descriptions are the same problem.
-  const previousBody = context.payload.changes?.body?.from;
-  const eventIsCurrent = typeof issue.updated_at === "string" &&
-    issue.body === eventIssue.body &&
-    issue.updated_at === eventIssue.updated_at;
   const newlyDeclared = eventIsCurrent && hasAdditionalActionableTopics === true && (
     context.payload.action === "opened" ||
     (context.payload.action === "edited" && previousBody !== undefined &&
