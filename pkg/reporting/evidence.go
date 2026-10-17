@@ -2,7 +2,6 @@ package reporting
 
 import (
 	"context"
-	"fmt"
 	"time"
 )
 
@@ -41,8 +40,8 @@ func (e *ReportEngine) MetricEvidenceFor(ctx context.Context, req MetricReportRe
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if e.getMetricsStore() == nil {
-		return nil, fmt.Errorf("metrics store not initialized")
+	if _, err := e.metricsStoreFor(req.OrgID); err != nil {
+		return nil, err
 	}
 	data, err := e.queryMetrics(req)
 	if err != nil {

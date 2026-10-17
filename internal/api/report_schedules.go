@@ -541,17 +541,32 @@ func (h *ReportingHandlers) resolveReportScheduleResources(ctx context.Context, 
 		entries = append(entries, multiReportResourceEntry{ResourceType: resourceType, ResourceID: resourceID})
 		return nil
 	}
+	// A schedule reports only on resources its own organization holds, so
+	// both explicit resources and tags resolve against that organization's
+	// inventory.
+	snapshot, ok := h.getReportingEnrichmentSnapshot(ctx, orgID)
+	if !ok {
+		return nil, reportScheduleValidationError{code: "scope_unavailable", message: "Schedule scope cannot be resolved until resource inventory is available"}
+	}
 	for _, res := range scope.Resources {
+		if _, err := normalizeReportResourceType(res.ResourceType); err != nil {
+			return nil, reportScheduleValidationError{code: "invalid_resource_type", message: err.Error()}
+		}
+		if !reportSubjectInInventory(res.ResourceID, snapshot) {
+			// A resource removed since the schedule was saved, or never
+			// part of this organization, is left out of the report.
+			log.Warn().
+				Str("org_id", orgID).
+				Str("resource_id", res.ResourceID).
+				Msg("report schedules: skipping a resource that is not in this organization's inventory")
+			continue
+		}
 		if err := appendEntry(res.ResourceType, res.ResourceID); err != nil {
 			return nil, reportScheduleValidationError{code: "invalid_resource_type", message: err.Error()}
 		}
 	}
 
 	if len(scope.Tags) > 0 {
-		snapshot, ok := h.getReportingEnrichmentSnapshot(ctx, orgID)
-		if !ok {
-			return nil, reportScheduleValidationError{code: "scope_unavailable", message: "Tagged schedule scope cannot be resolved until resource inventory is available"}
-		}
 		tags := map[string]struct{}{}
 		for _, tag := range scope.Tags {
 			tags[strings.ToLower(strings.TrimSpace(tag))] = struct{}{}

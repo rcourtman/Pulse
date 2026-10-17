@@ -664,3 +664,47 @@ func TestSummarizeToolReturnsHighUtilizationAsEvidenceWithoutDiagnosis(t *testin
 		}
 	}
 }
+
+func TestSummarizeToolReadsOnlyItsOrganizationsMetrics(t *testing.T) {
+	at := time.Now().Add(-time.Hour).Truncate(time.Minute)
+	stores := map[string]*metrics.Store{}
+	for orgID, value := range map[string]float64{"default": 13, "org-b": 71} {
+		store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer store.Close()
+		// The same metrics ID exists in both organizations.
+		store.Write("node", "delly-node-id", "memory", value, at)
+		store.Flush()
+		stores[orgID] = store
+	}
+	previous := reporting.GetEngine()
+	reporting.SetEngine(reporting.NewReportEngine(reporting.EngineConfig{
+		MetricsStoreForOrg: func(orgID string) (*metrics.Store, error) {
+			store, ok := stores[orgID]
+			if !ok {
+				return nil, fmt.Errorf("organization %q is not provisioned", orgID)
+			}
+			return store, nil
+		},
+	}))
+	defer reporting.SetEngine(previous)
+
+	exec := NewPulseToolExecutor(ExecutorConfig{OrgID: "org-b"})
+	exec.SetUnifiedResourceProvider(newSummarizeStubProvider())
+	for _, args := range []map[string]interface{}{
+		{"action": "resource", "resource_id": "delly", "range": "24h"},
+		{"action": "resource", "resource_type": "node", "resource_id": "delly-node-id", "range": "24h"},
+		{"action": "fleet", "resource_ids": "delly", "range": "24h"},
+	} {
+		result, err := exec.executeSummarize(context.Background(), args)
+		if err != nil || result.IsError {
+			t.Fatalf("summarize %v = %+v, %v", args, result, err)
+		}
+		text := result.Content[0].Text
+		if !strings.Contains(text, `"mean":71`) || strings.Contains(text, `"mean":13`) {
+			t.Fatalf("summarize %v for org-b must read only org-b's metrics: %s", args, text)
+		}
+	}
+}

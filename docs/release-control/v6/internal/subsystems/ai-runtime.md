@@ -7857,6 +7857,16 @@ remain available for report generation but are not invoked by `pulse_summarize`.
 `TestMetricEvidenceRetainsObservedCoverageAcrossRestart` verifies retained
 coordinates, sparse timestamps, statistics, empty results and query failures.
 
+Retained metric evidence is organization-scoped. Every `pulse_summarize`
+request carries the executor's organization as `MetricReportRequest.OrgID`, and
+the server's report engine resolves that organization's own metrics store
+(`EngineConfig.MetricsStoreForOrg`), refusing a request without one
+(`ErrReportOrgRequired`) rather than reading the default organization's store.
+A tenant's Assistant therefore summarizes only its own organization's history,
+even for a resource ID that also exists in another organization.
+`TestSummarizeToolReadsOnlyItsOrganizationsMetrics` and
+`TestReportEngineReadsOnlyTheRequestOrganizationsMetrics` hold this.
+
 The same canonical AI runtime now also records user-chat token
 usage to the cost ledger. `chat.Service.ExecuteStream` was a
 long-standing gap: the agentic loop accumulated token counts via

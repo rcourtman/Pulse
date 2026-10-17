@@ -726,7 +726,9 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		return
 	}
 
+	orgID := GetOrgID(r.Context())
 	req := reporting.MetricReportRequest{
+		OrgID:        orgID,
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
 		MetricType:   metricType,
@@ -737,11 +739,18 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		Branding:     h.resolveReportBranding(r.Context()),
 	}
 
-	// Enrich with resource data if monitor is available
-	orgID := GetOrgID(r.Context())
-	if snapshot, ok := h.getReportingEnrichmentSnapshot(r.Context(), orgID); ok {
-		h.enrichReportRequest(r.Context(), orgID, &req, snapshot, start, end)
+	// The resource must belong to the requesting organization; the engine
+	// then reads only that organization's metrics store.
+	snapshot, ok := h.getReportingEnrichmentSnapshot(r.Context(), orgID)
+	if !ok {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "inventory_unavailable", "Resource inventory for this organization is not available", nil)
+		return
 	}
+	if !reportSubjectInInventory(resourceID, snapshot) {
+		writeErrorResponse(w, http.StatusNotFound, "resource_not_found", "Resource not found in this organization", nil)
+		return
+	}
+	h.enrichReportRequest(r.Context(), orgID, &req, snapshot, start, end)
 
 	// Wire the per-tenant AI narrator and Patrol findings provider when
 	// configured. Both are nil-safe at the engine layer; absence falls
@@ -876,6 +885,38 @@ func (h *ReportingHandlers) resolveReportSubject(orgID string, req *reporting.Me
 		}
 		return
 	}
+}
+
+// reportSubjectInInventory reports whether resourceID names a resource in an
+// organization's inventory snapshot: a canonical unified resource ID, or the
+// legacy state-model ID of one of its nodes, VMs or containers, which the
+// report enrichment also accepts. A report is only generated for a resource
+// the requesting organization owns.
+func reportSubjectInInventory(resourceID string, snapshot reportingEnrichmentSnapshot) bool {
+	if resourceID == "" {
+		return false
+	}
+	for i := range snapshot.Resources {
+		if snapshot.Resources[i].ID == resourceID {
+			return true
+		}
+	}
+	for i := range snapshot.Nodes {
+		if snapshot.Nodes[i].ID == resourceID {
+			return true
+		}
+	}
+	for i := range snapshot.VMs {
+		if snapshot.VMs[i].ID == resourceID {
+			return true
+		}
+	}
+	for i := range snapshot.Containers {
+		if snapshot.Containers[i].ID == resourceID {
+			return true
+		}
+	}
+	return false
 }
 
 // reportSubjectIDMatches reports whether a legacy state-model ID refers to
@@ -1186,7 +1227,9 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 		return generatedMultiReport{}, &reportingRequestError{status: http.StatusBadRequest, code: "invalid_time_range", message: err.Error()}
 	}
 
+	orgID := GetOrgID(ctx)
 	multiReq := reporting.MultiReportRequest{
+		OrgID:      orgID,
 		Format:     format,
 		Start:      start,
 		End:        end,
@@ -1195,8 +1238,14 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 		Branding:   h.resolveReportBranding(ctx),
 	}
 
-	orgID := GetOrgID(ctx)
 	snapshot, hasSnapshot := h.getReportingEnrichmentSnapshot(ctx, orgID)
+	if !hasSnapshot {
+		return generatedMultiReport{}, &reportingRequestError{
+			status:  http.StatusServiceUnavailable,
+			code:    "inventory_unavailable",
+			message: "Resource inventory for this organization is not available",
+		}
+	}
 	for _, res := range body.Resources {
 		if !validResourceID.MatchString(res.ResourceType) || len(res.ResourceType) > 64 {
 			return generatedMultiReport{}, &reportingRequestError{
@@ -1217,7 +1266,16 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 			return generatedMultiReport{}, &reportingRequestError{status: http.StatusBadRequest, code: "invalid_resource_type", message: err.Error()}
 		}
 
+		if !reportSubjectInInventory(res.ResourceID, snapshot) {
+			return generatedMultiReport{}, &reportingRequestError{
+				status:  http.StatusNotFound,
+				code:    "resource_not_found",
+				message: fmt.Sprintf("Resource not found in this organization: %s", res.ResourceID),
+			}
+		}
+
 		req := reporting.MetricReportRequest{
+			OrgID:        orgID,
 			ResourceType: resourceType,
 			ResourceID:   res.ResourceID,
 			MetricType:   metricType,
@@ -1227,9 +1285,7 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 			Title:        title,
 			Branding:     multiReq.Branding,
 		}
-		if hasSnapshot {
-			h.enrichReportRequest(ctx, orgID, &req, snapshot, start, end)
-		}
+		h.enrichReportRequest(ctx, orgID, &req, snapshot, start, end)
 		multiReq.Resources = append(multiReq.Resources, req)
 	}
 

@@ -9,12 +9,15 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
@@ -35,6 +38,11 @@ func newTestReportingScheduleHandlers(t *testing.T) (*ReportingHandlers, *config
 	if persistence == nil {
 		t.Fatal("monitor config persistence is nil")
 	}
+	// A schedule only reports on resources its organization holds, so the
+	// default organization holds the VM validReportSchedulePayload names.
+	stateField := reflect.ValueOf(monitor).Elem().FieldByName("state")
+	state := reflect.NewAt(stateField.Type(), unsafe.Pointer(stateField.UnsafeAddr())).Elem().Interface().(*models.State)
+	state.UpdateVMs([]models.VM{{ID: "vm-1", Name: "VM 1", Status: "running"}})
 	return NewReportingHandlers(mtm, nil), persistence
 }
 
@@ -357,5 +365,48 @@ func TestRunPatrolDigestScheduleFailsClearlyWithoutDigestOrEmail(t *testing.T) {
 	}
 	if noEmail.NextRunAt == nil {
 		t.Fatal("failed digest run must still schedule the next occurrence")
+	}
+}
+
+// A schedule runs inside its owning organization: its scope resolves against
+// that organization's inventory and its report reads only that organization's
+// metrics store. The fixture lives in reporting_org_scope_test.go.
+func TestReportingScheduledRunReadsOnlyItsOwningOrganizationsMetrics(t *testing.T) {
+	handlers := newReportingOrgScopeFixture(t)
+	unifiedA := orgScopeUnifiedNodeID(t, handlers, "org-a")
+	persistence := config.NewConfigPersistence(t.TempDir())
+
+	// A schedule saved in org B that names org A's resources alongside its
+	// own reports only on org B's resource, from org B's store.
+	schedule := validReportSchedulePayload()
+	schedule.ID = "org-b-weekly"
+	schedule.Cadence = config.ReportScheduleCadence{Type: config.ReportScheduleCadenceWeekly, Weekday: "monday", Time: "09:00", Timezone: "UTC"}
+	schedule.Format = config.ReportScheduleFormatCSV
+	schedule.Scope = config.ReportScheduleScope{Resources: []config.ReportScheduleResource{
+		{ResourceType: "node", ResourceID: "node-a"},
+		{ResourceType: "node", ResourceID: unifiedA},
+		{ResourceType: "node", ResourceID: "node-b"},
+	}}
+	now := time.Now()
+	result, updated := handlers.runReportSchedule(orgScopeContext("org-b"), persistence, schedule, now, true, "")
+	if updated.LastRunStatus != config.ReportScheduleLastRunOK || result.path == "" {
+		t.Fatalf("org B scheduled run = %+v (%q), want a saved report", updated, updated.LastError)
+	}
+	saved, err := os.ReadFile(filepath.Clean(result.path))
+	if err != nil {
+		t.Fatalf("read saved report: %v", err)
+	}
+	if body := string(saved); !strings.Contains(body, orgScopeValueB) || strings.Contains(body, orgScopeValueA) || strings.Contains(body, "node-a") {
+		t.Fatalf("org B scheduled report must carry only org B's resource and metrics:\n%s", body)
+	}
+
+	// A schedule whose resources all belong to another organization reads
+	// nothing.
+	schedule.Scope = config.ReportScheduleScope{Resources: []config.ReportScheduleResource{
+		{ResourceType: "node", ResourceID: "node-a"},
+	}}
+	result, updated = handlers.runReportSchedule(orgScopeContext("org-b"), persistence, schedule, now, true, "")
+	if updated.LastRunStatus != config.ReportScheduleLastRunFailed || result.path != "" {
+		t.Fatalf("org B schedule over org A's resource = %+v, want a failed run with no report", updated)
 	}
 }

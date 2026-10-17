@@ -56,7 +56,7 @@ func TestSingleReportAINarrationNeedsAIExecuteForTokens(t *testing.T) {
 
 			narrator := &countingReportNarrator{}
 			var narratorResolves, findingsResolves atomic.Int32
-			handler := NewReportingHandlers(nil, nil)
+			handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 			handler.SetNarratorResolver(func(context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
 				narratorResolves.Add(1)
 				return narrator, nil, nil
@@ -116,7 +116,7 @@ func TestSingleReportGETNeverUsesAIRegardlessOfTokenScopes(t *testing.T) {
 
 			narrator := &countingReportNarrator{}
 			var narratorResolves, findingsResolves atomic.Int32
-			handler := NewReportingHandlers(nil, nil)
+			handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 			handler.SetNarratorResolver(func(context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
 				narratorResolves.Add(1)
 				return narrator, nil, nil
@@ -165,7 +165,7 @@ func TestFleetReportAINarrationNeedsAIExecuteForTokens(t *testing.T) {
 			t.Cleanup(func() { reporting.SetEngine(original) })
 
 			var narratorResolves, findingsResolves atomic.Int32
-			handler := NewReportingHandlers(nil, nil)
+			handler := newReportingHandlersWithInventoryForTest(t, "default", "vm-1")
 			handler.SetNarratorResolver(func(context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
 				narratorResolves.Add(1)
 				return nil, stubFleetNarrator{}, nil

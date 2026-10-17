@@ -253,3 +253,21 @@ func newReportingMTMForTest(t *testing.T, monitor *monitoring.Monitor) *monitori
 	})
 	return mtm
 }
+
+// newReportingHandlersWithInventoryForTest returns handlers whose orgID
+// organization holds nodes with the given IDs, so report requests for them
+// pass the check that a reported resource belongs to the requesting
+// organization.
+func newReportingHandlersWithInventoryForTest(t *testing.T, orgID string, resourceIDs ...string) *ReportingHandlers {
+	t.Helper()
+
+	state := models.NewState()
+	for _, id := range resourceIDs {
+		state.Nodes = append(state.Nodes, models.Node{ID: id, Name: id})
+	}
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, nil, nil)
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{
+		orgID: newReportingMonitorForTest(t, state, nil),
+	})
+	return NewReportingHandlers(mtm, nil)
+}

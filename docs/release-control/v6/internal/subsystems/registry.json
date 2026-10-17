@@ -7706,6 +7706,30 @@
             ]
           },
           {
+            "id": "server-runtime-wiring",
+            "label": "server runtime wiring proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/server/server.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
+              "internal/api/system_settings_telemetry_test.go",
+              "internal/api/telemetry_history_reads_test.go",
+              "internal/config/history_read_activity_test.go",
+              "internal/telemetry/service_health_test.go",
+              "internal/telemetry/telemetry_test.go",
+              "pkg/server/reporting_engine_test.go",
+              "pkg/server/service_health_test.go",
+              "pkg/server/telemetry_licensed_features_test.go",
+              "pkg/server/telemetry_pulse_intelligence_test.go",
+              "scripts/tests/test_telemetry_adoption_report.py",
+              "tests/integration/tests/19-telemetry-disclosure.spec.ts"
+            ]
+          },
+          {
             "id": "privacy-docs-and-telemetry",
             "label": "privacy docs and telemetry proof",
             "match_prefixes": [],
@@ -7715,7 +7739,6 @@
               "internal/config/history_read_activity.go",
               "internal/telemetry/service_health.go",
               "internal/telemetry/telemetry.go",
-              "pkg/server/server.go",
               "pkg/server/service_health.go",
               "pkg/server/telemetry_licensed_features.go",
               "pkg/server/telemetry_pulse_intelligence.go",
