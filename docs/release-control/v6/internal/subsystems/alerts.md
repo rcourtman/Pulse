@@ -5178,3 +5178,22 @@ invalid time shape, held age/size, mixed escalation/recovery, repeated evidence,
 legacy JSON, replacement, scope, policy and deletion. Monitoring's
 `TestSnapshotPartialEvidenceServedState` binds actual detector results to the
 served alert array for desktop/narrow consuming proof.
+### Direct percentage observations cannot imply recovery (17 October 2026)
+
+All metric evaluation entry points reject current CPU, memory, disk and usage
+percentages outside 0–100 before consulting rolling History, including direct
+agent filesystem and legacy callers that bypass unified candidate construction.
+An invalid sample interrupts activation and recovery timing without changing an
+open incident, its acknowledgement or transition ledger. Fresh continuous
+observations must satisfy any existing delay again. CPU/disk/usage keep immediate
+recovery on a valid clear reading; memory retains its configured stability.
+Explicit rule disablement
+still clears an alert independently of telemetry; zero and 100 are valid, and
+scalar temperature/rate metrics do not inherit percentage bounds.
+
+`direct_percentage_guard_test.go` exercises canonical and legacy metrics and
+the actual `CheckHost` filesystem entry point, including acknowledged incidents,
+fresh recovery and production-shaped consumer projections. The window boundary
+test in `windowed_metric_test.go` proves rejection precedes History reads.
+These are synthetic controls, not an attribution or installed recovery claim
+for a reported disk alert or notification delivery failure.

@@ -36,6 +36,37 @@ func TestCalculateMetricWindowUsesTimeWeightedAverage(t *testing.T) {
 	}
 }
 
+func TestMetricWindowRejectsInvalidCurrentPercentBeforeReadingHistory(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.MetricEvaluationWindows = map[string]map[string]int{"all": {"cpu": 300, "memory": 300, "disk": 300, "usage": 300}}
+	m.mu.Unlock()
+	var reads atomic.Int32
+	m.SetMetricWindowProvider(func(r MetricWindowRequest) ([]MetricWindowPoint, error) {
+		reads.Add(1)
+		return []MetricWindowPoint{{r.Start, 50}, {r.Start.Add(2 * time.Minute), 50}, {r.Start.Add(4 * time.Minute), 50}, {r.End, 50}}, nil
+	})
+	for _, metric := range []string{"cpu", "memory", "disk", "usage"} {
+		for _, value := range []float64{-1, 101} {
+			got := m.evaluateMetricWindow("fixture", "agent-disk", metric, value, time.Now())
+			if got.Ready || got.CurrentValue != value || got.WindowSeconds != 300 {
+				t.Fatalf("invalid %s value %v entered evaluation: %+v", metric, value, got)
+			}
+		}
+	}
+	if reads.Load() != 0 {
+		t.Fatal("invalid current percentages consulted history")
+	}
+	for _, value := range []float64{0, 100} {
+		if !m.evaluateMetricWindow("fixture", "agent-disk", "disk", value, time.Now()).Ready {
+			t.Fatalf("valid boundary %v was rejected", value)
+		}
+	}
+	if reads.Load() != 2 {
+		t.Fatal("valid current percentages did not consult history")
+	}
+}
+
 func TestCalculateMetricWindowRejectsIncompleteAndGappedEvidence(t *testing.T) {
 	end := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 	start := end.Add(-5 * time.Minute)
