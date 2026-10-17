@@ -4430,6 +4430,12 @@ install tokens it generates stay bound to that organization; nothing about token
 scope, agent registration or reporting identity changes. See the api-contracts
 contract, rule 35, for the capability rule.
 
+Since 17 October 2026 these agent routes (install command, setup script URL,
+agent link, unlink, uninstall, configuration, Docker and Kubernetes management,
+agent profiles and fleet diagnostics) declare that authority explicitly with
+`RequireOrgAdmin`. `RequireAdmin` now admits instance administrators only, so
+an agent route that does not opt in is closed to organization owners.
+
 ### Auto-register preserves the operator's stored TLS choice
 
 Re-registering an existing Proxmox node through the canonical auto-register

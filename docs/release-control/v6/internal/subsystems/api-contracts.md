@@ -5037,16 +5037,23 @@ auto-register mutation boundary.
     `TestActionRoutesRequireExplicitSSOAdminOnSSOOnlyInstance`.
 
     Org-bound settings are the one place an org-scoped session is not
-    withheld. `ensureAdminSession` admits the configured administrator or a
-    manager (owner or admin) of the request's organization inside an
-    org-scoped request, and that rule is `sessionUserHasSettingsAdminPrivileges`
-    for both the route gate and the snapshot. The snapshot records it as
-    `sessionManagesOrg`, never as `sessionIsAdmin`, and it widens only
-    `infrastructureRead`, `availabilityRead` and `reportingRead`, whose routes
-    pass `ensureAdminSession` and whose handlers read that organization's own
-    config and monitor state; `reportingRead` still requires the authorizer's
-    `read` on `nodes`. Every other capability, `detailLevel` and `authUsername`
-    stay instance administration. Before this, a provider opening a client
+    withheld. `ensureAdminSession`, the session check behind `RequireAdmin` and
+    the settings scope helpers, admits only instance administrators (the
+    configured administrator or an instance RBAC admin grant) whatever
+    organization the request names. Routes whose handlers act only on the
+    request organization's own config and monitor state opt into
+    `RequireOrgAdmin` / `ensureOrgAdminSession` / `ensureOrgSettingsWriteScope`,
+    which also admit a manager (owner or admin) of that organization through
+    `sessionUserHasSettingsAdminPrivileges`: agents, nodes, connections,
+    availability, TrueNAS and VMware, agent profiles, install commands, deploy
+    status, configuration transfer and the org-bound relay mobile token. The
+    default is instance administration, so a route that does not opt in fails
+    closed. The snapshot records the org rule as `sessionManagesOrg`, never as
+    `sessionIsAdmin`, and it widens only `infrastructureRead` and
+    `availabilityRead`. Reporting stays instance administration because report
+    generation reads the instance's default metrics store. Every other
+    capability, `detailLevel` and `authUsername` stay instance administration.
+    `internal/api/org_admin_session_authority_test.go` holds the session matrix. Before this, a provider opening a client
     workspace from the Pulse Account portal arrived as the org owner with every
     capability `false`, so Settings hid the Infrastructure and Reporting pages
     that the routes would have served and the handoff to
@@ -11657,8 +11664,9 @@ routes on mount:
   and `/api/logs/download`;
 - `pulseIntelligenceRead` combines the handler's settings-admin/scope check
   with `RequirePermission(read, settings)` from `/api/settings/ai`;
-- `reportingRead` combines `ensureAdminSession`, `settings:read`, and
-  `RequirePermission(read, nodes)` from `/api/admin/reports/catalog`.
+- `reportingRead` combines `ensureAdminSession` (instance administrators
+  only), `settings:read`, and `RequirePermission(read, nodes)` from
+  `/api/admin/reports/catalog`.
 
 Those last two must not collapse to `canReadSettings`: a custom authorizer can
 deny the route even when the caller has the settings scope. Reporting's

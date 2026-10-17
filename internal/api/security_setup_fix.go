@@ -134,53 +134,63 @@ func isRunningAsRoot() bool {
 	return os.Geteuid() == 0
 }
 
+// ensureAdminSession admits a session only when it belongs to an instance
+// administrator: the configured local admin or a user holding an instance RBAC
+// admin grant, whichever organization the request names. It is
+// the session check behind RequireAdmin and the settings scope helpers, so it
+// guards everything that reads or changes instance-wide state: credentials,
+// API tokens, SSO, system settings, updates, relay, logs and diagnostics.
+//
+// Organization owners and admins are not instance administrators. A route
+// that serves only the request's own organization opts into their authority
+// explicitly with ensureOrgAdminSession or RequireOrgAdmin; the default is
+// instance administration, so a route that forgets to choose fails closed.
+// Requests without a session cookie are left to the caller's other checks.
 func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
-	// Session users must match configured admin identity for privileged operations.
-	if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
-		sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
-		if sessionUserHasSettingsAdminPrivileges(cfg, req, sessionUser) {
-			return true
-		}
-
-		log.Warn().
-			Str("path", req.URL.Path).
-			Str("user", sessionUser).
-			Msg("Session user missing admin privileges for privileged operation")
-		http.Error(w, "Admin privileges required", http.StatusForbidden)
-		return false
-	}
-	return true
-}
-
-// ensureInstanceAdminSession is ensureAdminSession for routes that replace the
-// instance's own credentials: the administrator login and the whole API token
-// inventory. Those belong to the instance, not to any organization, so the
-// caller must be an instance administrator. The org management rule
-// ensureAdminSession applies to org-scoped sessions does not count here: an
-// organization owner who names their organization in the request would
-// otherwise rotate the instance administrator credentials and take the
-// instance over. Requests without a session cookie are left to the caller's
-// other checks, as in ensureAdminSession.
-func ensureInstanceAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
 	cookie, err := readSessionCookie(req)
 	if err != nil || cookie.Value == "" || !ValidateSession(cookie.Value) {
 		return true
 	}
 	sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
-	if !sessionIsOrgScoped(req) && sessionUserCarriesAdminPrivileges(cfg, sessionUser) {
+	if sessionUserCarriesAdminPrivileges(cfg, sessionUser) {
 		return true
 	}
 
 	log.Warn().
 		Str("path", req.URL.Path).
 		Str("user", sessionUser).
-		Msg("Session without instance administrator privileges attempted to replace instance credentials")
-	http.Error(w, "Instance administrator privileges required. Organization owners and admins cannot change the instance administrator login or API tokens.", http.StatusForbidden)
+		Bool("org_scoped", sessionIsOrgScoped(req)).
+		Msg("Session user missing instance admin privileges for privileged operation")
+	http.Error(w, "Admin privileges required", http.StatusForbidden)
 	return false
 }
 
-// sessionUserHasSettingsAdminPrivileges is the session rule ensureAdminSession
-// enforces for settings-bound routes: the configured local admin; on an
+// ensureOrgAdminSession is the session check for routes whose handlers read and
+// change only the request organization's own config and monitor state, such
+// as its infrastructure connections, agents and availability targets. It admits
+// every instance administrator and, on an org-scoped request, a user who can
+// manage that organization, so a provider opening a client workspace as its
+// owner can connect the client's systems. Everything else uses
+// ensureAdminSession.
+func ensureOrgAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+	if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
+		sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
+		if sessionUserCarriesAdminPrivileges(cfg, sessionUser) || sessionUserHasSettingsAdminPrivileges(cfg, req, sessionUser) {
+			return true
+		}
+
+		log.Warn().
+			Str("path", req.URL.Path).
+			Str("user", sessionUser).
+			Msg("Session user missing admin privileges for organization operation")
+		http.Error(w, "Admin privileges required", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+// sessionUserHasSettingsAdminPrivileges is the session rule ensureOrgAdminSession
+// enforces for org-bound routes: the configured local admin; on an
 // org-scoped request, a user who can manage that organization; otherwise an
 // instance administrator. The security status snapshot publishes settings
 // capabilities from this same rule, so a surface the UI offers is one its
@@ -299,6 +309,20 @@ func ensureSettingsScope(cfg *config.Config, w http.ResponseWriter, req *http.Re
 	}
 
 	return true
+}
+
+// ensureOrgSettingsScope is ensureSettingsScope for routes that act only on
+// the request organization's own state: token callers need the scope, and
+// session callers pass ensureOrgAdminSession instead of ensureAdminSession.
+func ensureOrgSettingsScope(cfg *config.Config, w http.ResponseWriter, req *http.Request, scope string) bool {
+	if record := getAPITokenRecordFromRequest(req); record != nil {
+		return ensureSettingsScope(cfg, w, req, scope)
+	}
+	return ensureOrgAdminSession(cfg, w, req)
+}
+
+func ensureOrgSettingsWriteScope(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+	return ensureOrgSettingsScope(cfg, w, req, config.ScopeSettingsWrite)
 }
 
 func ensureSettingsReadScope(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
@@ -478,9 +502,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 				Str("ip", clientIP).
 				Msg("API token without instance-wide authority attempted quick security setup")
 			http.Error(w, "Security setup replaces the administrator credentials and every API token, so it needs a full-access token that is not bound to any non-default organization.", http.StatusForbidden)
-			return
-		}
-		if authConfigured && !recoveryAuthorized && getAPITokenRecordFromRequest(req) == nil && !ensureInstanceAdminSession(r.config, w, req) {
 			return
 		}
 
@@ -781,9 +802,6 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 			Str("ip", GetClientIP(rq)).
 			Msg("API token without instance-wide authority attempted to regenerate every token")
 		http.Error(w, "Regenerating API tokens replaces every token, so it needs a full-access token that is not bound to any non-default organization. Use POST /api/security/tokens/{id}/rotate to replace one token.", http.StatusForbidden)
-		return
-	}
-	if getAPITokenRecordFromRequest(rq) == nil && !ensureInstanceAdminSession(r.config, w, rq) {
 		return
 	}
 

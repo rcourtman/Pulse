@@ -78,7 +78,7 @@ ROUTE_ANCHORS = [
     # Every profile route is wrapped once, for all methods, including GET.
     ("Token callers also need `settings:write` on every profile route, including GET requests",
      "internal/api/router_routes_registration.go",
-     'r.mux.Handle("/api/admin/profiles/", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite,'),
+     'r.mux.Handle("/api/admin/profiles/", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite,'),
     # Everything other than GET or HEAD on the /api/resources/ prefix needs the write scope.
     ("`POST /api/resources/{id}/link` (`monitoring:write`)",
      "internal/api/router_routes_monitoring.go",
@@ -95,7 +95,7 @@ ROUTE_ANCHORS = [
      "!tokenHasInstanceWideAuthority(callerToken)"),
     ("`POST /api/agents/agent/uninstall` (`agent:report` token, or an admin session)",
      "internal/api/router_routes_registration.go",
-     "RequireAdmin(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleUninstall))"),
+     "RequireOrgAdmin(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleUninstall))"),
     ("API-token callers also need the `ai:execute` scope for AI narration.",
      "internal/api/metrics_reporting_handlers.go",
      "if !reportCallerMayUseAI(ctx) {\n\t\treturn nil, nil, h.resolveExistingFindings(ctx)"),
