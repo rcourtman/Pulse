@@ -95,6 +95,11 @@
       "incomplete_commit": "de5f541553abc5a69725c1c7ba98e7609d532e48",
       "completion_commit": "bf2742cce69407e913114ead9c7f2f9c8cf59f74",
       "reason": "Preserve the additive upstream narration documentation reconciliation and its dependent diagnostics authority contracts while binding the separately supplied API-reference synchronization assertions through the existing exact-pair guard. No source identity or required contract/proof gate is rewritten or waived."
+    },
+    {
+      "incomplete_commit": "822eac9789e1d17c4139b0163c1014014dd76c1b",
+      "completion_commit": "b07dfef40c5803cc4aeca787d3280c79af31d47e",
+      "reason": "The tenant-scoped websocket delivery shipped its runtime change and tenant tests in the first commit; the following commit adds the agent-lifecycle and storage-recovery contract updates and moves the tenant tests into the named proof files. No source identity or required contract/proof gate is rewritten or waived."
     }
   ]
 }
