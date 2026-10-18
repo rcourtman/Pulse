@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "a6c728aba4c96bd9f02935df695fcd65ef66dd72",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx",
+    "frontend-modern/src/components/Settings/trueNASTlsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx": "a1c5330ec033f123acd791f53f13f1d98db0970720d084f59bd4538da96cb1b2",
+    "frontend-modern/src/components/Settings/trueNASTlsPresentation.ts": "c8c20bd7b846d6774d260a8881f97e654277402c4e2054fc521bbd6bed827628"
+  },
+  "routes": [
+    "/browser-tests/connection-evidence.html?platform=truenas"
+  ],
+  "states": [
+    "Trusted certificate chain required",
+    "Certificate chain and fingerprint required",
+    "Certificate fingerprint required with chain checks skipped",
+    "Certificate identity not verified for empty/native-empty pin",
+    "Invalid fingerprint rejected in the form policy",
+    "HTTP warning overrides an HTTPS checkbox and pin",
+    "Omitted separate port defaults HTTPS; explicit HTTPS overrides unchecked checkbox"
+  ],
+  "interactions": [
+    "Production API client/normalizer and Settings-owned hook consuming synthetic GET /api/truenas/connections in the real ConnectionEditor and TrueNASCredentialSlot.",
+    "Desktop keyboard Space activation and input edits; 320px touch taps and edits. Draft host, port, pin and verification changes update the same live status without a probe, preview, save or off-origin request.",
+    "Accessible field name/descriptions, 44px checkbox labels, no page horizontal overflow, zero page/console errors, and browser/server cleanup.",
+    "Five captures opened natively and inspected: full notice wrapping, control separation and contrasting blue/amber/red policies at desktop and 320px."
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 980
+    },
+    {
+      "width": 320,
+      "height": 980
+    }
+  ],
+  "verified_at": "2026-10-18T17:14:08Z",
+  "browser": {
+    "client": "Playwright 1.56.1",
+    "chromium": "141.0.7390.37"
+  },
+  "source_proof_receipt": "source-5_zq7444",
+  "compiler_binding": {
+    "source_sha": "a6c728aba4c96bd9f02935df695fcd65ef66dd72",
+    "inputs": 3001,
+    "artifacts": 3,
+    "all_input_and_artifact_hashes_verified": true
+  },
+  "captures": [
+    {
+      "file": "1360-chain-and-pin.png",
+      "viewport": {
+        "width": 1360,
+        "height": 980
+      },
+      "name": "chain-and-pin",
+      "bytes": 108520,
+      "sha256": "6297a749f9c5aca1af97cacb88ed16b5a323fc3a706ae50d4ebbda6cabe1e425"
+    },
+    {
+      "file": "1360-http-overrides-checkbox.png",
+      "viewport": {
+        "width": 1360,
+        "height": 980
+      },
+      "name": "http-overrides-checkbox",
+      "bytes": 105899,
+      "sha256": "1c9f1159dcd93f58cd2582a8c7e28f8cb0486907e5629a8222be44b302412e69"
+    },
+    {
+      "file": "320-chain-and-pin.png",
+      "viewport": {
+        "width": 320,
+        "height": 980
+      },
+      "name": "chain-and-pin",
+      "bytes": 70051,
+      "sha256": "86a605ab55a60403162b84a0d97d7729d7c037b9cb92f9ad3f3212b9fc5490af"
+    },
+    {
+      "file": "320-pin-only.png",
+      "viewport": {
+        "width": 320,
+        "height": 980
+      },
+      "name": "pin-only",
+      "bytes": 66617,
+      "sha256": "a239fba7e82bf3e57ad65cd6145e8929157720848f727ea81bd0063565123ed3"
+    },
+    {
+      "file": "320-http-overrides-checkbox.png",
+      "viewport": {
+        "width": 320,
+        "height": 980
+      },
+      "name": "http-overrides-checkbox",
+      "bytes": 66808,
+      "sha256": "c57b754f8fba76d09ab3a3d6bc4431e0af79ff819bdeef5fffca49cd3688bb8d"
+    }
+  ],
+  "limitations": [
+    "The existing saved API-key placeholder clips at 320px, with its separate retained-key help readable; not changed by this candidate.",
+    "Single-line pin inputs scroll their values horizontally, as standard editable controls; no claim that a full colon-delimited pin fits simultaneously on a phone.",
+    "Synthetic local config and draft editing only. No real TLS handshake, certificate renewal, appliance, save/probe, installed monitoring, release or screen-reader speech proof.",
+    "The narrow captures focus on controls/policy cards; the form-only footnote was checked through the real DOM description and is visibly reviewed on desktop."
+  ]
+}
