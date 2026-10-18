@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "d03b9fe2adbe817c77cf75e8af7f119bfedbfcfb",
+  "verified_at": "2026-10-18T10:01:12.334Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "a7ecf2c972bdc45628e4e6c0f604d38a4b11712047a9dcc9a73bda7f71f37c86"
+  },
+  "routes": [
+    "/browser-tests/apprise-transport.html (production Notifications tab through local HTTP)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Source d03b9fe2adbe817c77cf75e8af7f119bfedbfcfb: real delivery API reader/normalizer, notification hook, Notifications tab and CSS. All 2982 input and five artifact hashes match. Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37. Desktop light and 320px dark touch contexts.",
+    "Six unchanged application-produced synthetic rows: authentication, configuration and rejected failures stop at attempt 1 of 3; connectivity and server errors remain retryable after attempt 1; connectivity at attempt 3 of 3 exhausts its budget. The initial list has four terminal badges and two Retrying badges, never Delivered.",
+    "Read-only Refresh isolates the genuine exhausted case and two pending retries, then the three early terminal cases. Every terminal badge says Failed, no further retries without asserting an exhausted budget. Existing failure classifications and error details remain visible.",
+    "The retention description names the exact terminal badge for 30 days and other completed attempts for seven days, and states that Test sends are not listed. Captures show all three rows in each isolated state without horizontal clipping.",
+    "No page errors, writes or off-origin requests. Both browsers and the local server close after the pass. This establishes the presentation repair, not ordinary alert generation, recipient delivery or installed recovery."
+  ],
+  "interactions": [
+    "Focus the named activity list and press End; keyboard scrolling moves the list at both widths. Refresh delivery status uses only GET reads.",
+    "Refresh from six rows to the three control rows, then to three early-terminal rows. Wait for the returned early classification before strict badge counts, rather than accepting the old equal row count.",
+    "Capture control and early-terminal states at each width. Open all four actual capture files with the native image tool and inspect their pixels."
+  ]
+}
