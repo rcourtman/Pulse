@@ -1,8 +1,8 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "13c4da72f93ec5a51ccdeea826366a9cfe57e984",
-  "verified_at": "2026-10-18T02:56:13.206240+00:00",
+  "base_sha": "b5bb3a4597c9d461666776b15736355268ddc30a",
+  "verified_at": "2026-10-18T02:56:13.206240Z",
   "changed_paths": [
     "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx"
   ],
@@ -47,6 +47,7 @@
   "limits": [
     "The final suite-wide unexpected-resource assertion counted one local GET /favicon.ico 404. All six journeys, text-range/scroll geometry, exact transport, trust preservation, save/cancel/focus and stale-result assertions completed before that assertion.",
     "Accept the six completed UI cases; retain exit 1 and the favicon-only harness failure. It is not an application API, TLS, permission, browser-execution or cleanup refusal. No browser journey was replayed just to obtain a zero process exit.",
-    "A source-bound consuming fixture, not a live PVE/PBS/PMG operation or proof of ACME/new-member/provisioning recovery. Containing source build/type/lint/unit/budget proof follows on the committed candidate."
+    "A source-bound consuming fixture, not a live PVE/PBS/PMG operation or proof of ACME/new-member/provisioning recovery. Containing source build/type/lint/unit/budget proof follows on the committed candidate.",
+    "The first receipt used an equivalent +00:00 timestamp that the guard does not accept. This receipt-only correction uses UTC Z and its own parent; verified source contents and the six completed browser cases are unchanged, not replayed."
   ]
 }
