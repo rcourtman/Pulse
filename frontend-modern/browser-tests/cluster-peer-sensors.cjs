@@ -43,10 +43,16 @@ const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).d
       await page.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
       page.on('request',req=>{if(req.url().includes('/api/metrics-store/history')) requests.push(req.url());});
       await page.goto(origin+'/browser-tests/cluster-peer-sensors.html');
+      if (name === 'narrow') {
+        const toggle = page.getByTestId('history-phone-toggle');
+        await toggle.click();
+        assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+      }
       const steps=[];
       for (const state of ['id_rsa','denied','recovered','id_ed25519','stale','foreign','local']) {
         await page.getByRole('button',{name:state,exact:true}).click();
         const thermals = page.locator('[data-history-group="thermals"]');
+        await thermals.scrollIntoViewIfNeeded();
         await thermals.getByText('No stored history in this range',{exact:true}).waitFor();
         const current = thermals.locator('[data-history-current="temperature"]');
         const expected = ['denied','stale','foreign'].includes(state)?null:state==='local'?'70°C':'55°C';
