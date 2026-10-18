@@ -50,9 +50,9 @@ Native raw evidence is retained under
 ## Absolute SLO verification
 
 The optional `Workload chart 90ms SLO` job in Build and Test is the repeatable
-proof surface. A fresh hosted VM compiles base and candidate API test
-executables before timing, records their committed HEAD/tree and binary
-hashes, and observes idle capacity before each process. CPU, guest, swap and
+proof surface. A fresh hosted VM compiles the candidate API test executable
+before timing, records its committed HEAD/tree and binary hash, and observes
+idle capacity before the process. CPU, guest, swap and
 pressure samples remain in the `chart-latency` artifact alongside raw output
 and post-measurement samples. The candidate must execute exactly one fresh
 200-sample workload-chart test and report the existing 90 ms budget; skipped
@@ -65,3 +65,26 @@ diagnostic benchmark mean for those percentiles. The earlier historical
 12.72% comparison remains preserved; changed harness boundaries cannot
 retroactively resolve it. Broader performance headroom remains governed by
 the existing L10 follow-up.
+
+## Retained adverse evidence
+
+The initial hosted attempt at head `2a77054035513eabc884135d3a8c19fc76e0956b`
+passed its pre-run idle window, then observed 25.5% and 24.6% competing CPU
+during the baseline process. Its 138.45634 ms p95 used the ordinary 550 ms
+envelope and is not a valid idle-worker result. The candidate produced zero
+samples because the initial proof stopped on that context failure. See
+[job 117757206920](https://github.com/rcourtman/Pulse/actions/runs/39153766278/job/117757206920)
+and [raw artifact 12147832177](https://github.com/rcourtman/Pulse/actions/runs/39153766278/artifacts/12147832177).
+
+Absolute verification now runs the candidate directly; the existing paired
+benchmark job retains relative context. The sampler also retains per-process
+CPU names/counters and the measurement's I/O counters. It requires quiet I/O
+before admission and keeps the test's own I/O in its measured latency rather
+than classifying every I/O wait as an unrelated workload.
+
+A separate snapshot-safe fleet-tier-pruning experiment passed the full metrics
+suite. Ten alternating current-source comparisons measured 196.1 ms versus
+179.8 ms (p=0.063), with 0.20% more bytes and 0.07% more allocations. This
+shared-worker result is inconclusive; the experiment was reverted and its raw
+samples remain under the native proof directory. It establishes no speedup or
+SLO result.

@@ -69,52 +69,103 @@ def ticks(pid):
         return None
 
 
+def process_counters(root=Path('/proc')):
+    counters = {}
+    for path in root.iterdir():
+        if not path.name.isdigit():
+            continue
+        try:
+            name, tail = (path / 'stat').read_text().rsplit(')', 1)
+            fields = tail.split()
+            counters[int(path.name)] = dict(name=name.split('(', 1)[1],
+                                            ticks=int(fields[11]) + int(fields[12]),
+                                            start=fields[19])
+        except (OSError, ValueError, IndexError):
+            continue
+    return counters
+
+
+def background_processes(before, after, measurement_pid, total_ticks):
+    rows = []
+    if total_ticks <= 0:
+        return rows
+    for pid, current in after.items():
+        if pid == measurement_pid:
+            continue
+        previous = before.get(pid, {})
+        previous_ticks = previous.get('ticks', 0) if previous.get('start') == current['start'] else 0
+        delta = current['ticks'] - previous_ticks
+        if delta > 0:
+            rows.append(dict(pid=pid, name=current['name'], cpu_pct=100 * delta / total_ticks))
+    return sorted(rows, key=lambda row: row['cpu_pct'], reverse=True)[:5]
+
+
+def process_io(pid):
+    try:
+        fields = dict(line.split(': ') for line in Path(f'/proc/{pid}/io').read_text().splitlines())
+        return {key: int(fields[key]) for key in ('read_bytes', 'write_bytes')}
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def competing_capacity(row):
+    # The measured SQLite process performs I/O. Keep I/O wait in the raw
+    # receipt and latency, rather than mistaking its own reads for contention.
+    # Admission still requires quiet I/O before the process starts.
+    return (row['background_busy_pct'] > 10 or row['guest_pct'] > 2
+            or row['steal_pct'] > 0.1 or row['swap_pages'] != 0)
+
+
 def digest(path):
     with path.open('rb') as source:
         return hashlib.file_digest(source, 'sha256').hexdigest()
 
 
-def validate_output(text, returncode, strict):
+def validate_output(text, returncode):
     if returncode != 0:
         raise RuntimeError(f'SLO process exited {returncode}')
     passes = re.findall(r'^--- PASS: TestSLO_WorkloadCharts \(', text, re.MULTILINE)
     if len(passes) != 1 or re.search(r'^--- SKIP: TestSLO_WorkloadCharts ', text, re.MULTILINE):
         raise RuntimeError('SLO did not pass, including a skipped or missing test')
     reports = re.findall(r'charts/workloads p50=\S+ p95=\S+ p99=\S+ SLO=(\S+)', text)
-    if len(reports) != 1 or (strict and reports[0] != '90ms'):
+    if len(reports) != 1 or reports[0] != '90ms':
         raise RuntimeError(f'Expected one explicit SLO report at the selected budget, got {reports}')
 
 
-def measure(binary, prefix, strict):
+def measure(binary, prefix):
     identity = digest(binary)
     wait_idle(prefix)
     # Preserve the real Actions identity, without forwarding runner credentials.
     env = {key: os.environ[key] for key in (
         'PATH', 'HOME', 'TMPDIR', 'TZ', 'GOMAXPROCS', 'CI',
         'GITHUB_ACTIONS', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT') if key in os.environ}
-    if strict:
-        env['PULSE_STRICT_LOCAL_API_SLOS'] = 'true'
+    env['PULSE_STRICT_LOCAL_API_SLOS'] = 'true'
     command = [str(binary), '-test.run=^TestSLO_WorkloadCharts$', '-test.v',
                '-test.count=1', '-test.cpu=2', '-test.timeout=5m']
     capacity_errors = []
     with prefix.with_suffix('.log').open('w') as log, prefix.with_suffix('.cpu.jsonl').open('w') as receipt:
         before = snapshot()
+        processes_before = process_counters()
         process = subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT)
         own_before = 0
         while process.poll() is None:
             time.sleep(1)
             after = snapshot()
+            processes_after = process_counters()
             own_after = ticks(process.pid)
             row = interval(before, after)
+            row['measurement_io_bytes'] = process_io(process.pid)
+            row['background_processes'] = background_processes(
+                processes_before, processes_after, process.pid, row['total_ticks'])
             if own_before is not None and own_after is not None and row['total_ticks'] > 0:
                 row['measurement_cpu_pct'] = 100 * (own_after - own_before) / row['total_ticks']
                 row['background_busy_pct'] = max(0, row['busy_pct'] - row['measurement_cpu_pct'])
-                if (row['background_busy_pct'] > 10 or row['guest_pct'] > 2
-                        or row['steal_pct'] > 0.1 or row['iowait_pct'] > 1 or row['swap_pages']):
+                if competing_capacity(row):
                     capacity_errors.append(row)
             receipt.write(json.dumps(row) + '\n')
             receipt.flush()
             before, own_before = after, own_after
+            processes_before = processes_after
         returncode = process.wait()
     with prefix.with_suffix('.after.jsonl').open('w') as receipt:
         before = snapshot()
@@ -130,22 +181,20 @@ def measure(binary, prefix, strict):
     print(text, flush=True)
     if digest(binary) != identity:
         raise RuntimeError('Measured executable changed')
-    validate_output(text, returncode, strict)
+    validate_output(text, returncode)
     if capacity_errors:
         raise RuntimeError('Background CPU or guest/steal activity invalidated the idle measurement')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--baseline', type=Path, required=True)
     parser.add_argument('--candidate', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
-    # Baseline uses its ordinary hosted envelope only as timing context. The
-    # candidate must pass the existing local 90 ms budget without any skip.
-    measure(args.baseline.resolve(), args.output / 'baseline', strict=False)
-    measure(args.candidate.resolve(), args.output / 'candidate', strict=True)
+    # Absolute qualification executes the candidate directly. The separate
+    # paired benchmark job owns relative comparisons and baseline context.
+    measure(args.candidate.resolve(), args.output / 'candidate')
 
 
 if __name__ == '__main__':

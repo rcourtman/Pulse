@@ -772,13 +772,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Checkout pull request base
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: chart-baseline
-
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -788,17 +781,15 @@ jobs:
       - name: Check idle proof guards
         run: python3 -m unittest discover -s internal/api/testdata -p test_chart_latency_proof.py -v
 
-      - name: Compile fixed baseline and candidate executables
+      - name: Compile fixed candidate executable
         run: |
           set -euo pipefail
           proof_dir="$RUNNER_TEMP/chart-latency"
           mkdir -p "$proof_dir"
-          for source in chart-baseline .; do
-            mkdir -p "$source/internal/api/frontend-modern/dist"
-            [ -f "$source/internal/api/frontend-modern/dist/index.html" ] || \
-              printf '<!doctype html><title>ci embed stub</title>\n' \
-                > "$source/internal/api/frontend-modern/dist/index.html"
-          done
+          mkdir -p internal/api/frontend-modern/dist
+          [ -f internal/api/frontend-modern/dist/index.html ] || \
+            printf '<!doctype html><title>ci embed stub</title>\n' \
+              > internal/api/frontend-modern/dist/index.html
           {
             date -u +%FT%TZ
             go version
@@ -806,14 +797,11 @@ jobs:
             lscpu
             printf 'GOMAXPROCS=%s\nGITHUB_RUN_ID=%s\nGITHUB_RUN_ATTEMPT=%s\n' \
               "$GOMAXPROCS" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
-            printf 'baseline HEAD/tree:\n'
-            git -C chart-baseline rev-parse HEAD HEAD^{tree}
             printf 'candidate HEAD/tree:\n'
             git rev-parse HEAD HEAD^{tree}
             printf 'candidate source changes:\n'
             git diff --exit-code
           } > "$proof_dir/metadata.txt"
-          (cd chart-baseline && go test -p 1 ./internal/api -run '^$' -c -o "$proof_dir/baseline-api.test")
           go test -p 1 ./internal/api -run '^$' -c -o "$proof_dir/candidate-api.test"
           sha256sum "$proof_dir/"*.test >> "$proof_dir/metadata.txt"
 
@@ -823,7 +811,6 @@ jobs:
       - name: Verify chart latency on observed idle capacity
         run: |
           python3 internal/api/testdata/chart_latency_proof.py \
-            --baseline "$RUNNER_TEMP/chart-latency/baseline-api.test" \
             --candidate "$RUNNER_TEMP/chart-latency/candidate-api.test" \
             --output "$RUNNER_TEMP/chart-latency/samples"
 

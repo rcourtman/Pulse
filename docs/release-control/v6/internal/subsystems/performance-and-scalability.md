@@ -1873,11 +1873,17 @@ dashboard-specific overview, trend, or summary transport.
     enforce the existing 90 ms local budget, including on hosted runners,
     without changing their actual runner identity or accepting a skipped
     test. Ordinary hosted execution retains its 550 ms envelope. The optional
-    Build and Test chart-latency job compiles fixed base/candidate executables
+    Build and Test chart-latency job compiles a fixed candidate executable
     before measuring, requires observed idle capacity, and retains executable
     hashes, raw percentiles, and CPU/guest/swap evidence before, during and
-    after measurement. Its base timing is context under the ordinary envelope;
-    only the candidate's explicit 90 ms report establishes the local SLO.
+    after measurement. It executes the candidate directly; relative baseline
+    comparisons belong to the separate paired benchmark job. A baseline
+    failure cannot suppress the candidate's absolute check. The proof requires
+    quiet I/O before starting; the measured process's own I/O remains part of
+    its latency, with I/O wait and process I/O counters retained for diagnosis.
+    Competing CPU, guest/steal or swap activity invalidates the measurement,
+    and process CPU counters identify the largest observed background users.
+    Only the explicit 90 ms report establishes the local SLO.
     This evidence does not replace required source checks or release gates.
 31. Keep the retired dashboard overview route absent from the protected hot
 path. `frontend-modern/src/pages/Dashboard.tsx`,
