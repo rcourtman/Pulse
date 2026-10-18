@@ -268,7 +268,9 @@ describe('AlertDeliveryLogCard', () => {
       />
     ));
 
-    expect(screen.getByText(/Other completed attempts are retained for 7 days/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Other completed attempts are retained for 7 days/),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/Entries marked "Failed, no further retries" remain available for 30 days/),
     ).toBeInTheDocument();
