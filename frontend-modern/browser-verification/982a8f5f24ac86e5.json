@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "a66ae5ce862eabc03a34ddc57a1484d83c2f68c5",
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx": "3342bda2ace9d48d942c37031d72d478f85959787a17097d97c2853067d486fd"
+  },
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx"
+  ],
+  "routes": [
+    "Existing Settings / Infrastructure saved PVE, PBS and PMG connection editors, mounted through production NodeCredentialSlot and useNodeModalState in an offline fixture"
+  ],
+  "states": [
+    "Pinned certificate with verification checked or unchecked: a trusted CA chain cannot satisfy a different pin",
+    "No pin with verification checked: runtime-trusted, valid hostname-matching chain required",
+    "No pin with verification unchecked: server identity not verified, with credential impersonation warning",
+    "Explicit HTTP endpoint with a checked box and supplied pin: neither provides TLS protection",
+    "Form settings are not a successful connection test; PVE member-specific pins remain distinct"
+  ],
+  "interactions": [
+    "Desktop keyboard Space/Tab/Enter and phone touch change the existing controls, with live local accessible policy descriptions",
+    "Explicit fixture replacement pin and verification preference are saved to the original source target; no credentials issued/replaced or API call",
+    "PVE/PBS/PMG collection choices remain unchanged, including disabled PVE SMART",
+    "Explicit fixture HTTP/HTTPS and empty/present-pin edits update the policy without hidden saves or trust-field changes",
+    "All sixteen final captures opened with the native image tool: full readable guidance, distinct pin/chain/red-warning states, no clipped copy or page horizontal overflow"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-14T18:08:45Z",
+  "engines": [
+    "Playwright 1.56.1 / chromium 141.0.7390.37",
+    "Playwright 1.56.1 / webkit 26.0"
+  ],
+  "scope": "Eight synthetic consuming journeys / 24 states; all sixteen final captures opened natively. Exact source/style/artifact hashes verified. Browser results are not native TLS recovery, authentication acceptance, installed persistence, reporter resolution or release availability."
+}

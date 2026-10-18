@@ -8,10 +8,10 @@
 import { createSignal, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
 import { Route, Router } from '@solidjs/router';
+import { DarkModeContext, WebSocketContext, type WebSocketStore } from '../src/contexts/appRuntime';
 
 import { ProxmoxBackupServersTable } from '../src/features/proxmox/ProxmoxBackupServersTable';
 import type { Resource } from '../src/types/resource';
-import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
 import '../src/index.css';
 
 const sharedAgent = { agentId: 'agent-proxback', hostname: 'proxback-vm' };
@@ -119,7 +119,7 @@ const Fixture = () => {
   const [servers, setServers] = createSignal(structuredClone(resources));
   const [snapshot, setSnapshot] = createSignal(0);
   // Simulates a snapshot in which the merged host correlation target is
-  // transiently absent, which is what gates the drawer's history charts.
+  // transiently absent, which is what gates the drawer's History tab.
   const [dropMetricsTarget, setDropMetricsTarget] = createSignal(false);
   // Simulates a live refresh that briefly omits the correlated host row while
   // the PBS server row remains, which is what flipped the drawer's Identity and
@@ -196,17 +196,20 @@ const Fixture = () => {
   );
 };
 
-// The drawer's Overview reads active alerts from the app runtime, so the
-// fixture supplies an explicit offline context (no live WebSocket), as the
-// other drawer fixtures do. Without it the drawer threw before rendering.
 render(
   () => (
     <WebSocketContext.Provider
-      value={{ state: { pmg: [] }, activeAlerts: {}, connected: () => false } as any}
+      value={
+        {
+          activeAlerts: {},
+          state: { pmg: [] },
+          connected: () => false,
+        } as unknown as WebSocketStore
+      }
     >
       <DarkModeContext.Provider value={() => document.documentElement.classList.contains('dark')}>
         <Router>
-          <Route path="/*" component={Fixture} />
+          <Route path="*" component={Fixture} />
         </Router>
       </DarkModeContext.Provider>
     </WebSocketContext.Provider>

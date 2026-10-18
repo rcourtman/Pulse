@@ -18,6 +18,8 @@ on:
       - 'scripts/tests/test_e2e_test_images.py'
       - 'scripts/collect_e2e_container_logs.py'
       - 'scripts/tests/test_e2e_container_logs.py'
+      - 'scripts/ci_browser_proof_only.py'
+      - 'scripts/tests/test_ci_browser_proof_only.py'
   push:
     branches:
       - main
@@ -36,6 +38,8 @@ on:
       - 'scripts/tests/test_e2e_test_images.py'
       - 'scripts/collect_e2e_container_logs.py'
       - 'scripts/tests/test_e2e_container_logs.py'
+      - 'scripts/ci_browser_proof_only.py'
+      - 'scripts/tests/test_ci_browser_proof_only.py'
   workflow_dispatch:
 
 # Let branch runs finish so busy main and release branches retain verdicts.
@@ -49,8 +53,39 @@ permissions:
   contents: read
 
 jobs:
+  scope:
+    name: Detect browser receipt-only changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      proof_only: ${{ steps.diff.outputs.proof_only }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Check shipped docs before dependency work
+        run: python3 scripts/check_docs_mirror.py
+
+      - name: Validate browser receipt-only CI admission
+        run: python3 scripts/tests/test_ci_browser_proof_only.py
+
+      - name: Read the complete tree diff
+        id: diff
+        env:
+          DIFF_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          DIFF_HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          proof_only=$(python3 scripts/ci_browser_proof_only.py --base "$DIFF_BASE" --head "$DIFF_HEAD")
+          echo "proof_only=$proof_only" >> "$GITHUB_OUTPUT"
+
   tier-selection:
     name: Validate E2E tier selection
+    needs: scope
+    if: needs.scope.outputs.proof_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -73,11 +108,15 @@ jobs:
         run: python3 scripts/tests/test_playwright_acquisition.py
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: 'npm'
           cache-dependency-path: tests/integration/package-lock.json
+
+      - name: Validate read-only auth renderer diagnostics
+        working-directory: tests/integration
+        run: node --test scripts/capture-auth-renderer.test.mjs
 
       - name: Validate telemetry schema version parity
         working-directory: tests/integration
@@ -103,6 +142,8 @@ jobs:
 
   offline-org-provisioning:
     name: Offline Organization provisioning
+    needs: scope
+    if: needs.scope.outputs.proof_only != 'true'
     # Fixture acceptance only, not quarantine promotion or private RBAC proof.
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -116,7 +157,7 @@ jobs:
         run: python3 scripts/check_docs_mirror.py
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -160,7 +201,7 @@ jobs:
           --grep 'Scenario 1:|create, update, member manage' --workers=1 --retries=0
       - name: Upload offline provisioning failure report
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: offline-org-provisioning-report
           path: tests/integration/playwright-report/multi-tenant-diagnostic/
@@ -188,7 +229,7 @@ jobs:
 
       - name: Upload this run's exact test images
         id: images
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-test-images-${{ github.sha }}-${{ github.run_attempt }}
           path: |
@@ -218,7 +259,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -246,7 +287,7 @@ jobs:
         run: npm ci
 
       - name: Download this run's exact test images
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.test-images.outputs.artifact-id }}
           path: ${{ runner.temp }}/pulse-e2e-images
@@ -280,7 +321,7 @@ jobs:
 
       - name: Upload failed fixture admission
         if: ${{ !cancelled() && steps.fixture.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fixture-readiness-shard-${{ matrix.shard }}
           path: |
@@ -319,7 +360,7 @@ jobs:
       # reach the job deadline. Probation must not take its receipts with it.
       - name: Upload Playwright report
         if: ${{ !cancelled() && steps.stable.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-shard-${{ matrix.shard }}
           path: tests/integration/playwright-report/
@@ -329,7 +370,7 @@ jobs:
       # Keep only the separate machine-readable result here.
       - name: Upload JUnit results
         if: ${{ !cancelled() && steps.stable.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-results-shard-${{ matrix.shard }}
           path: tests/integration/test-results/junit.xml
@@ -384,7 +425,7 @@ jobs:
       # the combined Actions log stays small enough to inspect its verdicts.
       - name: Upload complete container diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-container-logs-shard-${{ matrix.shard }}-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pulse-e2e-container-logs/
@@ -395,7 +436,7 @@ jobs:
       # failure() never fires for these; key off the step outcome instead.
       - name: Upload probation Playwright report
         if: ${{ !cancelled() && steps.probation.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-probation-shard-${{ matrix.shard }}
           path: tests/integration/playwright-report-probation/
@@ -403,7 +444,7 @@ jobs:
 
       - name: Upload probation JUnit results
         if: ${{ !cancelled() && steps.probation.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-results-probation-shard-${{ matrix.shard }}
           path: tests/integration/test-results-probation/junit.xml
@@ -428,7 +469,7 @@ jobs:
         run: python3 scripts/check_docs_mirror.py
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           package-manager-cache: false
@@ -450,7 +491,7 @@ jobs:
         run: npm ci
 
       - name: Download this run's exact test images
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.test-images.outputs.artifact-id }}
           path: ${{ runner.temp }}/pulse-e2e-images
@@ -490,7 +531,7 @@ jobs:
 
       - name: Upload complete container diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-container-logs-agent-registration-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pulse-e2e-container-logs/
@@ -499,7 +540,7 @@ jobs:
 
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-agent-registration
           path: tests/integration/playwright-report/
@@ -507,7 +548,7 @@ jobs:
 
       - name: Upload test videos and screenshots
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-failures-agent-registration
           path: tests/integration/test-results/
@@ -518,6 +559,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     needs:
+      - scope
       - tier-selection
       - test-images
       - e2e
@@ -530,7 +572,29 @@ jobs:
       # this verdict. Mechanism and promotion rule: PROBATION_SPECS in
       # tests/integration/e2e-tiering.mjs.
       - name: Check E2E results
+        env:
+          PROOF_ONLY: ${{ needs.scope.outputs.proof_only }}
         run: |
+          if [ "${{ needs.scope.result }}" != "success" ]; then
+            echo "E2E change-scope admission did not pass."
+            exit 1
+          fi
+          if [ "$PROOF_ONLY" = "true" ]; then
+            # A skip is not a test pass. Require the expected all-skipped
+            # topology; never use a receipt to clear a failed runtime job.
+            for result in "${{ needs.tier-selection.result }}" "${{ needs.test-images.result }}" "${{ needs.e2e.result }}" "${{ needs.agent-registration.result }}"; do
+              if [ "$result" != "skipped" ]; then
+                echo "Unexpected runtime result for a browser receipt-only diff: $result"
+                exit 1
+              fi
+            done
+            echo "Browser receipt-only tree diff; runtime E2E is not applicable. Canonical Governance still validates evidence."
+            exit 0
+          fi
+          if [ "$PROOF_ONLY" != "false" ]; then
+            echo "E2E change scope is unknown; no runtime success is established."
+            exit 1
+          fi
           if [ "${{ needs.tier-selection.result }}" != "success" ]; then
             echo "E2E tier selection is invalid (result: ${{ needs.tier-selection.result }})"
             exit 1

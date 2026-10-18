@@ -320,6 +320,117 @@ test("additional topic classification is explicit and fail-quiet for legacy form
   );
 });
 
+test("edited form headings accept Markdown indentation and closing hashes", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  for (const newline of ["\n", "\r\n"]) {
+    for (let level = 1; level <= 6; level += 1) {
+      for (let indent = 0; indent <= 3; indent += 1) {
+        for (const closing of ["", " #", " ######## \t"]) {
+          const heading = (name) => " ".repeat(indent) + "#".repeat(level) + "\t" + name + closing;
+          const body = [heading("Pulse version"), "6.5.0", "",
+            heading("Feedback type"), "Documentation issue", "",
+            heading("Additional actionable topics"), "The second host loses its Docker inventory."]
+            .join(newline);
+          assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0", body);
+          assert.equal(classifyV6FeedbackType(body), "documentation", body);
+          assert.equal(classifyAdditionalActionableTopics(body), true, body);
+        }
+      }
+    }
+  }
+});
+
+test("closing hashes and indentation do not let neighbouring fields become topics", () => {
+  for (const followingField of ["Pulse version", "Additional context", "Logs, screenshots, or diagnostics", "Confirmations"]) {
+    const body = ["  ### Additional actionable topics ###", "None", "",
+      `   ## ${followingField} ####`, "An error outside the declared topic field."].join("\n");
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), false, body);
+  }
+  const body = [" ### Additional actionable topics #", "None", "",
+    "  #### Separate backup problem ###", "Backups belong to the wrong host.", "",
+    "   ### Pulse version ####", "6.5.0"].join("\n");
+  assert.equal(triage.internals.classifyAdditionalActionableTopics(body), true);
+});
+
+test("plain hash-prefixed text cannot declare issue-form metadata", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  for (const prefix of ["####### ", "###", "    ### ", "\t### ", "> ### "]) {
+    const body = [prefix + "Pulse version", "6.5.0", "",
+      prefix + "Feedback type", "Bug / regression", "",
+      prefix + "Additional actionable topics", "Copied template text."].join("\n");
+    assert.equal(extractPulseVersion("No version in title", body), null, body);
+    assert.equal(classifyV6FeedbackType(body), null, body);
+    assert.equal(classifyAdditionalActionableTopics(body), null, body);
+  }
+  // A seven-hash line inside a topic is ordinary field content, not a boundary.
+  assert.equal(classifyAdditionalActionableTopics(
+    "### Additional actionable topics\nNone\n####### Pulse version\nA second symptom.\n"
+  ), true);
+});
+
+test("only a separated final hash run closes an issue-form heading", () => {
+  for (const suffix of ["#", " ### example", " ## #"]) {
+    const body = `### Additional actionable topics${suffix}\nA second bug.\n`;
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), null, body);
+  }
+});
+
+test("edited headings stay hidden inside comments and pasted code", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  const copied = [" ### Pulse version ###", "6.4.1", "  ### Feedback type ###",
+    "Bug / regression", "   ### Additional actionable topics ###", "Copied example."].join("\n");
+  for (const [open, close] of [["<!--", "-->"], ["```markdown", "```"], ["~~~markdown", "~~~"]]) {
+    const body = [open, copied, close, "  ### Pulse version ###", "unknown",
+      "  ### Feedback type ###", "Documentation issue", "  ### Additional actionable topics ###", "None"]
+      .join("\n");
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), null, body);
+    assert.equal(classifyV6FeedbackType(body), "documentation", body);
+    assert.equal(classifyAdditionalActionableTopics(body), false, body);
+  }
+});
+
+test("edited version headings retain fenced values and authoritative unknowns", () => {
+  for (const value of ["6.5.0-rc.1", "unknown", "6.5"]) {
+    const body = [" ### Pulse version ###", "```text", value, "```", "",
+      "  ### Agent version ###", "6.4.5"].join("\n");
+    assert.equal(triage.internals.extractPulseVersion("Upgrade from v6.4.5", body),
+      value === "6.5.0-rc.1" ? value : null, body);
+  }
+});
+
+test("label consumer uses edited headings without changing Community-owned state", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2900, title: "Upgrade from v6.4.5",
+    body: " ### Feedback type ###\nBug / regression\n  ### Pulse version ###\n6.5.0\n" +
+      "   ### Additional actionable topics ###\nThe second host loses Docker inventory.\n",
+    labels: ["enhancement", "needs-retest-on-latest", "needs-human", "operator-reviewed", "affects-6.4.5"]
+      .map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels),
+    [["affects-6.5.0", "bug", "needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2900, 2900]);
+});
+
+test("invalid headings cannot create classification or decomposition mutations", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2901, title: "An example in a documentation report",
+    body: "####### Feedback type\nBug / regression\n####### Pulse version\n6.5.0\n" +
+      "####### Additional actionable topics\nCopied template text.\n",
+    labels: ["documentation", "needs-retest-on-latest", "needs-human", "operator-reviewed"]
+      .map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createLabel, []);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+});
+
 test("topic classification reads later paragraphs after an empty first line", () => {
   for (const firstLine of ["None", "<!-- List distinct topics here. -->", "_No response_"]) {
     const body = [
@@ -365,6 +476,139 @@ test("hidden template fields cannot declare topics or override feedback type", (
   ), "documentation");
 });
 
+test("literal HTML comments in pasted code cannot erase later visible form fields", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  for (const newline of ["\n", "\r\n"]) {
+    for (const [open, close] of [["```html", "```"], ["~~~~html", "~~~~"],
+      ["   ````text", "   ````"]]) {
+      for (const marker of ["<!-- unfinished response", "<!-- closed response -->", "<!<!-- -->-->"]) {
+        const body = [open, marker, "### Pulse version", "6.4.1", close, "",
+          "### Pulse version", "6.5.0", "### Feedback type", "Documentation issue",
+          "### Additional actionable topics", "Missing disk reading"].join(newline);
+        assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0", body);
+        assert.equal(classifyV6FeedbackType(body), "documentation", body);
+        assert.equal(classifyAdditionalActionableTopics(body), true, body);
+      }
+    }
+    for (const indent of ["    ", "\t"]) {
+      const body = [`${indent}<!-- copied log delimiter`, `${indent}Pulse version: 6.4.1`, "",
+        "### Pulse version", "6.5.0", "### Feedback type", "Documentation issue",
+        "### Additional actionable topics", "Missing disk reading"].join(newline);
+      assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0", body);
+      assert.equal(classifyV6FeedbackType(body), "documentation", body);
+      assert.equal(classifyAdditionalActionableTopics(body), true, body);
+    }
+  }
+});
+
+test("hidden comments still hide their contents even when they contain code fences", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  const hidden = ["<!-- hidden template", "```markdown", "### Pulse version", "6.4.1",
+    "### Feedback type", "Bug / regression", "### Additional actionable topics", "Copied topic", "```"];
+  const visible = ["### Pulse version", "6.5.0", "### Feedback type", "Documentation issue",
+    "### Additional actionable topics", "None"];
+  for (const newline of ["\n", "\r\n"]) {
+    const closed = [...hidden, "    -->", ...visible].join(newline);
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5", closed), "6.5.0");
+    assert.equal(classifyV6FeedbackType(closed), "documentation");
+    assert.equal(classifyAdditionalActionableTopics(closed), false);
+    const unfinished = [...hidden, ...visible].join(newline);
+    assert.equal(extractPulseVersion("Bug", unfinished), null);
+    assert.equal(classifyV6FeedbackType(unfinished), null);
+    assert.equal(classifyAdditionalActionableTopics(unfinished), null);
+  }
+});
+
+test("pasted HTML keeps genuine topic values without turning copied headings into fields", () => {
+  const body = ["### Additional actionable topics", "```html", "<!-- unmatched response marker",
+    "### Pulse version", "6.4.1", "```", "### Pulse version", "6.5.0"].join("\n");
+  assert.equal(triage.internals.classifyAdditionalActionableTopics(body), true);
+  assert.equal(triage.internals.extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0");
+});
+
+test("inline and quoted HTML literals cannot hide subsequent form declarations", () => {
+  const { extractPulseVersion, classifyV6FeedbackType, classifyAdditionalActionableTopics } = triage.internals;
+  for (const evidence of [
+    "The error includes `<!-- unfinished`.",
+    "The error includes ``a ` tick and <!-- unfinished``.",
+    "The error includes `<!-- first` and ``<!-- second``.",
+    "> ```html\n> <!-- unfinished\n> ### Pulse version\n> 6.4.1\n> ```",
+    "   > The response includes <!-- unfinished",
+    "The literal is \\<!-- unfinished.",
+  ]) {
+    for (const newline of ["\n", "\r\n"]) {
+      const body = ["### Existing evidence", evidence, "", "### Pulse version", "6.5.0",
+        "### Feedback type", "Documentation issue", "### Additional actionable topics",
+        "Storage History remains empty."].join("\n").replaceAll("\n", newline);
+      assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0", body);
+      assert.equal(classifyV6FeedbackType(body), "documentation", body);
+      assert.equal(classifyAdditionalActionableTopics(body), true, body);
+    }
+  }
+});
+
+test("an interrupted inline comment cannot turn an unclosed code fence into visible fields", () => {
+  const { extractPulseVersion, classifyV6FeedbackType, classifyAdditionalActionableTopics } = triage.internals;
+  for (const evidence of [
+    "A literal `<!-- unfinished` followed by <!--",
+    "A mismatched `<!-- opener`` remains text before a block quote",
+    "An escaped \\` backtick does not protect <!-- unfinished`",
+    "An even escape \\\\<!-- remains text before the quote",
+    "<!-- a hidden ` backtick is not an opener --> <!-- second hidden`",
+  ]) {
+    const body = [evidence, "> quoted text", "```", "### Pulse version", "6.4.1",
+      "### Feedback type", "Bug / regression", "### Additional actionable topics", "Copied topic",
+      "-->", "### Pulse version", "unknown", "### Feedback type", "Documentation issue",
+      "### Additional actionable topics", "None"].join("\n");
+    // GFM's block lexer puts every later line inside the unclosed fence.
+    // The previous scanner mistakenly treated an inline opener as a comment
+    // across those blocks, then accepted invisible headings after its close.
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), null, body);
+    assert.equal(classifyV6FeedbackType(body), null, body);
+    assert.equal(classifyAdditionalActionableTopics(body), null, body);
+    const visible = body + "\n```\n### Pulse version\n6.5.0\n" +
+      "### Feedback type\nDocumentation issue\n### Additional actionable topics\nNone";
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5", visible), "6.5.0", visible);
+    assert.equal(classifyV6FeedbackType(visible), "documentation", visible);
+    assert.equal(classifyAdditionalActionableTopics(visible), false, visible);
+  }
+});
+
+test("syncLabels preserves visible fields after inline HTML without new contact", async () => {
+  for (const evidence of ["Error: `<!-- unfinished`", "> <!-- unfinished response"]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2808, title: "Upgrade from v6.4.5",
+      body: ["### Existing evidence", evidence, "", "### Pulse version", "6.5.0",
+        "### Feedback type", "Bug / regression", "### Additional actionable topics", "Missing History"].join("\n"),
+      labels: ["needs-human", "needs-retest-on-latest", "operator-reviewed", "needs-version-info"]
+        .map(name => ({ name })) };
+    await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+    assert.deepEqual(calls.addLabels.flatMap(call => call.labels), ["affects-6.5.0", "bug", "needs-decomposition"]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["needs-version-info"]);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2808, 2808]);
+  }
+});
+
+test("syncLabels consumes real fields after pasted HTML without contact or state changes", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2801, title: "Upgrade from v6.4.5",
+    body: ["```html", "<!-- incomplete response", "### Pulse version", "6.4.1", "```",
+      "### Pulse version", "6.5.0", "### Feedback type", "Bug / regression",
+      "### Additional actionable topics", "Missing disk reading"].join("\n"),
+    labels: ["needs-human", "needs-retest-on-latest", "operator-reviewed", "needs-version-info"]
+      .map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels.flatMap(call => call.labels), ["affects-6.5.0", "bug", "needs-decomposition"]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["needs-version-info"]);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2801, 2801]);
+});
+
 test("a hidden hint or empty topic field is not an actionable declaration", () => {
   for (const value of ["", "<!-- A second bug. -->", "None\n\n<!-- Another topic. -->"]) {
     assert.equal(triage.internals.classifyAdditionalActionableTopics(
@@ -389,7 +633,7 @@ test("syncLabels surfaces newly added later-line topics without resetting Commun
     assert.deepEqual(calls.createComment, []);
     assert.deepEqual(calls.getLatestRelease, []);
     assert.deepEqual(calls.paginate, []);
-    assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2800]);
+    assert.deepEqual(calls.getIssue.map(call => call.issue_number), action === "reopened" ? [2800] : [2800, 2800]);
   }
 });
 
@@ -1090,7 +1334,7 @@ test("delayed events classify the current report and labels, not an old version"
   const { github, calls } = createGithub({ currentIssue });
   await syncLabels({ github, context: createContext({ issue: eventIssue }), core: createCore() });
 
-  assert.deepEqual(calls.getIssue, [{ owner: "rcourtman", repo: "Pulse", issue_number: 2800 }]);
+  assert.deepEqual(calls.getIssue, Array(2).fill({ owner: "rcourtman", repo: "Pulse", issue_number: 2800 }));
   assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
   assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
   assert.equal(calls.getLatestRelease.length, 0);
@@ -1179,3 +1423,354 @@ test("a mismatched current issue identity fails closed", async () => {
   assert.equal(calls.removeLabel.length, 0);
   assert.equal(calls.createComment.length, 0);
 });
+
+
+test("quoted and multiline inline-code versions cannot replace a legacy declaration", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const newline of ["\n", "\r\n"]) {
+    for (const copied of [
+      "> Copied old log\nPulse version: 6.4.5",
+      "Pasted text: `\nPulse version: 6.4.5\n`",
+      "Pasted text: **`\nPulse version: 6.4.5\n`**",
+      "- Copied old log\n  Pulse version: 6.4.5",
+      "<pre>\nPulse version: 6.4.5\n</pre>",
+    ]) {
+      const body = (copied + "\n\nPulse version: **`6.5.0`**").replaceAll("\n", newline);
+      assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0", body);
+      assert.equal(extractPulseVersion("Bug", copied.replaceAll("\n", newline)), null, copied);
+    }
+  }
+});
+
+test("raw HTML and nested headings cannot declare form metadata", () => {
+  const { extractPulseVersion, classifyV6FeedbackType, classifyAdditionalActionableTopics } = triage.internals;
+  const fields = "### Pulse version\n6.4.5\n### Feedback type\nBug / regression\n" +
+    "### Additional actionable topics\nCopied template text.";
+  for (const copied of [
+    "<div>\n" + fields + "\n</div>",
+    "<pre>\n" + fields + "\n</pre>",
+    "<script>\n" + fields + "\n</script>",
+    fields.split("\n").map(line => "> " + line).join("\n"),
+    "- Copied template\n\n" + fields.split("\n").map(line => "  " + line).join("\n"),
+  ]) {
+    assert.equal(extractPulseVersion("No declared version", copied), null, copied);
+    assert.equal(classifyV6FeedbackType(copied), null, copied);
+    assert.equal(classifyAdditionalActionableTopics(copied), null, copied);
+    const body = copied + "\n\n### Pulse version\nunknown\n### Feedback type\nDocumentation issue\n" +
+      "### Additional actionable topics\nNone";
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), null, body);
+    assert.equal(classifyV6FeedbackType(body), "documentation", body);
+    assert.equal(classifyAdditionalActionableTopics(body), false, body);
+  }
+});
+
+test("the actual label consumer keeps copied declarations from changing report or Community state", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2902, title: "Pasted old installer output",
+    body: "> Copied log\nPulse version: 6.4.5\n\n" +
+      "<div>\n### Feedback type\nBug / regression\n### Additional actionable topics\nExample\n</div>\n\n" +
+      "Pulse version: `6.5.0`",
+    labels: ["bug", "affects-6.4.5", "needs-version-info", "needs-retest-on-latest", "needs-human", "operator-reviewed"]
+      .map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2902, 2902]);
+});
+
+
+test("triage workflow prepares and checks the exact parser before minting its write token", () => {
+  const workflow = fs.readFileSync(path.resolve(__dirname, "../workflows/issue-version-label-sync.yml"), "utf8");
+  const install = workflow.indexOf("run: npm ci --ignore-scripts --no-audit --no-fund --prefix .github/scripts");
+  const check = workflow.indexOf("run: npm run test:triage --prefix .github/scripts");
+  const credential = workflow.indexOf("- name: Mint triage bot token");
+  assert.ok(install >= 0 && check > install && credential > check);
+  assert.match(workflow, /node-version: '24'/);
+  assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}/);
+  assert.match(workflow, /persist-credentials: false/);
+  for (const file of ["package.json", "package-lock.json", "issue-version-triage.test.cjs", "triage-comment-policy.test.cjs"]) {
+    assert.ok(workflow.includes(`.github/scripts/${file}`), file);
+  }
+  assert.ok(workflow.includes("docs/ISSUE_TRIAGE.md"));
+  assert.ok(workflow.includes(".github/ISSUE_TEMPLATE"));
+  assert.ok(workflow.includes(".github/workflows"));
+  assert.doesNotMatch(workflow, /npm install|--ignore-scripts=false|\$\{\{ github\.event\.issue\.body/);
+});
+
+test("the standalone triage graph reuses the existing exact parser without transitive or lifecycle additions", () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
+  const lock = JSON.parse(fs.readFileSync(path.join(__dirname, "package-lock.json"), "utf8"));
+  assert.equal(manifest.private, true);
+  assert.deepEqual(manifest.dependencies, { marked: "17.0.6" });
+  assert.deepEqual(lock.packages[""].dependencies, manifest.dependencies);
+  assert.deepEqual(Object.keys(lock.packages).sort(), ["", "node_modules/marked"]);
+  const parser = lock.packages["node_modules/marked"];
+  assert.equal(parser.version, manifest.dependencies.marked);
+  assert.equal(parser.resolved, "https://registry.npmjs.org/marked/-/marked-17.0.6.tgz");
+  assert.match(parser.integrity, /^sha512-/);
+  assert.equal(parser.hasInstallScript, undefined);
+  assert.equal(parser.dependencies, undefined);
+  assert.equal(parser.optionalDependencies, undefined);
+});
+
+
+// Exercise the real mutation consumer, not just its Markdown classifier. A
+// successful first read cannot authorize a stale write after label preparation.
+for (const [scenario, changes] of [
+  ["closure", { state: "closed" }],
+  ["body correction", { body: "### Pulse version\n6.6.0\n" }],
+  ["title correction", { title: "Corrected report" }],
+  ["review activity", { updated_at: "2026-10-14T10:01:00Z" }],
+  ["classification removal", { labels: [] }],
+  ["human ownership", { labels: [{ name: "bug" }, { name: "needs-human" }] }],
+  ["pull request", { pull_request: {} }],
+]) {
+  test(`label preparation cannot outlive a report's ${scenario}`, async () => {
+    const issue = {
+      number: 2910, state: "open", title: "Current bug",
+      body: "### Pulse version\n6.5.0\n### Additional actionable topics\nA separate History problem\n",
+      updated_at: "2026-10-14T10:00:00Z",
+      labels: ["bug", "affects-6.4.5", "needs-version-info"].map(name => ({ name })),
+    };
+    const { github, calls } = createGithub({ currentIssue: structuredClone(issue) });
+    const read = github.rest.issues.get;
+    github.rest.issues.get = async payload => ({ data: structuredClone((await read(payload)).data) });
+    github.rest.issues.getLabel = async ({ name }) => {
+      calls.getLabel.push(name);
+      github.currentIssue = { ...github.currentIssue, ...structuredClone(changes) };
+      return { data: { name } };
+    };
+    const messages = [];
+    await syncLabels({ github, context: createContext({ issue }), core: { info: text => messages.push(text) } });
+    assert.equal(calls.getIssue.length, 2);
+    assert.equal(calls.addLabels.length, 0);
+    assert.equal(calls.removeLabel.length, 0);
+    assert.equal(calls.createComment.length, 0);
+    assert.equal(calls.getLatestRelease.length, 0);
+    assert.equal(calls.paginate.length, 0);
+    assert.ok(messages.includes("Issue changed during metadata preparation. Skipping outdated label delta."));
+  });
+}
+
+test("a non-bug classification also requires a current report before its write", async () => {
+  const issue = { number: 2911, state: "open", title: "Feedback", labels: [],
+    body: "### Feedback type\nDocumentation issue\n" };
+  const { github, calls } = createGithub({ currentIssue: issue });
+  const read = github.rest.issues.get;
+  github.rest.issues.get = async payload => {
+    const result = await read(payload);
+    return { data: calls.getIssue.length === 1 ? result.data : { ...issue, state: "closed" } };
+  };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.getIssue.length, 2);
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
+});
+
+for (const status of [403, 404, 500]) {
+  test(`a failed pre-write read (${status}) cannot use the initial snapshot`, async () => {
+    const issue = { number: 2912, state: "open", title: "Bug", labels: [{ name: "bug" }],
+      body: "### Pulse version\n6.5.0\n" };
+    const { github, calls } = createGithub({ currentIssue: issue });
+    const read = github.rest.issues.get;
+    github.rest.issues.get = async payload => {
+      const result = await read(payload);
+      if (calls.getIssue.length === 2) throw Object.assign(new Error("Read failed"), { status });
+      return result;
+    };
+    await assert.rejects(syncLabels({ github, context: createContext({ issue }), core: createCore() }), { status });
+    assert.equal(calls.getIssue.length, 2);
+    assert.equal(calls.addLabels.length, 0);
+    assert.equal(calls.removeLabel.length, 0);
+    assert.equal(calls.createComment.length, 0);
+  });
+}
+
+test("a mismatched pre-write issue identity fails closed", async () => {
+  const issue = { number: 2913, state: "open", title: "Bug", labels: [{ name: "bug" }],
+    body: "### Pulse version\n6.5.0\n" };
+  const { github, calls } = createGithub({ currentIssue: issue });
+  const read = github.rest.issues.get;
+  github.rest.issues.get = async payload => {
+    const result = await read(payload);
+    return { data: calls.getIssue.length === 1 ? result.data : { ...issue, number: 9999 } };
+  };
+  await assert.rejects(syncLabels({ github, context: createContext({ issue }), core: createCore() }),
+    /Current issue identity did not match/);
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
+});
+
+test("the pre-write comparison treats label order as irrelevant", async () => {
+  const issue = { number: 2914, state: "open", title: "Bug",
+    labels: ["bug", "needs-human", "needs-retest-on-latest", "affects-6.4.5"].map(name => ({ name })),
+    body: "### Pulse version\n6.5.0\n" };
+  const { github, calls } = createGithub({ currentIssue: issue });
+  const read = github.rest.issues.get;
+  github.rest.issues.get = async payload => {
+    const result = await read(payload);
+    return { data: calls.getIssue.length === 1 ? result.data : { ...issue, labels: [...issue.labels].reverse() } };
+  };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
+});
+
+test("a report with no label delta needs no additional pre-write read", async () => {
+  const issue = { number: 2915, state: "open", title: "Bug",
+    labels: ["bug", "affects-6.5.0", "needs-human"].map(name => ({ name })),
+    body: "### Pulse version\n6.5.0\n" };
+  const { github, calls } = createGithub({ currentIssue: issue });
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.getIssue.length, 1);
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
+});
+
+test("unknown current versions retire only managed exact-version labels", async () => {
+  const preserved = ["bug", "needs-retest-on-latest", "needs-decomposition",
+    "needs-human", "operator-reviewed", "affects-main", "affects-storage"];
+  for (const body of [
+    "### Pulse version\nunknown\n",
+    "Pulse version: unknown; agent version 6.5.0",
+    "### Pulse version\n6.5\n### Agent version\n6.5.0",
+    "### Pulse version\n_No response_\n",
+    "### Pulse version\n\n### Agent version\n6.5.0",
+    "The running version is unavailable.",
+  ]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2916, title: "Upgrade from v6.4.5", body,
+      labels: [...preserved, "affects-6.4.5", "affects-6.6.0-beta.3"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ action: "edited", issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-version-info"]], body);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "affects-6.6.0-beta.3"], body);
+    assert.equal(calls.getIssue.length, 2);
+    assert.equal(calls.getLatestRelease.length, 0);
+    assert.equal(calls.createComment.length, 0);
+  }
+});
+
+test("a delayed known-version event cleans metadata from the current unknown report", async () => {
+  const eventIssue = { number: 2917, title: "Bug", body: "### Pulse version\n6.4.5\n",
+    labels: [{ name: "bug" }, { name: "affects-6.4.5" }] };
+  const { github, calls } = createGithub({ currentIssue: {
+    ...eventIssue, state: "open", body: "### Pulse version\nunknown\n",
+    updated_at: "2026-10-14T11:00:00Z",
+    labels: [...eventIssue.labels, { name: "needs-retest-on-latest" }, { name: "needs-version-info" }],
+  } });
+  await syncLabels({ github, context: createContext({ action: "edited", issue: eventIssue }), core: createCore() });
+  assert.equal(calls.addLabels.length, 0);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
+  assert.equal(calls.getIssue.length, 2, "a removals-only delta still needs the live-state fence");
+  assert.equal(calls.createComment.length, 0);
+});
+
+test("unknown-version removal cannot overwrite a correction during preparation", async () => {
+  const issue = { number: 2918, title: "Bug", body: "### Pulse version\nunknown\n",
+    labels: ["bug", "affects-6.5.0", "needs-version-info"].map(name => ({ name })) };
+  const { github, calls } = createGithub();
+  github.rest.issues.getLabel = async () => {
+    github.currentIssue = { ...github.currentIssue, body: "### Pulse version\n6.5.0\n" };
+    return { data: {} };
+  };
+  await syncLabels({ github, context: createContext({ action: "edited", issue }), core: createCore() });
+  assert.equal(calls.getIssue.length, 2);
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
+});
+
+test("unknown versions do not remove metadata from non-bug feedback", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2919, title: "Documentation", body: "### Pulse version\nunknown\n",
+    labels: ["documentation", "affects-6.5.0", "needs-retest-on-latest"].map(name => ({ name })) };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
+  assert.equal(calls.getIssue.length, 1);
+});
+
+test("already unknown-version metadata is a no-op without an extra live read", async () => {
+  const { github, calls } = createGithub({ existingLabels: new Set(["needs-version-info"]) });
+  const issue = { number: 2920, title: "Bug", body: "### Pulse version\nunknown\n",
+    labels: ["bug", "needs-version-info", "needs-human", "affects-main"].map(name => ({ name })) };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
+  assert.equal(calls.getIssue.length, 1);
+});
+
+test("attempted server archives separate release versions from packaging", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const version of ["6.5.0", "6.5.0-rc.1", "6.6.0-beta.3", "6.6.0-dev.branch-2"]) {
+    for (const filename of [
+      ...["386", "amd64", "arm64", "armv6", "armv7"].map(arch =>
+        `pulse-v${version}-linux-${arch}.tar.gz`),
+      `pulse-v${version}.tar.gz`,
+      `pulse-${version}.tgz`,
+    ]) {
+      for (const body of [
+        `### Pulse version\n${filename}\n### Agent version\nnone`,
+        `Pulse version: **\`${filename}\`**`,
+      ]) {
+        assert.equal(extractPulseVersion("Failed install", body), version, filename);
+      }
+    }
+  }
+});
+
+test("non-server artifacts cannot supply an attempted server version", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const filename of [
+    "pulse-agent-v6.6.0-beta.3-linux-amd64.tar.gz",
+    "pulse-agent-helper-v6.6.0-beta.3-linux-amd64.tar.gz",
+    "pulse-agent-runner-v6.6.0-beta.3-linux-amd64.tar.gz",
+    "pulse-mcp-v6.6.0-beta.3-windows-amd64.zip",
+    "pulse-provider-msp-v6.6.0-beta.3.tar.gz",
+    "pulse-v6.6.0-beta.3-linux-amd64.tar.gz.sha256",
+    "pulse-v6.6.0-beta.3-linux-amd64.tar.gz.sig",
+    "pulse-v6.6.0-beta.3-linux-amd64.tar.gz.sshsig",
+    "pulse-v6.6.0-beta.3-release.sbom.spdx.json.sha256",
+    "install.sh",
+  ]) {
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5",
+      `### Pulse version\n${filename}\n### Agent version\n6.5.0`), null, filename);
+  }
+});
+
+test("archive recognition neither borrows a later filename nor shortens bare prereleases", () => {
+  const { extractPulseVersion } = triage.internals;
+  assert.equal(extractPulseVersion("Upgrade from v6.4.5",
+    "### Pulse version\nunknown; downloaded pulse-v6.6.0-beta.3-linux-amd64.tar.gz"), null);
+  for (const version of ["6.6.0-dev.branch-2", "6.6.0-beta.3-linux-amd64", "6.6.0-custom.tgz"]) {
+    assert.equal(extractPulseVersion("Bug", `### Pulse version\n${version}`), version);
+  }
+});
+
+for (const [filename, version] of [
+  ["pulse-v6.6.0-beta.3-linux-amd64.tar.gz", "6.6.0-beta.3"],
+  ["pulse-v6.6.0-beta.3-linux-armv7.tar.gz", "6.6.0-beta.3"],
+  ["pulse-v6.6.0-beta.3.tar.gz", "6.6.0-beta.3"],
+  ["pulse-6.6.0-beta.3.tgz", "6.6.0-beta.3"],
+  ["pulse-v6.5.0-linux-amd64.tar.gz", "6.5.0"],
+]) {
+  test(`archive intake reconciles exact-version labels silently: ${filename}`, async () => {
+    const { github, calls } = createGithub();
+    const oldArtifactLabel = `affects-${filename.replace(/^pulse-v?/, "")}`;
+    const issue = { number: 2921, title: "[Bug]: Failed install",
+      body: `### Pulse version\n${filename}\n### Agent version\nnone`,
+      labels: ["bug", "affects-6.4.5", oldArtifactLabel, "needs-version-info", "needs-human",
+        "needs-retest-on-latest"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [[`affects-${version}`]]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name),
+      ["affects-6.4.5", oldArtifactLabel, "needs-version-info"]);
+    assert.deepEqual(calls.createLabel.map(call => call.name), [`affects-${version}`]);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2);
+  });
+}

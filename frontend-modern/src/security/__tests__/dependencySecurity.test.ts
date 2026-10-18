@@ -1,6 +1,8 @@
 // @vitest-environment node
 
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -78,6 +80,15 @@ const prettierPinIsReviewed = (version: string): boolean =>
   /^3\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(version) && atLeast(version, [3, 9, 9]);
 
 describe('frontend dependency security floors', () => {
+  it('checks the actual locked Solid serialization edges before accepting security overrides', () => {
+    const check = fileURLToPath(
+      new URL('../../../../scripts/check-frontend-serialization.mjs', import.meta.url),
+    );
+    expect(execFileSync(process.execPath, [check], { encoding: 'utf8' })).toContain(
+      'Solid runtime edges match, or use the exact qualified security override',
+    );
+  });
+
   it.each<[string, [number, number, number]]>([
     // GHSA-p6vx-979v-rg4c and GHSA-jp82-f5mq-hwhp: both Seroval fixes
     // are required, including the TypedArray fix after the first 1.6.x patch.

@@ -36,6 +36,17 @@ verifies receiver round-trip, schema/availability gates and bounds. Public
 snapshot, privacy and adoption-query tests verify the shared semantics. Receiver
 deployment and a client release are necessary before collecting fleet evidence.
 
+### Retired mobile settings keep information separate from entitlement
+
+Pulse Mobile retirement guidance is a full-text labelled note, not a paid
+feature offer with a clamped sales description. Instances without the existing
+Relay capability can read the date and phone-alert alternatives but cannot
+pair devices or configure connections. Entitled phones keep their existing
+configuration and pairing controls until 31 March 2027. The change introduces
+no commercial offer, billing read, entitlement substitution or service change.
+
+`RelaySettingsPanel.runtime.test.tsx` and the current first-session/paid-settings
+browser consumers verify the readable notice and unchanged access boundaries.
 
 ### Opt-in confirmed-operation transport keeps paid contexts unchanged
 
@@ -3714,6 +3725,16 @@ Mobile settings gate and Alerts push panel carry no upgrade prompt. The
 `relay` feature is labelled "Pulse Relay (Mobile Connection)" because it never
 provided remote access to the web UI. Pulse Mobile retires on 31 March 2027;
 until then licensed instances keep pairing and push unchanged.
+
+The backend feature catalog follows the same boundary: `relay`, `mobile_app`
+and `push_notifications` have no generic upgrade reason. Both full entitlements
+and non-billing commercial posture omit those retired offers. Missing extended
+history advertises only Pro's 90 days, never Relay or remote web access. Catalog
+roles, capability grants, subscriber terms and the legacy `relay` runtime's
+14-day compatibility limit remain unchanged. The retirement HTTP regression
+checks both commercial projections and runtime capabilities for Community,
+legacy Relay and Pro; continuing Relay subscribers' Pro grants remain owned by
+the license server, not inferred from a legacy tier payload.
 
 ### Extended history measurement does not establish customer identity
 

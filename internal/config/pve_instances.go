@@ -93,10 +93,29 @@ func pveClusterInstancesHaveFingerprintConflict(a, b PVEInstance) bool {
 	if ProxmoxFingerprintsConflict(a.Fingerprint, b.Fingerprint) {
 		return true
 	}
-	indexEndpoints := func(instance PVEInstance) (byNode, byKey map[string]string) {
+	indexEndpoints := func(instance PVEInstance) (byNode, byKey map[string]string, ambiguous bool) {
 		byNode = make(map[string]string)
 		byKey = make(map[string]string)
+		trustByNode, trustByKey := make(map[string]string), make(map[string]string)
 		for _, endpoint := range instance.ClusterEndpoints {
+			// Internal trust agreement follows the verifier, not the broader
+			// legacy identity presentation normalization below. A malformed
+			// nonempty pin must not become absent or agree with a valid pin.
+			if endpoint.Fingerprint != "" {
+				trust := strings.ToLower(strings.ReplaceAll(endpoint.Fingerprint, ":", ""))
+				if node := strings.TrimSpace(strings.ToLower(endpoint.NodeName)); node != "" {
+					if previous, ok := trustByNode[node]; ok && previous != trust {
+						ambiguous = true
+					}
+					trustByNode[node] = trust
+				}
+				for _, key := range clusterEndpointIdentityKeys(endpoint) {
+					if previous, ok := trustByKey[key]; ok && previous != trust {
+						ambiguous = true
+					}
+					trustByKey[key] = trust
+				}
+			}
 			fp := normalizeProxmoxFingerprint(endpoint.Fingerprint)
 			if fp == "" {
 				continue
@@ -108,10 +127,16 @@ func pveClusterInstancesHaveFingerprintConflict(a, b PVEInstance) bool {
 				byKey[key] = fp
 			}
 		}
-		return byNode, byKey
+		return byNode, byKey, ambiguous
 	}
-	aByNode, aByKey := indexEndpoints(a)
-	bByNode, bByKey := indexEndpoints(b)
+	aByNode, aByKey, aAmbiguous := indexEndpoints(a)
+	bByNode, bByKey, bAmbiguous := indexEndpoints(b)
+	// Consolidation must not erase a contradiction within either saved view
+	// before the runtime trust resolver can refuse it. A later repeated row
+	// matching the other view is not independent reconciliation of saved trust.
+	if aAmbiguous || bAmbiguous {
+		return true
+	}
 	for node, fp := range bByNode {
 		if existing, ok := aByNode[node]; ok && existing != fp {
 			return true

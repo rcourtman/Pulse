@@ -4,7 +4,7 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Toggle } from '@/components/shared/Toggle';
 import { Card } from '@/components/shared/Card';
-import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
 import {
@@ -27,20 +27,20 @@ import {
 export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) => {
   const state = useRelaySettingsPanelState(props);
 
-  // Relay feature gate
+  // Retirement guidance is not a paid feature offer. Keep the whole message
+  // readable on a phone while withholding pairing from unlicensed instances.
   if (!state.relayEnabled()) {
     return (
       <SettingsPanel title="Pulse Mobile">
         <Show when={!state.loading()} fallback={<div class="text-sm ">Loading...</div>}>
-          <Card tone="info" padding="md">
-            <FeatureGateSection
-              icon={<RadioTower size={20} strokeWidth={2} />}
-              title="Pulse Mobile"
-              body={RELAY_LICENSE_REQUIRED_MESSAGE}
-              upgradeDestination={state.upgradeDestination()}
-              showUpgradePrompts={false}
-            />
-          </Card>
+          <InlineNotice
+            tone="info"
+            role="note"
+            aria-label="Pulse Mobile retirement"
+            icon={<RadioTower size={20} strokeWidth={2} />}
+          >
+            <p class="text-sm leading-relaxed">{RELAY_LICENSE_REQUIRED_MESSAGE}</p>
+          </InlineNotice>
         </Show>
       </SettingsPanel>
     );
@@ -58,7 +58,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
           </Card>
         </Show>
 
-        <Card tone="info" padding="md">
+        <Card tone="info" padding="md" role="note" aria-label="Pulse Mobile retirement">
           <p class={RELAY_INFO_TITLE_CLASS}>{RELAY_PAIRING_AVAILABILITY_TITLE}</p>
           <p class={RELAY_INFO_MESSAGE_CLASS}>{RELAY_PAIRING_AVAILABILITY_MESSAGE}</p>
         </Card>

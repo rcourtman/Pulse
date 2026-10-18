@@ -16,6 +16,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 PREPUSH = ROOT / "scripts/dev-prepush.sh"
 AUDIT = ROOT / "scripts/npm-audit-retry.sh"
+AUDIT_PROCESS = ROOT / "scripts/npm_audit_process.py"
 
 
 class DevPrepushFixture(unittest.TestCase):
@@ -53,6 +54,7 @@ class DevPrepushFixture(unittest.TestCase):
         )
         self.write("scripts/dev-prepush.sh", PREPUSH.read_text())
         self.write("scripts/npm-audit-retry.sh", AUDIT.read_text())
+        self.write("scripts/npm_audit_process.py", AUDIT_PROCESS.read_text())
         self.write("frontend-modern/package.json", '{"private":true}\n')
         self.write("frontend-modern/package-lock.json", '{"lockfileVersion":3}\n')
         self.write("frontend-modern/src/example.ts", "export const value = 1;\n")
@@ -170,6 +172,17 @@ class DevPrepushFrontendTest(DevPrepushFixture):
         self.env["PREPUSH_AUDIT_MODE"] = "unavailable"
         self.assert_refused_before_source_checks(*self.run_gate(), reads=2)
 
+    def test_changed_audit_process_requires_a_result(self):
+        self.change("scripts/npm_audit_process.py")
+        self.env["PREPUSH_AUDIT_MODE"] = "unavailable"
+        self.assert_refused_before_source_checks(*self.run_gate(), reads=2)
+
+    def test_changed_audit_process_cannot_relax_positive_findings(self):
+        self.change("scripts/npm_audit_process.py")
+        self.env["PREPUSH_AUDIT_MODE"] = "critical"
+        self.env["NPM_AUDIT_REQUIRE_RESULT"] = "false"
+        self.assert_refused_before_source_checks(*self.run_gate())
+
     def test_failed_zero_report_is_not_a_passing_local_gate(self):
         self.change("frontend-modern/package-lock.json")
         self.env["PREPUSH_AUDIT_MODE"] = "zero-failure"
@@ -257,10 +270,17 @@ class DevPrepushFrontendTest(DevPrepushFixture):
         self.assertEqual(calls, [])
         self.assertEqual(len(guards), 1)
 
+    def test_audit_process_path_lookalike_does_not_query(self):
+        self.change("scripts/npm_audit_process.py.extra")
+        result, calls, guards = self.run_gate(dependencies=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(calls, [])
+        self.assertEqual(len(guards), 1)
+
     def test_local_strict_paths_match_ci(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/build-and-test.yml").read_text())
         classification = next(step for step in workflow["jobs"]["changes"]["steps"] if step.get("id") == "filter")["run"]
-        paths = r"^frontend-modern/package(-lock)?\.json$|^scripts/npm-audit-retry\.sh$"
+        paths = r"^frontend-modern/package(-lock)?\.json$|^scripts/(npm-audit-retry\.sh|npm_audit_process\.py)$"
         self.assertIn(paths, classification)
         self.assertIn(paths, PREPUSH.read_text())
 

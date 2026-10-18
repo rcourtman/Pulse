@@ -19,7 +19,13 @@ func testClusterClientEndpointOwnershipRoutingAndTrust(t *testing.T) {
 	other := newClusterTrustFixture(t)
 	declaredPin := clusterTrustPin(declared.active.Load())
 	input := []string{declared.server.URL}
-	cc := NewClusterClient("owned-endpoints", clusterTrustConfig("https://primary.trust.invalid", declaredPin), input, nil)
+	cfg := clusterTrustConfig("https://primary.trust.invalid", declaredPin)
+	// This is a routing/ownership assertion, not a one-second latency SLO.
+	// Keep local fixture work bounded without making race instrumentation,
+	// TLS scheduling or diagnostic output an ownership failure. Production
+	// timeouts and the separate cancellation/timeout tests are unchanged.
+	cfg.Timeout = 5 * time.Second
+	cc := NewClusterClient("owned-endpoints", cfg, input, nil)
 
 	// Reusing the caller's configuration storage must not declare a new member,
 	// change the live failover target, or permit first-use trust for that target.
@@ -31,11 +37,15 @@ func testClusterClientEndpointOwnershipRoutingAndTrust(t *testing.T) {
 		t.Error("caller-owned endpoint edit declared a new first-use trust target")
 	}
 	before := declared.requests.Load()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	started := time.Now()
 	// The first single-endpoint read also performs a connectivity check. Pin
 	// the authenticated target, not the implementation's number of API probes.
-	if nodes, err := cc.GetNodes(context.Background()); err != nil || len(nodes) != 1 || declared.requests.Load() <= before {
+	if nodes, err := cc.GetNodes(ctx); err != nil || len(nodes) != 1 || declared.requests.Load() <= before {
 		t.Errorf("caller-owned endpoint edit interrupted ordinary pinned monitoring: %v", err)
 	}
+	t.Logf("bounded routing read: elapsed=%s client_timeout=%s declared_requests=%d injected_requests=%d", time.Since(started), cfg.Timeout, declared.requests.Load()-before, other.requests.Load())
 
 	// Use a real local verifier mismatch, not provider text. Rejected admission
 	// must do no additional capture handshake, authenticated request or pin write.
@@ -51,10 +61,10 @@ func testClusterClientEndpointOwnershipRoutingAndTrust(t *testing.T) {
 	cc.mu.RLock()
 	_, captured := cc.endpointFingerprints[other.server.URL]
 	cc.mu.RUnlock()
-	if captured || cc.getEndpointFingerprint(declared.server.URL) != declaredPin {
+	if captured || checkedClusterFingerprint(t, cc, declared.server.URL) != declaredPin {
 		t.Error("caller-owned endpoint edit changed the client's trust state")
 	}
-	t.Logf("observed injected endpoint authenticated requests=%d; original pin unchanged=%t", other.requests.Load(), cc.getEndpointFingerprint(declared.server.URL) == declaredPin)
+	t.Logf("observed injected endpoint authenticated requests=%d; original pin unchanged=%t", other.requests.Load(), checkedClusterFingerprint(t, cc, declared.server.URL) == declaredPin)
 }
 
 func testClusterClientEndpointOwnershipGuestAdmission(t *testing.T) {

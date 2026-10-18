@@ -25,6 +25,10 @@ type Snapshot = {
   platform: Resource['platformType'];
   scopes?: Resource['platformScopes'];
   seen: number;
+  memorySource?: string;
+  memoryState?: string;
+  memoryUsage?: number;
+  agentStale?: boolean;
 };
 
 function Fixture() {
@@ -54,9 +58,14 @@ function Fixture() {
     },
     cpu: { current: 10 },
     memory: {
-      current: 0,
-      observation: { state: 'current', source: 'agent', observedAt: '2026-10-10T00:00:00Z' },
+      current: snapshot().memoryUsage ?? 0,
+      observation: {
+        state: snapshot().memoryState ?? 'current',
+        source: snapshot().memorySource ?? 'agent',
+        observedAt: '2026-10-10T00:00:00Z',
+      },
     },
+    agent: { stale: snapshot().agentStale === true },
     disk: { current: snapshot().usage },
     network: { rxBytes: 0, txBytes: 200 },
     proxmox: {

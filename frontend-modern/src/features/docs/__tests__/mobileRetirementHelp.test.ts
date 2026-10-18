@@ -1,0 +1,93 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { createGuideFixture } from './guideFixture';
+
+// These are checks of the shipped server documentation, not app or Relay
+// qualification. No pairing, notification, subscription or provider is used.
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
+const shipped = (name: string) =>
+  readFileSync(path.join(root, 'frontend-modern/public/docs', `${name}.md`), 'utf8');
+const render = createGuideFixture(shipped);
+const prose = (element: Element) => (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+function section(name: string, fragment: string, level: number): HTMLElement {
+  const heading = render(name).querySelector(`[id="${fragment}"]`);
+  expect(heading, `${name}#${fragment}`).not.toBeNull();
+  const result = document.createElement('section');
+  for (let next = heading!.nextElementSibling; next; next = next.nextElementSibling) {
+    if (/^H[1-6]$/.test(next.tagName) && Number(next.tagName.slice(1)) <= level) break;
+    result.appendChild(next.cloneNode(true));
+  }
+  return result;
+}
+
+describe('existing phone recovery and retirement help', () => {
+  it('keeps retirement, continuing paid terms and app/web access distinct', () => {
+    const text = prose(section('TROUBLESHOOTING', 'relay-showing-disconnected', 4));
+    expect(text).toContain('31 March 2027');
+    expect(text).toContain('existing paired phones keep working until then');
+    expect(text).toContain('Relay is no longer sold');
+    expect(text).toContain('current price for as long as their subscription continues');
+    expect(text).toContain('including after the app retires');
+    expect(text).toContain('Do not buy or switch plans');
+    expect(text).toContain('not the web UI');
+    expect(text).toContain('ntfy, Gotify or Pushover');
+    expect(text).toContain('own VPN or tunnel');
+    expect(prose(section('RELAY', 'requirements', 2))).toContain(
+      'An existing licence with the relay entitlement',
+    );
+    expect(prose(section('RELAY', 'requirements', 2))).not.toContain('Relay-or-higher');
+  });
+
+  it('replaces unbounded reads and speculative recovery with preserved evidence', () => {
+    const element = section('RELAY', 'troubleshooting', 2);
+    const text = prose(element);
+    expect(element.querySelector('pre')).toBeNull();
+    expect(text).toContain('An active server connection does not prove phone delivery');
+    expect(text).toContain('Unknown details are valid');
+    expect(text).toContain('bounded Pulse log readers');
+    expect(text).toContain('Do not post full logs, QR codes, pairing deep links, cookies, tokens');
+    expect(text).toContain('Do not disable/re-enable relay, delete a pairing, rescan a QR code');
+    expect(text).toContain('restart services or change firewall rules merely to collect evidence');
+    expect(text).toContain('do not pair another device as a test');
+    expect(text).toContain('A successful Test is not proof of ordinary alert delivery');
+    expect(text).not.toContain('Confirm your mobile account has beta access');
+    expect(text).not.toContain('Restart Pulse Mobile');
+  });
+
+  it('keeps existing bookmarks and every recovery link usable in the actual renderer', () => {
+    const sections = [
+      section('TROUBLESHOOTING', 'relay-showing-disconnected', 4),
+      section('RELAY', 'troubleshooting', 2),
+    ];
+    for (const element of sections) {
+      for (const link of element.querySelectorAll('a[href]')) {
+        const href = link.getAttribute('href')!;
+        const same = /^#(.+)$/.exec(href);
+        const cross = /^\/docs\/([^#]+)#(.+)$/.exec(href);
+        expect(same || cross, href).not.toBeNull();
+        expect(
+          render(cross ? cross[1] : 'RELAY').querySelector(`[id="${cross ? cross[2] : same![1]}"]`),
+          href,
+        ).not.toBeNull();
+        // Cross-document links use the router; same-page fragments use native anchors.
+        expect(link.hasAttribute('data-doc-link'), href).toBe(Boolean(cross));
+      }
+    }
+    for (const fragment of [
+      'relay-showing-disconnected',
+      'pulse-mobile-cant-connect',
+      'open-pulse-handoff-not-loading',
+    ]) {
+      expect(render('RELAY').querySelector(`[id="${fragment}"]`), fragment).not.toBeNull();
+    }
+  });
+
+  it('ships the same guidance as the canonical repository pages', () => {
+    for (const name of ['TROUBLESHOOTING', 'RELAY']) {
+      expect(shipped(name)).toBe(readFileSync(path.join(root, 'docs', `${name}.md`), 'utf8'));
+    }
+  });
+});

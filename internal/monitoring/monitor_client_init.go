@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -28,7 +29,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 
 		// Check if this is a cluster
 		if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
-			endpoints, endpointFingerprints := m.buildClusterEndpointsForInit(pve)
+			endpoints, endpointFingerprints, conflictingEndpoints := m.buildClusterEndpointsForInit(pve)
 
 			log.Info().
 				Str("cluster", pve.ClusterName).
@@ -43,6 +44,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 				clientConfig,
 				endpoints,
 				endpointFingerprints,
+				conflictingEndpoints...,
 			)
 			m.replacePVEClient(pve.Name, clusterClient)
 			log.Info().
@@ -58,7 +60,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 		// Create regular client
 		clientConfig := config.CreateProxmoxConfig(&pve)
 		clientConfig.Timeout = cfg.ConnectionTimeout
-		client, err := newProxmoxClientFunc(clientConfig)
+		client, err := newProxmoxClientFunc(context.Background(), clientConfig)
 		if err != nil {
 			monErr := errors.WrapConnectionError("create_pve_client", pve.Name, err)
 			log.Error().

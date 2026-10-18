@@ -39,6 +39,63 @@ registry ingestion with collected containers, images and networks. Genuine
 duplicate names must still fail closed. Source controls alone do not establish
 installed command transport or autonomous recovery.
 
+### Workload aggregate disk presence survives projection (14 October 2026)
+
+`useWorkloads` does not default an absent aggregate disk usage/used byte field
+to zero merely because capacity was supplied. Both REST and owning snapshots
+preserve the difference between capacity-only inventory and finite measured
+usage. Explicit zero percentages, percentage-only metrics and valid byte-only
+metrics remain available. This aggregate metric contract is distinct from
+DiskInfo filesystem records whose zero byte fields may be omitted. Identity,
+producer selection, collection, retention and History transport are unchanged.
+
+Raw byte metrics always serialize a generic `value`, even its default zero.
+That scalar cannot confer a current percentage: an explicit `percent` or a
+valid used/total byte pair is required when `unit` names bytes. Legacy untyped
+value-only percentages and explicit percent-unit values remain usable.
+
+Verification: `useWorkloads.test.ts` exercises mounted REST and owning-snapshot
+refreshes and `workloadDiskUsage.test.ts` covers numeric admission. The
+`workload-disk-metrics` browser fixture consumes the REST mapper into production
+rows/drawer with synthetic evidence; browser proof is retained separately and
+establishes no installed/native recovery.
+
+
+### Workloads preserve platform guest interfaces — issue #2757
+
+Both the `/api/resources` and owning canonical-snapshot Workloads projections
+retain `proxmox.networkInterfaces` when the linked agent reports no interface
+list. A present agent list still wins, including an explicit empty list;
+lists from different producers are not merged. Names, addresses, MACs and
+reported traffic retain their association. The selected identity/IP order,
+canonical row and History coordinates do not change.
+
+`networkInterfacesFromAgent` is internal frontend provenance. Only the selected
+agent list inherits `agentStale` in the drawer's Network section. A silent linked
+agent still marks its other readings last known, but cannot mark independently
+supplied Proxmox interfaces as its last report. Legacy drawer callers keep their
+existing agent-freshness semantics. This adds no wire field, guest query,
+collection command, permission or native freshness/recovery guarantee.
+
+`useWorkloads.test.ts` checks REST/snapshot VM and LXC source transitions,
+agent precedence, empty/absent lists, IP order and stable canonical identity;
+`GuestDrawer.test.tsx` checks reactive source-specific last-known presentation
+without clearing agent RAID/filesystem warnings. Desktop and narrow browser
+proof must consume producing JSON, not manually populated WorkloadGuest rows.
+The row's existing Network tooltip uses semantic foreground/muted tokens for
+names, addresses, MACs, traffic and the address-only fallback. Fixed dark-palette
+text must not make the newly retained names unreadable on a light surface.
+
+### Independently known PBS remains available in Backups (13 October 2026)
+
+The resource-owned PBS table is outside backup-inventory loading/error gates.
+Its canonical identity, datastore health/capacity and details remain usable
+when either or both inventory endpoints fail. Error/loading counts are not zero
+backup evidence. The inventory-only surface retains incomplete notices and
+ordinary retries. `ProxmoxBackupsTable.test.tsx` checks stable server-table
+ownership through loading, single/both failures and valid response recovery.
+This consumes existing resources; it adds no producer or native recovery claim.
+
 ### Shared interpretation of selected guest memory
 
 `GuestMemoryEvidenceForResource` and the VM/container `MemoryEvidence` accessors
@@ -8473,3 +8530,34 @@ classification use the existing shared clock for freshness and ages. No clock
 tick initiates a probe, grants health, changes thresholds or widens token scope.
 The vSphere VM table has one h2 title, including kiosk and filtered-empty state;
 its count follows filtered rows only when the page-owned toolbar state is ready.
+
+### Host filesystem consumers retain uncertainty
+
+The existing Proxmox node and Docker host drawers preserve a negative
+filesystem usage sentinel through normalization into **Usage unavailable**,
+not 0% or healthy empty storage. Missing/invalid capacity and negative or
+non-finite used bytes also withhold utilization; a finite positive capacity
+can still be shown independently. Canonical DiskInfo omits genuine zero bytes,
+so those omissions retain their existing zero semantics when positive capacity
+is present and there is no unknown sentinel. Valid measured byte ratios,
+mount filtering and resource identity remain unchanged.
+
+Both drawers consume the same host disk presentation text and neutral unknown
+state. A same-ID accepted resource refresh replaces the old reading, in both
+directions, without adding a read, scan or disk operation to disclosure.
+`HostDrawer.filesystem-readings.test.tsx` checks both production consumers;
+`DrawerDiskListCard.readings.test.tsx` checks normalized unknown/invalid and
+zero controls. The source-bound `browser-tests/host-disk-usage.cjs` fixture
+connects synthetic Resources HTTP, the real resource hook, platform tables and
+keyboard/touch drawer controls. This is presentation admission, not installed
+collector, guest safety, restart or release acceptance.
+
+The shared `filesystemByteUsage.ts` admission also applies to filesystem inputs
+of `stackedDiskBarModel.ts`: unusable byte rows remain neutral in tooltips and
+do not contribute used bytes, capacity, bars, combined percentages or highest
+usage. All-unmeasured filesystem lists with no independent accepted aggregate
+render N/A, not a fabricated zero. Independently supplied aggregate metrics and
+retained/unavailable source classifications preserve their existing semantics.
+The connected stacked-model controls retain explicit aggregate fallback tests;
+the browser fixture checks mixed and all-unknown lists in the actual summaries
+as well as both drawers, including live replacement at narrow widths.

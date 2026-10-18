@@ -412,7 +412,7 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 		m.mu.RUnlock()
 	}
 
-	fallbackClient, err := newProxmoxClientFunc(clientCfg)
+	fallbackClient, err := newProxmoxClientFunc(ctx, clientCfg)
 	if err != nil {
 		return nil, currentClient, cause
 	}

@@ -47,6 +47,92 @@ access remains an execution boundary; reading a failure or a successful task
 does not grant a lifecycle action or prove a restorable artifact. Manifest,
 persisted-task and API/tool parity regressions cover this separation.
 
+### Native CI tooling refresh (14 October 2026)
+
+The native agent matrix uses the exact setup-node v7.1.0 and upload-artifact
+v7.0.2 pins in the [deployment tooling contract](deployment-installability.md#node-setup-and-artifact-action-refresh-14-october-2026).
+The Node 24 application toolchain, locked frontend cache, real asset build before
+all-platform runtime tests, generated Windows command execution and retained
+Linux removal receipt are unchanged. `TestNativeAgentWorkflowBuildsRealFrontendBeforeRuntime`,
+`TestNativeAgentRejectsBrokenImagesBeforeFrontendPreparation` and
+`TestNativeWindowsExecutesGeneratedInstallCommand` bind those actual consumers
+to the refreshed pin without relaxing ordering or platform controls. Local
+source proof is not native Windows, appliance or installed lifecycle acceptance.
+
+### Optional configuration-signing guidance fits narrow installers (13 October 2026)
+
+The three existing signing environment names wrap within their advice card.
+Their complete text, values, optional semantics, trust defaults and copied
+installation/removal commands are unchanged. The source regression in
+`InfrastructureOperationsModel.test.tsx` preserves those exact names and the
+wrapping class; desktop/phone light/dark browser proof must inspect the actual
+installer and preserve separate-token/private-file copy behaviour. This is
+readability, not an installed agent or QNAP recovery result.
+
+### Backend bootstrap preserves silent input on BusyBox hosts
+
+Setup, Proxmox and container bootstrap commands prefer standalone `stty`,
+otherwise the BusyBox `stty` applet. They distinguish absent terminals, missing
+or unsupported tools and failed snapshot/echo/restoration before installation.
+The privileged Bash child keeps the selected tool and complete saved terminal
+state through EXIT/HUP/INT/TERM cleanup. Overflow is drained while silent;
+empty, interrupted or oversized input never reaches the installer. The isolated
+POSIX root/sudo prefix emits that child once, without moving credentials into
+shell source, argv, environment or history. Existing complete-download,
+preflight, private-file, scope, profile, identity and TLS boundaries remain.
+`portable_bootstrap_test.go` exercises all three producers with real PTYs and
+BusyBox, full terminal restoration and closed privilege/download fixtures;
+it is not native appliance installation or recovery evidence.
+
+### Unraid/QNAP removal retires exact boot entries and confirms watchdog quiescence
+
+The Unix uninstall caller selects these platforms from their vendor/installed
+footprints, not from an ordinary recovered Linux state directory or QNAP state
+finder alone. Existing exact state-removal authority must select the wrapper's
+state directory. Regular root-owned files and parents are required; FAT boot
+volumes cannot be assumed to implement Unix chmod semantics. Unknown wrapper
+ownership and missing observation tools refuse before mutation.
+
+One complete bounded boot-file parse admits only the exact generated Unraid
+launch or canonical QNAP deferred block/legacy direct launch for that wrapper.
+All duplicates retire; unrelated entries (including co-installed names and
+legacy Telegraf) remain. Foreign/indirect targets, partial or changed blocks,
+linked/non-regular files, binary/incomplete content and over-1-MiB files refuse
+without evaluating or disclosing their text. The original remains in a private
+`.pulse-removal.*` recovery directory outside the active boot namespace through
+remote confirmation. A changed source during staging or a concurrently created
+file, directory or symlink refuses without clobbering it; interrupted staging
+retains the actual original and never restores automatic activation. New boot
+content uses no-clobber file creation, compatible with FAT without hard links;
+this is not an atomic whole-content swap or a lock against external root writers.
+
+Complete bounded kernel evidence returns only numeric IDs and roles. Only exact
+selected watchdog/collector processes receive checked TERM, watchdog first,
+with independent absence observations. Editor sessions, backup wrappers and
+co-installed names are not targets. Relative/foreign same-name processes or
+unattributable QNAP deferred autorun or live Unraid go shells refuse instead
+of signalling another boot owner. A live go shell may already hold later boot
+commands in memory; editing its file cannot establish quiescence. Failed/diagnostic/duplicate/empty reads and ignored/refused signals
+retain identity, credentials, trust and recoverable files. QNAP mount and
+unmount each have checked bounded results, including cleanup after partial mount.
+
+Whole boot/process and applicable init-manager quiescence closes again before
+same-instance server removal and before local erasure; late activation refuses,
+even after remote removal succeeded. NAS paths do not subsequently run the
+unchecked global pkill or delete arbitrary discovered QNAP state/whole legacy
+Unraid directories. Successful/absent/repeated removal still requires complete
+fresh observations. No automatic restart, credential churn or transport-policy
+change follows a partial operation.
+
+`TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` requires all eighteen
+actual-function/full-uninstall caller controls in `agent_nas_teardown.py`. The
+boot filesystem transformations are real private user operations; flash/kernel
+faults are closed models. Two generated watchdog/child controls use real private
+ordinary-user processes, not appliance mounts or root services. Native signed
+Unraid/QNAP/Linux/PowerShell, TLS/identity/repetition/cleanup and containing
+publication remain separate obligations; this source proof does not resolve
+#1099 or claim installed restoration.
+
 ### Patrol maintenance coverage adds no agent authority
 
 The Patrol operator-state projection in `internal/api/router.go` now reads the
@@ -7695,6 +7781,28 @@ that waits for the persistent data volume before launching the stored wrapper,
 and `internal/agentupdate/update.go` keeps the persisted QNAP binary copy in
 sync on self-update so reboot does not roll the runtime back to an older
 binary.
+The persistent replacement must also remain executable. If the verified runtime
+and persistent path identify the same file (including directory or executable
+symlink aliases), the updater must not copy over its already-installed binary.
+Separate QNAP/Unraid copies use an exclusively created temporary in the
+destination directory, closed and explicitly made `0755` before atomic rename.
+They must not reuse or follow a pre-existing fixed `.tmp` path. Read, creation,
+write, close, chmod or rename failure leaves the previous persistent binary
+unchanged, closes/removes the owned temporary and logs the persistence failure.
+Persistence remains best-effort after live replacement; a runnable new runtime
+does not establish that the boot copy was updated. Saved identity, credentials,
+transport trust, mandatory checksum/signature, downloaded-binary self-test and
+main replacement/backup recovery remain unchanged.
+
+`TestNASAuthenticatedUpdateKeepsExecutableCopies` exercises the real trusted
+HTTPS/checksum/test-signature/self-test path with inert changed executables in
+unified, aliased and split QNAP layouts, split Unraid and an ordinary Linux
+control. Actual child execution checks both runtime and boot copies, preserved
+saved state and temporary cleanup. `TestPersistentBinaryCopyFailuresRetainExecutable`
+requires every persistence fault phase to retain an executable old copy and
+clean its own temporary; unowned legacy temporaries and other hardlinks survive.
+These Linux source controls do not establish native appliance, flash mount,
+boot/watchdog, old-installed-updater recovery or release availability.
 That appliance lifecycle must remain bounded by available storage. Before
 downloading or replacing an agent, `scripts/install.sh` checks the effective
 temporary and installation filesystems for enough free space, coalesces the
@@ -9570,7 +9678,7 @@ cross-compiled with `GOOS=windows go build ./internal/hostagent/`.
 The shared frontend Unix installer preserves single-line paste grammar,
 quoted destinations, explicit custom CA/insecure continuity and profile flags.
 Issued credentials are separate from copied commands. A privileged Bash child
-owns the Core-aligned silent bounded reader and temporary 0700/0600 handoff;
+owns the silent bounded reader and temporary 0700/0600 handoff;
 maximum-size input must survive unchanged, overflow must not reach the caller's
 history, and every exit must restore terminal modes and remove temporary files.
 Download/preflight failures never reach credential entry or installation.
@@ -9578,8 +9686,22 @@ Sudo validation occurs before download; download and unprivileged preflight
 still precede privileged installation. Token-optional and saved-state update
 paths need no terminal or replacement credential.
 
-For non-terminal FreeBSD command fields, the existing page offers an absolute
-local private-token-file variant, with ownership/regular-file/symlink/mode
+Root/sudo dispatch emits the quoted private reader only once via an isolated
+POSIX positional-argument prefix. Normal quoted URL/profile/identity variants
+remain below the common 4096-byte terminal line boundary. Actual interactive
+PTY controls wait for the caller prompt before pasting and before exiting, so
+startup truncation or a queued exit is not mistaken for a reader failure.
+
+The frontend reader selects standalone `stty`, or `busybox stty` when standalone
+`stty` is absent, and uses the same selected utility to restore terminal modes.
+Missing terminal, missing/unsupported utility, unreadable settings, echo-disable
+failure and restoration failure stop before installation with distinct errors;
+no echoed, inline-token or broader-privilege fallback is permitted. A mode-save
+failure never requests input. Interrupted/oversized input remains private.
+The backend bootstrap mirror remains separately owned by Core until composed.
+
+For Linux/NAS and non-terminal FreeBSD command fields, the existing page offers
+an absolute local private-token-file variant, with ownership/regular-file/symlink/mode
 checks and the installer's bounded trusted reader. The operator provisions and
 removes that file through a trusted file path; the command neither contains its
 contents nor deletes it. A GUI without private file provisioning requires a
@@ -9908,6 +10030,19 @@ sources through a runtime transition. Production collection/late-reply and
 publication-order controls are in `guest_poll_ownership_test.go`; diagnostics
 and both History stores are covered in `diagnostic_snapshots_test.go`. These
 controls establish no native guest restart, thaw or prior-workload restoration.
+
+### Proxmox rejection guidance is not agent recovery (14 October 2026)
+
+The shared diagnostics producer separates 403 permission denial, 401 rejected
+authentication and other observed HTTP failures, carrying bounded guidance
+through its existing error summary. It preserves intentional ACL scope and
+privilege separation; it does not request agent reinstall, token rotation as a
+test or guest-agent commands. PBS monitor and live-check evidence stay distinct.
+Agent identities, enrolment, scopes, capabilities, installer/update/removal and
+normal polling behavior are unchanged. The diagnostics source/serializer and
+same-credential fixture controls are in `diagnostics_additional_test.go` and
+`TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization`; they do not
+establish native guest restart, installed-agent or thaw recovery.
 
 ### Pulse Pro runtime switch routes (14 October 2026)
 

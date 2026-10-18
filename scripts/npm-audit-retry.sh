@@ -102,35 +102,20 @@ export npm_config_fetch_timeout=$((ATTEMPT_TIMEOUT * 1000))
 
 DEADLINE=$(( $(date +%s) + MAX_SECONDS ))
 
-# Run one audit under a hard wall-clock bound, portably: `timeout` is not
-# present on every developer machine, so a watchdog subshell kills the npm
-# process if it outlives the limit. Blocking on `wait` for the real child
-# avoids the zombie-liveness race that a `kill -0` poll would hit.
+# Run one audit under a hard wall-clock bound on Linux and macOS. Killing just
+# npm or a watchdog shell leaves their children alive after the verdict. The
+# Python helper (already required for classification) owns a separate process
+# group, stops it on timeout/cancellation and removes leftovers on completion.
+# It retains the original report and exit status; it never queries npm again.
+audit_runner_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 run_audit() {
   local limit="$1" out="$2"
-
-  : >"${out}"
-  "${NPM_BIN}" "${AUDIT_ARGS[@]}" >"${out}" 2>/dev/null &
-  local npm_pid=$!
-
-  (
-    sleep "${limit}"
-    kill -TERM "${npm_pid}" 2>/dev/null
-    sleep 2
-    kill -KILL "${npm_pid}" 2>/dev/null
-  ) >/dev/null 2>&1 &
-  local killer_pid=$!
-
-  wait "${npm_pid}" 2>/dev/null
-  local status=$?
-
-  kill -TERM "${killer_pid}" 2>/dev/null
-  wait "${killer_pid}" 2>/dev/null
-
-  # Keep the observed command status. Even a complete-looking zero summary
-  # cannot establish a clean audit when npm failed or was stopped afterwards.
-  # Positive findings in that same response still take precedence.
-  return "${status}"
+  # Keep Bash's existing executable-script fallback (ENOEXEC), including on
+  # macOS. The fixed exec program forwards argv literally; no npm argument or
+  # executable path is interpolated into shell code.
+  python3 "${audit_runner_dir}/npm_audit_process.py" \
+    "${limit}" "${out}" "${BASH}" -c 'exec "$@"' npm-audit \
+    "${NPM_BIN}" "${AUDIT_ARGS[@]}"
 }
 
 # Classify one audit run. Prints a verdict word, summary and (for a finding)

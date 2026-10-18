@@ -21,28 +21,23 @@ var connRetryDelays = []time.Duration{
 }
 
 // retryFailedConnections attempts to recreate clients that failed during initialization
-// This handles cases where Proxmox/network isn't ready when Pulse starts
+// This handles cases where Proxmox/network isn't ready when Pulse starts. Keep
+// the capped retry cadence until every active connection has a client or the
+// monitor stops: providers list clients, so an expired startup retry would leave
+// a missing connection outside ordinary polling permanently.
 func (m *Monitor) retryFailedConnections(ctx context.Context) {
 	defer recoverFromPanic("retryFailedConnections")
 
-	// Retry schedule: 5s, 10s, 20s, 40s, 60s, then every 60s for up to 5 minutes total
+	// Retry schedule: 5s, 10s, 20s, 40s, 60s, then every 60s.
 	retryDelays := connRetryDelays
-
-	maxRetryDuration := 5 * time.Minute
-	startTime := time.Now()
 	retryIndex := 0
 
 	for {
-		// Stop retrying after max duration or if context is cancelled
+		// Stop when the monitor is cancelled, including while waiting below.
 		select {
 		case <-ctx.Done():
 			return
 		default:
-		}
-
-		if time.Since(startTime) > maxRetryDuration {
-			log.Info().Msg("connection retry period expired")
-			return
 		}
 
 		// Calculate next retry delay
@@ -108,13 +103,23 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 		// Try to recreate PVE clients
 		for _, pve := range missingPVE {
+			if ctx.Err() != nil {
+				return
+			}
 			if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
 				// Create cluster client
-				endpoints, endpointFingerprints := m.buildClusterEndpointsForReconnect(pve)
+				endpoints, endpointFingerprints, conflictingEndpoints := m.buildClusterEndpointsForReconnect(pve)
 
 				clientConfig := config.CreateProxmoxConfig(&pve)
 				clientConfig.Timeout = connectionTimeout
-				clusterClient := proxmox.NewClusterClient(pve.Name, clientConfig, endpoints, endpointFingerprints)
+				clusterClient, err := proxmox.NewClusterClientWithContext(ctx, pve.Name, clientConfig, endpoints, endpointFingerprints, conflictingEndpoints...)
+				if ctx.Err() != nil {
+					return
+				}
+				if err != nil {
+					log.Warn().Err(err).Str("instance", pve.Name).Msg("Failed to reconnect cluster client, will retry")
+					continue
+				}
 
 				m.replacePVEClient(pve.Name, clusterClient)
 				m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
@@ -129,7 +134,10 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 			// Create regular client
 			clientConfig := config.CreateProxmoxConfig(&pve)
 			clientConfig.Timeout = connectionTimeout
-			client, err := newProxmoxClientFunc(clientConfig)
+			client, err := newProxmoxClientFunc(ctx, clientConfig)
+			if ctx.Err() != nil {
+				return
+			}
 			if err != nil {
 				log.Warn().
 					Err(err).
@@ -148,9 +156,15 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 		// Try to recreate PBS clients
 		for _, pbsInst := range missingPBS {
+			if ctx.Err() != nil {
+				return
+			}
 			clientConfig := config.CreatePBSConfig(&pbsInst)
 			clientConfig.Timeout = 60 * time.Second
-			client, err := pbs.NewClient(clientConfig)
+			client, err := pbs.NewClientWithContext(ctx, clientConfig)
+			if ctx.Err() != nil {
+				return
+			}
 			if err != nil {
 				monErr := monitorerrors.WrapConnectionError("recreate_pbs_client", pbsInst.Name, err)
 				log.Warn().

@@ -1,0 +1,96 @@
+{
+  "original_goal": "Safe certificate-error diagnosis through existing help, without a verification bypass or connection/credential churn.",
+  "source_sha": "646f5869836b4fa9169bd60bdd5adefef0859a23",
+  "verified_parent": "646f5869836b4fa9169bd60bdd5adefef0859a23",
+  "result": "passed",
+  "verified_at": "2026-10-14T17:46:06.410103Z",
+  "source_files": {
+    "docs/TROUBLESHOOTING.md": "3e377b9a648e1126671b3f1078db70e2cd555f758327de6ea57f3c37f2b1b1f6",
+    "docs/PBS.md": "6b4af56c6d6ee9e78f548ffeeee4c40058efb2f0b875b985b27fd427ca76ed3d",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "3e377b9a648e1126671b3f1078db70e2cd555f758327de6ea57f3c37f2b1b1f6",
+    "frontend-modern/public/docs/PBS.md": "6b4af56c6d6ee9e78f548ffeeee4c40058efb2f0b875b985b27fd427ca76ed3d",
+    "frontend-modern/browser-tests/certificate-trust-help.cjs": "f189cd33c85a9db09cc7415a49247224bb1edf112e272e33a923eba5e3e3dc72"
+  },
+  "source_proof": {
+    "receipt_id": "source-vkt24ps1",
+    "source_sha": "646f5869836b4fa9169bd60bdd5adefef0859a23",
+    "snapshot": "a5fbb56ba34cc2b4fdbf0e29f79831dbfb71f5926af060b5920cb66fda70fc09",
+    "command_exit": 0,
+    "client_exit": 0,
+    "guest_ready": true,
+    "guest_stop_completed": true,
+    "output_bytes": 376559,
+    "output_sha256": "4f11bea57ecbdd37a941effc250224eaaaaa100c08aec8c9e054b2c8332afe60",
+    "collection_complete": true,
+    "checks": "71 parser/link/mirror tests and 32-module real Docs/router/Markdown/CSS consuming build; not a full product/API build."
+  },
+  "content_binding": {
+    "sha256": "4779c37aa2ce504a8a11cc2816b721f7ec000a79fa6977277e2b103822a6bf70",
+    "source_inputs": 2844,
+    "artifacts": 14,
+    "served_guides": {
+      "TROUBLESHOOTING": "3e377b9a648e1126671b3f1078db70e2cd555f758327de6ea57f3c37f2b1b1f6",
+      "PBS": "6b4af56c6d6ee9e78f548ffeeee4c40058efb2f0b875b985b27fd427ca76ed3d"
+    }
+  },
+  "browser": {
+    "client_exit": 0,
+    "playwright": "1.56.1",
+    "cases": [
+      {
+        "name": "desktop-chromium",
+        "width": 1360,
+        "height": 900,
+        "dark": false,
+        "browser": "141.0.7390.37",
+        "checks": [
+          "symptom entry, four TLS error distinctions, CA versus leaf trust, verified renewal, per-member safety and private evidence",
+          "direct and reloaded renewal/member fragments receive visible heading focus without page overflow",
+          "keyboard/touch Getting Help and PBS round-trip links, focused destinations and browser back"
+        ]
+      },
+      {
+        "name": "phone-webkit",
+        "width": 390,
+        "height": 900,
+        "dark": true,
+        "browser": "26.0",
+        "checks": [
+          "symptom entry, four TLS error distinctions, CA versus leaf trust, verified renewal, per-member safety and private evidence",
+          "direct and reloaded renewal/member fragments receive visible heading focus without page overflow",
+          "keyboard/touch Getting Help and PBS round-trip links, focused destinations and browser back"
+        ]
+      }
+    ],
+    "capture_sha256": {
+      "desktop-chromium-errors.png": "eaa0b3c86fb3325fd016ca391719c53716e6072c1e7d6e2123583be18874d66f",
+      "desktop-chromium-renewal.png": "1420ff53fbbdf0374f2834d71aea51f6eee234c240446f137b6d8ab630e7d2bc",
+      "desktop-chromium-members.png": "a5c56c6c429ec1dd6f90668c712cad7675946def42408c8e4688e744b933d881",
+      "desktop-chromium-pbs-entry.png": "39065dfb054258da2710f254b9d28e0b8191392ca07c18a383d8f7b96a8a44eb",
+      "phone-webkit-errors.png": "24ca5897499d8fb51d62d658334d7ca5541cf1854f48ddb5a27c78627c014599",
+      "phone-webkit-renewal.png": "2e5df770d6a3e2207b3bb4de4160a2bbb58dd03770d16a93b34fddbcd19cdb7c",
+      "phone-webkit-members.png": "ef9cbc041cea339ebba3de7e22138328040a274c321f9556277508c9f217aab0",
+      "phone-webkit-pbs-entry.png": "0277b5fb4b53c3b58ef566a0852e173ae4009dc1f59df442a3c7de3e7278ec37"
+    },
+    "errors": [],
+    "cleanup": {
+      "browser_closed": true,
+      "server_closed": true
+    }
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "inspection_count": 8,
+    "observations": [
+      "Desktop light: all four error distinctions, verification-preserving warning and CA-versus-leaf renewal text are legible; focused headings have a visible outline. The entire member/privacy/recovery paragraph is readable without overlap.",
+      "Phone dark at 390 px: saved fields, error distinctions, complete renewal workflow and member/privacy paragraphs wrap inside the content column. Bold safety labels and underlined links remain readable; the member heading has a visible blue focus outline.",
+      "Both PBS captures show the complete added trust-method paragraph and underlined return link. Existing long code lines scroll within their code block rather than widening the page. No literal credential, overlay or clipped changed paragraph is present."
+    ],
+    "limitations": "Documentation rendering/interaction proof only. No native TLS request, saved-pin edit, guest recovery or release operation."
+  },
+  "unresolved_dependency": {
+    "owner": "Independent reviewer/coordinator/protected publisher; later train inclusion; PI investigation and actual-use follow-through.",
+    "needed": "Containing reviewed publication and actual released source. Native TLS, member recovery and every original reported symptom remain with Core/Delivery."
+  },
+  "limits": "Real Docs consumer with fixture shell only; no backend/API, TLS, update or platform request. Static-doc guard skip is not browser proof. Public security correction is a separate verified community action."
+}

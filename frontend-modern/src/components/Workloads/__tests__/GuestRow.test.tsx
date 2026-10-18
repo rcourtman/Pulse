@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@solidjs/testing-library';
+import { render, screen, fireEvent, cleanup, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk } from '@/types/api';
 import { guestDiskDeferrals } from '../__fixtures__/guestDiskDeferrals';
+import { GUEST_DRAWER_BACKUP_PRECAUTION } from '../guestDrawerModel';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
@@ -796,7 +797,7 @@ describe('GuestRow', () => {
 
     it('shows dash when disk data is unavailable', () => {
       renderGuestRow({
-        guest: makeGuest({ disk: { total: 0, used: 0, free: 0, usage: 0 } }),
+        guest: makeGuest({ disk: { total: 0, used: 0, free: 0 } }),
       });
       expect(screen.queryByTestId('disk-bar')).toBeNull();
       // Fallback is a hyphen "-"
@@ -1271,6 +1272,49 @@ describe('GuestRow', () => {
     const observation = (state: string, date = observedAt, source = 'guest-agent-meminfo') =>
       makeMemory({ observation: { state, source, observedAt: date } });
     const noticeSelector = '[data-workload-memory-read-status]';
+    it.each(['bars', 'sparklines'] as const)(
+      'invalidates only a stale agent-owned carrier in the mounted %s row',
+      (mode) => {
+        const [guest, setGuest] = createSignal(
+          makeGuest({ memory: observation('current', observedAt, 'agent') }),
+        );
+        const view = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                visibleColumnIds={['name', 'memory']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        expect(view.container.querySelector(noticeSelector)).toBeNull();
+        setGuest({ ...guest(), agentStale: true, lastSeen: '2026-10-01T12:00:00Z' });
+        const notice = view.container.querySelector(noticeSelector)!;
+        expect(notice).toHaveTextContent('Last known');
+        expect(notice).toHaveTextContent('stopped reporting');
+        expect(notice).toHaveTextContent('2026-09-30 11:00:00 UTC');
+        expect(notice).not.toHaveTextContent('2026-10-01');
+        if (mode === 'bars')
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+            'data-reading-state',
+            'last-known',
+          );
+        else
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, last known 50%' }),
+          ).toBeInTheDocument();
+        setGuest({ ...guest(), memory: observation('current') });
+        expect(view.container.querySelector(noticeSelector)).toBeNull();
+        setGuest({
+          ...guest(),
+          agentStale: false,
+          memory: observation('current', observedAt, 'agent'),
+        });
+        expect(view.container.querySelector(noticeSelector)).toBeNull();
+      },
+    );
     const history = {
       getGuestMetricSeries: vi.fn(() => [
         {
@@ -2543,6 +2587,45 @@ describe('GuestRow', () => {
   });
 
   describe('disk usage edge cases', () => {
+    it.each(['bars', 'sparklines'] as const)(
+      'keeps missing capacity-only reads separate from zero and byte-only reads in %s',
+      (mode) => {
+        const [value, setValue] = createSignal(makeGuest({ disk: { total: 100 }, disks: [] }));
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={value()}
+                visibleColumnIds={['name', 'disk']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        const row = container.querySelector('tr');
+        const cell = () => container.querySelector('[data-workload-col="disk"]')!;
+        expect(screen.queryByTestId('disk-bar')).toBeNull();
+        expect(cell()).not.toHaveTextContent('0%');
+        setValue({ ...value(), disk: { usage: 1 } });
+        if (mode === 'bars') expect(screen.getByTestId('disk-bar')).toBeInTheDocument();
+        else
+          expect(
+            screen.getByRole('img', { name: 'test-vm disk usage history, current 1%' }),
+          ).toBeInTheDocument();
+        setValue({ ...value(), disk: { used: 50, total: 100 } });
+        if (mode === 'sparklines')
+          expect(
+            screen.getByRole('img', { name: 'test-vm disk usage history, current 50%' }),
+          ).toBeInTheDocument();
+        setValue({ ...value(), disk: { usage: 0 } });
+        if (mode === 'sparklines')
+          expect(
+            screen.getByRole('img', { name: 'test-vm disk usage history, current 0%' }),
+          ).toBeInTheDocument();
+        expect(container.querySelector('tr')).toBe(row);
+      },
+    );
+
     it('shows dash when disk usage is -1 (unsupported)', () => {
       renderGuestRow({
         guest: makeGuest({
@@ -3342,9 +3425,11 @@ describe('GuestRow backup evidence disclosure', () => {
   it.each([{ columns: ['name', 'backup'] }, { columns: ['name'] }])(
     'opens read-only evidence without triggering the enclosing row for columns %j',
     ({ columns }) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-10-12T02:00:00Z'));
       const onClick = vi.fn();
       renderGuestRow({
-        guest: makeGuest({ lastBackup: Date.now() - 3600000 }),
+        guest: makeGuest({ lastBackup: Date.parse('2026-10-12T00:30:00Z') }),
         visibleColumnIds: columns,
         onClick,
       });
@@ -3352,13 +3437,318 @@ describe('GuestRow backup evidence disclosure', () => {
         name: columns.includes('backup') ? /^Backup status:/ : /^Last backup:/,
       });
       fireEvent.click(trigger);
-      expect(
-        screen.getByRole('dialog', { name: 'Backup status details for test-vm' }),
-      ).toHaveTextContent('Last completed backup');
+      const dialog = screen.getByRole('dialog', { name: 'Backup status details for test-vm' });
+      expect(dialog).toHaveTextContent('Last completed backup');
+      const completedTime = dialog.querySelector('time')!;
+      expect(completedTime).toHaveAttribute('datetime', '2026-10-12T00:30:00.000Z');
+      expect(completedTime.textContent).toBe('2026-10-12 00:30:00 UTC');
       expect(onClick).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole('button', { name: 'Close backup details' }));
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(onClick).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('GuestRow accessible reading explanations', () => {
+  it.each(['bars', 'sparklines'] as const)(
+    'regression: %s exposes safe disk evidence without opening the enclosing row',
+    async (metricDisplayMode) => {
+      const onClick = vi.fn();
+      renderGuestRow({
+        guest: makeGuest({ diskStatusReason: 'prev-agent-timeout' }),
+        visibleColumnIds: ['name', 'disk'],
+        metricDisplayMode,
+        onClick,
+      });
+      const trigger = screen.getByRole('button', { name: 'Disk reading for test-vm: Last known' });
+      expect(trigger).toHaveAttribute('type', 'button');
+      expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('dialog')).toBeNull();
+      trigger.focus();
+      fireEvent.click(trigger);
+      const dialog = screen.getByRole('dialog', { name: 'Disk reading for test-vm' });
+      expect(dialog).toHaveTextContent('Using last known disk stats.');
+      expect(dialog).toHaveTextContent(
+        'Completion is uncertain. Do not restart the guest agent during a backup.',
+      );
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      expect(onClick).not.toHaveBeenCalled();
+      await Promise.resolve();
+      const close = screen.getByRole('button', { name: 'Close reading details' });
+      expect(close).toHaveFocus();
+      fireEvent.keyDown(document, { key: 'Tab' });
+      expect(close).toHaveFocus();
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(trigger).toHaveFocus();
+      expect(onClick).not.toHaveBeenCalled();
+    },
+  );
+
+  it('regression: exposes source, original time and cache/setup caveat without a hover', () => {
+    const onClick = vi.fn();
+    renderGuestRow({
+      guest: makeGuest({
+        memory: makeMemory({
+          // The current caption is actionable only at the configured warning.
+          // Quiet low-pressure cache readings remain covered independently.
+          used: 0.8 * 4294967296,
+          free: 0.2 * 4294967296,
+          usage: 80,
+          observation: {
+            state: 'current',
+            source: 'status-mem',
+            observedAt: '2026-01-01T00:00:00Z',
+          },
+        }),
+      }),
+      visibleColumnIds: ['name', 'memory'],
+      workloadTableLayoutMode: 'phone',
+      onClick,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Memory reading for test-vm: Cache?' }));
+    const dialog = screen.getByRole('dialog', { name: 'Memory reading for test-vm' });
+    expect(dialog).toHaveTextContent('Source: Proxmox. Observed: 2026-01-01 00:00:00 UTC.');
+    expect(dialog).toHaveTextContent('a high percentage alone does not mean it is short of memory');
+    expect(dialog).toHaveTextContent('Defer agent setup, restarts and live guest-agent probes');
+    expect(onClick).not.toHaveBeenCalled();
+    expect(dialog.querySelectorAll('button')).toHaveLength(1);
+  });
+
+  it('updates already open evidence for the same guest, closes on fresh source, and does not add a read', () => {
+    const [guest, setGuest] = createSignal(makeGuest({ diskStatusReason: 'prev-agent-timeout' }));
+    const { container } = render(() => (
+      <table>
+        <tbody>
+          <GuestRow guest={guest()} visibleColumnIds={['name', 'disk']} />
+        </tbody>
+      </table>
+    ));
+    const row = container.querySelector('tr');
+    fireEvent.click(screen.getByRole('button', { name: 'Disk reading for test-vm: Last known' }));
+    const dialog = screen.getByRole('dialog');
+    setGuest(makeGuest({ diskStatusReason: 'permission-denied' }));
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(dialog).toHaveTextContent('Permission denied.');
+    expect(dialog).toHaveTextContent('Do not widen intentionally scoped access');
+    expect(dialog).not.toHaveTextContent('Using last known disk stats.');
+    expect(dialog).not.toHaveTextContent('Guest request timed out.');
+    setGuest(makeGuest({ diskStatusReason: undefined }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Disk reading for/ })).toBeNull();
+    expect(container.querySelector('tr')).toBe(row);
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
+
+  it('closes rather than transferring an open explanation to another resource with the same name', () => {
+    const [guest, setGuest] = createSignal(makeGuest({ diskStatusReason: 'prev-agent-timeout' }));
+    render(() => (
+      <table>
+        <tbody>
+          <GuestRow guest={guest()} visibleColumnIds={['name', 'disk']} />
+        </tbody>
+      </table>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: /^Disk reading for/ }));
+    setGuest(
+      makeGuest({
+        id: 'another-instance-node1-100',
+        instance: 'another-instance',
+        diskStatusReason: 'permission-denied',
+      }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Disk reading for/ }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Permission denied.');
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('Guest request timed out.');
+  });
+
+  it('leaves current cache-aware readings without extra buttons, dialogs or mutations', () => {
+    renderGuestRow({
+      guest: makeGuest({
+        memory: makeMemory({
+          observation: {
+            state: 'current',
+            source: 'guest-agent-meminfo',
+            observedAt: '2026-01-01T00:00:00Z',
+          },
+        }),
+      }),
+      visibleColumnIds: ['name', 'memory', 'disk'],
+    });
+    expect(screen.queryByRole('button', { name: /^(Memory|Disk) reading for/ })).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('backup disclosures keep completion separate from guest safety', () => {
+  const backup = Date.now() - 3600_000;
+
+  function openBackup(backupColumn: boolean) {
+    fireEvent.click(
+      screen.getByRole('button', { name: backupColumn ? /^Backup status:/ : /^Last backup:/ }),
+    );
+    return screen.getByRole('dialog');
+  }
+
+  it.each([true, false])(
+    'keeps the same open evidence truthful through lock, uncertain completion and recovery, column=%s',
+    (backupColumn) => {
+      const onClick = vi.fn();
+      const [guest, setGuest] = createSignal(
+        makeGuest({ lastBackup: backup, guestAgentStatus: 'available', agentVersion: '9.2' }),
+      );
+      render(() => (
+        <table>
+          <tbody>
+            <GuestRow
+              guest={guest()}
+              visibleColumnIds={backupColumn ? ['name', 'backup'] : ['name']}
+              onClick={onClick}
+            />
+          </tbody>
+        </table>
+      ));
+      const dialog = openBackup(backupColumn);
+      expect(dialog).toHaveTextContent('Last completed backup');
+      expect(dialog).toHaveTextContent('Guest-agent reads: Reported available');
+      expect(dialog).toHaveTextContent('does not independently confirm thaw or filesystem writes');
+      expect(within(dialog).queryByRole('link', { name: 'Backup safety guidance' })).toBeNull();
+      expect(
+        within(dialog).getByRole('link', { name: 'Change when backups count as old' }),
+      ).toHaveAttribute('href', '/alerts/thresholds/proxmox#backups');
+
+      setGuest({
+        ...guest(),
+        lock: 'backup',
+        backupInProgress: true,
+        diskStatusReason: 'prev-vm-locked',
+      });
+      expect(screen.getByRole('dialog')).toBe(dialog);
+      expect(dialog).toHaveTextContent('Backup running now');
+      expect(dialog).toHaveTextContent('Guest-agent reads: Deferred');
+      expect(dialog).toHaveTextContent(
+        'Guest reads paused while Proxmox reports a VM operation lock',
+      );
+      expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+      expect(dialog).not.toHaveTextContent('Reported available');
+      expect(within(dialog).getByRole('link', { name: 'Backup safety guidance' })).toHaveAttribute(
+        'href',
+        '/docs/VM_DISK_MONITORING',
+      );
+
+      // An unlocked VM and fresh backup are not evidence that an uncertain
+      // guest request completed. A reporting Pulse Agent cannot clear it.
+      setGuest({
+        ...guest(),
+        lock: '',
+        backupInProgress: false,
+        diskStatusReason: 'prev-agent-timeout',
+        agentKind: 'pulse',
+        agentVersion: '6.5.0',
+        agentStale: false,
+      });
+      expect(dialog).toHaveTextContent('Guest request timed out. Completion is uncertain.');
+      expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+      expect(dialog).toHaveTextContent('Last completed backup');
+      expect(dialog).not.toHaveTextContent('VM operation lock');
+
+      setGuest({ ...guest(), diskStatusReason: '', guestAgentStatus: 'available' });
+      expect(dialog).toHaveTextContent('Guest-agent reads: Reported available');
+      expect(dialog).not.toHaveTextContent('timed out');
+      expect(dialog).not.toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+      expect(within(dialog).queryByRole('link', { name: 'Backup safety guidance' })).toBeNull();
+      expect(
+        within(dialog).getByRole('link', { name: 'Change when backups count as old' }),
+      ).toHaveAttribute('href', '/alerts/thresholds/proxmox#backups');
+      expect(onClick).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(guestDiskDeferrals)(
+    'carries the existing allowlisted %s precaution into backup evidence',
+    (reason, detail) => {
+      renderGuestRow({
+        guest: makeGuest({
+          lastBackup: backup,
+          guestAgentStatus: 'deferred',
+          diskStatusReason: reason,
+        }),
+        visibleColumnIds: ['name', 'backup'],
+      });
+      const dialog = openBackup(true);
+      expect(dialog).toHaveTextContent(detail);
+      expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+    },
+  );
+
+  it.each([
+    'available',
+    'expected-unreachable',
+    'not-running',
+    'disabled',
+    'unrecognised-private-value',
+    '',
+  ])(
+    'shows the recognised interpretation of %s, never raw unknown state or a health verdict',
+    (state) => {
+      renderGuestRow({
+        guest: makeGuest({ lastBackup: backup, guestAgentStatus: state, agentVersion: '9.2' }),
+        visibleColumnIds: ['name', 'backup'],
+      });
+      const dialog = openBackup(true);
+      expect(dialog).toHaveTextContent('Guest-agent reads:');
+      expect(dialog).not.toHaveTextContent('unrecognised-private-value');
+      expect(dialog).not.toHaveTextContent('Guest agent connected');
+      expect(dialog).not.toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+    },
+  );
+
+  it.each(['lxc', 'vm'] as const)(
+    'does not fabricate QEMU read state for a %s non-QEMU control',
+    (type) => {
+      renderGuestRow({
+        guest: makeGuest({
+          lastBackup: backup,
+          type,
+          platformType: type === 'vm' ? 'vmware-vsphere' : 'proxmox-pve',
+          platformScopes: type === 'vm' ? ['vmware-vsphere'] : ['proxmox-pve'],
+          lock: 'backup',
+          agentKind: 'pulse',
+          agentVersion: '6.5.0',
+        }),
+        visibleColumnIds: ['name', 'backup'],
+      });
+      if (type === 'vm') {
+        expect(screen.queryByRole('button', { name: /^Backup status:/ })).toBeNull();
+        return;
+      }
+      const dialog = openBackup(true);
+      expect(dialog).toHaveTextContent('Last completed backup');
+      expect(dialog).not.toHaveTextContent('Guest-agent reads:');
+      expect(dialog).not.toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+    },
+  );
+
+  it.each([0, NaN, Date.now() + 86400_000])(
+    'keeps a precaution independent of missing or uncertain backup evidence %s',
+    (lastBackup) => {
+      renderGuestRow({
+        guest: makeGuest({
+          lastBackup,
+          guestAgentStatus: 'deferred',
+          diskStatusReason: 'lock-unverified',
+        }),
+        visibleColumnIds: ['name', 'backup'],
+      });
+      const trigger = screen.getByRole('button', { name: /^Backup status:/ });
+      fireEvent.click(trigger);
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).not.toHaveTextContent('Last completed backup');
+      expect(dialog).toHaveTextContent('Pulse cannot verify that the VM is unlocked');
+      expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
     },
   );
 });

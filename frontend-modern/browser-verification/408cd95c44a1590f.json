@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "6ced391ac3d4c832f2b7012a2397a6b9f76d990d",
+  "verified_at": "2026-10-14T03:21:54.155154Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx": "5fb7d048b8491266bac8a0b8934ba2c40f5339fce3ef4362a53907cbf92e57af"
+  },
+  "routes": [
+    "/settings/system-relay (existing unlicensed notice and entitled phone controls through the actual compiled app)"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Playwright1.56.1, Chromium141 and WebKit26; actual compiled source f90a3da1, validated source inputs/assets and synthetic read-only runtime responses. Containing parent changes only the PBS fixture viewport metadata, not the app producer, styles or graph.",
+    "Eight desktop/phone, light/dark, unlicensed/existing-paid scenes pass. Ten capture originals were opened with native view_image in the lane outcome; complete notice text wraps without clamping, including the date and all three phone-alert alternatives.",
+    "Unlicensed notices expose neither pairing/configuration/token access nor sale links. Existing entitled phone configuration and pairing controls remain; no pairing, configuration, entitlement or billing mutation is exercised.",
+    "Three final original retirement/paid-navigation browser assertions pass with one intentional mobile desktop-journey skip. The independent current auth light golden comparisons fail and remain explicitly unqualified, not covered by this notice receipt."
+  ],
+  "interactions": [
+    "Direct existing-route navigation with delayed runtime capabilities, real settings component and shared InlineNotice/Card; current labelled note rather than hidden phone subtitle.",
+    "Read complete free/paid guidance and existing connection/pairing controls at 390px/desktop; inspect actual pixels and layout, unclipped paragraph heights and page containment.",
+    "Observe only GET requests, no non-billing entitlement reads or unlicensed configuration/pairing/token reads; no new offer, route, permission or service operation."
+  ]
+}

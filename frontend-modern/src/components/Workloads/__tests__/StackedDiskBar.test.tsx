@@ -19,11 +19,13 @@ import { StackedDiskBar } from '../StackedDiskBar';
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeDisk(overrides: Partial<Disk> = {}): Disk {
+  const total = overrides.total ?? 107374182400;
+  const used = overrides.used ?? 53687091200;
   return {
     total: 107374182400, // 100 GiB
     used: 53687091200, // ~50 GiB
     free: 53687091200,
-    usage: 50,
+    usage: total > 0 ? (used / total) * 100 : 0,
     mountpoint: '/',
     type: 'ext4',
     device: '/dev/sda1',
@@ -138,6 +140,22 @@ describe('StackedDiskBar', () => {
       expect(screen.getByText('75%')).toBeInTheDocument();
     });
   });
+
+  it.each([Infinity, -Infinity, Number.NaN, -100, 0, undefined])(
+    'renders the independent percentage without invalid capacity bytes (%s)',
+    async (total) => {
+      const { container } = render(() => (
+        <StackedDiskBar aggregateDisk={{ total, used: 50, usage: 50 }} mode="aggregate" />
+      ));
+      expect(screen.getByText('50%')).toBeInTheDocument();
+      expect(getSingleBarFill(container)).toHaveAttribute('width', '50');
+      expect(container.textContent).not.toMatch(/NaN|Infinity|undefined|50.0 B\//);
+      await fireEvent.mouseEnter(getBarTrigger(container));
+      expect(document.querySelector('[data-tooltip-portal]')?.textContent).not.toMatch(
+        /NaN|Infinity|undefined/,
+      );
+    },
+  );
 
   // ── Multiple disks (inline per-disk mode) ──────────────────────────────
 
@@ -515,10 +533,11 @@ describe('StackedDiskBar', () => {
   // ── Zero capacity edge case ─────────────────────────────────────────────
 
   describe('zero capacity', () => {
-    it('handles zero total capacity gracefully', () => {
+    it('shows unavailable rather than empty utilization for zero total capacity', () => {
       const disk = makeDisk({ used: 0, total: 0, free: 0 });
       render(() => <StackedDiskBar disks={[disk]} />);
-      expect(screen.getByText('0%')).toBeInTheDocument();
+      expect(screen.getByText('N/A')).toBeInTheDocument();
+      expect(screen.queryByText('0%')).not.toBeInTheDocument();
     });
 
     it('handles zero total in stacked mode without NaN segments', () => {

@@ -16,10 +16,10 @@ func TestClusterClientEndpointFingerprint(t *testing.T) {
 		},
 	}
 
-	if got := cc.getEndpointFingerprint("node1"); got != "node-fp" {
+	if got := checkedClusterFingerprint(t, cc, "node1"); got != "node-fp" {
 		t.Fatalf("expected node fingerprint, got %s", got)
 	}
-	if got := cc.getEndpointFingerprint("node2"); got != "base" {
+	if got := checkedClusterFingerprint(t, cc, "node2"); got != "base" {
 		t.Fatalf("expected base fingerprint, got %s", got)
 	}
 }

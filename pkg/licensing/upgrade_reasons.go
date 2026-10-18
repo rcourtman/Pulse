@@ -11,9 +11,9 @@ type ReasonEntry struct {
 }
 
 // UpgradeReasonMatrix is the canonical feature-to-upgrade-reason mapping.
-// Relay features use "Upgrade to Relay" messaging; Pro features use "Upgrade to Pro".
-// Compatibility-only capabilities must not appear here as generic marketed
-// upgrade reasons.
+// Retired Relay/mobile capabilities remain available to existing entitlements,
+// but must not appear here as marketed upgrades. Current paid features use Pro
+// messaging; compatibility-only capabilities also stay out of this matrix.
 var UpgradeReasonMatrix = buildUpgradeReasonMatrix()
 
 func buildUpgradeReasonMatrix() []ReasonEntry {

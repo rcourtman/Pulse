@@ -132,12 +132,38 @@ func testGuestMemoryObservationLifecycle(t *testing.T) {
 		t.Errorf("deferred memory became fresh History points: %d, want two normal polls", got)
 	}
 	entry := m.vmAgentMemCache[key]
-	entry.fetchedAt = time.Now().Add(-vmAgentMemCleanupMaxAge - time.Second)
+	expiredAt := time.Now().Add(-vmAgentMemCleanupMaxAge - time.Second)
+	entry.fetchedAt = expiredAt
 	m.vmAgentMemCache[key] = entry
-	expired := build()
-	assertProjection(expired, "unavailable", "unavailable", time.Time{})
-	if expired.Memory.HasKnownUsage() || client.vmAgentMemCalls != 1 {
-		t.Fatal("expired evidence became usage or queued a guest read")
+	// Cache expiry alone cannot expire the independently annotated snapshot.
+	// Its original observation is still within the short carry-forward window,
+	// even though the cache no longer qualifies for deferred QGA retention.
+	retained := build()
+	assertProjection(retained, "last-known", "guest-agent-meminfo", original)
+	if retained.Memory.Used != initial.Memory.Used || m.vmAgentMemCache[key].fetchedAt != expiredAt || client.vmAgentMemCalls != 1 {
+		t.Fatal("cache expiry lost the recent original snapshot or renewed QGA evidence")
+	}
+	// Model elapsed time consistently in both original evidence owners. Keep
+	// the diagnostic receipt and served LastSeen fresh: poll timestamps cannot
+	// renew the reading. No retention limit or production clock is changed.
+	snapshot := m.previousGuestSnapshot("provenance", "qemu", "node", 105)
+	if snapshot == nil {
+		t.Fatal("retained diagnostic snapshot missing")
+	}
+	snapshot.Memory.Observation.ObservedAt = expiredAt
+	m.recordGuestSnapshot("provenance", "qemu", "node", 105, *snapshot)
+	previous.Memory.Observation.ObservedAt = expiredAt
+	for poll := 0; poll < 4; poll++ {
+		expired := build()
+		assertProjection(expired, "unavailable", "unavailable", time.Time{})
+		if expired.Memory.HasKnownUsage() || m.vmAgentMemCache[key].fetchedAt != expiredAt || client.vmAgentMemCalls != 1 {
+			t.Fatal("expired evidence became usage, renewed its age or queued a guest read")
+		}
+	}
+	for _, metric := range []string{"memory", "memoryused"} {
+		if got := len(m.metricsHistory.GetGuestMetrics(identity, metric, time.Hour)); got != 2 {
+			t.Errorf("cache/snapshot expiry renewed %s History: %d, want two normal polls", metric, got)
+		}
 	}
 	res.Lock, client.vmStatus.Lock = "", ""
 	client.vmAgentMemAvailable = 4 * gib

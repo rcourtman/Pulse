@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "10bca28cc3afcf3efbdbe1a76518c7a42d9d8474",
+  "verified_at": "2026-10-13T10:45:52.055Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/InlineNotice.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/InlineNotice.tsx": "919f343c34b1477c1c8e611ab0dda99b9ec3fc68335dfbf9a04032f9051c63ef"
+  },
+  "routes": [
+    "Synthetic canonical Resource -> useWorkloads -> production GuestRow/GuestDrawer and ResourceDetailDrawer",
+    "/docs/VM_DISK_MONITORING (actual shipped Docs renderer)",
+    "/recovery-fixture (production RolesPanel and UserAssignmentsPanel, synthetic failed/recovered GET responses)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Original-primitive controls confirm 16px-tall phone safety links and 26.6 by 16px Retry buttons; final actions are at least 44 by 44px on a phone, retaining 16px desktop density. Four notice tones and wrapping long labels have no measured overflow.",
+    "Solid 2px current-tone keyboard outlines with 2px offset and persistent underlines are visible in both themes. Measured final text/focus contrast is 6.84\u201312.38:1. All twelve final and twelve parent captures were opened with native view_image; actual pixels inspected. UA auto-outline single-colour estimates are not treated as complete parent contrast proof.",
+    "Backup safety text, destinations, callbacks and producer/read semantics are unchanged. Both drawer notices persist across Overview/History/Manage and a same-guest lock/cooldown update; native Docs bytes match the unchanged canonical and shipped guide."
+  ],
+  "interactions": [
+    "Native keyboard Tab/Enter and phone padded-edge taps activate the actual safety link in both drawer consumers and reach the shipped guide; real renderer output is read back.",
+    "Actual RBAC error notices recover their synthetic role/user data through one GET per Retry activation, with no access mutation. Four-tone long actions remain visible and focused. Only loopback static assets and synthetic GET responses are used; no external request, mutation, live guest command or page error; both browsers and server close.",
+    "This browser proof is presentation/accessibility only; separate full-suite/build VM results, independent review, protected publication and actual native recovery remain separate facts."
+  ]
+}

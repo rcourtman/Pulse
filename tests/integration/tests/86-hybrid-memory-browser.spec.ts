@@ -1,5 +1,45 @@
 import { expect, test, type WebSocketRoute } from "@playwright/test";
 
+// A table section can extend outside an overflow container even when every
+// reading is fully visible. Measure text lines, not the decorative tbody edge.
+function textIsUnclipped(element: HTMLElement, bottomClearance: number) {
+  const text = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let found = false;
+  for (let node = text.nextNode(); node; node = text.nextNode()) {
+    if (!node.textContent?.trim()) continue;
+    const clip = {
+      left: 0,
+      top: 0,
+      right: window.innerWidth,
+      bottom: window.innerHeight - bottomClearance,
+    };
+    for (let parent: HTMLElement | null = node.parentElement; parent; parent = parent.parentElement) {
+      const style = getComputedStyle(parent);
+      if (style.visibility !== "visible" || Number(style.opacity) === 0) return false;
+      const rect = parent.getBoundingClientRect();
+      if (/^(auto|scroll|hidden|clip)$/.test(style.overflowX)) {
+        clip.left = Math.max(clip.left, rect.left + parent.clientLeft);
+        clip.right = Math.min(clip.right, rect.left + parent.clientLeft + parent.clientWidth);
+      }
+      if (/^(auto|scroll|hidden|clip)$/.test(style.overflowY)) {
+        clip.top = Math.max(clip.top, rect.top + parent.clientTop);
+        clip.bottom = Math.min(clip.bottom, rect.top + parent.clientTop + parent.clientHeight);
+      }
+    }
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const lines = [...range.getClientRects()].filter((rect) => rect.width > 0 && rect.height > 0);
+    if (lines.length === 0) return false;
+    found = true;
+    for (const line of lines) {
+      if (line.left < clip.left || line.top < clip.top || line.right > clip.right || line.bottom > clip.bottom) {
+        return false;
+      }
+    }
+  }
+  return found;
+}
+
 // Synthetic canonical API/socket snapshots; not a live poller or FreeBSD proof.
 test("hybrid guest memory follows canonical snapshots in the browser", async ({
   page,
@@ -237,6 +277,12 @@ test("hybrid guest memory follows canonical snapshots in the browser", async ({
         has: page.getByText("Free", { exact: true }),
       }),
     ).toContainText("100 MB");
+    const readingCells = memoryDetails.locator("th, td");
+    await expect(readingCells).toHaveCount(5); // Memory, Total/value, Free/value.
+    for (const cell of await readingCells.all()) {
+      await expect(cell).toBeVisible();
+      await expect.poll(() => cell.evaluate(textIsUnclipped, 64)).toBe(true);
+    }
     await expect(
       page.locator(".workload-row").filter({ hasText: "cluster-b-vm" }),
     ).toContainText("80%");
@@ -246,4 +292,46 @@ test("hybrid guest memory follows canonical snapshots in the browser", async ({
     });
   }
   expect(errors).toEqual([]);
+});
+
+test("memory text geometry rejects clipping without rejecting table edges", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Chromium geometry controls");
+  for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await page.setContent(`
+      <div id="clip" style="width:200px; overflow:hidden">
+        <table style="width:220px; border-collapse:collapse">
+          <tbody style="border:4px solid black">
+            <tr><th colspan="2" style="padding:24px">Memory</th></tr>
+            <tr><td style="padding:24px">Total</td><td style="padding:24px">100 MB</td></tr>
+            <tr><td style="padding:24px">Free</td><td style="padding:24px">100 MB</td></tr>
+          </tbody>
+        </table>
+      </div>`);
+    // The wider table clips its decorative edge, not any of the five readings.
+    await expect(page.locator("tbody")).not.toBeInViewport({ ratio: 1 });
+    const cells = page.locator("th, td");
+    await expect(cells).toHaveCount(5);
+    for (const cell of await cells.all()) {
+      expect(await cell.evaluate(textIsUnclipped, 64)).toBe(true);
+    }
+    const heading = page.locator("th");
+    for (const style of [
+      "width:20px; overflow:hidden", // Horizontal text clipping.
+      "width:200px; height:10px; overflow:hidden", // Vertical text clipping.
+      "width:200px; visibility:hidden", // Hidden text still has line boxes.
+      "width:200px; opacity:0", // Transparent text still has line boxes.
+      "width:200px; transform:translateX(-250px)", // Outside the viewport.
+      `width:200px; position:fixed; top:${viewport.height - 60}px`, // Navigation clearance.
+    ]) {
+      await page.locator("#clip").evaluate((element, value) => element.setAttribute("style", value), style);
+      expect(await heading.evaluate(textIsUnclipped, 64), style).toBe(false);
+    }
+    await page.setContent('<p><span style="display:inline-block; width:10px; overflow:hidden">100 MB</span></p>');
+    expect(await page.locator("p").evaluate(textIsUnclipped, 64)).toBe(false);
+    await page.locator("span").evaluate((element) => element.setAttribute("style", "visibility:hidden"));
+    expect(await page.locator("p").evaluate(textIsUnclipped, 64)).toBe(false);
+    await page.setContent("<p></p>");
+    expect(await page.locator("p").evaluate(textIsUnclipped, 64)).toBe(false);
+  }
 });

@@ -174,6 +174,7 @@ const memoryReading = (resource: Resource) =>
     resource.memory?.observation,
     isProxmoxGuest(resource),
     {
+      agentStale: resource.agent?.stale === true,
       guestKind:
         resource.type === 'vm'
           ? 'vm'

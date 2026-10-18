@@ -48,17 +48,18 @@ jobs:
           tar -xzf "/tmp/${archive}" -C /tmp gitleaks
           install /tmp/gitleaks /usr/local/bin/gitleaks
 
+      - name: Validate delivered-history secret scan
+        run: python3 scripts/tests/test_ci_secret_scan.py
+
       - name: Run gitleaks
+        env:
+          EXPECTED_HEAD: ${{ github.sha }}
+          DIFF_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        # A merge's latest log entry can have no patch. Scan all newly
+        # delivered commits and its first-parent resolution, not just -1.
+        # Missing/non-ancestor bases scan the complete checkout history.
         run: |
-          set -euo pipefail
-          gitleaks detect \
-            --source . \
-            --log-opts=-1 \
-            --no-banner \
-            --redact \
-            --exit-code 2 \
-            --report-format sarif \
-            --report-path results.sarif
+          bash scripts/scan-ci-secrets.sh "$EXPECTED_HEAD" "$DIFF_BASE"
 
   # The secret scan above runs on every push including docs-only ones — this
   # workflow is the only per-push gitleaks pass, so it must not be path
@@ -73,6 +74,7 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       frontend_deps: ${{ steps.filter.outputs.frontend_deps }}
       go_compile: ${{ steps.filter.outputs.go_compile }}
+      triage_helper: ${{ steps.filter.outputs.triage_helper }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -84,6 +86,9 @@ jobs:
       # independent per-push secret scan and Public docs check unchanged.
       - name: Check shipped docs before dependency work
         run: python3 scripts/check_docs_mirror.py
+
+      - name: Validate browser receipt-only CI admission
+        run: python3 scripts/tests/test_ci_browser_proof_only.py
 
       - name: Classify changed files
         id: filter
@@ -99,10 +104,32 @@ jobs:
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "frontend_deps=true" >> "$GITHUB_OUTPUT"
             echo "go_compile=true" >> "$GITHUB_OUTPUT"
+            echo "triage_helper=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Receipts change evidence, not the application. Keep the per-push
+          # secret scan and Canonical Governance (including receipt validation).
+          # The complete tree diff must be receipt-only; mixed source or graph
+          # changes and an unavailable diff never enter this path.
+          if [ "$(python3 scripts/ci_browser_proof_only.py --base "$base" --head "${{ github.sha }}")" = true ]; then
+            echo "Browser receipt-only tree diff; runtime checks are not applicable."
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "frontend_deps=false" >> "$GITHUB_OUTPUT"
+            echo "go_compile=false" >> "$GITHUB_OUTPUT"
+            echo "triage_helper=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           changed=$(git diff --name-only "$base" "${{ github.sha }}")
           printf 'Changed files:\n%s\n' "$changed"
+          # The issue-event job tests before minting its App token, but that
+          # happens after publication. Test its parser and silent-mutation
+          # policy on the proposed source too, including documentation-only
+          # guidance and every workflow consumed by the policy tests.
+          triage_helper=false
+          if printf '%s\n' "$changed" | grep -E '^\.github/scripts/(issue-version-triage(\.test)?\.cjs|triage-comment-policy\.test\.cjs|package(-lock)?\.json)$|^\.github/ISSUE_TEMPLATE/|^\.github/workflows/|^docs/ISSUE_TRIAGE\.md$|^scripts/tests/test_ci_browser_proof_only\.py$' >/dev/null; then
+            triage_helper=true
+          fi
+          echo "triage_helper=$triage_helper" >> "$GITHUB_OUTPUT"
           # Note: -q must not be combined with -v here — BSD grep exits 1 for
           # that combination even when inverted matches exist.
           if printf '%s\n' "$changed" | grep -vE '^docs/|\.md$' >/dev/null; then
@@ -129,12 +156,38 @@ jobs:
           # Consume the full list: grep -q can close the pipe on an early
           # match, making printf fail with SIGPIPE under pipefail. A large
           # dependency change must not enter the inherited-advisory mode.
-          if printf '%s\n' "$changed" | grep -E '^frontend-modern/package(-lock)?\.json$|^scripts/npm-audit-retry\.sh$' >/dev/null; then
+          if printf '%s\n' "$changed" | grep -E '^frontend-modern/package(-lock)?\.json$|^scripts/(npm-audit-retry\.sh|npm_audit_process\.py)$' >/dev/null; then
             frontend_deps=true
           else
             frontend_deps=false
           fi
           echo "frontend_deps=$frontend_deps" >> "$GITHUB_OUTPUT"
+
+  triage-helper:
+    name: Issue metadata and silent triage policy
+    needs: changes
+    if: needs.changes.outputs.triage_helper == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out proposed triage source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install locked parser without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix .github/scripts
+
+      - name: Test proposed issue metadata and silent policy
+        run: npm run test:triage --prefix .github/scripts
 
   provider-pair-docker:
     name: Provider pair Docker acceptance
@@ -200,11 +253,18 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend-modern/package-lock.json
+
+      # npm overrides can install an older serializer than a new Solid asks
+      # for without npm ci failing. The old security exception is source-bound.
+      - name: Check Solid serialization dependency edges
+        run: |
+          node --test scripts/tests/check-frontend-serialization.test.mjs
+          node scripts/check-frontend-serialization.mjs
 
       - name: Install frontend dependencies
         working-directory: frontend-modern
@@ -312,7 +372,7 @@ jobs:
 
       - name: Retain bounded native updater receipt
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-updater-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pulse-native-updater.json
@@ -332,7 +392,7 @@ jobs:
 
       - name: Retain bounded notification runtime receipt
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: notification-runtime-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pulse-notification-runtime.json
@@ -598,7 +658,7 @@ jobs:
 
       - name: Upload internal/api test timings
         if: always() && needs.changes.outputs.code == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: internal-api-test-seconds-${{ matrix.index }}
           path: ${{ runner.temp }}/internal-api-test-seconds/
@@ -771,7 +831,7 @@ jobs:
 
       - name: Upload benchmark evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bench-results
           path: |

@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "3d871cf58529825a4eb5275f4dd582a7d479f441",
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx": "e2d6fca5bd093abdbabc7c49b9158658f7e8bcc2b85cc3eb0525561840610e43"
+  },
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx"
+  ],
+  "routes": [
+    "Existing Settings / Infrastructure / Proxmox connection editor, through production NodesAPI and NodeCredentialSlot in an offline app-runtime fixture"
+  ],
+  "states": [
+    "Saved TLS alias and duplicate-row conflicts from Core 9705e5df / actual source-i98qcvv8 HTTP responses; token, JSON-password and form-password configurations",
+    "Native Online and immutable identity preserved alongside Pulse reachability=false",
+    "Collapsed and expanded failure reason; independent member disclosures; recovery clears stale diagnostics",
+    "Synthetic missing reason, unknown/reachable peer with stale error and long literal multiline error"
+  ],
+  "interactions": [
+    "Ordinary keyboard Tab reaches the diagnostic; Enter opens, Space closes and Enter reopens without form submission",
+    "WebKit phone touch tap exposes the same credential-free reason with a 44px target",
+    "Visible keyboard focus and non-overlapping diagnostic text; minimum measured text contrast 6.367:1",
+    "Dirty display name and address override survive diagnostic use and independent config reload; SSL verification and fingerprint inputs unchanged",
+    "Disclosures start no request or mutation; long error text wraps and HTML-shaped text stays literal"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 1050
+    },
+    {
+      "width": 390,
+      "height": 1050
+    }
+  ],
+  "verified_at": "2026-10-14T15:24:00Z",
+  "engines": [
+    "Playwright 1.56.1 / Chromium 141.0.7390.37",
+    "Playwright 1.56.1 / WebKit 26.0"
+  ],
+  "scope": "12 actual recorded-producer cases plus four explicitly synthetic adverse controls; not native trust recovery, installed acceptance, auth qualification, incident attribution or release availability. All 20 final captures opened with native view_image. Final containing code is 3d871cf585; this additive receipt is bound to its own parent, not an earlier receipt retargeting.",
+  "receipt_path": "frontend-modern/browser-verification/ee5c3c73b448908b.json"
+}

@@ -203,6 +203,37 @@ If you have multiple PBS servers, add each one separately in Settings. Pulse wil
 
 ## Troubleshooting
 
+### PBS is Active but missing from monitoring
+
+**Active** in **Settings → Infrastructure** describes the configured
+connection's polling health. It does not establish that Pulse has a matching
+PBS resource, every datastore or fresh readings. A direct PBS API connection
+does not require a Pulse Agent; adding one does not prove that the API path
+recovered.
+
+Use the existing views to distinguish what is missing:
+
+| Observation | Where to look next |
+| --- | --- |
+| The PBS server itself is missing | Open **Proxmox → Backups** and look for its **Backup server** row. Note any existing search or view filter. The PBS VM/LXC in **Overview** is a different resource. If Proxmox navigation is absent too, retain that fact. |
+| The server row exists, but datastores or backups are missing | Compare the affected view with the connection's existing collection scope. PVE passthrough backups do not establish that direct PBS inventory is available. Do not widen permissions or change scope just to diagnose the gap. |
+| Current readings exist, but a chart is empty | Use the [PBS History checks](#pbs-is-connected-but-history-stays-empty) for that server and time range. An empty chart is not the same as a missing server. |
+
+When reporting a missing server, keep the Pulse server version separate from
+the PBS version and whether a Pulse Agent is installed. Say which existing
+views lack it, whether Infrastructure says Active, and whether it was visible
+before. A last known working version is useful only if already known; unknown
+is valid. Use consistent aliases for private server names. Existing error text
+or screenshots are enough to start; do not run Diagnostics, enable Debug or
+collect a full response just to fill the report.
+
+Do not delete and re-add the connection, replace tokens, install an agent,
+restart PBS or Pulse, clear History or run a backup to make the server appear.
+These actions can lose evidence or change the affected path. Keep certificate
+verification and existing access restrictions intact. If the original incident
+also involved an unresponsive guest or uncertain freeze/thaw, follow
+[Backup safety](VM_DISK_MONITORING.md#backup-safety) before any live checks.
+
 ### "Connection Failed" Error
 
 Check from the Pulse host or container's network, if possible. A request from
@@ -219,6 +250,12 @@ another machine does not prove that Pulse can reach PBS.
   ```bash
   openssl x509 -in /etc/proxmox-backup/proxy.pem -noout -fingerprint -sha256
   ```
+
+  For renewal, a fingerprint mismatch or contradictory saved pins, use the
+  [certificate-trust checks](TROUBLESHOOTING.md#proxmox-or-pbs-certificate-validation-failed)
+  before changing this connection. A saved leaf pin is a different trust
+  method from CA validation; do not disable verification or clear it simply
+  because a new certificate connects.
 
 - **Authentication/permissions:** test a datastore request, not just `/version`.
   Prepare a private header file on the machine running curl. Stop if preparation
@@ -398,12 +435,24 @@ the pause. Monitoring and alerts are unavailable while Pulse is stopped.
 
 ### PBS is connected but History stays empty
 
-Open **Proxmox → Backups → Backup Server → History**, not a datastore or the
-PBS virtual machine's row in **Overview**. Record which route fails. A working
-VM chart can use a different metrics target from the PBS host chart; it does
-not establish that the PBS chart can read the same series. Current CPU and
-memory values, a green connection badge, and an **API+Agent** label also do not
-prove that stored host history is available.
+Open **Proxmox → Backups**, choose the **Backup Server** row, then use the
+drawer's **Overview** charts and **History range** selector. If your installed
+version still has a separate **History** tab, use that tab instead; no upgrade
+or restart is needed just to find the chart. This is not a datastore chart,
+**Alerts → History**, or the PBS virtual machine's row in Proxmox **Overview**.
+Record which route fails. A working VM chart can use a different metrics target
+from the PBS host chart; it does not establish that the PBS chart can read the
+same series. Current CPU and memory values, a green connection badge, and an
+**API+Agent** label also do not prove that stored host history is available.
+
+Use the chart's selected stored range, not a current summary card or table
+sparkline. For observation times, missing samples and aggregated low–high bands,
+see [reading a History panel](METRICS_HISTORY.md#read-a-history-panel). On a
+phone, secondary panels may be collapsed behind **Show …** below the charts;
+reveal them before treating a panel as missing. This changes the layout, not
+the selected range or collection. CPU and memory are in **Utilization**, which
+is already visible when the charts are shown; the button is not a fix for an
+empty CPU or memory chart.
 
 Start with one affected PBS and a recent, unlocked time range:
 
@@ -416,7 +465,8 @@ Start with one affected PBS and a recent, unlocked time range:
 2. If the target is already known, inspect the chart's request instead of
    collecting the identities again. In your signed-in browser, open developer
    tools → **Network**, filter for `metrics-store/history`, then open the
-   affected **History** tab. Do not refresh or restart the server. Inspect one
+   affected drawer's **Overview** charts (or **History** tab on older versions).
+   Do not refresh or restart the server. Inspect one
    completed request for the drawer's `resourceType`, `resourceId` and `range`.
    The drawer normally fetches all chart metrics together: a request **without
    `metric`** is expected, so do not wait for a separate `metric=cpu` request.

@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "60bd0ffc621436e036e80140c85a687fcbae3cfa",
+  "changed_paths": [
+    "frontend-modern/src/utils/format.ts",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/format.ts": "3239389ca80fcda409753972e96d4db17693e484b54310e7137a766ba2688111",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "5ac3f5aa7c9e61e9a96360e168814c252f922b4465de4c48dc5e831709878894",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "40ba78e29e0a0e5f11e50597f511cdc5902bb364255eb07cb6608dc4e0dd4c3c"
+  },
+  "routes": [
+    "/browser-tests/backup-completion-time.html (isolated existing production Workloads row/drawer fixture; no product route added)"
+  ],
+  "states": [
+    "completed VM/LXC numeric timestamps",
+    "equivalent offset producer observations",
+    "running/ended activity without renewed completion",
+    "replacement completion only",
+    "invalid/absent/future and now-valid supplied evidence",
+    "non-UTC local calendar and locale differences"
+  ],
+  "interactions": [
+    "real AlertsAPI saved-policy GET",
+    "keyboard and touch disclosure, Escape closure and focus return, no row-action propagation",
+    "desktop fine-pointer hover shortcut",
+    "passive clock tick with unchanged existing 30-second anomaly polling only; no added backup/guest/history reads",
+    "native view_image inspection of all six final captures"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-12T18:41:13.404255Z",
+  "proof_scope": "Real AlertsAPI policy read, production VM/LXC row, table badge/indicator/hover, shared dialog and guest drawer with synthetic completion timestamps. Non-UTC desktop/phone contexts; no native backup, guest operation or availability claim.",
+  "browser_proof": {
+    "checks": 43,
+    "loaded_production_hashes": 214,
+    "captures": 6,
+    "client_exit": 0,
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "name": "desktop-west",
+        "version": "141.0.7390.37",
+        "viewport": {
+          "width": 1365,
+          "height": 900
+        },
+        "timezoneId": "America/Los_Angeles",
+        "locale": "en-US"
+      },
+      {
+        "name": "phone-east",
+        "version": "26.0",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "timezoneId": "Asia/Tokyo",
+        "locale": "ja-JP"
+      }
+    ],
+    "cleanup": {
+      "desktop-west-context": "closed",
+      "desktop-west-browser": "closed",
+      "phone-east-context": "closed",
+      "phone-east-browser": "closed",
+      "server": "closed"
+    },
+    "dossier": "RECEIPTS.md / browser/result.json and native-image-review.json"
+  }
+}

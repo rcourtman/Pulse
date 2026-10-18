@@ -7547,7 +7547,7 @@ func TestContract_DiagnosticsDockerPrepareTokenInstallCommandUsesLifecycleTransp
 	if strings.Contains(got, "--disable-host") {
 		t.Fatalf("install command preserved stale disable-host flag: %s", got)
 	}
-	if !strings.Contains(got, `sudo bash -c`) || !strings.Contains(got, `--token-file "$token_file"`) || !strings.Contains(got, "--preflight-only") {
+	if !strings.Contains(got, `"$@" bash -c`) || !strings.Contains(got, `--token-file "$token_file"`) || !strings.Contains(got, "--preflight-only") {
 		t.Fatal("install command missing private-token/preflight root-or-sudo boundary")
 	}
 	if strings.Contains(got, "token-123") || strings.Contains(got, "| bash") || strings.Contains(got, "| sudo") {
@@ -7580,7 +7580,7 @@ func TestContract_DiagnosticsDockerPrepareTokenPreservesExplicitWorkloadOnlyMode
 func TestContract_SetupScriptURLCommandUsesFailFastQuotedTransport(t *testing.T) {
 	url := "https://pulse.example.com/api/setup-script?type=pve&host=pve1.local"
 	got := buildSetupScriptCommand(url, "token-123")
-	for _, required := range []string{"curl -fsSL " + posixShellQuote(url) + ` -o "$install_script"`, "sudo bash -c", "PULSE_SETUP_TOKEN_FILE="} {
+	for _, required := range []string{"curl -fsSL " + posixShellQuote(url) + ` -o "$install_script"`, `"$@" bash -c`, "PULSE_SETUP_TOKEN_FILE="} {
 		if !strings.Contains(got, required) {
 			t.Fatalf("missing secure bootstrap fragment %s", required)
 		}
@@ -8654,10 +8654,7 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[
-			{"key":"mobile_app","reason":"Get Relay so Pulse Mobile can pair with this instance for secure handoff and notifications.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=mobile_app"},
-			{"key":"push_notifications","reason":"Get Relay so important alerts reach you immediately on mobile instead of waiting for you to reopen Pulse.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=push_notifications"},
-			{"key":"relay","reason":"Get Relay so Pulse stays reachable securely from anywhere instead of only on the local dashboard.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=relay"},
-			{"key":"long_term_metrics","reason":"Get Relay for 14 days of history, or Pro for 90 days, so you can see what changed before and after an incident.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=long_term_metrics"},
+			{"key":"long_term_metrics","reason":"Upgrade to Pro for 90 days of metric history, so you can see what changed before and after an incident.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=long_term_metrics"},
 			{"key":"ai_autofix","reason":"Upgrade to Pro so Patrol can investigate issues, apply safe fixes within Patrol mode, and verify the result.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_autofix"},
 			{"key":"ai_alerts","reason":"Upgrade to Pro so Patrol can investigate issues instead of handing you a stack of symptoms.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_alerts"},
 			{"key":"rbac","reason":"Upgrade to Pro when more than one operator needs safe access boundaries around infrastructure changes.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=rbac"},
@@ -11206,7 +11203,7 @@ func TestContract_ProxmoxInstallCommandUsesPrivilegeEscalationWrapper(t *testing
 	if !strings.Contains(got, `if [ "$(id -u)" -eq 0 ]; then`) {
 		t.Fatalf("install command missing root-or-sudo wrapper: %s", got)
 	}
-	if !strings.Contains(got, `sudo bash -c`) {
+	if !strings.Contains(got, `"$@" bash -c`) {
 		t.Fatalf("install command missing sudo fallback: %s", got)
 	}
 	if !strings.Contains(got, `token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)`) {
@@ -27181,6 +27178,38 @@ func TestContract_AssistantSettingsAdvertisePlanningNotExecution(t *testing.T) {
 	}
 }
 
+func TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization(t *testing.T) {
+	diag := EmptyDiagnosticsInfo()
+	diag.Nodes = []NodeDiagnostic{{ID: "private-pve-id", Name: "private-pve-name"}}
+	applyNodeDiagnosticFailure(&diag.Nodes[0], classifyDiagnosticsConnectionFailure(errors.New("API error 403: forbidden"), "probe failed"))
+	diag.Nodes[0].Connected, diag.Nodes[0].Error = mergeDiagnosticsConnection(false, diag.Nodes[0].Error, true, true)
+	diag.PBS = []PBSDiagnostic{{ID: "private-pbs-id", Name: "private-pbs-name"}}
+	applyPBSConnectionDiagnostic(&diag.PBS[0], Connection{State: ConnectionStateUnauthorized,
+		StateReason: "poll failed", LastError: &ConnectionError{Message: "authentication error: API error 403: forbidden"}})
+	applyPBSDiagnosticFailure(&diag.PBS[0], classifyDiagnosticsConnectionFailure(errors.New("API error 401: unauthorized"), "probe failed"))
+	appendDiagnosticsAPIRejections(&diag)
+	if len(diag.Errors) != 3 || !strings.Contains(diag.Errors[0], "monitor still reports this instance connected") ||
+		!strings.Contains(diag.Errors[1], "PBS connection 1 monitor:") || !strings.Contains(diag.Errors[2], "PBS connection 1 live check:") {
+		t.Fatalf("summary collapsed or misattributed probe/monitor evidence: %+v", diag.Errors)
+	}
+	for _, summary := range diag.Errors {
+		if strings.Contains(summary, "private-") || strings.Contains(summary, "Rotate the node credentials") {
+			t.Fatalf("summary introduced identities or credential churn: %s", summary)
+		}
+	}
+	rec := httptest.NewRecorder()
+	writeDiagnosticsResponse(rec, diag, time.Time{})
+	var wire DiagnosticsInfo
+	if err := json.Unmarshal(rec.Body.Bytes(), &wire); err != nil {
+		t.Fatal(err)
+	}
+	if !wire.Nodes[0].Connected || wire.PBS[0].Connected || wire.PBS[0].Probe.Connected ||
+		wire.PBS[0].ErrorKind != "proxmox_permission_denied" || wire.PBS[0].Probe.ErrorKind != "proxmox_auth_rejected" ||
+		!reflect.DeepEqual(wire.Errors, diag.Errors) {
+		t.Fatalf("wire changed authoritative connectivity or rejection guidance: %+v", wire)
+	}
+}
+
 // A failed support probe must not direct an operator to remove the trust
 // boundary which rejected it. These are diagnostic errors, not native faults.
 func TestContract_DiagnosticsTLSRecoveryPreservesTrust(t *testing.T) {
@@ -27420,5 +27449,44 @@ func TestSSOConfigConcurrentReadsAndAdminWrites(t *testing.T) {
 	}
 	if got := providerIDs(persisted); fmt.Sprint(got) != fmt.Sprint(want[:writers]) {
 		t.Fatalf("persisted providers = %v, want %v", got, want[:writers])
+	}
+}
+
+func TestContract_PortablePrivateBootstrapPayloads(t *testing.T) {
+	const token = "synthetic-portable-install-token"
+	artifact := configapi.BuildSetupScriptInstallArtifact("https://pulse.example", "pbs", "https://pbs.example:8007", "https://pulse.example", false, token, 1900000000)
+	payload := map[string]any{
+		"setup":     artifact,
+		"proxmox":   AgentInstallCommandResponse{Command: configapi.BuildProxmoxAgentInstallCommand(configapi.AgentInstallCommandOptions{BaseURL: "https://pulse.example", Token: token, InstallType: "pbs", IncludeInstallType: true}), Token: token},
+		"container": map[string]string{"command": buildContainerRuntimeAgentInstallCommand("https://pulse.example", token, false), "token": token},
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]map[string]any
+	if err := json.Unmarshal(encoded, &wire); err != nil {
+		t.Fatal(err)
+	}
+	for kind, fields := range wire {
+		command, ok := fields["command"].(string)
+		if !ok || strings.Contains(command, token) || strings.ContainsAny(command, "\r\n") || strings.Count(command, "bash -c ") != 1 {
+			t.Fatalf("%s wire command lost its single private body", kind)
+		}
+		for _, required := range []string{`"$@" bash -c`, "tty_control=(stty)", "tty_control=(busybox stty)", "Cannot restore terminal settings.", ` -o "$install_script"`} {
+			if !strings.Contains(command, required) {
+				t.Fatalf("%s wire command lost %s", kind, required)
+			}
+		}
+		credentialKey := "token"
+		if kind == "setup" {
+			credentialKey = "setupToken"
+			if fields["commandWithEnv"] != command || fields["commandWithoutEnv"] != command || fields["downloadURL"] != fields["url"] {
+				t.Fatal("setup artifact aliases or credential-free download changed")
+			}
+		}
+		if fields[credentialKey] != token {
+			t.Fatalf("%s lost its separate credential field", kind)
+		}
 	}
 }

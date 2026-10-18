@@ -17,33 +17,44 @@ spec.loader.exec_module(runner)
 
 
 class NativeInstallerRunnerTest(unittest.TestCase):
-    inventory = "TestInstaller\nTestRootInstallResetSafety\nExample\nFuzzInput\nTestFuture\nTestRootInstallResetFuture\nok\tpackage\n"
+    inventory = "TestInstaller\nTestRootInstallResetSafety\nExample\nFuzzInput\nTestFuture\nTestRootInstallResetFuture\nTestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure\nok\tpackage\n"
     expected_groups = (
-        ["Example", "TestFuture"],
-        ["FuzzInput", "TestInstaller"],
+        ["TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure"],
+        ["Example", "TestFuture", "TestInstaller"],
+        ["FuzzInput"],
         ["TestRootInstallResetFuture", "TestRootInstallResetSafety"],
     )
 
     def test_every_discovered_check_runs_once_in_one_group(self):
         groups = runner.partition(self.inventory)
-        self.assertEqual(runner.GROUPS, ("general-0", "general-1", "reset"))
+        self.assertEqual(runner.GROUPS, ("nas-preflight", "general-0", "general-1", "reset"))
         self.assertEqual(groups, self.expected_groups)
         selected = [name for group in groups for name in group]
-        self.assertEqual(len(selected), 6)
-        self.assertEqual(len(set(selected)), 6)
+        self.assertEqual(len(selected), 7)
+        self.assertEqual(len(set(selected)), 7)
 
     def test_partition_order_and_odd_inventory_are_exhaustive(self):
         reversed_inventory = "\n".join(reversed(self.inventory.splitlines()))
         self.assertEqual(runner.partition(reversed_inventory), self.expected_groups)
         self.assertEqual(runner.partition(self.inventory + "TestZ\n"), (
-            ["Example", "TestFuture", "TestZ"],
+            self.expected_groups[0],
             self.expected_groups[1],
-            self.expected_groups[2],
+            ["FuzzInput", "TestZ"],
+            self.expected_groups[3],
         ))
+
+    def test_other_checks_keep_their_previous_group_and_order(self):
+        general = sorted(name for name in self.inventory.splitlines()
+                         if name.startswith(("Test", "Example", "Fuzz"))
+                         and not name.startswith("TestRootInstallReset"))
+        groups = runner.partition(self.inventory)
+        for group, previous in zip(groups[1:3], (general[::2], general[1::2])):
+            self.assertEqual(group, [name for name in previous if name not in runner.PREFLIGHT])
 
     def test_missing_inventory_is_not_a_passing_empty_run(self):
         for inventory in ("", "ok\tpackage\n", "TestInstaller\n", "TestRootInstallResetSafety\n",
-                          "TestInstaller\nTestRootInstallResetSafety\n"):
+                          "TestInstaller\nTestRootInstallResetSafety\n",
+                          self.inventory.replace(runner.PREFLIGHT[0] + "\n", "")):
             with self.subTest(inventory=inventory), self.assertRaises(ValueError):
                 runner.partition(inventory)
 
@@ -54,9 +65,9 @@ class NativeInstallerRunnerTest(unittest.TestCase):
 
     def test_unicode_go_identifiers_remain_included(self):
         groups = runner.partition(self.inventory + "TestΣ\n")
-        self.assertIn("TestΣ", [name for group in groups[:2] for name in group])
+        self.assertIn("TestΣ", [name for group in groups[1:3] for name in group])
 
-    def run_main(self, fault=None):
+    def run_main(self, fault=None, phase="all"):
         calls = []
 
         def run(command, **kwargs):
@@ -68,10 +79,10 @@ class NativeInstallerRunnerTest(unittest.TestCase):
         with mock.patch.object(runner.subprocess, "run", side_effect=run), mock.patch("builtins.print"):
             if fault:
                 with self.assertRaises(subprocess.CalledProcessError) as raised:
-                    runner.main()
+                    runner.main(phase)
                 self.assertEqual(raised.exception.returncode, 23)
             else:
-                runner.main()
+                runner.main(phase)
         return calls
 
     def test_actual_commands_preserve_deadlines_count_and_complete_selection(self):
@@ -81,7 +92,7 @@ class NativeInstallerRunnerTest(unittest.TestCase):
         self.assertTrue(calls[0][1]["text"])
         # Check the count before zip: a missing final reset invocation must not
         # silently truncate the comparison and become a passing control.
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(calls), 5)
         for (command, kwargs), names in zip(calls[1:], self.expected_groups):
             self.assertEqual(command, ["go", "test", "-count=1", "-timeout", "10m", "-run", "^(" + "|".join(names) + ")$", runner.PACKAGE])
             self.assertTrue(kwargs["check"])
@@ -89,7 +100,7 @@ class NativeInstallerRunnerTest(unittest.TestCase):
 
     def test_command_selectors_do_not_broaden_the_inventory(self):
         calls = self.run_main()
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(calls), 5)
         patterns = [re.compile(command[6]) for command, _ in calls[1:]]
         for name in (name for group in self.expected_groups for name in group):
             with self.subTest(name=name):
@@ -101,14 +112,45 @@ class NativeInstallerRunnerTest(unittest.TestCase):
     def test_inventory_failure_does_not_run_any_group(self):
         self.assertEqual(len(self.run_main(1)), 1)
 
-    def test_first_general_failure_cannot_be_hidden_by_later_groups(self):
+    def test_preflight_failure_cannot_be_hidden_by_later_groups(self):
         self.assertEqual(len(self.run_main(2)), 2)
 
-    def test_second_general_failure_remains_terminal(self):
+    def test_first_general_failure_remains_terminal(self):
         self.assertEqual(len(self.run_main(3)), 3)
 
-    def test_reset_failure_remains_terminal(self):
+    def test_second_general_failure_remains_terminal(self):
         self.assertEqual(len(self.run_main(4)), 4)
+
+    def test_reset_failure_remains_terminal(self):
+        self.assertEqual(len(self.run_main(5)), 5)
+
+    def test_workflow_phases_execute_the_same_inventory_once(self):
+        early = self.run_main(phase="preflight")
+        remaining = self.run_main(phase="remaining")
+        self.assertEqual(len(early), 2)
+        self.assertEqual(len(remaining), 4)
+        self.assertEqual(early[1][0], self.run_main()[1][0])
+        self.assertEqual(remaining[1:], self.run_main()[2:])
+        patterns = [re.compile(command[6]) for command, _ in early[1:] + remaining[1:]]
+        for name in (name for group in self.expected_groups for name in group):
+            with self.subTest(name=name):
+                self.assertEqual(sum(bool(pattern.fullmatch(name)) for pattern in patterns), 1)
+
+    def test_each_phased_failure_stops_without_retry(self):
+        for phase, count in (("preflight", 2), ("remaining", 4)):
+            for fault in range(1, count + 1):
+                with self.subTest(phase=phase, fault=fault):
+                    self.assertEqual(len(self.run_main(fault, phase)), fault)
+
+    def test_unknown_phase_cannot_start_go_or_hide_checks(self):
+        with mock.patch.object(runner.subprocess, "run") as run:
+            with self.assertRaises(ValueError):
+                runner.main("skip")
+            run.assert_not_called()
+        result = subprocess.run(["python3", str(ROOT / "scripts/installtests/run_unix_contracts.py"),
+                                 "--phase", "skip"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("invalid choice", result.stderr)
 
 
 if __name__ == "__main__":

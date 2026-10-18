@@ -638,9 +638,10 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-100">
                     <span class="font-medium">Config signing (optional)</span> — Require signed
                     remote config payloads with{' '}
-                    <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via{' '}
-                    <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and{' '}
-                    <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
+                    <code class="wrap-anywhere">PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>.
+                    Provide keys via{' '}
+                    <code class="wrap-anywhere">PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and{' '}
+                    <code class="wrap-anywhere">PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
                   </div>
 
                   <div class="rounded-md border border-border bg-surface-hover px-4 py-3">

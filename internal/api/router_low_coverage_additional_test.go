@@ -179,7 +179,8 @@ func TestHandleDiagnosticsDockerPrepareToken_Success(t *testing.T) {
 	if !strings.Contains(payload["installCommand"].(string), "--enable-docker") {
 		t.Fatalf("expected install command to enable docker metrics: %q", payload["installCommand"])
 	}
-	if !strings.Contains(payload["installCommand"].(string), `sudo bash -c`) || !strings.Contains(payload["installCommand"].(string), `--token-file "$token_file"`) {
+	requirePrivateBootstrapPrivilegeDispatch(t, payload["installCommand"].(string))
+	if !strings.Contains(payload["installCommand"].(string), `--token-file "$token_file"`) {
 		t.Fatal("expected install command to preserve private token input through root or sudo")
 	}
 	for _, field := range []string{"installCommand", "systemdServiceSnippet"} {

@@ -1,15 +1,17 @@
 package monitoring
 
 import (
+	"strings"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
-func (m *Monitor) buildClusterEndpointsForInit(pve config.PVEInstance) ([]string, map[string]string) {
+func (m *Monitor) buildClusterEndpointsForInit(pve config.PVEInstance) ([]string, map[string]string, []string) {
 	return m.buildClusterClientEndpoints(pve)
 }
 
-func (m *Monitor) buildClusterEndpointsForReconnect(pve config.PVEInstance) ([]string, map[string]string) {
+func (m *Monitor) buildClusterEndpointsForReconnect(pve config.PVEInstance) ([]string, map[string]string, []string) {
 	return m.buildClusterClientEndpoints(pve)
 }
 
@@ -18,9 +20,11 @@ func (m *Monitor) buildClusterEndpointsForReconnect(pve config.PVEInstance) ([]s
 // are valid inside the cluster but unreachable from the Pulse container; those
 // addresses remain useful failover and reachability evidence, but they must
 // never displace the URL the operator proved reachable when adding the cluster.
-func (m *Monitor) buildClusterClientEndpoints(pve config.PVEInstance) ([]string, map[string]string) {
+func (m *Monitor) buildClusterClientEndpoints(pve config.PVEInstance) ([]string, map[string]string, []string) {
 	endpoints := make([]string, 0, len(pve.ClusterEndpoints)+1)
 	endpointFingerprints := make(map[string]string)
+	var conflictingEndpoints []string
+	conflicts := make(map[string]bool)
 	discoveryCfg := monitorDiscoveryConfig(m)
 	hasFingerprint := pve.Fingerprint != ""
 	seen := make(map[string]struct{}, len(pve.ClusterEndpoints)+1)
@@ -53,7 +57,17 @@ func (m *Monitor) buildClusterClientEndpoints(pve config.PVEInstance) ([]string,
 			failoverCount++
 		}
 		if ep.Fingerprint != "" {
-			endpointFingerprints[host] = ep.Fingerprint
+			if previous, exists := endpointFingerprints[host]; exists {
+				if strings.ToLower(strings.ReplaceAll(previous, ":", "")) != strings.ToLower(strings.ReplaceAll(ep.Fingerprint, ":", "")) && !conflicts[host] {
+					// The map cannot retain two values for the exact same URL.
+					// Carry the conflict separately; a later repeated row must
+					// not erase it or choose the certificate to trust.
+					conflicts[host] = true
+					conflictingEndpoints = append(conflictingEndpoints, host)
+				}
+			} else {
+				endpointFingerprints[host] = ep.Fingerprint
+			}
 		}
 	}
 
@@ -71,5 +85,5 @@ func (m *Monitor) buildClusterClientEndpoints(pve config.PVEInstance) ([]string,
 			Msg("Configured Proxmox cluster URL is empty; using first discovered member as API authority")
 	}
 
-	return endpoints, endpointFingerprints
+	return endpoints, endpointFingerprints, conflictingEndpoints
 }

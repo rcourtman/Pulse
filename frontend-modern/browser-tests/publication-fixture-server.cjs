@@ -11,21 +11,27 @@ const runtimePaths = [
   'src/components/Workloads/GuestRow.tsx',
   'src/components/Workloads/MetricMiniSparkline.tsx',
   'src/components/Workloads/guestDrawerModel.ts',
+  'src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts',
+  'src/utils/memoryObservation.ts',
   'src/features/patrol/PatrolAttentionWorkbench.tsx',
 ];
 const entryPaths = [
+  'browser-tests/backup-completion-time.html',
   'browser-tests/guest-disk-provenance.html',
   'browser-tests/guest-reading-help.html',
   'browser-tests/guest-row-memory-provenance.html',
+  'browser-tests/guest-memory-agent-stale.html',
   'browser-tests/patrol-rule-removal.html',
 ];
 const harnessPaths = [
   'browser-tests/publication-fixture-source.cjs',
   'browser-tests/build-publication-fixtures.mjs',
   'browser-tests/publication-fixture-server.cjs',
+  'browser-tests/backup-completion-time.cjs',
   'browser-tests/guest-disk-provenance.cjs',
   'browser-tests/guest-reading-help.cjs',
   'browser-tests/guest-row-memory-provenance.cjs',
+  'browser-tests/guest-memory-agent-stale.cjs',
   'browser-tests/patrol-rule-removal.cjs',
   'browser-tests/patrol-rule-removal-final.cjs',
 ];

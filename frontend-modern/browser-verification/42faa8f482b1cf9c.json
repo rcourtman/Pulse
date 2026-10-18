@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "ac45a69738d06d526b08b96d6c47b51431739088",
+  "content_sha256": {
+    "frontend-modern/src/utils/connectionErrorPresentation.ts": "1f6bcf499896a091958c8fd840f26f94f335aa58200631db1b76c1ec86ab8584"
+  },
+  "changed_paths": [
+    "frontend-modern/src/utils/connectionErrorPresentation.ts"
+  ],
+  "routes": [
+    "Existing Settings / Infrastructure connected-systems ledger and API platform probe, plus saved Proxmox connection editor; production consumers in an offline app-runtime fixture"
+  ],
+  "states": [
+    "Untrusted TLS certificate and changed fingerprint with independently checked identity guidance",
+    "403 denial with misleading upstream authentication text preserves intended resource limits",
+    "401 rejected authentication makes replacement conditional on confirmed invalidity",
+    "595 server failure with quoted 401/403 is not presented as invalid credentials",
+    "Ordinary synthetic recovery clears old errors; saved SSL verification, fingerprint and collection opt-ins preserved"
+  ],
+  "interactions": [
+    "Desktop keyboard Tab/Enter and phone touch submit the existing address-only probe, with no credential route selected on failure",
+    "Both production consuming surfaces show the full safe hint, with wrapped text and no horizontal overflow",
+    "Same-address next probe and ledger reload clear stale guidance without any settings write",
+    "Manage opens the saved Proxmox form: Verify SSL remains checked, pin unchanged, VMs on and containers off; dirty name survives ledger reload"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-14T17:30:38Z",
+  "engines": [
+    "Playwright 1.56.1 / chromium 141.0.7390.37",
+    "Playwright 1.56.1 / webkit 26.0"
+  ],
+  "scope": "Ten HTTP-fixture consumer journeys; all sixteen final captures opened natively. Exact runtime hashes match this source. Not native/installed trust recovery, permissions acceptance, full authentication qualification or release availability."
+}

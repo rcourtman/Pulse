@@ -350,16 +350,11 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
           perDiskItems().length > 0
             ? compactDetailRows(
                 perDiskItems().map((disk) =>
-                  makeDetailRow(
-                    disk.label,
-                    `${Math.round(disk.percent)}% · ${formatBytes(disk.used)} / ${formatBytes(
-                      disk.total,
-                    )}`,
-                    {
-                      title: disk.device ? `${disk.label} · ${disk.device}` : disk.label,
-                      tone: getDetailTone(disk.textClass),
-                    },
-                  ),
+                  makeDetailRow(disk.label, disk.usageText, {
+                    title: disk.device ? `${disk.label} · ${disk.device}` : disk.label,
+                    tone: disk.percent === null ? 'muted' : getDetailTone(disk.textClass),
+                    wrap: true,
+                  }),
                 ),
               )
             : toDetailRows(storageRows()),

@@ -59,7 +59,7 @@ func (m *Monitor) applyAgentLXCFilesystems(
 	intervalSeconds int,
 ) {
 	agentID = strings.TrimSpace(agentID)
-	if m == nil || m.state == nil || inventory == nil ||
+	if m == nil || inventory == nil ||
 		strings.TrimSpace(linkedNodeID) == "" || agentID == "" {
 		return
 	}
@@ -67,16 +67,18 @@ func (m *Monitor) applyAgentLXCFilesystems(
 		return
 	}
 
-	var linkedNodes []models.Node
-	for _, node := range m.state.GetSnapshot().Nodes {
-		if node.ID == linkedNodeID {
-			linkedNodes = append(linkedNodes, node)
-		}
-	}
-	if len(linkedNodes) != 1 {
+	// This is live agent admission, not a full inventory or mock-mode read.
+	// Capture the replaceable state once and copy only the unique linked node.
+	m.mu.RLock()
+	state := m.state
+	m.mu.RUnlock()
+	if state == nil {
 		return
 	}
-	node := linkedNodes[0]
+	node, unique := state.GetUniqueNode(linkedNodeID)
+	if !unique {
+		return
+	}
 	if strings.TrimSpace(node.Instance) == "" || strings.TrimSpace(node.Name) == "" {
 		return
 	}

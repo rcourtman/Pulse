@@ -20,6 +20,96 @@
 
 ## Purpose
 
+### Aggregate disk bars preserve percentage-only evidence (14 October 2026)
+
+The shared stacked-disk primitive keeps independently supplied aggregate
+percentages in percentage points, including values below 1%. Without a measured
+filesystem, it uses the aggregate metric admission in `workloadDiskUsage.ts`;
+capacity alone cannot draw a healthy zero. Percentage-only tooltips and labels
+withhold missing bytes rather than inventing empty capacity. Measured filesystem
+byte ratios, omitted-zero DiskInfo rows, unknown sentinels, per-filesystem
+thresholds and source-owned last-known/unavailable decoration remain separate.
+
+Verification: the stacked-disk component/model suites retain filesystem and
+host controls; `workloadDiskUsage.test.ts` and the desktop/narrow
+`workload-disk-metrics` browser fixture cover aggregate low/zero/byte/unknown
+readings through the consuming Workloads row and drawer. A fixture is not a
+native measurement or stored History observation.
+
+
+### Pulse Mobile retirement guidance stays readable (14 October 2026)
+
+The existing Pulse Mobile settings surface exposes its retirement guidance as
+a labelled note. An instance without the Relay capability uses the shared
+`InlineNotice`, not the sales gate's two-line body: the date and existing ntfy,
+Gotify and Pushover alternatives wrap in full on a phone. Existing entitled
+phones retain their configuration and pairing controls until 31 March 2027;
+neither note adds an offer, billing read, pairing action or new navigation.
+
+`RelaySettingsPanel.runtime.test.tsx` preserves the full unlicensed message,
+absence of clamping/actions and existing entitlement controls. The first-session
+and paid-navigation browser tests target the actual labelled note rather than
+the desktop-only page subtitle. Desktop and narrow consuming proof must inspect
+the rendered copy and unchanged hidden-form/entitlement boundaries.
+
+### Independent PBS resource and inventory rendering (13 October 2026)
+
+The existing PBS health/datastore/detail table remains mounted outside backup
+inventory loading/error gates. Explicit per-source notices and retries are
+independent too; both inventory failures retain their error state and never
+publish zero restore-point success. Known resource identity and readable
+capacity remain usable, while PBS backup counts stay Loading/Unavailable until
+a valid inventory arrives. `ProxmoxBackupsTable.test.tsx` verifies pending,
+single/both failure and ordinary recovery with a stable server-table owner.
+Desktop/narrow production-app proof must retain actual API resource identity,
+keyboard/touch detail access and truthful incomplete counts. No monitoring,
+backup execution, agent, credential or access authority is added.
+
+### Alert-first drawer composition retains usable evidence guidance (13 October 2026)
+
+The guest's full OS caption moves to the visible, wrapping facts strip; it is
+not shortened or made tooltip-only when Summary moves into closed Details.
+Filesystem evidence and its existing reading-guidance link stay outside that
+disclosure, including unknown and last-known readings. The link keeps its
+44px phone target, compact desktop target and keyboard outline.
+
+The node's denied-update explanation and HelpIcon are owned by the drawer,
+outside the demoted Summary and the lifted warning rows. An ordinary same-node
+reading or relative-age update must not replace the open help dialog or its
+trigger. Update evidence wraps in Worth checking. Alert-first 24h cards,
+metric-owned alert colours, on-demand History, closed inventory Details and
+unchanged advice/actions remain. This is presentation/access continuity, not
+native QGA/backup or update-permission recovery.
+
+`NodeDrawerOverview.updateEvidence.test.tsx` and
+`GuestDrawerOverview.filesystems.test.tsx` cover the connected merge outcomes;
+`browser-tests/drawer-composition.cjs` consumes the actual adapter, drawers,
+shared history query and Docs with synthetic observations at desktop/phone
+widths, including keyboard/touch guidance and same-node updates.
+
+### History honours explicit selected-source staleness (13 October 2026)
+
+The shared memory presentation reads the server's explicit `agent.stale`
+invalidation only when the selected observation is from `agent`. A dated
+current carrier then becomes visibly last known, with its original source,
+time and measured value, including zero. It does not supply current sorting,
+metric-filter pressure or guest/canonical History fallbacks. The visible source
+label explains that the supplying Pulse Agent stopped reporting. Missing or
+invalid provenance remains unknown; unavailable telemetry stays unavailable.
+
+QGA and Proxmox observations remain independent of a stale linked Pulse Agent
+and of filesystem deferrals. No client TTL, source timestamp renewal, metadata
+rewrite, API schema, History point or guest operation is added. The source
+can restore current measured zero when it reports again. This is presentation
+safety, not native restart/thaw recovery or release availability.
+
+`staleAgentMemory.test.ts` connects qualification to both History models,
+sorting and metric search, while `GuestRow.test.tsx` mounts same-ID source
+updates in bars and sparklines. The static production-component browser
+fixture `guest-memory-agent-stale.cjs` exercises agent-facet-only canonical
+deltas through the actual Workloads projection, both drawers and trusted
+keyboard/touch controls at desktop and phone widths.
+
 ### Patrol setup panel uses existing form primitives
 
 `PatrolSetupPanel.tsx` builds the provider choice from `SelectionCardGroup`
@@ -242,6 +332,11 @@ the chart's native hover title and assistive text.
 An independent qualified memory reading is not paused by a disk deferral.
 Neither Last seen, backup completion nor running power state renews memory.
 Unannotated unrelated platforms and actual zero readings retain their meaning.
+Selected agent memory freshness is independent of VM/LXC classification. A stale
+agent retains its original observation as last known, while an independent
+current Proxmox observation remains current. Guest kind still determines the
+provider's cache interpretation.
+
 A current reading from a cache-inclusive Proxmox source (`status-mem`,
 `status-freemem`, `cluster-resources`, `derived-total-minus-used`, the same
 sources and guest kinds the backend marks `MayIncludeCache`) keeps its numbers,
@@ -9058,17 +9153,31 @@ return, active state, badges, and narrow-layout containment remain unchanged.
 The Proxmox node drawer presents checked zero, current positive, stale,
 unavailable, and not-checked package evidence as a labelled detail row with
 bounded copy and checked time. The compact table badge remains reserved for a
-current positive observation. Provider errors are never rendered. An
-unavailable check whose reason is `permission_denied` reads neutral, so the
-node Overview keeps it in Details rather than Worth checking: Proxmox gates the
-package list on `Sys.Modify`, and `docs/TROUBLESHOOTING.md` calls keeping the
-narrower monitoring role a valid choice. Other unavailable reasons stay warnings.
-Node Details rows wrap their values (`wrap: true`) rather than truncating them,
-because Details is where a reader goes for the full value: the update reason,
-the linked agent ID and the CPU model read whole at desktop and phone widths. Component
-and browser evidence covers both 1440px and 390px layouts in
-`NodeDrawerOverview.updateEvidence.test.tsx`, `ProxmoxNodesTable.test.tsx`, and
-`frontend-modern/browser-verification.json`.
+current positive observation. Provider errors are never rendered. Component
+evidence is covered by `NodeDrawerOverview.updateEvidence.test.tsx`,
+`proxmoxUpdateEvidence.test.ts`, and `ProxmoxNodesTable.test.tsx`.
+
+Denied update-list access exposes visible guidance beside that status through
+the shared HelpIcon and help-content registry. It explains that inventory and
+metrics use separate permission checks, preserves the choice to monitor with
+read-only access, and describes Sys.Modify as broader access that also permits
+refreshing package indexes. A denied response does not establish the exact
+missing privilege or an empty update list. Status text wraps through the shared
+detail-row contract at phone widths, including retained counts and checked time.
+The operator-context section and its help control retain their identity while
+readings and relative timestamps update. The shared help dialog remains inside
+the viewport with scrollable content, keyboard dismissal and focus return.
+Current-source browser receipts under `frontend-modern/browser-verification/`
+cover desktop, intermediate, phone and short landscape layouts. These checks
+establish presentation and interaction, not installed Proxmox permissions or
+released acceptance.
+
+An unavailable update check whose reason is `permission_denied` reads neutral,
+so it remains in Details rather than Worth checking. Other unavailable reasons
+stay warnings. Node Details values wrap rather than truncate. This preserves
+full reasons, agent IDs and CPU models at desktop and phone widths.
+
+
 
 Denied update-list access exposes visible guidance beside that status through
 the shared HelpIcon and help-content registry. It explains that inventory and
@@ -9805,3 +9914,61 @@ only when it is present, while existing schedules remain editable after a runtim
 change. Legacy catalogs default to false. API and catalog-model tests cover
 absence and registration so staggered source upgrades do not offer unavailable
 rendering. No price or entitlement changes.
+
+### One explicit guest backup completion time (12 October 2026)
+
+The Workloads backup badge and name-cell indicator disclose the same UTC
+completion date/time as the guest drawer, including on the fine-pointer hover
+shortcut. `formatBackupCompletionTime` normalises the original instant once per
+disclosed readout; the semantic `time` preserves its ISO timestamp. Local browser
+timezone and locale cannot silently change the visible calendar day or time.
+The completion text wraps at narrow widths. Unknown/future/absent readings still
+have no completion element; running or ended activity and clock ticks do not
+renew it. Only replacement evidence changes the supplied completed time.
+
+`BackupCompletionTime.test.tsx`, `BackupStatusAccess.test.tsx` and the formatter
+controls connect both disclosure paths to the drawer, offset inputs, updates,
+uncertainty and disposal. The `backup-completion-time` browser fixture uses real
+VM/LXC rows, policy producer, hover, keyboard/touch dialogs and the guest drawer
+in non-UTC desktop and phone contexts. This is unambiguous presentation, not
+PBS verification ingestion, independent thaw, filesystem liveness, native
+guest restart recovery or containing software availability.
+
+### Host drawers distinguish unknown filesystem usage from empty filesystems
+
+The existing Proxmox node and Docker host per-filesystem rows use the shared
+host disk presentation. An explicit negative usage sentinel, negative or
+non-finite used bytes, or absent/non-positive/non-finite capacity produces
+**Usage unavailable**, with any finite positive capacity retained separately.
+Unavailable usage has neutral text and no utilization bar; a retained capacity
+alone is not a healthy zero. Finite byte ratios preserve their existing
+threshold presentation. Real zero-byte values, including zeros omitted by the
+canonical DiskInfo JSON representation, remain valid empty filesystems when
+capacity is known and no unknown sentinel is present.
+
+The shared usage text wraps in both existing drawers, rather than relying on
+a tooltip or rendering an old percentage after a new unavailable read. The
+existing mount filtering, row disclosure and single-filesystem summary stay
+unchanged. The connected `HostDrawer.filesystem-readings.test.tsx` and shared
+`DrawerDiskListCard.readings.test.tsx` controls cover unknown/capacity/zero,
+invalid bytes and same-mounted-drawer replacement. The desktop Chromium and
+narrow touch WebKit `browser-tests/host-disk-usage.cjs` fixture consumes synthetic
+Resources responses through the actual platform tables and drawers. No new
+route, monitoring policy, provider operation or native recovery claim is added.
+
+The shared `filesystemByteUsage.ts` admission also applies to filesystem inputs
+of `stackedDiskBarModel.ts`: unusable byte rows remain neutral in tooltips and
+do not contribute used bytes, capacity, bars, combined percentages or highest
+usage. All-unmeasured filesystem lists with no independent accepted aggregate
+render N/A, not a fabricated zero. Independently supplied aggregate metrics and
+retained/unavailable source classifications preserve their existing semantics.
+The connected stacked-model controls retain explicit aggregate fallback tests;
+the browser fixture checks mixed and all-unknown lists in the actual summaries
+as well as both drawers, including live replacement at narrow widths.
+
+The aggregate bar admits byte sublabels only with finite non-negative measured
+used bytes and finite positive capacity. An independently valid percentage
+remains visible beside invalid capacity without formatting NaN/Infinity bytes.
+Model/component controls cover non-finite, absent and non-positive capacity;
+`workload-disk-metrics.cjs` checks both Bars (including the tooltip) and Sparklines
+through the same REST reading at desktop and phone widths.

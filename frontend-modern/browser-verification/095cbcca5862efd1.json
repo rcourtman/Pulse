@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "e5c1f3963631c777e94c857dd75c0c84b9fb6898",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/shared/HelpIcon.tsx",
+    "frontend-modern/src/components/shared/helpIconModel.ts",
+    "frontend-modern/src/components/shared/useHelpIconState.ts",
+    "frontend-modern/src/content/help/updates.ts",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "54c0cb2988ad6befc171ac3f6042f52b33d6d5654977027968531ee87cb4ff7d",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "26c84752b849f2cbb9f56e963eab7a65800a14f1031d7389200e899b6477856a",
+    "frontend-modern/src/components/shared/HelpIcon.tsx": "154ff34a5b770a4c5abe954af42ca43b4fd343b593d0ecf36c2aaf21ec1e372f",
+    "frontend-modern/src/components/shared/helpIconModel.ts": "a28b0aa96d48d05ceba5d062d823ec444f15c0e6de17665d1da9bbbf3b0a54ca",
+    "frontend-modern/src/components/shared/useHelpIconState.ts": "c1a05f886cd5f7ec9a1b5f7c4ac98825b3b8f10321be9cc0027053f4c832b8c8",
+    "frontend-modern/src/content/help/updates.ts": "f7e3a822d1826aa0eb137dc3e5fb1559005d7685bdca2671b84b14722b681806",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts": "52af16617dbe18ed2608d285975b9565ba22e0e48017723a580a126cc5c90f9a"
+  },
+  "routes": [
+    "Existing Workloads guest Overview (production Resources API/useWorkloads/GuestRow/GuestDrawer fixture)",
+    "Existing node Overview denial help (production NodeDrawer/HelpIcon)",
+    "/docs/TROUBLESHOOTING#proxmox-pending-update-access (actual shipped Docs renderer through Learn more)"
+  ],
+  "states": [
+    "Complete Windows Server name and version",
+    "Synthetic VM/system-container name/version replacement, missing OS and recovery",
+    "Long unbroken version, name-only and version-only evidence",
+    "Not-running agent remains separate from retained System",
+    "Denied update access, retained stale count, confirmed zero recovery"
+  ],
+  "interactions": [
+    "Desktop keyboard row disclosure and touch-phone row opening",
+    "Same-resource refetch updates OS without remounting drawer; no OS evidence omits the row",
+    "Read full wrapped System without hover or new focus target",
+    "Keyboard/touch open denial-help; synthetic polling preserves it",
+    "Learn more opens same-origin shipped Docs section in a protected new tab",
+    "Escape/Close help returns focus; recovered access withdraws denial cue"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-12T22:32:24Z",
+  "proof": {
+    "checks": 22,
+    "native_inspected_captures": [
+      "desktop-system.png",
+      "desktop-update-help.png",
+      "desktop-shipped-docs.png",
+      "phone-system.png",
+      "phone-update-help.png",
+      "phone-shipped-docs.png"
+    ],
+    "source_graph_files": 258,
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "name": "desktop",
+        "width": 1280,
+        "height": 900,
+        "colorScheme": "light",
+        "timezoneId": "Europe/London",
+        "version": "141.0.7390.37"
+      },
+      {
+        "name": "phone",
+        "width": 390,
+        "height": 844,
+        "colorScheme": "dark",
+        "timezoneId": "Asia/Tokyo",
+        "version": "26.0"
+      }
+    ],
+    "observations": "Six final image contents opened with native view_image: complete System wraps at both widths, help and local documentation readable. Original full-value hover title remains incidental, not the accessibility route. Synthetic/native-recovery limits are retained in RECEIPTS.md.",
+    "cleanup": {
+      "desktopContext": true,
+      "desktopBrowser": true,
+      "phoneContext": true,
+      "phoneBrowser": true,
+      "server": true
+    },
+    "new_api_calls_on_disclosures": 0,
+    "guest_or_update_mutations": 0,
+    "recomposition": {
+      "original_execution_source": "9b3598364802c4fbf3542d0a1978f6558bde4bd5",
+      "original_execution_base": "c56cc44bd8686413f2769cc9623dc30c87c589d8",
+      "reason": "Recreate the rejected unshared candidate on its recorded base without importing an inadmissible contributor committer. The imported commit object is preserved unchanged. Every runtime/test/configuration/dependency/script/contract byte is identical to the previously verified source; only browser-receipt metadata and ancestry change.",
+      "original_capture_verified_at": "2026-10-12T22:32:24Z",
+      "browser_replayed": false,
+      "inspection": "Original six source-bound workspace captures and full build bindings are retained byte-exact; original images are inspected natively. The metadata binds cumulative final content to this new non-merge parent, not a fresh execution claim.",
+      "compiled_sources_verified": 256
+    }
+  }
+}

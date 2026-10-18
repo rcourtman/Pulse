@@ -11,7 +11,7 @@ const renderedGuides = new Map<string, HTMLElement>();
 
 function renderGuide(name: string): HTMLElement {
   // Several destinations share a long guide. Render each immutable document
-  // once, rather than making sixteen navigation checks parse it repeatedly.
+  // once, rather than making navigation checks parse it repeatedly.
   // entry() clones its section, so the cached article is never modified.
   const cached = renderedGuides.get(name);
   if (cached) return cached;
@@ -55,6 +55,30 @@ describe('troubleshooting workflow entry', () => {
     // New, independently verified workflows must not break unrelated safety
     // checks. Require every existing job once, without relying on list offsets.
     const requiredWorkflows: [string, string[]][] = [
+      [
+        'Not sure which version is affected:',
+        ['/docs/TROUBLESHOOTING#find-the-running-server-and-agent-versions'],
+      ],
+      [
+        'Proxmox or PBS reports a certificate error:',
+        ['/docs/TROUBLESHOOTING#proxmox-or-pbs-certificate-validation-failed'],
+      ],
+      [
+        'Copied agent install or removal command failed:',
+        ['/docs/UNIFIED_AGENT#copied-agent-command-fails-before-installation'],
+      ],
+      [
+        'PBS is Active but missing from monitoring:',
+        ['/docs/PBS#pbs-is-active-but-missing-from-monitoring'],
+      ],
+      [
+        'RAID is reported degraded despite a spare:',
+        ['/docs/TROUBLESHOOTING#raid-array-is-degraded-with-a-spare'],
+      ],
+      [
+        'Unraid reports missing disks in empty slots:',
+        ['/docs/TROUBLESHOOTING#unraid-reports-missing-disks-in-empty-slots'],
+      ],
       [
         'Cannot sign in:',
         [
@@ -128,6 +152,16 @@ describe('troubleshooting workflow entry', () => {
   it('keeps server updates, workload updates and reporting acceptance distinct', () => {
     const section = entry();
     const update = workflow(section, 'Update failed or its result is uncertain:');
+    const install = workflow(section, 'Agent host is missing or reporting is rejected:');
+    const command = workflow(section, 'Copied agent install or removal command failed:');
+    const reporting = workflow(section, 'Guest readings are missing or disagree:');
+    const memory = workflow(section, 'Pulse itself uses more memory, CPU or disk writes:');
+    const raid = workflow(section, 'RAID is reported degraded despite a spare:');
+    expect(raid.querySelector('a')?.getAttribute('href')).toBe(
+      '/docs/TROUBLESHOOTING#raid-array-is-degraded-with-a-spare',
+    );
+    expect(prose(raid)).toContain('A spare-inclusive total is not the required member count');
+    expect(prose(raid)).toContain('do not change the array just to clear a Pulse alert');
     expect(prose(update)).toContain('An update of a monitored container is a different job');
     const updateLinks = [...update.querySelectorAll('a')].map((link) => link.getAttribute('href'));
     expect(updateLinks).toEqual([
@@ -135,15 +169,14 @@ describe('troubleshooting workflow entry', () => {
       '/docs/DOCKER#check-a-failed-or-pending-workload-update',
     ]);
     expect(prose(update)).toContain('Preserve the current state and rollback evidence');
-    expect(prose(workflow(section, 'Agent host is missing or reporting is rejected:'))).toContain(
-      'Installer success is not an accepted report',
+    expect(prose(install)).toContain('Installer success is not an accepted report');
+    expect(prose(command)).toContain('A stopped new command does not diagnose the existing agent');
+    expect(prose(command)).toContain('do not repeat removal or installation');
+    expect(command.querySelector('a')?.getAttribute('href')).toBe(
+      '/docs/UNIFIED_AGENT#copied-agent-command-fails-before-installation',
     );
-    expect(prose(workflow(section, 'Guest readings are missing or disagree:'))).toContain(
-      'a working Pulse Agent view does not prove API recovery',
-    );
-    expect(
-      prose(workflow(section, 'Pulse itself uses more memory, CPU or disk writes:')),
-    ).toContain('Guest usage and database size are different measurements');
+    expect(prose(reporting)).toContain('a working Pulse Agent view does not prove API recovery');
+    expect(prose(memory)).toContain('Guest usage and database size are different measurements');
   });
 
   it('routes every entry to an existing shipped heading in the production viewer', () => {

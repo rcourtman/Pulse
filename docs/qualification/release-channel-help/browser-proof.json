@@ -1,0 +1,84 @@
+{
+  "original_goal": "Truthful, safe release help through the existing Docs surface, including the current weekly stable target.",
+  "source_sha": "98ca169e12b99b7a79b4bf8f3ea774377a27aae1",
+  "verified_parent": "98ca169e12b99b7a79b4bf8f3ea774377a27aae1",
+  "result": "passed",
+  "verified_at": "2026-10-14T15:16:17.525213Z",
+  "source_files": {
+    "docs/RELEASE_PROCESS.md": "5becb5098d1f91a6429c85ef6ef3d37fa52a4b02f6b9aced01ee55d84f1b4d6e",
+    "frontend-modern/public/docs/RELEASE_PROCESS.md": "5becb5098d1f91a6429c85ef6ef3d37fa52a4b02f6b9aced01ee55d84f1b4d6e",
+    "frontend-modern/browser-tests/release-channel-help.cjs": "aab424b39a0e083ae3af3354223c1d1f57b7d5a82cf6b1c738a61c1ae48c71e2"
+  },
+  "containing_preview_receipt": {
+    "receipt_id": "source-dr80pw2w",
+    "source_sha": "98ca169e12b99b7a79b4bf8f3ea774377a27aae1",
+    "output_sha256": "6dafda91735fe8115dae15d81b0de4aba942f0e41bb8cee39a73e9f7929bcde1",
+    "exitcode": 0,
+    "guest_stop_completed": true
+  },
+  "content_binding": {
+    "sha256": "e5be72a918c9901989e7873a03492874a8f886725d7386042dcdab56ca3524a3",
+    "sources": 2842,
+    "artifacts": 14,
+    "served_guide_sha256": "5becb5098d1f91a6429c85ef6ef3d37fa52a4b02f6b9aced01ee55d84f1b4d6e"
+  },
+  "browser": {
+    "playwright": "1.56.1",
+    "cases": [
+      {
+        "name": "desktop-chromium",
+        "width": 1360,
+        "height": 900,
+        "dark": false,
+        "browser": "141.0.7390.37",
+        "checks": [
+          "shipped update-guide entry; daily-beta scope, cut/inclusion, stable separation, weekly stable target, early eligibility, unchanged candidate checks and safe retest",
+          "keyboard/touch backup, deployment-limits and safe-evidence links; focused destinations; browser back",
+          "documentation index entry remains reachable"
+        ]
+      },
+      {
+        "name": "phone-webkit",
+        "width": 390,
+        "height": 900,
+        "dark": true,
+        "browser": "26.0",
+        "checks": [
+          "shipped update-guide entry; daily-beta scope, cut/inclusion, stable separation, weekly stable target, early eligibility, unchanged candidate checks and safe retest",
+          "keyboard/touch backup, deployment-limits and safe-evidence links; focused destinations; browser back",
+          "documentation index entry remains reachable"
+        ]
+      }
+    ],
+    "capture_sha256": {
+      "desktop-chromium-betas.png": "5fd03c7fd111564f93bc23aa44cbff379f76c1e0fb5916b20709095a8d681695",
+      "desktop-chromium-preparation.png": "f49cd2ffebd3aeba0b3ab80e6e0aedcefec29bae220306611f70ba512e44c6f5",
+      "desktop-chromium-promotion.png": "677004cba7dc3eb0920a44a2cc53aedef8ca0fc94fd2b1f35aa9732ebf566ea5",
+      "desktop-chromium-safe-testing.png": "7cd44ab68e920fbe4c2d5902c49c8e98cf2b770417cea797b66a2451ac501e9f",
+      "phone-webkit-betas.png": "299a3702942b546da29d2e2b2c8ea149d70aaa6fa12637667a3ab44f10fe8693",
+      "phone-webkit-preparation.png": "77dcce48113f15981582c492850bd835b33fe254a3522c2996fc9bc85a8fe8e0",
+      "phone-webkit-promotion.png": "3a45b1e87eacb5098c0145c2d1fba7bd695df576af36219594259c35eb90f5fe",
+      "phone-webkit-safe-testing.png": "ab5c72f3b2f14e93eac000a64616247d2466770b41220dac3a8024cd71499833"
+    },
+    "errors": [],
+    "cleanup": {
+      "browser_closed": true,
+      "server_closed": true
+    }
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "inspection_count": 8,
+    "observations": [
+      "Desktop light: seven-day stable target, one-day-earlier eligibility, full 24-hour soak and possible preparation/qualification delay are legible together in the first numbered step; heading focus outline is visible.",
+      "Phone dark, 390px: the complete changed numbered step wraps within the content column; bold timing distinguishes the stable target from candidate eligibility; no clipped words, overlaps or horizontal page overflow.",
+      "Both viewports retain legible daily-beta inclusion, chart-versus-server, early-cut checks and safe ordinary-use feedback. Backup/deployment/evidence links are underlined; keyboard/touch navigation and focused destinations passed."
+    ]
+  },
+  "unchanged_proof": "Prior source-6c1be_9a / 09e60797f5 supplies 98 focused parser/link/fetch/security checks. That proof is retained, not re-executed or rebased to this source. This containing build/browser pass covers the updated guide and actual current consumer.",
+  "unresolved_dependency": {
+    "owner": "Independent review/coordinator/protected publisher, then the release train; PI retains reporter follow-through.",
+    "needed": "Reviewed containing source and eventual published release inclusion. No native/installed/update/recovery result inferred."
+  },
+  "limits": "Real Docs renderer/router/CSS with fixture shell only; no external/API request or update, notification, native recovery or release operation. Static-doc browser-guard skip is not this proof."
+}

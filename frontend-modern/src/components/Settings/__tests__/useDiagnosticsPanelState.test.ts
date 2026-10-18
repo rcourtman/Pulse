@@ -211,12 +211,17 @@ describe('useDiagnosticsPanelState', () => {
     expect(payload.infrastructureOnboarding).toBeUndefined();
   });
 
-  it('blocks export until diagnostics have been run', async () => {
+  it('opens with no result and makes no request just to prepare an export', async () => {
     const { result } = renderHook(() => useDiagnosticsPanelState());
+
+    expect(result.diagnosticsData()).toBeNull();
+    expect(result.loading()).toBe(false);
+    expect(apiFetchJSONMock).not.toHaveBeenCalled();
 
     await result.exportDiagnostics(true);
 
     expect(showErrorMock).toHaveBeenCalledWith('Run diagnostics first');
     expect(createObjectURLMock).not.toHaveBeenCalled();
+    expect(apiFetchJSONMock).not.toHaveBeenCalled();
   });
 });

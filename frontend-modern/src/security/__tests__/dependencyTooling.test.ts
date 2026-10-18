@@ -34,6 +34,26 @@ describe('reviewed formatter behaviour', () => {
 
 describe('patched transitive dependency compatibility', () => {
   it.each([
+    'solid-js',
+    'seroval',
+    'seroval-plugins',
+    '@types/node',
+    '@typescript-eslint/eslint-plugin',
+    '@typescript-eslint/parser',
+    'eslint-plugin-solid',
+    'globals',
+    'typescript-eslint',
+  ])('executes the exact committed %s version, not a stale offline install', (name) => {
+    const lock = JSON.parse(
+      readFileSync(new URL('../../../package-lock.json', import.meta.url), 'utf8'),
+    ) as { packages: Record<string, { version: string }> };
+    const installed = JSON.parse(
+      readFileSync(new URL(`../../../node_modules/${name}/package.json`, import.meta.url), 'utf8'),
+    ) as { version: string };
+    expect(installed.version).toBe(lock.packages[`node_modules/${name}`].version);
+  });
+
+  it.each([
     ['solid-js', 'seroval'],
     ['seroval-plugins/web', 'seroval'],
     ['@tailwindcss/typography', 'postcss-selector-parser'],

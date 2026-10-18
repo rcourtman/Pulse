@@ -28,8 +28,29 @@ interface HumanizedConnectionError {
 const TIMEOUT_HINT =
   'Check the host is reachable, the port is correct, and the network path is open.';
 const TLS_HINT =
-  'Verify the certificate or pin a fingerprint in TLS settings, or disable TLS verification temporarily for testing.';
-const AUTH_HINT = 'Re-check the API token or username/password.';
+  "Keep TLS verification enabled. Check the certificate's hostname, expiry and trusted chain. Independently verify its identity before adding or replacing a saved fingerprint.";
+const AUTH_HINT =
+  'Check the configured user, realm and token ID, and whether the credential has expired or been revoked. Replace it only if invalidity is confirmed.';
+const DENIED_HINT =
+  'Check read permissions for the intended resource and any proxy policy. Keep intentional access limits. Do not replace credentials or broaden access just to test.';
+
+const HTTP_STATUS_PRESENTATIONS: Record<number, HumanizedConnectionError> = {
+  401: { headline: 'Authentication failed', hint: AUTH_HINT },
+  403: { headline: 'Permission denied', hint: DENIED_HINT },
+  404: {
+    headline: 'Endpoint not found',
+    hint: 'Pulse reached the host but the API path is missing. Check the URL path or the platform version.',
+  },
+};
+const SERVER_ERROR: HumanizedConnectionError = {
+  headline: 'Server error',
+  hint: 'The platform returned a server error. Check the platform logs for the underlying cause.',
+};
+
+// Use the first explicit response status, not a number in an endpoint or a
+// quoted provider explanation. A 403/5xx mentioning authentication is not a 401.
+const HTTP_STATUS_PATTERN =
+  /\b(?:API error|HTTP(?: error| status(?: code)?)?|status(?: code)?)[\s:]+([45]\d{2})\b|^([45]\d{2})\b/i;
 
 const HUMANIZED_PATTERNS: { match: RegExp; headline: string; hint: string | null }[] = [
   {
@@ -53,6 +74,11 @@ const HUMANIZED_PATTERNS: { match: RegExp; headline: string; hint: string | null
     hint: 'The host cannot be reached from this Pulse instance. Check VPN, firewall, or VLAN configuration.',
   },
   {
+    match: /(?:certificate |tls (?:pinning failed: )?)?fingerprint (?:mismatch|changed)/i,
+    headline: 'TLS fingerprint changed',
+    hint: TLS_HINT,
+  },
+  {
     match: /x509:.*signed by unknown authority|certificate signed by unknown/i,
     headline: 'TLS certificate not trusted',
     hint: TLS_HINT,
@@ -68,9 +94,9 @@ const HUMANIZED_PATTERNS: { match: RegExp; headline: string; hint: string | null
     hint: TLS_HINT,
   },
   {
-    match: /\b401\b|unauthorized|authentication failed|invalid (?:credentials|api token)/i,
-    headline: 'Authentication failed',
-    hint: AUTH_HINT,
+    match: /x509:|TLS certificate (?:error|validation failed)/i,
+    headline: 'TLS certificate validation failed',
+    hint: TLS_HINT,
   },
   {
     match: /access violation/i,
@@ -78,19 +104,22 @@ const HUMANIZED_PATTERNS: { match: RegExp; headline: string; hint: string | null
     hint: 'The request was blocked before Pulse could read inventory. Check proxy, firewall, or network policy settings.',
   },
   {
-    match: /\b403\b|forbidden|permission denied/i,
+    match: /forbidden|permission denied/i,
     headline: 'Permission denied',
-    hint: 'The credentials connected, but the user/token lacks the required role.',
+    hint: DENIED_HINT,
   },
   {
-    match: /\b404\b|not found/i,
-    headline: 'Endpoint not found',
-    hint: 'Pulse reached the host but the API path is missing. Check the URL path or the platform version.',
+    match: /unauthorized|authentication failed|invalid (?:credentials|api token)/i,
+    headline: 'Authentication failed',
+    hint: AUTH_HINT,
   },
   {
-    match: /\b5\d{2}\b|server error|internal error/i,
-    headline: 'Server error',
-    hint: 'The platform returned a server error. Check the platform logs for the underlying cause.',
+    match: /not found/i,
+    ...HTTP_STATUS_PRESENTATIONS[404],
+  },
+  {
+    match: /server error|internal error/i,
+    ...SERVER_ERROR,
   },
 ];
 
@@ -102,15 +131,23 @@ export const humanizeConnectionError = (raw?: string | null): HumanizedConnectio
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
+  const cleaned = stripImplementationPrefixes(trimmed);
+  const statusMatch = cleaned.match(HTTP_STATUS_PATTERN);
+  if (statusMatch) {
+    const status = Number(statusMatch[1] ?? statusMatch[2]);
+    const presentation = HTTP_STATUS_PRESENTATIONS[status] ?? (status >= 500 ? SERVER_ERROR : null);
+    if (presentation) return { ...presentation };
+    return { headline: cleaned, hint: null };
+  }
+
   for (const pattern of HUMANIZED_PATTERNS) {
-    if (pattern.match.test(trimmed)) {
+    if (pattern.match.test(cleaned)) {
       return { headline: pattern.headline, hint: pattern.hint };
     }
   }
 
   // Unknown error: fall back to the raw text with the most common
   // implementation-leaking prefixes peeled off so it's at least readable.
-  const cleaned = stripImplementationPrefixes(trimmed);
   return { headline: cleaned || 'Connection error', hint: null };
 };
 

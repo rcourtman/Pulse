@@ -103,6 +103,146 @@ organizations yields each organization only its own history.
 `pkg/reporting/engine_org_scope_test.go` and
 `TestSummarizeToolReadsOnlyItsOrganizationsMetrics` hold this boundary.
 
+### Conflicting saved endpoint pins cannot select certificate trust
+
+For equivalent Proxmox endpoint URL spellings, all nonempty saved member pins
+must agree under the TLS verifier's existing case/colon normalization. Exact
+spelling and map iteration can no longer select one of contradictory pins.
+Resolution returns a fixed, credential-free trust-conflict error before a TLS
+probe, password login, token read, first-use capture or polling-client creation.
+The member stays unreachable to Pulse; an independently trusted sibling can
+continue ordinary monitoring. No saved pin is removed or overwritten, and the
+error cannot become an empty pin/CA or opt-out fallback. Agreeing pin formats,
+nonempty invalid pins, primary-pin fallback, declared-member first-use and the
+existing scheme/port/base-path/IPv4-mapped trust boundaries remain unchanged.
+
+`TestClusterConflictingSavedPinsNeverAuthenticate` covers startup, recovery and
+lazy selection in token/JSON/form modes, three URL spellings and both VerifySSL
+settings with real TLS sockets. It checks zero TLS/login/read work for conflicts,
+no installed client or trust mutation, sibling use, and accepted monitoring
+following a normal reload with reconciled fixture pins. Existing established-pin,
+first-use, cancellation, ownership and guest-admission controls still apply.
+`TestClusterSavedPinResolutionRejectsConflicts` and
+`TestClusterFirstUseCaptureDoesNotReconcileConflictingPins` retain the conflict
+through normalized authorities, invalid nonempty pins and a capture race.
+`TestClusterConflictingPinsEndpointProjection` uses the production endpoint
+builder, real clients and monitor projection in all three auth modes: native
+Online, identity and saved trust are not changed by failed Pulse reachability.
+The producer also records contradictory exact duplicate saved rows before
+its map/deduplication can overwrite them, and carries those endpoint conflicts
+through initialisation, missing-client reconnect and cluster refresh. The
+cluster owns a copy of that conflict set; aliases cannot escape it, and a
+later repeated row cannot clear it. Normal configuration reload with agreeing
+pins is required to resume that endpoint. A non-conflicting sibling is not
+refused. The public constructor's optional conflict inputs preserve existing
+callers and do not introduce a new trust mode. Producer tests cover both
+routes, pin formatting, repeated contradictions and configuration ownership.
+The projection cases include exact duplicates as well as URL aliases.
+A credential-free agreement check also holds automatic topology refresh while
+saved trust is contradictory: discovery cannot collapse the rows, move an
+alias or substitute a pin to clear that refusal. Current trusted sibling
+clients keep monitoring; topology changes wait for independently reconciled
+configuration. `TestClusterPinConflictsSurviveMonitorLifecycle` exercises the
+actual initialisation, missing-client retry and refresh/rebuild paths in all
+three auth modes and both layouts, including normal refresh after reconciliation.
+Saved-view consolidation also refuses a view with internal pin contradictions,
+so map indexing cannot hide an earlier contradictory row before monitoring
+starts. `TestConsolidatePVEInstancesRetainsInternallyConflictingPins` covers
+both merge orders, repeated rows, same-node/address evidence and agreeing formats.
+Internal agreement uses the TLS verifier's case/colon comparison even when
+legacy identity formatting would erase or simplify a malformed nonempty pin;
+colon-only, whitespace and prefixed pins cannot hide a contradiction.
+The endpoint-ownership routing control uses a five-second fixture client and
+a ten-second enclosing caller lifetime, rather than a one-second latency
+criterion. It records elapsed time and both targets' request counts; unchanged
+pin, admission and routing assertions remain required. Runtime timeouts and
+separate timeout/cancellation controls are unchanged. This is not a diagnosis
+or dismissal of the retained earlier one-second timeout.
+Lock-evidence fixture cases use independent base-path namespaces while each
+case's clients share the same guard key. A recycled loopback port cannot inherit
+an earlier synthetic guest's cooldown. `TestGuestAgentLockEvidenceFixtureIsolation`
+shares one listener and retains an earlier uncertainty fence unchanged while an
+independent fixture completes its lock/command checks. No runtime fence is
+cleared, expired or weakened; native guest recovery is not established.
+This establishes source/consumer behaviour, not native recovery or attribution
+of a guest, PBS or certificate report.
+
+
+### First-use cluster trust includes password construction
+
+Declared, previously untrusted Proxmox members use the existing credential-free
+TLS capture and pinned retry whether the inherited primary pin fails during
+password login or during the token-authenticated nodes probe. Startup, ordinary
+unhealthy recovery and lazy first selection share this path. Capture still
+requires typed local pin-mismatch evidence and cannot replace a primary, saved
+member or concurrent winner pin; it never sends an HTTP request or credentials.
+The pinned retry is not repeated to obtain a nodes count. Failed or cancelled
+authentication installs no polling session; a separately accepted full-timeout
+client is required before recovery becomes healthy. Refusal retains the
+established runtime pin for a distinct later ordinary recovery. Saved trust,
+CA/redirect policy, login encodings, cadence and guest/backup fences do not change.
+
+`TestClusterFirstUseSessionAdmission` covers JSON password, existing form
+fallback and token modes in all three phases, then ordinary member reads.
+The adjacent refusal, established-pin and cancellation controls exercise actual
+TLS sockets. Concurrent lazy selection retains serialized construction while
+health/trust inspection stays usable during capture. `TestClusterFirstUsePasswordEndpointProjection` carries first-use
+probe/full-session refusal and later public-read recovery into the monitor's
+cluster-member projection without changing native Online state, identity or
+saved fingerprints. This is source/consumer qualification, not installed
+cluster recovery or attribution of an existing user report.
+
+
+### Proxmox password success admits a complete session, not just HTTP 200
+
+PVE and PBS consume the entire existing byte-bounded login body before
+publishing ticket, CSRF token and the normal two-hour expiry together. The
+shared `internal/securityutil/proxmox_session.go` parser requires canonical,
+unambiguous envelope/session keys, complete UTF-8 JSON, a nonempty cookie-safe
+ticket and a nonempty header-safe CSRF token. Unknown unique metadata such as
+username and capabilities remains supported. Partial/null, duplicate or
+case-conflicting credentials, extra JSON values, incomplete reads and oversized
+tails fail without replacing the retained tuple or advancing PVE generation.
+Validation errors contain no response credentials. A malformed success is not
+a provider credential refusal and does not trigger JSON-to-form fallback.
+
+`session_response_admission_test.go` in both client packages exercises these
+controls and eight joined expired readers, zero subsequent API/form requests
+on invalid success, retained state and distinct later ordinary recovery with
+coherent cookie/CSRF pairs. Cluster recovery additionally checks empty and
+partial success for the retained polling client, with and without a previous
+client. `TestPBSInvalidSessionKeepsFirstPollBoundary` exercises the real pinned
+constructor, normal startup retry, poll executor and production broadcast:
+invalid success installs no client, valid construction is not healthy telemetry,
+and only the accepted first poll publishes recovered node/datastore readings.
+
+TLS trust, credentials, auth encodings and 400/415 fallback, API-token paths,
+renewal ownership, retries/cadence, guest/backup fences and History are unchanged.
+The parser establishes response integrity, not cryptographic ticket validation
+or native/installed acceptance. It neither attributes nor resolves a reported
+PBS, Windows guest, restart or workload-safety incident.
+
+
+### Rejected infrastructure URLs stay out of diagnostics
+
+PVE/PBS constructors validate a host before logging it. URL syntax errors omit
+`url.Parse`'s copy of the supplied input; ordinary validation reasons remain.
+Cluster logs, health snapshots, recovery summaries and aggregate errors use
+display-only labels:
+a valid base URL or `[invalid endpoint]`. Health snapshots preserve each entry
+even when rejected endpoints share that label, and are built only for enabled
+log events. These labels never supply routing,
+alias membership, saved configuration or TLS-pin identity. HTTP/HTTPS defaults,
+base paths, authentication, CA/pin/opt-out choices and guest fences are unchanged.
+
+`TestClientRejectedHostDiagnosticsContainNoCredentials` and
+`TestClusterRejectedEndpointDiagnosticsContainNoCredentials` exercise actual
+constructors, single/multiple endpoint routing and recovery with synthetic
+userinfo/query/fragment and malformed URLs. Accepted-host and
+`TestInfrastructureURLValidationPolicyUnchanged` controls preserve ordinary
+routing and diagnostics. This bounds client diagnostics, not arbitrary provider
+error text, previously saved logs, native trust recovery or an installed service.
+
 ### Patrol maintenance coverage widens no authority
 
 Patrol inherits only maintenance from an ancestor window scoped
@@ -205,6 +345,18 @@ and `TestFetchFingerprintRejectsInvalidAuthorityBeforeDial` check exact parsing;
 leaves over IPv4/IPv6 and unchanged bare-host defaults, without HTTP. Existing
 cluster trust and provisioning controls remain required. This is source proof,
 not installed connection recovery or completion of #2140.
+
+`FetchFingerprintContext` additionally binds TCP dialing and the TLS handshake
+to the caller's context under the same five-second ceiling. A cancelled or
+expired caller receives no fingerprint, and a stalled capture closes its own
+socket. The existing `FetchFingerprint` helper retains its background-context
+interface and ordinary leaf/authority semantics. Proxmox first-use recovery
+uses the context-bound helper and checks cancellation under the trust mutex
+before committing a runtime pin; established pins and first-use eligibility
+are unchanged. `TestFetchFingerprintCancellationContract` covers pre-cancelled
+no-dial, stalled-handshake cancellation/deadline with peer-observed EOF, and
+ordinary owned-leaf capture through both interfaces without HTTP. These are
+local source/connection-lifecycle proofs, not installed trust recovery.
 
 ### TLS pin failures remain local typed trust evidence
 
@@ -3469,3 +3621,17 @@ checks remain before generation and delivery. Missing private rendering fails
 explicitly. `pkg/server/server_test.go` retains runtime identity separation.
 Backup reporting tests cover missing renderer and unchanged entitlement refusal.
 The live disposable Pro runtime proof exercises actual registered rendering.
+
+### Diagnostics does not prescribe credential or ACL churn (14 October 2026)
+
+Proxmox 403 is an access denial, not evidence that a saved token must be
+rotated or privileges broadened. Diagnostic recovery keeps intentional target
+boundaries, both user/token ACLs and privilege separation; 401 replacement is
+conditional on confirmed invalidity. Typed HTTP status precedes untrusted
+provider text. The existing displayed error summary uses connection positions
+and fixed diagnoses/guidance, not host, token, username or provider-body text.
+No credential, TLS, authorization, caller-filtering or endpoint contract is
+weakened. The diagnostic wire/identity and ordinary same-credential recovery
+controls in `diagnostics_access_test.go`, `diagnostics_additional_test.go`,
+`contract_test.go` and `client_request_test.go` cover these properties; they do
+not establish provider or installed acceptance.

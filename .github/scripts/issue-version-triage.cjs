@@ -10,27 +10,79 @@ function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function declarationLines(body) {
-  let fence = null;
-  return stripHTMLComments(body).split(/\r?\n/).map((text) => {
-    const marker = text.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
-    let delimiter = false;
-    const inCode = fence !== null;
-    if (fence) {
-      if (marker && marker[1][0] === fence.character &&
-          marker[1].length >= fence.length && !marker[2].trim()) {
-        fence = null;
-        delimiter = true;
-      }
-    } else if (marker && (marker[1][0] === "~" || !marker[2].includes("`"))) {
-      fence = { character: marker[1][0], length: marker[1].length };
-      delimiter = true;
+// Use the same locked GFM lexer as Pulse's Markdown surfaces, without
+// rendering or executing any issue content. Only top-level declarations count.
+const { lexer } = require("marked");
+
+function inlineProjection(tokens, maskCode = false) {
+  return (tokens || []).map((token) => {
+    const raw = token.raw || "";
+    // Keep line positions when removing hidden comments. A comment inside a
+    // code span is a literal, not an HTML token, and remains evidence.
+    if (token.type === "html" && /^<!--/.test(raw)) {
+      return raw.replace(/[^\r\n]/g, "");
     }
-    // Pasted examples and logs are evidence, not issue-form structure. Keep
-    // their text as a value under a real field, but never scan it for fields.
-    return { text, delimiter, declaration: !inCode && !delimiter &&
-      !/^(?: {4}|\t)/.test(text) };
-  });
+    if (maskCode && token.type === "codespan") {
+      return raw.replace(/[^\r\n]/g, " ");
+    }
+    if (token.tokens && typeof token.text === "string") {
+      const offset = raw.indexOf(token.text);
+      if (offset !== -1) {
+        return raw.slice(0, offset) + inlineProjection(token.tokens, maskCode) +
+          raw.slice(offset + token.text.length);
+      }
+    }
+    return raw;
+  }).join("");
+}
+
+function declarationLines(body) {
+  const lines = [];
+  const append = (text, declaration = false, metadata = text) => {
+    const visible = text.split(/\r?\n/);
+    const declared = metadata.split(/\r?\n/);
+    visible.forEach((value, i) => lines.push({
+      text: value,
+      metadata: declared[i] || "",
+      delimiter: false,
+      declaration,
+      heading: null,
+    }));
+  };
+  for (const token of lexer(String(body || ""), { gfm: true })) {
+    if (token.type === "heading") {
+      const text = inlineProjection(token.tokens).trim();
+      lines.push({ text, metadata: text, delimiter: false, declaration: true, heading: text });
+    } else if (token.type === "paragraph") {
+      append(inlineProjection(token.tokens), true, inlineProjection(token.tokens, true));
+    } else if (token.type === "code") {
+      // A real version field may have a fenced or indented value. Its contents
+      // remain a value, never new metadata or a section boundary.
+      append(token.text);
+    } else if (token.type === "list") {
+      // Preserve legacy "- **Pulse version**: ..." declarations. Only an
+      // item's first line can declare one; lazy/nested copied content cannot.
+      for (const item of token.items) {
+        const first = item.tokens[0];
+        if (first && first.type === "text" && first.tokens) {
+          const text = inlineProjection(first.tokens);
+          const metadata = inlineProjection(first.tokens, true);
+          append(text.split(/\r?\n/)[0], true, metadata.split(/\r?\n/)[0]);
+          append(text.split(/\r?\n/).slice(1).join("\n"));
+          for (const nested of item.tokens.slice(1)) append(nested.raw || "");
+        } else {
+          append(item.raw);
+        }
+      }
+    } else if (token.type === "html" && /^\s*<!--/.test(token.raw)) {
+      append("");
+    } else {
+      // Block quotes (including lazy continuation), HTML, tables and nested
+      // examples are evidence, not top-level form structure.
+      append(token.raw || "");
+    }
+  }
+  return lines;
 }
 
 function firstFieldValue(lines) {
@@ -41,27 +93,18 @@ function firstFieldValue(lines) {
 function extractSectionValue(body, heading, followingHeadings = []) {
   if (!body) return null;
   const lines = declarationLines(body);
-  const pattern = new RegExp(`^#+[ \\t]*${escapeRegExp(heading)}[ \\t]*$`, "i");
-  const start = lines.findIndex((line) => line.declaration && pattern.test(line.text));
+  const pattern = new RegExp(`^${escapeRegExp(heading)}$`, "i");
+  const start = lines.findIndex((line) => line.heading !== null && pattern.test(line.heading));
   if (start === -1) return null;
-  const boundary = new RegExp(`^#+[ \\t]*(?:${followingHeadings.length
-    ? followingHeadings.map(escapeRegExp).join("|") : "[^\\n]+"})[ \\t]*$`, "i");
+  const boundary = followingHeadings.length
+    ? new RegExp(`^(?:${followingHeadings.map(escapeRegExp).join("|")})$`, "i") : null;
   let end = start + 1;
-  while (end < lines.length && !(lines[end].declaration && boundary.test(lines[end].text))) {
+  while (end < lines.length && !(lines[end].heading !== null &&
+      (!boundary || boundary.test(lines[end].heading)))) {
     end += 1;
   }
   // An empty declared field differs from a legacy report with no field.
   return lines.slice(start + 1, end).map((line) => line.text).join("\n").trim();
-}
-
-function stripHTMLComments(value) {
-  let stripped = String(value || "");
-  let previous;
-  do {
-    previous = stripped;
-    stripped = stripped.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
-  } while (stripped !== previous);
-  return stripped;
 }
 
 function classifyAdditionalActionableTopics(body) {
@@ -73,11 +116,11 @@ function classifyAdditionalActionableTopics(body) {
   ]);
   if (value === null) return null;
 
-  const normalized = stripHTMLComments(value)
+  const normalized = value
     .trim()
     .toLowerCase()
     .replace(/[.!]+$/g, "");
-  if (!normalized) return false;
+  if (!normalized || !/[\p{L}\p{N}]/u.test(normalized)) return false;
 
   return !new Set([
     "_no response_",
@@ -98,6 +141,19 @@ function normalizeVersion(value) {
 
 function normalizeLegacyVersionValue(value) {
   const visible = String(value).trim().replace(/^[`*_]+/, "");
+  // Failed-install forms explicitly accept an attempted server archive. Its
+  // packaging suffix is not part of the release version. Recognise only the
+  // server archive names; companion binaries and signatures cannot establish
+  // the attempted server executable's version.
+  const filename = visible.match(/^pulse-[^\s`*_]+/i)?.[0];
+  if (filename && /\.(?:tar\.gz|tgz|zip|exe|sha256|sig|sshsig)(?:\.|$)/i.test(filename)) {
+    const archive = filename.match(
+      /^pulse-v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.(?:tar\.gz|tgz)$/i
+    );
+    return archive ? normalizeVersion(archive[1].replace(
+      /-linux-(?:386|amd64|arm64|armv6|armv7)$/i, ""
+    )) : null;
+  }
   // Keep an explicitly shared server/agent version (as in #1788), without
   // mining a sentence such as "unknown; agent version 6.5.0" for a number.
   return /^(?:v?\d+\.\d+\.\d+\b|(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+v?\d+\.\d+\.\d+\b|(?:[a-z0-9._/-]+\/)?pulse:|pulse[-_])/i.test(visible)
@@ -108,7 +164,7 @@ function extractPulseVersion(title, body) {
   if (body) {
     const lines = declarationLines(body);
     const versionHeading = lines.findIndex((line) =>
-      line.declaration && /^#{1,6}[ \t]+Pulse[ \t]+version[ \t]*$/i.test(line.text)
+      line.heading !== null && /^Pulse[ \t]+version$/i.test(line.heading)
     );
     if (versionHeading !== -1) {
       // The explicit running-version field is authoritative, even when it is
@@ -118,8 +174,8 @@ function extractPulseVersion(title, body) {
     }
     for (let i = 0; i < lines.length; i += 1) {
       if (!lines[i].declaration) continue;
-      const line = lines[i].text.replace(/\*\*|__/g, "")
-        .replace(/^[ \t]*(?:#{1,6}[ \t]+|[-*][ \t]+)/, "").trim();
+      const line = (lines[i].heading ?? lines[i].metadata).replace(/\*\*|__/g, "")
+        .replace(/^[ \t]*[-*][ \t]+/, "").trim();
       const field = line.match(
         /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
       );
@@ -128,7 +184,12 @@ function extractPulseVersion(title, body) {
       // Legacy inline/standalone fields have the same authority as the form.
       // Unknown or incomplete must not borrow an agent/platform version or
       // an upgrade's starting version from the title.
-      const inlineValue = field[1].trim();
+      const visibleLine = (lines[i].heading ?? lines[i].text).replace(/\*\*|__/g, "")
+        .replace(/^[ \t]*[-*][ \t]+/, "").trim();
+      const visibleField = visibleLine.match(
+        /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
+      );
+      const inlineValue = visibleField ? visibleField[1].trim() : "";
       if (inlineValue) return normalizeLegacyVersionValue(inlineValue);
       // A declared value may itself be fenced; that does not turn headings
       // elsewhere in a fenced log into declarations.
@@ -136,6 +197,9 @@ function extractPulseVersion(title, body) {
     }
   }
 
+  // A starting version named in an upgrade title is not a running-version
+  // declaration. Copied examples may leave no usable body field at all.
+  if (/\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing))\b[^\n]*\bfrom\b/i.test(String(title || ""))) return null;
   return normalizeVersion(title);
 }
 
@@ -229,7 +293,7 @@ function buildTriageState(issue, core, latestVersion) {
 }
 
 function keepOnlyReportedVersionLabel(nextLabels, reportedVersion) {
-  const keep = `${VERSION_LABEL_PREFIX}${reportedVersion}`;
+  const keep = reportedVersion ? `${VERSION_LABEL_PREFIX}${reportedVersion}` : null;
   for (const label of [...nextLabels]) {
     if (
       /^affects-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(label) &&
@@ -242,17 +306,36 @@ function keepOnlyReportedVersionLabel(nextLabels, reportedVersion) {
 
 // Apply only this event's classification delta. Replacing the complete label
 // set would overwrite Community changes made after the event was queued.
-async function applyLabelDelta(github, context, issue, before, after) {
+async function applyLabelDelta(github, context, issue, before, after, core) {
   const target = {
     owner: context.repo.owner,
     repo: context.repo.repo,
     issue_number: issue.number,
   };
   const additions = [...after].filter((name) => !before.has(name)).sort();
+  const removals = [...before].filter((name) => !after.has(name)).sort();
+  if (!additions.length && !removals.length) return;
+
+  // Label lookup/creation can take time after the initial report read. Do not
+  // apply that prepared decision to a report since edited, closed or reviewed.
+  // This narrows the race; GitHub's separate label APIs are not a transaction.
+  const { data: current } = await github.rest.issues.get(target);
+  if (!current || current.number !== issue.number) {
+    throw new Error("Current issue identity did not match the triage event");
+  }
+  const currentLabels = new Set((current.labels || []).map((label) => label.name));
+  if (current.state !== "open" || current.pull_request ||
+      ["title", "body", "updated_at"].some((field) => current[field] !== issue[field]) ||
+      currentLabels.size !== before.size ||
+      [...before].some((name) => !currentLabels.has(name))) {
+    core.info("Issue changed during metadata preparation. Skipping outdated label delta.");
+    return;
+  }
+
   if (additions.length) {
     await github.rest.issues.addLabels({ ...target, labels: additions });
   }
-  for (const name of [...before].filter((name) => !after.has(name)).sort()) {
+  for (const name of removals) {
     try {
       await github.rest.issues.removeLabel({ ...target, name });
     } catch (error) {
@@ -313,7 +396,7 @@ async function syncLabels({ github, context, core }) {
 
   if (!isBugLike) {
     core.info("Issue is not bug-like after classification. Skipping version triage.");
-    await applyLabelDelta(github, context, issue, labelNames, nextLabels);
+    await applyLabelDelta(github, context, issue, labelNames, nextLabels, core);
     return;
   }
 
@@ -325,7 +408,6 @@ async function syncLabels({ github, context, core }) {
       "0e8a16",
       `Bug reported against Pulse ${reportedVersion}`
     );
-    keepOnlyReportedVersionLabel(nextLabels, reportedVersion);
     nextLabels.add(`${VERSION_LABEL_PREFIX}${reportedVersion}`);
     nextLabels.delete(NEEDS_VERSION_LABEL);
   } else {
@@ -339,9 +421,14 @@ async function syncLabels({ github, context, core }) {
     nextLabels.add(NEEDS_VERSION_LABEL);
   }
 
+  // A correction to unknown, incomplete or absent version evidence retires
+  // this synchronizer's old exact-version assertions too. It must not leave
+  // a known affected version beside its missing-version classification.
+  keepOnlyReportedVersionLabel(nextLabels, reportedVersion);
+
   // Retest labels are community-owned: version metadata cannot establish
   // relevant-fix availability or reconcile the live reporter conversation.
-  await applyLabelDelta(github, context, issue, labelNames, nextLabels);
+  await applyLabelDelta(github, context, issue, labelNames, nextLabels, core);
 }
 
 // Compatibility entry points for callers using the old helper API. Version

@@ -408,8 +408,10 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "pkg/pbs/auth_session_concurrency_test.go",
                         "pkg/pbs/client_http_test.go",
                         "pkg/pbs/client_test.go",
+                        "pkg/pbs/host_diagnostics_regression_test.go",
                     ],
                 }
             ],

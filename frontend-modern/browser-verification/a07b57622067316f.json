@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "560ba9072e6b7818e86261fc1b0d8eda87ef19e3",
+  "verified_at": "2026-10-13T21:13:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "10cb7aee1a6eacf036eeeec2d9e60abfd977ffd2dd4a0a057a336c6485340d7c",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "65e4fd0f685e558bb62cd8e1dd11dc62cc5d6efc74cee0b9ba133530e154bf3d"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/settings?section=infrastructure",
+    "/browser-tests/unix-private-install.html"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 950
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Production Backups consumes the exact original Go-produced API-only PBS resources in both themes. Independently known server/datastore health and identity survive both pending reads, either/both HTTP503 inventory errors and ordinary recovery; incomplete/unknown evidence is explicit, never fabricated no-backup success.",
+    "Desktop known-server counts remain Loading/Unavailable until PBS inventory succeeds. The existing narrow projection omits those counts and keeps source incomplete notices. Same table and open Primary ID details persist through source-specific/combined retries.",
+    "The actual Infrastructure installer advice keeps all three complete optional signing environment names within their card at desktop/390px in both themes, with unchanged names, signing/trust defaults and copied commands. All34 final captures, including two settled desktop error frames, opened with native view_image."
+  ],
+  "interactions": [
+    "Desktop native disclosure focus/Enter and keyboard retries; phone row taps/retries; canonical PBS Primary ID and open details persist through retries.",
+    "Unchanged 600-artifact renderer:140 mounted desktop items/36 phone including day header; first present/last initially absent, ordinary scroll reaches last without pagination.",
+    "Actual installer and Doctor consumers: separate synthetic token copy, private-file alternative, CA/identity-bound install/removal/credential/saved-state copy controls and optional-auth confirmation. No appliance or installer execution."
+  ],
+  "source_proof": "source-xgkn29zo:23421 tests pass/three skip, type/all lint/scoped formatting pass; source-5_7ji9nx:production embed/budgets and actual-installer preview pass. Complete raw matches and guest ready/stopped.191 production artifacts/2905 input bindings;3 installer artifacts/2819 input bindings.",
+  "prior_adverse": "Original source-2ffjei5f five-second table timeout retained with unknown cause. Paired diagnostic falsified allocation hypothesis; renderer/fixture/limit unchanged. First new scoped proof retains109 pass/seven fixture failures, corrected by exact formatting and actual inventory waiters. Browser focus/theme/hidden-phone-count/syntax mistakes remain recorded; only completed source-bound cases and inspected final pixels establish this receipt.",
+  "limits": "Fixture-backed consuming browser proof, not native PBS/QNAP recovery, reporter cause/resolution or release availability. Browser/server close calls observed; independent descendant-cleanup evidence unavailable."
+}

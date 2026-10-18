@@ -10,13 +10,25 @@ HEADING = "### Current, retained and unavailable disk readings\n"
 ANCHOR = "#current-retained-and-unavailable-disk-readings"
 
 
+def assert_disk_reason_wiring(test, row, presentation):
+    # An unavailable caption is optional presentation, not the reading's state
+    # or explanation. Bind the actual disk cell (not another metric's N/A) to
+    # its reason, and keep the current/retained/unavailable producer distinct.
+    disk_cell = row.split("{/* Disk */}", 1)[1].split("{/* IP Address", 1)[0]
+    test.assertIn("title={diskReadStatus()?.message}", disk_cell)
+    test.assertIn("title={getDiskStatusTooltip()}", disk_cell)
+    test.assertIn("{status().message}", disk_cell)
+    test.assertIn("state: reason.startsWith('prev-') ? 'last-known' : 'unavailable'", presentation)
+    test.assertIn("message: getWorkloadGuestDiskStatusMessage(reason)", presentation)
+
+
 class GuestDiskReadingDocsTest(unittest.TestCase):
     def section(self):
         guide = (ROOT / "docs/VM_DISK_MONITORING.md").read_text(encoding="utf-8")
         self.assertEqual(guide.count(HEADING), 1)
         return " ".join(guide.split(HEADING, 1)[1].split("\n### ", 1)[0].split())
 
-    def test_explanations_use_existing_labels_without_claiming_freshness(self):
+    def test_explanations_distinguish_reading_states_without_requiring_an_empty_caption(self):
         text = self.section()
         row = (ROOT / "frontend-modern/src/components/Workloads/GuestRow.tsx").read_text()
         drawer = (ROOT / "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx").read_text()
@@ -25,6 +37,14 @@ class GuestDiskReadingDocsTest(unittest.TestCase):
             with self.subTest(label=label):
                 self.assertIn(label, text)
                 self.assertIn(f"'{label}'", row)
+        for empty_state in ("Usage unavailable", "No permission", "Agent error", "a dash"):
+            self.assertIn(empty_state, text)
+        assert_disk_reason_wiring(self, row, presentation)
+        for distinction in ("select the disk reading indicator", "same guest's details",
+                            "phone or with a keyboard", "rather than relying on a hover tooltip",
+                            "presence or absence of a caption does not establish freshness",
+                            "same guest's explanation before treating it as an agent setup problem"):
+            self.assertIn(distinction, text)
         self.assertIn("Filesystems → Status", text)
         self.assertIn("label: 'Filesystems'", drawer)
         self.assertIn("makeDetailRow('Status'", drawer)
@@ -34,6 +54,22 @@ class GuestDiskReadingDocsTest(unittest.TestCase):
                             "not proof that the disk is full", "freshness unknown",
                             "A cooldown ending does not establish a successful new read"):
             self.assertIn(distinction, text)
+
+    def test_reason_contract_accepts_caption_removal_not_reason_removal(self):
+        row = (ROOT / "frontend-modern/src/components/Workloads/GuestRow.tsx").read_text()
+        presentation = (ROOT / "frontend-modern/src/utils/workloadGuestPresentation.ts").read_text()
+        # A future caption-only edit must not require false documentation or
+        # pass just because another metric still contains the old label.
+        assert_disk_reason_wiring(self, row.replace("'N/A'", "null").replace("'Unavailable'", "null"),
+                                 presentation)
+        for required in ("title={diskReadStatus()?.message}", "title={getDiskStatusTooltip()}",
+                         "{status().message}"):
+            with self.subTest(missing=required), self.assertRaises(AssertionError):
+                assert_disk_reason_wiring(self, row.replace(required, ""), presentation)
+        for required in ("state: reason.startsWith('prev-') ? 'last-known' : 'unavailable'",
+                         "message: getWorkloadGuestDiskStatusMessage(reason)"):
+            with self.subTest(missing=required), self.assertRaises(AssertionError):
+                assert_disk_reason_wiring(self, row, presentation.replace(required, ""))
 
     def test_inventory_workflow_does_not_confuse_selection_with_coverage(self):
         text = self.section()

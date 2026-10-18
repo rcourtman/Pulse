@@ -15,10 +15,25 @@ See [INSTALL.md](INSTALL.md) for all options (Docker Compose, Kubernetes, system
 Go to **Settings → Infrastructure → Install on a host** for systems that should
 run the unified agent directly.
 
-- **Recommended (agent setup)**: copy the generated install command and run it on the target host.
+- **Agent setup**: use the generated command on the target host, entering the
+  token only at its private prompt, never in the command itself. Alternatively,
+  follow the [private-file preparation](UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas).
 - **Manual/API-backed platforms**: use **Settings → Infrastructure** (**Add infrastructure**) for systems such as Proxmox, PBS, PMG, or TrueNAS that connect over an API instead of running the agent locally.
 
 If you want Pulse to find servers automatically, open **Settings → Infrastructure**, select **Configure discovery** (it reads **Settings** once discovery is on), turn on **Automatic scanning** in the Discovery settings dialog, and then review discovered servers in the same section.
+
+### Why does the copied agent command say no installation was attempted?
+
+That message describes a stopped preparation step, not the health of an agent
+already installed. If it follows `stty: command not found`, the private token
+prompt cannot prepare the terminal; having an interactive shell does not supply
+the missing tool. Do not remove the privacy check, put a token in the command,
+generate another token or uninstall the existing agent to get past it.
+
+Use the [agent command failure guide](UNIFIED_AGENT.md#copied-agent-command-fails-before-installation)
+to distinguish the prompt, preflight and removal paths. Keep the original error
+and existing state; a failed new command does not explain an earlier outage or
+automatic-update failure.
 
 ### How do I change the port?
 

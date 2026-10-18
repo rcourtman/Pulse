@@ -86,7 +86,9 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 						rows = `{"mountpoint":"/","type":"ext4","disk":[{"dev":"/dev/vda1"}],"total-bytes":1000,"used-bytes":0}`
 					}
 					fmt.Fprintf(w, `{"data":{"result":[%s]}}`, rows)
-				case strings.Contains(r.URL.Path, "/agent/"):
+				case strings.HasSuffix(r.URL.Path, "/agent/get-osinfo"), strings.HasSuffix(r.URL.Path, "/agent/info"):
+					fmt.Fprint(w, `{"data":{"result":{}}}`)
+				case strings.HasSuffix(r.URL.Path, "/agent/network-get-interfaces"):
 					fmt.Fprint(w, `{"data":{"result":[]}}`)
 				default:
 					t.Errorf("unexpected request: %s", r.URL.Path)

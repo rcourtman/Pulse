@@ -15,6 +15,98 @@
 
 ## Purpose
 
+### Workloads aggregate disk readings keep their units and presence (14 October 2026)
+
+Workload aggregate metrics are percentage points, including values from zero
+through one; selection never guesses a fraction from magnitude. A capacity or
+used-byte scalar alone is not an aggregate utilization reading. The mapper
+preserves missing/invalid aggregate fields, while an explicit finite
+non-negative percentage or finite non-negative used bytes with positive
+capacity supplies usage. An explicit invalid percentage cannot fall back to
+retained byte carriers. Values above 100 are bounded for existing display.
+
+The row (bars and history lens), drawer current/last-known fallback, numeric
+search and capacity sorting share this numeric admission. Source-owned guest
+read deferrals, linked-agent leases and stopped-VM rules still determine
+freshness independently. Unavailable or retained values remain after current
+values in both sort directions and cannot match numeric capacity queries.
+Percentage-only readings show no invented used/capacity bytes; byte-only
+readings and explicit zero remain available. Per-filesystem DiskInfo omitted
+zero bytes retain their existing wire semantics and are not aggregate metrics.
+No collector, guest request, timer, store/history point, threshold or alert
+policy is changed.
+
+Raw byte metrics always serialize a generic `value`, even its default zero.
+That scalar cannot confer a current percentage: an explicit `percent` or a
+valid used/total byte pair is required when `unit` names bytes. Legacy untyped
+value-only percentages and explicit percent-unit values remain usable.
+
+Verification: `workloadDiskUsage.test.ts`, `useWorkloads.test.ts` (REST and owning
+snapshot refreshes), `workloadSelectors.test.ts`, `GuestRow.test.ts`,
+`GuestDrawerHistory.disk-provenance.test.tsx` and stacked-disk tests cover low
+percentages, capacity-only absence, explicit zero, byte-only reads and the
+unchanged freshness controls. `browser-tests/workload-disk-metrics.tsx` feeds
+synthetic REST observations through the production mapper, selection, rows and
+full drawer at desktop and phone widths. Its browser result/pixels must be
+recorded separately; it proves neither native recovery nor availability.
+
+
+### Existing Workloads snapshots retain guest interface names
+
+The Workloads mapper selects the existing agent interface list, otherwise the
+existing Proxmox list, on both REST and owning-snapshot paths. It adds no fetch,
+sort, cross-producer merge or retained cache. Explicitly empty agent lists keep
+precedence. Source provenance travels with the selected list so a source change
+on the same canonical row updates only its owning last-known presentation.
+`useWorkloads.test.ts` checks VM/LXC transitions, unchanged ordered IPs and
+identities, eight normal REST reads versus zero Workloads requests for the
+owning-snapshot path. This is consumer proof, not native collection recovery.
+Network tooltip text follows the existing semantic palette; this changes no
+geometry, source selection, polling, hover ownership or portal mechanism.
+
+### Guest filesystem guidance remains reachable by touch and keyboard (13 October 2026)
+
+The existing Filesystems footer link in the guest drawer has a 44px minimum
+height below the shared `sm` breakpoint, while desktop keeps its compact text
+height. Its underlined label and focus outline use the semantic foreground in
+both themes. The target is the unchanged shipped missing-reading explanation;
+no new route, setup action, guest operation, polling or recovery claim is added.
+Read-reason updates keep the destination available until a current reading
+removes the explanation. Existing section reconciliation is unchanged.
+
+`GuestDrawer.test.tsx` covers the connected drawer's responsive/focus classes,
+destination, same-guest reason replacement and current-reading
+withdrawal. `browser-tests/guest-disk-docs-context.cjs` measures actual target
+bounds, foreground/focus contrast, keyboard/touch navigation and the consuming
+Docs renderer at desktop/phone widths in both themes. Browser acceptance and
+pixels must be recorded separately; these fixtures prove no native thaw or
+recovery.
+
+### Workloads reading explanations work without hover
+
+The existing Memory/Disk freshness and cache cues are native disclosure buttons.
+`WorkloadReadingStatus` opens the shared Dialog only on activation and shows the
+already-qualified reason, source and original observation time supplied to the
+row. It creates no read, timer, layout observer, collection or recovery action.
+Unmarked current cache-aware readings add no component or control. Dense row
+geometry, column widths, bars/sparklines and hover-history ownership remain.
+The phone target extends within the cell without increasing the row rhythm.
+
+Same-identity observations update an open explanation; a genuinely current
+observation removes the cue and returns focus to the row's existing disclosure.
+A changed canonical identity closes the old explanation, even when names match.
+Dialog Escape, backdrop and Close return focus to the original cue; activation
+never opens the enclosing row. This is accessible evidence, not confirmation of
+thaw, writes, guest-agent availability or ordinary restart recovery.
+
+`GuestRow.test.tsx` covers the actual row/control, safe fixed copy, cache caveat,
+original time, identity replacement and current-reading withdrawal. The
+production fixture `browser-tests/reading-status-access.cjs` consumes canonical
+Resources through `useWorkloads` and verifies desktop keyboard/narrow touch,
+settled captures, request counts, unchanged row nodes and target bounds. Browser
+proof must be recorded separately; a fixture is not accepted pixel evidence.
+
+
 ### Guest memory alerts do not translate unrelated samples (12 October 2026)
 
 When the Workloads row uses host-relative memory, its existing guest drawer
@@ -328,10 +420,10 @@ proof, not a native CPU improvement, QGA/thaw result or delivery acceptance.
 ### Guest filesystem provenance preserves dense row geometry
 
 Visible retained and fixable-read filesystem cues must fit the existing dense row
-rhythm (an unavailable setup-gap read adds no visible cue at all), including canonical phone/narrow column weights, without adding a new
-collector, history request, layout observer, focus target or event path. Keep
-compact copy on narrow rows and the full safe reason in assistive text and the
-existing drawer. Inline sparkline plots may shrink to preserve their numeric
+rhythm (an unavailable setup-gap read adds no visible cue), including canonical phone/narrow column weights, without adding a new
+collector, history request or layout observer. Keep compact copy on narrow rows
+and the full safe reason in assistive text, the existing drawer and the
+read-only reading disclosure described below. Inline sparkline plots may shrink to preserve their numeric
 value within the already assigned column; do not add forced minimum widths,
 observers or a larger row to compensate. The cue stays outside the
 bars/sparkline/history-lens branch, so changing display mode cannot discard freshness information; removing it
@@ -535,6 +627,10 @@ or History work is added per row. `GuestRow.test.tsx` covers the drag, the
 in-place click and chevron activation over a selection.
 
 ## Canonical Files
+
+- `frontend-modern/src/utils/workloadDiskUsage.ts` — aggregate disk numeric/current-reading admission.
+
+- `frontend-modern/src/utils/filesystemByteUsage.ts`: shared finite byte/capacity admission for filesystem utilization.
 
 1. `pkg/metrics/store.go`
 2. `pkg/metrics/store_query_plan_test.go`
@@ -4152,3 +4248,38 @@ future/backwards-clock uncertainty and timer disposal. Connected
 backup-activity, configured policy and caution/absence controls. Browser proof
 uses the real read-only AlertsAPI/store and existing drawer/table badge with
 synthetic timestamps, not native backup safety, guest recovery or availability.
+
+### Backup time formatting stays disclosure-local (12 October 2026)
+
+The existing Workloads backup evidence uses a shared, explicit UTC completion
+formatter instead of reparsing the timestamp separately for the ISO attribute,
+local date and unlabelled local time. A closed row does not call the formatter;
+it is an accessor consumed only by mounted hover/dialog evidence. The drawer
+uses the same formatter after existing completed-evidence admission. No new
+poll, per-row timer, history read, retained cache, alert evaluation or guest
+operation is introduced, and saved freshness thresholds remain unchanged.
+
+`BackupCompletionTime.test.tsx` checks mounted same-guest updates, activity,
+shared-clock ticks and disposed timers; existing backup-clock tests retain
+policy-boundary coverage. `backupCompletionTime.test.ts` checks equivalent
+offset/numeric/Date inputs and unusable timestamp safety. Browser proof checks
+that disclosures and passive ticks add no API requests while production
+table/drawer times agree in opposing non-UTC contexts. This is not whole-fleet
+CPU/RSS relief or native guest/backup recovery.
+
+### Filesystem summaries admit only usable byte readings
+
+The shared stacked-disk model uses the same finite byte/capacity admission as
+the host drawer rows. Unknown sentinels, invalid used bytes and unmeasured
+capacity stay in tooltip identity/capacity evidence, without entering byte
+sums, utilization segments or severity. Mixed summaries count only accepted
+filesystem byte rows; all-unknown lists render N/A unless an independent
+accepted aggregate is available. True zero and source-owned last-known states
+remain distinct. The existing aggregate-only percentage fallback is unchanged.
+
+`stackedDiskBarModel.branchcov0712b.test.ts` covers mixed partial byte lists,
+invalid values, all-unknown admission and explicit independent aggregate
+controls. `browser-tests/host-disk-usage.cjs` exercises the actual resource
+HTTP/table/summary/drawer flow at desktop and touch widths. Disclosure adds no
+measurement or storage operation. This is truthful presentation, not native
+collector recovery or an installed performance result.

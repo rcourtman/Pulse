@@ -296,6 +296,40 @@ describe('GuestDrawer', () => {
     expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the accessible filesystem guidance target across read-reason updates', () => {
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        diskStatusReason: 'agent-not-running',
+        disks: [{ mountpoint: '/', total: 10 * 1024 ** 3, used: 5 * 1024 ** 3, usage: 50 }],
+      }),
+    );
+    solidRender(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    const guidance = screen.getByRole('link', { name: 'Filesystem reading guidance' });
+    expect(guidance).toHaveAttribute(
+      'href',
+      '/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis',
+    );
+    expect(guidance).toHaveClass(
+      'inline-flex',
+      'min-h-11',
+      'sm:min-h-0',
+      'text-base-content',
+      'focus-visible:outline-2',
+      'focus-visible:outline-offset-2',
+      'focus-visible:outline-base-content',
+    );
+    setGuest({ ...guest(), diskStatusReason: 'prev-vm-locked' });
+    expect(screen.getByRole('link', { name: 'Filesystem reading guidance' })).toHaveAttribute(
+      'href',
+      guidance.getAttribute('href'),
+    );
+    expect(technicalDetails().getByText(/^Using last known disk stats\./)).toHaveTextContent(
+      'VM operation lock, such as a backup',
+    );
+    setGuest({ ...guest(), diskStatusReason: '' });
+    expect(screen.queryByRole('link', { name: 'Filesystem reading guidance' })).toBeNull();
+  });
+
   it('keeps the backup precaution visible across drawer tabs without starting a guest check', async () => {
     const [guest, setGuest] = createSignal(
       makeGuest({
@@ -969,7 +1003,9 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(technicalDetails().getByText('Ubuntu • 22.04')).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('guest-drawer-facts')).getByText('Ubuntu • 22.04'),
+      ).toBeInTheDocument();
     });
 
     it('shows OS name only when version is missing', () => {
@@ -979,7 +1015,9 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(technicalDetails().getByText('Debian')).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('guest-drawer-facts')).getByText('Debian'),
+      ).toBeInTheDocument();
     });
 
     it('shows OS version only when name is missing', () => {
@@ -989,7 +1027,9 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(technicalDetails().getByText('11.0')).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('guest-drawer-facts')).getByText('11.0'),
+      ).toBeInTheDocument();
     });
 
     it('shows IP addresses', () => {
@@ -1465,6 +1505,37 @@ describe('GuestDrawer', () => {
       expect(within(array).getByTestId('raid-card-rebuild')).toHaveTextContent(
         'Rebuild was at 42%',
       );
+    });
+
+    it('keeps Proxmox interface freshness independent of a silent linked agent', () => {
+      const [guest, setGuest] = createSignal(
+        makeAgentGuest({ agentStale: true, networkInterfacesFromAgent: false }),
+      );
+      render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+      const staleNetwork =
+        'Using last known interface details. The Pulse Agent in this guest stopped reporting.';
+      const networkValue = () =>
+        technicalDetails()
+          .getByText(/^192\.168\.1\.5/)
+          .closest('td');
+      expect(technicalDetails().getByText('eth0')).toBeInTheDocument();
+      expect(technicalDetails().queryByText(staleNetwork)).toBeNull();
+      expect(networkValue()).not.toHaveClass('text-muted');
+      // This source distinction does not make the agent's other readings current.
+      expect(technicalDetails().getByText(/^Last known 75%/)).toBeInTheDocument();
+      expect(screen.getByTestId('raid-card-array')).toHaveAttribute(
+        'data-raid-reading',
+        'last-known',
+      );
+
+      setGuest({ ...guest(), networkInterfacesFromAgent: true });
+      expect(technicalDetails().getByText(staleNetwork)).toBeInTheDocument();
+      expect(networkValue()).toHaveClass('text-muted');
+
+      setGuest({ ...guest(), networkInterfacesFromAgent: false });
+      expect(technicalDetails().queryByText(staleNetwork)).toBeNull();
+      expect(networkValue()).not.toHaveClass('text-muted');
+      expect(technicalDetails().getByText(/^Last known 75%/)).toBeInTheDocument();
     });
 
     it('keeps a live in-guest agent current when Proxmox has no guest reads', () => {

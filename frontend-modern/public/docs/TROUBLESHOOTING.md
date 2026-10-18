@@ -11,6 +11,9 @@ first.** Do not run Diagnostics, force guest-agent probes or repeat a backup to
 fill a report. A successful backup task or responsive console alone does not
 establish safe recovery.
 
+- **Not sure which version is affected:** distinguish the
+  [running server, reported agent and update target](TROUBLESHOOTING.md#find-the-running-server-and-agent-versions).
+  A helper's selected release or an agent's target is not its running version.
 - **Cannot sign in:** use [local password recovery](TROUBLESHOOTING.md#i-forgot-my-password)
   or [401 and login failures](TROUBLESHOOTING.md#cannot-login--401-unauthorized),
   according to the existing authentication method. Do not delete configuration
@@ -24,6 +27,14 @@ establish safe recovery.
   [agent authentication and reporting evidence](UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403)
   before replacing a token or reinstalling. Installer success is not an accepted
   report.
+- **Proxmox or PBS reports a certificate error:** distinguish
+  [certificate trust, renewal and saved-pin conflicts](TROUBLESHOOTING.md#proxmox-or-pbs-certificate-validation-failed).
+  Keep verification enabled; a new certificate or a working browser is not
+  permission to replace saved trust.
+- **Copied agent install or removal command failed:** distinguish its
+  [preparation, private prompt and lifecycle action](UNIFIED_AGENT.md#copied-agent-command-fails-before-installation).
+  A stopped new command does not diagnose the existing agent. Keep state and
+  credentials; do not repeat removal or installation to obtain an error.
 - **Guest readings are missing or disagree:** distinguish
   [current, retained and unavailable disks](VM_DISK_MONITORING.md#current-retained-and-unavailable-disk-readings)
   from [guest memory pressure](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful).
@@ -35,6 +46,18 @@ establish safe recovery.
 - **TrueNAS readings are stale or absent:** use
   [TrueNAS data checks](TRUENAS.md#stale-truenas-data), keeping the platform API
   and Pulse Agent paths separate.
+- **PBS is Active but missing from monitoring:** distinguish the
+  [server, backup inventory and History](PBS.md#pbs-is-active-but-missing-from-monitoring).
+  An Active API connection does not establish a visible PBS resource; installing
+  an agent does not prove API recovery.
+- **RAID is reported degraded despite a spare:** compare
+  [required members, active members and spares](TROUBLESHOOTING.md#raid-array-is-degraded-with-a-spare).
+  A spare-inclusive total is not the required member count; do not change the
+  array just to clear a Pulse alert.
+- **Unraid reports missing disks in empty slots:** distinguish
+  [unassigned slots, missing members and parity counts](TROUBLESHOOTING.md#unraid-reports-missing-disks-in-empty-slots).
+  Unraid parity is not Linux MD RAID; do not rebuild or change disk assignments
+  just to make Pulse's count agree.
 - **Pulse itself uses more memory, CPU or disk writes:** use
   [memory baseline and growth checks](TROUBLESHOOTING.md#memory-use-keeps-growing)
   or [CPU and write-rate checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).
@@ -51,6 +74,46 @@ Review evidence locally before sharing it; unknown or unavailable details are
 valid, and a full configuration, journal or network export is not required.
 
 ## ⚡ Quick Fixes
+
+### Find the running server and agent versions
+
+Use the existing display on the affected Pulse installation; no update, restart
+or new diagnostic run is needed just to identify a version.
+
+- **Pulse server:** open **Settings → System → Updates** and read **Server
+  version**, not the available update. Keep any beta/RC suffix or development
+  build identity exactly as displayed. A newer server does not establish that
+  a separate agent has updated.
+- **Pulse Agent:** under **Settings → Infrastructure**, open the affected
+  connection and read **Pulse Agent version** alongside **Last seen**. An
+  **Update available** value such as `6.4.5 → 6.5.0` distinguishes the reported
+  version on the left from the target on the right. **Version target** alone
+  is not a reported agent version. If the connection is stale or offline, its
+  last report does not prove what is running now; keep that time and uncertainty.
+  For an API-only connection with no Pulse Agent, report the agent as **none**,
+  not the server's version. See [agent update behaviour](UNIFIED_AGENT.md#auto-update)
+  for the separate update path.
+- **Container image:** include the image tag or digest already available in
+  your deployment manager, separately from **Server version**. A tag such as
+  `latest` is mutable; a Compose file or selected image is not proof that a
+  running container was replaced. Keep the exact reference, including the
+  registry and preview suffix; do not substitute a GitHub release tag. A
+  `helm-chart-…` release identifies a chart, not a Pulse server archive or the
+  application version running in Kubernetes.
+
+Keep the **version at the failure**, an interrupted update's **intended version**
+and the **version observed after recovery** separate. Today's display does not
+reconstruct the failing run. If the helper selected a release but Pulse never
+started, give that attempted release and the public helper name or URL instead;
+installer output or a verified download signature does not prove completion.
+
+If a view is unavailable or you cannot access it with your existing permissions,
+write **unknown**; do not widen access, reinstall or re-enrol an agent, rerun an
+update or enable Debug to fill the gap. Do not share full container inspections,
+resolved Compose configuration, service environments or command lines: they can
+contain credentials. Existing version text or a locally reviewed, redacted
+excerpt is enough. Add it to the [existing report](#-getting-help); information
+already supplied does not need to be collected again.
 
 ### I forgot my password
 
@@ -199,6 +262,75 @@ do not replace credentials or disable TLS verification on a refusal alone.
 For a page that opens but has missing readings, use the
 [missing-data checks](FAQ.md#no-data-showing) instead of resetting the connection.
 
+### Proxmox or PBS certificate validation failed
+
+A TLS error is not an invalid API token or a missing permission. Keep the
+original error and time, and inspect the **existing** connection in
+**Settings → Infrastructure → Manage → SSL settings**. Check its saved
+**Endpoint URL**, **Verify SSL certificate** and **SSL Fingerprint (optional)**
+without changing them just to diagnose the failure. PVE normally uses HTTPS
+port **8006**; PBS uses **8007**. A browser reaching the platform is a different
+client and trust store from the Pulse server or container.
+
+**Keep certificate verification enabled.** Do not switch to HTTP, disable
+verification, clear a saved pin, rotate API tokens or delete and re-add the
+connection merely to get past an error.
+
+- **Unknown authority or self-signed certificate:** the Pulse runtime needs
+  the intended trusted certificate chain, or an independently verified SHA-256
+  leaf fingerprint. Obtain trust through an already-trusted platform console
+  or administration channel, not solely from the failing connection or its
+  suggested fingerprint. See the [PBS certificate check](PBS.md#connection-failed-error).
+- **Expired, not-yet-valid or hostname error:** reconcile the platform's
+  certificate, its validity period, the clocks and the saved endpoint's
+  hostname. An IP address is not interchangeable with a certificate's DNS
+  name. Do not bypass the error or pin an unsuitable certificate to hide it.
+- **Fingerprint mismatch:** the presented leaf differs from the saved pin.
+  Renewal is one possible reason, not proof that this is the same server.
+  Verify the replacement independently before making a trust change.
+- **TLS trust conflict:** different saved fingerprints refer to equivalent
+  endpoint URLs. This is contradictory saved trust, not a reason to choose
+  whichever pin connects. Preserve the entries and verify which endpoint and
+  certificate each belongs to before reconciliation.
+
+#### Certificate renewal and saved fingerprints
+
+A saved fingerprint selects leaf-certificate pinning instead of normal CA
+chain and hostname validation, even with **Verify SSL certificate** enabled.
+Renewing an ACME certificate can therefore invalidate a saved pin while the
+new certificate's chain is valid. Leaving verification enabled with no saved
+fingerprint uses the Pulse runtime's CA trust; disabling it with no pin removes
+chain and hostname checks.
+
+Choose the intended trust method, not an error-suppression workaround. Only
+after independently verifying the replacement certificate and server identity,
+update the affected connection's pin. If deliberately moving from leaf pinning
+to CA validation, first establish the runtime's trusted chain and matching
+endpoint hostname, then remove only that connection's pin while keeping
+verification enabled. Preserve unrelated credentials, collection scope and
+saved connections. If you cannot establish trust, stop rather than accept the
+new certificate.
+
+#### Cluster members and conflicting saved trust
+
+Cluster members can have different certificates. A reachable primary or one
+healthy member does not prove trust or polling recovery for every peer; do not
+copy the primary's fingerprint to all members. In **Cluster members**, retain
+the affected node and existing failure reason. If **Unreachable — details**
+is available, open it with touch or keyboard rather than relying on a hover.
+A display-name edit does not reconcile certificate trust.
+
+If the affected member pin or conflicting entry cannot be safely reconciled
+through the existing controls, leave it intact and use [Getting Help](#-getting-help).
+Share only the running Pulse version, PVE/PBS version, original time, redacted
+error class, which primary or peers are affected, and whether a certificate
+renewal was already observed. Use consistent aliases; keep literal endpoints,
+fingerprints, credentials and full configuration private. Unknown is valid.
+Do not edit encrypted files, run Diagnostics, force rediscovery, reinstall or
+restart just to fill a report. During a freeze/thaw or unresponsive-guest
+incident, follow [Backup safety](VM_DISK_MONITORING.md#backup-safety) first;
+certificate help does not establish workload recovery.
+
 ### CORS errors
 
 CORS controls whether a browser can read a response from a different origin.
@@ -329,6 +461,75 @@ restore, not by overwriting today's history. Follow
 [safe audit recovery](AUDIT_LOGGING.md#verification-failures-and-safe-recovery).
 
 ### Monitoring Data
+
+#### Unraid reports missing disks in empty slots
+
+Compare the same host's **existing** Unraid status with Pulse's disk inventory,
+storage-topology alert and observation time. Keep the Pulse server and Unraid
+Unified Agent versions separate: updating the server does not establish that
+the agent updated. No new command, Diagnostics run or array operation is needed
+to report a disagreement.
+
+| Existing observation | Meaning |
+| --- | --- |
+| `DISK_NP`, no device or size, and only `fsType=auto` or a transport-only identity such as `ata-_` | A configured-but-unassigned slot, not evidence of a missing assigned disk. A slot name such as `disk6` or `parity2` alone is not assignment evidence. |
+| `DISK_NP_MISSING`, even without a device or identity | Unraid explicitly reports an assigned-but-absent member. Do not discard it as an empty slot. |
+| A missing/disabled slot with a real device, model/serial, filesystem or size | Assignment evidence remains; do not dismiss the failure because other slots are empty. `auto` alone is not a real filesystem. |
+| Single online parity disk and five data disks | Pulse's `numProtected` counts online parity devices: **1**, not five protected data disks. That count alone does not prove complete protection or healthy disks. |
+| No matching native observation, an old reading or an unknown version | The comparison is unavailable, not a healthy result. `STARTED` alone does not establish array health. |
+
+For the healthy partially populated topology in [#1788](https://github.com/rcourtman/Pulse/issues/1788),
+seventeen empty data slots wrongly contributed to `numMissing`. The final
+correction treats `fsType=auto` as a placeholder at agent collection, server
+ingestion and storage-health assessment. **Pulse v6.5.0 contains this correction
+in the server and Unified Agent**; an earlier preview retest failed before
+this final correction. This does not establish that a current alert has the
+same cause or that the reporter's installation has recovered.
+
+If existing native status shows no missing assigned members but Pulse disagrees,
+preserve the mismatch rather than suppressing the check or changing the array.
+Do not unassign a disk, rebuild, start a parity check, restart or re-enrol the
+agent, or enable Debug just to diagnose the alert. A genuine missing, disabled,
+invalid or unavailable parity member remains a separate safety concern.
+
+For a report, share only already available versions, the original time, relevant
+status/counts and redacted alert text. Keep disk serials, paths and raw agent
+payloads private; use consistent aliases and leave unknowns unknown. Follow
+[Getting Help](TROUBLESHOOTING.md#-getting-help), without repeating a failed
+update or array operation to supply evidence.
+
+#### RAID array is degraded with a spare
+
+For a Linux MD RAID alert, compare the same array's **existing** native status
+with Pulse's reading and observation time. In `mdadm` output, **Raid Devices**
+is the required member count; **Total Devices** can include a spare. A spare
+does not replace an active member until it has joined the array.
+
+| Existing observation | Meaning |
+| --- | --- |
+| `clean`; Raid Devices **4**, Active **4**, Total **5**, Working **5**, Spare **1**, Failed **0** | Four required members are active, with one spare. The total of five does not by itself mean a member is missing. |
+| Raid Devices **4**, Active **3**, with a spare still present | A required member is missing. Do not subtract the spare from the required count or treat it as restored redundancy. |
+| Failed devices, a degraded/unavailable state, or recovery/reshape in progress | These are separate health or recovery observations. A spare or the word `clean` alone does not establish that recovery finished. |
+| Missing counts, an old reading or different array identities | The comparison is unavailable or unlike-for-like, not a healthy result. |
+
+Pulse **v6.5.0** includes the [spare-count correction reported in #2369](https://github.com/rcourtman/Pulse/issues/2369)
+for the clean four-member-plus-spare case, including reports from older
+collectors. That does not establish that every RAID alert has this cause or
+that an affected installation has recovered. A healthy count also does not
+verify data integrity, backup completeness or restore readiness.
+
+For genuine member loss or recovery, use the storage platform's established
+recovery procedure and independent monitoring. Keep RAID alerts enabled; do
+not remove a spare, fail a member, assemble/rebuild an array, start a scrub,
+reboot or change collection settings just to test or silence Pulse. No new
+`mdadm` command, Diagnostics run or induced failure is required to file a report.
+
+For help, retain the original alert/time, running Pulse and collector versions
+where known, collection path, and the already available state and counts for
+one matching array. A missing collector version or native observation can be
+reported as unknown. Use consistent private aliases for the host and array;
+keep UUIDs, serial numbers, private paths and full command output out of public
+reports. Do not repeat an array operation to obtain evidence.
 
 #### Primary IP shows a Podman or Docker bridge address
 
@@ -679,6 +880,11 @@ Compare **existing observations of the same guest, kernel and time**, with the
 same units and memory allocation. The Proxmox node's available memory is not the
 VM's available memory, and a single application's RSS is not total guest usage.
 Do not sum process RSS to infer guest pressure: processes can share pages.
+
+For History comparisons, keep each panel's stored time and qualification with
+the value; a range endpoint, page refresh or today's live source does not date
+a past reading. Use [History panel interpretation](METRICS_HISTORY.md#read-a-history-panel)
+to distinguish a missing observation from zero, and stored data from fallback.
 
 | Reading | What it describes | What it does not establish |
 | --- | --- | --- |
@@ -1296,9 +1502,19 @@ not a guide to the current menu.
 ### Relay / Mobile
 
 #### Relay showing "Disconnected"
-- Confirm a valid Relay, Pro, grandfathered Pro+, or Cloud license is active (**Settings → Plans & Billing**).
-- Check Pulse server can reach the relay server (outbound WebSocket to `relay.pulserelay.pro`).
-- Review logs: `journalctl -u pulse | grep relay` or `docker logs pulse | grep relay`.
+
+Pulse Mobile and Relay retire on **31 March 2027**; existing paired phones keep
+working until then. **Relay is no longer sold.** Existing Relay subscribers keep
+Pro features at their current price for as long as their subscription continues,
+including after the app retires. Do not buy or switch plans to diagnose a
+connection failure.
+
+For an existing paired phone, use the [Relay connection checks](RELAY.md#relay-showing-disconnected).
+Keep the pairing and current configuration; a relay connection is not proof
+that the phone has connected. Relay connects the app, **not the web UI**.
+For phone alerts after retirement, configure [ntfy, Gotify or Pushover](WEBHOOKS.md#-quick-setup)
+under **Alerts → Notifications** and open Pulse in your phone's browser, using
+your own VPN or tunnel when away from home.
 
 ---
 
@@ -1306,7 +1522,13 @@ not a guide to the current menu.
 
 ### Collect diagnostics safely
 
-**Run Diagnostics** in **Settings → Diagnostics** is not just a passive export.
+Open **Settings → Support → Diagnostics & Health** in your existing authorised
+Pulse session (`/settings/support/diagnostics` on your Pulse URL). Opening this
+panel does not run diagnostics. If no result is displayed, the download buttons
+are absent: use the original errors or observations rather than running checks
+just to obtain an attachment. Diagnostics are optional, not a condition of reporting.
+
+**Run Diagnostics** (shown as **Run** on phones) is not just a passive export.
 It can make live Proxmox/PBS API and guest-agent requests; results may also come
 from a short-lived cache. Do not run it during a backup, freeze/thaw or an
 unresponsive-host incident merely to obtain a report. Keep the original errors
@@ -1330,7 +1552,8 @@ information, including details echoed in errors or notes. Do not paste a
 Share only evidence relevant to the symptom; a screenshot or exact redacted
 error may be enough. See [Getting Help](#-getting-help).
 
-The **Support Bundle** download in **System Logs** is a different export: it can
+The **Support Bundle** download in **Settings → Support → System Logs** is a
+different export: it can
 contain a complete log file or server buffer plus configuration and environment
 information. It is not the **GitHub (review first)** diagnostics export and is
 not limited to the lines visible in the panel. Keep the archive private and
@@ -1702,13 +1925,15 @@ If you're still stuck:
    exact error. Do not repeat an update, outage or notification storm merely to
    reproduce it. A failed update banner does not prove the action left the
    target unchanged; check its current state before another attempt.
-2. **Identify the affected version**: give the running Pulse and relevant agent
-   versions, not just the version before an upgrade. For Docker, include the
+2. **Identify the affected version**: distinguish the
+   [running server, reported agent and update target](#find-the-running-server-and-agent-versions),
+   not just the version before an upgrade. For Docker, include the
    running image tag or digest. If installation never started Pulse, give the
    attempted release and public installer/helper source, or say "unknown".
-3. **Choose relevant, safe evidence**: if Pulse is running and collection is
-   safe, use **Settings → Diagnostics → GitHub (review first)** for
-   connection or data failures, following [safe diagnostics collection](#collect-diagnostics-safely).
+3. **Choose relevant, safe evidence**: use existing logs, errors or observations
+   first. If a result is already displayed in **Settings → Support → Diagnostics
+   & Health**, **GitHub (review first)** downloads it without running checks again;
+   follow [safe diagnostics collection](#collect-diagnostics-safely).
    For a visual problem, a screenshot or the exact
    error may be enough. If logs are needed, use the
    [bounded Pulse log readers](#inspect-notification-logs), choosing the command

@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get("PULSE_AGENT_TRUENAS_SOURCE", ROOT / "scripts/install.sh"))
 FUNCTIONS = (
     "portable_path_uid", "portable_path_mode", "trusted_lifecycle_regular_file",
+    "nas_agent_removal_platform",
     "read_agent_removal_unit_state", "confirm_agent_unit_quiescent",
     "quiesce_agent_units_for_removal", "teardown_systemd_agent_service",
     "read_legacy_agent_removal_processes", "legacy_agent_processes_absent",
@@ -381,6 +382,10 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
         result = self.exercise(bootstrap='missing', tasks='absent', appliance=False)
         self.assertEqual(result[0].returncode, 0, result[0].stderr)
         self.assertFalse(any(e.startswith('task:') for e in result[2]))
+        # The complete caller also checks the unrelated NAS platform. Extract
+        # that real function, with its existing vendor paths redirected, rather
+        # than letting an undefined command masquerade as a negative scope read.
+        self.assertNotIn('command not found', result[0].stdout + result[0].stderr)
 
     def test_process_read_exposes_only_roles_and_real_timeout_child_is_stopped(self):
         result = self.exercise(fault='live-bootstrap', flow='process')

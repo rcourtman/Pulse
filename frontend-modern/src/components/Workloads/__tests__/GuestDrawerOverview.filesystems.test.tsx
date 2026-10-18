@@ -56,6 +56,33 @@ const props: ComponentProps<typeof GuestDrawerOverview> = {
 describe('GuestDrawerOverview filesystem labels', () => {
   afterEach(cleanup);
 
+  it('keeps full OS facts and phone reading guidance outside the closed Details', () => {
+    const os = 'Microsoft Windows Server 2025 Datacenter Evaluation long-build-identity';
+    render(() => (
+      <GuestDrawerOverview
+        {...props}
+        guestOsSummary={os}
+        hasFilesystemDetails={false}
+        guest={{ ...props.guest, type: 'qemu', disks: [], diskStatusReason: 'agent-not-running' }}
+      />
+    ));
+    const facts = screen.getByTestId('guest-drawer-facts');
+    expect(facts).toHaveTextContent(os);
+    const system = screen.getByText(os);
+    expect(system.closest('details')).toBeNull();
+    expect(system).toHaveClass('whitespace-normal', 'wrap-anywhere');
+    expect(system).not.toHaveClass('truncate');
+    expect(screen.getByTestId('guest-technical-details')).not.toHaveAttribute('open');
+    const guidance = screen.getByRole('link', { name: 'Filesystem reading guidance' });
+    expect(guidance.closest('details')).toBeNull();
+    expect(guidance).toHaveClass('min-h-11', 'sm:min-h-0', 'text-base-content');
+    expect(guidance).toHaveClass('focus-visible:outline-2');
+    expect(guidance).toHaveAttribute(
+      'href',
+      '/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis',
+    );
+  });
+
   it.each(guestDiskDeferrals)(
     'explains %s in the existing drawer even before any disk sample',
     (reason, message) => {

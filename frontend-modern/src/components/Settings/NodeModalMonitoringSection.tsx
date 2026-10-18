@@ -1,4 +1,4 @@
-import { Component, Show } from 'solid-js';
+import { Component, createMemo, createUniqueId, Show } from 'solid-js';
 import type { NodeModalProps } from '@/components/Settings/nodeModalModel';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -11,6 +11,7 @@ import {
   labelClass,
 } from '@/components/shared/Form';
 import { TogglePrimitive } from '@/components/shared/Toggle';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import {
   getNodeMonitoringCoverageCopy,
   getTemperatureMonitoringLockedCopy,
@@ -23,40 +24,98 @@ interface NodeModalMonitoringSectionProps {
 
 export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionProps> = (props) => {
   const { modalProps, state } = props;
+  const descriptionId = createUniqueId();
+  const tlsPolicy = createMemo(() => {
+    // Match the TLS client's precedence, not the checkbox alone. This is a
+    // description of form inputs, never evidence that a peer was verified.
+    if (state.formData().host.trim().toLowerCase().startsWith('http://')) {
+      return {
+        title: 'TLS is not used for HTTP',
+        description:
+          'This HTTP URL does not use TLS: neither the checkbox nor a fingerprint authenticates the server or protects credentials in transit. Do not switch to HTTP to bypass a certificate error.',
+        tone: 'danger' as const,
+      };
+    }
+    if (state.formData().fingerprint !== '') {
+      return {
+        title: 'Certificate fingerprint required',
+        description:
+          'The fingerprint takes precedence over the checkbox. This endpoint must present the matching certificate, even if its certificate chain is trusted or verification is unchecked.',
+        tone: 'info' as const,
+      };
+    }
+    if (state.formData().verifySSL) {
+      return {
+        title: 'Trusted certificate chain required',
+        description:
+          'With no fingerprint set, this endpoint must present a valid, hostname-matching certificate with a chain trusted by the Pulse runtime.',
+        tone: 'info' as const,
+      };
+    }
+    return {
+      title: 'Certificate identity not verified',
+      description:
+        'With no fingerprint and verification unchecked, these settings do not authenticate the server. Encryption alone does not protect credentials from an impersonated endpoint.',
+      tone: 'danger' as const,
+    };
+  });
 
   return (
     <>
-      <div>
+      <section aria-label="TLS trust">
         <SectionHeader title="SSL settings" size="sm" class="mb-4" titleClass="text-base-content" />
         <div class="space-y-3">
-          <label class="flex items-center gap-2 text-sm text-base-content">
+          <label class="flex min-h-11 items-center gap-2 text-sm text-base-content">
             <input
               type="checkbox"
               checked={state.formData().verifySSL}
               onChange={(event) => state.updateField('verifySSL', event.currentTarget.checked)}
+              aria-describedby={`${descriptionId}-tls-policy`}
               class={formCheckbox}
             />
             Verify SSL certificate
           </label>
 
           <div class={formField}>
-            <label for="node-ssl-fingerprint" class={labelClass()}>
+            <label for={`${descriptionId}-ssl-fingerprint`} class={labelClass()}>
               SSL Fingerprint (optional)
             </label>
             <input
-              id="node-ssl-fingerprint"
+              id={`${descriptionId}-ssl-fingerprint`}
               type="text"
               value={state.formData().fingerprint}
               onInput={(event) => state.updateField('fingerprint', event.currentTarget.value)}
+              aria-describedby={`${descriptionId}-fingerprint-help ${descriptionId}-tls-policy`}
               placeholder="AA:BB:CC:DD:EE:FF:..."
               class={controlClass('font-mono')}
             />
-            <p class={formHelpText}>
-              Useful when connecting to servers with self-signed certificates.
+            <p id={`${descriptionId}-fingerprint-help`} class={formHelpText}>
+              Pins the SHA-256 fingerprint of this endpoint's certificate instead of checking its
+              certificate chain. Certificate renewal can change the fingerprint, including with ACME
+              or Let's Encrypt. Independently verify the replacement through an already-trusted
+              administration channel before updating a pin. Do not disable verification or clear a
+              pin to bypass an error.
             </p>
           </div>
+          <InlineNotice
+            tone={tlsPolicy().tone}
+            role="status"
+            aria-label="Form TLS policy"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <p class="font-medium">{tlsPolicy().title}</p>
+            <p id={`${descriptionId}-tls-policy`}>{tlsPolicy().description}</p>
+          </InlineNotice>
+          <p class={formHelpText}>
+            Form settings only, not a connection-test result.
+            <Show when={modalProps.nodeType === 'pve'}>
+              {' '}
+              Cluster members may have their own saved fingerprints.
+            </Show>
+          </p>
         </div>
-      </div>
+      </section>
 
       {/* For PVE the Collection scope section below carries both the
           coverage description and the per-collector toggles, so the
@@ -75,7 +134,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
       </Show>
 
       <Show when={modalProps.nodeType === 'pve'}>
-        <div class="space-y-3">
+        <section aria-label="Collection scope" class="space-y-3">
           <SectionHeader
             title="Collection scope"
             size="sm"
@@ -83,23 +142,35 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             titleClass="text-base-content"
           />
           <p class="text-sm text-muted">
-            Pulse tracks all supported Proxmox VE resources by default — virtual machines,
-            containers, storage, and backups — so you always get full visibility without extra
-            configuration. Disable individual collectors below to reduce API load or trim workload
-            noise.
+            Choose which resources Pulse collects from this Proxmox VE connection. Guest details
+            depend on guest-agent availability and permissions. Some readings can be unavailable or
+            temporarily deferred. Disable collectors you do not need to reduce API load or trim
+            workload noise.
           </p>
+          <InlineNotice tone="warning" role="note" aria-label="Guest-agent backup precaution">
+            <span id={`${descriptionId}-backup-precaution`}>
+              Guest-agent reads share the channel used by freeze-enabled backups. If a guest becomes
+              unresponsive around a backup, stop Pulse monitoring and leave it stopped until
+              independent checks confirm thaw and writes to every filesystem covered by the backup.
+              Do not run live diagnostics or restart the guest agent during the incident. An OK
+              backup or a running VM does not prove recovery.
+            </span>
+          </InlineNotice>
 
           <label class="flex items-start gap-2 text-sm text-base-content">
             <input
               type="checkbox"
+              aria-labelledby={`${descriptionId}-vms-label`}
+              aria-describedby={`${descriptionId}-vms-help ${descriptionId}-backup-precaution`}
               checked={state.formData().monitorVMs}
               onChange={(event) => state.updateField('monitorVMs', event.currentTarget.checked)}
               class={formCheckbox + ' mt-0.5'}
             />
             <div>
-              <div>Virtual machines</div>
-              <p class="text-xs text-muted mt-1">
-                QEMU guest state, resource usage, and per-VM metrics.
+              <div id={`${descriptionId}-vms-label`}>Virtual machines</div>
+              <p id={`${descriptionId}-vms-help`} class="text-xs text-muted mt-1">
+                VM state and resource usage. Guest memory and filesystem details depend on available
+                guest-agent readings.
               </p>
             </div>
           </label>
@@ -107,6 +178,8 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
           <label class="flex items-start gap-2 text-sm text-base-content">
             <input
               type="checkbox"
+              aria-labelledby={`${descriptionId}-containers-label`}
+              aria-describedby={`${descriptionId}-containers-help`}
               checked={state.formData().monitorContainers}
               onChange={(event) =>
                 state.updateField('monitorContainers', event.currentTarget.checked)
@@ -114,21 +187,25 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
               class={formCheckbox + ' mt-0.5'}
             />
             <div>
-              <div>Containers</div>
-              <p class="text-xs text-muted mt-1">LXC container state and resource usage.</p>
+              <div id={`${descriptionId}-containers-label`}>Containers</div>
+              <p id={`${descriptionId}-containers-help`} class="text-xs text-muted mt-1">
+                LXC container state and resource usage.
+              </p>
             </div>
           </label>
 
           <label class="flex items-start gap-2 text-sm text-base-content">
             <input
               type="checkbox"
+              aria-labelledby={`${descriptionId}-storage-label`}
+              aria-describedby={`${descriptionId}-storage-help`}
               checked={state.formData().monitorStorage}
               onChange={(event) => state.updateField('monitorStorage', event.currentTarget.checked)}
               class={formCheckbox + ' mt-0.5'}
             />
             <div>
-              <div>Storage</div>
-              <p class="text-xs text-muted mt-1">
+              <div id={`${descriptionId}-storage-label`}>Storage</div>
+              <p id={`${descriptionId}-storage-help`} class="text-xs text-muted mt-1">
                 Per-storage capacity, status, and content type breakdown.
               </p>
             </div>
@@ -137,16 +214,20 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
           <label class="flex items-start gap-2 text-sm text-base-content">
             <input
               type="checkbox"
+              aria-labelledby={`${descriptionId}-backups-label`}
+              aria-describedby={`${descriptionId}-backups-help`}
               checked={state.formData().monitorBackups}
               onChange={(event) => state.updateField('monitorBackups', event.currentTarget.checked)}
               class={formCheckbox + ' mt-0.5'}
             />
             <div>
-              <div>Backups</div>
-              <p class="text-xs text-muted mt-1">vzdump schedules and recent backup activity.</p>
+              <div id={`${descriptionId}-backups-label`}>Backups</div>
+              <p id={`${descriptionId}-backups-help`} class="text-xs text-muted mt-1">
+                vzdump schedules and recent backup activity.
+              </p>
             </div>
           </label>
-        </div>
+        </section>
 
         <div class="space-y-4">
           <SectionHeader
@@ -159,11 +240,12 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             <div class="flex items-start justify-between gap-3">
               <div>
                 <p class="font-medium text-base-content">Monitor physical disk health (SMART)</p>
-                <p class="mt-1 text-xs text-muted">
+                <p id={`${descriptionId}-physical-disks-help`} class="mt-1 text-xs text-muted">
                   This will spin up idle HDDs. Leave disabled if you rely on drive standby.
                 </p>
               </div>
               <TogglePrimitive
+                ariaDescribedBy={`${descriptionId}-physical-disks-help`}
                 checked={state.formData().monitorPhysicalDisks}
                 onChange={(event) =>
                   state.updateField('monitorPhysicalDisks', event.currentTarget.checked)

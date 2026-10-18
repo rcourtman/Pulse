@@ -29,7 +29,9 @@ Pulse Relay is the end-to-end encrypted connection between a Pulse instance and 
 
 ## Requirements
 
-- **Relay, Pro, legacy Pro+, or Cloud license** — relay is gated by the `relay` feature key.
+- **An existing licence with the `relay` entitlement** — Relay is no longer sold.
+  Existing Relay subscribers receive Pro features at their current price for as
+  long as their subscription continues, including after the app retires.
 - **Outbound WebSocket** — Pulse must be able to reach `relay.pulserelay.pro` (port 443).
 - **No inbound ports** — you do not need to open any ports on your firewall.
 
@@ -43,7 +45,7 @@ Relay was designed with a zero-trust model:
 | **Plaintext** | Relay server never sees your monitoring data |
 | **Authentication** | Per-session mobile authentication |
 | **Back-pressure** | Data limiters prevent channel flooding |
-| **License-gated** | Requires an active Relay-or-higher license |
+| **License-gated** | Requires an active licence with the `relay` entitlement |
 | **Configurable** | Can be enabled/disabled at any time via Settings |
 | **Audit** | Pulse Mobile relay access token creation is recorded in the audit trail. Relay connection events are written to the Pulse server log. |
 
@@ -97,30 +99,44 @@ Pulse Mobile can pair with multiple Pulse instances. Each pairing has its own en
 
 ### Relay showing "Disconnected"
 
-1. Confirm your Relay, Pro, grandfathered Pro+, or Cloud license is active (**Settings → Plans & Billing**).
-2. Verify the Pulse server can reach the relay server:
-   ```bash
-   curl -s https://relay.pulserelay.pro/healthz
-   ```
-3. Check Pulse logs for relay errors:
-   ```bash
-   journalctl -u pulse | grep -i relay
-   # or
-   docker logs pulse | grep -i relay
-   ```
+For an existing paired phone, inspect **Settings → Pulse Mobile** without
+changing it: distinguish whether relay is enabled, whether the server's relay
+connection is active, and whether the affected phone connects. An active server
+connection does not prove phone delivery. Relay is no longer sold; do not buy
+or switch plans as a troubleshooting step. If the panel shows a licence error,
+keep its exact redacted wording rather than changing the subscription.
+
+Use the original time, Pulse server and app versions, and any existing error
+or screenshot. Unknown details are valid. If logs are needed, follow the
+[bounded Pulse log readers](TROUBLESHOOTING.md#inspect-notification-logs) on the
+Pulse server, then review only relevant lines locally. Do not post full logs,
+QR codes, pairing deep links, cookies, tokens or private server addresses.
+
+Keep the existing pairing and configuration. Do not disable/re-enable relay,
+delete a pairing, rescan a QR code, restart services or change firewall rules
+merely to collect evidence. A public relay health response would not establish
+that this server's WebSocket or the phone's encrypted session recovered.
 
 ### Pulse Mobile can't connect
 
-1. Verify relay is enabled in **Settings → Pulse Mobile**.
-2. Confirm your mobile account has beta access.
-3. Re-scan the QR code — sessions can expire.
-4. Ensure your mobile device has internet access.
+Compare the affected phone's existing connection error with the server's
+[Relay status](#relay-showing-disconnected). If another already-paired phone
+works, retain that distinction; do not pair another device as a test. Preserve
+the current pairing and use the existing error or redacted screenshot in the
+[same support thread](TROUBLESHOOTING.md#-getting-help).
 
 ### Open Pulse handoff not loading
 
-1. Check the relay connection status in **Settings → Pulse Mobile**.
-2. Look for WebSocket reconnection messages in Pulse logs.
-3. Restart Pulse Mobile.
+Keep app connectivity separate from access to the web UI: Relay connects the
+app, **not the web UI**. Open the Pulse web address in the phone's browser using
+your own VPN or tunnel away from home. If the browser works but the app's
+handoff does not, report that distinction and the existing app error without
+restarting or re-pairing.
+
+For alerts after **31 March 2027**, add [ntfy, Gotify or Pushover](WEBHOOKS.md#-quick-setup)
+under **Alerts → Notifications**. These destinations do not require Relay or
+a Pulse Mobile pairing. A successful Test is not proof of ordinary alert delivery;
+see [notification delivery checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
 
 ## See Also
 

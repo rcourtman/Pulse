@@ -10,6 +10,7 @@ import {
 } from '@/utils/sourcePlatforms';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { normalizeDiskArray } from '@/utils/format';
+import { getWorkloadDiskUsagePercent } from '@/utils/workloadDiskUsage';
 import {
   getWorkloadCPUFraction,
   isDockerManagedAppContainer,
@@ -116,6 +117,7 @@ type APIResource = {
     diskStatusReason?: string;
     guestAgentStatus?: string;
     guestAgentExpected?: boolean;
+    networkInterfaces?: APINetworkInterface[];
     lock?: string;
     swapUsed?: number;
     swapTotal?: number;
@@ -330,6 +332,30 @@ const buildMetric = (metric?: APIMetricValue) => {
   return { total, used, free, usage };
 };
 
+const buildDiskMetric = (metric?: APIMetricValue): WorkloadGuest['disk'] => {
+  const disk = {
+    total: metric?.total,
+    used: metric?.used,
+    // Byte metrics always serialize a generic value, including default zero.
+    // Only an explicit percentage or measured byte pair establishes usage.
+    usage:
+      metric?.percent ?? (!metric?.unit || metric.unit === 'percent' ? metric?.value : undefined),
+  };
+  return {
+    ...disk,
+    // Preserve missing/invalid evidence. Capacity-only metrics must not turn
+    // into current 0%, but explicitly reported zero and byte-only reads work.
+    usage: getWorkloadDiskUsagePercent(disk) ?? disk.usage,
+    free:
+      typeof disk.total === 'number' &&
+      Number.isFinite(disk.total) &&
+      typeof disk.used === 'number' &&
+      Number.isFinite(disk.used)
+        ? Math.max(0, disk.total - disk.used)
+        : undefined,
+  };
+};
+
 const mapNetworkInterfaces = (interfaces?: APINetworkInterface[]) =>
   interfaces?.map((iface) => ({
     name: iface.name,
@@ -491,7 +517,8 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     firstFiniteMetricNumber(resource.metrics?.cpu?.percent, resource.metrics?.cpu?.value) ?? 0;
   const cpuAvailable = hasMetricValue(resource.metrics?.cpu);
   const memoryAvailable = hasMetricValue(resource.metrics?.memory);
-  const diskAvailable = hasMetricValue(resource.metrics?.disk);
+  const disk = buildDiskMetric(resource.metrics?.disk);
+  const diskAvailable = getWorkloadDiskUsagePercent(disk) !== null;
   const networkIOAvailable =
     hasMetricValue(resource.metrics?.netIn) || hasMetricValue(resource.metrics?.netOut);
   const diskIOAvailable =
@@ -566,7 +593,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         balloon: resource.proxmox?.balloon ?? 0,
       };
     })(),
-    disk: buildMetric(resource.metrics?.disk),
+    disk,
     disks: normalizeDiskArray(resource.proxmox?.disks ?? resource.agent?.disks),
     disksFromAgent: (resource.proxmox?.disks == null && resource.agent?.disks != null) || undefined,
     // Both the API and owning platform snapshot pass through this mapper.
@@ -588,7 +615,18 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     agentKind: resource.agent?.agentVersion ? 'pulse' : undefined,
     agentId: resource.agent?.agentId,
     agentRaid: resource.agent?.raid,
-    networkInterfaces: mapNetworkInterfaces(resource.agent?.networkInterfaces),
+    // Agent reports retain precedence, including an explicitly empty list.
+    // Agentless PVE guests already supply named interfaces on their platform
+    // facet; both the REST and owning-snapshot paths must preserve them.
+    networkInterfaces: mapNetworkInterfaces(
+      resource.agent?.networkInterfaces ?? resource.proxmox?.networkInterfaces,
+    ),
+    networkInterfacesFromAgent:
+      resource.agent?.networkInterfaces != null
+        ? true
+        : resource.proxmox?.networkInterfaces != null
+          ? false
+          : undefined,
     // A linked agent past its reporting lease keeps its last report on the
     // resource, so its RAID, network and filesystem rows are not current.
     agentStale: resource.agent?.stale === true || undefined,
