@@ -76,6 +76,20 @@ describe('TrueNAS protection read availability', () => {
       'last loaded records',
     );
     expect(screen.queryByText('private transport diagnostic')).not.toBeInTheDocument();
+    let rejectRetry!: (error: Error) => void;
+    apiFetchJSONMock.mockImplementationOnce(
+      () =>
+        new Promise((_done, reject) => {
+          rejectRetry = reject;
+        }),
+    );
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh protection activity' }));
+    expect(screen.getByRole('button', { name: 'Refreshing protection activity…' })).toBeDisabled();
+    expect(screen.getByText(/Could not refresh TrueNAS protection\./)).toHaveTextContent(
+      'last loaded records',
+    );
+    rejectRetry(new Error('still unavailable'));
+    await screen.findByRole('button', { name: 'Refresh protection activity' });
     first.unmount();
 
     let resolve!: (value: unknown) => void;
@@ -86,11 +100,13 @@ describe('TrueNAS protection read availability', () => {
         }),
     );
     mountProtection();
-    await vi.waitFor(() => expect(apiFetchJSONMock).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(apiFetchJSONMock).toHaveBeenCalledTimes(4));
     expect(screen.getByText(/Could not refresh TrueNAS protection\./)).toHaveTextContent(
       'last loaded records',
     );
-    expect(screen.getByRole('button', { name: 'Refreshing protection activity…' })).toBeDisabled();
+    // Cached remounts refresh in the background, so the notice persists but
+    // the existing query contract keeps a manual Refresh available.
+    expect(screen.getByRole('button', { name: 'Refresh protection activity' })).toBeEnabled();
     resolve({ data: [point('snapshot-b')] });
     await vi.waitFor(() =>
       expect(screen.queryByText(/Could not refresh TrueNAS protection\./)).not.toBeInTheDocument(),

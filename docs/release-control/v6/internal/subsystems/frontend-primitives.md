@@ -27,8 +27,10 @@ native Refresh button above its table when a refresh fails with retained records
 The notice survives filtering, pending retries and cached remounts; it qualifies
 historical counts/outcomes without discarding accessible disclosures. Without
 records, the existing error panel remains visible and its Refresh control is
-disabled while retrying rather than reverting to a spinner or an empty result.
-No raw diagnostic text is rendered. TrueNASProtectionTable and connected reader
+disabled during an explicit retry rather than reverting to a spinner or an
+empty result. Cached remounts keep the query's existing background refresh and
+an available manual Refresh while the notice remains visible. No raw diagnostic
+text is rendered. TrueNASProtectionTable and connected reader
 regressions plus desktop/narrow HTTP/browser checks cover this composition; shared
 primitive APIs and provider/recovery operations are unchanged.
 

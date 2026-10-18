@@ -197,14 +197,41 @@ const point = (id, dataset, outcome = 'success') => ({
       );
       await capture('retained');
 
-      reply = { status: 200, hold: true, body: { data: [point('snapshot-b', 'tank/recovered')] } };
-      await activate(page.getByRole('button', { name: 'Leave fixture tab' }));
-      await activate(page.getByRole('button', { name: 'Open fixture tab' }));
+      reply = { status: 200, hold: true, body: { data: [point('snapshot-retry', 'tank/retry')] } };
+      await activate(
+        page.getByRole('button', { name: 'Refresh protection activity', exact: true }),
+      );
       await page.getByRole('button', { name: 'Refreshing protection activity…' }).waitFor();
       assert(
         await page.getByRole('button', { name: 'Refreshing protection activity…' }).isDisabled(),
       );
       assert.equal(await rows().count(), 2);
+      await capture('explicit-retry');
+      assert(release);
+      release();
+      release = null;
+      await page.locator('[data-truenas-protection-row="snapshot-retry"]').waitFor();
+      reply = { status: 200, body: { data: 'unreadable' } };
+      await activate(page.getByRole('button', { name: 'Refresh fixture read' }));
+      await page.getByRole('status').filter({ hasText: 'last loaded records' }).waitFor();
+      entry.states.push(
+        'Explicit retry disables its control without hiding the warning or retained rows',
+      );
+
+      reply = { status: 200, hold: true, body: { data: [point('snapshot-b', 'tank/recovered')] } };
+      const backgroundRead = page.waitForRequest((request) =>
+        request.url().includes('/api/recovery/points'),
+      );
+      await activate(page.getByRole('button', { name: 'Leave fixture tab' }));
+      await activate(page.getByRole('button', { name: 'Open fixture tab' }));
+      await backgroundRead;
+      await page.getByRole('status').filter({ hasText: 'last loaded records' }).waitFor();
+      assert(
+        await page
+          .getByRole('button', { name: 'Refresh protection activity', exact: true })
+          .isEnabled(),
+      );
+      assert.equal(await rows().count(), 1);
       await capture('cached-retry');
       assert(release, 'held recovery request was not admitted');
       release();
