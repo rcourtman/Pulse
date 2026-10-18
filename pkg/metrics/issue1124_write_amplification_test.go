@@ -188,8 +188,10 @@ func TestStoreIdentityMigrationDeduplicatesLegacyRows(t *testing.T) {
 
 func TestStoreIdentityMigrationRecoversAfterCrash(t *testing.T) {
 	if os.Getenv("PULSE_METRICS_IDENTITY_CRASH_CHILD") == "1" {
-		metricsIdentityMigrationHook = func() {
-			os.Exit(88)
+		metricsClusteredMigrationHook = func(stage string) {
+			if stage == "before-commit" {
+				os.Exit(88)
+			}
 		}
 		dbPath := os.Getenv("PULSE_METRICS_IDENTITY_CRASH_DB")
 		cfg := DefaultConfig(filepath.Dir(dbPath))
@@ -315,12 +317,14 @@ func TestStoreIdentityMigrationKeepsReadersAvailable(t *testing.T) {
 	migrationEntered := make(chan struct{})
 	releaseMigration := make(chan struct{})
 	var hookOnce sync.Once
-	metricsIdentityMigrationHook = func() {
-		hookOnce.Do(func() { close(migrationEntered) })
-		<-releaseMigration
+	metricsClusteredMigrationHook = func(stage string) {
+		if stage == "after-copy" {
+			hookOnce.Do(func() { close(migrationEntered) })
+			<-releaseMigration
+		}
 	}
 	t.Cleanup(func() {
-		metricsIdentityMigrationHook = nil
+		metricsClusteredMigrationHook = nil
 	})
 
 	cfg := DefaultConfig(filepath.Dir(dbPath))
@@ -497,8 +501,9 @@ func TestMetricsWriteAmplificationInvariant(t *testing.T) {
 //
 // Run with PULSE_METRICS_WRITE_PROFILE=full (v6.1.1 layout), lookup (the
 // v6.1.2 to v6.4 metric-major unique index) or consolidated (the time-major
-// identity index), each optionally -batched, and optionally
-// PULSE_METRICS_WRITE_PROFILE_TICKS=N. The default 30 ticks
+// identity index), each optionally -batched, or clustered (the production
+// time-major primary table). PULSE_METRICS_WRITE_PROFILE_TICKS=N
+// overrides the default 30 ticks, which
 // persist 393,630 samples across 2,197 resources. Set
 // PULSE_METRICS_WRITE_PROFILE_AUTOCHECKPOINT=1 for production checkpoint/fsync
 // tracing, PULSE_METRICS_WRITE_PROFILE_CHECKPOINT_PAGES=N for a bounded
@@ -511,8 +516,8 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 		t.Skip("set " + issue1124ProfileEnv + " to run the write-amplification profile")
 	}
 	if mode != "full" && mode != "lookup" && mode != "consolidated" && mode != "full-batched" &&
-		mode != "lookup-batched" && mode != "consolidated-batched" && mode != "without-rowid" {
-		t.Fatalf("%s must be full, lookup, consolidated, full-batched, lookup-batched, consolidated-batched, or without-rowid, got %q", issue1124ProfileEnv, mode)
+		mode != "lookup-batched" && mode != "consolidated-batched" && mode != "without-rowid" && mode != "clustered" {
+		t.Fatalf("%s must be full, lookup, consolidated, full-batched, lookup-batched, consolidated-batched, without-rowid, or clustered, got %q", issue1124ProfileEnv, mode)
 	}
 
 	ticks := 30
@@ -561,6 +566,12 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 	}
 	issue1124ConfigureConnections(t, store, connectionCount, checkpointPages)
 	autoCheckpoint := checkpointPages > 0
+
+	if mode != "clustered" {
+		// Keep historical profiles as actual rowid schemas after production
+		// moves to clustered storage. No rows have been written yet.
+		issue1124InstallRowidSchema(t, store)
+	}
 
 	if mode == "full" || mode == "full-batched" {
 		// Reconstruct the v6.1.1 schema so released and consolidated layouts
@@ -1211,12 +1222,13 @@ func issue1124CreateLegacyStore(t *testing.T, dbPath string, rows int, duplicate
 
 func issue1124AssertConsolidatedIndexes(t *testing.T, store *Store) {
 	t.Helper()
-	matches, err := store.metricsIndexMatches(metricsIdentityIndex, true, metricsIdentityColumns)
+	index := store.metricsReadIndex()
+	matches, err := store.metricsIndexMatches(index, true, metricsIdentityColumns)
 	if err != nil {
 		t.Fatalf("inspect consolidated identity index: %v", err)
 	}
 	if !matches {
-		t.Fatalf("%s is not the expected unique time-major identity index", metricsIdentityIndex)
+		t.Fatalf("%s is not the expected unique time-major identity index", index)
 	}
 
 	rows, err := store.db.Query(`PRAGMA index_list(metrics)`)
@@ -1244,7 +1256,7 @@ func issue1124AssertConsolidatedIndexes(t *testing.T, store *Store) {
 	// Retired metric-major trees (idx_metrics_lookup, idx_metrics_unique)
 	// must be gone: each would be dirtied by every insert.
 	want := map[string]bool{
-		"idx_metrics_query_all": true,
+		index:                   true,
 		"idx_metrics_tier_time": false,
 	}
 	if len(indexes) != len(want) {
@@ -1255,4 +1267,26 @@ func issue1124AssertConsolidatedIndexes(t *testing.T, store *Store) {
 			t.Fatalf("metrics index %s unique=%v present=%v, want unique=%v", name, got, ok, unique)
 		}
 	}
+}
+
+// issue1124InstallRowidSchema reconstructs the released time-major rowid table
+// in an empty measurement fixture, preserving comparisons across schema changes.
+func issue1124InstallRowidSchema(tb testing.TB, store *Store) {
+	tb.Helper()
+	if _, err := store.db.Exec(`
+		DROP TABLE metrics;
+		CREATE TABLE metrics (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			resource_type TEXT NOT NULL, resource_id TEXT NOT NULL,
+			metric_type TEXT NOT NULL, value REAL NOT NULL,
+			min_value REAL, max_value REAL,
+			timestamp INTEGER NOT NULL, tier TEXT NOT NULL DEFAULT 'raw'
+		);
+		CREATE INDEX idx_metrics_tier_time ON metrics(tier, timestamp);
+		CREATE UNIQUE INDEX idx_metrics_query_all
+		ON metrics(resource_type, resource_id, tier, timestamp, metric_type);
+	`); err != nil {
+		tb.Fatalf("install historical rowid table: %v", err)
+	}
+	store.clusteredMetrics.Store(false)
 }

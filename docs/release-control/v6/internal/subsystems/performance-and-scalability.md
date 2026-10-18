@@ -545,7 +545,7 @@ which retention tiers have observations in that snapshot. Every present tier
 participates in the shared indexed overlap query. Presence never stands in for
 per-series coverage. The store retains at most 32 compiled read-statement shapes
 and 32 SQL templates keyed only by parameter counts, tier order and aggregation
-shape. Alphabetic named SQLite bindings supply each current identity, window and
+shape, projection and physical layout. Alphabetic named SQLite bindings supply each current identity, window and
 display step once across all branches. Bindings use `database/sql.Named` so the
 driver need not repeatedly convert ordinals to strings while matching a large
 parameter set. Names describe parameter positions only. Resource IDs and all
@@ -633,6 +633,10 @@ in-place click and chevron activation over a selection.
 - `frontend-modern/src/utils/filesystemByteUsage.ts`: shared finite byte/capacity admission for filesystem utilization.
 
 1. `pkg/metrics/store.go`
+   1a. `pkg/metrics/clustered_layout.go`
+   1b. `pkg/metrics/clustered_layout_test.go`
+   1c. `pkg/metrics/identity_index_test.go`
+   1d. `pkg/metrics/issue1124_write_amplification_test.go`
 2. `pkg/metrics/store_query_plan_test.go`
 3. `pkg/metrics/store_slo_test.go`
 4. `pkg/metrics/store_additional_test.go`
@@ -2698,9 +2702,13 @@ WAL checkpoints more aggressive again, reopens duplicate-write failures,
 removes the bounded rollup-window checkpointing, or removes the metrics DB
 path/cadence controls must re-prove the metrics-store hot path with the owned
 store tests rather than assuming the earlier vacuum fixes are sufficient.
-Metric identity and every range read must also share one unique, time-major
-`idx_metrics_query_all(resource_type, resource_id, tier, timestamp,
-metric_type)` B-tree. Reintroducing a second full-width identity index is a
+Metric identity, stored values and every range read share the time-major
+`PRIMARY KEY(resource_type, resource_id, tier, timestamp, metric_type)` of
+`metrics WITHOUT ROWID`. The primary table itself supplies the samples; a
+separate rowid-table lookup per observation is no longer required. Its only
+secondary tree is the `(tier, timestamp)` retention index. Legacy rowid stores
+continue to use `idx_metrics_query_all` until deferred migration commits.
+Reintroducing a second full-width identity index is a
 write-amplification regression even when retained `metrics.db` size looks small:
 every sample would dirty both trees in the WAL and every checkpoint would copy
 both sets of pages back into the main file. The column order is part of the
@@ -2738,12 +2746,35 @@ value points afterward. Full and value projections share scope normalization,
 filters, tier reconciliation, time ordering, display buckets and Docker
 observation provenance; their distinct SQL column shapes must have distinct
 keys within the existing bounded query cache. Neither mode caches results or
-tier presence. Full readers continue to preserve extrema. Legacy databases keep their
-existing unique index authoritative while the replacement index is built, but
-that O(rows) migration must run on deferred startup maintenance and swap indexes
-in one SQLite transaction so constructor latency, concurrent reads, uniqueness,
-and crash recovery remain intact; a database with no unique identity index at
-all migrates synchronously so upserts never run without a conflict target. The
+tier presence. Full readers continue to preserve extrema. Legacy databases keep
+their existing unique index authoritative while deferred startup maintenance
+copies the eight observation columns into the clustered table. `BEGIN IMMEDIATE`
+serializes writers and independent Store migrations before inspection. Copy,
+old-table removal, rename and retention-index creation commit in one WAL
+transaction; cancellation, crash, insufficient disk space or a conflicting
+replacement table leaves the installed table and observations intact. Readers
+retain their old SQLite snapshots during the copy; queued writes resume after
+commit. The migration checks free filesystem space for three times the used
+database pages plus 16 MiB before copying. Layout migration and auto-vacuum
+share the existing 30-minute rewrite context, canceled when the Store closes.
+There is no redundant legacy index rebuild before the copy. A database with
+no unique identity index still deduplicates and establishes identity
+synchronously before ingestion starts.
+
+Each retained read fixes its index choice for its snapshot. A stale legacy
+index error may retry once with a new snapshot only after inspecting the
+clustered primary key. This covers another Store committing the upgrade while
+prepared SQL is cached. Layout participates in the bounded SQL-template key;
+results and tier presence remain uncached. Restart recognizes the primary key
+without recreating the legacy index. If an older executable reopens the
+row-compatible table and recreates its legacy identity index, deferred
+maintenance removes only the known redundant trees after verifying the primary
+key. `clustered_layout_test.go` covers fresh/reopened schemas, exact stored
+nullable bounds and all tiers, metadata, concurrent old snapshots and queued
+writes, cross-Store cached reads, cancellation after swap, crash before commit,
+conflicting replacement tables and primary-table range plans. Historical write
+profiles reconstruct their original rowid tables; `clustered` profiles exercise
+the current production schema. The
 deterministic issue-1124 profile must continue to attribute writes by logical
 payload, table/index `dbstat` pages, page-cache writes/spills, WAL frames,
 checkpoint frames, process write bytes where the host exposes them, and traced
@@ -4093,7 +4124,7 @@ mode in `TestStoreAutoVacuumPersistsAcrossRestart`.
 
 ### Metrics-store writes survive the one-time startup write-lock hold
 
-The deferred identity-index rebuild and the auto-vacuum VACUUM can hold the
+The deferred clustered-table migration and the auto-vacuum VACUUM can hold the
 SQLite write lock for minutes on a large legacy database. `BEGIN` is deferred,
 so the lock is contended at the first `INSERT` or at `COMMIT`, not at `Begin`;
 a retry loop around `Begin` alone skipped rows and committed an empty
