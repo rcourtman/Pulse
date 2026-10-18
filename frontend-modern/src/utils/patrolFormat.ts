@@ -58,8 +58,8 @@ export function formatTriggerReason(reason?: string): string {
 
 export function formatScope(run?: PartialRunRecord | null): string {
   if (!run) return '';
-  const idCount = getCanonicalScopeResourceIds(run)?.length ?? 0;
-  if (idCount > 0) return `Scoped to ${idCount} resource${idCount === 1 ? '' : 's'}`;
+  // Scope identifiers can include aliases and parent context for the same workload.
+  if (getCanonicalScopeResourceIds(run)?.length) return 'Scoped';
   const types = run.scope_resource_types ?? [];
   if (types.length > 0) return `Scoped to ${types.join(', ')}`;
   if (run.type === 'scoped') return 'Scoped';

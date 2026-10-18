@@ -433,15 +433,10 @@ export function getPatrolRunCoverageSummary(
   >,
 ): string {
   const resourcesChecked = Math.max(0, run.resources_checked || 0);
-  const scopedResourceCount = getCanonicalScopeResourceIds(run)?.length ?? 0;
-
-  if (scopedResourceCount > 0) {
-    if (resourcesChecked < scopedResourceCount) {
-      return `Checked ${resourcesChecked} of ${scopedResourceCount} scoped resources`;
-    }
-    if (resourcesChecked > 0) {
-      return `Checked ${formatResourceCount(resourcesChecked, 'scoped')}`;
-    }
+  // Effective scope IDs include aliases and parent context. Their length is
+  // not a comparable resource total, so it cannot establish partial coverage.
+  if (getCanonicalScopeResourceIds(run)?.length) {
+    return `Checked ${formatResourceCount(resourcesChecked, 'scoped')}`;
   }
 
   if (resourcesChecked > 0) {
@@ -458,12 +453,6 @@ export function getPatrolRunResourcesHeading(
   >,
 ): string {
   const resourcesChecked = Math.max(0, run.resources_checked || 0);
-  const scopedResourceCount = getCanonicalScopeResourceIds(run)?.length ?? 0;
-
-  if (scopedResourceCount > 0 && resourcesChecked > 0 && resourcesChecked < scopedResourceCount) {
-    return `Resources checked (${resourcesChecked} of ${scopedResourceCount} scoped)`;
-  }
-
   return `Resources checked (${resourcesChecked})`;
 }
 

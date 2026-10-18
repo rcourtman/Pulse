@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PatrolRunRecord } from '@/api/patrol';
 import runHistoryEntrySource from '../RunHistoryEntry.tsx?raw';
 import { RunHistoryEntry } from '../RunHistoryEntry';
+import dockerHistory from '../__fixtures__/dockerPatrolHistory.json';
 
 const { findingsPanelState, openMock } = vi.hoisted(() => ({
   findingsPanelState: {
@@ -173,7 +174,7 @@ describe('RunHistoryEntry', () => {
     expect(screen.queryByText('healthy')).not.toBeInTheDocument();
   });
 
-  it('uses a shared coverage summary when a scoped run checked fewer resources than its scope', () => {
+  it('uses a shared coverage summary without treating scope aliases as a resource total', () => {
     render(() => (
       <RunHistoryEntry
         run={{
@@ -196,22 +197,76 @@ describe('RunHistoryEntry', () => {
     expect(screen.getByText('Patrol needs attention')).toBeInTheDocument();
     expect(
       screen.getAllByText(
-        'Checked 1 of 2 scoped resources in 453ms. Runtime issue: 1 Patrol runtime error recorded.',
+        'Checked 1 scoped resource in 453ms. Runtime issue: 1 Patrol runtime error recorded.',
       ).length,
     ).toBeGreaterThan(0);
-    expect(screen.getByText('Resources checked (1 of 2 scoped)')).toBeInTheDocument();
+    expect(screen.getByText('Resources checked (1)')).toBeInTheDocument();
     expect(screen.queryByText('• 1 resources')).not.toBeInTheDocument();
     expect(screen.queryByText('Scoped to 2 resources')).not.toBeInTheDocument();
     expect(
       screen.getAllByText(
         (_, element) =>
           element?.tagName === 'P' &&
-          (element.textContent?.includes('Checked 1 of 2 scoped resources') ?? false) &&
+          (element.textContent?.includes('Checked 1 scoped resource') ?? false) &&
           (element.textContent?.includes('453ms') ?? false) &&
           (element.textContent?.includes('Runtime issue: 1 Patrol runtime error recorded.') ??
             false),
       ).length,
     ).toBeGreaterThan(0);
+  });
+
+  it.each(dockerHistory.cases)(
+    'renders the real $case host count without counting scope aliases as workloads',
+    (entry) => {
+      expect(entry.run.status).toBe('error');
+      // The producer omits the optional zero auto-fix count on the wire.
+      const producedRun: PatrolRunRecord = {
+        ...entry.run,
+        status: 'error',
+        auto_fix_count: 0,
+      };
+      render(() => (
+        <RunHistoryEntry
+          run={producedRun}
+          isLive={false}
+          patrolStream={patrolStream}
+          selected={true}
+          onSelect={vi.fn()}
+        />
+      ));
+
+      expect(producedRun.effective_scope_resource_ids).toHaveLength(4);
+      expect(screen.getByText('Resources checked (1)')).toBeInTheDocument();
+      expect(screen.getByText('1 Docker host')).toBeInTheDocument();
+      expect(screen.getByText('Provider not ready')).toBeInTheDocument();
+      expect(screen.getByText('chat service not available')).toBeInTheDocument();
+      expect(screen.queryByText('1 container')).not.toBeInTheDocument();
+      expect(screen.queryByText(/of 4 scoped/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/^All clear/)).not.toBeInTheDocument();
+      expect(findingsPanelState.latestProps?.scopeResourceIds).toEqual(
+        producedRun.effective_scope_resource_ids,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Discuss' }));
+      const context = openMock.mock.calls[0]?.[0];
+      expect(JSON.stringify(context)).toContain('Checked 1 scoped resource');
+      expect(JSON.stringify(context)).toContain('Provider not ready');
+      expect(JSON.stringify(context)).not.toMatch(/of 4 scoped|Scoped to 4 resources/);
+    },
+  );
+
+  it('labels multiple collected Docker hosts without implying a container count', () => {
+    render(() => (
+      <RunHistoryEntry
+        run={{ ...run, resources_checked: 2, docker_checked: 2 }}
+        isLive={false}
+        patrolStream={patrolStream}
+        selected={true}
+        onSelect={vi.fn()}
+      />
+    ));
+    expect(screen.getByText('2 Docker hosts')).toBeInTheDocument();
+    expect(screen.queryByText(/containers/)).not.toBeInTheDocument();
   });
 
   it('surfaces structured Patrol runtime error details on expanded runs', () => {
@@ -343,7 +398,7 @@ describe('RunHistoryEntry', () => {
     expect(screen.getByText('Patrol needs attention')).toBeInTheDocument();
     expect(
       screen.getAllByText(
-        'Checked 0 of 2 scoped resources in 453ms. Runtime issue: 1 Patrol runtime error recorded.',
+        'Checked 0 scoped resources in 453ms. Runtime issue: 1 Patrol runtime error recorded.',
       ).length,
     ).toBeGreaterThan(0);
     expect(screen.queryByText('Scoped to 2 resources')).not.toBeInTheDocument();
@@ -351,7 +406,7 @@ describe('RunHistoryEntry', () => {
       screen.getAllByText(
         (_, element) =>
           element?.tagName === 'P' &&
-          (element.textContent?.includes('Checked 0 of 2 scoped resources') ?? false) &&
+          (element.textContent?.includes('Checked 0 scoped resources') ?? false) &&
           (element.textContent?.includes('453ms') ?? false) &&
           (element.textContent?.includes('Runtime issue: 1 Patrol runtime error recorded.') ??
             false),
@@ -484,7 +539,7 @@ describe('RunHistoryEntry', () => {
       />
     ));
 
-    expect(screen.getByText('1 container')).toBeInTheDocument();
+    expect(screen.getByText('1 Docker host')).toBeInTheDocument();
     expect(screen.getByText('1 TrueNAS system')).toBeInTheDocument();
     expect(screen.queryByText('1 agent')).not.toBeInTheDocument();
   });

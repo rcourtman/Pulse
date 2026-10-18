@@ -90,7 +90,7 @@ describe('getPatrolRunSnapshotEmptyState (exercised via getPatrolFindingsEmptySt
       }),
     ).toStrictEqual({
       title: 'No findings recorded for this run',
-      body: 'Checked 1 of 2 scoped resources. This run recorded no Patrol findings.',
+      body: 'Checked 1 scoped resource. This run recorded no Patrol findings.',
       tone: 'info',
     });
   });

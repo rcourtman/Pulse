@@ -602,7 +602,9 @@ function formatPatrolRunCoverage(run: PatrolRunRecord): string | undefined {
         ? `${normalizeNonNegativeCount(run.guests_checked)} VMs`
         : undefined,
       normalizeNonNegativeCount(run.docker_checked) > 0
-        ? `${normalizeNonNegativeCount(run.docker_checked)} containers`
+        ? `${normalizeNonNegativeCount(run.docker_checked)} Docker host${
+            normalizeNonNegativeCount(run.docker_checked) === 1 ? '' : 's'
+          }`
         : undefined,
       normalizeNonNegativeCount(run.storage_checked) > 0
         ? `${normalizeNonNegativeCount(run.storage_checked)} storage resources`

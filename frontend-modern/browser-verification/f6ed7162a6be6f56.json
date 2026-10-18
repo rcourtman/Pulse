@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "010a6c39b08652021f745d53aae366a1623259e5",
+  "verified_at": "2026-10-18T00:30:52Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/patrol/RunHistoryEntry.tsx",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
+    "frontend-modern/src/utils/patrolFormat.ts",
+    "frontend-modern/src/utils/patrolRunPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/patrol/RunHistoryEntry.tsx": "f4e425dc755950e1da60ce1743ccc4dc171d493b59939ff1ba70f4dd60a2d87a",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "831c91300c9edb76c70d9da2b9dd3858e07072d0ed1277749f2114b7cac1e38d",
+    "frontend-modern/src/utils/patrolFormat.ts": "3a9d89ead3d739c1cdc56da8918558bedeb8254a54515ceaa3f4abd8fa021ee9",
+    "frontend-modern/src/utils/patrolRunPresentation.ts": "6679e96895eb2310c65a8bd35ad0b1b7e498188636c5907b11342be3a2d85cd7"
+  },
+  "routes": [
+    "/alerts (production InvestigateAlertButton fixture)",
+    "/patrol/activity (production RunHistoryEntry and FindingsPanel fixture)",
+    "Pulse Assistant / Discuss run (real AIChat component)"
+  ],
+  "states": [
+    "Four unchanged frozen Docker producer/request/History cases per viewport: ordinary source ID, snapshot/unified host-qualified name-only container, and offline Docker host. All retain one recorded Docker host, four effective identities and an explicit no-chat runtime error; no identity or backend count is rewritten.",
+    "Explicitly synthetic zero-resource, multiple-host and legacy-scope controls per viewport. Checked count is retained; identity-list lengths are not reported as resource totals. Zero/error states are not claimed healthy.",
+    "Source source-xd2c1wl2 passes 871 tests/types/full frontend quality/production build/embed/integrity/budget gates. source-qlccpqgj builds and type-checks the actual consuming History/alert/Assistant fixture from this parent. Four backend handoff race tests and 23 table cases plus vet pass at bf25f5fd68, with final containing Go blobs unchanged.",
+    "The first browser command remains failed after nine completed cases because a desktop-only Collapse selector was used on phone. The remaining five narrow cases pass using the actual universal Close button; completed desktop evidence was not replayed. Eighteen final captures plus the adverse capture and two original captures were opened natively and inspected.",
+    "Frozen safe JSON, local read/API/session fixtures and an isolated Assistant wrapper are not an installed backend, whole app shell, provider/model run or reporter recovery. No non-Patrol write, external request, model send or workload operation occurred."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "interactions": [
+    "Enter on Investigate sends the exact frozen three-field resource/alert request; accepted and busy local fixture responses preserve exact identities.",
+    "Keyboard History expand, Technical details, collapse/reopen, zero/one/plural and legacy-scope count assertions.",
+    "Discuss opens the real Assistant briefing with the same counts, failure and approval boundary; close via desktop collapse or universal narrow Close X.",
+    "Actual native pixel inspection of every retained final capture, plus original wrong-label captures and the adverse phone capture."
+  ]
+}

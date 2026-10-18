@@ -499,14 +499,14 @@ describe('getPatrolRunResourcesHeading (branch coverage)', () => {
     ).toBe('Resources checked (0)');
   });
 
-  it('shows partial count when fewer resources checked than scoped', () => {
+  it('does not infer partial coverage from identity count', () => {
     expect(
       getPatrolRunResourcesHeading({
         resources_checked: 1,
         scope_resource_ids: ['r1', 'r2', 'r3'],
         effective_scope_resource_ids: ['r1', 'r2', 'r3'],
       }),
-    ).toBe('Resources checked (1 of 3 scoped)');
+    ).toBe('Resources checked (1)');
   });
 });
 

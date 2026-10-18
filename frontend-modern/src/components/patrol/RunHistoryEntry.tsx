@@ -275,7 +275,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 </Show>
                 <Show when={run.docker_checked > 0}>
                   <MetadataBadge tone="neutral">
-                    <BoxIcon class="w-3 h-3" /> {run.docker_checked} container
+                    <BoxIcon class="w-3 h-3" /> {run.docker_checked} Docker host
                     {run.docker_checked !== 1 ? 's' : ''}
                   </MetadataBadge>
                 </Show>

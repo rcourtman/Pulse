@@ -251,13 +251,9 @@ func patrolRunCoverageSummary(run PatrolRunRecord) string {
 	if run.EffectiveScopeResourceIDs == nil {
 		scopedResourceCount = len(run.ScopeResourceIDs)
 	}
+	// Scope IDs include aliases and parent context, not a workload denominator.
 	if scopedResourceCount > 0 {
-		if resourcesChecked > 0 && resourcesChecked < scopedResourceCount {
-			return fmt.Sprintf("Checked %d of %d scoped resources", resourcesChecked, scopedResourceCount)
-		}
-		if resourcesChecked > 0 {
-			return fmt.Sprintf("Checked %s", formatPatrolRunResourceCount(resourcesChecked, "scoped"))
-		}
+		return fmt.Sprintf("Checked %s", formatPatrolRunResourceCount(resourcesChecked, "scoped"))
 	}
 	if resourcesChecked > 0 {
 		return fmt.Sprintf("Checked %s", formatPatrolRunResourceCount(resourcesChecked, ""))
@@ -266,7 +262,7 @@ func patrolRunCoverageSummary(run PatrolRunRecord) string {
 	return joinPatrolRunContextParts([]string{
 		countPatrolRunFact(run.NodesChecked, "nodes"),
 		countPatrolRunFact(run.GuestsChecked, "VMs"),
-		countPatrolRunFact(run.DockerChecked, "containers"),
+		countPatrolRunSingularFact(run.DockerChecked, "Docker host"),
 		countPatrolRunFact(run.StorageChecked, "storage resources"),
 		countPatrolRunFact(run.HostsChecked, "agents"),
 		countPatrolRunFact(run.TrueNASChecked, "TrueNAS systems"),
@@ -291,11 +287,7 @@ func patrolRunScopeSummary(run PatrolRunRecord) string {
 		ids = run.ScopeResourceIDs
 	}
 	if len(ids) > 0 {
-		suffix := ""
-		if len(ids) != 1 {
-			suffix = "s"
-		}
-		return fmt.Sprintf("Scoped to %d resource%s", len(ids), suffix)
+		return "Scoped"
 	}
 	if len(run.ScopeResourceTypes) > 0 {
 		return "Scoped to " + strings.Join(run.ScopeResourceTypes, ", ")

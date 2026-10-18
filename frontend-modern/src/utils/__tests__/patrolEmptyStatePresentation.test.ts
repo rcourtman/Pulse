@@ -500,7 +500,7 @@ describe('patrolEmptyStatePresentation', () => {
       }),
     ).toEqual({
       title: 'No findings recorded for this run',
-      body: 'Checked 1 of 2 scoped resources. This run recorded no Patrol findings, but it ended with issues requiring review.',
+      body: 'Checked 1 scoped resource. This run recorded no Patrol findings, but it ended with issues requiring review.',
       tone: 'warning',
     });
   });
