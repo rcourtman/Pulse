@@ -78,19 +78,10 @@ func readStorageList(resp *http.Response) ([]Storage, error) {
 }
 
 func readStorageContentInventory(resp *http.Response) ([]StorageContent, error) {
-	contents, err := readStorageInventory(resp, []string{"volid", "content", "ctime", "format", "size", "used", "vmid", "notes", "protected", "encryption", "verification", "verified"}, func(content StorageContent) (string, bool) {
+	// Snapshot sizing and container root usage need disk volumes too. Keep
+	// this boundary lossless; each consumer selects its own content kinds only
+	// after the whole response has passed the same integrity checks.
+	return readStorageInventory(resp, []string{"volid", "content", "ctime", "format", "size", "used", "vmid", "notes", "protected", "encryption", "verification", "verified"}, func(content StorageContent) (string, bool) {
 		return content.Volid, strings.TrimSpace(content.Volid) != "" && strings.TrimSpace(content.Content) != ""
 	})
-	if err != nil {
-		return nil, err
-	}
-	// Validate every row before filtering; an ignored ISO/template must not
-	// hide ambiguity in a list that can remove previously accepted backups.
-	backups := make([]StorageContent, 0, len(contents))
-	for _, content := range contents {
-		if content.Content == "backup" || content.Content == "vztmpl" {
-			backups = append(backups, content)
-		}
-	}
-	return backups, nil
 }

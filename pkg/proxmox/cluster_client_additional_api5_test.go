@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestClusterClient_GetStorageContentFiltersBackup(t *testing.T) {
+func TestClusterClient_GetStorageContentPreservesKinds(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -29,7 +29,7 @@ func TestClusterClient_GetStorageContentFiltersBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetStorageContent failed: %v", err)
 	}
-	if len(content) != 1 || content[0].Content != "backup" {
+	if len(content) != 2 || content[0].Content != "backup" || content[1].Content != "iso" {
 		t.Fatalf("unexpected storage content: %+v", content)
 	}
 }

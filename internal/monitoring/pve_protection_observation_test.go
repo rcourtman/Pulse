@@ -154,6 +154,172 @@ func TestBuildPVEProtectionProviderObservationMapsEvidenceQuality(t *testing.T) 
 	}
 }
 
+// Ordinary HTTP -> generic content -> all three existing consumers. The
+// provider fixture is read-only: no guest command, backup or recovery runs.
+func TestStorageContentConsumersKeepSnapshotAndLiveRootEvidenceSeparate(t *testing.T) {
+	const gib = uint64(1 << 30)
+	m, recoveryManager := recoveryIngestTestMonitor(t)
+	m.state, m.rateTracker = models.NewState(), NewRateTracker()
+	m.alertManager = alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(m.alertManager.Stop)
+	cfg := m.alertManager.GetConfig()
+	cfg.Enabled = true
+	cfg.SnapshotDefaults = alerts.SnapshotAlertConfig{Enabled: true, WarningSizeGiB: 50, CriticalSizeGiB: 80}
+	m.alertManager.UpdateConfig(cfg)
+	m.state.UpdateVMsForInstance("site", []models.VM{{ID: "site:member:100", VMID: 100, Instance: "site", Node: "member", Name: "database", Status: "running"}})
+	created := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
+	var phase, unexpected atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			unexpected.Add(1)
+			http.Error(w, "read-only fixture", http.StatusMethodNotAllowed)
+			return
+		}
+		switch r.URL.Path {
+		case "/api2/json/nodes/member/storage":
+			fmt.Fprint(w, `{"data":[{"storage":"fast","content":"images","active":1,"enabled":1},{"storage":"remote","content":"images","active":1,"enabled":1},{"storage":"mixed","content":"backup,rootdir","active":1,"enabled":1}]}`)
+		case "/api2/json/nodes/member/storage/fast/content":
+			size := 15 * gib
+			if phase.Load() >= 3 {
+				size = 10 * gib
+			}
+			fmt.Fprintf(w, `{"data":[{"volid":"fast:vm-100-disk-0@weekly","content":"images","vmid":100,"size":%d}]}`, size)
+		case "/api2/json/nodes/member/storage/remote/content":
+			if phase.Load() == 1 {
+				http.Error(w, "fixture storage is unread", http.StatusForbidden)
+				return
+			}
+			size := 45 * gib
+			if phase.Load() == 2 {
+				size = 0
+			} else if phase.Load() >= 3 {
+				size = 10 * gib
+			}
+			fmt.Fprintf(w, `{"data":[{"volid":"remote:vm-100-disk-1@weekly","content":"images","vmid":100,"size":%d}]}`, size)
+		case "/api2/json/nodes/member/storage/mixed/content":
+			// A later snapshot row must not overwrite live root usage. Nor
+			// may either live or snapshot disks become completed backups.
+			fmt.Fprintf(w, `{"data":[{"volid":"mixed:subvol-200-disk-0","content":"rootdir","vmid":200,"size":%d,"used":%d},{"volid":"mixed:subvol-200-disk-0@weekly","content":"rootdir","vmid":200,"size":%d,"used":%d},{"volid":"mixed:backup/vzdump-lxc-200.tar","content":"backup","vmid":200,"ctime":%d,"size":%d},{"volid":"mixed:iso/disc.iso","content":"iso"},{"volid":"mixed:vztmpl/template.tar","content":"vztmpl"},{"volid":"mixed:future","content":"future-kind"}]}`, 10*gib, 3*gib, 10*gib, 9*gib, created.Unix(), gib)
+		case "/api2/json/nodes/member/qemu/100/snapshot":
+			if phase.Load() == 4 {
+				fmt.Fprint(w, `{"data":[]}`)
+			} else {
+				fmt.Fprintf(w, `{"data":[{"name":"weekly","snaptime":%d}]}`, created.Unix())
+			}
+		case "/api2/json/nodes/member/lxc/200/snapshot":
+			fmt.Fprint(w, `{"data":[]}`)
+		case "/api2/json/nodes/member/lxc":
+			// The ordinary fallback path replaces the listing's zero usage
+			// with a measured live-root value; no QGA probe is involved.
+			fmt.Fprintf(w, `{"data":[{"vmid":200,"name":"worker","status":"stopped","maxdisk":%d,"disk":0,"maxmem":%d}]}`, 10*gib, gib)
+		case "/api2/json/nodes/member/lxc/200/config":
+			fmt.Fprint(w, `{"data":{"hostname":"worker","ostype":"debian","rootfs":"mixed:subvol-200-disk-0,size=10G"}}`)
+		default:
+			unexpected.Add(1)
+			t.Errorf("unexpected provider read: %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture-only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wait := func() {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			m.recoveryIngestMu.Lock()
+			pending := m.recoveryIngestRunning
+			m.recoveryIngestMu.Unlock()
+			if !pending {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("recovery ingestion did not settle")
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+	t.Cleanup(wait)
+	nodes := []proxmox.Node{{Node: "member", Status: "online"}}
+	status := map[string]string{"member": "online"}
+	var originalID string
+	var originalObservedAt any
+	for p, name := range []string{"initial", "unread-storage", "missing-size", "recovered", "deleted"} {
+		t.Run(name, func(t *testing.T) {
+			phase.Store(int32(p))
+			containers := m.collectContainersWithNodes(context.Background(), "site", "", false, client, nodes, status)
+			if len(containers) != 1 || containers[0].Disk.Used != 3*int64(gib) || containers[0].Disk.Total != 10*int64(gib) || containers[0].Disk.Usage != 30 {
+				t.Fatalf("backup/snapshot/filtered content became live-root usage: %+v", containers)
+			}
+			m.state.UpdateContainersForInstance("site", containers)
+			m.pollStorageBackupsWithNodes(context.Background(), "site", client, nodes, status)
+			m.pollGuestSnapshots(context.Background(), "site", client)
+			wait()
+			state := m.GetState()
+			if len(state.PVEBackups.StorageBackups) != 1 || state.PVEBackups.StorageBackups[0].Volid != "mixed:backup/vzdump-lxc-200.tar" {
+				t.Fatalf("non-backup content became backup success: %+v", state.PVEBackups.StorageBackups)
+			}
+			wantSize := int64(0)
+			if p == 0 {
+				wantSize = 60 * int64(gib)
+			} else if p == 3 {
+				wantSize = 20 * int64(gib)
+			}
+			if p == 4 {
+				if len(state.PVEBackups.GuestSnapshots) != 0 {
+					t.Fatal("authoritative empty snapshot inventory did not remove the snapshot")
+				}
+			} else if len(state.PVEBackups.GuestSnapshots) != 1 || state.PVEBackups.GuestSnapshots[0].SizeBytes != wantSize {
+				t.Fatalf("partial or hidden snapshot total: %+v, want size %d", state.PVEBackups.GuestSnapshots, wantSize)
+			}
+			active := m.alertManager.GetActiveAlerts()
+			if p < 3 {
+				if len(active) != 1 || active[0].Value != 60 || active[0].Type != "snapshot-age" {
+					t.Fatalf("unread snapshot disk cleared/replaced a 60 GiB warning: %+v", active)
+				}
+				if p == 0 {
+					originalID, originalObservedAt = active[0].ID, active[0].Metadata["snapshotSizeObservedAt"]
+					if err := m.alertManager.AcknowledgeAlert(originalID, "fixture operator"); err != nil {
+						t.Fatal(err)
+					}
+				} else if active[0].ID != originalID || !active[0].Acknowledged || active[0].Metadata["snapshotSizeHeld"] != true || !reflect.DeepEqual(active[0].Metadata["snapshotSizeObservedAt"], originalObservedAt) || !strings.Contains(active[0].Message, "last known") {
+					t.Fatalf("held size renewed observation or lost acknowledgement/identity: %+v", active[0])
+				}
+			} else if len(active) != 0 {
+				t.Fatalf("complete smaller total did not resolve the warning: %+v", active)
+			}
+			store, err := recoveryManager.StoreForOrg("default")
+			if err != nil {
+				t.Fatal(err)
+			}
+			points, _, err := store.ListPoints(context.Background(), recovery.ListPointsOptions{})
+			wantPoints := 2
+			if p == 4 {
+				wantPoints = 1
+			}
+			if err != nil || len(points) != wantPoints {
+				t.Fatalf("storage/snapshot recovery points lost isolation: %+v / %v", points, err)
+			}
+			for _, point := range points {
+				if point.Kind == recovery.KindSnapshot && ((wantSize == 0 && point.SizeBytes != nil) || (wantSize > 0 && (point.SizeBytes == nil || *point.SizeBytes != wantSize))) {
+					t.Fatalf("stored snapshot claimed a partial size: %+v", point)
+				}
+			}
+			// Retain collected wire inputs, not browser-authored success.
+			payload, err := json.Marshal(map[string]any{"phase": name, "state": m.GetState(), "history": m.alertManager.GetAlertHistory(20), "points": points})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("SNAPSHOT_STORAGE_CONSUMER %s", payload)
+		})
+	}
+	if unexpected.Load() != 0 {
+		t.Fatalf("unexpected native/provider operations: %d", unexpected.Load())
+	}
+}
+
 func TestIsPVEBackupPermissionError(t *testing.T) {
 	t.Parallel()
 

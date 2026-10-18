@@ -191,10 +191,10 @@ func TestPVEStorageInventoryPreservesEmptySparseAndAdditiveData(t *testing.T) {
 	}
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"data":[{"volid":"archive:backup/101.vma.zst","content":"backup","size":0,"vmid":0,"ctime":0,"notes":null,"verification":null,"future":{"version":2}},{"volid":"archive:vztmpl/ubuntu.tar","content":"vztmpl"},{"volid":"archive:iso/ubuntu.iso","content":"iso"}]}`))}
 	rows, err := readStorageContentInventory(resp)
-	if err != nil || len(rows) != 2 || rows[0].Size != 0 || rows[0].VMID != 0 || rows[1].Content != "vztmpl" {
-		t.Fatalf("zero measurements/host backup/template filtering changed: %+v / %v", rows, err)
+	if err != nil || len(rows) != 3 || rows[0].Size != 0 || rows[0].VMID != 0 || rows[1].Content != "vztmpl" || rows[2].Content != "iso" {
+		t.Fatalf("zero measurements/host backup/additive content changed: %+v / %v", rows, err)
 	}
-	// Even a filtered ISO participates in inventory integrity checks.
+	// Every content kind participates in inventory integrity checks.
 	resp = &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"data":[{"content":"iso"}]}`))}
 	if _, err := readStorageContentInventory(resp); err == nil {
 		t.Fatal("filtered invalid row hid an incomplete inventory")
