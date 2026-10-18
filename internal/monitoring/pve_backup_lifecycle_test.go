@@ -85,7 +85,7 @@ func TestPVEBackupLifecycleWithdrawsLateResults(t *testing.T) {
 				case <-time.After(5 * time.Second):
 					t.Fatal("scan did not reach controlled read")
 				}
-				fresh := &lifecycleBackupClient{label: "current"}
+				fresh := &lifecycleBackupClient{label: "replacement"}
 				switch withdrawal {
 				case "replace":
 					m.replacePVEClient("site", fresh)
@@ -113,11 +113,11 @@ func TestPVEBackupLifecycleWithdrawsLateResults(t *testing.T) {
 				waitForBackupPollReturn(t, m, "site")
 				after := m.state.GetSnapshot().PVEBackups
 				require.Len(t, after.BackupTasks, 1)
-				require.Equal(t, "site-current", after.BackupTasks[0].ID)
+				require.Equal(t, "site-replacement", after.BackupTasks[0].ID)
 				require.Len(t, after.StorageBackups, 1)
-				require.Contains(t, after.StorageBackups[0].Volid, "current")
+				require.Contains(t, after.StorageBackups[0].Volid, "replacement")
 				require.Len(t, after.GuestSnapshots, 1)
-				require.Equal(t, "current", after.GuestSnapshots[0].Name)
+				require.Equal(t, "replacement", after.GuestSnapshots[0].Name)
 				t.Logf("BACKUP_LIFECYCLE_%s_%s cancelled=true late_effects=0 current=1/1/1", stage, withdrawal)
 			})
 		}
@@ -151,7 +151,7 @@ func (c *partialBudgetBackupClient) GetStorage(ctx context.Context, node string)
 }
 
 func TestPVEBackupLifecyclePartialBudgetKeepsUnreadCopies(t *testing.T) {
-	client := &partialBudgetBackupClient{lifecycleBackupClient: &lifecycleBackupClient{label: "current"}}
+	client := &partialBudgetBackupClient{lifecycleBackupClient: &lifecycleBackupClient{label: "replacement"}}
 	m := backupLifecycleMonitor(client)
 	held := []models.StorageBackup{
 		{ID: "held-slow", Instance: "site", Storage: "local", StorageNode: "slow", VMID: 100, Time: time.Unix(1700000000, 0), Size: 2048},

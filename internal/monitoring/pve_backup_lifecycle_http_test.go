@@ -38,7 +38,7 @@ func TestPVEBackupLifecycleHTTP(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				label := "withdrawn"
 				if currentMode.Load() {
-					label = "current"
+					label = "replacement"
 				}
 				readStage := ""
 				var data any = []any{}
