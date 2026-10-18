@@ -218,7 +218,13 @@ describe('RunHistoryEntry', () => {
   it.each(dockerHistory.cases)(
     'renders the real $case host count without counting scope aliases as workloads',
     (entry) => {
-      const producedRun = entry.run as PatrolRunRecord;
+      expect(entry.run.status).toBe('error');
+      // The producer omits the optional zero auto-fix count on the wire.
+      const producedRun: PatrolRunRecord = {
+        ...entry.run,
+        status: 'error',
+        auto_fix_count: 0,
+      };
       render(() => (
         <RunHistoryEntry
           run={producedRun}

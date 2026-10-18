@@ -393,9 +393,7 @@ describe('patrolRunPresentation', () => {
 
   it('reports checked resources without an alias-based denominator', () => {
     expect(getPatrolRunCoverageSummary(scopedCoverageRun)).toBe('Checked 1 scoped resource');
-    expect(getPatrolRunResourcesHeading(scopedCoverageRun)).toBe(
-      'Resources checked (1)',
-    );
+    expect(getPatrolRunResourcesHeading(scopedCoverageRun)).toBe('Resources checked (1)');
   });
 
   it('uses checked-resource language for non-scoped coverage summaries', () => {
