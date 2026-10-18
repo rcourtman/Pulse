@@ -322,7 +322,9 @@ func exercisePBSRootDatastoreDiscovery(t *testing.T, cases []pbsDatastoreDiscove
 			poll(tc.phase)
 			project("observed")
 			if tc.disabled != "" {
-				require.Equal(t, initial, rows(instance), "scope-off must not invent an empty inventory")
+				// Snapshot order is not a preservation contract. Compare every
+				// artifact field and duplicate count without relying on map order.
+				require.ElementsMatch(t, initial, rows(instance), "scope-off must preserve exact last-known artifacts")
 				require.Equal(t, points, f.points(t, instance))
 				f.assertProtected(t, instance)
 			} else if tc.phase == 3 || tc.phase == 7 {
@@ -350,7 +352,7 @@ func exercisePBSRootDatastoreDiscovery(t *testing.T, cases []pbsDatastoreDiscove
 					// denied. Attention applies to partially readable evidence.
 					permissions = operationaltrust.EvidencePermissionsDenied
 				} else {
-					require.Equal(t, initial, rows(instance), "failed discovery must retain exact last-known artifacts")
+					require.ElementsMatch(t, initial, rows(instance), "failed discovery must retain exact last-known artifacts")
 					require.Equal(t, readAt, f.m.pbsBackupCacheTimeFor(instance, key), "unread history must not be freshened")
 				}
 				for _, posture := range f.postures(t) {

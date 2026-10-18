@@ -1322,6 +1322,8 @@ func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T)
 			"func (m *Monitor) updatePVEBackupTemplateSubjectsFromClusterResources(instanceName string, resources []proxmox.ClusterResource) {",
 			"func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {",
 			"m.checkBackupAlerts(ctx)",
+		},
+		"monitor_alerts.go": {
 			"m.checkBackupAlerts(context.Background())",
 		},
 		"recovery_rollups.go": {
@@ -2547,7 +2549,22 @@ func TestReloadAndRuntimeContextStayOnCanonicalMonitoringPath(t *testing.T) {
 			"m.setRuntimeContext(ctx, wsHub)",
 		},
 		"monitor_backups.go": {
-			"parentCtx := m.getRuntimeContext()",
+			"owner, reason := m.beginPVEBackupPoll(instanceName, now, client)",
+			"parentCtx := context.WithValue(owner.ctx, pveBackupPollContextKey{}, owner)",
+		},
+		// Backup scans capture the runtime while admitting their connection
+		// owner under m.mu, rather than looking up a possibly replaced runtime
+		// later in the background goroutine. Guard that stronger boundary.
+		"pve_backup_poll.go": {
+			"parent := m.runtimeCtx",
+			"ctx, cancel := context.WithCancel(parent)",
+			"m.pveBackupPolls[instance] = owner",
+		},
+		"pbs_backup_poll.go": {
+			"parent := m.runtimeCtx",
+			"ctx, cancel := context.WithCancel(parent)",
+			"m.pbsBackupPollers[instance] = owner",
+			"parent := context.WithValue(owner.ctx, pbsBackupPollContextKey{}, owner)",
 		},
 		"monitor_pve.go": {
 			"parentCtx := m.getRuntimeContext()",
@@ -2556,7 +2573,8 @@ func TestReloadAndRuntimeContextStayOnCanonicalMonitoringPath(t *testing.T) {
 			"parentCtx := m.getRuntimeContext()",
 		},
 		"monitor_pbs_pmg.go": {
-			"parentCtx := m.getRuntimeContext()",
+			"backupInventory := pbsBackupInventory{runtimeEpoch: m.pbsBackupRuntimeEpoch}",
+			"m.pollPBSBackupsAsync(instanceName, client, backupInventory)",
 		},
 		"../config/config.go": {
 			"func LoadWithoutLoggingInit() (*Config, error) {",
