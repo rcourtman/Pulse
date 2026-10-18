@@ -516,3 +516,37 @@ func BenchmarkGuestFilesystemReplyCost(b *testing.B) {
 		})
 	}
 }
+
+// The cheap shape rejection must retain the original completed-reading
+// semantics. It is neither successful emptiness nor an uncertainty cooldown.
+func TestGuestFilesystemNonObjectRowsRemainIncomplete(t *testing.T) {
+	for _, bad := range []string{`null`, `false`, `true`, `7`, `"synthetic-private-scalar"`, `[]`, `[{}]`} {
+		t.Run(fmt.Sprintf("case-%d", len(bad)), func(t *testing.T) {
+			var commands atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/config") {
+					fmt.Fprint(w, `{"data":{}}`)
+					return
+				}
+				commands.Add(1)
+				if strings.HasSuffix(r.URL.Path, "/get-fsinfo") {
+					fmt.Fprintf(w, `{"data":{"result":[%s,{"mountpoint":"/","type":"ext4","total-bytes":1000,"used-bytes":0},%s]}}`, bad, bad)
+				} else {
+					backupAgentPayload(w, r)
+				}
+			}))
+			defer server.Close()
+			client := commandReplyTestClient(t, server.URL)
+			rows, err := client.GetVMFSInfo(context.Background(), "node", 105)
+			if len(rows) != 1 || rows[0].UsedBytes != 0 || cap(rows) > 2 || err == nil || err.Error() != "guest filesystem inventory is incomplete: 2 malformed entries" {
+				t.Fatal("known malformed row shape changed accepted peer, output reservation or counted error")
+			}
+			if strings.Contains(err.Error(), "synthetic-private-scalar") {
+				t.Fatal("raw row entered the counted error")
+			}
+			if _, err := client.GetVMAgentInfo(context.Background(), "node", 105); err != nil || commands.Load() != 2 {
+				t.Fatal("completed rejected shape acquired an uncertainty fence or repeated a command")
+			}
+		})
+	}
+}

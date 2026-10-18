@@ -407,7 +407,11 @@ additive, incomplete, empty, null and small/large unrecognized object responses
 through the real HTTP client.
 
 Malformed filesystem arrays are decoded one row at a time, without reserving
-accepted-filesystem output for every rejected row. A completed reply with
+accepted-filesystem output for every rejected row. Non-object rows retain their
+existing rejection without constructing a per-filesystem object decoder.
+`TestGuestFilesystemNonObjectRowsRemainIncomplete` pins null/scalar/list rows,
+accepted measured-zero peers and unchanged completed-command admission.
+A completed reply with
 malformed rows emits one payload-free Warning with total rows, rejected rows,
 the first rejected zero-based index and node/VM attribution, not one event per
 rejection. Valid peers retain order, disk postprocessing and measured zero;

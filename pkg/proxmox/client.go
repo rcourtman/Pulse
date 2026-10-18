@@ -2050,7 +2050,11 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 					return nil, fmt.Errorf("unexpected response format from guest agent get-fsinfo")
 				}
 				var fs VMFileSystem
-				if err := json.Unmarshal(row, &fs); err != nil {
+				// The row decoder already rejects every non-object. Reject that
+				// known shape before allocating another decoder for each null or
+				// scalar in a large incomplete inventory.
+				row = bytes.TrimSpace(row)
+				if len(row) == 0 || row[0] != '{' || json.Unmarshal(row, &fs) != nil {
 					invalidEntries++
 					if firstInvalid < 0 {
 						firstInvalid = entries
