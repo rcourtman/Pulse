@@ -15,7 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
-func stubSMTPDialSuccess(t *testing.T, deliveries *int32) {
+func stubSMTPDialSuccess(t *testing.T, deliveries *int32, observers ...func(isolatedSMTPReceipt)) {
 	t.Helper()
 
 	origDial := smtpDialTimeout
@@ -24,6 +24,7 @@ func stubSMTPDialSuccess(t *testing.T, deliveries *int32) {
 
 		go func() {
 			defer serverConn.Close()
+			var receipt isolatedSMTPReceipt
 
 			writer := bufio.NewWriter(serverConn)
 			reader := textproto.NewReader(bufio.NewReader(serverConn))
@@ -43,8 +44,10 @@ func stubSMTPDialSuccess(t *testing.T, deliveries *int32) {
 				case strings.HasPrefix(line, "AUTH"):
 					fmt.Fprint(writer, "235 2.7.0 Authentication successful\r\n")
 				case strings.HasPrefix(line, "MAIL FROM:"):
+					receipt = isolatedSMTPReceipt{from: strings.TrimPrefix(line, "MAIL ")}
 					fmt.Fprint(writer, "250 2.1.0 OK\r\n")
 				case strings.HasPrefix(line, "RCPT TO:"):
+					receipt.recipients = append(receipt.recipients, strings.TrimPrefix(line, "RCPT "))
 					fmt.Fprint(writer, "250 2.1.5 OK\r\n")
 				case strings.HasPrefix(line, "DATA"):
 					fmt.Fprint(writer, "354 End data with <CR><LF>.<CR><LF>\r\n")
@@ -61,6 +64,9 @@ func stubSMTPDialSuccess(t *testing.T, deliveries *int32) {
 					}
 					if deliveries != nil {
 						atomic.AddInt32(deliveries, 1)
+					}
+					for _, observe := range observers {
+						observe(receipt)
 					}
 					fmt.Fprint(writer, "250 2.0.0 queued\r\n")
 				case strings.HasPrefix(line, "QUIT"):
@@ -307,7 +313,8 @@ func TestNegotiateAuth_ServerMechanisms(t *testing.T) {
 
 func TestSendGroupedEmail_UsesFromAsRecipient(t *testing.T) {
 	var deliveries int32
-	stubSMTPDialSuccess(t, &deliveries)
+	receipts := make(chan isolatedSMTPReceipt, 1)
+	stubSMTPDialSuccess(t, &deliveries, func(receipt isolatedSMTPReceipt) { receipts <- receipt })
 
 	manager := NewEnhancedEmailManager(EmailProviderConfig{
 		EmailConfig: EmailConfig{
@@ -348,15 +355,16 @@ func TestSendGroupedEmail_UsesFromAsRecipient(t *testing.T) {
 		t.Fatalf("expected 1 delivered email, got %d", deliveries)
 	}
 
-	expectedTo := []string{"sender@example.com"}
-	if !reflect.DeepEqual(manager.config.EmailConfig.To, expectedTo) {
-		t.Fatalf("expected manager recipients %v, got %v", expectedTo, manager.config.EmailConfig.To)
+	expectedTo := []string{"TO:<sender@example.com>"}
+	if got := awaitIsolatedSMTPReceipt(t, receipts); !reflect.DeepEqual(got.recipients, expectedTo) {
+		t.Fatalf("expected SMTP recipients %v, got %v", expectedTo, got.recipients)
 	}
 }
 
 func TestSendEmail_UsesSharedDeliveryExecutor(t *testing.T) {
 	var deliveries int32
-	stubSMTPDialSuccess(t, &deliveries)
+	receipts := make(chan isolatedSMTPReceipt, 1)
+	stubSMTPDialSuccess(t, &deliveries, func(receipt isolatedSMTPReceipt) { receipts <- receipt })
 
 	manager := NewEnhancedEmailManager(EmailProviderConfig{
 		EmailConfig: EmailConfig{
@@ -391,10 +399,11 @@ func TestSendEmail_UsesSharedDeliveryExecutor(t *testing.T) {
 		t.Fatalf("expected shared sendEmail path to deliver 1 message, got %d", deliveries)
 	}
 
-	if manager.config.EmailConfig.From != "sender@example.com" {
-		t.Fatalf("expected existing manager config to be updated, got %q", manager.config.EmailConfig.From)
+	receipt := awaitIsolatedSMTPReceipt(t, receipts)
+	if receipt.from != "FROM:<sender@example.com>" {
+		t.Fatalf("expected submitted SMTP sender, got %q", receipt.from)
 	}
-	if !reflect.DeepEqual(manager.config.EmailConfig.To, []string{"recipient@example.com"}) {
-		t.Fatalf("expected existing manager recipients to be updated, got %v", manager.config.EmailConfig.To)
+	if !reflect.DeepEqual(receipt.recipients, []string{"TO:<recipient@example.com>"}) {
+		t.Fatalf("expected submitted SMTP recipients, got %v", receipt.recipients)
 	}
 }
