@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "base_sha": "4d376e5eb0561446198eade0a037c03b1e06d27a",
+  "source_sha": "4d376e5eb0561446198eade0a037c03b1e06d27a",
+  "verified_at": "2026-10-18T13:42:15.185826+00:00",
+  "result": "passed",
+  "scope": "Changed contribution guide consumed by actual Docs/router/Markdown/CSS, local GET-only synthetic shell. Commands checked separately through production config helpers with synthetic data. Not full application startup, installed host isolation, incident recovery or release availability.",
+  "content_sha256": {
+    "CONTRIBUTING.md": "02a056bb6ddf81f4c1ab984abb6c9d5184694187d39c90ea2a6a1f7f5dde5ceb",
+    "frontend-modern/public/docs/CONTRIBUTING.md": "02a056bb6ddf81f4c1ab984abb6c9d5184694187d39c90ea2a6a1f7f5dde5ceb"
+  },
+  "source_proofs": {
+    "guidance": "source-cepyxutr",
+    "guidance_complete_output_and_stop_verified": true
+  },
+  "browser": {
+    "playwright": "1.56.1",
+    "cases": [
+      {
+        "name": "desktop-light",
+        "width": 1440,
+        "height": 1000,
+        "dark": false,
+        "browser": "141.0.7390.37",
+        "geometry": {
+          "width": 896,
+          "content": 896,
+          "offset": 0
+        },
+        "exactRenderedRecipe": true,
+        "exactFetchedGuide": true,
+        "fragmentFocusAndReload": true,
+        "restoredIntakeGuidance": true,
+        "explicitImportSelectorsAndLocalEnvWarning": true,
+        "interaction": "keyboard",
+        "noDocumentOverflow": true
+      },
+      {
+        "name": "phone-dark",
+        "width": 320,
+        "height": 900,
+        "dark": true,
+        "browser": "141.0.7390.37",
+        "geometry": {
+          "width": 288,
+          "content": 572,
+          "offset": 284
+        },
+        "exactRenderedRecipe": true,
+        "exactFetchedGuide": true,
+        "fragmentFocusAndReload": true,
+        "restoredIntakeGuidance": true,
+        "explicitImportSelectorsAndLocalEnvWarning": true,
+        "interaction": "touch",
+        "noDocumentOverflow": true
+      }
+    ],
+    "page_errors": [],
+    "binding_sha256": "eebcc603fc5b39e6f37200de1f76591daf50f1b943d2e2f0841e7867d5f94d6e"
+  },
+  "captures": [
+    {
+      "file": "desktop-light-isolation.png",
+      "sha256": "2e26ac3ba382c7000b66c42c979ca767ca19801aca37f6964bef085e26b06e73",
+      "observation": "The fresh-clone/disposable-host warning is visible above the commands. It states that installed imports are off by default but local environment files remain shell inputs and the bypass must not face an untrusted network."
+    },
+    {
+      "file": "desktop-light-recipe.png",
+      "sha256": "201337faee971262d2b8d44202f0b929c6fe1377bf000ce1480cabdbbbd7d68f",
+      "observation": "The opt-out recipe is readable, followed by no-takeover/unused-port guidance and the installed-data selector warning. The added local .env paragraph precedes the command block."
+    },
+    {
+      "file": "desktop-light-configuration-boundary.png",
+      "sha256": "a6866cd64e39570d747866e72078a35a2d33e2cf8dab3a584c4e0de1175a9261",
+      "observation": "Both deliberate true selectors, their different consequences, and the separate empty directory response to refusal are visible. The local-file/host-isolation limit is readable."
+    },
+    {
+      "file": "desktop-light-intake-title-evidence.png",
+      "sha256": "06604924d77e27725a55b57e8aaf85d21bad511b896b5d08fba7aae904fd41a2",
+      "observation": "Existing title-evidence guidance remains readable and intact. This is a regression control, not a new intake repair."
+    },
+    {
+      "file": "phone-dark-isolation.png",
+      "sha256": "9ff8c6903a7617058cc4e41f3ba170b3aeb64e3a2e98cfbc44191a1783461fd6",
+      "observation": "At 320 px, the new default/configuration warning wraps within the viewport. The code panel is bounded rather than widening the document."
+    },
+    {
+      "file": "phone-dark-recipe.png",
+      "sha256": "26f79d4d6aef9405fa2b5b86e04bd585dde8670e6d213b62a8b9cbfde1fca0e6",
+      "observation": "At 320 px, the local .env shell-input warning remains readable before the recipe; the command panel is horizontally scrollable. The separate browser interaction checked its full scroll range."
+    },
+    {
+      "file": "phone-dark-configuration-boundary.png",
+      "sha256": "a1c934cfcba655446c98767be6ed9afefc9ad50bd5b843b4712b9ca9cea53d8e",
+      "observation": "At 320 px, the long selector names wrap within the prose; both import consequences, refusal recovery and local-shell/host limits are readable. Owned logs/stop commands remain in a bounded panel."
+    },
+    {
+      "file": "phone-dark-intake-title-evidence.png",
+      "sha256": "364582ce695d6b22272da327fce4677fe6d5f3427962dba39c066cf8daf141ca",
+      "observation": "At 320 px, the unchanged title-evidence paragraph wraps without document overflow; no new version or refile demand was introduced."
+    }
+  ],
+  "retained_evidence": "Product intelligence continuation 20261018T131748Z: RECEIPTS.md, CURRENT-DETAILS.tar.xz and HISTORY-MAP.tar.xz retain complete source/browser outputs, exact capture bytes and reconstruction map. Eight original local captures were presented through native view_image.",
+  "remaining": "Independent reviewer/coordinator/protected publisher owns containing publication. Earlier Delivery runtime output is unavailable in this projection; its reported identity is retained without reconstruction or replay."
+}
