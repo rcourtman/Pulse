@@ -88,7 +88,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
     if (phase === 'rejected') check(!rowText.includes('%') || !rowText.includes('0%'), 'unavailable readings are not shown as idle');
     if (width === 320) await row.tap();
     else {
-     const disclosure = row.getByRole('button', { name: /show details/i });
+     const disclosure = row.getByRole('button', { name: /expand details/i });
      await disclosure.focus(); await page.keyboard.press('Enter');
      check(await disclosure.getAttribute('aria-expanded') === 'true', 'keyboard opens the existing inline drawer');
     }
@@ -98,8 +98,8 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
     await select.selectOption('1h');
     await page.waitForTimeout(400);
     const utilization = drawer.locator('[data-history-group="utilization"]');
-    await utilization.waitFor();
     if (phase !== 'rejected') {
+     await utilization.waitFor();
      const chart = utilization.getByRole('img');
      await chart.waitFor();
      const description = await chart.evaluate((node) => document.getElementById(node.getAttribute('aria-describedby'))?.textContent || '');
@@ -108,12 +108,13 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
      if (phase === 'partial') check(!description.includes('37.5%'), 'CPU-only history does not invent sibling memory');
      else check(description.includes(phase==='zero' ? '0.0%' : '37.5%'), 'memory History uses the same ARC-aware reading');
     } else {
+     await drawer.getByText('Failed to load history data', { exact: true }).waitFor();
      record.drawer = await drawer.innerText();
      check(await utilization.getByRole('img').count() === 0, 'rejected reporting has no fabricated utilization chart');
     }
     // At narrow widths the existing more-charts control reveals I/O/thermals.
-    const more = drawer.getByRole('button', { name: /show.*(chart|metric)/i });
-    if (await more.count()) { await more.first().click(); }
+    const more = drawer.getByTestId('history-phone-toggle');
+    if (width === 320 && await more.isVisible()) { await more.click(); }
     const io = drawer.locator('[data-history-group="disk-io"]');
     if (phase !== 'rejected' && phase !== 'partial') {
      await io.getByRole('img').waitFor();
@@ -122,7 +123,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
     }
     check(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)), 'no document horizontal overflow');
     if (['complete','rejected','zero'].includes(phase)) {
-     await utilization.scrollIntoViewIfNeeded();
+     await (phase === 'rejected' ? drawer.getByRole('status', { name: 'History refresh status' }) : utilization).scrollIntoViewIfNeeded();
      const file = `${width}-${phase}.png`;
      await page.screenshot({ path: path.join(output, file), animations:'disabled' });
      result.screenshots.push({ file, width, phase, sha256:hash(fs.readFileSync(path.join(output,file))) });
