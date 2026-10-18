@@ -43,7 +43,37 @@ def assert_group_claim_advice(case, guide):
         case.assertIn(marker, " ".join(guide.split()))
 
 
+def assert_provider_edit_entry(case, guide):
+    chooser = guide.split("## ⚡ Quick Fixes", 1)[0]
+    entry = chooser.split("- **SSO stopped working after editing a provider:**", 1)
+    case.assertEqual(len(entry), 2, "the symptom chooser must name provider-save failures")
+    entry = " ".join(entry[1].split("\n- ", 1)[0].split())
+    case.assertIn("OIDC.md#sign-in-fails-after-editing-a-provider", entry)
+    for boundary in ("saved without changing anything", "Keep the working administrator session",
+                     "a local password reset does not restore", "Test does not prove sign-in"):
+        case.assertIn(boundary, entry)
+
+
+def assert_unauthorised_sso_routes(case, guide):
+    section = guide.split("#### Cannot login / 401 Unauthorized", 1)[1].split("\n#### ", 1)[0]
+    entry = " ".join(section.split("- **SSO or proxy login:**", 1)[1].split("\n- ", 1)[0].split())
+    for target in ("OIDC.md#sign-in-fails-after-editing-a-provider",
+                   "OIDC.md#safe-diagnosis", "PROXY_AUTH.md"):
+        case.assertIn(target, entry)
+    case.assertIn("unchanged save", entry)
+    case.assertIn("without closing the working administrator session", entry)
+    case.assertIn("A local lockout reset does not repair", entry)
+
+
 class OIDCSessionDocsTest(unittest.TestCase):
+    def test_login_symptom_chooser_reaches_provider_save_recovery(self):
+        assert_provider_edit_entry(self, (ROOT / "docs/TROUBLESHOOTING.md").read_text())
+
+    def test_unauthorised_help_separates_sso_recovery_from_proxy_auth(self):
+        assert_unauthorised_sso_routes(self, (ROOT / "docs/TROUBLESHOOTING.md").read_text())
+        for heading in ("### Sign-in fails after editing a provider", "### Safe diagnosis"):
+            self.assertIn(heading, GUIDE.read_text())
+
     def test_setup_orders_callback_and_access_before_cutover(self):
         assert_callback_setup(self, GUIDE.read_text())
 
