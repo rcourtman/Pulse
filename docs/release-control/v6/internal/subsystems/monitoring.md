@@ -588,6 +588,15 @@ an earlier synthetic guest's cooldown. `TestGuestAgentLockEvidenceFixtureIsolati
 shares one listener and retains an earlier uncertainty fence unchanged while an
 independent fixture completes its lock/command checks. No runtime fence is
 cleared, expired or weakened; native guest recovery is not established.
+HTTP-status fixtures share this same test-only endpoint namespace helper.
+Independent cases keep distinct base-path identities even when a loopback
+listener is reused; every diagnostic and cluster alias within a case retains
+the same identity and VM-wide cooldown. `TestGuestAgentHTTPFailureFixtureIsolation`
+uses one listener for two independent uncertain commands, then verifies both
+unchanged fences still reject all follow-up guest reads without wire work.
+The old bare-endpoint fixture behaviour fails that control. This is a separately
+claimed test-stabilization correction; no runtime guard, cooldown or provider
+completion rule is changed.
 This establishes source/consumer behaviour, not native recovery or attribution
 of a guest, PBS or certificate report.
 
@@ -8813,3 +8822,28 @@ JSON documents to the production resource decoder, TrueNAS systems table, inline
 drawer and chart client at desktop and narrow widths. The fixture does not
 require local History persistence or establish appliance, installed or released
 recovery. Original scan/cleanup facts and stopped guest monitoring are separate.
+
+### Persisted chart history uses the canonical value projection
+
+Single-resource and fleet chart history reads in `monitor_metrics.go` use
+`metrics.Store.QueryMetricValues` and `QueryMetricValuesBatch`. These return
+fresh, detached `models.MetricPoint` slices, the same canonical point type
+already aliased by monitoring. The shared retained reader projects timestamp
+and value without transporting unused extrema or constructing an intermediate
+full-point map and a second value-point copy. Existing metric filters, tier
+precedence, chronological ordering, gap-fill lookback and Docker observation
+provenance still apply through that same reader.
+
+The chart boundary applies the existing LTTB target to its owned result maps.
+It does not change chart sampling, point budgets, source precedence or payload
+meaning. Persisted results remain detached across calls; this ownership does
+not relax the separate detached-snapshot requirement for mutable in-memory
+History or the mock resource timeline rule. Full retained readers continue to
+return extrema for consumers that need them.
+
+`TestStoreValueProjectionPreservesChartSampling` in
+`internal/monitoring/monitor_metrics_slo_test.go` compares filtered and
+unfiltered chart results against the full reader with 1,000-point series,
+including LTTB selection and caller mutation. Metrics-store guards compare the
+projections across mixed tiers and buckets, changed database snapshots and
+Docker legacy/observed provenance; the query-plan guard covers both SQL forms.

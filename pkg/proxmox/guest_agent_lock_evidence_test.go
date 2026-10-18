@@ -2,7 +2,6 @@ package proxmox
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -59,7 +58,7 @@ func TestGuestAgentLockEvidenceRejectsAmbiguity(t *testing.T) {
 							backupAgentPayload(w, r)
 						}))
 						defer server.Close()
-						c := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
+						c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 						if err := read(context.Background(), c, 105); GuestAgentDeferredReason(err) != "lock-unverified" {
 							t.Errorf("ambiguous lock admitted/published a command: %v", err)
 						}
@@ -73,7 +72,7 @@ func TestGuestAgentLockEvidenceRejectsAmbiguity(t *testing.T) {
 						healthy.Store(true)
 						// A completed command's failed lock check is not transport
 						// uncertainty. A new diagnostic must reverify and resume.
-						diagnostic := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
+						diagnostic := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 						if err := read(context.Background(), diagnostic, 105); err != nil {
 							t.Fatalf("complete unlocked config did not resume: %v", err)
 						}
@@ -121,7 +120,7 @@ func TestGuestAgentLockEvidenceRejectsRedirects(t *testing.T) {
 							}
 						}))
 						defer server.Close()
-						c := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
+						c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 						if err := read(context.Background(), c, 105); GuestAgentDeferredReason(err) != "lock-unverified" {
 							t.Errorf("redirected lock admitted/published a command: %v", err)
 						}
@@ -150,7 +149,7 @@ func TestGuestAgentLockEvidenceRejectsRedirects(t *testing.T) {
 							t.Errorf("ordinary redirected requests = %d, want %d", redirected.Load(), wantRedirected)
 						}
 						healthy.Store(true)
-						if err := read(context.Background(), backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL)), 105); err != nil {
+						if err := read(context.Background(), backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL)), 105); err != nil {
 							t.Fatalf("valid same-target config did not resume: %v", err)
 						}
 						if commands.Load() != want+1 || redirected.Load() != wantRedirected {
@@ -191,7 +190,7 @@ func TestGuestAgentLockEvidenceHealthyConfigAndSessionRecovery(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			c, err := NewClient(ClientConfig{Host: lockEvidenceFixtureEndpoint(t, server.URL), User: "fixture@pam", Password: "fixture-password", Timeout: time.Second})
+			c, err := NewClient(ClientConfig{Host: guestAgentFixtureEndpoint(t, server.URL), User: "fixture@pam", Password: "fixture-password", Timeout: time.Second})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -203,18 +202,6 @@ func TestGuestAgentLockEvidenceHealthyConfigAndSessionRecovery(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Shared guest fences intentionally outlive a closed fixture listener. A
-// recycled loopback port must not make an independent lock case inherit an
-// earlier case's VM-wide uncertainty. Every client within a case keeps its key.
-func lockEvidenceFixtureEndpoint(t *testing.T, serverURL string) string {
-	t.Helper()
-	// Go appends #NN to repeated subtest names. Names are evidence labels,
-	// not URL syntax; a digest keeps their full identity without fragments,
-	// query parameters or ambiguous path separators.
-	identity := sha256.Sum256([]byte(t.Name()))
-	return serverURL + "/lock-evidence-fixture/" + fmt.Sprintf("%x", identity)
 }
 
 func TestGuestAgentLockEvidenceFixtureIsolation(t *testing.T) {
@@ -243,7 +230,7 @@ func TestGuestAgentLockEvidenceFixtureIsolation(t *testing.T) {
 	guestAgentGuards.Lock()
 	retained := guestAgentGuards.entries[guestAgentGuardKey{endpoint: key, vmid: 105}]
 	guestAgentGuards.Unlock()
-	current := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
+	current := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 	if _, err := current.GetVMAgentInfo(context.Background(), "node", 105); err != nil {
 		t.Fatalf("independent lock fixture inherited earlier uncertainty: %v", err)
 	}

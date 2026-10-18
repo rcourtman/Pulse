@@ -21,7 +21,7 @@ func storedObservationMetric(resourceType, metricType string) string {
 	return metricType
 }
 
-func projectDockerObservations(result map[string]map[string][]MetricPoint) {
+func projectDockerObservations[T any](result map[string]map[string][]T) {
 	for _, series := range result {
 		for _, metric := range []string{"disk", "diskread", "diskwrite"} {
 			delete(series, metric)

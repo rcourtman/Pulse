@@ -56,6 +56,10 @@ func TestStoreRetainedTierCoverage(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			filteredMany, err := store.QueryMetricTypesBatch("node", []string{"a", "b"}, []string{"memory", "cpu", "cpu"}, start, end, step)
+			if err != nil {
+				t.Fatal(err)
+			}
 			for _, id := range []string{"a", "b"} {
 				all, err := store.QueryAll("node", id, start, end, step)
 				if err != nil {
@@ -63,6 +67,9 @@ func TestStoreRetainedTierCoverage(t *testing.T) {
 				}
 				if !reflect.DeepEqual(all, batch[id]) {
 					t.Fatalf("batch differs for %s: %v != %v", id, batch[id], all)
+				}
+				if !reflect.DeepEqual(filteredMany[id], all) {
+					t.Fatalf("multi-metric filter changed ordering or retained values for %s: %v != %v", id, filteredMany[id], all)
 				}
 				for _, metric := range []string{"cpu", "memory"} {
 					single, err := store.Query("node", id, metric, start, end, step)
@@ -267,6 +274,92 @@ func TestRetainedQueryTemplatesBindCurrentWindowAndStep(t *testing.T) {
 		}
 		if !reflect.DeepEqual(values, tc.values) {
 			t.Fatalf("%+v returned stale bindings: %+v", tc, points)
+		}
+	}
+}
+
+// Extrema can be missing independently, including after a row with explicit
+// zero bounds. Every retained read shape must apply the fallback per point.
+func TestStoreRetainedNullableExtrema(t *testing.T) {
+	db := newPlanTestDB(t)
+	store := &Store{db: pdb.Wrap(db, "nullable-extrema-test")}
+	base := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	type observation struct {
+		value             float64
+		low, high         interface{}
+		wantLow, wantHigh float64
+	}
+	observations := []observation{
+		{10, -2.0, 99.0, -2, 99},
+		{20, nil, nil, 20, 20},
+		{30, 0.0, 0.0, 0, 0},
+		{-10, nil, -3.0, -10, -3},
+		{50, 2.0, nil, 2, 50},
+		{60, nil, nil, 60, 60},
+	}
+	for _, id := range []string{"a", "b"} {
+		for _, metric := range []string{"cpu", "memory"} {
+			for i, row := range observations {
+				// Alternate non-overlapping tiers so single-resource buckets must
+				// also normalize NULL bounds across the reconciliation UNION.
+				tier := TierMinute
+				if i%2 != 0 {
+					tier = TierRaw
+				}
+				if _, err := db.Exec(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value,min_value,max_value) VALUES ('node',?,?,?,?,?,?,?)`, id, metric, tier, base.Add(time.Duration(i)*time.Minute).Unix(), row.value, row.low, row.high); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+	}
+	for _, step := range []int64{0, 120} {
+		for _, ids := range [][]string{{"a"}, {"a", "b"}} {
+			for _, filter := range [][]string{nil, {"cpu"}, {"cpu", "memory"}} {
+				t.Run(fmt.Sprintf("step=%d/ids=%d/filter=%d", step, len(ids), len(filter)), func(t *testing.T) {
+					got, err := store.QueryMetricTypesBatch("node", ids, filter, base.Add(-2*time.Hour), base.Add(6*time.Minute), step)
+					if err != nil {
+						t.Fatal(err)
+					}
+					values, err := store.QueryMetricValuesBatch("node", ids, filter, base.Add(-2*time.Hour), base.Add(6*time.Minute), step)
+					if err != nil {
+						t.Fatal(err)
+					}
+					assertMetricValueProjection(t, got, values)
+					for _, id := range ids {
+						metrics := filter
+						if len(metrics) == 0 {
+							metrics = []string{"cpu", "memory"}
+						}
+						for _, metric := range metrics {
+							want := make([]MetricPoint, 0, len(observations))
+							for i := 0; i < len(observations); {
+								row := observations[i]
+								point := MetricPoint{Timestamp: base.Add(time.Duration(i) * time.Minute), Value: row.value, Min: row.wantLow, Max: row.wantHigh}
+								i++
+								if step > 1 {
+									next := observations[i]
+									point.Timestamp = point.Timestamp.Add(time.Minute)
+									point.Value = (point.Value + next.value) / 2
+									point.Min = min(point.Min, next.wantLow)
+									point.Max = max(point.Max, next.wantHigh)
+									i++
+								}
+								want = append(want, point)
+							}
+							points := got[id][metric]
+							if len(points) != len(want) {
+								t.Fatalf("%s/%s: got %+v, want %+v", id, metric, points, want)
+							}
+							for i, point := range points {
+								expected := want[i]
+								if !point.Timestamp.Equal(expected.Timestamp) || point.Value != expected.Value || point.Min != expected.Min || point.Max != expected.Max {
+									t.Fatalf("%s/%s point %d: got %+v, want %+v", id, metric, i, point, expected)
+								}
+							}
+						}
+					}
+				})
+			}
 		}
 	}
 }

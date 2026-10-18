@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -653,10 +654,21 @@ const (
 )
 
 func effectiveAPISLOTarget(localTarget, githubActionsTarget time.Duration) time.Duration {
-	if githubActionsTarget > 0 && latencyBudgetEnforced() {
+	if githubActionsTarget > 0 && latencyBudgetEnforced() && !strictLocalAPISLOs() {
 		return githubActionsTarget
 	}
 	return localTarget
+}
+
+// Controlled idle-worker proofs can enforce the local budgets without changing
+// runner identity or falling back to the hosted envelopes. Ordinary shared
+// worker runs retain their existing contention policy.
+func strictLocalAPISLOs() bool {
+	return os.Getenv("PULSE_STRICT_LOCAL_API_SLOS") == "true"
+}
+
+func apiLatencyBudgetEnforced() bool {
+	return strictLocalAPISLOs() || latencyBudgetEnforced()
 }
 
 // measureEndpointLatencies runs fn sloIterations times with a warmup phase and
@@ -727,7 +739,9 @@ func percentile(durations []time.Duration, pct float64) time.Duration {
 // up to ~4x on the median during vite builds), so a local overrun cannot be
 // attributed to a code regression and the test skips with the full
 // distribution, the same way skipUnderRace treats race-detector overhead.
-// A local pass still means the budget was genuinely met.
+// A local pass still means the budget was genuinely met. An explicitly
+// controlled proof sets PULSE_STRICT_LOCAL_API_SLOS=true to enforce the local
+// budget, including on Actions, and must retain its idle-worker evidence.
 func assertLatencySLO(t *testing.T, label string, latencies []time.Duration, target time.Duration) {
 	t.Helper()
 	p50 := percentile(latencies, 0.50)
@@ -736,7 +750,7 @@ func assertLatencySLO(t *testing.T, label string, latencies []time.Duration, tar
 	if p95 <= target {
 		return
 	}
-	if latencyBudgetEnforced() {
+	if apiLatencyBudgetEnforced() {
 		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
 		return
 	}
