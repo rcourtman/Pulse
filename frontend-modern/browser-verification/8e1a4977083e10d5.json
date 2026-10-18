@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "b9ed20581bce65528a3213f33d58a04f954297c9",
+  "verified_at": "2026-10-18T12:51:40Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/Table.tsx",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/Table.tsx": "860a1c1ed07eeb0ceab9c585672c025f5d31d01016e0038cc39d318ded4767ea",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "acf0f52ee5875c31ab45bdc8e4a0b22664602aab6060f6edf1e0f4e7b7735205"
+  },
+  "routes": [
+    "/browser-tests/platform-sort-access.html (safe local HTTP through the real recovery reader/decoder/cache and production Protection table/CSS; synthetic Docker metadata through the production Docker Secrets table)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Build and browser source b9ed20581bce65528a3213f33d58a04f954297c9. All 2,994 bound source-input and five served-artifact hashes match. Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37 desktop/320px dark touch and Firefox 142.0.1 desktop pass.",
+    "Sortable column headers retain native th scope and active aria-sort while exposing type=button controls. Decorative direction glyphs do not change the accessible button name. Non-sortable Labels stays static; hidden columns add no Tab stop.",
+    "Tab/Enter/Space operate real Protection and Docker sort actions exactly once, with stable focus, a visible inset focus ring and inherited numeric/text header alignment. Narrow touch uses the same target; checked visible Protection targets are at least 24px in both dimensions.",
+    "Existing name and descending-first chronological cycles, missing-last ordering and saved sort survive activation and reload. Sorting in an enclosing fixture form does not submit it; only synthetic GET reads occur.",
+    "Six original desktop/320px captures were opened with the native view_image tool and pixels inspected. Focus rings and sorted rows are visible in both themes and browsers. Existing narrow Protection summary truncation remains; no full narrow-table readability or assistive-device acceptance is claimed.",
+    "Types, full lint, all 1,447 containing tests in 88 files (including the unchanged production-CSP static-markup guard), production build and fixture build pass at this exact source. The fixture server does not reproduce the production CSP response header.",
+    "No page errors, off-origin requests, writes or horizontal document overflow; browsers and fixture server close. No provider, backup, guest thaw, installed recovery, protected publication or release acceptance is established."
+  ],
+  "interactions": [
+    "Reach Dataset by Tab; use Enter, Space and Enter to cycle ascending, descending and built-in order without moving focus or double firing. Traverse every visible header button and check hidden headers are skipped.",
+    "Sort Reported time / Time in both directions with an unknown timestamp retained last, then verify the saved preference after reload. Tap Dataset at 320px.",
+    "Tab into the second production Docker table, use Enter/Space to reorder its metadata rows, and verify static Labels and zero enclosing-form submissions.",
+    "Open and inspect all six original capture files natively, including focused chronological and text sorting on desktop light and 320px dark."
+  ]
+}
