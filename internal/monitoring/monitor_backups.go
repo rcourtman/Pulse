@@ -2585,11 +2585,13 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 		end    time.Time
 		status string
 		errMsg string
+		warned bool
 	}
 
 	var order []int
 	sections := make(map[int]*guestSection)
 	cursor := jobTask.StartTime
+	activeVMID := 0
 
 	ensureSection := func(vmid int) *guestSection {
 		if sec, ok := sections[vmid]; ok {
@@ -2611,6 +2613,7 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 			sec := ensureSection(vmid)
 			sec.start = cursor
 			sec.status = "running"
+			activeVMID = vmid
 		} else if match := vzdumpLogGuestFinishRe.FindStringSubmatch(text); match != nil {
 			vmid, err := strconv.Atoi(match[1])
 			if err != nil || vmid <= 0 {
@@ -2626,6 +2629,9 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 			duration := time.Duration(hours)*time.Hour + time.Duration(minutes)*time.Minute + time.Duration(seconds)*time.Second
 			sec.end = sec.start.Add(duration)
 			cursor = sec.end
+			if activeVMID == vmid {
+				activeVMID = 0
+			}
 		} else if match := vzdumpLogGuestFailRe.FindStringSubmatch(text); match != nil {
 			vmid, err := strconv.Atoi(match[1])
 			if err != nil || vmid <= 0 {
@@ -2637,6 +2643,15 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 			if sec.errMsg == "" {
 				sec.errMsg = "backup failed"
 			}
+			if activeVMID == vmid {
+				activeVMID = 0
+			}
+		} else if activeVMID > 0 && (strings.HasPrefix(text, "WARN:") || strings.HasPrefix(text, "WARNING:")) {
+			// A finished backup can still have guest-scoped warnings. Do not
+			// let its finish marker turn those into clean success, attribute
+			// job-wide warnings to an arbitrary guest, or copy private log text.
+			// Keep running/failure precedence until a guest actually finishes.
+			sections[activeVMID].warned = true
 		}
 	}
 
@@ -2648,6 +2663,10 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 	tasks := make([]models.BackupTask, 0, len(order))
 	for _, vmid := range order {
 		sec := sections[vmid]
+		if sec.status == "OK" && sec.warned {
+			sec.status = "warning"
+			sec.errMsg = "Backup completed with warnings; review the original Proxmox task log."
+		}
 		if jobFinished {
 			if sec.status == "running" {
 				// The job ended without a per-guest verdict; treat as failed
