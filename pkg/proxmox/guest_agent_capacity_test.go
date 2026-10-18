@@ -12,6 +12,23 @@ import (
 	"time"
 )
 
+// These tests are serial, as are the other guest-guard tests. Restore the
+// process-wide state before the package's parallel HTTP tests can start.
+func isolateGuestAgentCapacity(t *testing.T) {
+	t.Helper()
+	guestAgentGuards.Lock()
+	aliases, entries, next := guestAgentGuards.aliases, guestAgentGuards.entries, guestAgentGuards.nextCleanup
+	guestAgentGuards.aliases = make(map[string][]string)
+	guestAgentGuards.entries = make(map[guestAgentGuardKey]guestAgentGuardEntry)
+	guestAgentGuards.nextCleanup = time.Now().Add(time.Hour)
+	guestAgentGuards.Unlock()
+	t.Cleanup(func() {
+		guestAgentGuards.Lock()
+		guestAgentGuards.aliases, guestAgentGuards.entries, guestAgentGuards.nextCleanup = aliases, entries, next
+		guestAgentGuards.Unlock()
+	})
+}
+
 // Half the protected entries are busy; half retain uncertain completion.
 func seedProtectedGuestAgentCapacity(count int) map[guestAgentGuardKey]guestAgentGuardEntry {
 	protected := make(map[guestAgentGuardKey]guestAgentGuardEntry, count)
@@ -44,7 +61,7 @@ func assertProtectedGuestAgentCapacity(t *testing.T, protected map[guestAgentGua
 func TestGuestAgentCapacityReusesExpiredAliasEntries(t *testing.T) {
 	for _, expiredAliases := range []int{1, 2} {
 		t.Run(fmt.Sprintf("expired-%d", expiredAliases), func(t *testing.T) {
-			isolateGuestAgentRegistry(t)
+			isolateGuestAgentCapacity(t)
 			first, second := "https://first.capacity.invalid/api2/json", "https://second.capacity.invalid/api2/json"
 			registerGuestAgentEndpoints("https://first.capacity.invalid", []string{"https://second.capacity.invalid"})
 			protected := seedProtectedGuestAgentCapacity(maxGuestAgentGuardEntries - 1 - expiredAliases)
@@ -79,7 +96,7 @@ func TestGuestAgentCapacityReusesExpiredAliasEntries(t *testing.T) {
 func TestGuestAgentCapacityReclaimsExpiredBeforeEveryHTTPRead(t *testing.T) {
 	for name, read := range backupAgentReads() {
 		t.Run(name, func(t *testing.T) {
-			isolateGuestAgentRegistry(t)
+			isolateGuestAgentCapacity(t)
 			var commands, configs atomic.Int32
 			var locked atomic.Bool
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -131,7 +148,7 @@ func TestGuestAgentCapacityReclaimsExpiredBeforeEveryHTTPRead(t *testing.T) {
 func TestGuestAgentCapacityNeverEvictsProtectedWork(t *testing.T) {
 	for _, slotsLeft := range []int{0, 1} {
 		t.Run(fmt.Sprintf("slots-%d", slotsLeft), func(t *testing.T) {
-			isolateGuestAgentRegistry(t)
+			isolateGuestAgentCapacity(t)
 			var requests atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requests.Add(1)
