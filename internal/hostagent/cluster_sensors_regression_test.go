@@ -54,7 +54,7 @@ func TestClusterPeerMixedSSHIdentities(t *testing.T) {
 		if strings.Join(identities, ",") != "/root/.ssh/id_rsa,/root/.ssh/id_ed25519" {
 			return "", errors.New("both existing cluster identities must be offered, RSA first")
 		}
-		if args[len(args)-1] != "sensors -j" {
+		if args[len(args)-1] != "sensors -j 2>/dev/null" {
 			return "", errors.New("sensor command errors must not be masked")
 		}
 		return peerTemperatureFixture, nil

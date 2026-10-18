@@ -24,7 +24,10 @@ contents; it does not provision a key, mutate authorisation, change the existing
 host-key policy or touch the server's restricted sensor fallback. The opt-out
 precedes discovery. Local/offline peers are not contacted. A failed peer does
 not discard other peer readings. The remote `sensors -j` exit is no longer
-masked by a successful shell fallback. Unusable data is omitted, never zero.
+masked by a successful shell fallback; stderr stays separate from JSON. Valid
+partial readings accompanying lm-sensors exit 1 are retained with a warning,
+not recovery. Authentication/transport/other command exits cannot admit output.
+Unusable data is omitted, never zero.
 
 Agent warnings are limited to once per peer per five minutes; usable recovery
 clears the limiter and logs once, and removed/offline peers are pruned. Caller

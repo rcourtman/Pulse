@@ -67,7 +67,7 @@ func TestClusterPeerSSHNative(t *testing.T) {
 				if name != "ssh" {
 					return "", errors.New("unexpected command")
 				}
-				if strings.Join(args[len(args)-2:], " ") != "root@192.0.2.2 sensors -j" {
+				if strings.Join(args[len(args)-2:], " ") != "root@192.0.2.2 sensors -j 2>/dev/null" {
 					return "", errors.New("unexpected peer or remote command")
 				}
 				// Check production bounds and unchanged host-key policy before
@@ -192,7 +192,7 @@ func peerSSHServer(t *testing.T, trusted, host ssh.Signer) (string, func(bool)) 
 					}
 					for request := range requests {
 						var command struct{ Command string }
-						if request.Type != "exec" || ssh.Unmarshal(request.Payload, &command) != nil || command.Command != "sensors -j" {
+						if request.Type != "exec" || ssh.Unmarshal(request.Payload, &command) != nil || command.Command != "sensors -j 2>/dev/null" {
 							_ = request.Reply(false, nil)
 							continue
 						}
@@ -277,11 +277,46 @@ func TestClusterPeerUnusableOutputIsNotRecovery(t *testing.T) {
 func TestClusterPeerSSHArgumentsPreserveBoundaries(t *testing.T) {
 	var logs bytes.Buffer
 	a := peerSensorFixtureAgent(&logs, func(_ context.Context, name string, args ...string) (string, error) {
-		want := []string{"-i", "/root/.ssh/id_rsa", "-i", "/root/.ssh/id_ed25519", "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR", "root@192.0.2.2", "sensors -j"}
+		want := []string{"-i", "/root/.ssh/id_rsa", "-i", "/root/.ssh/id_ed25519", "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR", "root@192.0.2.2", "sensors -j 2>/dev/null"}
 		if name != "ssh" || !reflect.DeepEqual(args, want) {
 			t.Errorf("unexpected SSH command: %s %q", name, args)
 		}
 		return peerTemperatureFixture, nil
 	})
 	a.collectClusterSensors(context.Background())
+}
+
+func TestClusterPeerPartialSensorOutput(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		exit        int
+		output      string
+		wantReading bool
+	}{
+		{"partial chip failure", 1, peerTemperatureFixture, true},
+		{"invalid partial output", 1, "invalid JSON", false},
+		{"missing command cannot admit output", 127, peerTemperatureFixture, false},
+		{"SSH failure cannot admit output", 255, peerTemperatureFixture, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Obtain the real os/exec exit type, without a sensor or network call.
+			commandErr := exec.Command("sh", "-c", fmt.Sprintf("exit %d", tc.exit)).Run()
+			if commandErr == nil {
+				t.Fatal("expected fixture command failure")
+			}
+			var logs bytes.Buffer
+			a := peerSensorFixtureAgent(&logs, func(context.Context, string, ...string) (string, error) { return tc.output, commandErr })
+			result := a.collectClusterSensors(context.Background())
+			if tc.wantReading {
+				if len(result) != 1 || result[0].Sensors.TemperatureCelsius["cpu_package"] != 55 {
+					t.Fatalf("valid partial readings lost: %+v", result)
+				}
+			} else if len(result) != 0 {
+				t.Fatalf("failed transport/invalid data admitted: %+v", result)
+			}
+			if !strings.Contains(logs.String(), `"level":"warn"`) || strings.Contains(logs.String(), "recovered") {
+				t.Fatalf("partial/failure wrongly labelled: %s", &logs)
+			}
+		})
+	}
 }

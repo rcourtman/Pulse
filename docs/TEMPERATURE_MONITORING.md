@@ -43,12 +43,16 @@ cluster's existing inter-node keys, not a Pulse API token or the Pulse server's
 restricted sensor key. The agent offers existing `id_rsa` then `id_ed25519`
 identities in one non-interactive connection, so an unrelated Ed25519 key does
 not hide a working RSA cluster key. It does not create keys, edit peer trust,
-or enable SSH access. The remote command is only `sensors -j`.
+or enable SSH access. The remote command reads only `sensors -j`; its stderr stays off the data
+stream.
 
 Failed authentication, a failed sensor command or no usable readings now emits
 an agent warning naming the peer, at most once per peer every five minutes.
 Usable recovery is logged once. The warning does not contain the raw SSH or
-sensor output. Missing readings stay unavailable, not zero; a failed peer does
+sensor output. A sensor exit of 1 with valid partial readings keeps those
+known values and the warning, without claiming full recovery. Authentication,
+transport and invalid-output failures provide no new readings. Missing readings
+stay unavailable, not zero; a failed peer does
 not prevent other peers or local sensors from reporting. A recent last-good
 server reading keeps its existing freshness limit; failed reads do not renew
 its timestamp. Collection keeps its

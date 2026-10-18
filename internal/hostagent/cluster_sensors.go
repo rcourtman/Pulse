@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -116,7 +117,9 @@ func (a *Agent) collectClusterSensors(ctx context.Context) []agentshost.ClusterN
 		if ctx.Err() == nil {
 			a.logClusterSensorResult(r.Peer, r.Err, time.Now())
 		}
-		if r.Err == nil && len(r.Sensors.TemperatureCelsius) > 0 {
+		// Valid readings from a partial sensor command remain useful, but
+		// its non-zero exit is still warned and never called recovery.
+		if len(r.Sensors.TemperatureCelsius) > 0 {
 			clusterSensors = append(clusterSensors, agentshost.ClusterNodeSensors{
 				NodeName:    strings.ToLower(r.Peer.Name),
 				Sensors:     r.Sensors,
@@ -214,7 +217,7 @@ func (a *Agent) logClusterSensorResult(peer clusterPeer, err error, now time.Tim
 	a.clusterSensorFailures[peer] = now
 	// Do not log SSH/sensor output: it can contain private hardware details.
 	a.logger.Warn().Err(err).Str("peer", peer.Name).
-		Msg("Failed to collect sensors from cluster peer; check root SSH authorisation and sensors -j on that peer. To use only local agent sensors, set --disable-cluster-peer-sensors (warnings limited to once per peer every 5 minutes)")
+		Msg("Cluster peer sensors incomplete or unavailable; check root SSH authorisation and sensors -j on that peer. To use only local agent sensors, set --disable-cluster-peer-sensors (warnings limited to once per peer every 5 minutes)")
 }
 
 // collectPeerSensors SSHes to a peer node and runs `sensors -j` to collect temperature data.
@@ -237,28 +240,35 @@ func (a *Agent) collectPeerSensors(ctx context.Context, peer clusterPeer, sshKey
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "LogLevel=ERROR",
 		"root@"+peer.IP,
-		"sensors -j",
+		"sensors -j 2>/dev/null",
 	)
-	output, err := a.collector.CommandCombinedOutput(ctx, "ssh", args...)
-	if err != nil {
-		return agentshost.Sensors{}, err
+	output, commandErr := a.collector.CommandCombinedOutput(ctx, "ssh", args...)
+	if commandErr != nil {
+		// lm-sensors can return 1 alongside usable readings when one chip
+		// fails. Preserve those known readings, without masking the failure.
+		// SSH auth/transport errors (255), missing commands (127), cancellation
+		// and other exits must not turn arbitrary output into live readings.
+		var exitErr *exec.ExitError
+		if !errors.As(commandErr, &exitErr) || exitErr.ExitCode() != 1 {
+			return agentshost.Sensors{}, commandErr
+		}
 	}
 
 	output = strings.TrimSpace(output)
 	if output == "" || output == "{}" {
-		return agentshost.Sensors{}, nil
+		return agentshost.Sensors{}, commandErr
 	}
 
 	// Parse using the shared sensors parser
 	tempData, err := a.collector.SensorsParse(output)
 	if err != nil {
-		return agentshost.Sensors{}, err
+		return agentshost.Sensors{}, errors.Join(commandErr, err)
 	}
 
 	if !tempData.Available {
-		return agentshost.Sensors{}, nil
+		return agentshost.Sensors{}, commandErr
 	}
 
 	// Convert to flat sensor format using the shared helper
-	return convertTemperatureDataToSensors(tempData), nil
+	return convertTemperatureDataToSensors(tempData), commandErr
 }
