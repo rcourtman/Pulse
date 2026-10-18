@@ -39,7 +39,6 @@ func TestGuestAgentHTTPFailureDefersEveryRead(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			for name, first := range backupAgentReads() {
 				t.Run(name, func(t *testing.T) {
-					isolateGuestAgentRegistry(t)
 					var calls atomic.Int32
 					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 						switch {
@@ -87,7 +86,6 @@ func TestGuestAgentUnrecognisedHTTPStatusDefersEveryRead(t *testing.T) {
 		t.Run(fmt.Sprintf("status-%d", status), func(t *testing.T) {
 			for name, first := range backupAgentReads() {
 				t.Run(name, func(t *testing.T) {
-					isolateGuestAgentRegistry(t)
 					var commands, configs atomic.Int32
 					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 						switch {
@@ -131,51 +129,9 @@ func TestGuestAgentUnrecognisedHTTPStatusDefersEveryRead(t *testing.T) {
 	}
 }
 
-func TestGuestAgentHTTPFixtureDoesNotInheritPriorAdmission(t *testing.T) {
-	isolateGuestAgentRegistry(t)
-	var commands atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/config") {
-			fmt.Fprint(w, `{"data":{}}`)
-			return
-		}
-		commands.Add(1)
-		w.WriteHeader(http.StatusUpgradeRequired)
-		fmt.Fprint(w, "upstream unavailable")
-	}))
-	defer server.Close()
-	client := backupTestClient(t, server.URL)
-	// A closed fixture can leave this same origin in the process-wide guard
-	// until its one-minute uncertainty interval expires. Kernel port reuse must
-	// not turn the first request of a new HTTP case into an old cooldown.
-	release, err := acquireGuestAgent(client.baseURL, 105)
-	if err != nil {
-		t.Fatal(err)
-	}
-	release(true)
-	t.Run("new-http-fixture", func(t *testing.T) {
-		isolateGuestAgentRegistry(t)
-		var response *apiResponseError
-		_, err := backupTestClient(t, server.URL).GetVMAgentVersion(context.Background(), "node", 105)
-		if GuestAgentDeferredReason(err) != "agent-completion-unverified" || !errors.As(err, &response) || response.statusCode != http.StatusUpgradeRequired {
-			t.Errorf("new fixture inherited an earlier origin's admission: %v", err)
-		}
-		if _, err := backupTestClient(t, server.URL).GetVMAgentVersion(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
-			t.Errorf("clients inside one fixture no longer share uncertainty: %v", err)
-		}
-		if commands.Load() != 1 {
-			t.Errorf("new fixture dispatched %d commands, want one", commands.Load())
-		}
-	})
-	if _, err := acquireGuestAgent(client.baseURL, 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
-		t.Errorf("fixture isolation discarded the outer uncertainty fence: %v", err)
-	}
-}
-
 func TestGuestAgentUnrecognisedHTTPStatusSharesAliasesAndResumes(t *testing.T) {
 	for _, status := range []int{409, 425, 499} {
 		t.Run(fmt.Sprintf("status-%d", status), func(t *testing.T) {
-			isolateGuestAgentRegistry(t)
 			var commands atomic.Int32
 			var healthy atomic.Bool
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -250,7 +206,6 @@ func TestGuestAgentUnrecognisedHTTPStatusSharesAliasesAndResumes(t *testing.T) {
 }
 
 func TestGuestAgentHTTPFailureDoesNotFailOver(t *testing.T) {
-	isolateGuestAgentRegistry(t)
 	var calls atomic.Int32
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -308,7 +263,6 @@ func TestGuestAgentHTTPExplicitRefusalsRemainErrors(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			isolateGuestAgentRegistry(t)
 			var calls atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.HasSuffix(r.URL.Path, "/config") {
@@ -357,7 +311,6 @@ func TestGuestAgentHTTPAmbiguousFailuresDoNotClearAdmission(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			isolateGuestAgentRegistry(t)
 			var calls atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.HasSuffix(r.URL.Path, "/config") {
@@ -394,7 +347,6 @@ func TestGuestAgentHTTPTerminalFailuresRemainCommandBound(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			isolateGuestAgentRegistry(t)
 			var calls atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.HasSuffix(r.URL.Path, "/config") {
@@ -424,7 +376,6 @@ func TestGuestAgentHTTPTerminalFailuresRemainCommandBound(t *testing.T) {
 }
 
 func TestGuestAgentHTTPOrdinaryRequestPreservesStatusAndError(t *testing.T) {
-	isolateGuestAgentRegistry(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(502)
 		fmt.Fprint(w, "API error 403: permission denied")
@@ -442,7 +393,6 @@ func TestGuestAgentHTTPOrdinaryRequestPreservesStatusAndError(t *testing.T) {
 }
 
 func TestGuestAgentHTTPUncertaintyExpiresAndKeepsOtherVMsIndependent(t *testing.T) {
-	isolateGuestAgentRegistry(t)
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/config") {

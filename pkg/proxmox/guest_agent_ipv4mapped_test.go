@@ -89,7 +89,7 @@ func mappedEndpointReadNames() []string {
 func TestGuestAgentIPv4MappedInflight(t *testing.T) {
 	for _, reverse := range []bool{false, true} {
 		t.Run(fmt.Sprintf("mapped-first-%t", reverse), func(t *testing.T) {
-			isolateGuestAgentRegistry(t)
+			isolateGuestAgentCapacity(t)
 			entered, finish := make(chan struct{}), make(chan struct{})
 			var commands, configs atomic.Int32
 			_, ipv4, mapped := mappedEndpointServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +165,7 @@ func TestGuestAgentIPv4MappedUncertainty(t *testing.T) {
 	for _, reverse := range []bool{false, true} {
 		for _, incomplete := range []bool{false, true} {
 			t.Run(fmt.Sprintf("mapped-first-%t/incomplete-%t", reverse, incomplete), func(t *testing.T) {
-				isolateGuestAgentRegistry(t)
+				isolateGuestAgentCapacity(t)
 				var commands, configs atomic.Int32
 				_, ipv4, mapped := mappedEndpointServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					switch {
