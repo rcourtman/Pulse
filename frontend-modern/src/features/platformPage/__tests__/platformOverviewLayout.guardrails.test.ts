@@ -923,6 +923,9 @@ describe('platform overview layout guardrails', () => {
     expect(jsxAttr(button, 'type')).toBe('"button"');
     expect(jsxAttr(button, 'class')).toContain('focus-visible:ring-2');
     expect(jsxAttr(button, 'onKeyDown')).toBeUndefined();
+    expect(jsxAttr(button, 'style')).toBeUndefined();
+    expect(jsxAttr(button, 'class')).toContain('[text-align:inherit]');
+    expect(jsxAttr(button, 'class')).toContain('[text-transform:inherit]');
     const conditional = findNodes(sortable, ts.isJsxElement).find(
       (node) =>
         node.openingElement.tagName.getText() === 'Show' && node.getText().includes('<button'),

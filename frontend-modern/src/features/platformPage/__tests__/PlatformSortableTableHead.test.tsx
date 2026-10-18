@@ -64,6 +64,7 @@ describe('PlatformSortableTableHead', () => {
       expect(header).not.toHaveAttribute('tabindex');
       expect(header).not.toHaveAttribute('aria-sort');
       expect(button).toHaveAttribute('type', 'button');
+      expect(button).not.toHaveAttribute('style');
       expect(button.tabIndex).toBe(0);
     }
     const staticHeader = screen.getByRole('columnheader', { name: 'Actions' });
