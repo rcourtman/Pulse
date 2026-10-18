@@ -140,10 +140,19 @@ tie cannot displace a strictly newer result. Agreeing outcome aliases and duplic
 observations remain usable with a stable ID-based representative, not a claim
 that its end time makes it newer. Invalid/future dates retain their distinct
 explanation and cannot be cleared by a dated task. Provider posture, restore-point
-evidence, collection and all guest/backup commands are unchanged. Recovery-model and consuming Coverage
-tests cover that distinction; browser fixtures establish presentation, not
-native backup completion, thaw, filesystem writes or installed recovery.
+evidence, collection and all guest/backup commands are unchanged.
 
+An Unknown summary must not discard its matched collected job observations.
+The existing disclosure and text search preserve their exact statuses/errors,
+IDs, job origins and timestamps, including conflicting observations of one ID.
+These are collected jobs, not a selected latest result or timeline. Missing,
+invalid and future starts remain qualified Unknown without inventing dates.
+Only unresolved chronology exposes this collection: an ordinary unambiguous or
+empty replacement withdraws it and its stale search matches. Recovery-model and
+consuming Coverage tests plus `backup-job-uncertainty.cjs` cover isolation,
+response order, same-open replacement and desktop/narrow literal wrapping.
+These fixtures establish presentation, not native backup completion, thaw,
+filesystem writes or installed recovery.
 
 ### Patrol timer checkpoints preserve run and recovery history
 

@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "3ed82519fa5d562fe610521accad08b0cb97903c",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "db49c57c3985f3dd521cad88d0e4056a293f4fbefb1114dc70f5acb960cec728",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "ce3b2cb0a649e833a2f4b23b9cab68eed8d2febf86d9c6ced85c505c03b93a40"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "An unorderable start keeps the latest result Unknown while collected failures and original job provenance remain readable.",
+    "Missing, invalid and future starts do not become fabricated usable dates; raw provider markup stays literal.",
+    "Same-ID conflicting observations both remain visible under Unknown, including reversed input order.",
+    "Ordinary OK then empty replacement withdraws unresolved diagnostics and stale search matches.",
+    "A 200-job collection remains reachable inside the measured 200-workload window, including its final diagnostic and return to the first evidence."
+  ],
+  "interactions": [
+    "Real HTTP inventory reader/decoder, recovery model, search, table, disclosure and production CSS consume safe synthetic GET observations; no guest, backup or provider operation.",
+    "Failure, raw reason, job-ID and recorded-observation searches isolate the correct connection; equal-name/VMID peer remains independent. Historical job node is not rewritten to current placement.",
+    "Desktop keyboard and 320px WebKit touch expand and refresh. Same-open reads retain the physical row, expansion and desktop Refresh focus. Intentional search removal/reinsertion preserves logical expansion, not a removed DOM element.",
+    "All 12 final captures were opened with native view_image and inspected for readable literal text, colours, wrapping, uncertainty, replacement and final-list evidence. Six retained earlier frames were also opened; their partial failed attempts are not counted as completed journeys.",
+    "No horizontal overflow, page/console errors or off-origin/mutating requests are reported. Both browsers/contexts and the loopback server close."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-18T23:27:45.976080Z",
+  "browser": {
+    "client": "Playwright 1.56.1",
+    "desktop": "Chromium 141.0.7390.37",
+    "narrow": "WebKit 26.0, touch emulation, dark theme"
+  },
+  "source_proof_receipt": "source-zzt_lta9",
+  "full_suite_source_sha": "8ac17d2f135d583448b91d12733690d049be5c9b",
+  "fixture_proof_receipt": "source-s7nu5_4l",
+  "fixture_entry": "/browser-tests/coverage-workload-identity.html",
+  "compiler_binding": {
+    "source_sha": "3ed82519fa5d562fe610521accad08b0cb97903c",
+    "source_inputs": 300,
+    "artifacts": 5,
+    "source_and_artifact_hashes_matched": true,
+    "served_artifacts_identical_to_full_suite_fixture": true
+  },
+  "source_equivalence": "Only the browser protocol differs between full-suite source and verified parent; product runtime and manifests are byte-identical. A fresh fixture-only proof binds the corrected protocol. The full suite is not claimed as rerun at this parent.",
+  "protocol_sha256": "e82da08815cf5ba4dc71d4951d11bdb90b9d4b5b4eb29001cc27985816de7089",
+  "captures": [
+    {
+      "file": "desktop-unresolved.png",
+      "sha256": "0a49c4421d7f7397a843c050079a3dcc4b34df0d9be4c7f230d667e533ae2162",
+      "bytes": 130327
+    },
+    {
+      "file": "desktop-raw-failure.png",
+      "sha256": "0a49c4421d7f7397a843c050079a3dcc4b34df0d9be4c7f230d667e533ae2162",
+      "bytes": 130327
+    },
+    {
+      "file": "desktop-invalid-start.png",
+      "sha256": "9974eb8ccf87f8b650e292d51f7d382a217246d40655e28c542d21dd5436851a",
+      "bytes": 122956
+    },
+    {
+      "file": "desktop-conflict.png",
+      "sha256": "19d2da0f5e7fac3589eb655e9b2c514401a4d91c2fdfbf00c2367e37e6d581b9",
+      "bytes": 129495
+    },
+    {
+      "file": "desktop-corrected.png",
+      "sha256": "59679bebb68981e3638ca29d47790c07be25068edb50baf430c251074c015c28",
+      "bytes": 138724
+    },
+    {
+      "file": "desktop-last-collected.png",
+      "sha256": "369df3249791a889a0ac1cc3d3864b2c61a678d5eb1a6c1530ed85a27c4851fb",
+      "bytes": 131686
+    },
+    {
+      "file": "narrow-unresolved.png",
+      "sha256": "fd09908924a7704c0818b4d166bddc4843dff186caefe8d88a8d8a980f24a61b",
+      "bytes": 90962
+    },
+    {
+      "file": "narrow-raw-failure.png",
+      "sha256": "090c11346a9741e7421f506de8204faa2cc4acc05f1d996d79d6c9b63a150cb7",
+      "bytes": 78525
+    },
+    {
+      "file": "narrow-invalid-start.png",
+      "sha256": "7794ada21641fadaafb371b370e1977068d4dfa7b31abe6a585d0c5f626db2ae",
+      "bytes": 88657
+    },
+    {
+      "file": "narrow-conflict.png",
+      "sha256": "e24f46be57c55955e2a9acabbcc67f454dc4cdd7b6569fbee9c48ad52a73529b",
+      "bytes": 88545
+    },
+    {
+      "file": "narrow-corrected.png",
+      "sha256": "0086a72d773f5e9b2a2a214a1189e19ee383f3e8a9417253065e9b8e6fe1bd15",
+      "bytes": 87264
+    },
+    {
+      "file": "narrow-last-collected.png",
+      "sha256": "19939b159fc7f77d2a3cdb96fe4a93dc44b0b11e60986eccef768f63a379b7ad",
+      "bytes": 85511
+    }
+  ],
+  "limits": [
+    "Safe synthetic read-only observations, not native backup completion, independent thaw, filesystem liveness, prior-active restoration, installed recovery or full authenticated-app acceptance.",
+    "Chromium desktop and WebKit narrow emulation, not physical-device or screen-reader speech qualification.",
+    "Long diagnostics and collections require vertical scrolling on phones; no horizontal clipping was observed."
+  ]
+}

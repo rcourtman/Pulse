@@ -28,6 +28,7 @@ import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   getWorkloadRecoveryPostureLabel,
   type WorkloadCoverageRow,
+  type CoverageTask,
 } from './proxmoxBackupRecoveryModel';
 import type { CoverageSortKey } from './proxmoxBackupsTableModel';
 import {
@@ -179,6 +180,112 @@ const postureExplanation = (row: WorkloadCoverageRow): string => {
   }
   return 'Pulse cannot tell yet whether this guest is backed up.';
 };
+
+function CoverageTaskProvenanceNote() {
+  return (
+    <>
+      <p class="mt-2 text-muted">
+        Last observed is when Pulse read this job's history from Proxmox, not when the job finished.
+        Refreshing this page does not make retained results current. An unknown observation time is
+        not a fresh result.
+      </p>
+      <p class="mt-2 text-muted">
+        The job location is recorded at the time of the backup. The workload may now be on another
+        node.
+      </p>
+    </>
+  );
+}
+
+// Share the same escaped, wrapping fields for selected and unresolved jobs.
+// An unresolved observation is never promoted to the latest-job region.
+function CoverageTaskDetail(props: { task: CoverageTask; latest?: boolean }) {
+  const now = useRelativeTimeNow();
+  const startIsUsable = () => {
+    const ms = Date.parse(props.task.startedAt);
+    return ms !== undefined && Number.isFinite(ms) && ms > 0 && ms <= now();
+  };
+  return (
+    <section
+      aria-label={props.latest ? 'Latest backup job' : undefined}
+      class="mb-2 min-w-0 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] text-base-content"
+      data-backup-task-detail={props.latest ? '' : undefined}
+      data-backup-task-evidence={!props.latest ? '' : undefined}
+    >
+      <h4 class="mb-1 font-medium">
+        {props.latest ? 'Latest backup job' : 'Collected backup job'}
+      </h4>
+      <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1">
+        <Show when={!props.latest}>
+          <dt class="text-muted">Job ID</dt>
+          <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">{props.task.id}</dd>
+        </Show>
+        <dt class="text-muted">Result</dt>
+        <dd
+          class={`min-w-0 whitespace-pre-wrap wrap-anywhere ${statusWordToneClass(taskWordVariant(props.task.label))}`}
+        >
+          {props.task.label}
+        </dd>
+        <Show
+          when={
+            props.task.statusErrorConflict ||
+            (props.task.label === 'Failed' && props.task.status.trim().toLowerCase() !== 'failed')
+          }
+        >
+          <dt class="text-muted">Reported status</dt>
+          <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">{props.task.status}</dd>
+        </Show>
+        <dt class="text-muted">Job connection</dt>
+        <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
+          {props.task.instance?.trim() || 'Not reported'}
+        </dd>
+        <dt class="text-muted">Job node</dt>
+        <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
+          {props.task.node?.trim() || 'Not reported'}
+        </dd>
+        <dt class="text-muted">Started</dt>
+        <dd class="min-w-0 whitespace-normal wrap-anywhere">
+          <Show
+            when={startIsUsable()}
+            fallback={
+              <span data-backup-task-start-unknown>
+                Unknown
+                {props.task.startedAt ? ` · reported: ${props.task.startedAt}` : ' · not reported'}
+              </span>
+            }
+          >
+            <time dateTime={props.task.startedAt}>
+              {formatPlatformTableDateTimeValue(props.task.startedAt)}
+            </time>
+          </Show>
+        </dd>
+        <dt class="text-muted">Last observed</dt>
+        <dd class="min-w-0 whitespace-normal wrap-anywhere">
+          <CoverageTaskObservation value={props.task.observedAt} detailed />
+        </dd>
+        <Show when={props.task.error?.trim()}>
+          {(error) => (
+            <>
+              <dt class="text-muted">
+                {props.task.label === 'Warning' ? 'Reported warning' : 'Reported error'}
+              </dt>
+              <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">{error()}</dd>
+            </>
+          )}
+        </Show>
+      </dl>
+      <Show when={props.latest}>
+        <CoverageTaskProvenanceNote />
+      </Show>
+      <Show when={props.task.statusErrorConflict}>
+        <p class="mt-2 text-amber-700 dark:text-amber-300" data-backup-task-status-conflict>
+          The reported job status and error disagree. This result is unknown. Check the existing job
+          history in Proxmox.
+        </p>
+      </Show>
+    </section>
+  );
+}
 
 // "Workload coverage" table: one row per workload answering "does this have a
 // backup?" across PBS snapshots / PVE backup files / guest snapshots, each
@@ -610,86 +717,7 @@ export function ProxmoxCoverageTable(props: {
                             {postureExplanation(row)}
                           </div>
                           <Show when={row.latestTask}>
-                            {(task) => (
-                              <section
-                                aria-label="Latest backup job"
-                                class="mb-2 min-w-0 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] text-base-content"
-                                data-backup-task-detail
-                              >
-                                <h4 class="mb-1 font-medium">Latest backup job</h4>
-                                <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1">
-                                  <dt class="text-muted">Result</dt>
-                                  <dd
-                                    class={`min-w-0 whitespace-pre-wrap wrap-anywhere ${statusWordToneClass(taskWordVariant(task().label))}`}
-                                  >
-                                    {task().label}
-                                  </dd>
-                                  <Show
-                                    when={
-                                      task().statusErrorConflict ||
-                                      (task().label === 'Failed' &&
-                                        task().status.trim().toLowerCase() !== 'failed')
-                                    }
-                                  >
-                                    <dt class="text-muted">Reported status</dt>
-                                    <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
-                                      {task().status}
-                                    </dd>
-                                  </Show>
-                                  <dt class="text-muted">Job connection</dt>
-                                  <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
-                                    {task().instance?.trim() || 'Not reported'}
-                                  </dd>
-                                  <dt class="text-muted">Job node</dt>
-                                  <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
-                                    {task().node?.trim() || 'Not reported'}
-                                  </dd>
-                                  <dt class="text-muted">Started</dt>
-                                  <dd class="min-w-0 whitespace-normal wrap-anywhere">
-                                    <time dateTime={task().startedAt}>
-                                      {formatPlatformTableDateTimeValue(task().startedAt)}
-                                    </time>
-                                  </dd>
-                                  <dt class="text-muted">Last observed</dt>
-                                  <dd class="min-w-0 whitespace-normal wrap-anywhere">
-                                    <CoverageTaskObservation value={task().observedAt} detailed />
-                                  </dd>
-                                  <Show when={task().error?.trim()}>
-                                    {(error) => (
-                                      <>
-                                        <dt class="text-muted">
-                                          {task().label === 'Warning'
-                                            ? 'Reported warning'
-                                            : 'Reported error'}
-                                        </dt>
-                                        <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
-                                          {error()}
-                                        </dd>
-                                      </>
-                                    )}
-                                  </Show>
-                                </dl>
-                                <p class="mt-2 text-muted">
-                                  Last observed is when Pulse read this job's history from Proxmox,
-                                  not when the job finished. Refreshing this page does not make
-                                  retained results current. An unknown observation time is not a
-                                  fresh result.
-                                </p>
-                                <p class="mt-2 text-muted">
-                                  The job location is recorded at the time of the backup. The
-                                  workload may now be on another node.
-                                </p>
-                                <Show when={task().statusErrorConflict}>
-                                  <p
-                                    class="mt-2 text-amber-700 dark:text-amber-300"
-                                    data-backup-task-status-conflict
-                                  >
-                                    The reported job status and error disagree. This result is
-                                    unknown. Check the existing job history in Proxmox.
-                                  </p>
-                                </Show>
-                              </section>
-                            )}
+                            {(task) => <CoverageTaskDetail task={task()} latest />}
                           </Show>
                           <Show when={row.taskChronologyUnknown}>
                             <p
@@ -698,6 +726,32 @@ export function ProxmoxCoverageTable(props: {
                             >
                               {coverageTaskExplanation(row)}
                             </p>
+                          </Show>
+                          <Show when={row.taskChronologyUnknown && row.unresolvedTasks?.length}>
+                            <section
+                              aria-label="Collected backup jobs"
+                              class="text-[11px] text-base-content"
+                              data-backup-task-unresolved
+                            >
+                              <h4 class="mb-1 text-[11px] font-medium text-base-content">
+                                Collected backup jobs
+                              </h4>
+                              <p class="mb-2 text-[11px] text-muted">
+                                These observations do not establish which job is latest. Their list
+                                order is not a job timeline. A reported OK result does not prove
+                                backup usability, guest thaw or filesystem writes.
+                              </p>
+                              <ul>
+                                <For each={row.unresolvedTasks}>
+                                  {(task) => (
+                                    <li>
+                                      <CoverageTaskDetail task={task} />
+                                    </li>
+                                  )}
+                                </For>
+                              </ul>
+                              <CoverageTaskProvenanceNote />
+                            </section>
                           </Show>
                           <Show when={(row.protectionPosture?.providerStates.length ?? 0) > 0}>
                             <div class="mb-2 overflow-hidden rounded-md border border-border-subtle">
