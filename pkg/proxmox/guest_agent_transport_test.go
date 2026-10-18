@@ -47,7 +47,7 @@ func TestGuestAgentWireDoesNotReplayLostReply(t *testing.T) {
 					http.NotFound(w, r)
 				}))
 				defer server.Close()
-				client := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
+				client := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 				if err := read(context.Background(), client, 105); GuestAgentDeferredReason(err) != "agent-timeout" {
 					t.Errorf("lost command reply was not deferred: %v", err)
 				}
@@ -88,7 +88,7 @@ func TestGuestAgentWireDoesNotFollowRedirect(t *testing.T) {
 					http.Redirect(w, r, destination.URL+r.URL.Path, status)
 				}))
 				defer server.Close()
-				client := backupTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
+				client := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 				if err := read(context.Background(), client, 105); GuestAgentDeferredReason(err) != "agent-redirect" {
 					t.Errorf("redirect response was not deferred: %v", err)
 				}
@@ -175,7 +175,7 @@ func TestGuestAgentWireFixtureKeepsIndependentRedirectFence(t *testing.T) {
 		http.Redirect(w, r, destination.URL+r.URL.Path, http.StatusTemporaryRedirect)
 	}))
 	defer server.Close()
-	endpoint := lockEvidenceFixtureEndpoint(t, server.URL)
+	endpoint := guestAgentFixtureEndpoint(t, server.URL)
 	older := backupTestClient(t, endpoint+"/earlier")
 	release, err := acquireGuestAgent(older.baseURL, 105)
 	if err != nil {
