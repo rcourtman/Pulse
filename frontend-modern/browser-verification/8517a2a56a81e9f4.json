@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "0fd0af0e1cf0476e625e4e9422cacecdd8492b07",
+  "verified_at": "2026-10-18T14:02:54Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "c78857cf7361915cdbcef54619dda154e42f677c26e647be79461b75863177d4"
+  },
+  "routes": [
+    "/browser-tests/truenas-protection-read.html (safe GET inventory through the real recovery reader/decoder/query cache and production TrueNAS Protection table/CSS)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    },
+    {
+      "width": 600,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Exact source 0fd0af0e1cf0476e625e4e9422cacecdd8492b07 passes module types, full lint, 618 focused tests in 38 files, production embed and real-consumer fixture builds. Complete source output hash verified; command exit 0 and guest stop completed.",
+    "All 2,996 bound source inputs and five served artifacts match. Playwright 1.56.1 matches the integration lock. Chromium 141.0.7390.37 exercises desktop light, 320px UK dark and US light touch, 600px tablet and a 344px parent in a desktop viewport; Firefox 142.0.1 exercises desktop.",
+    "Below the existing phone-container breakpoint, matching header/body priorities leave Dataset, Time and complete Outcome visible, with activity kind retained. UK and US date/clock lines and all five outcomes fit; missing timestamps remain unavailable, not invented completion.",
+    "Existing detail values use stacked, wrapping rows. Full artifact/task names and long unbroken target text fit on phone and constrained desktop without hover. Accepted HTTP replacement updates the same open row/native time; collapse remains usable.",
+    "All nine final captures were opened with native view_image and actual pixels inspected. Complete phone outcomes, date/clock, full wrapping details, desktop layout and focus rings are visible. Existing cramped three-card nested composition and tight tablet heading are not claimed redesigned.",
+    "No page errors, off-origin requests, writes or horizontal document overflow; browsers and fixture server close. This fixture does not emit the production CSP response header; its unchanged static CSP guard passes. No provider, backup, replication, guest thaw, installed recovery, protected publication or release acceptance."
+  ],
+  "interactions": [
+    "Keyboard Enter and Space change chronological direction exactly once, preserve focus/aria-sort and keep missing time last in every context.",
+    "Touch row tap or native keyboard disclosure opens the full artifact/target/Last run/error context; geometry and pixels both check actual readable text rather than DOM presence.",
+    "Refresh the synthetic GET read with a new timestamp; verify the same open disclosure and native datetime update, then collapse.",
+    "Open all nine final capture files natively, including 320px dark full details and the constrained desktop detail."
+  ]
+}
