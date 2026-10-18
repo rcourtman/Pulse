@@ -9,11 +9,37 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/notifications.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": []
+  "dependency_subsystem_ids": [
+    "security-privacy"
+  ]
 }
 ```
 
 ## Purpose
+
+### Approved addresses share a bounded connection budget
+
+Webhook and HTTP Apprise transports pass their validated numeric destinations
+to `pkg/securityutil/pinned_dial.go`. A stalled first address must leave time
+for a healthy later address, including another address of the same family.
+The shared primitive staggers at most two connect workers, prefers the other
+address family for fallback, and shares one ten-second connection budget among
+all candidates. A winner cancels other attempts and closes late successful
+connections. Only the winning connection carries the HTTP request.
+
+Webhook admission and dialing use the same context-aware DNS lookup with a
+five-second ceiling. Redirect validation retains the request context. Empty
+DNS results fail closed. Private-address admission, DNS pinning, TLS identity,
+same-origin redirects and queue retry policy retain their existing owners.
+
+`pinned_connectivity_linux_test.go` saturates a real owned loopback TCP accept
+queue while a second address on the same port accepts HTTP. Both secure clients
+must reach that receiver exactly once. The queued control reopens the persisted
+sent status, audit and telemetry with one attempt, one delivery and no failure.
+`webhook_dns_context_test.go` exercises cancellation through the production
+resolver path and verifies bounded admission and private-address refusal.
+These are source controls, not attribution of fleet connectivity counters or
+proof of installed-destination recovery.
 
 ### Destination saves use one submitted snapshot without replacing newer input
 
@@ -305,6 +331,7 @@ or displayed a notification.
 12. `internal/notifications/failure_class.go`
 13. `internal/notifications/quiet_hours_queue.go`
 14. `internal/notifications/apprise_diagnostics.go`
+15. `pkg/securityutil/pinned_dial.go`
 
 ## Shared Boundaries
 
@@ -334,6 +361,9 @@ or displayed a notification.
    raise or clear alerts directly. Retry and dismissal reconcile even when no
    row changed, because an already-repaired queue may still have a persisted
    stale warning from an earlier process.
+5. Change approved-address connection scheduling through
+   `pkg/securityutil/pinned_dial.go`, owned by `security-privacy`. Keep webhook
+   allowlisting and provider-specific destination policy in this subsystem.
 
 ## Forbidden Paths
 
@@ -701,11 +731,12 @@ targets such as `0.0.0.0` and `::` before delivery and must not allow webhook
 private-CIDR allowlists to include networks that contain those unspecified
 addresses.
 The DNS-rebinding pin in the secure webhook dialer is part of that same guard:
-hostname dials may connect only to resolver-validated IPs, and the dialer must
-try every permitted resolved address in resolution order rather than pinning
-the first, so an IPv6-first resolution (`::1` ahead of `127.0.0.1`) or a dead
-leading A record cannot fail delivery to a host that is reachable on a later
-permitted address.
+hostname dials may connect only to resolver-validated IPs. The shared pinned
+dialer uses bounded staggered fallback rather than letting a stalled first
+connect consume the request deadline. Resolver family preference and order
+within each family survive, while alternate families and later same-family
+addresses get connection budget. DNS lookups retain cancellation and their
+five-second ceiling for admission, redirects and the transport itself.
 That same ownership includes webhook retry classification. The canonical
 retry gate in `webhook_enhanced.go` must parse provider failures from both
 `status 429`-style and `HTTP 429`-style error strings before it decides

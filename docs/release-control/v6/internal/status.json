@@ -10030,7 +10030,7 @@
     },
     {
       "id": "notification-delivery-terminal-failure-diagnosis",
-      "summary": "The 17 October 2026 production clean weekly cohort has 503 of 8,474 covered rotating IDs reporting terminal notification failures, with rolling totals of 121,418 failures and 245,982 deliveries. The largest classified failure sums are connectivity (37,480) and authentication (30,847), with schema-dependent coverage. These aggregates do not identify a transport/provider or prove a release regression. Typed failure classification, deterministic-failure short circuiting and explicit retained-queue recovery already exist. This source slice repairs independently reproduced SMTP defects: provider-default usernames could pass validation without enabling AUTH, and preparing concurrent deliveries could overwrite an earlier sender/recipient envelope. Real SMTP controls cover accepted messages, concurrent delivery isolation, shared rate limits and persistent queue verdicts; bad credentials still produce an authentication dead letter. Remaining work is destination-level repeated-failure handling, evidence of destination recovery, and precise delivery-health guidance. The source fixes do not establish how much fleet failure they explain or that the production fleet has recovered.",
+      "summary": "The 18 October 2026 production clean weekly cohort has 495 of 8,466 covered rotating IDs reporting terminal notification failures, with rolling totals of 122,341 failures and 245,365 deliveries. Connectivity (37,688) and authentication (30,627) are the largest classified sums, with schema-dependent coverage. These aggregates do not identify a transport/provider or prove a release regression. Typed failure classification, deterministic-failure short circuiting and explicit retained-queue recovery already exist. The preceding source slice repairs SMTP provider-default authentication and concurrent envelope mutation. This connectivity slice independently reproduces and repairs stalled leading approved addresses starving healthy fallback connections in both pinned HTTP clients, plus webhook DNS continuing after dial cancellation. Shared bounded dialing, context-aware DNS and real TCP/resolver controls retain destination policy, one-request delivery and persisted queue verdicts. Remaining work is destination-level repeated-failure handling, evidence of destination recovery, and precise delivery-health guidance. These source fixes do not establish how much fleet failure they explain or that the production fleet has recovered.",
       "owner": "project-owner",
       "status": "triaged",
       "recorded_at": "2026-09-03",
@@ -10043,6 +10043,11 @@
       ],
       "proposed_resolution": "lane-expansion",
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/notification-connectivity-reliability-2026-10-18.md",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/notification-smtp-delivery-reliability-2026-10-17.md",
