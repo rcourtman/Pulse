@@ -397,7 +397,8 @@ func TestGuestFilesystemMalformedReplyCost(t *testing.T) {
 				peer := `{"name":"root","mountpoint":"/","type":"ext4","total-bytes":1000,"used-bytes":0}`
 				bad := `{"mountpoint":"/` + marker + `","type":"ext4","total-bytes":9000}`
 				// Valid peers at both ends pin ordering and the last measured zero.
-				payload := `{"data":{"result":[` + peer + "," + strings.Repeat(bad+",", malformed) + peer + `]}}`
+				last := `{"name":"data","mountpoint":"/data","type":"ext4","total-bytes":2000,"used-bytes":0}`
+				payload := `{"data":{"result":[` + peer + "," + strings.Repeat(bad+",", malformed) + last + `]}}`
 				var commands, configs atomic.Int32
 				var healthy atomic.Bool
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -427,10 +428,12 @@ func TestGuestFilesystemMalformedReplyCost(t *testing.T) {
 				if err != nil && err.Error() != fmt.Sprintf("guest filesystem inventory is incomplete: %d malformed entries", malformed) {
 					t.Fatal("diagnostic bound changed the existing counted error")
 				}
-				for _, row := range rows {
-					if row.Name != "root" || row.TotalBytes != 1000 || row.UsedBytes != 0 || row.Disk != "root-filesystem" {
-						t.Fatal("valid peer identity, order, bytes or measured zero changed")
-					}
+				if rows[0].Name != "root" || rows[0].TotalBytes != 1000 || rows[0].UsedBytes != 0 || rows[0].Disk != "root-filesystem" ||
+					rows[1].Name != "data" || rows[1].TotalBytes != 2000 || rows[1].UsedBytes != 0 || rows[1].Disk != "/data" {
+					t.Fatal("valid peer identity, order, bytes or measured zero changed")
+				}
+				if cap(rows) > 2*len(rows) {
+					t.Errorf("accepted output reservation follows rejected rows: capacity=%d accepted=%d", cap(rows), len(rows))
 				}
 				if strings.Contains(captured.String(), marker) {
 					t.Fatal("rejected volume payload escaped into diagnostics")

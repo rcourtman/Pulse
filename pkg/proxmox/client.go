@@ -2026,38 +2026,7 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		Int("response_bytes", len(bodyBytes)).
 		Msg("Received guest agent filesystem response")
 
-	// Decode entry-by-entry to retain valid peers, but never mistake that
-	// remainder for a complete inventory after dropping a malformed record.
-	var arrayResult struct {
-		Data struct {
-			Result []json.RawMessage `json:"result"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(bodyBytes, &arrayResult); err == nil && arrayResult.Data.Result != nil {
-		filesystems := make([]VMFileSystem, 0, len(arrayResult.Data.Result))
-		invalidEntries := 0
-		for idx, rawFS := range arrayResult.Data.Result {
-			var fs VMFileSystem
-			if err := json.Unmarshal(rawFS, &fs); err != nil {
-				invalidEntries++
-				log.Warn().
-					Err(err).
-					Str("node", node).
-					Int("vmid", vmid).
-					Int("filesystem_index", idx).
-					Msg("Skipping malformed guest agent filesystem entry")
-				continue
-			}
-			filesystems = append(filesystems, fs)
-		}
-		postProcessVMFilesystems(node, vmid, filesystems)
-		if invalidEntries > 0 {
-			return filesystems, fmt.Errorf("guest filesystem inventory is incomplete: %d malformed entries", invalidEntries)
-		}
-		return filesystems, nil
-	}
-
-	// If that fails, try as an object (might be an error response or different format)
+	// Keep one raw result, then decode its supported array or object shape.
 	var objectResult struct {
 		Data struct {
 			Result json.RawMessage `json:"result"`
@@ -2065,6 +2034,48 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	}
 	if err := json.Unmarshal(bodyBytes, &objectResult); err == nil {
 		rawFS := bytes.TrimSpace(objectResult.Data.Result)
+		if len(rawFS) > 0 && rawFS[0] == '[' {
+			// Decode one row at a time. A bounded body may contain many tiny
+			// rejected rows: do not reserve a filesystem slot or emit a warning
+			// for each one. All valid peers still retain their original order.
+			decoder := json.NewDecoder(bytes.NewReader(rawFS))
+			if _, err := decoder.Token(); err != nil {
+				return nil, fmt.Errorf("unexpected response format from guest agent get-fsinfo")
+			}
+			filesystems := make([]VMFileSystem, 0)
+			entries, invalidEntries, firstInvalid := 0, 0, -1
+			var row json.RawMessage // Reuse only the current raw row's buffer.
+			for decoder.More() {
+				if err := decoder.Decode(&row); err != nil {
+					return nil, fmt.Errorf("unexpected response format from guest agent get-fsinfo")
+				}
+				var fs VMFileSystem
+				if err := json.Unmarshal(row, &fs); err != nil {
+					invalidEntries++
+					if firstInvalid < 0 {
+						firstInvalid = entries
+					}
+				} else {
+					filesystems = append(filesystems, fs)
+				}
+				entries++
+			}
+			if _, err := decoder.Token(); err != nil {
+				return nil, fmt.Errorf("unexpected response format from guest agent get-fsinfo")
+			}
+			postProcessVMFilesystems(node, vmid, filesystems)
+			if invalidEntries > 0 {
+				log.Warn().
+					Str("node", node).
+					Int("vmid", vmid).
+					Int("filesystem_entries", entries).
+					Int("malformed_entries", invalidEntries).
+					Int("first_invalid_index", firstInvalid).
+					Msg("Skipping malformed guest agent filesystem entries")
+				return filesystems, fmt.Errorf("guest filesystem inventory is incomplete: %d malformed entries", invalidEntries)
+			}
+			return filesystems, nil
+		}
 		if len(rawFS) == 0 || bytes.Equal(rawFS, []byte("null")) {
 			log.Debug().
 				Str("node", node).

@@ -406,6 +406,23 @@ never their raw contents, without changing the existing empty-result outcome.
 additive, incomplete, empty, null and small/large unrecognized object responses
 through the real HTTP client.
 
+Malformed filesystem arrays are decoded one row at a time, without reserving
+accepted-filesystem output for every rejected row. A completed reply with
+malformed rows emits one payload-free Warning with total rows, rejected rows,
+the first rejected zero-based index and node/VM attribution, not one event per
+rejection. Valid peers retain order, disk postprocessing and measured zero;
+the existing counted incomplete-inventory error remains authoritative. Empty,
+null and object compatibility, the 8 MiB body bound, both operation-lock checks,
+single-attempt admission and uncertainty cooldowns are unchanged. This bounds
+this reader's rejection warning volume, not all log events or total parsing
+cost; it does not establish native guest/backup or installed recovery.
+`TestGuestFilesystemMalformedReplyCost` joins 0/1/32/4096 rejections, Warn/Debug
+logs, peers at both ends, command counts and ordinary recovery through HTTP.
+`BenchmarkGuestFilesystemReplyCost` retains comparable reader allocations for
+small valid and rejection-heavy replies, without a timing acceptance threshold.
+The existing System Logs panel consumes an actual producer warning via SSE at
+desktop/narrow widths; Pause/Resume/Clear remain display-only controls.
+
 ### Backups can reread healthy inventory without leaving the view
 
 The existing Backups surface discloses that its restore points reflect the last
