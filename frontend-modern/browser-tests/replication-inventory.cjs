@@ -289,7 +289,7 @@ let browser;
           'page',
         );
         for (const [name, state] of [
-          ['web-replica', 'Healthy'],
+          ['web-replica', 'OK'],
           ['failed-replica', 'Failed'],
           ['disabled-replica', 'Disabled'],
         ]) {
@@ -305,7 +305,7 @@ let browser;
       await refresh();
       await checkJobs();
       checks.push(
-        'Keyboard/touch Refresh recovers through the actual reader; healthy/failed/disabled states stay distinct.',
+        'Keyboard/touch Refresh recovers through the actual reader; OK/failed/disabled results stay distinct.',
       );
       payload = { data: [jobs().data[0], { ...jobs().data[1], enabled: 'false', failCount: '0' }] };
       await page.clock.runFor(30050);

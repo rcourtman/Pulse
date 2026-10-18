@@ -50,23 +50,31 @@ describe('shipped Proxmox replication disagreement guidance', () => {
     expect(text).toContain('No replication jobs match current filters');
     expect(text).toContain('Could not load replication jobs');
     const rows = [...section.querySelectorAll('tbody tr')];
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(4);
     expect(rows.map((row) => row.querySelector('td')?.textContent)).toEqual([
-      'Pending, with current sync times',
+      'Unknown, even with current sync times',
+      'Pending',
       'Old sync times or an overdue next sync',
       'Empty inventory, missing tab or load error',
     ]);
     for (const row of rows) expect(row.querySelectorAll('td')).toHaveLength(3);
-    expect(prose(rows[0])).toContain('Pending alone does not prove a job is waiting or failed');
+    expect(prose(rows[0])).toContain(
+      'Missing or unrecognised results are Unknown, not evidence of queued work',
+    );
     expect(prose(rows[0])).toContain('alone does not prove success');
-    expect(prose(rows[1])).toContain('browser clock advancing, not evidence of a new poll');
-    expect(prose(rows[2])).toContain('unknown, not an empty healthy result');
-    expect(prose(rows[2])).toContain('does not establish lifecycle or polling recovery');
+    expect(prose(rows[1])).toContain('The provider explicitly reports a pending last result');
+    expect(prose(rows[1])).toContain('Pending is not a successful completion');
+    expect(prose(rows[2])).toContain('browser clock advancing, not evidence of a new poll');
+    expect(prose(rows[2])).toContain('An OK result describes the last reported sync');
+    expect(prose(rows[3])).toContain('unknown, not an empty healthy result');
+    expect(prose(rows[3])).toContain('does not establish lifecycle or polling recovery');
   });
 
   it('makes the matching job and narrow-layout evidence reachable without new probes', () => {
     const text = prose(replicationSection());
     expect(text).toContain('expand its row using the control beside Guest');
+    expect(text).toContain('Reported last result and Interpretation explain the status');
+    expect(text).toContain('a reported error is not cleared by an OK result or zero failures');
     expect(text).toContain('Job, Route, Last sync, Next sync, Duration and Failures');
     expect(text).toContain('even when narrow layouts hide table columns');
     expect(text).toContain('owning installation, job/guest ID and source → target route');

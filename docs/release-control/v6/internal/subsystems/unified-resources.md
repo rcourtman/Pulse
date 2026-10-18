@@ -23,6 +23,28 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Replication reports outcomes without inventing health or queued work
+
+The existing Replication table presents a successful last sync as **OK**, not
+an overall Healthy verdict. A reported error or positive failure count wins over
+successful aliases, including a zero-count error. Missing, blank and unrecognised
+last results remain **Unknown**, not Pending. Only an explicit pending result is
+Pending; disabled jobs remain Disabled with their historical error/result readable.
+Outcome aliases are trimmed and case-insensitive. Status counts and filtering use
+the same predicate as the scanning row and update after ordinary HTTP replacement.
+
+The existing keyboard/touch disclosure shows the full plain-text reported last
+result and its interpretation without hover. The table explains that status is
+not a restore check or current guest health, and keeps Next sync independent so
+an overdue schedule cannot be hidden by a previous OK result. Neither collection,
+API shape, polling cadence nor any replication/guest/recovery operation changes.
+`ProxmoxReplicationTable.test.tsx` pins outcome/error precedence, unknown versus
+explicitly pending, plain-text results and live filter replacement.
+`replication-result-verdicts.cjs` exercises the real page/query/HTTP reader/table
+and CSS at desktop and narrow widths. These are synthetic consumer proofs, not
+native sync, restore, thaw, filesystem-liveness or installed-recovery acceptance.
+
+
 ### Backup artifact detail access
 
 The existing By date and Coverage consumers keep full reported archive paths

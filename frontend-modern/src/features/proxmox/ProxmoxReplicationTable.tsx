@@ -41,7 +41,7 @@ import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQue
 // ReplicationJobsSnapshot without going through the unified-resource
 // pipeline.
 
-type ReplicationStatusFilter = 'all' | 'healthy' | 'failed' | 'pending' | 'disabled';
+type ReplicationStatusFilter = 'all' | 'healthy' | 'failed' | 'pending' | 'unknown' | 'disabled';
 
 type ReplicationColumn =
   | 'status'
@@ -146,7 +146,7 @@ const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<ReplicationStatusFilter>[
   { value: 'all', label: 'All' },
   {
     value: 'healthy',
-    label: 'Healthy',
+    label: 'OK',
     tone: 'success',
     leading: filterChipStatusDot('bg-emerald-500'),
   },
@@ -154,6 +154,12 @@ const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<ReplicationStatusFilter>[
   {
     value: 'pending',
     label: 'Pending',
+    tone: 'warning',
+    leading: filterChipStatusDot('bg-amber-500'),
+  },
+  {
+    value: 'unknown',
+    label: 'Unknown',
     tone: 'warning',
     leading: filterChipStatusDot('bg-amber-500'),
   },
@@ -173,11 +179,32 @@ interface ReplicationStatusIndicator {
 
 function classifyJob(job: ReplicationJob): ReplicationStatusFilter {
   if (!job.enabled) return 'disabled';
-  if ((job.failCount ?? 0) > 0) return 'failed';
-  const last = (job.lastSyncStatus ?? '').toLowerCase();
+  // Match the producer's precedence: an error remains failure evidence even
+  // with a zero failure count or an older successful result beside it.
+  if ((job.failCount ?? 0) > 0 || job.error?.trim()) return 'failed';
+  const last = (job.lastSyncStatus ?? '').trim().toLowerCase();
   if (last === 'ok' || last === 'success' || last === 'completed') return 'healthy';
   if (last === 'failed' || last === 'error') return 'failed';
-  return 'pending';
+  // The producer leaves this empty when status collection is unavailable or
+  // unrecognised. Neither a configured job nor an old timestamp proves queued
+  // work. Only an explicit pending result belongs in that filter.
+  if (last === 'pending') return 'pending';
+  return 'unknown';
+}
+
+function resultExplanation(classification: ReplicationStatusFilter): string {
+  switch (classification) {
+    case 'healthy':
+      return 'The last reported sync succeeded. This does not confirm a restore or current guest health.';
+    case 'failed':
+      return 'A failed result, error or failed attempt is reported for this job. A previous successful sync does not override it.';
+    case 'pending':
+      return 'The reported last sync result is pending. No successful completion is established.';
+    case 'disabled':
+      return 'This job is disabled. Any last result remains historical.';
+    default:
+      return 'No recognised last sync result was reported. This does not mean a sync is pending.';
+  }
 }
 
 function indicatorFor(classification: ReplicationStatusFilter): ReplicationStatusIndicator {
@@ -185,13 +212,15 @@ function indicatorFor(classification: ReplicationStatusFilter): ReplicationStatu
     case 'healthy':
       return {
         variant: 'success',
-        label: 'Healthy',
+        label: 'OK',
         tone: 'text-emerald-600 dark:text-emerald-300',
       };
     case 'failed':
       return { variant: 'danger', label: 'Failed', tone: 'text-red-600 dark:text-red-300' };
     case 'pending':
       return { variant: 'warning', label: 'Pending', tone: 'text-amber-600 dark:text-amber-300' };
+    case 'unknown':
+      return { variant: 'warning', label: 'Unknown', tone: 'text-amber-600 dark:text-amber-300' };
     case 'disabled':
       return { variant: 'muted', label: 'Disabled', tone: 'text-muted' };
     default:
@@ -486,6 +515,10 @@ export const ProxmoxReplicationTable: Component<{
               total={total()}
               rowNoun="jobs"
             />
+            <p class="text-xs leading-5 text-muted" data-replication-result-scope>
+              Status is the reported last sync result, not a restore check or current guest health.
+              Check Next sync for overdue jobs.
+            </p>
 
             <Show
               when={filtered().length > 0}
@@ -769,6 +802,14 @@ export const ProxmoxReplicationTable: Component<{
                                       {errorText}
                                     </dd>
                                   </Show>
+                                  <dt class="font-semibold text-muted">Reported last result</dt>
+                                  <dd class="wrap-anywhere text-base-content">
+                                    {job.lastSyncStatus?.trim() || 'Not reported'}
+                                  </dd>
+                                  <dt class="font-semibold text-muted">Interpretation</dt>
+                                  <dd class="wrap-anywhere text-base-content">
+                                    {resultExplanation(classification)}
+                                  </dd>
                                   <dt class="font-semibold text-muted">Guest</dt>
                                   <dd class="break-all text-base-content">{guestLabel}</dd>
                                   <dt class="font-semibold text-muted">Job</dt>

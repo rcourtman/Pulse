@@ -802,12 +802,14 @@ row is not proof that Proxmox deleted the job.
 
 | Observation in Pulse | What to compare | What it does not establish |
 | --- | --- | --- |
-| **Pending**, with current sync times | The same job's outcome, failures and error in Proxmox. Pulse can retain sync times without a usable outcome for its Healthy/Pending classification. | Pending alone does not prove a job is waiting or failed. A recent time, zero displayed failures or no displayed error alone does not prove success. |
-| Old sync times or an overdue next sync | The same job's existing native last/next sync and outcome. Record whether actual sync times advance during ordinary polling. | A changing “ago” or “overdue” label is the browser clock advancing, not evidence of a new poll. A Healthy pill does not establish current inventory or a running scheduler. |
+| **Unknown**, even with current sync times | Expand **Reported last result** and **Interpretation**, then compare the same job's outcome, failures and error in Proxmox. Missing or unrecognised results are Unknown, not evidence of queued work. | A recent time, zero displayed failures or no displayed error alone does not prove success. |
+| **Pending** | The provider explicitly reports a pending last result. Compare the same job's existing native status. | Pending is not a successful completion, restore check or confirmation that the scheduler is currently running. |
+| Old sync times or an overdue next sync | The same job's existing native last/next sync and outcome. Record whether actual sync times advance during ordinary polling. | A changing “ago” or “overdue” label is the browser clock advancing, not evidence of a new poll. An OK result describes the last reported sync, not current inventory or a running scheduler. |
 | Empty inventory, missing tab or load error | Whether the expected jobs still exist in Proxmox, which Pulse connection owns them, and any displayed read error. | Missing or failed collection is unknown, not an empty healthy result. Correcting a status pill does not establish lifecycle or polling recovery. |
 
-For one affected job, expand its row using the control beside **Guest**;
-the details retain **Job**, **Route**, **Last sync**, **Next sync**, **Duration**
+For one affected job, expand its row using the control beside **Guest**.
+**Reported last result** and **Interpretation** explain the status; a reported
+error is not cleared by an OK result or zero failures. The details retain **Job**, **Route**, **Last sync**, **Next sync**, **Duration**
 and **Failures** even when narrow layouts hide table columns. Compare the
 owning installation, job/guest ID and source → target route with the existing
 native Proxmox replication view. Similar names or VMIDs in separate

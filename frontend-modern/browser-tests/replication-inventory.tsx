@@ -3,11 +3,14 @@
 import { Route, Router } from '@solidjs/router';
 import { render } from 'solid-js/web';
 import { ProxmoxPageSurface } from '../src/features/proxmox/ProxmoxPageSurface';
+import Docs from '../src/pages/Docs';
 import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
 import { getGlobalWebSocketStore } from '../src/stores/websocket-global';
 import '../src/index.css';
 
-window.history.replaceState(null, '', '/proxmox/replication');
+if (!window.location.pathname.startsWith('/docs/')) {
+  window.history.replaceState(null, '', '/proxmox/replication');
+}
 
 render(
   () => (
@@ -17,6 +20,7 @@ render(
           <h1 class="mb-3 text-base font-semibold">Replication inventory read verification</h1>
           <Router>
             <Route path="/proxmox/*" component={ProxmoxPageSurface} />
+            <Route path="/docs/*docPath" component={Docs} />
           </Router>
         </main>
       </DarkModeContext.Provider>
