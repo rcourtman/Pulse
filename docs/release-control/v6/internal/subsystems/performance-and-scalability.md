@@ -1884,6 +1884,23 @@ dashboard-specific overview, trend, or summary transport.
     Competing CPU, guest/steal or swap activity invalidates the measurement,
     and process CPU counters identify the largest observed background users.
     Only a passing explicit 90 ms report on valid capacity establishes the local SLO.
+    The manual `pulse-enterprise:.github/workflows/verify-workload-chart-latency.yml`
+    reuses that same public proof on the existing disposable `pulse-ci-vm-large`
+    runner. It checks out literal public Pulse `main` and verifies the expected
+    full commit and clean tracked source before toolchain or source execution.
+    A moving main fails closed. The runner label alone establishes no capacity
+    claim: the unchanged idle admission and concurrent observations decide
+    whether its one strict measurement is usable. A separate three-second CPU
+    attribution benchmark never retries or replaces the SLO result. Source,
+    control, toolchain and executable identities, raw capacity intervals and
+    CPU attribution remain in the job log. Core dumps are disabled and no raw
+    diagnostics artifact or publishing permission is added. The private
+    `scripts/release_latency_gate_test.py` executes the actual workflow source
+    guard against valid, mismatched and modified fixture checkouts. Operation
+    is documented in `pulse-enterprise:scripts/workload-chart-latency-proof.md`.
+    This focused route changes no existing complete release comparison,
+    scheduler policy, source gate or release gate. L10's broader performance
+    follow-up remains open until its own evidence supports closure.
     This evidence does not replace required source checks or release gates.
 31. Keep the retired dashboard overview route absent from the protected hot
 path. `frontend-modern/src/pages/Dashboard.tsx`,
