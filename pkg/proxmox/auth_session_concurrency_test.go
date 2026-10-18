@@ -334,20 +334,36 @@ func TestClientSessionRenewalStarterCancellation(t *testing.T) {
 		name    string
 		waiter  bool
 		failure bool
+		form    bool
 	}{
 		{name: "live waiter keeps login", waiter: true},
 		{name: "login failure reaches live waiter", waiter: true, failure: true},
 		{name: "abandoned login is reused", waiter: false},
+		{name: "live waiter keeps form login", waiter: true, form: true},
+		{name: "form login failure reaches live waiter", waiter: true, failure: true, form: true},
+		{name: "abandoned form login is reused", form: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			entered, finish := make(chan struct{}), make(chan struct{})
 			var authCalls, apiCalls atomic.Int32
+			renewalLogin := int32(2)
+			if tc.form {
+				renewalLogin++ // The renewal's JSON request requires form fallback.
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.HasSuffix(r.URL.Path, "/access/ticket") {
 					n := authCalls.Add(1)
-					if n == 2 {
+					if tc.form && n == 2 {
+						w.WriteHeader(http.StatusUnsupportedMediaType)
+						fmt.Fprint(w, `{"message":"synthetic form required"}`)
+						return
+					}
+					if n == renewalLogin {
+						if tc.form && r.Header.Get("Content-Type") != "application/x-www-form-urlencoded" {
+							t.Error("shared renewal did not retain form fallback")
+						}
 						close(entered)
 						select {
 						case <-finish:
@@ -427,15 +443,15 @@ func TestClientSessionRenewalStarterCancellation(t *testing.T) {
 				t.Fatal(err)
 			}
 			snapshot, _ := c.authSnapshot()
-			if snapshot.ticket != "session-2" || !snapshot.expiresAt.After(time.Now()) {
+			if snapshot.ticket != fmt.Sprintf("session-%d", renewalLogin) || !snapshot.expiresAt.After(time.Now()) {
 				t.Errorf("detached login not published: ticket=%q", snapshot.ticket)
 			}
 			wantAPI := int32(1)
 			if tc.waiter {
 				wantAPI = 2
 			}
-			if authCalls.Load() != 2 || apiCalls.Load() != wantAPI {
-				t.Errorf("auth/api=%d/%d, want 2/%d", authCalls.Load(), apiCalls.Load(), wantAPI)
+			if authCalls.Load() != renewalLogin || apiCalls.Load() != wantAPI {
+				t.Errorf("auth/api=%d/%d, want %d/%d", authCalls.Load(), apiCalls.Load(), renewalLogin, wantAPI)
 			}
 		})
 	}

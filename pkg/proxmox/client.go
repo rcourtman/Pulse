@@ -437,15 +437,25 @@ func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error
 	return client, nil
 }
 
-// authenticate performs password-based authentication
+// authenticate owns one password login attempt, including the form fallback.
+// An unpublished client's initial login belongs to its constructor's context;
+// there are no live readers that need to keep that attempt running.
 func (c *Client) authenticate(ctx context.Context) error {
-	return c.renewAuthentication(ctx, nil)
+	loginCtx, cancel := context.WithTimeout(ctx, c.sessionLoginTimeout())
+	defer cancel()
+	current, _ := c.authSnapshot()
+	username := current.user + "@" + current.realm
+	err := c.authenticateJSON(loginCtx, username, c.config.Password)
+	if shouldFallbackToForm(err) {
+		err = c.authenticateForm(loginCtx, username, c.config.Password)
+	}
+	return err
 }
 
 // expected binds expiry or a 401 to the session actually used by that read.
 // A late rejection of an old ticket cannot trigger another renewal after a
-// concurrent request has already replaced it. Explicit authentication (nil)
-// still owns the existing JSON/form fallback and failed-attempt behaviour.
+// concurrent request has already replaced it. Only renewal of a published
+// client's session is shared independently of any single reader's lifetime.
 func (c *Client) renewAuthentication(ctx context.Context, expected *uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -466,7 +476,6 @@ func (c *Client) renewAuthentication(ctx context.Context, expected *uint64) erro
 	}
 	pending := &authRefresh{done: make(chan struct{})}
 	c.authInFlight = pending
-	username := c.auth.user + "@" + c.auth.realm
 	c.authMu.Unlock()
 
 	// The login is shared, so no single caller's cancellation may end it: a
@@ -474,14 +483,8 @@ func (c *Client) renewAuthentication(ctx context.Context, expected *uint64) erro
 	// must not fail every live read waiting on it. The detached attempt keeps
 	// the caller's values, is bounded by the client's request timeout, and
 	// publishes its result for later reads even after its starter has left.
-	loginCtx, cancelLogin := context.WithTimeout(context.WithoutCancel(ctx), c.sessionRenewalTimeout())
 	go func() {
-		defer cancelLogin()
-		password := c.config.Password
-		err := c.authenticateJSON(loginCtx, username, password)
-		if shouldFallbackToForm(err) {
-			err = c.authenticateForm(loginCtx, username, password)
-		}
+		err := c.authenticate(context.WithoutCancel(ctx))
 		c.authMu.Lock()
 		pending.err = err
 		c.authInFlight = nil
@@ -497,9 +500,9 @@ func (c *Client) renewAuthentication(ctx context.Context, expected *uint64) erro
 	}
 }
 
-// sessionRenewalTimeout bounds one shared login attempt (JSON plus any form
-// fallback) by the same per-request timeout the client applies to API reads.
-func (c *Client) sessionRenewalTimeout() time.Duration {
+// sessionLoginTimeout bounds one login attempt (JSON plus any form fallback),
+// initial or shared, by the same per-request timeout the client applies to reads.
+func (c *Client) sessionLoginTimeout() time.Duration {
 	if c.httpClient != nil && c.httpClient.Timeout > 0 {
 		return c.httpClient.Timeout
 	}
