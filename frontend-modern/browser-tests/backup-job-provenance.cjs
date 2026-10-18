@@ -90,6 +90,7 @@ async function geometry(page) {
         width: r.width,
       }));
       const glyphOverflow = [];
+      const zeroAreaLineBreakRects = [];
       // WebKit includes the preserved trailing space of a wrapped pre-wrap
       // line in the full Range rectangle. Retain that raw measurement, but
       // check non-whitespace glyphs and actual scroll overflow for clipping.
@@ -102,8 +103,20 @@ async function geometry(page) {
           range.setStart(text, offset);
           range.setEnd(text, offset + 1);
           for (const r of range.getClientRects())
-            if (r.left < box.left - 1 || r.right > box.right + 1)
-              glyphOverflow.push({ glyph: text.textContent[offset], left: r.left, right: r.right });
+            if (r.left < box.left - 1 || r.right > box.right + 1) {
+              const observation = {
+                glyph: text.textContent[offset],
+                left: r.left,
+                right: r.right,
+                width: r.width,
+                height: r.height,
+              };
+              // WebKit also exposes a zero-width caret at the preceding
+              // line break. It paints no part of the character; retain it
+              // separately from non-zero glyph rectangles.
+              if (r.width === 0 || r.height === 0) zeroAreaLineBreakRects.push(observation);
+              else glyphOverflow.push(observation);
+            }
         }
       }
       const measured = {
@@ -113,6 +126,7 @@ async function geometry(page) {
         scrollWidth: node.scrollWidth,
         fragments,
         glyphOverflow,
+        zeroAreaLineBreakRects,
       };
       if (node.scrollWidth > node.clientWidth + 1 || glyphOverflow.length) problems.push(measured);
       else if (fragments.some((r) => r.left < box.left - 1 || r.right > box.right + 1))
