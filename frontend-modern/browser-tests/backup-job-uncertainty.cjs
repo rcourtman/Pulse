@@ -217,6 +217,10 @@ async function geometry(page) {
     await latest.scrollIntoViewIfNeeded(); await capture(page, name + '-corrected');
     await search.fill('failed'); assert.equal(await row.count(), 0); assert.equal(await peer.count(), 0);
     await search.fill(''); await row.waitFor(); await peer.waitFor();
+    // Filtering every match away intentionally unmounts its DOM row. The logical
+    // expansion must survive, but comparing it to the removed element is wrong.
+    assert.equal(await row.getByRole('button').getAttribute('aria-expanded'), 'true');
+    await row.evaluate((element) => { window.uncertainJobRow = element; });
     await refresh([], () => !document.querySelector('[data-backup-task-detail], [data-backup-task-unresolved], [data-backup-task-chronology]'));
     assert.equal(await latest.count(), 0); assert.equal(await collected.count(), 0);
     assert.equal(await row.locator('[data-backup-task-unknown]').count(), 0);
