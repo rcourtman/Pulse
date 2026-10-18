@@ -448,6 +448,7 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 	m.mu.Lock()
 	instanceCfg.Host = persistHost
 	m.cancelPVEGuestPollLocked(instanceName)
+	m.cancelPVEBackupPollLocked(instanceName)
 	m.pveClients[instanceName] = fallbackClient
 
 	// Update in-memory config so subsequent polls build clients against the working port.

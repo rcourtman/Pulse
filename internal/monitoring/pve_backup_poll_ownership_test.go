@@ -50,7 +50,7 @@ func waitForBackupPollReturn(t *testing.T, m *Monitor, instance string) {
 	defer tick.Stop()
 	for {
 		m.mu.RLock()
-		active := m.pveBackupPollInFlight[instance]
+		active := m.pveBackupPolls[instance] != nil
 		m.mu.RUnlock()
 		if !active {
 			return
@@ -75,6 +75,7 @@ func TestPVEBackupAsyncKeepsOneScanInFlight(t *testing.T) {
 			if mode == "cadence-reset" {
 				m.config.BackupPollingInterval = time.Hour
 			}
+			m.replacePVEClient("site", client)
 			start := func() { m.pollPVEBackupsAsync("site", &config.PVEInstance{MonitorBackups: true}, client, nil, nil) }
 			start()
 			select {
@@ -103,6 +104,9 @@ func TestPVEBackupAsyncKeepsOneScanInFlight(t *testing.T) {
 
 func TestPVEBackupPollAdmissionIsAtomicAndConnectionScoped(t *testing.T) {
 	m := &Monitor{config: &config.Config{EnableBackupPolling: true, BackupPollingInterval: time.Minute}}
+	client := &stubPVEClient{}
+	m.replacePVEClient("site", client)
+	m.replacePVEClient("other-site", client)
 	now := time.Now()
 	var winners atomic.Int32
 	var wg sync.WaitGroup
@@ -112,7 +116,7 @@ func TestPVEBackupPollAdmissionIsAtomicAndConnectionScoped(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			if run, _ := m.beginPVEBackupPoll("site", now); run {
+			if owner, _ := m.beginPVEBackupPoll("site", now, client); owner != nil {
 				winners.Add(1)
 			}
 		}()
@@ -120,29 +124,32 @@ func TestPVEBackupPollAdmissionIsAtomicAndConnectionScoped(t *testing.T) {
 	close(start)
 	wg.Wait()
 	require.Equal(t, int32(1), winners.Load())
-	run, _ := m.beginPVEBackupPoll("site", now.Add(24*time.Hour))
-	require.False(t, run, "elapsed cadence is not completion")
-	run, _ = m.beginPVEBackupPoll("other-site", now)
-	require.True(t, run, "one slow connection must not block its peers")
-	m.finishPVEBackupPoll("site", now)
-	m.finishPVEBackupPoll("other-site", now)
-	require.Empty(t, m.pveBackupPollInFlight)
+	owner := m.pveBackupPolls["site"]
+	blocked, _ := m.beginPVEBackupPoll("site", now.Add(24*time.Hour), client)
+	require.Nil(t, blocked, "elapsed cadence is not completion")
+	other, _ := m.beginPVEBackupPoll("other-site", now, client)
+	require.NotNil(t, other, "one slow connection must not block its peers")
+	m.finishPVEBackupPoll("site", owner)
+	m.finishPVEBackupPoll("other-site", other)
+	require.Empty(t, m.pveBackupPolls)
 	completed := m.lastPVEBackupPoll["site"]
 	require.False(t, completed.Before(now))
-	run, _ = m.beginPVEBackupPoll("site", completed.Add(time.Second))
-	require.False(t, run, "ordinary completion retains configured cadence")
-	run, _ = m.beginPVEBackupPoll("site", completed.Add(time.Minute))
-	require.True(t, run, "next due scan must resume")
-	m.finishPVEBackupPoll("site", completed.Add(time.Minute))
+	owner, _ = m.beginPVEBackupPoll("site", completed.Add(time.Second), client)
+	require.Nil(t, owner, "ordinary completion retains configured cadence")
+	owner, _ = m.beginPVEBackupPoll("site", completed.Add(time.Minute), client)
+	require.NotNil(t, owner, "next due scan must resume")
+	m.finishPVEBackupPoll("site", owner)
 }
 
 func TestPVEBackupPollResetPreservesOwnerAndCatchUp(t *testing.T) {
 	for _, reset := range []string{"shorter-interval", "re-enabled", "removed-timestamp"} {
 		t.Run(reset, func(t *testing.T) {
 			m := &Monitor{config: &config.Config{EnableBackupPolling: true, BackupPollingInterval: time.Hour}}
+			client := &stubPVEClient{}
+			m.replacePVEClient("site", client)
 			now := time.Now()
-			run, _ := m.beginPVEBackupPoll("site", now)
-			require.True(t, run)
+			owner, _ := m.beginPVEBackupPoll("site", now, client)
+			require.NotNil(t, owner)
 			switch reset {
 			case "shorter-interval":
 				m.SetBackupPollingInterval(time.Minute)
@@ -154,13 +161,13 @@ func TestPVEBackupPollResetPreservesOwnerAndCatchUp(t *testing.T) {
 				delete(m.lastPVEBackupPoll, "site")
 				m.mu.Unlock()
 			}
-			run, _ = m.beginPVEBackupPoll("site", now)
-			require.False(t, run, "timestamp reset cannot discard an in-flight owner")
-			m.finishPVEBackupPoll("site", now)
+			blocked, _ := m.beginPVEBackupPoll("site", now, client)
+			require.Nil(t, blocked, "timestamp reset cannot discard an in-flight owner")
+			m.finishPVEBackupPoll("site", owner)
 			require.Empty(t, m.lastPVEBackupPoll, "old completion must not overwrite the catch-up request")
-			run, _ = m.beginPVEBackupPoll("site", now)
-			require.True(t, run, "catch-up is eligible only after actual return")
-			m.finishPVEBackupPoll("site", now)
+			owner, _ = m.beginPVEBackupPoll("site", now, client)
+			require.NotNil(t, owner, "catch-up is eligible only after actual return")
+			m.finishPVEBackupPoll("site", owner)
 		})
 	}
 }
@@ -172,6 +179,7 @@ func TestPVEBackupAsyncCancellationIsNotCompletion(t *testing.T) {
 	var once sync.Once
 	defer once.Do(func() { close(client.release) })
 	m := &Monitor{state: models.NewState(), runtimeCtx: ctx, config: &config.Config{EnableBackupPolling: true, BackupPollingCycles: 1}}
+	m.replacePVEClient("site", client)
 	start := func() { m.pollPVEBackupsAsync("site", &config.PVEInstance{MonitorBackups: true}, client, nil, nil) }
 	start()
 	select {
@@ -182,8 +190,8 @@ func TestPVEBackupAsyncCancellationIsNotCompletion(t *testing.T) {
 	cancel()
 	m.setRuntimeContext(context.Background(), nil)
 	m.resetBackupPollTimestamps()
-	run, _ := m.beginPVEBackupPoll("site", time.Now())
-	require.False(t, run, "cancelled read still owns its connection until it returns")
+	owner, _ := m.beginPVEBackupPoll("site", time.Now(), client)
+	require.Nil(t, owner, "cancelled read still owns its connection until it returns")
 	once.Do(func() { close(client.release) })
 	waitForBackupPollReturn(t, m, "site")
 	start()
@@ -238,6 +246,7 @@ func TestPVEBackupAsyncOwnsCompleteHTTPScan(t *testing.T) {
 			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: 10 * time.Second})
 			require.NoError(t, err)
 			m := &Monitor{state: models.NewState(), config: &config.Config{EnableBackupPolling: true, BackupPollingCycles: 1}}
+			m.replacePVEClient("site", client)
 			m.state.UpdateVMsForInstance("site", []models.VM{{ID: "site-node-100", Instance: "site", Node: "node", VMID: 100, Status: "running"}})
 			start := func() {
 				m.pollPVEBackupsAsync("site", &config.PVEInstance{MonitorBackups: true}, client, []proxmox.Node{{Node: "node", Status: "online"}}, map[string]string{"node": "online"})

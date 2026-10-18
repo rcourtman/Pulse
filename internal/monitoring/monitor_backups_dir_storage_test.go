@@ -229,12 +229,13 @@ type runtimeContextBackupClient struct {
 
 func (c *runtimeContextBackupClient) GetBackupTasks(ctx context.Context) ([]pveapi.Task, error) {
 	c.observed <- ctx.Err()
+	<-ctx.Done()
 	return nil, ctx.Err()
 }
 
 func TestPollPVEBackupsAsyncUsesRuntimeContextIndependentOfCycle(t *testing.T) {
 	runtimeCtx, cancelRuntime := context.WithCancel(context.Background())
-	cancelRuntime()
+	defer cancelRuntime()
 	client := &runtimeContextBackupClient{observed: make(chan error, 1)}
 	m := &Monitor{
 		state:             models.NewState(),
@@ -245,6 +246,7 @@ func TestPollPVEBackupsAsyncUsesRuntimeContextIndependentOfCycle(t *testing.T) {
 			BackupPollingCycles: 1,
 		},
 	}
+	m.replacePVEClient("cluster-a", client)
 	m.pollPVEBackupsAsync(
 		"cluster-a",
 		&config.PVEInstance{MonitorBackups: true},
@@ -260,11 +262,12 @@ func TestPollPVEBackupsAsyncUsesRuntimeContextIndependentOfCycle(t *testing.T) {
 	}
 	select {
 	case err := <-client.observed:
-		if err != context.Canceled {
-			t.Fatalf("backup read did not receive the cancelled monitor runtime: %v", err)
+		if err != nil {
+			t.Fatalf("backup read did not receive the live monitor runtime: %v", err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("backup reader did not observe the monitor runtime")
 	}
+	cancelRuntime()
 	waitForBackupPollReturn(t, m, "cluster-a")
 }
