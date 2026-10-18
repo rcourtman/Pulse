@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -1123,6 +1124,82 @@ func TestPBSNamespaceInventoryAdmission(t *testing.T) {
 			}
 			if err != nil && strings.Contains(err.Error(), "private-provider-marker") {
 				t.Error("private provider details escaped through namespace diagnostic")
+			}
+			if calls != 1 || !body.closed {
+				t.Errorf("requests=%d closed=%t", calls, body.closed)
+			}
+		})
+	}
+}
+
+// Root discovery decides whether a complete empty backup inventory is real.
+// Validate the entire name list before filtering or making any detail request.
+func TestPBSDatastoreInventoryAdmission(t *testing.T) {
+	const good = `{"data":[{"store":"archive"},{"store":"mirror","comment":"fixture"}]}`
+	for _, tc := range []struct {
+		name, body        string
+		status            int
+		tailErr, closeErr error
+		valid             bool
+		names             []string
+	}{
+		{name: "complete", body: good, valid: true, names: []string{"archive", "mirror"}},
+		{name: "empty", body: `{"data":[]}`, valid: true},
+		{name: "extended", body: `{"errors":null,"extra":7,"data":[{"store":"archive","extra":true}]}`, valid: true, names: []string{"archive"}},
+		{name: "missing", body: `{}`}, {name: "null", body: `{"data":null}`},
+		{name: "wrong-type", body: `{"data":{}}`}, {name: "null-row", body: `{"data":[null]}`},
+		{name: "missing-store", body: `{"data":[{}]}`}, {name: "blank-store", body: `{"data":[{"store":""}]}`},
+		{name: "null-store", body: `{"data":[{"store":null}]}`}, {name: "space-store", body: `{"data":[{"store":" archive "}]}`},
+		{name: "nontext-store", body: `{"data":[{"store":7}]}`},
+		{name: "duplicate-store", body: `{"data":[{"store":"archive","store":"mirror"}]}`},
+		{name: "case-store", body: `{"data":[{"Store":"archive"}]}`},
+		{name: "duplicate-row", body: `{"data":[{"store":"archive"},{"store":"archive"}]}`},
+		{name: "duplicate-data", body: `{"data":[],"data":[{"store":"archive"}]}`},
+		{name: "case-data", body: `{"Data":[]}`},
+		{name: "provider-error", body: `{"data":[],"errors":{"private-provider-marker":"unavailable"}}`},
+		{name: "trailing-json", body: good + ` {"data":[]}`},
+		{name: "trailing-garbage", body: good + ` private-provider-marker`},
+		{name: "truncated", body: strings.TrimSuffix(good, "}")},
+		{name: "invalid-utf8", body: `{"data":[{"store":"` + string([]byte{0xff}) + `"}]}`},
+		{name: "read-error", body: good, tailErr: errors.New("private-provider-marker")},
+		{name: "close-error", body: good, closeErr: errors.New("private-provider-marker")},
+		{name: "truncated-body", body: good, tailErr: io.ErrUnexpectedEOF},
+		{name: "partial-http", body: good, status: http.StatusPartialContent},
+		{name: "exact-limit", body: good + strings.Repeat(" ", int(maxResponseBodyBytes)-len(good)), valid: true, names: []string{"archive", "mirror"}},
+		{name: "over-limit", body: good + strings.Repeat(" ", int(maxResponseBodyBytes))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := &backupInventoryTestBody{Reader: strings.NewReader(tc.body), tailErr: tc.tailErr, closeErr: tc.closeErr}
+			status := tc.status
+			if status == 0 {
+				status = http.StatusOK
+			}
+			client, err := NewClient(ClientConfig{Host: "https://pbs-datastores.invalid", TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			calls := 0
+			client.httpClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				calls++
+				if r.Method != http.MethodGet || r.URL.Path != "/api2/json/admin/datastore" {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL)
+				}
+				return &http.Response{StatusCode: status, Header: make(http.Header), Body: body}, nil
+			})
+			var included []string
+			values, err := client.GetDatastoresFiltered(context.Background(), func(name string) bool { included = append(included, name); return false })
+			if tc.valid {
+				if err != nil || !reflect.DeepEqual(included, tc.names) {
+					t.Errorf("complete list names=%v err=%v, want %v", included, err, tc.names)
+				}
+			} else if err == nil || len(included) != 0 {
+				t.Errorf("unsafe datastore inventory was filtered/admitted: names=%v err=%v", included, err)
+			}
+			if len(values) != 0 {
+				t.Error("excluded stores received detail responses")
+			}
+			if err != nil && strings.Contains(err.Error(), "private-provider-marker") {
+				t.Error("private provider details escaped the discovery diagnostic")
 			}
 			if calls != 1 || !body.closed {
 				t.Errorf("requests=%d closed=%t", calls, body.closed)

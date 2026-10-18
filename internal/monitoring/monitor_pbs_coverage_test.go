@@ -838,3 +838,14 @@ func TestPBSNamespaceDiscoveryAdmissionAndRecovery(t *testing.T) {
 		})
 	}
 }
+
+// Complete discovery and deliberate scope-off must not collapse into the same
+// no-op. Use the ordinary foreground/background path and durable projection.
+func TestPBSRootDatastoreInventoryAndScope(t *testing.T) {
+	exercisePBSRootDatastoreDiscovery(t, []pbsDatastoreDiscoveryCase{
+		{"empty", 3, ""}, {"removed_store", 7, ""},
+		{"datastores_off", 3, "datastores"}, {"backups_off", 3, "backups"}, {"global_off", 3, "global"},
+		{"cancelled", 9, "cancelled"},
+		{"withdrawn_empty", 10, "withdrawn"}, {"withdrawn_denied", 11, "withdrawn"},
+	})
+}

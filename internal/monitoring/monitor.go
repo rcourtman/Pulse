@@ -1379,6 +1379,7 @@ type Monitor struct {
 	backupAlertEvalMu          sync.Mutex                                 // Coalesce global rollup reads and order failure/recovery publication.
 	persistence                *config.ConfigPersistence                  // Add persistence for saving updated configs
 	pbsBackupPollers           map[string]*pbsBackupPoll                  // Hold runtime/client ownership until the backup reader actually returns
+	pbsBackupRuntimeEpoch      uint64                                     // Includes foreground discovery in runtime ownership, even with reused parent contexts
 	pbsBackupPublicationMu     sync.RWMutex                               // Orders backup publication against runtime/client withdrawal
 	pbsBackupCacheTime         map[string]map[pbsBackupGroupKey]time.Time // Track when each PBS backup group was last fetched
 	runtimePollingMu           sync.RWMutex                               // Guards runtimePollingOverride; polling goroutines read it every cycle
@@ -1523,6 +1524,7 @@ func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
 	for name := range m.pbsBackupPollers {
 		m.cancelPBSBackupPollLocked(name)
 	}
+	m.pbsBackupRuntimeEpoch++
 	// A new runtime invalidates detached replication reads even when the old
 	// caller has not yet canceled its parent context.
 	for name, poll := range m.pveReplicationPolls {

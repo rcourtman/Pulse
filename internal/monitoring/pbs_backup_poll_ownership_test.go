@@ -20,7 +20,7 @@ func pbsOwnershipMonitor() (*Monitor, *pbs.Client) {
 
 func TestPBSBackupLifecycleAdmissionHoldsUntilReturn(t *testing.T) {
 	m, client := pbsOwnershipMonitor()
-	owner, _ := m.beginPBSBackupPoll("site", time.Now(), client)
+	owner, _ := m.beginPBSBackupPoll("site", time.Now(), client, m.pbsBackupRuntimeEpoch)
 	require.NotNil(t, owner)
 	m.SetBackupPollingInterval(time.Minute)
 	m.setRuntimeContext(context.Background(), nil)
@@ -28,17 +28,17 @@ func TestPBSBackupLifecycleAdmissionHoldsUntilReturn(t *testing.T) {
 	m.replacePBSClient("site", fresh)
 	require.ErrorIs(t, owner.ctx.Err(), context.Canceled)
 	for i := 0; i < 8; i++ {
-		other, _ := m.beginPBSBackupPoll("site", time.Now(), fresh)
+		other, _ := m.beginPBSBackupPoll("site", time.Now(), fresh, m.pbsBackupRuntimeEpoch)
 		require.Nil(t, other, "cancellation/cadence reset cannot release a live reader's slot")
 	}
 	m.finishPBSBackupPoll("site", owner)
 	require.Zero(t, m.lastPBSBackupPoll["site"], "withdrawn return must not delay normal resumption")
-	next, _ := m.beginPBSBackupPoll("site", time.Now(), fresh)
+	next, _ := m.beginPBSBackupPoll("site", time.Now(), fresh, m.pbsBackupRuntimeEpoch)
 	require.NotNil(t, next)
 	m.SetBackupPollingInterval(30 * time.Second)
 	m.finishPBSBackupPoll("site", next)
 	require.Zero(t, m.lastPBSBackupPoll["site"], "completion must preserve an explicit cadence reset")
-	next, _ = m.beginPBSBackupPoll("site", time.Now(), fresh)
+	next, _ = m.beginPBSBackupPoll("site", time.Now(), fresh, m.pbsBackupRuntimeEpoch)
 	require.NotNil(t, next)
 	m.finishPBSBackupPoll("site", next)
 	require.False(t, m.lastPBSBackupPoll["site"].IsZero(), "normal completion must preserve cadence")
@@ -52,7 +52,7 @@ func TestPBSBackupLifecycleAdmissionIsAtomicAndConnectionScoped(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if owner, _ := m.beginPBSBackupPoll("site", time.Now(), client); owner != nil {
+			if owner, _ := m.beginPBSBackupPoll("site", time.Now(), client, m.pbsBackupRuntimeEpoch); owner != nil {
 				owners <- owner
 			}
 		}()
@@ -62,7 +62,7 @@ func TestPBSBackupLifecycleAdmissionIsAtomicAndConnectionScoped(t *testing.T) {
 	owner := <-owners
 	peer := &pbs.Client{}
 	m.replacePBSClient("peer", peer)
-	peerOwner, _ := m.beginPBSBackupPoll("peer", time.Now(), peer)
+	peerOwner, _ := m.beginPBSBackupPoll("peer", time.Now(), peer, m.pbsBackupRuntimeEpoch)
 	require.NotNil(t, peerOwner)
 	m.replacePBSClient("site", &pbs.Client{})
 	require.Error(t, owner.ctx.Err())
@@ -73,18 +73,33 @@ func TestPBSBackupLifecycleAdmissionIsAtomicAndConnectionScoped(t *testing.T) {
 
 func TestPBSBackupLifecycleEndedOrUnregisteredCannotStart(t *testing.T) {
 	m, client := pbsOwnershipMonitor()
-	owner, _ := m.beginPBSBackupPoll("site", time.Now(), &pbs.Client{})
+	owner, _ := m.beginPBSBackupPoll("site", time.Now(), &pbs.Client{}, m.pbsBackupRuntimeEpoch)
 	require.Nil(t, owner)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	m.setRuntimeContext(ctx, nil)
-	owner, _ = m.beginPBSBackupPoll("site", time.Now(), client)
+	owner, _ = m.beginPBSBackupPoll("site", time.Now(), client, m.pbsBackupRuntimeEpoch)
 	require.Nil(t, owner)
+}
+
+func TestPBSBackupLifecycleDiscoveryCannotEnterReplacementRuntime(t *testing.T) {
+	m, client := pbsOwnershipMonitor()
+	parent := context.Background()
+	m.setRuntimeContext(parent, nil)
+	oldEpoch := m.pbsBackupRuntimeEpoch
+	m.setRuntimeContext(parent, nil)
+	owner, reason := m.beginPBSBackupPoll("site", time.Now(), client, oldEpoch)
+	require.Nil(t, owner, "an old discovery must not acquire a new runtime's publication authority")
+	require.Equal(t, "runtime changed during discovery", reason)
+	require.Empty(t, m.lastPBSBackupPoll, "rejected discovery cannot postpone the ordinary current scan")
+	owner, _ = m.beginPBSBackupPoll("site", time.Now(), client, m.pbsBackupRuntimeEpoch)
+	require.NotNil(t, owner)
+	m.finishPBSBackupPoll("site", owner)
 }
 
 func TestPBSBackupLifecyclePublicationCannotCrossWithdrawal(t *testing.T) {
 	m, client := pbsOwnershipMonitor()
-	owner, _ := m.beginPBSBackupPoll("site", time.Now(), client)
+	owner, _ := m.beginPBSBackupPoll("site", time.Now(), client, m.pbsBackupRuntimeEpoch)
 	require.NotNil(t, owner)
 	ctx := context.WithValue(owner.ctx, pbsBackupPollContextKey{}, owner)
 	entered, release, returned := make(chan struct{}), make(chan struct{}), make(chan struct{})

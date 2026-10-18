@@ -22,7 +22,14 @@ func readBackupInventory[T any](resp *http.Response, fields []string, validate f
 	if readErr != nil || closeErr != nil {
 		return nil, errors.Join(readErr, closeErr)
 	}
-	if resp.StatusCode != http.StatusOK || !utf8.Valid(body) {
+	if resp.StatusCode != http.StatusOK {
+		return nil, errInvalidBackupInventory
+	}
+	return decodeBackupInventory(body, fields, validate)
+}
+
+func decodeBackupInventory[T any](body []byte, fields []string, validate func(map[string]json.RawMessage, T) bool) ([]T, error) {
+	if !utf8.Valid(body) {
 		return nil, errInvalidBackupInventory
 	}
 	envelope, ok := backupInventoryObject(body, "data", "errors")
@@ -50,6 +57,21 @@ func readBackupInventory[T any](resp *http.Response, fields []string, validate f
 		values = append(values, value)
 	}
 	return values, nil
+}
+
+type datastoreListEntry struct {
+	Store string `json:"store"`
+}
+
+func decodeBackupDatastores(body []byte) ([]datastoreListEntry, error) {
+	seen := make(map[string]bool)
+	return decodeBackupInventory(body, []string{"store"}, func(_ map[string]json.RawMessage, datastore datastoreListEntry) bool {
+		if datastore.Store == "" || strings.TrimSpace(datastore.Store) != datastore.Store || seen[datastore.Store] {
+			return false
+		}
+		seen[datastore.Store] = true
+		return true
+	})
 }
 
 // Keep additive provider fields, but do not let duplicate keys or json's

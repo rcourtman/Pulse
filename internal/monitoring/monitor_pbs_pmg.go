@@ -178,7 +178,9 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
 	var pollErr error
 	var pbsInst models.PBSInstance
-	var backupDatastores []pbsBackupDatastore
+	m.mu.RLock()
+	backupInventory := pbsBackupInventory{runtimeEpoch: m.pbsBackupRuntimeEpoch}
+	m.mu.RUnlock()
 	publishResult := false
 	if m.pollMetrics != nil {
 		m.pollMetrics.IncInFlight("pbs")
@@ -365,6 +367,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	// Poll datastores if enabled
 	if instanceCfg.MonitorDatastores {
 		datastores, err := client.GetDatastoresFiltered(ctx, includeDatastore)
+		backupInventory.datastoreDiscoveryErr = err
 		if err != nil {
 			monErr := errors.WrapAPIError("get_datastores", instanceName, err, 0)
 			log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get datastores")
@@ -456,7 +459,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				}
 
 				pbsInst.Datastores = append(pbsInst.Datastores, modelDS)
-				backupDatastores = append(backupDatastores, pbsBackupDatastore{PBSDatastore: modelDS, namespaceDiscoveryErr: err})
+				backupInventory.datastores = append(backupInventory.datastores, pbsBackupDatastore{PBSDatastore: modelDS, namespaceDiscoveryErr: err})
 			}
 		}
 	}
@@ -527,16 +530,20 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 	// Poll backups if enabled
 	if instanceCfg.MonitorBackups {
-		if len(pbsInst.Datastores) == 0 {
+		if ctx.Err() != nil {
+			// A cancelled foreground discovery cannot admit a new background
+			// observation into a replacement runtime.
+			return
+		} else if !instanceCfg.MonitorDatastores {
 			log.Debug().
 				Str("instance", instanceName).
-				Msg("No PBS datastores available for backup polling")
+				Msg("Skipping PBS backup polling - datastore monitoring disabled")
 		} else if !m.backupPollingEnabledSetting() {
 			log.Debug().
 				Str("instance", instanceName).
 				Msg("Skipping PBS backup polling - globally disabled")
 		} else {
-			m.pollPBSBackupsAsync(instanceName, client, backupDatastores)
+			m.pollPBSBackupsAsync(instanceName, client, backupInventory)
 		}
 	} else {
 		log.Debug().
