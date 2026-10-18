@@ -18,6 +18,87 @@ const guest = (changes: Partial<WorkloadGuest> = {}): WorkloadGuest =>
 const observedAt = '2026-09-30T11:00:00Z';
 afterEach(() => vi.restoreAllMocks());
 
+describe('in-guest memory at explicit native power transitions', () => {
+  const reading = (source: string, status: string, type = 'qemu') =>
+    guest({
+      status,
+      type,
+      agentStale: false,
+      memory: {
+        total: 100,
+        used: 95,
+        free: 5,
+        usage: 95,
+        observation: { state: 'current', source, observedAt },
+      },
+    });
+
+  it.each(['agent', 'guest-agent-meminfo', 'guest-agent-meminfo-derived'])(
+    'does not present %s as current while paused or suspended',
+    (source) => {
+      for (const status of ['paused', 'suspended', ' PAUSED ']) {
+        const input = reading(source, status);
+        const original = structuredClone(input);
+        expect(getCurrentWorkloadMemoryUsage(input)).toBeNull();
+        const presentation = getWorkloadMemoryObservationPresentation(input, {
+          includeCurrent: false,
+        });
+        expect(presentation?.state).toBe('last-known');
+        expect(presentation?.summary).toContain('Last known');
+        expect(presentation?.message).toContain('Proxmox reports this guest');
+        expect(presentation?.message).toContain('2026-09-30 11:00:00 UTC');
+        expect(input).toEqual(original);
+      }
+    },
+  );
+
+  it.each(['qemu', 'lxc'])(
+    'withholds linked agent memory when the native %s is stopped',
+    (type) => {
+      for (const status of ['stopped', 'offline', ' STOPPED ']) {
+        const input = reading('agent', status, type);
+        expect(getCurrentWorkloadMemoryUsage(input)).toBeNull();
+        expect(getWorkloadMemoryObservationPresentation(input)?.state).toBe('unavailable');
+        expect(getWorkloadMemoryObservationPresentation(input)?.message).toContain('guest stopped');
+      }
+    },
+  );
+
+  it('does not admit missing provenance or revive unavailable memory', () => {
+    const input = reading('agent', 'paused');
+    input.memory.observation!.state = 'future-state';
+    expect(getWorkloadMemoryObservationPresentation(input)?.state).toBe('unknown');
+    input.memory.observation!.state = 'unavailable';
+    expect(getWorkloadMemoryObservationPresentation(input)?.state).toBe('unavailable');
+    input.memory.observation!.state = 'current';
+    input.memory.usage = NaN;
+    expect(getWorkloadMemoryObservationPresentation(input)?.state).toBe('unavailable');
+  });
+
+  it('leaves independent platform readings, unconfirmed power and other integrations unchanged', () => {
+    for (const source of ['status-mem', 'cluster-resources', 'available-field']) {
+      expect(getCurrentWorkloadMemoryUsage(reading(source, 'paused'))).toBe(95);
+    }
+    for (const status of ['unknown', 'starting', 'running', '']) {
+      expect(getCurrentWorkloadMemoryUsage(reading('agent', status))).toBe(95);
+    }
+    const other = reading('agent', 'paused', 'vm');
+    other.platformScopes = ['vmware-vsphere'];
+    expect(getCurrentWorkloadMemoryUsage(other)).toBe(95);
+    expect(getWorkloadMemoryObservationPresentation(other)?.state).toBe('current');
+  });
+
+  it('preserves measured zero on a fresh running reading, not as paused capacity', () => {
+    const input = reading('agent', 'paused');
+    input.memory.usage = 0;
+    expect(getCurrentWorkloadMemoryUsage(input)).toBeNull();
+    expect(getWorkloadMemoryObservationPresentation(input)?.state).toBe('last-known');
+    input.status = 'running';
+    expect(getCurrentWorkloadMemoryUsage(input)).toBe(0);
+    expect(getWorkloadMemoryObservationPresentation(input)?.state).toBe('current');
+  });
+});
+
 describe('selected workload memory observation', () => {
   it.each(['qemu', 'lxc'])('requires original provenance for a legacy %s reading', (type) => {
     expect(getWorkloadMemoryObservationPresentation(guest({ type }))?.state).toBe('unknown');

@@ -78,6 +78,25 @@ const memoryObservationTime = (observation: MemoryObservation | undefined): numb
   return Number.isFinite(timestamp) && timestamp > 0 && timestamp <= Date.now() ? timestamp : null;
 };
 
+// These figures require execution inside the guest. A native power change can
+// arrive before the selected memory carrier or linked agent lease changes.
+// Host-reported Proxmox memory is independent, and unknown power is not evidence
+// against an independently reporting agent. Never edit the wire observation.
+const inGuestMemorySources = new Set([
+  'agent',
+  'guest-agent-meminfo',
+  'guest-agent-meminfo-derived',
+]);
+const inGuestMemoryPowerState = (
+  observation: MemoryObservation | undefined,
+  proxmoxRuntimeStatus: string | undefined,
+): 'stopped' | 'paused' | 'suspended' | null => {
+  if (!observation || !inGuestMemorySources.has(observation.source)) return null;
+  const status = proxmoxRuntimeStatus?.trim().toLowerCase();
+  if (status === 'stopped' || status === 'offline') return 'stopped';
+  return status === 'paused' || status === 'suspended' ? status : null;
+};
+
 // Selection and labels classify the same source-owned observation. Numeric
 // selection does not need to allocate a source/date label for every comparison.
 const memoryObservationState = (
@@ -85,16 +104,22 @@ const memoryObservationState = (
   observation: MemoryObservation | undefined,
   timestamp: number | null,
   agentStale = false,
-): MemoryObservationPresentation['state'] =>
-  !isMemoryPercent(value) || observation?.state === 'unavailable'
-    ? 'unavailable'
-    : observation?.state === 'last-known'
-      ? 'last-known'
-      : observation?.state === 'current' && timestamp !== null
-        ? agentStale && observation.source === 'agent'
-          ? 'last-known'
-          : 'current'
-        : 'unknown';
+  proxmoxRuntimeStatus?: string,
+): MemoryObservationPresentation['state'] => {
+  if (!isMemoryPercent(value) || observation?.state === 'unavailable') return 'unavailable';
+  if (
+    observation?.state !== 'last-known' &&
+    !(observation?.state === 'current' && timestamp !== null)
+  )
+    return 'unknown';
+  const power = inGuestMemoryPowerState(observation, proxmoxRuntimeStatus);
+  if (power === 'stopped') return 'unavailable';
+  return observation.state === 'last-known' ||
+    power !== null ||
+    (agentStale && observation.source === 'agent')
+    ? 'last-known'
+    : 'current';
+};
 
 const requiresWorkloadMemoryObservation = (guest: WorkloadGuest): boolean => {
   const nonProxmoxVMware =
@@ -129,6 +154,7 @@ export const getCurrentWorkloadMemoryUsage = (guest: WorkloadGuest): number | nu
       memory.observation,
       memoryObservationTime(memory.observation),
       guest.agentStale === true,
+      requiresWorkloadMemoryObservation(guest) ? guest.status : undefined,
     ) !== 'current'
   ) {
     return null;
@@ -155,7 +181,12 @@ export const getMemoryObservationPresentation = (
   value: number | undefined,
   observation: MemoryObservation | undefined,
   requiresObservation = false,
-  options: { includeCurrent?: boolean; guestKind?: MemoryGuestKind; agentStale?: boolean } = {},
+  options: {
+    includeCurrent?: boolean;
+    guestKind?: MemoryGuestKind;
+    agentStale?: boolean;
+    proxmoxRuntimeStatus?: string;
+  } = {},
 ): MemoryObservationPresentation | null => {
   // Unannotated unrelated platforms retain their existing behaviour. Legacy
   // Proxmox readings lack authority to assert current freshness.
@@ -165,7 +196,14 @@ export const getMemoryObservationPresentation = (
   // carrier. Honour the server's explicit source invalidation, but only for
   // that agent's own reading: QGA and Proxmox remain independent. Do not add a
   // client lease, renew the observation time or mutate its wire metadata.
-  const state = memoryObservationState(value, observation, timestamp, options.agentStale);
+  const state = memoryObservationState(
+    value,
+    observation,
+    timestamp,
+    options.agentStale,
+    options.proxmoxRuntimeStatus,
+  );
+  const power = inGuestMemoryPowerState(observation, options.proxmoxRuntimeStatus);
   // An unavailable reading shows no number, so there is nothing to qualify.
   const mayIncludeCache =
     state !== 'unavailable' &&
@@ -211,7 +249,9 @@ export const getMemoryObservationPresentation = (
       // Consumers prefix their own metric name ("Memory reading: ...").
       message: notRunning
         ? 'Unavailable while the guest is not running.'
-        : `Unavailable.${knownSource ? ` Source: ${source}.` : ''}${observed ? ` ${time}` : ''}`,
+        : power === 'stopped'
+          ? 'Unavailable while Proxmox reports this guest stopped. Earlier in-guest memory readings are not current measurements.'
+          : `Unavailable.${knownSource ? ` Source: ${source}.` : ''}${observed ? ` ${time}` : ''}`,
       mayIncludeCache,
     };
   }
@@ -219,10 +259,14 @@ export const getMemoryObservationPresentation = (
     options.agentStale && observation?.source === 'agent'
       ? ' The Pulse Agent that supplied this reading stopped reporting.'
       : '';
+  const powerStatus =
+    state === 'last-known' && power !== null
+      ? ` In-guest memory cannot be current while Proxmox reports this guest ${power}.`
+      : '';
   return {
     state,
     summary: `${label} · ${source}${sourceStatus ? ' (stopped reporting)' : ''}${mayIncludeCache ? ' (may include cache)' : ''}${observed ? ` · ${observed}` : ' · time unknown'}`,
-    message: `${label}. Source: ${source}. ${time}${state === 'last-known' || state === 'unknown' ? ' Not a current measurement.' : ''}${sourceStatus}${cacheNote ? ` ${cacheNote}` : ''}`,
+    message: `${label}. Source: ${source}. ${time}${state === 'last-known' || state === 'unknown' ? ' Not a current measurement.' : ''}${sourceStatus}${powerStatus}${cacheNote ? ` ${cacheNote}` : ''}`,
     mayIncludeCache,
     ...(cacheNote ? { cacheNote } : {}),
   };
@@ -256,6 +300,7 @@ export const getWorkloadMemoryObservationPresentation = (
       ...options,
       guestKind: getWorkloadMemoryGuestKind(guest),
       agentStale: guest.agentStale === true,
+      proxmoxRuntimeStatus: requiresWorkloadMemoryObservation(guest) ? guest.status : undefined,
     },
   );
 };

@@ -50,10 +50,42 @@ const resource = (input: WorkloadGuest): Resource => ({
   platformType: 'proxmox-pve',
   lastSeen: Date.parse(input.lastSeen!),
   agent: { stale: input.agentStale },
+  proxmox: { runtimeStatus: input.status },
   memory: { current: input.memory.usage, observation: input.memory.observation },
 });
 
 describe('source-owned stale agent memory', () => {
+  it.each(['paused', 'suspended', 'stopped'])(
+    'uses native %s for shared memory selection, search, sorting and both History consumers',
+    (status) => {
+      const input = { ...guest(), status, agentStale: false };
+      const original = structuredClone(input);
+      const independent = {
+        ...guest('guest-agent-meminfo', 'current', 10),
+        id: 'independent',
+        status: 'running',
+        agentStale: false,
+      };
+      expect(evaluateFilterStack(input, parseFilterStack('memory>90'))).toBe(false);
+      expect(evaluateFilterStack(input, parseFilterStack('memory<100'))).toBe(false);
+      expect(
+        [input, independent].sort(createWorkloadSortComparator('memory', 'desc')!).map((g) => g.id),
+      ).toEqual(['independent', input.id]);
+      for (const source of ['agent', 'guest-agent-meminfo']) {
+        input.memory.observation!.source = source;
+        expect(getGuestDrawerCurrentMetrics(input).memory).toBeUndefined();
+        expect(getResourceMetricsHistoryCurrentMetrics(resource(input)).memory).toBeUndefined();
+        const retained = status === 'stopped' ? undefined : 95;
+        expect(getGuestDrawerDeferredMetrics(input).memory.lastKnownValue).toBe(retained);
+        expect(
+          getResourceMetricsHistoryDeferredMetrics(resource(input)).memory.lastKnownValue,
+        ).toBe(retained);
+      }
+      input.memory.observation!.source = 'agent';
+      expect(input).toEqual(original);
+    },
+  );
+
   it.each([0, 95])(
     'retains a value (%s) without asserting a current agent measurement',
     (usage) => {

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createStore, reconcile } from 'solid-js/store';
+import { createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
@@ -80,6 +81,39 @@ afterEach(() => {
 
 describe('ResourceDetailDrawer machine inventory', () => {
   const gib = 1024 ** 3;
+  it('keeps native paused/stopped guest amounts out of the same-open canonical facts', () => {
+    const [value, setValue] = createSignal(
+      resource({
+        type: 'vm',
+        platformType: 'proxmox-pve',
+        status: 'online',
+        memory: {
+          current: 95,
+          total: 4 * gib,
+          used: 3.8 * gib,
+          observation: { state: 'current', source: 'agent', observedAt: '2026-10-10T00:00:00Z' },
+        },
+        proxmox: { runtimeStatus: 'running' },
+        agent: { stale: false },
+      }),
+    );
+    render(() => <ResourceDetailDrawer resource={value()} />);
+    const facts = screen.getByTestId('resource-drawer-facts');
+    expect(facts).toHaveTextContent('3.80 GB of 4.00 GB RAM');
+    for (const runtimeStatus of ['paused', 'suspended', 'stopped']) {
+      setValue({ ...value(), proxmox: { runtimeStatus } });
+      expect(facts).toHaveTextContent('4.00 GB RAM');
+      expect(facts).not.toHaveTextContent('of 4.00 GB RAM');
+    }
+    setValue({
+      ...value(),
+      memory: {
+        ...value().memory!,
+        observation: { state: 'current', source: 'status-mem', observedAt: '2026-10-10T00:00:00Z' },
+      },
+    });
+    expect(facts).toHaveTextContent('3.80 GB of 4.00 GB RAM');
+  });
   it('states one facts line and keeps the inventory under a closed Details', () => {
     render(() => (
       <ResourceDetailDrawer

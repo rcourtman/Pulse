@@ -10261,3 +10261,30 @@ only when it is present, while existing schedules remain editable after a runtim
 change. Legacy catalogs default to false. API and catalog-model tests cover
 absence and registration so staggered source upgrades do not offer unavailable
 rendering. No price or entitlement changes.
+
+### Native power qualifies in-guest memory without renewing its observation
+
+A Proxmox native pause or suspend makes an otherwise current in-guest memory
+reading last known; a reported stop makes it unavailable. This applies only to
+Pulse Agent and QEMU meminfo sources, across the Workloads table's bars and
+sparklines, guest memory details, memory sort/search and both drawers' current
+History fallbacks and canonical memory facts. Canonical online health or a still-valid agent lease cannot
+promote the earlier reading over the native power state. Source, timestamp and
+wire state are retained unchanged; no client collection lease is introduced.
+
+Host-reported Proxmox memory, other integrations and independently reporting
+agents under unknown native power keep their existing qualification. Explicit
+unavailable/invalid readings stay unavailable; missing provenance stays unknown.
+Stored History paths, measured zero, saved alert policy, guest operations and
+backup monitoring are unchanged. Running-state replacement may display a new
+current zero; that is not proof of thaw, writes or recovery.
+
+`memoryObservation.test.ts`, `GuestRow.test.tsx`,
+`GuestDrawerHistory.memory-provenance.test.tsx` and
+`resourceDetailDrawerMetricsHistoryModel.linked-filesystems.test.ts` and
+`ResourceDetailDrawer.machine-history.test.tsx` exercise
+source/power boundaries and mounted transitions. The source-bound
+`guest-memory-native-power.cjs` browser protocol drives the production canonical
+delta merger and Workloads mapper through row disclosures, guest details and both
+History surfaces at desktop and 320px, preserving stored paths. These synthetic
+read-only fixtures establish presentation, not native or installed recovery.

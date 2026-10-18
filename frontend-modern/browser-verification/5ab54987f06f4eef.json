@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "cf271835f764d480916dbad2d4b7dad58809db7b",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+    "frontend-modern/src/utils/memoryObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "9c569d7faa21298822a7bd69860bdce816680bb5ed456933414708965242d3d8",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "b3eda67864588548066ae2d91f16cf2580863d414d1b1eaf3f7a6522e201fc05",
+    "frontend-modern/src/utils/memoryObservation.ts": "5327de10d25de124e4a1bfdab92e5aa72dfd8f304a2530bc76f5d0b5eb5b7abd"
+  },
+  "routes": [
+    "/browser-tests/guest-memory-agent-stale.html (production canonical delta merger, Workloads mapper, guest row, full guest and canonical drawers)"
+  ],
+  "states": [
+    "Native paused and suspended: in-guest Pulse Agent and QGA memory is last known despite canonical online and agent stale=false",
+    "Native stopped/offline: no current or retained memory value; stopped linked LXC also unavailable",
+    "Host Proxmox source and independently reporting agent under unknown native power remain current; stale agent remains last known",
+    "Fresh running source replacement preserves measured zero; original wire source/state/time is unchanged by power-only deltas",
+    "Empty-store current fallback is qualified; stored History paths are unchanged",
+    "Canonical RAM facts withhold used amounts for non-current memory"
+  ],
+  "interactions": [
+    "Desktop keyboard expands real technical details, opens and closes the memory reading dialog with return focus",
+    "Narrow touch opens and closes the same reading disclosure",
+    "Real metric display and memory-basis selects exercise bars, retained sparklines and host share",
+    "Read-only synthetic canonical source deltas update the same-open production surfaces; no guest or settings action"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-18T04:33:56.275Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow_webkit": "26.0"
+  },
+  "pixel_review": "All 14 captures opened with native view_image in this source turn; source/time/precaution text wraps, dialog controls and row cues are readable, no visible horizontal clipping. Narrow scrollWidth/clientWidth both 320; desktop both 1365.",
+  "limits": "Synthetic read-only presentation proof, not collector, native thaw, filesystem writes, installed recovery or release acceptance. Existing source-free WebKit Back/reload capability fault is not exercised or cleared.",
+  "driver": "frontend-modern/browser-tests/guest-memory-native-power.cjs"
+}
