@@ -15,6 +15,37 @@
 ```
 
 ## Purpose
+
+### TrueNAS agent completion requires confirmed boot persistence
+
+A running agent does not establish a persistent TrueNAS installation. The Unix
+installer reads the complete bounded middleware task inventory with the existing
+ownership parser before registration. Failed/malformed/diagnostic inventories,
+foreign/indirect activation and duplicate matching tasks stop registration;
+they are never treated as absence or permission to create a duplicate. JSON
+encoding preserves bootstrap paths with spaces, quotes or backslashes.
+Exactly one enabled, owned SCRIPT/POSTINIT task with the existing 30-second
+bootstrap timeout is required. An already-correct task is not rewritten; a
+disabled owned task is updated by its observed numeric ID. One bounded create
+or update is followed by independent inventory readback. A failed/uncertain
+mutation is not replayed, and an update must preserve the original ID.
+
+Unknown persistence does not prevent the existing runtime-start path or discard
+connection/recovery files. After the existing runtime verification succeeds,
+completion instead exits **1** with JSON code `persistence_unconfirmed` and
+instructions to reconcile the existing task before retrying. Startup failure
+**13** and authentication failure **18** remain distinct and authoritative.
+No success or upgrade-survival claim may follow unconfirmed registration.
+This confirms configured middleware state, not actual reboot/upgrade execution.
+
+`TestInstallSHTrueNASBootRegistrationRequiresReadback` executes the production
+registration/completion functions and the full TrueNAS completion caller with
+closed middleware/platform/readiness operations and real private state files.
+Create/update/no-op, both platform branches, repetition, invalid ownership and
+inventories, uncertain/ignored/refused mutations, changed readback, tool absence,
+actual timeout child cleanup and text/JSON outcomes must all pass. These controls
+are not native appliance or installed monitoring recovery acceptance.
+
 ### Automatic-update settings are privately and atomically published
 
 The Linux server installer's explicit `setup_auto_updates` opt-in must never

@@ -8861,6 +8861,25 @@ func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 	t.Logf("%s", output)
 }
 
+// Exercise the production registration and CLI completion caller together. A
+// running collector must not turn unknown boot persistence into install success.
+func TestInstallSHTrueNASBootRegistrationRequiresReadback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("TrueNAS shell contracts; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "truenas_boot_registration.py"), "-v")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("TrueNAS boot registration and completion controls: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "Ran 7 tests") || !strings.Contains(string(output), "\nOK\n") || strings.Contains(string(output), "skipped") {
+		t.Fatalf("incomplete TrueNAS boot registration controls:\n%s", output)
+	}
+	t.Logf("%s", output)
+}
+
 func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("DSM Upstart shell controls; Windows has its own native SCM gate")

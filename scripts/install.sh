@@ -1772,6 +1772,33 @@ except (ValueError, TypeError, KeyError, UnicodeError):
 ' "$TRUENAS_BOOTSTRAP_SCRIPT" <<< "$observation"
 }
 
+register_truenas_agent_boot_task() {
+    local inventory="" observed="" ident="" enabled="" payload=""
+    command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 &&
+        command -v timeout >/dev/null 2>&1 || return 1
+    # Reuse removal's complete, bounded ownership check. A failed query is not
+    # an empty inventory, and duplicate/foreign tasks cannot select an update.
+    inventory=$(read_truenas_agent_removal_tasks) || return 1
+    if [[ "$inventory" != complete ]]; then
+        read -r ident enabled <<< "$inventory"
+        [[ "$inventory" == "$ident $enabled"$'\ncomplete' ]] || return 1
+    fi
+    payload=$(python3 -c 'import json,sys; print(json.dumps(dict(type="SCRIPT", script=sys.argv[1], when="POSTINIT", enabled=True, timeout=30, comment="Pulse Agent Bootstrap")))' \
+        "$TRUENAS_BOOTSTRAP_SCRIPT") || return 1
+    if [[ -z "$ident" ]]; then
+        LC_ALL=C timeout -k 1 5 midclt call initshutdownscript.create "$payload" >/dev/null 2>&1 || return 1
+    elif [[ "$enabled" != true ]]; then
+        LC_ALL=C timeout -k 1 5 midclt call initshutdownscript.update "$ident" "$payload" >/dev/null 2>&1 || return 1
+    fi
+    # Exit zero is not persistence. Read back exactly one enabled, owned task;
+    # an update must keep its original ID. Never replay an uncertain mutation.
+    observed=$(read_truenas_agent_removal_tasks) || return 1
+    if [[ -z "$ident" ]]; then
+        read -r ident enabled <<< "$observed"
+    fi
+    [[ "$observed" == "$ident true"$'\ncomplete' ]]
+}
+
 quiesce_truenas_agent_boot_tasks_for_removal() {
     local inventory="" expected="" observed="" ident="" enabled="" mode=""
     command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 &&
@@ -3566,6 +3593,11 @@ complete_installation_flow() {
     fi
     verify_agent_started || verification_rc=$?
     if [[ $verification_rc -eq 0 ]]; then
+        if [[ "${TRUENAS_BOOT_TASK_CONFIRMED:-}" == false ]]; then
+            log_error "The agent is running, but its TrueNAS boot task was not confirmed; installation is incomplete. Reconcile the existing Init/Shutdown task before retrying; installed files and connection state were retained."
+            json_event "complete" "persistence_unconfirmed" "TrueNAS boot-task persistence was not confirmed" "$EXIT_GENERAL"
+            exit "$EXIT_GENERAL"
+        fi
         report_proxmox_registration_outcome "$state_dir" || true
         if [[ "$UPGRADE_MODE" == "true" ]]; then
             log_info "$upgrade_success_message"
@@ -7842,23 +7874,19 @@ EOF
     fi
 
     # Register Init/Shutdown task using midclt
-    if command -v midclt >/dev/null 2>&1; then
-        log_info "Registering TrueNAS Init/Shutdown task..."
-
-        # Check if task already exists
-        EXISTING_TASK=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
-
-        if [[ -n "$EXISTING_TASK" ]]; then
-            log_info "Init/Shutdown task already exists (id $EXISTING_TASK), updating..."
-            midclt call initshutdownscript.update "$EXISTING_TASK" '{"type":"SCRIPT","script":"'"$TRUENAS_BOOTSTRAP_SCRIPT"'","when":"POSTINIT","enabled":true,"timeout":30,"comment":"Pulse Agent Bootstrap"}' >/dev/null 2>&1 || true
-        else
-            midclt call initshutdownscript.create '{"type":"SCRIPT","script":"'"$TRUENAS_BOOTSTRAP_SCRIPT"'","when":"POSTINIT","enabled":true,"timeout":30,"comment":"Pulse Agent Bootstrap"}' >/dev/null 2>&1 || log_warn "Failed to create Init/Shutdown task. Please add it manually in TrueNAS UI."
-        fi
+    TRUENAS_BOOT_TASK_CONFIRMED=false
+    if register_truenas_agent_boot_task; then
+        TRUENAS_BOOT_TASK_CONFIRMED=true
+        log_info "Confirmed enabled TrueNAS Post Init bootstrap task."
     else
-        log_warn "midclt not available. Please create an Init/Shutdown task manually in TrueNAS UI:"
+        # Keep the runtime and recovery files useful even when middleware is
+        # unavailable. Completion below still saves connection state, checks
+        # runtime health and exits nonzero rather than claiming persistence.
+        log_warn "TrueNAS boot-task registration was not confirmed. Check the existing task in TrueNAS UI before retrying; do not create a duplicate."
         log_warn "  Type: Script"
         log_warn "  Script: $TRUENAS_BOOTSTRAP_SCRIPT"
         log_warn "  When: Post Init"
+        log_warn "  Enabled: Yes"
     fi
 
     # Enable and start service
@@ -7880,7 +7908,7 @@ EOF
         log_info "Logs: tail -f ${AGENT_LOG_FILE}"
     fi
     log_info ""
-    log_info "The Init/Shutdown task ensures the agent survives TrueNAS upgrades."
+    log_info "The confirmed Init/Shutdown task is configured to restore the agent after a TrueNAS upgrade."
     exit 0
 fi
 
