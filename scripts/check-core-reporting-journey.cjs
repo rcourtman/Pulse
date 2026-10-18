@@ -74,7 +74,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
   await new Promise((resolve) => server.listen(5369, '127.0.0.1', resolve));
   browser = await chromium.launch({ headless: true, channel: 'chromium', args: ['--no-sandbox'] });
   result.chromium = browser.version();
-  for (const width of [1440, 320]) {
+  for (const width of input.widths || [1440, 320]) {
    const context = await browser.newContext({ viewport: { width, height: width===320 ? 1000 : 1100 }, hasTouch: width===320, isMobile: width===320, locale:'en-GB', timezoneId:'UTC' });
    const page = await context.newPage();
    page.setDefaultTimeout(12000);
@@ -149,10 +149,20 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
     }
     check(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)), 'no document horizontal overflow');
     if (['complete','rejected','zero','retained'].includes(phase)) {
+     if (input.capturePhoneDetails && width === 320) {
+      const inspection = utilization.getByRole('slider', { name:'Inspect Utilization history' });
+      if (await inspection.count()) { await inspection.focus(); await page.keyboard.press('Home'); }
+     }
      await utilization.scrollIntoViewIfNeeded();
      const file = `${width}-${phase}.png`;
      await page.screenshot({ path: path.join(output, file), animations:'disabled' });
      result.screenshots.push({ file, width, phase, sha256:hash(fs.readFileSync(path.join(output,file))) });
+     if (input.capturePhoneDetails && width === 320 && phase !== 'rejected') {
+      await io.scrollIntoViewIfNeeded();
+      const lower = `${width}-${phase}-io.png`;
+      await page.screenshot({ path:path.join(output,lower), animations:'disabled' });
+      result.screenshots.push({ file:lower, width, phase, sha256:hash(fs.readFileSync(path.join(output,lower))) });
+     }
     }
    }
    await context.close();
