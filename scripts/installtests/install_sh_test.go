@@ -634,7 +634,7 @@ func TestInstallSHAllCurlInvocationsDisableAmbientConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	invocation := regexp.MustCompile(`\bcurl\s+(?:"|--|-s)`)
+	invocation := regexp.MustCompile(`\bcurl\s+(?:["\'-]|https?://)`)
 	count := 0
 	for _, line := range strings.Split(string(content), "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "#") || !invocation.MatchString(line) {
@@ -6649,7 +6649,7 @@ save_connection_info() { [[ "$1" == "$FIXTURE" ]]; record save; }
 resolve_agent_health_url() { printf '%%s' '%s'; }
 sleep() { [[ "$1" == 2 ]]; }
 curl() {
-    [[ "$*" == '-sf --max-time 2 http://127.0.0.1:9191/readyz' ]] || return 97
+    [[ "$*" == '--disable -sf --max-time 2 http://127.0.0.1:9191/readyz' ]] || return 97
     record health
     health_calls=$((health_calls + 1))
     [[ %d -gt 0 && $health_calls -ge %d ]]
