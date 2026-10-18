@@ -1136,13 +1136,20 @@ The failure class is authoritative where the sender knows it and heuristic only
 where nobody does. `internal/notifications/failure_class.go` owns that order:
 a class declared by the sender through `NotificationFailureError` wins, then
 Go's own error types decide (`*textproto.Error` carries the SMTP reply code,
-x509 and TLS errors mean `tls`, `net.DNSError` and timeouts mean
-`connectivity`), and only then is the error message text consulted.
+x509 and TLS errors mean `tls`, while DNS errors, timeouts, failed network
+operations and propagated EOF/truncation mean `connectivity`), and only then
+is the error message text consulted. A connection closing during AUTH or TLS
+does not prove a credential or certificate verdict. The structured SMTP/TLS
+verdicts still outrank generic network evidence, and opaque failures remain
+`unknown` when no declared or structured evidence identifies them.
+Explicit `EmailAcceptanceUnconfirmedError` also remains `unknown`: loss of
+the final DATA acknowledgement must not be presented as a definitive delivery
+or rejection, nor as an ordinary pre-acceptance connection failure.
 
 Two rules follow and are not optional. A destination's response body must never
 determine its own failure class: every site that builds an error from an HTTP
-status classifies from the status code, so the body is retained for the
-operator's audit row but cannot make a 500 that says "rate limit" record as
+status classifies from the status code, so arbitrary body text is withheld and
+cannot make a 500 that says "rate limit" record as
 `rate_limited`. And an SMTP reply code is not read like an HTTP status: a 5xx
 reply is the destination refusing the message (`rejected`, or `authentication`
 for 530/534/535/538 and `configuration` for the 500-504 syntax replies), while
@@ -1167,6 +1174,18 @@ consuming the remaining ladder. `connectivity`, `rate_limited`, `server_error`,
 them proves a later attempt fails. TLS is deliberately on the retrying side: a
 handshake can fail transiently during rotation, and the cost of one wasted
 ladder is lower than the cost of dropping a recoverable notification.
+
+Payload template parse, execution and JSON-validation failures are declared
+configuration failures at the renderer. Ordinary and enhanced delivery,
+including plain-text ntfy, share that renderer; ntfy retains plain-text payloads
+without JSON validation. Malformed retained email, webhook and Apprise config,
+and unsupported retained notification types, are also configuration failures.
+These local failures stop on the first attempt rather than repeatedly trying a
+job that cannot be rendered or decoded. Diagnostics retain a fixed stage
+message and the wrapped cause for errors.Is/As, without copying configured
+template text, rendered payloads or private configuration into logs and audits.
+Retained configuration snapshots and explicit operator retry authority remain
+unchanged. This does not rewrite historical audit classes or private jobs.
 
 `NotificationFailureClass.Retryable` is the single owner of that split. Neither
 the queue nor any destination type may keep its own list. This generalises to
@@ -1372,15 +1391,20 @@ HTTP or browser save path. It does not start a new operating-system process,
 drive an alert lifecycle or establish recipient delivery. Those installed
 acceptance obligations remain separate from constructor restoration coverage.
 
-### Interrupted webhook rejection bodies retain the HTTP verdict
+### Interrupted HTTP response bodies retain the delivery verdict
 
-When webhook response headers establish a non-2xx status, a subsequent body
+Webhooks and HTTP Apprise share the bounded `readWebhookResponse` verdict.
+When response headers establish a non-2xx status, a subsequent body
 read failure retains that HTTP status in the error and its authoritative
 notification failure class. Terminal rejections must not become connectivity
 retries merely because the diagnostic body is truncated. Response headers,
 including Retry-After, and the underlying read error remain available; partial
-body text is not added to the error. Existing handling of 2xx body read errors
-is unchanged: it remains a read failure, not proof of recipient receipt.
+body text is not added to the error. A 2xx response whose bounded body read
+fails remains a failure, not proof of recipient receipt. HTTP Apprise firing,
+recovery and Test must not suppress that error or mark the queued attempt sent.
+Only a successful bounded response verdict can create or consume a delivery
+receipt. Reaching the cap retains the reader's existing limit semantics. The
+response-byte cap, payloads, TLS/SSRF policy and retry budgets remain.
 
 Transport-only `TestWebhookTruncatedResponseClassification` covers 200, 401,
 403, 422, 429 and 503 with interrupted bodies. `TestWebhookRetryTruncatedResponse`

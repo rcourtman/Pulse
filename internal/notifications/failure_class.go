@@ -6,8 +6,10 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/textproto"
+	"strings"
 	"syscall"
 )
 
@@ -60,6 +62,22 @@ func FailWithClass(class NotificationFailureClass, err error) error {
 // the operator-facing audit row but can no longer influence the class.
 func FailfWithClass(class NotificationFailureClass, format string, args ...any) error {
 	return &NotificationFailureError{Class: class, Err: fmt.Errorf(format, args...)}
+}
+
+// Local decoding/rendering errors can include private configuration or alert
+// content. Retain their causes without putting that prose in diagnostics.
+type notificationConfigurationError struct {
+	message string
+	cause   error
+}
+
+func (e *notificationConfigurationError) Error() string {
+	return e.message + " (configuration details withheld)"
+}
+func (e *notificationConfigurationError) Unwrap() error { return e.cause }
+
+func failNotificationConfiguration(message string, cause error) error {
+	return FailWithClass(NotificationFailureConfiguration, &notificationConfigurationError{message: message, cause: cause})
 }
 
 // ClassFromHTTPStatus maps an HTTP response status to its delivery class.
@@ -131,6 +149,14 @@ func ClassifyNotificationFailureError(err error) NotificationFailureClass {
 		return declared.Class
 	}
 
+	// Losing the final DATA acknowledgement leaves SMTP acceptance unknown.
+	// That explicit uncertainty must not become an ordinary connection verdict
+	// merely because the retained cause is EOF or another network error.
+	var unconfirmed *EmailAcceptanceUnconfirmedError
+	if errors.As(err, &unconfirmed) {
+		return NotificationFailureUnknown
+	}
+
 	// An SMTP reply code is the mail server's structured verdict. net/smtp
 	// surfaces it as *textproto.Error however deeply it is wrapped.
 	var protoErr *textproto.Error
@@ -159,12 +185,30 @@ func ClassifyNotificationFailureError(err error) NotificationFailureClass {
 	}
 
 	if errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
 		errors.Is(err, syscall.ECONNREFUSED) ||
 		errors.Is(err, syscall.ECONNRESET) ||
 		errors.Is(err, syscall.EHOSTUNREACH) ||
 		errors.Is(err, syscall.ENETUNREACH) ||
 		errors.Is(err, syscall.ETIMEDOUT) ||
 		errors.Is(err, syscall.EPIPE) {
+		return NotificationFailureConnectivity
+	}
+
+	// A failed network operation remains connectivity evidence even when its
+	// cause has no recognised prose or the sender's stage mentions AUTH/TLS.
+	// Structured SMTP replies and certificate failures have already won above.
+	var operationErr *net.OpError
+	if errors.As(err, &operationErr) {
+		// Go's TCP TLS alerts have an unexported cause inside net.OpError.
+		// Retain their native TLS diagnosis, inspecting the cause rather than
+		// a sender's AUTH/TLS stage text around an ordinary connection error.
+		for cause := operationErr.Err; cause != nil; cause = errors.Unwrap(cause) {
+			if strings.HasPrefix(cause.Error(), "tls:") {
+				return NotificationFailureTLS
+			}
+		}
 		return NotificationFailureConnectivity
 	}
 
