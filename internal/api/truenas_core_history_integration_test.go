@@ -70,6 +70,10 @@ func TestCORE13RESTReportingChartJourney(t *testing.T) {
 	mtm := monitoring.NewMultiTenantMonitor(cfg, nil, nil)
 	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"org-core": monitor, "org-other": {}})
 	router.mtMonitor = mtm
+	// Match the production tenant resource binding as well as the chart
+	// monitor binding; assigning the chart owner alone leaves resource reads
+	// without their tenant snapshot provider.
+	router.resourceHandlers.SetTenantStateProvider(NewMultiTenantStateProvider(mtm, monitor))
 	router.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, poller)
 	const resourcePath = "/api/resources?source=truenas&type=agent,storage,physical_disk&limit=100"
 	const historyPath = "/api/metrics-store/history?resourceType=agent&resourceId=core-rest-fixture&range=1h&maxPoints=240"
