@@ -111,7 +111,26 @@ func resourceStaleThresholdsForIntervals(
 func (m *Monitor) UnifiedResourceSnapshotWithStaleThresholds() ([]unifiedresources.Resource, time.Time, map[unifiedresources.DataSource]time.Duration) {
 	m.refreshUnifiedResourceRead()
 	view := m.currentUnifiedStateView()
-	return m.applyPersistedMetadataToUnifiedResources(view.resources), view.freshness, view.staleThresholds
+	return m.applyPersistedMetadataToUnifiedResources(unifiedSnapshotResources(view)), view.freshness, view.staleThresholds
+}
+
+// unifiedSnapshotResources carries the captured generation's resolved History
+// coordinates across the REST registry rebuild. Source-native IDs cannot always
+// be reconstructed from presentation rows (notably TrueNAS and VMware). The
+// targets already belong to this read, so never consult the live store again or
+// guess from a display name. Copy top-level rows before decorating: mock views
+// and cached read-state overlays may share their resource slice with readers.
+func unifiedSnapshotResources(view monitorUnifiedStateView) []unifiedresources.Resource {
+	if view.metricsTargets == nil {
+		return view.resources
+	}
+	resources := append([]unifiedresources.Resource(nil), view.resources...)
+	for i := range resources {
+		// Missing in this captured generation is authoritative too; do not
+		// carry a stale target from an earlier presentation row.
+		resources[i].MetricsTarget = view.metricsTargets.MetricsTargetForResource(resources[i].ID)
+	}
+	return resources
 }
 
 // Headless readers need the same publication freshness as frontend state reads.

@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "9c592b457d8be84765157b40e93afc80f6b2d718",
+  "changed_paths": [
+    "frontend-modern/browser-tests/build-core-reporting-journey.mjs",
+    "frontend-modern/browser-tests/core-reporting-journey.html",
+    "frontend-modern/browser-tests/core-reporting-journey.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/browser-tests/build-core-reporting-journey.mjs": "a17d53947df762cc1c38ce0b4d05c5294331ec580e958ad9e5886557d522297f",
+    "frontend-modern/browser-tests/core-reporting-journey.html": "66c472045046869410faca1390bb2320610ea8c1b69ceb454a0ab6b0233901b4",
+    "frontend-modern/browser-tests/core-reporting-journey.tsx": "bc17640c61dedbd7dacf9d1ec6d49d578dc62a544d0f065da7c4824ada1ee9f5"
+  },
+  "routes": [
+    "/browser-tests/core-reporting-journey.html",
+    "/api/resources",
+    "/api/metrics-store/history?resourceType=agent&resourceId=core-rest-fixture&range=24h&maxPoints=240",
+    "/api/metrics-store/history?resourceType=agent&resourceId=core-rest-fixture&range=1h&maxPoints=240"
+  ],
+  "states": [
+    "Complete/rejected/CPU-only/measured-zero/recovered CORE reporting and warm failure retaining original historical observations.",
+    "Existing production resource decoder, TrueNAS systems table, inline drawer and chart client consume actual authenticated-backend fixture JSON; no hand-written chart series.",
+    "Current unavailable telemetry remains distinct from historical observations and independent capacity."
+  ],
+  "interactions": [
+    "Desktop keyboard disclosure opens the inline drawer; phone row tap and more-charts disclosure expose existing History.",
+    "Default24h response completes before selecting1h; Home inspects the actual native observation rather than substituting the later capacity sample.",
+    "Desktop memory tooltip separates effective used/free/ARC; supplementary phone captures pin CPU/memory and scroll to below-fold disk I/O."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1100,
+      "browser": "Chromium"
+    },
+    {
+      "width": 320,
+      "height": 1000,
+      "browser": "Chromium"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "desktop-memory.png",
+      "sha256": "c7a64b3072c4e934ce747d975cda10b56121cd0afaef6a40cdda966758d721a0",
+      "native_pixel_review": true,
+      "observations": "Table CPU12%, rounded effective memory38%; tooltip separates6.00GB used,8.00GB reclaimable ARC,2.00GB free and88% used-with-cache. No chart claim from this capture."
+    },
+    {
+      "path": "1440-complete.png",
+      "sha256": "f4fa8905c1c293415a8533cb01f8e3abcb933cb89e7a0f2b52070cd21049e1cc",
+      "native_pixel_review": true,
+      "observations": "Native observation selected: CPU12.0%, memory37.5%, historical network32/64B/s and disk I/O1.00/2.00KB/s visible; independent later capacity is not spliced into the selected time."
+    },
+    {
+      "path": "1440-rejected.png",
+      "sha256": "628618d4bfcf449707a04c32e2f8551fd51e24b17e57dc0ea91bbd5c5eff54f1",
+      "native_pixel_review": true,
+      "observations": "Current CPU/memory/temperature are dashes; History says no CPU/memory reading, retains measured40% capacity and leaves I/O/thermals empty rather than zero."
+    },
+    {
+      "path": "1440-zero.png",
+      "sha256": "937b805651986d0d11e46c69f415fc252ff133d8924f1ea6446e9bdb3297217b",
+      "native_pixel_review": true,
+      "observations": "Current and selected historical CPU/memory are measured zero; I/O is0B/s with drawn zero series, not unavailable. Independent capacity remains."
+    },
+    {
+      "path": "320-complete.png",
+      "sha256": "da6304bdb2f6c2df89cc3debcf4db63898b1dde19554253a4474b7662ce23fef",
+      "native_pixel_review": true,
+      "observations": "Table12%/38% and native lines visible; after inspection loses focus to the more-charts button, latest capacity time truthfully says no CPU/memory reading. Lower I/O is below this capture; supplementary capture completes it."
+    },
+    {
+      "path": "320-rejected.png",
+      "sha256": "ba1edc1e053aa36803997aeeea2292a605488f8aff94bf768d744396d81d7e51",
+      "native_pixel_review": true,
+      "observations": "Current CPU/memory dashes, no-reading legends and an independent40% capacity point; empty network and disk-I/O panels, no invented zero."
+    },
+    {
+      "path": "320-zero.png",
+      "sha256": "f924658af41ab5245837aec2be3f4c350966e21254fccb3154b41f7ee32fb384",
+      "native_pixel_review": true,
+      "observations": "Table0%/0% and plotted zero lines; latest independent capacity time has no CPU/memory reading. Supplementary pinned capture shows the numeric historical zero."
+    },
+    {
+      "path": "supplement-1440-retained.png",
+      "sha256": "58c276e22c5798a899edfb8d0ac98e52a17b5930e0e2089bfaf1fa61f835ec0a",
+      "native_pixel_review": true,
+      "observations": "Current CPU/memory stay unavailable while separately labelled Latest recorded charts preserve earlier12.0%/37.5%, native rates and Single observation/No trend notices."
+    },
+    {
+      "path": "supplement-320-retained.png",
+      "sha256": "0b67961c0f2536c1fbd5f4ea418383388ae7fac905a3a89040f4b997d03fae72",
+      "native_pixel_review": true,
+      "observations": "Unavailable current table fields remain dashes; retained12.0%/37.5% are dated, isolated observations rather than a current healthy reading or invented trend."
+    },
+    {
+      "path": "supplement-320-retained-io.png",
+      "sha256": "3b6d21e7a33dd1e43318e1cd7eba6a94629761b2f63f380011858720a50b01d2",
+      "native_pixel_review": true,
+      "observations": "Below-fold disk I/O1.00/2.00KB/s is readable, with isolated points and the original recorded-time/no-trend notice."
+    },
+    {
+      "path": "supplement-320-complete.png",
+      "sha256": "914d2d7b6ba78811864cddd9afb7446ff58fa42c6ef296d8e356d5321e0ed210",
+      "native_pixel_review": true,
+      "observations": "Pinned native observation shows CPU12.0% and memory37.5% in full with a visible keyboard focus ring; table and date-range controls fit320px."
+    },
+    {
+      "path": "supplement-320-complete-io.png",
+      "sha256": "2f9416da37526e8d54b327ffe4442109b246c56adeb2b0bc652644ea7635e979",
+      "native_pixel_review": true,
+      "observations": "Below-fold positive disk I/O1.00/2.00KB/s, both plotted lines, labels and inspection control fit the narrow viewport."
+    },
+    {
+      "path": "supplement-320-zero.png",
+      "sha256": "15b38ef1596e0914378569b0905947b4ce8ebf7c8a15a0a1668085503153f09f",
+      "native_pixel_review": true,
+      "observations": "Pinned historical CPU0.0% and memory0.0% are readable and distinct from no reading; real zero lines retain the selected native observation."
+    },
+    {
+      "path": "supplement-320-zero-io.png",
+      "sha256": "9a4cd4b5e652eb15a9e0bf82b193e45ac77e49292884b0d959713b4aa829dfb3",
+      "native_pixel_review": true,
+      "observations": "Below-fold Read0B/s and Write0B/s are readable, plotted at zero; no missing-reading substitution or horizontal clipping."
+    }
+  ],
+  "proof_command": "pulse-worker-browser scripts/check-core-reporting-journey.cjs",
+  "verified_at": "2026-10-18T17:30:30Z",
+  "playwright": "1.56.1",
+  "chromium": "141.0.7390.37",
+  "runtime_fix": "8f069bd865df110f379eb9a73c9a0af43e813389",
+  "existing_rest_fix": "862ecc465662d38190816a5bb9493631b7330ed9",
+  "source_proofs": {
+    "api": {
+      "receipt_id": "source-2xwv_ea4",
+      "source_sha": "94f8165b4795c496eb6fcbb6f5847af11be6c647",
+      "exitcode": 0,
+      "guest_stop_completed": true
+    },
+    "frontend": {
+      "receipt_id": "source-wso2__1e",
+      "source_sha": "7d8e5aa06c4376f5d6160c267a95ea319d212a00",
+      "exitcode": 0,
+      "guest_stop_completed": true
+    },
+    "ownership_control": {
+      "receipt_id": "source-3ugiqnqc",
+      "source_sha": "a0e5a4b285adf9125120f8ee634f659f262a7615",
+      "overall_command_exitcode": 1,
+      "monitoring_package_exitcode": 0,
+      "control": "TestUnifiedSnapshotPreservesCapturedHistoryTargets",
+      "observed": "PASS; the companion API test failed its then-incorrect retained-History assertions, corrected and passing in the final API receipt.",
+      "same_tree_as_runtime_commit": "e08b2c5da8ff6b73f4692fc9d4a0707167cd3ba8"
+    }
+  },
+  "browser_proof_sources": {
+    "cold_matrix": {
+      "driver_commit": "3dda551c7c8bd588dd129f7a6af73a11d297c031",
+      "cases": 10,
+      "checks": 67,
+      "producer_receipt": "source-3k7yga2h",
+      "limits": "Cold documents had passed their assertions; the same producer command failed its separate warm empty-key expectation. No overall pass inferred.",
+      "producer_source_sha": "8216790dd2bbd0eb32c53cfaa50868b7e487f092"
+    },
+    "completion": {
+      "driver_commit": "9c592b457d8be84765157b40e93afc80f6b2d718",
+      "cases": 4,
+      "producer_receipt": "source-2xwv_ea4",
+      "scope": "Warm desktop/phone and supplementary pinned/lower-chart phone pixels."
+    }
+  },
+  "limits": [
+    "Narrow row temperature retains its existing ellipsis; no claim that every hardware field fits in the row.",
+    "Original phone captions can return to the later independent capacity time after focus moves; supplementary captures pin the native CPU/memory observation and show the lower I/O panels.",
+    "No installed service, reporter, physical appliance, Safari or release acceptance is established.",
+    "Schema-faithful synthetic pinned-TLS CORE server, not an appliance. Browser JSON is decoded/re-encoded for local HTTP; the local websocket channel is explicitly offline503.",
+    "API and build proofs bind their own committed source. Their runtime/compiled input hashes match this containing candidate; later edits only refine the verifier and record receipts.",
+    "Frontend-file guard skip is not used as browser proof for the backend effect."
+  ]
+}

@@ -8825,3 +8825,26 @@ change. Per-key point/day geometry keeps wrapped facts reachable within the
 unchanged window budgets. `recoverableWorkloadIdentity.test.tsx` and
 `recoverable-workload-identity.cjs` cover the existing list's projections and
 refresh, not installed identity or native recovery.
+
+
+### CORE reporting reaches the existing chart consumer — #2077 / #2964
+
+The monitor's unified-resource snapshot carries History targets resolved from
+that same captured registry generation into the REST resource seed. The resource
+service must not lose a native TrueNAS connection ID while rebuilding canonical
+presentation rows, then make the drawer query the row's hashed ID instead.
+Captured absence clears a retained target; no display-name inference or lookup
+against a later live registry is allowed. Decorating a snapshot does not mutate
+shared rows or the captured target map. Existing freshness, tenant/scope/token
+checks, TLS verification and source precedence remain unchanged.
+
+`TestUnifiedSnapshotPreservesCapturedHistoryTargets` verifies ownership and
+known/unknown target preservation. `TestCORE13RESTReportingChartJourney` drives
+the pinned-TLS CORE REST client, provider, native poller/monitor fallback and
+actual authenticated resources/History routes for default-day and selected-hour
+reads, complete/rejected/partial/measured-zero/recovered telemetry, free/ARC
+memory and device I/O. `check-core-reporting-journey.cjs` serves those captured
+JSON documents to the production resource decoder, TrueNAS systems table, inline
+drawer and chart client at desktop and narrow widths. The fixture does not
+require local History persistence or establish appliance, installed or released
+recovery. Original scan/cleanup facts and stopped guest monitoring are separate.
