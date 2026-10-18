@@ -294,6 +294,17 @@ const component = 'src/features/alerts/AlertDeliveryLogCard.tsx';
         assert.equal(await summary.locator('..').locator('p').innerText(), ids.join('\n'));
         assert.equal((await measure()).scroll, before.client);
         await capture('all-alert-ids');
+        if (width === 320) {
+          await summary
+            .locator('..')
+            .locator('p')
+            .evaluate((e) => e.scrollIntoView({ block: 'end' }));
+          await capture('all-alert-ids-end');
+          const failure = list.locator('p').filter({ hasText: diagnostic });
+          await failure.scrollIntoViewIfNeeded();
+          assert.equal(await failure.evaluate((e) => e.scrollWidth <= e.clientWidth), true);
+          await capture('full-diagnostic');
+        }
         mode = 'unavailable';
         await card.getByRole('button').click();
         await card.getByRole('alert').first().waitFor();
