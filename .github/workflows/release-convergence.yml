@@ -130,18 +130,35 @@ jobs:
               fi
               activation_owner_run_id="$(jq -r '.convergence_run_id' "${marker}")"
               if [ "${activation_owner_run_id}" != "${EXPECTED_CONVERGENCE_RUN_ID}" ]; then
-                original_status="$(
-                  gh api \
-                    "repos/${{ github.repository }}/actions/runs/${activation_owner_run_id}" \
-                    --jq '.status' 2>/dev/null || true
-                )"
-                if [ "${original_status}" != "completed" ]; then
+                # This observation is deliberately after verification of the
+                # exact immutable marker. Missing Actions history is not a
+                # completed owner, nor permission to bypass/reclaim the lease.
+                if ! original_status="$(
+                  python3 scripts/release_control/reconcile_release_convergence.py \
+                    --repository "${GITHUB_REPOSITORY}" \
+                    --activation-owner "${activation_owner_run_id}" \
+                    --tag "${TAG}" --source-run-id "${EXPECTED_SOURCE_RUN_ID}"
+                )"; then
                   rm -f "${marker}"
-                  echo "Original convergence owner ${activation_owner_run_id} is ${original_status:-unavailable}; successor adoption is not yet allowed."
-                  sleep 2
-                  continue
+                  echo "::error::Original convergence owner observation failed; no successor adoption."
+                  exit 1
                 fi
-                echo "[OK] Adopting committed ${TAG} from completed convergence owner ${activation_owner_run_id}."
+                case "${original_status}" in
+                  active)
+                    rm -f "${marker}"
+                    echo "Original convergence owner ${activation_owner_run_id} is active; successor adoption is not yet allowed."
+                    sleep 2
+                    continue
+                    ;;
+                  completed|history-missing)
+                    echo "[OK] Adopting attested ${TAG}; original owner ${activation_owner_run_id} history=${original_status}. The global lease is still required."
+                    ;;
+                  *)
+                    rm -f "${marker}"
+                    echo "::error::Unknown activation-owner observation; no successor adoption."
+                    exit 1
+                    ;;
+                esac
               fi
               activation_marker_sha256="$(sha256sum "${marker}" | awk '{print $1}')"
               server_image_digest="$(jq -r '.server_image_digest' "${marker}")"

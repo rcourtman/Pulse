@@ -131,6 +131,42 @@ def validate_marker(
     return int(owner)
 
 
+def activation_owner_state(
+    github: GitHub,
+    owner_run_id: int,
+    *,
+    workflow_id: int,
+    display_title: str,
+) -> str:
+    """Observe history, not permission to mutate or proof of completion.
+
+    An immutable, attested marker can outlive Actions history. Its absence does
+    not establish that the owner completed. A successor must still verify that
+    marker's exact bytes and acquire the unchanged global promotion lease;
+    in particular, missing history never permits reclaiming an unknown lease.
+    """
+    positive_int(owner_run_id, "activation owner run ID")
+    try:
+        owner = github.api(f"repos/{github.repository}/actions/runs/{owner_run_id}")
+    except GitHubNotFound:
+        return "history-missing"
+    if not isinstance(owner, dict) or owner.get("id") != owner_run_id:
+        raise ReconciliationError("activation owner response has a mismatched run ID")
+    require_run_identity(
+        owner,
+        repository=github.repository,
+        workflow_id=workflow_id,
+        path=CONVERGENCE_PATH,
+        display_title=display_title,
+    )
+    status = owner.get("status")
+    if status == "completed":
+        return "completed"
+    if isinstance(status, str) and status in {"queued", "in_progress", "waiting", "pending", "requested"}:
+        return "active"
+    raise ReconciliationError("activation owner status is unavailable or unknown")
+
+
 def current_channel_heads(releases: Iterable[object]) -> dict[bool, dict[str, Any]]:
     """Select published server heads before applying retry eligibility."""
     latest_release: dict[bool, tuple[datetime, dict[str, Any]]] = {}
@@ -260,7 +296,7 @@ class GitHub:
             detail = result.stderr.strip().splitlines() if output else []
             suffix = f": {detail[-1]}" if detail else ""
             operation = read_subject or " ".join(arguments[:3])
-            if "HTTP 404" in result.stderr:
+            if re.findall(r"\bHTTP ([0-9]{3})\b", result.stderr or "") == ["404"]:
                 raise GitHubNotFound(
                     f"GitHub object was not found ({operation}){suffix}"
                 )
@@ -635,26 +671,20 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
     owner_run_id = validate_marker(
         marker, release=release, tag=tag, source_run_id=source_run_id
     )
-    try:
-        owner_run = github.api(f"repos/{repository}/actions/runs/{owner_run_id}")
-    except GitHubNotFound as exc:
-        # The immutable marker outlives Actions history. Once its owner run is
-        # deleted, release-convergence.yml can never adopt the tag (it waits
-        # for that owner to read "completed"), so a retry would only time out.
-        raise ReconciliationError(
-            f"activation marker owner run {owner_run_id} for committed {tag} no longer "
-            "exists in Actions history; convergence cannot adopt this release until an "
-            "operator resolves it. No retry was dispatched."
-        ) from exc
-    require_run_identity(
-        owner_run,
-        repository=repository,
+    owner_state = activation_owner_state(
+        github,
+        owner_run_id,
         workflow_id=convergence_workflow_id,
-        path=CONVERGENCE_PATH,
         display_title=title,
     )
-    if owner_run.get("status") != "completed":
+    if owner_state == "active":
         raise ReconciliationError("activation marker owner is not terminal")
+    if owner_state == "history-missing":
+        report_decision(
+            f"Activation owner {owner_run_id} for committed {tag} has unavailable "
+            "Actions history (404), not confirmed completion. Recovery still "
+            "requires exact immutable attestation and the existing global lease."
+        )
 
     default_commit = github.api(f"repos/{repository}/commits/{default_branch}").get("sha")
     if not isinstance(default_commit, str) or EXACT_SHA.fullmatch(default_commit) is None:
@@ -759,6 +789,10 @@ def parse_args() -> argparse.Namespace:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--run-id", type=int)
     group.add_argument("--latest", action="store_true")
+    group.add_argument("--activation-owner", type=int,
+                       help="observe an attested marker's original owner; no mutation")
+    parser.add_argument("--tag")
+    parser.add_argument("--source-run-id", type=int)
     parser.add_argument("--max-attempts", type=int, default=5)
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -766,6 +800,18 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    owner_run_id = getattr(args, "activation_owner", None)
+    tag = getattr(args, "tag", None)
+    source_run_id = getattr(args, "source_run_id", None)
+    if owner_run_id is not None:
+        if (owner_run_id <= 0 or not isinstance(tag, str)
+                or RELEASE_TAG.fullmatch(tag) is None
+                or source_run_id is None or source_run_id <= 0):
+            print("activation owner requires positive run IDs and an exact release tag", file=sys.stderr)
+            return 2
+    elif tag is not None or source_run_id is not None:
+        print("tag/source-run-id are only valid with activation-owner", file=sys.stderr)
+        return 2
     if args.run_id is not None and args.run_id <= 0:
         print("run ID must be positive", file=sys.stderr)
         return 2
@@ -776,9 +822,25 @@ def main() -> int:
     github = GitHub(
         args.repository,
         gh,
-        mutate=not args.dry_run,
+        mutate=not args.dry_run and owner_run_id is None,
         private_token=os.environ.get("PRO_REPOSITORY_TOKEN", ""),
     )
+    if owner_run_id is not None:
+        try:
+            workflow = github.api(
+                f"repos/{args.repository}/actions/workflows/release-convergence.yml"
+            )
+            state = activation_owner_state(
+                github,
+                owner_run_id,
+                workflow_id=positive_int(workflow.get("id"), "workflow ID"),
+                display_title=f"Release convergence {tag} source {source_run_id}",
+            )
+        except (OSError, ReconciliationError) as exc:
+            print(f"activation owner observation failed: {exc}", file=sys.stderr)
+            return 1
+        print(state)
+        return 0
     try:
         run_ids = discover(github) if args.latest else [args.run_id]
     except (OSError, ReconciliationError) as exc:

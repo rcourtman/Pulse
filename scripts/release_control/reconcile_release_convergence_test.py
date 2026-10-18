@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import json
 import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 import subprocess
+import sys
 
 import reconcile_release_convergence as subject
 
@@ -798,22 +800,63 @@ class ReconciliationTests(unittest.TestCase):
         subject.reconcile(github, github.run_id, 5)
         self.assertEqual([], github.posts)
 
-    def test_deleted_activation_owner_is_named_without_retry(self):
-        github = FakeGitHub()
-        fake_api = github.api
-
+    def missing_owner(self, github):
+        original = github.api
         def api(endpoint):
-            if endpoint.endswith(f"/actions/runs/{github.owner_run_id}"):
-                raise subject.GitHubNotFound("GitHub object was not found")
-            return fake_api(endpoint)
-
+            if endpoint == f"repos/{github.repository}/actions/runs/{github.owner_run_id}":
+                raise subject.GitHubNotFound("gh: Not Found (HTTP 404)")
+            return original(endpoint)
         github.api = api
-        with self.assertRaises(subject.ReconciliationError) as raised:
+        return github
+
+    def test_deleted_activation_owner_can_reach_attested_workflow_not_fake_completion(self):
+        github = self.missing_owner(FakeGitHub())
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
             subject.reconcile(github, github.run_id, 5)
-        self.assertNotIsInstance(raised.exception, subject.GitHubNotFound)
-        self.assertIn("owner run 90 for committed v6.5.0-rc.1", str(raised.exception))
-        self.assertIn("no longer exists", str(raised.exception))
+        self.assertEqual(1, len(github.posts))
+        self.assertEqual(
+            (f"repos/{github.repository}/actions/workflows/release-convergence.yml/dispatches", {
+                "ref": "main", "inputs": {
+                    "tag": "v6.5.0-rc.1", "version": "6.5.0-rc.1", "prerelease": "true",
+                    "target_commitish": "c" * 40, "release_id": "300", "r2_prefix": "packet",
+                    "source_release_run_id": "200",
+                },
+            }), github.posts[0],
+        )
+        self.assertIn("unavailable Actions history (404), not confirmed completion", output.getvalue())
+        self.assertIn("exact immutable attestation and the existing global lease", output.getvalue())
+
+    def test_missing_owner_preserves_current_control_retry_budget(self):
+        github = self.missing_owner(FakeGitHub(current_controls=True))
+        github.runs[0]["run_attempt"] = 5
+        subject.reconcile(github, github.run_id, 5)
         self.assertEqual([], github.posts)
+
+    def test_missing_owner_does_not_override_credential_containment_or_marker_identity(self):
+        held = self.missing_owner(FakeGitHub())
+        held.unchanged_credential_containment_block = lambda run_id: True
+        subject.reconcile(held, held.run_id, 5)
+        self.assertEqual([], held.posts)
+        corrupt = self.missing_owner(FakeGitHub())
+        corrupt.marker["target_commitish"] = "f" * 40
+        with self.assertRaisesRegex(subject.ReconciliationError, "source commit"):
+            subject.reconcile(corrupt, corrupt.run_id, 5)
+        self.assertEqual([], corrupt.posts)
+
+    def test_unavailable_or_refused_owner_read_does_not_dispatch(self):
+        for detail in ("HTTP 401", "HTTP 403", "HTTP 429", "HTTP 504", "transport refused"):
+            with self.subTest(detail=detail):
+                github = FakeGitHub()
+                original = github.api
+                def api(endpoint):
+                    if endpoint == f"repos/{github.repository}/actions/runs/{github.owner_run_id}":
+                        raise subject.ReconciliationError(detail)
+                    return original(endpoint)
+                github.api = api
+                with self.assertRaisesRegex(subject.ReconciliationError, detail):
+                    subject.reconcile(github, github.run_id, 5)
+                self.assertEqual([], github.posts)
 
     def test_one_channel_failure_does_not_starve_the_other(self):
         args = argparse.Namespace(repository="rcourtman/Pulse", run_id=None,
@@ -842,6 +885,117 @@ class ReconciliationTests(unittest.TestCase):
             [(f"repos/{github.repository}/actions/runs/{github.run_id}/rerun", None)],
             github.posts,
         )
+
+
+class ActivationOwnerObservationTests(unittest.TestCase):
+    def state(self, github):
+        return subject.activation_owner_state(
+            github, github.owner_run_id, workflow_id=42, display_title=github.title
+        )
+
+    def test_present_owner_identity_and_status_are_required(self):
+        for status in ("completed", "queued", "in_progress", "waiting", "pending", "requested", None, "unknown", ["completed"]):
+            with self.subTest(status=status):
+                github = FakeGitHub()
+                original = github.api
+                def api(endpoint):
+                    value = original(endpoint)
+                    value["status"] = status
+                    return value
+                github.api = api
+                if not isinstance(status, str) or status == "unknown":
+                    with self.assertRaisesRegex(subject.ReconciliationError, "unknown"):
+                        self.state(github)
+                else:
+                    self.assertEqual("completed" if status == "completed" else "active", self.state(github))
+                self.assertEqual([], github.posts)
+
+    def test_mismatched_present_identity_never_becomes_missing_history(self):
+        for key, value in (
+            ("id", 91), ("repository", {"full_name": "other/repo"}),
+            ("workflow_id", 43), ("path", subject.CREATE_RELEASE_PATH),
+            ("event", "push"), ("display_title", "Release convergence v6.5.0 source 201"),
+        ):
+            with self.subTest(key=key):
+                github = FakeGitHub()
+                original = github.api
+                def api(endpoint):
+                    result = original(endpoint)
+                    result[key] = value
+                    return result
+                github.api = api
+                with self.assertRaises(subject.ReconciliationError):
+                    self.state(github)
+                self.assertEqual([], github.posts)
+
+    def test_missing_status_observation_is_read_only_at_real_cli(self):
+        # Execute the same CLI consumed after attestation by the real workflow.
+        # The closed gh fixture allows exactly two GETs, never a provider call.
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            gh = root / "gh"
+            record = root / "calls.jsonl"
+            reply = root / "reply.json"
+            gh.write_text("""#!/usr/bin/env python3
+import json, os, pathlib, sys
+p = pathlib.Path(os.environ["OWNER_FIXTURE"])
+x = json.loads(p.read_text())
+with pathlib.Path(os.environ["OWNER_CALLS"]).open("a") as f:
+    f.write(json.dumps(sys.argv[1:]) + "\\n")
+assert sys.argv[1] == "api" and "--method" not in sys.argv
+endpoint = sys.argv[-1]
+if endpoint == "repos/rcourtman/Pulse/actions/workflows/release-convergence.yml":
+    if x.get("workflow_missing"):
+        print("gh: Not Found (HTTP 404)", file=sys.stderr); sys.exit(1)
+    print('{"id":42}')
+elif endpoint == "repos/rcourtman/Pulse/actions/runs/90":
+    if "error" in x:
+        print(x["error"], file=sys.stderr); sys.exit(1)
+    print(x["raw"] if "raw" in x else json.dumps(x["run"]))
+else:
+    raise AssertionError(endpoint)
+""")
+            gh.chmod(0o700)
+            github = FakeGitHub()
+            owner = github.api(f"repos/{github.repository}/actions/runs/{github.owner_run_id}")
+            command = [sys.executable, str(Path(subject.__file__)), "--repository", github.repository,
+                       "--activation-owner", "90", "--tag", "v6.5.0-rc.1", "--source-run-id", "200"]
+            cases = [
+                ({"run": owner}, 0, "completed\n"),
+                ({"run": {**owner, "status": "in_progress"}}, 0, "active\n"),
+                ({"error": "gh: Not Found (HTTP 404)"}, 0, "history-missing\n"),
+                ({"error": "gh: Forbidden (HTTP 403)"}, 1, ""),
+                ({"error": "gh: unauthorised (HTTP 401)"}, 1, ""),
+                ({"error": "gh: limit (HTTP 429)"}, 1, ""),
+                ({"error": "transport refused"}, 1, ""),
+                ({"error": "gh: unexpected HTTP 4040"}, 1, ""),
+                ({"error": "gh: HTTP 404 then refused (HTTP 403)"}, 1, ""),
+                ({"raw": "truncated{"}, 1, ""),
+                ({"raw": "[]"}, 1, ""),
+                ({"run": {**owner, "status": "unknown"}}, 1, ""),
+                ({"run": {**owner, "id": 91}}, 1, ""),
+                ({"run": {**owner, "workflow_id": 43}}, 1, ""),
+                ({"workflow_missing": True}, 1, ""),
+            ]
+            env = {**os.environ, "GH_BIN": str(gh), "OWNER_FIXTURE": str(reply), "OWNER_CALLS": str(record)}
+            for case, code, output in cases:
+                with self.subTest(case=case):
+                    reply.write_text(json.dumps(case))
+                    record.write_text("")
+                    result = subprocess.run(command, env=env, text=True, capture_output=True, timeout=10)
+                    self.assertEqual(code, result.returncode, result.stderr)
+                    self.assertEqual(output, result.stdout)
+                    calls = [json.loads(line) for line in record.read_text().splitlines()]
+                    self.assertEqual(1 if case.get("workflow_missing") else 2, len(calls))
+                    self.assertTrue(all(c[0] == "api" and "--method" not in c for c in calls))
+                    if code:
+                        self.assertIn("observation failed", result.stderr)
+            for extra in (["--activation-owner", "0"], ["--tag", "v6.5.0-rc.1;unsafe"], ["--source-run-id", "0"]):
+                with self.subTest(extra=extra):
+                    record.write_text("")
+                    result = subprocess.run(command + extra, env=env, text=True, capture_output=True, timeout=10)
+                    self.assertEqual(2, result.returncode)
+                    self.assertEqual("", record.read_text())
 
 
 if __name__ == "__main__":
