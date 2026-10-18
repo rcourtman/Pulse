@@ -80,17 +80,23 @@ const point = (id, dataset, outcome = 'success') => ({
         return;
       }
       assert(!url.pathname.startsWith('/api/'), 'unexpected API request');
+      if (url.pathname === '/favicon.ico') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
       const file = path.resolve(staticRoot, '.' + decodeURIComponent(url.pathname));
       assert(file.startsWith(staticRoot + path.sep));
       const mime =
         { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css' }[
           path.extname(file)
         ] || 'application/octet-stream';
+      const content = fs.readFileSync(file);
       res.writeHead(200, { 'Content-Type': mime });
-      res.end(fs.readFileSync(file));
+      res.end(content);
     } catch (error) {
       result.serverError = String(error);
-      res.writeHead(500);
+      if (!res.headersSent) res.writeHead(500);
       res.end('fixture server failure');
     }
   });
