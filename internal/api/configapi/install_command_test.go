@@ -85,24 +85,28 @@ while time.monotonic() < deadline:
                 exit_sent = True
         if b"\x1ePULSE_COMMAND_READY\x1f" in output:
             command_ready = True
-        # The interactive shell also echoes the copied command, which contains
-        # this prompt literal. A PTY read may end there before the command has
-        # even run. Never deliver a credential while terminal echo is enabled:
-        # the real bootstrap disables it before printing the input prompt.
-        silent = not (termios.tcgetattr(tty_watch)[3] & termios.ECHO)
-        if output.endswith(b"(paste at this prompt, not in the command): ") and command_ready and silent and not sent:
-            if p.get("signal_on_prompt"):
-                # Keep the controlling terminal/session alive. The selected
-                # tool records the privileged reader that owns EXIT cleanup;
-                # signalling the entire session kills that observation owner.
-                with open(os.path.join(env["FAKE_ROOT"], "reader-pid")) as f:
-                    reader = int(f.read())
+    # Readline also changes terminal modes while echoing a copied command.
+    # Wait for the real prompt and Bash's noncanonical read, then poll even
+    # without new output so that a running reader can become blocked.
+    mode = termios.tcgetattr(tty_watch)[3]
+    input_ready = not (mode & (termios.ECHO | termios.ICANON))
+    if output.endswith(b"(paste at this prompt, not in the command): ") and command_ready and input_ready and not sent:
+        if p.get("signal_on_prompt"):
+            # Keep the controlling terminal/session alive. The selected tool
+            # records the privileged reader that owns EXIT cleanup. A visible
+            # prompt precedes Bash completing its read setup, so on Linux also
+            # observe the reader sleeping before delivering the real signal.
+            with open(os.path.join(env["FAKE_ROOT"], "reader-pid")) as f:
+                reader = int(f.read())
+            state = reader_signal_state(reader)
+            if not sys.platform.startswith("linux") or state.get("State", "").startswith("S "):
                 signal_observation = {"signal": p["signal_on_prompt"], "sent": False,
-                                      "before": reader_signal_state(reader)}
+                                      "before": state}
                 os.kill(reader, getattr(signal, "SIG" + p["signal_on_prompt"]))
                 signal_observation["sent"] = True
-            else:
-                os.write(master, (p["input"] + "\n").encode())
+                sent = True
+        else:
+            os.write(master, (p["input"] + "\n").encode())
             sent = True
     if child.poll() is not None and not ready: break
 else:
