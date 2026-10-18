@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "1d314781c983a07d79f2ca77a8d8b146ff48b153",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "1653d74f6a0995b96f9d48ee30570373875187c0d9174cd5498532df0b177738",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "ad3b843cc6e4908643510b338cc0a6dc136cb837d4ee6a9ea9b3836b13396c5f"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "Explicit ERROR: provider status is Failed, retaining the exact raw message.",
+    "Independent connection with equal workload name/VMID remains OK; protection remains Unknown.",
+    "Long multiline markup-shaped status is literal, wrapping and searchable.",
+    "Successful status plus separate error remains Unknown.",
+    "Unknown ERROR-free lookalike remains literal.",
+    "Ordinary OK replacement withdraws stale raw/error/conflict data."
+  ],
+  "interactions": [
+    "Real HTTP reader, accepted backup inventory, recovery model, search and Coverage disclosure/CSS consume safe synthetic GET observations. No provider, backup or guest operation.",
+    "Failed, archive unavailable and error: searches find only the failed connection. After ordinary OK replacement, Failed search finds neither connection.",
+    "Desktop keyboard activation/refresh and 320px WebKit touch activation/refresh preserve the open disclosure and logical row; desktop Refresh retains keyboard focus.",
+    "No page/console errors or off-origin/mutating requests; browser and loopback server close.",
+    "All eight retained captures were opened natively and inspected for actual text, colours, wrapping and replacement."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-18T21:24:26.282571Z",
+  "browser": {
+    "client": "Playwright 1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow": "26.0 WebKit, touch emulation, dark theme"
+  },
+  "source_proof_receipt": "source-21753fsg",
+  "fixture_entry": "/browser-tests/coverage-workload-identity.html",
+  "compiler_binding": {
+    "source_sha": "1d314781c983a07d79f2ca77a8d8b146ff48b153",
+    "source_inputs": 299,
+    "artifacts": 5,
+    "source_and_artifact_hashes_matched": true
+  },
+  "protocol_sha256": "24282f725d4587f0933e341ecdac1fa4c25cba19dec94d6070d7d3d1e9d1ef6b",
+  "captures": [
+    {
+      "file": "desktop-raw-failure.png",
+      "sha256": "e470043d229f14bf962258a0e91cfea9105da22e76ca3e3c63913d1d5180bd86",
+      "bytes": 119878
+    },
+    {
+      "file": "desktop-literal-status.png",
+      "sha256": "2136f981a0ef7f133ccf59346d00c888b82c9180824db9e735034f4aa031d23e",
+      "bytes": 129922
+    },
+    {
+      "file": "desktop-contradictory.png",
+      "sha256": "ea6247973c3b407c0ff845473e7461cf95e00289eb180268fcbb5b6312dc2519",
+      "bytes": 125502
+    },
+    {
+      "file": "desktop-corrected.png",
+      "sha256": "45f8bb8e6dfd7abbfe593b452af27b82302f659225bff1f87bc2c5a7f5a65daf",
+      "bytes": 116388
+    },
+    {
+      "file": "narrow-raw-failure.png",
+      "sha256": "6071579d2bd0971280f96cf74cf1c4b728c1632dae1fbd9ad3614489a353a440",
+      "bytes": 89588
+    },
+    {
+      "file": "narrow-literal-status.png",
+      "sha256": "84a9fc89846356b88fda4af873f1dc64c79d4ac2abe9d0065665e48f08b9ed0b",
+      "bytes": 77891
+    },
+    {
+      "file": "narrow-contradictory.png",
+      "sha256": "a3286b57a441ab648c3ec4e9e0972ba8ba1a434551980fe3dc80109859f248c9",
+      "bytes": 88954
+    },
+    {
+      "file": "narrow-corrected.png",
+      "sha256": "e3b363479b484d73d96da379c16e81d4e3686ad0ac28874e796ab1423b6965cb",
+      "bytes": 85573
+    }
+  ],
+  "limits": [
+    "Synthetic read-only observations through the production consumer, not native backup completion, independent thaw, filesystem liveness, installed recovery or full authenticated-app acceptance.",
+    "Chromium desktop and WebKit narrow emulation, not physical-device or screen-reader speech qualification.",
+    "Some unchanged lower details require vertical scrolling at 320px. No horizontal overflow was observed in the changed status/detail fields."
+  ]
+}
