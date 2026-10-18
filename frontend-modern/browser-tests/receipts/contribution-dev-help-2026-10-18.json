@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "base_sha": "0462ce091627d3839862933bf7df399b89292433",
+  "source_sha": "0462ce091627d3839862933bf7df399b89292433",
+  "verified_at": "2026-10-18T12:04:22.083222+00:00",
+  "result": "passed",
+  "scope": "Shipped documentation in production Docs/router/Markdown/CSS; synthetic surrounding shell, local GET-only delivery. No full application, live development startup, installed isolation, incident recovery or publication acceptance.",
+  "content_sha256": {
+    "CONTRIBUTING.md": "223e44e3b8996d913b8a75b7b150468c35100111c8dca9102ee4bdd896c791f0",
+    "frontend-modern/public/docs/CONTRIBUTING.md": "223e44e3b8996d913b8a75b7b150468c35100111c8dca9102ee4bdd896c791f0",
+    "docs/ISSUE_TRIAGE.md": "024435f6fc57751a4c97deb3db797e95bc367eccd46d18ea5af6b2a3539dddfd",
+    "frontend-modern/public/docs/ISSUE_TRIAGE.md": "024435f6fc57751a4c97deb3db797e95bc367eccd46d18ea5af6b2a3539dddfd"
+  },
+  "source_proofs": {
+    "recipe": "source-1d9k178m",
+    "consumer_build": "source-sl_1ghj_",
+    "complete_output_and_stop_verified": true
+  },
+  "browser": {
+    "playwright": "1.56.1",
+    "cases": [
+      {
+        "name": "desktop-light",
+        "width": 1440,
+        "height": 1000,
+        "dark": false,
+        "browser": "141.0.7390.37",
+        "geometry": {
+          "width": 896,
+          "content": 896,
+          "offset": 0
+        },
+        "exactRenderedRecipe": true,
+        "exactFetchedGuide": true,
+        "fragmentFocusAndReload": true,
+        "restoredIntakeGuidance": true,
+        "interaction": "keyboard",
+        "noDocumentOverflow": true
+      },
+      {
+        "name": "phone-dark",
+        "width": 320,
+        "height": 900,
+        "dark": true,
+        "browser": "141.0.7390.37",
+        "geometry": {
+          "width": 288,
+          "content": 554,
+          "offset": 266
+        },
+        "exactRenderedRecipe": true,
+        "exactFetchedGuide": true,
+        "fragmentFocusAndReload": true,
+        "restoredIntakeGuidance": true,
+        "interaction": "touch",
+        "noDocumentOverflow": true
+      }
+    ],
+    "page_errors": []
+  },
+  "captures": [
+    {
+      "file": "desktop-light-isolation.png",
+      "sha256": "d24dc975d4b5c5ca94a379fc7d942ff91d4c54c50e7de2624df91ae6c8ad2e66",
+      "observation": "Visible isolation warning precedes both copyable command blocks; it names installed configuration and authentication-bypass risks. Text and focus outline are readable."
+    },
+    {
+      "file": "desktop-light-recipe.png",
+      "sha256": "d94b6a64eca9605f89cc40ef99037de66c99e1a461e75ba94d85bd2426241408",
+      "observation": "No-takeover start/status and owned logs/stop commands are visible with refusal/unused-port guidance and the configuration-loading limitation."
+    },
+    {
+      "file": "desktop-light-intake-title-evidence.png",
+      "sha256": "06604924d77e27725a55b57e8aaf85d21bad511b896b5d08fba7aae904fd41a2",
+      "observation": "Restored title-fallback guidance is readable within the intake paragraph, including platform/agent/chart exclusions and whole-thread limits."
+    },
+    {
+      "file": "phone-dark-isolation.png",
+      "sha256": "b9b84c1dbe16c06d1cfc011d8cedf094cba5a587f8cf911562f293db8d90b00d",
+      "observation": "At 320 px the isolation warning wraps within the page; both code blocks remain bounded and horizontally scrollable rather than widening the document."
+    },
+    {
+      "file": "phone-dark-recipe.png",
+      "sha256": "ff5db51d3291561e2eaee7b698354709bac8bf1ea3634da83e5007bf1cab7a0e",
+      "observation": "At 320 px no-takeover and port-selection advice and the non-production credential/configuration limits wrap readably. The browser separately exercised horizontal code scrolling."
+    },
+    {
+      "file": "phone-dark-intake-title-evidence.png",
+      "sha256": "364582ce695d6b22272da327fce4677fe6d5f3427962dba39c066cf8daf141ca",
+      "observation": "At 320 px restored title-evidence guidance wraps without page overflow; adjacent intake guidance remains readable."
+    }
+  ],
+  "retained_evidence": "Product intelligence continuation 20261018T114037Z: RECEIPTS.md, complete source/browser outputs and six original capture files.",
+  "remaining": "Independent source review/protected publication. Development configuration-import default remains with Delivery; guidance is not a runtime fix."
+}
