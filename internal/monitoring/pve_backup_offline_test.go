@@ -106,7 +106,9 @@ func TestPVEOfflineBackupTasksRetainAgeAndHealthyPeerProgress(t *testing.T) {
 			require.Len(t, original, 5)
 			require.Equal(t, "pve-a", original["site-a-old"].Node, "task scope comes from its reader")
 			require.Equal(t, "warning", original["site-b-job-vm200"].Status)
-			require.Equal(t, "running", original["site-b-running"].Status)
+			require.Empty(t, original["site-b-running"].Status, "PVE omits status while the task is running; preserve the provider observation")
+			intent, active := m.resolveBackupIntentContext("", "site", "pve-b", 300, original["site-b-running"].ObservedAt.Add(time.Second))
+			require.True(t, active && intent.Active, "fresh running evidence remains usable")
 			require.Len(t, m.vzdumpJobTaskCache, 1)
 			for _, step := range []struct {
 				phase int32
@@ -129,6 +131,8 @@ func TestPVEOfflineBackupTasksRetainAgeAndHealthyPeerProgress(t *testing.T) {
 				require.Equal(t, int32(1), bReads.Load())
 				require.Equal(t, int32(1), logReads.Load())
 				require.Len(t, m.vzdumpJobTaskCache, 1, "offline parent cache must not be pruned")
+				_, active := m.resolveBackupIntentContext("", "site", "pve-b", 300, original["site-b-running"].ObservedAt.Add(backupIntentEvidenceMaxAge+time.Second))
+				require.False(t, active, "retained offline evidence must expire rather than suppress alerts indefinitely")
 			}
 			phase.Store(4)
 			m.pollBackupTasks(context.Background(), "site", client)
