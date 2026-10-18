@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -146,13 +147,17 @@ func TestCORE13RESTReportingChartJourney(t *testing.T) {
 					t.Fatalf("free/ARC/effective used changed: %+v", memory)
 				}
 			}
+			history24 := request(token, "org-core", strings.Replace(historyPath, "range=1h", "range=24h", 1))
 			history := request(token, "org-core", historyPath)
-			wantCalls := int64(2)
+			wantCalls := int64(3)
 			if i == 1 {
-				wantCalls = 14
+				wantCalls = 21
 			}
 			if fixture.Posts.Load()-beforePosts != wantCalls || fixture.RejectedOldKey.Load() != 0 {
 				t.Fatal("chart did not traverse native reporting, or repeated the rejected envelope")
+			}
+			if history24.Code != history.Code {
+				t.Fatal("default-range chart status disagrees with selected range")
 			}
 			if i == 1 {
 				if history.Code != 503 || snapshot.System.Telemetry.ErrorCategory != "request_rejected" {
@@ -192,7 +197,7 @@ func TestCORE13RESTReportingChartJourney(t *testing.T) {
 					}
 				}
 			}
-			payload, err := json.Marshal(map[string]any{"phase": phase, "resources": json.RawMessage(resources.Body.Bytes()), "history": map[string]any{"status": history.Code, "body": json.RawMessage(history.Body.Bytes())}, "telemetry": snapshot.System.Telemetry})
+			payload, err := json.Marshal(map[string]any{"phase": phase, "resources": json.RawMessage(resources.Body.Bytes()), "history": map[string]any{"status": history.Code, "body": json.RawMessage(history.Body.Bytes())}, "history24": map[string]any{"status": history24.Code, "body": json.RawMessage(history24.Body.Bytes())}, "telemetry": snapshot.System.Telemetry})
 			if err != nil {
 				t.Fatal(err)
 			}
