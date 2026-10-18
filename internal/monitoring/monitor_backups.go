@@ -2721,6 +2721,44 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 	return tasks
 }
 
+// beginPVEBackupPoll checks cadence and takes ownership atomically. A timestamp
+// limits frequency; it cannot prove completion when a slow scan outlives that
+// interval, cycle scheduling is due again, or a settings save resets cadence.
+func (m *Monitor) beginPVEBackupPoll(instance string, now time.Time) (bool, string) {
+	if m == nil {
+		return false, "configuration unavailable"
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.pveBackupPollInFlight[instance] {
+		return false, "previous backup scan is still running"
+	}
+	run, reason, next := m.shouldRunBackupPoll(m.lastPVEBackupPoll[instance], now)
+	if !run {
+		return false, reason
+	}
+	if m.lastPVEBackupPoll == nil {
+		m.lastPVEBackupPoll = make(map[string]time.Time)
+	}
+	if m.pveBackupPollInFlight == nil {
+		m.pveBackupPollInFlight = make(map[string]bool)
+	}
+	m.lastPVEBackupPoll[instance] = next
+	m.pveBackupPollInFlight[instance] = true
+	return true, ""
+}
+
+func (m *Monitor) finishPVEBackupPoll(instance string, started time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Preserve an immediate catch-up requested by a cadence reset (or removal)
+	// during this scan. Only this scan's unchanged timestamp may be advanced.
+	if m.lastPVEBackupPoll[instance].Equal(started) {
+		m.lastPVEBackupPoll[instance] = time.Now()
+	}
+	delete(m.pveBackupPollInFlight, instance)
+}
+
 func (m *Monitor) pollPVEBackupsAsync(
 	instanceName string,
 	instanceCfg *config.PVEInstance,
@@ -2742,11 +2780,7 @@ func (m *Monitor) pollPVEBackupsAsync(
 
 	now := time.Now()
 
-	m.mu.RLock()
-	lastPoll := m.lastPVEBackupPoll[instanceName]
-	m.mu.RUnlock()
-
-	shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
+	shouldPoll, reason := m.beginPVEBackupPoll(instanceName, now)
 	if !shouldPoll {
 		if reason != "" {
 			log.Debug().
@@ -2757,16 +2791,9 @@ func (m *Monitor) pollPVEBackupsAsync(
 		return
 	}
 
-	// Set initial timestamp before starting goroutine (prevents concurrent starts).
-	// This optional work owns a runtime-scoped timeout below; the completed core
-	// PVE generation must not be reclassified as unreachable merely because its
-	// per-cycle context expired before background scheduling.
-	m.mu.Lock()
-	m.lastPVEBackupPoll[instanceName] = newLast
-	m.mu.Unlock()
-
 	// Run backup polling in a separate goroutine to avoid blocking real-time stats
 	go func(startTime time.Time, inst string, pveClient PVEClientInterface) {
+		defer m.finishPVEBackupPoll(inst, startTime)
 		defer recoverFromPanic(fmt.Sprintf("pollPVEBackups-%s", inst))
 		timeout := m.calculateBackupOperationTimeout(inst)
 		log.Info().
@@ -2789,10 +2816,6 @@ func (m *Monitor) pollPVEBackupsAsync(
 			Dur("duration", duration).
 			Msg("Completed background backup/snapshot polling")
 
-		// Update timestamp after completion for accurate interval scheduling
-		m.mu.Lock()
-		m.lastPVEBackupPoll[inst] = time.Now()
-		m.mu.Unlock()
 	}(now, instanceName, client)
 
 }
