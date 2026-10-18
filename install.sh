@@ -151,6 +151,11 @@ verify_release_signature() {
     return 0
 }
 
+# All direct HTTP clients ignore ambient curl/wget configuration. Saved
+# defaults must not weaken TLS, rewrite read-only requests, add transfers or
+# trace an installer request. Keep caller trust/proxy settings and each
+# transfer's existing timeout, redirect and signature policy unchanged.
+
 # Installer version - the major version this script is bundled with
 INSTALLER_MAJOR_VERSION=5
 
@@ -303,7 +308,7 @@ get_latest_release_from_redirect() {
     # tolerates intermediate redirects that omit /tag/ (issue #698).
     local target_url="${1:-https://github.com/$GITHUB_REPO/releases/latest}"
     local effective_url=""
-    local curl_cmd=(curl -fsSL --connect-timeout 5 --max-time 10 -o /dev/null -w '%{url_effective}' "$target_url")
+    local curl_cmd=(curl --disable -fsSL --connect-timeout 5 --max-time 10 -o /dev/null -w '%{url_effective}' "$target_url")
 
     if command -v timeout >/dev/null 2>&1; then
         effective_url=$(timeout 10 "${curl_cmd[@]}" 2>/dev/null || true)
@@ -957,7 +962,7 @@ wait_for_pulse_ready() {
     local api_endpoint="${pulse_url%/}/api/health"
     print_info "Waiting for Pulse API at ${api_endpoint}..."
     for attempt in $(seq 1 "$retries"); do
-        if curl -fsS --max-time 2 "$api_endpoint" >/dev/null 2>&1; then
+        if curl --disable -fsS --max-time 2 "$api_endpoint" >/dev/null 2>&1; then
             print_info "Pulse API is reachable"
             return 0
         fi
@@ -1100,11 +1105,11 @@ resolve_latest_release_tag_for_channel() {
 
     [[ "$channel" == stable || "$channel" == rc ]] || return 1
     if command -v timeout >/dev/null 2>&1; then
-        if ! releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
+        if ! releases_json=$(timeout 15 curl --disable -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
             releases_json=""
         fi
     else
-        if ! releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
+        if ! releases_json=$(curl --disable -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
             releases_json=""
         fi
     fi
@@ -2081,7 +2086,7 @@ create_lxc_container() {
         sysctl -p >/dev/null 2>&1
         
         # Note: We don't create /usr/local/bin/update to avoid conflicts with Community Scripts
-        # Native installations should update using: curl -fsSL ... | bash
+        # Native installations should update using: curl --disable -fsSL ... | bash
         
         # Ensure /usr/local/bin is in PATH for all users
         if ! grep -q '/usr/local/bin' /etc/profile 2>/dev/null; then
@@ -3524,11 +3529,11 @@ download_container_installer() {
             sleep 2
         fi
         if command -v timeout >/dev/null 2>&1; then
-            if timeout 30 curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
+            if timeout 30 curl --disable -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
                 download_success=true
                 break
             fi
-        elif curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
+        elif curl --disable -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
             download_success=true
             break
         fi
@@ -3539,7 +3544,7 @@ download_container_installer() {
         [[ -z "$download_error" ]] || print_error "Error: $download_error"
         return 1
     fi
-    if ! curl -fsSL --connect-timeout 10 --max-time 30 "${download_url}.sshsig" > "$staged_signature" 2>"$staging_dir/curl-error"; then
+    if ! curl --disable -fsSL --connect-timeout 10 --max-time 30 "${download_url}.sshsig" > "$staged_signature" 2>"$staging_dir/curl-error"; then
         print_error "Failed to download container installer signature; refusing to copy or run the installer"
         return 1
     fi
@@ -3559,11 +3564,11 @@ resolve_target_release() {
         print_info "Installing specific version: $LATEST_RELEASE"
 
         if command -v timeout >/dev/null 2>&1; then
-            if ! timeout 15 curl -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
+            if ! timeout 15 curl --disable -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
                 print_warn "Could not verify version $LATEST_RELEASE, proceeding anyway..."
             fi
         else
-            if ! curl -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
+            if ! curl --disable -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
                 print_warn "Could not verify version $LATEST_RELEASE, proceeding anyway..."
             fi
         fi
@@ -3628,14 +3633,14 @@ download_release_archive() {
         return 1
     fi
 
-    if ! wget -q --timeout=60 --tries=2 -O "$archive_path" "$download_url"; then
+    if ! wget --no-config -q --timeout=60 --tries=2 -O "$archive_path" "$download_url"; then
         print_error "Failed to download Pulse release"
         print_info "This can happen due to network issues or GitHub rate limiting"
         print_info "You can try downloading manually from: $download_url"
         return 1
     fi
 
-    if ! wget -q --timeout=60 --tries=2 -O "$signature_file" "$signature_url"; then
+    if ! wget --no-config -q --timeout=60 --tries=2 -O "$signature_file" "$signature_url"; then
         rm -f "$signature_file" "$archive_path"
         print_error "Failed to download signature for Pulse release"
         print_info "Refusing to install without signature verification"
@@ -4137,7 +4142,7 @@ build_from_source() {
             return 1
         fi
 
-        if ! wget -q "https://go.dev/dl/go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"; then
+        if ! wget --no-config -q "https://go.dev/dl/go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"; then
             print_error "Failed to download Go toolchain"
             cd "$original_dir" >/dev/null 2>&1 || true
             return 1
@@ -4531,13 +4536,13 @@ download_auto_update_script() {
         local signature_file=""
 
         if command -v timeout >/dev/null 2>&1; then
-            if timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
+            if timeout $((max_time + 10)) curl --disable -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
                 :
             else
                 curl_status=$?
             fi
         else
-            if curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
+            if curl --disable -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
                 :
             else
                 curl_status=$?
@@ -4547,9 +4552,9 @@ download_auto_update_script() {
         if [[ $curl_status -eq 0 ]]; then
             signature_file=$(mktemp /tmp/pulse-auto-update-signature.XXXXXX)
             if command -v timeout >/dev/null 2>&1; then
-                timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
+                timeout $((max_time + 10)) curl --disable -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
             else
-                curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
+                curl --disable -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
             fi
 
             if [[ $curl_status -ne 0 ]]; then
@@ -5915,7 +5920,7 @@ cleanup_local_sensor_proxy() {
     echo "Removed legacy pulse-sensor-proxy footprint from this host."
     echo "If this host belongs to a Proxmox cluster, run the full cleanup on the"
     echo "other nodes (and to remove the pulse-monitor@pam API user):"
-    echo "  curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | bash -s -- --purge --remove-proxmox-access --local-only"
+    echo "  curl --disable -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | bash -s -- --purge --remove-proxmox-access --local-only"
 }
 
 

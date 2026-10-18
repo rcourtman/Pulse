@@ -2760,3 +2760,16 @@ func TestRootInstallScriptProtectedStagingControls(t *testing.T) {
 		t.Fatalf("protected staging controls: %v\n%s", err, out)
 	}
 }
+
+// Exercise actual installer helpers and real local TLS/HTTP clients. Only inert
+// signed inputs are downloaded; no system installation or payload runs here.
+func TestRootInstallHTTPClientsIgnoreAmbientConfiguration(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_installer_client_config.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("server installer HTTP-client configuration controls: %v\n%s", err, out)
+	}
+}
