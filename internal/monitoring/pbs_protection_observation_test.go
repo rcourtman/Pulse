@@ -152,3 +152,8 @@ func TestPBSGroupLatestChangePreservesFailedRefreshBoundaries(t *testing.T) {
 		}
 	}
 }
+
+// Failed namespace discovery must qualify the stored protection verdict.
+func TestPBSNamespaceDiscoveryFailureIsNotEmptyInventory(t *testing.T) {
+	exercisePBSNamespaceDiscovery(t, http.StatusServiceUnavailable, "fixture temporarily unavailable", false, false, "transient")
+}

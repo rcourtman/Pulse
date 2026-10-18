@@ -1654,8 +1654,7 @@ type pbsBackupFetchRequest struct {
 	cached    cachedPBSGroup
 }
 
-// pollPBSBackups fetches all backups from PBS datastores
-func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore) {
+func (m *Monitor) pollPBSBackupInventory(ctx context.Context, instanceName string, client *pbs.Client, datastores []pbsBackupDatastore) {
 	log.Debug().Str("instance", instanceName).Msg("polling PBS backups")
 
 	// Cache existing PBS backups so we can avoid redundant API calls when no changes occurred.
@@ -1678,7 +1677,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			return
 		}
 
-		namespacePaths := namespacePathsForDatastore(ds)
+		namespacePaths := namespacePathsForDatastore(ds.PBSDatastore)
 
 		log.Info().
 			Str("instance", instanceName).
@@ -1692,6 +1691,15 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		datastoreTerminalNamespaceErrors := 0
 		groupsReused := 0
 		groupsRequested := 0
+		if ds.namespaceDiscoveryErr != nil {
+			// A readable root does not establish which nested namespaces exist.
+			// Do not probe cached paths after failed/denied discovery, or let
+			// root-only success certify complete history and reconcile it away.
+			datastoreNamespaceErrors++
+			if !shouldReuseCachedPBSBackups(ds.namespaceDiscoveryErr) {
+				datastoreTerminalNamespaceErrors++
+			}
+		}
 
 		for _, namespace := range namespacePaths {
 			if ctx.Err() != nil {
@@ -1822,6 +1830,19 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			fetchedAt := time.Now()
 			for _, key := range fetched.refreshed {
 				refreshedGroups[key] = fetchedAt
+			}
+		}
+
+		if ds.namespaceDiscoveryErr != nil && shouldReuseCachedPBSBackups(ds.namespaceDiscoveryErr) {
+			// Transient discovery loss retains unread nested rows at their
+			// original cache age. Successfully read root rows still replace
+			// their own scope; access rejection does not retain raw rows.
+			for key, entry := range existingGroups {
+				if key.datastore != ds.Name || key.namespace == "" {
+					continue
+				}
+				allBackups = appendPBSBackupsWithinLimit(allBackups, entry.snapshots)
+				retainedGroups[key] = struct{}{}
 			}
 		}
 

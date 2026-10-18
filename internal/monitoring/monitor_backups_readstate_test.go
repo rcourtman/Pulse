@@ -2,8 +2,12 @@ package monitoring
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1555,4 +1560,172 @@ func TestPBSNamespaceFailuresRespectReadScope(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Real synthetic foreground -> background -> stored-protection evidence.
+func exercisePBSNamespaceDiscovery(t *testing.T, status int, response string, denied, complete bool, projection string) {
+	t.Helper()
+	f := newPBSPosturePollFixture(t, 3)
+	const instance = "pbs-main"
+	var phase atomic.Int32
+	var mu sync.Mutex
+	reads := map[string]int{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("unexpected provider mutation %s %s", r.Method, r.URL.Path)
+			http.Error(w, "read only", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		store := "archive"
+		if strings.Contains(r.URL.Path, "/mirror/") {
+			store = "mirror"
+		}
+		ns := r.URL.Query().Get("ns")
+		mu.Lock()
+		reads[fmt.Sprintf("%d/%s/%s/%s", phase.Load(), store, ns, r.URL.Path)]++
+		mu.Unlock()
+		snapshotAt := f.backupAt
+		size := 1024
+		if store == "mirror" && phase.Load() > 0 {
+			snapshotAt += 3600
+			size = 4096
+		}
+		body := `{"data":[]}`
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/version"):
+			body = `{"data":{"version":"3.4.2"}}`
+		case r.URL.Path == "/api2/json/nodes/localhost/status":
+			body = `{"data":{"cpu":0.1,"memory":{"used":512,"total":1024},"uptime":120}}`
+		case r.URL.Path == "/api2/json/admin/datastore":
+			body = `{"data":[{"store":"archive","total":1000,"used":250,"avail":750},{"store":"mirror","total":1000,"used":250,"avail":750}]}`
+		case strings.HasSuffix(r.URL.Path, "/status"):
+			body = `{"data":{"status":"available","total":1000,"used":250,"avail":750}}`
+		case strings.HasSuffix(r.URL.Path, "/namespace"):
+			if store == "archive" {
+				if phase.Load() == 1 {
+					w.WriteHeader(status)
+					_, _ = fmt.Fprint(w, response)
+					return
+				}
+				body = `{"data":[{"ns":"team/production"}]}`
+			}
+		case strings.HasSuffix(r.URL.Path, "/groups"):
+			id := "101"
+			if store == "mirror" {
+				id = "102"
+			} else if ns == "team/production" {
+				id = "100"
+			}
+			if store == "mirror" || phase.Load() == 0 {
+				body = fmt.Sprintf(`{"data":[{"backup-type":"vm","backup-id":%q,"backup-count":1,"last-backup":%d}]}`, id, snapshotAt)
+			}
+		case strings.HasSuffix(r.URL.Path, "/snapshots"):
+			body = fmt.Sprintf(`{"data":[{"backup-type":"vm","backup-id":%q,"backup-time":%d,"size":%d,"files":["index.json.blob"],"verification":{"state":"ok"}}]}`, r.URL.Query().Get("backup-id"), snapshotAt, size)
+		}
+		_, _ = fmt.Fprint(w, body)
+	}))
+	defer server.Close()
+	f.m.config = &config.Config{EnableBackupPolling: true, BackupPollingCycles: 1, PBSInstances: []config.PBSInstance{{Name: instance, Host: server.URL, TokenName: "fixture@pbs!reader", TokenValue: "fixture-only", MonitorDatastores: true, MonitorBackups: true}}}
+	f.m.pollStatusMap = make(map[string]*pollStatus)
+	f.m.initPBSClients(f.m.config)
+	client, ok := f.m.getPBSClient(instance)
+	require.True(t, ok)
+	f.m.setRuntimeContext(context.Background(), nil)
+	project := func(label string) {
+		if projection == "" {
+			return
+		}
+		payload, err := json.Marshal(map[string]any{"backups": f.m.PBSBackupsSnapshot(), "postures": f.postures(t)})
+		require.NoError(t, err)
+		t.Logf("PBS_NAMESPACE_BROWSER_%s_%s=%s", projection, label, base64.StdEncoding.EncodeToString(payload))
+	}
+	poll := func(p int32) {
+		phase.Store(p)
+		// An unchanged interval does not reset cadence. Reduce the configured
+		// interval through the ordinary catch-up route for each synthetic phase.
+		f.m.SetBackupPollingInterval(2 * time.Second)
+		f.m.SetBackupPollingInterval(time.Second)
+		f.m.pollPBSInstance(context.Background(), instance, client)
+		waitForPBSBackupReturn(t, f.m)
+		f.wait(t)
+	}
+	poll(0)
+	f.assertProtected(t, instance)
+	project("initial")
+	key := pbsBackupGroupKey{datastore: "archive", namespace: "team/production", backupType: "vm", backupID: "100"}
+	at := f.m.pbsBackupCacheTimeFor(instance, key)
+	require.False(t, at.IsZero())
+	poll(1)
+	raw := f.m.PBSBackupsSnapshot()
+	project("partial")
+	wantRaw, wantPoints := 2, 3
+	if denied || complete {
+		wantRaw = 1
+	}
+	if complete {
+		wantPoints = 1
+	}
+	if len(raw) != wantRaw {
+		t.Errorf("namespace discovery result lost scope: raw=%+v want=%d", raw, wantRaw)
+	}
+	for _, b := range raw {
+		if b.VMID == "102" {
+			require.Equal(t, int64(4096), b.Size, "readable sibling must advance independently")
+			require.Equal(t, f.backupAt+3600, b.BackupTime.Unix())
+		}
+		if b.VMID == "100" {
+			require.Equal(t, "team/production", b.Namespace)
+			require.Equal(t, f.backupAt, b.BackupTime.Unix(), "retained row cannot gain a new backup time")
+		}
+	}
+	for _, b := range raw {
+		require.NotEqual(t, "101", b.VMID, "a successful empty root must still replace its own raw scope")
+	}
+	require.Len(t, f.points(t, instance), wantPoints, "incomplete discovery cannot delete stored history")
+	if denied || complete {
+		require.Zero(t, f.m.pbsBackupCacheTimeFor(instance, key), "withdrawn raw scope cannot retain a reusable cache age")
+	} else {
+		require.Equal(t, at, f.m.pbsBackupCacheTimeFor(instance, key), "unread namespace cannot renew or lose its original cache age")
+	}
+	for _, p := range f.postures(t) {
+		require.Len(t, p.ProviderStates, 1)
+		provider := p.ProviderStates[0]
+		if complete {
+			require.Equal(t, recovery.ProtectionHistoryComplete, provider.HistoryCompleteness)
+			continue
+		}
+		wantState := recovery.ProtectionStateUnknown
+		wantPermissions := operationaltrust.EvidencePermissionsUnknown
+		if denied {
+			wantState = recovery.ProtectionStateAttention
+			wantPermissions = operationaltrust.EvidencePermissionsPartial
+		}
+		if p.State != wantState || provider.HistoryCompleteness != recovery.ProtectionHistoryPartial || provider.JobState != recovery.OutcomeWarning || provider.Permissions != wantPermissions {
+			t.Errorf("namespace discovery failure presented complete/healthy evidence: %+v", p)
+		}
+	}
+	mu.Lock()
+	for read, count := range reads {
+		if strings.HasPrefix(read, "1/archive/team/production/") && count != 0 {
+			t.Errorf("failed discovery must not probe an old namespace: %s", read)
+		}
+	}
+	mu.Unlock()
+	poll(2)
+	require.Len(t, f.m.PBSBackupsSnapshot(), 1, "complete discovery and empty nested enumeration confirm deletion")
+	require.Len(t, f.points(t, instance), 1, "only a complete scan may reconcile old points")
+	require.Zero(t, f.m.pbsBackupCacheTimeFor(instance, key))
+	project("complete")
+	t.Logf("namespace_status=%d complete=%t denied=%t retained_raw=%d stored=%d recovered_raw=1 recovered_stored=1", status, complete, denied, len(raw), wantPoints)
+}
+
+// Focused test callers supply already-known namespace inventories. Production
+// carries actual foreground discovery quality into pollPBSBackupInventory.
+func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore) {
+	observed := make([]pbsBackupDatastore, 0, len(datastores))
+	for _, ds := range datastores {
+		observed = append(observed, pbsBackupDatastore{PBSDatastore: ds})
+	}
+	m.pollPBSBackupInventory(ctx, instanceName, client, observed)
 }
