@@ -2,7 +2,11 @@ import { createSignal } from 'solid-js';
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { NotificationDeliveryLog, Webhook } from '@/api/notifications';
+import type {
+  NotificationDeliveryLog,
+  NotificationDeliveryLogEntry,
+  Webhook,
+} from '@/api/notifications';
 import type { AlertEvent } from '@/types/api';
 import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
@@ -67,12 +71,57 @@ describe('AlertDeliveryLogCard', () => {
 
     expect(screen.getByText('Ops Discord')).toBeInTheDocument();
     expect(screen.getByText('Email')).toBeInTheDocument();
-    expect(screen.getByText('Failed, retries exhausted')).toBeInTheDocument();
+    expect(screen.getByText('Failed, no further retries')).toBeInTheDocument();
     expect(screen.getByText('Delivered')).toBeInTheDocument();
     expect(screen.getByText('vm-offline-101 +1 more')).toBeInTheDocument();
     expect(screen.getByText(/Authentication failure/)).toBeInTheDocument();
     expect(screen.getByText(/HTTP 401 Unauthorized/)).toBeInTheDocument();
   });
+
+  // These outcomes are produced by the queue with a three-attempt budget.
+  // Authentication/configuration/rejection stop on attempt one; connectivity
+  // and server errors can retry, and connectivity can also exhaust the budget.
+  // The audit API exposes attempts but not the budget or the stop decision.
+  it.each([
+    ['authentication', 1, 'dead_letter', 'Failed, no further retries', 'Authentication failure'],
+    ['configuration', 1, 'dead_letter', 'Failed, no further retries', 'Configuration problem'],
+    ['rejected', 1, 'dead_letter', 'Failed, no further retries', 'Rejected by destination'],
+    ['connectivity', 3, 'dead_letter', 'Failed, no further retries', 'Connectivity failure'],
+    ['connectivity', 1, 'retry', 'Retrying', 'Connectivity failure'],
+    ['server_error', 1, 'retry', 'Retrying', 'Destination server error'],
+  ] as const)(
+    'describes %s after %i attempt(s) as %s without inventing a stop reason',
+    (failureClass, attempts, outcome, label, classification) => {
+      const entry: NotificationDeliveryLogEntry = {
+        ...log.entries[0],
+        notificationId: `${failureClass}-${attempts}`,
+        attempts,
+        outcome,
+        failureClass,
+        success: false,
+        errorMessage: 'Synthetic destination failure',
+      };
+      render(() => (
+        <AlertDeliveryLogCard
+          log={{ ...log, entries: [entry] }}
+          unavailable={false}
+          refreshing={false}
+          onRefresh={vi.fn()}
+          webhooks={webhooks}
+        />
+      ));
+
+      const row = screen.getByRole('listitem');
+      expect(within(row).getByText(label, { exact: true })).toBeVisible();
+      expect(within(row).getByText(new RegExp(classification))).toBeVisible();
+      expect(within(row).getByText(/Synthetic destination failure/)).toBeVisible();
+      expect(row).not.toHaveTextContent(/exhaust/i);
+      expect(row).not.toHaveTextContent('Delivered');
+      expect(screen.getByText(/Failures with no further automatic retries/)).toHaveTextContent(
+        'remain available for 30 days',
+      );
+    },
+  );
 
   it('says test sends are not listed so their absence is not read as failure', () => {
     render(() => (
@@ -156,7 +205,7 @@ describe('AlertDeliveryLogCard', () => {
   it.each([
     ['retry', 'Retrying'],
     ['failed', 'Failed'],
-    ['dead_letter', 'Failed, retries exhausted'],
+    ['dead_letter', 'Failed, no further retries'],
     ['cancelled', 'Cancelled'],
   ] as const)(
     'replaces a previous successful row with %s evidence on refresh',
@@ -221,7 +270,7 @@ describe('AlertDeliveryLogCard', () => {
 
     expect(screen.getByText(/Completed attempts are retained for 7 days/)).toBeInTheDocument();
     expect(
-      screen.getByText(/Failures that exhausted retries remain available for 30 days/),
+      screen.getByText(/Failures with no further automatic retries remain available for 30 days/),
     ).toBeInTheDocument();
     const timestamps = Array.from(container.querySelectorAll('time'));
     expect(timestamps[0]).toHaveAttribute('datetime', log.entries[0].timestamp);
