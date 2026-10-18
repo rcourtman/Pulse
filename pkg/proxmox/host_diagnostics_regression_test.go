@@ -303,6 +303,13 @@ func TestClientConstructionHonoursContext(t *testing.T) {
 	testClientConstructionHonoursContext(t)
 }
 
+// Unlike unpublished construction, renewal belongs to every live reader.
+// Exercise both authentication encodings so restoring constructor cancellation
+// cannot accidentally restore cancellation of a shared renewal too.
+func TestClientSessionRenewalStarterCancellation(t *testing.T) {
+	testClientSessionRenewalStarterCancellation(t)
+}
+
 func TestClusterCancelledCallerStartsNoSession(t *testing.T) {
 	testClusterCancelledCallerStartsNoSession(t)
 }

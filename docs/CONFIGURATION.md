@@ -1311,6 +1311,23 @@ TrueNAS connections are stored encrypted in `truenas.enc`.
 
 ---
 
+## VMware refresh timeout
+
+`PULSE_VMWARE_POLL_TIMEOUT` bounds the whole inventory refresh for each vCenter
+connection. It defaults to `20s`. If a large inventory needs more time, set a
+positive Go duration such as `120s` on the Pulse server process. Empty values
+use the default; invalid, zero, negative or overflowing values warn and use
+`20s` rather than removing the deadline.
+
+This does not change the individual HTTP request timeout, permissions or TLS
+verification. A shorter parent deadline or shutdown still cancels the refresh.
+Connections are polled sequentially: allowing one connection more time can
+also delay the next connection. Failed refreshes keep the last complete
+inventory; increasing the budget is not proof that a network or API error has
+been repaired.
+
+---
+
 ## Relay
 
 The relay protocol provides end-to-end encrypted remote access foundations for Pulse mobile connectivity.
