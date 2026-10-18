@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -382,5 +383,171 @@ func TestStorageInventoryDiagnosticsNoPayload(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// A bounded wire body can contain thousands of rejected rows. It must not turn
+// one ordinary read into one warning and one reserved filesystem slot per row.
+// Synthetic HTTP only: no native QGA, backup or guest recovery is attempted.
+func TestGuestFilesystemMalformedReplyCost(t *testing.T) {
+	for _, malformed := range []int{0, 1, 32, 4096} {
+		for _, level := range []zerolog.Level{zerolog.WarnLevel, zerolog.DebugLevel} {
+			t.Run(fmt.Sprintf("rows-%d/%s", malformed, level), func(t *testing.T) {
+				const marker = "synthetic-private-rejected-volume"
+				peer := `{"name":"root","mountpoint":"/","type":"ext4","total-bytes":1000,"used-bytes":0}`
+				bad := `{"mountpoint":"/` + marker + `","type":"ext4","total-bytes":9000}`
+				// Valid peers at both ends pin ordering and the last measured zero.
+				last := `{"name":"data","mountpoint":"/data","type":"ext4","total-bytes":2000,"used-bytes":0}`
+				payload := `{"data":{"result":[` + peer + "," + strings.Repeat(bad+",", malformed) + last + `]}}`
+				var commands, configs atomic.Int32
+				var healthy atomic.Bool
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if strings.HasSuffix(r.URL.Path, "/config") {
+						configs.Add(1)
+						fmt.Fprint(w, `{"data":{}}`)
+						return
+					}
+					commands.Add(1)
+					if strings.HasSuffix(r.URL.Path, "/get-fsinfo") && !healthy.Load() {
+						fmt.Fprint(w, payload)
+					} else {
+						backupAgentPayload(w, r)
+					}
+				}))
+				defer server.Close()
+				client := commandReplyTestClient(t, server.URL+"/malformed-reply-cost/"+fmt.Sprint(malformed)+"/"+level.String())
+				var captured bytes.Buffer
+				prior, priorLevel := log.Logger, zerolog.GlobalLevel()
+				log.Logger = zerolog.New(zerolog.SyncWriter(&captured)).Level(level)
+				zerolog.SetGlobalLevel(level)
+				defer func() { log.Logger = prior; zerolog.SetGlobalLevel(priorLevel) }()
+				rows, err := client.GetVMFSInfo(context.Background(), "node", 105)
+				if (err != nil) != (malformed > 0) || len(rows) != 2 || commands.Load() != 1 || configs.Load() != 2 {
+					t.Fatal("diagnostic bound changed valid peers, completeness or command/lock count")
+				}
+				if err != nil && err.Error() != fmt.Sprintf("guest filesystem inventory is incomplete: %d malformed entries", malformed) {
+					t.Fatal("diagnostic bound changed the existing counted error")
+				}
+				if rows[0].Name != "root" || rows[0].TotalBytes != 1000 || rows[0].UsedBytes != 0 || rows[0].Disk != "root-filesystem" ||
+					rows[1].Name != "data" || rows[1].TotalBytes != 2000 || rows[1].UsedBytes != 0 || rows[1].Disk != "/data" {
+					t.Fatal("valid peer identity, order, bytes or measured zero changed")
+				}
+				if cap(rows) > 2*len(rows) {
+					t.Errorf("accepted output reservation follows rejected rows: capacity=%d accepted=%d", cap(rows), len(rows))
+				}
+				if strings.Contains(captured.String(), marker) {
+					t.Fatal("rejected volume payload escaped into diagnostics")
+				}
+				logBytes := captured.Len()
+				decoder := json.NewDecoder(bytes.NewReader(captured.Bytes()))
+				var warnings []map[string]interface{}
+				for decoder.More() {
+					var event map[string]interface{}
+					if err := decoder.Decode(&event); err != nil {
+						t.Fatal("malformed log event")
+					}
+					if event["level"] == "warn" {
+						warnings = append(warnings, event)
+					}
+				}
+				t.Logf("response_bytes=%d malformed=%d log_bytes=%d warnings=%d accepted=%d commands=%d configs=%d", len(payload), malformed, logBytes, len(warnings), len(rows), commands.Load(), configs.Load())
+				wantWarnings := 0
+				if malformed > 0 {
+					wantWarnings = 1
+				}
+				if len(warnings) != wantWarnings || logBytes > 2048 {
+					t.Errorf("diagnostics amplify rejected rows: warnings=%d want=%d bytes=%d limit=2048", len(warnings), wantWarnings, logBytes)
+				} else if malformed > 0 {
+					event := warnings[0]
+					if event["malformed_entries"] != float64(malformed) || event["filesystem_entries"] != float64(malformed+2) || event["first_invalid_index"] != float64(1) || event["node"] != "node" || event["vmid"] != float64(105) {
+						t.Error("counted warning lost rejection total, first index or guest attribution")
+					} else if malformed == 4096 && level == zerolog.WarnLevel {
+						// Real producer event, consumed unchanged by the browser proof.
+						wire, _ := json.Marshal(event)
+						t.Logf("FILESYSTEM_LOG_PRODUCER %s", wire)
+					}
+				}
+				// Malformed completed readings are not uncertain command completion.
+				if _, err := client.GetVMAgentInfo(context.Background(), "migrated", 105); err != nil {
+					t.Fatalf("completed reading incorrectly fenced metadata: %v", err)
+				}
+				healthy.Store(true)
+				if next, err := client.GetVMFSInfo(context.Background(), "migrated", 105); err != nil || len(next) != 0 || commands.Load() != 3 || configs.Load() != 6 {
+					t.Fatal("ordinary complete inventory did not resume with unchanged lock checks")
+				}
+			})
+		}
+	}
+}
+
+// Measure the unchanged public reader, including guarded HTTP and parsing, on
+// an identical small valid inventory and a large rejected inventory. Allocation
+// observations are comparative evidence, not a timing/CI performance threshold.
+func BenchmarkGuestFilesystemReplyCost(b *testing.B) {
+	prior, priorLevel := log.Logger, zerolog.GlobalLevel()
+	log.Logger = zerolog.New(io.Discard).Level(zerolog.Disabled)
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	defer func() { log.Logger = prior; zerolog.SetGlobalLevel(priorLevel) }()
+	for _, malformed := range []int{0, 4096} {
+		b.Run(fmt.Sprintf("malformed-%d", malformed), func(b *testing.B) {
+			peer := `{"mountpoint":"/","type":"ext4","total-bytes":1000,"used-bytes":0}`
+			payload := `{"data":{"result":[` + peer + "," + strings.Repeat("null,", malformed) + peer + `]}}`
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/config") {
+					fmt.Fprint(w, `{"data":{}}`)
+				} else {
+					fmt.Fprint(w, payload)
+				}
+			}))
+			defer server.Close()
+			client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: 15 * time.Second})
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer client.httpClient.CloseIdleConnections()
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				rows, err := client.GetVMFSInfo(context.Background(), "node", 105)
+				if len(rows) != 2 || (err != nil) != (malformed > 0) {
+					b.Fatal("reader lost valid peers or counted failure")
+				}
+			}
+		})
+	}
+}
+
+// The cheap shape rejection must retain the original completed-reading
+// semantics. It is neither successful emptiness nor an uncertainty cooldown.
+func TestGuestFilesystemNonObjectRowsRemainIncomplete(t *testing.T) {
+	for _, bad := range []string{`null`, `false`, `true`, `7`, `"synthetic-private-scalar"`, `[]`, `[{}]`} {
+		t.Run(fmt.Sprintf("case-%d", len(bad)), func(t *testing.T) {
+			var commands atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/config") {
+					fmt.Fprint(w, `{"data":{}}`)
+					return
+				}
+				commands.Add(1)
+				if strings.HasSuffix(r.URL.Path, "/get-fsinfo") {
+					fmt.Fprintf(w, `{"data":{"result":[%s,{"mountpoint":"/","type":"ext4","total-bytes":1000,"used-bytes":0},%s]}}`, bad, bad)
+				} else {
+					backupAgentPayload(w, r)
+				}
+			}))
+			defer server.Close()
+			// Keep independent cases outside any prior listener's guest fence.
+			client := commandReplyTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
+			rows, err := client.GetVMFSInfo(context.Background(), "node", 105)
+			if len(rows) != 1 || rows[0].UsedBytes != 0 || cap(rows) > 2 || err == nil || err.Error() != "guest filesystem inventory is incomplete: 2 malformed entries" {
+				t.Fatal("known malformed row shape changed accepted peer, output reservation or counted error")
+			}
+			if strings.Contains(err.Error(), "synthetic-private-scalar") {
+				t.Fatal("raw row entered the counted error")
+			}
+			if _, err := client.GetVMAgentInfo(context.Background(), "node", 105); err != nil || commands.Load() != 2 {
+				t.Fatal("completed rejected shape acquired an uncertainty fence or repeated a command")
+			}
+		})
 	}
 }
