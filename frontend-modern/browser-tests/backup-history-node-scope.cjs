@@ -112,10 +112,10 @@ async function capture(page, name) {
       const detail = row.locator('xpath=following-sibling::tr[1]').getByRole('region', { name: 'Latest backup job', exact: true });
       await detail.waitFor();
       const field = (label) => detail.locator('dt', { hasText: new RegExp('^' + label + '$') }).locator('xpath=following-sibling::dd[1]');
-      assert.equal(await field('Result').innerText(), 'Failed');
+      assert.equal(await field('Result').innerText(), 'ERROR: archive unavailable');
       assert.equal(await field('Job node').innerText(), 'pve-a');
       const checks = ['initial production failed task and pve-a provenance render'];
-      for (const [phase, expected] of [ ['foreign', 'Failed'], ['recovered', 'OK'], ['implicit-node', 'OK'] ]) {
+      for (const [phase, expected] of [ ['foreign', 'ERROR: archive unavailable'], ['recovered', 'OK'], ['implicit-node', 'OK'] ]) {
         payload = observations[phase];
         const refresh = page.getByRole('button', { name: 'Refresh backups', exact: true });
         const read = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/backups/pve');
@@ -135,7 +135,8 @@ async function capture(page, name) {
         assert.match(await page.locator('[data-proxmox-coverage-key="resource:site-200"]').innerText(), /OK/);
         assert.match(await page.locator('[data-proxmox-coverage-key="resource:other-100"]').innerText(), /OK/);
         if (phase === 'foreign') {
-          assert.equal(await field('Reported error').innerText(), 'archive unavailable');
+          assert.equal(await field('Reported error').count(), 0, 'the producer reports its raw error as status, not a separate error field');
+          assert.equal(await field('Result').innerText(), 'ERROR: archive unavailable');
           assert.equal(await detail.locator('.text-emerald-600').count(), 0);
           checks.push('foreign history cannot replace live failure/node; independent node and reused VMID remain OK');
         } else {
