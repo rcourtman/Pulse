@@ -43,6 +43,7 @@ import {
   getAlertDestinationsHeldEventsUnavailable,
   getAlertDestinationsTestPausedWarning,
   getAlertDestinationsAppriseTargetsHelp,
+  getAlertDestinationsAppriseTransportWarning,
   getAlertDestinationsAppriseTestLabel,
   getAlertDestinationsAppriseTestError,
   getAlertDestinationsAppriseTestFailure,
@@ -350,4 +351,37 @@ describe('alert destinations delivery paused copy', () => {
     }
     setActiveLocale(DEFAULT_LOCALE);
   });
+});
+
+describe('Apprise API transport policy, not connection evidence', () => {
+  it.each([false, true])('warns for HTTP independently of bypass=%s', (skip) => {
+    expect(
+      getAlertDestinationsAppriseTransportWarning('  HTTP://apprise.example.invalid:8000  ', skip),
+    ).toContain('HTTP does not use TLS');
+  });
+  it('warns for the full HTTPS bypass without echoing endpoint data', () => {
+    const warning = getAlertDestinationsAppriseTransportWarning(
+      'HTTPS://apprise.example.invalid/path?token=fixture',
+      true,
+    );
+    expect(warning).toContain('not just for self-signed certificates');
+    expect(warning).toContain('form settings');
+    expect(warning).not.toContain('fixture');
+    expect(warning).not.toContain('apprise.example.invalid');
+  });
+  it.each([
+    '',
+    'unfinished',
+    'https://',
+    'ftp://apprise.example.invalid',
+    'https://apprise.example.invalid',
+  ])('does not infer insecure transport from %s with verification on', (url) => {
+    expect(getAlertDestinationsAppriseTransportWarning(url, false)).toBeNull();
+  });
+  it.each(['', 'unfinished', 'https://', 'ftp://apprise.example.invalid'])(
+    'does not invent a transport for %s with bypass selected',
+    (url) => {
+      expect(getAlertDestinationsAppriseTransportWarning(url, true)).toBeNull();
+    },
+  );
 });

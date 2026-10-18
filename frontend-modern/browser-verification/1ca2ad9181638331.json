@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "a69ecff8da0f0e59d9eb29fe70cd27d618b6a12a",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx": "64edba8874bca3604568fdbc02411b17d3c38a5aa7e52d9e4475965c924c7f06",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "660b6203469fde0c442dfd6743ea531288e4bedc91c4cc7586f6b78ff7699615"
+  },
+  "routes": [
+    "/browser-tests/apprise-transport.html (real API reader, settings normalizer and Notifications tab, synthetic GET responses)"
+  ],
+  "states": [
+    "HTTPS with verification enabled: no unsafe transport notice and no claim of verified connectivity",
+    "HTTPS bypass: full certificate/hostname warning, not a self-signed-only exception",
+    "HTTP: plaintext/identity warning independent of the checkbox",
+    "CLI: no claim about API TLS; switching back preserves draft settings",
+    "Same-open production GET reload consumes a saved bypass; blank saved API key and target configuration preserved"
+  ],
+  "interactions": [
+    "Desktop focus and Space toggle with retained focus; narrow label touch toggles",
+    "Server URL edits and CLI/API selects update accessible notices without a test or save",
+    "Same-open fixture reload exercises production settings producer/normalizer/consumer; all API writes and off-origin requests refused"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-18T05:07:58.186962Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow_webkit": "26.0"
+  },
+  "pixel_review": "All six retained captures opened with native view_image in this source turn. New notice/checkbox/help text is readable without clipping in desktop light and 320px dark layouts. Existing panel description and saved-key placeholder truncate at narrow width; their content is unchanged. New notices wrap fully. Document scrollWidth/clientWidth 1365/1365 and 320/320.",
+  "limits": "Synthetic presentation and draft preservation, not TLS negotiation, recipient delivery, installed recovery or availability. Existing source-free WebKit Back/reload fault is not exercised or cleared.",
+  "driver": "frontend-modern/browser-tests/apprise-transport.cjs",
+  "receipt_correction": "Retains the same browser pass and exact runtime hashes. Corrects UTC timestamp serialization from +00:00 to the guard-required Z; this non-merge receipt is bound to its own parent. No runtime source changed and no browser result is replayed."
+}

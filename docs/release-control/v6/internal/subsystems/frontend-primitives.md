@@ -1904,6 +1904,23 @@ removal/failure retention and containing publication remain separate evidence.
 
 ## Shared Boundaries
 
+### Apprise API transport warnings describe form settings, not delivery proof
+
+Notifications names `skipTlsVerify` as skipping TLS certificate verification,
+not merely allowing self-signed certificates. For a configured HTTPS API with
+that flag, the notice explains missing certificate/hostname checks and the risk
+to API keys, destination URLs and alert content. Plain HTTP has its own warning
+regardless of the checkbox: it has no TLS and the checkbox cannot protect it.
+The policy is only Pulse-to-API; CLI mode and Apprise's delivery targets are not
+qualified by it. Unknown/incomplete addresses do not invent transport evidence.
+Warnings are accessibly associated with the URL and checkbox and update in the
+same open form without changing credentials, configuration or sending a test.
+The normal settings loader/payload and mounted section tests cover preservation;
+`apprise-transport.cjs` exercises synthetic HTTP through the production reader,
+normalizer and Notifications tab at desktop and 320px, with writes refused.
+No TLS-client, saved-policy, real delivery or installed-recovery change is implied.
+
+
 ### Transport-independent operator rows
 
 Proxmox/Storage and Docker presenters retain the shared table/detail, responsive

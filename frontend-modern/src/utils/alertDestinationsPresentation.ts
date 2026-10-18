@@ -63,9 +63,31 @@ export const ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_PLACEHOLDER = 'X-API-KEY'
 export const ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP =
   'Defaults to X-API-KEY for Apprise API deployments.';
 export const ALERT_DESTINATIONS_APPRISE_TLS_LABEL = 'TLS verification';
-export const ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL = 'Allow self-signed certificates';
+export const ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL =
+  'Skip TLS certificate verification (unsafe)';
 export const ALERT_DESTINATIONS_APPRISE_TLS_HELP =
-  'Enable only when the Apprise API uses a self-signed certificate.';
+  'Leave unchecked to verify the HTTPS API server. This setting affects only the connection from Pulse to the Apprise API, not the local CLI or delivery targets. It has no effect on HTTP.';
+
+// Describe the configured Pulse → API transport, never a successful connection
+// or the separate transports Apprise uses to deliver to its own destinations.
+export function getAlertDestinationsAppriseTransportWarning(
+  serverUrl: string,
+  skipTlsVerify: boolean,
+): string | null {
+  let protocol: string;
+  try {
+    protocol = new URL(serverUrl.trim()).protocol;
+  } catch {
+    return null; // An incomplete address is not evidence of a transport policy.
+  }
+  if (protocol === 'http:') {
+    return 'HTTP does not use TLS. Requests to this API would send API keys, destination URLs and alert content without encryption or server identity checks. Use HTTPS with a trusted certificate. The verification checkbox has no effect on HTTP.';
+  }
+  if (protocol === 'https:' && skipTlsVerify) {
+    return 'Certificate and hostname checks are disabled by these HTTPS form settings, not just for self-signed certificates. API keys, destination URLs and alert content could be sent to an impersonated server. Keep verification on and use a certificate trusted by the Pulse runtime.';
+  }
+  return null;
+}
 export const ALERT_DESTINATIONS_APPRISE_TIMEOUT_LABEL = 'Timeout (seconds)';
 export const ALERT_DESTINATIONS_APPRISE_TIMEOUT_HELP =
   'Maximum time to wait for Apprise to respond.';

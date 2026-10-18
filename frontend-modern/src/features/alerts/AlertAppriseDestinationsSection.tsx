@@ -1,7 +1,7 @@
 import { Show, createSignal, createUniqueId } from 'solid-js';
 
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
-import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificationWarningBanner';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { Toggle } from '@/components/shared/Toggle';
 import { formControl, formField, formHelpText, labelClass } from '@/components/shared/Form';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -42,6 +42,7 @@ import {
   ALERT_DESTINATIONS_APPRISE_TLS_LABEL,
   getAlertDestinationsAppriseTargetsHelp,
   getAlertDestinationsAppriseTestLabel,
+  getAlertDestinationsAppriseTransportWarning,
   getAlertDestinationsStatusLabel,
 } from '@/utils/alertDestinationsPresentation';
 
@@ -68,6 +69,8 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
     minimumSeverity: `${fieldIdPrefix}-minimum-severity`,
   };
   const [showSettings, setShowSettings] = createSignal(false);
+  const transportWarning = () =>
+    getAlertDestinationsAppriseTransportWarning(props.config.serverUrl, props.config.skipTlsVerify);
   let settingsRegion: HTMLDivElement | undefined;
   // The summary's button unmounts as the form renders, so hand keyboard focus
   // to the first revealed control instead of dropping it on the document.
@@ -196,12 +199,15 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
                   value={props.config.serverUrl}
                   class={formControl}
                   placeholder={ALERT_DESTINATIONS_APPRISE_SERVER_URL_PLACEHOLDER}
+                  aria-describedby={`${fieldIds.serverUrl}-help${transportWarning() ? ` ${fieldIds.skipTlsVerify}-warning` : ''}`}
                   onInput={(event) => {
                     props.updateApprise({ serverUrl: event.currentTarget.value });
                     props.setHasUnsavedChanges(true);
                   }}
                 />
-                <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_SERVER_URL_HELP}</p>
+                <p id={`${fieldIds.serverUrl}-help`} class={formHelpText}>
+                  {ALERT_DESTINATIONS_APPRISE_SERVER_URL_HELP}
+                </p>
               </div>
               <div class={formField}>
                 <label
@@ -272,19 +278,28 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
                 <span class={labelClass('text-xs uppercase tracking-[0.08em]')}>
                   {ALERT_DESTINATIONS_APPRISE_TLS_LABEL}
                 </span>
-                <Show when={props.config.skipTlsVerify}>
-                  <TlsVerificationWarningBanner
-                    class="mb-3"
-                    subject="this Apprise API endpoint"
-                    remediation="Install a trusted certificate on the Apprise server before using this in production."
-                  />
+                <Show when={transportWarning()}>
+                  {(message) => (
+                    <InlineNotice
+                      id={`${fieldIds.skipTlsVerify}-warning`}
+                      class="mb-3"
+                      tone="warning"
+                      role="status"
+                      aria-label="Apprise API transport warning"
+                      aria-live="polite"
+                      aria-atomic="true"
+                    >
+                      {message()}
+                    </InlineNotice>
+                  )}
                 </Show>
-                <label class="inline-flex items-center gap-2">
+                <label class="inline-flex min-h-11 items-center gap-2">
                   <input
                     id={fieldIds.skipTlsVerify}
                     type="checkbox"
                     class="h-4 w-4 rounded-sm border border-border"
                     checked={props.config.skipTlsVerify}
+                    aria-describedby={`${fieldIds.skipTlsVerify}-help${transportWarning() ? ` ${fieldIds.skipTlsVerify}-warning` : ''}`}
                     onChange={(event) => {
                       props.updateApprise({ skipTlsVerify: event.currentTarget.checked });
                       props.setHasUnsavedChanges(true);
@@ -294,7 +309,9 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
                     {ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL}
                   </span>
                 </label>
-                <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_TLS_HELP}</p>
+                <p id={`${fieldIds.skipTlsVerify}-help`} class={formHelpText}>
+                  {ALERT_DESTINATIONS_APPRISE_TLS_HELP}
+                </p>
               </div>
             </div>
           </Show>
