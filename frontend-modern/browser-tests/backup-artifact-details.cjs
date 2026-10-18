@@ -299,11 +299,14 @@ async function capture(name, fullPage = true) {
         await page.waitForTimeout(100);
         resize.push({ width, geometry: await inspect(dateTable()) });
       }
-      const sort = page.getByRole('button', { name: 'Sort by Created', exact: true });
+      // The active header names its next direction, not just the column.
+      const sort = page.getByRole('button', { name: /^Sort by Created (ascending|descending)$/ });
       await activate(sort, false);
       assert(await sort.evaluate((el) => document.activeElement === el));
+      assert.equal(await sort.locator('..').getAttribute('aria-sort'), 'ascending');
       await page.keyboard.press('Space');
       assert(await sort.evaluate((el) => document.activeElement === el));
+      assert.equal(await sort.locator('..').getAttribute('aria-sort'), 'descending');
     }
     await page.getByRole('link', { name: 'Coverage', exact: true }).click();
     const toggle = page.getByRole('button', { name: /Expand details for recovery-vm/i });
