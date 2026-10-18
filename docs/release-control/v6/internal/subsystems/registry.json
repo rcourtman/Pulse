@@ -6803,6 +6803,7 @@
               "internal/monitoring/recovery_rollups_resilience_test.go",
               "internal/monitoring/reload_test.go",
               "internal/monitoring/truenas_poller_test.go",
+              "internal/monitoring/vmware_poller_test.go",
               "internal/unifiedresources/code_standards_test.go"
             ]
           },

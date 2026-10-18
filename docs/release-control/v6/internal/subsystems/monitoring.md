@@ -4656,6 +4656,18 @@ health record, even if that provider keeps separate authenticated Automation
 API and VI JSON clients internally. Connection edits that change host, auth,
 TLS, or poll cadence must replace that live provider state instead of leaving
 stale VMware sessions resident until restart.
+The VMware poller owns the total per-connection inventory refresh deadline.
+`PULSE_VMWARE_POLL_TIMEOUT` accepts a trimmed, positive Go duration and defaults
+to `20s` when unset or blank. Invalid, zero, negative or overflowing durations
+warn and fall back to that default. This process-wide override changes the
+whole refresh budget, while individual HTTP requests retain their `20s` limit.
+The poller must propagate earlier parent deadlines and shutdown cancellation,
+release the refresh context after success or failure, and keep connection
+refreshes sequential. `TestVMwarePollTimeout`,
+`TestVMwarePollerRefreshDeadline`,
+`TestVMwarePollerRefreshHonoursEarlierParentDeadline` and
+`TestVMwarePollerRefreshCancellation` in
+`internal/monitoring/vmware_poller_test.go` are the registered runtime proofs.
 That same provider-owned summary must also serve the shared settings runtime
 surface. `internal/monitoring/vmware_poller.go` owns the per-connection poll
 summary (`poll` plus `observed`), `POST /api/vmware/connections/{id}/test`

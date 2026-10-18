@@ -14,6 +14,137 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 )
 
+func TestVMwarePollTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  time.Duration
+	}{
+		{"empty", "", 20 * time.Second},
+		{"blank", " \t\n", 20 * time.Second},
+		{"seconds", "120s", 120 * time.Second},
+		{"compound", "1m30s", 90 * time.Second},
+		{"trimmed", " \t120s\n", 120 * time.Second},
+		{"subsecond", "250ms", 250 * time.Millisecond},
+		{"invalid", "invalid", 20 * time.Second},
+		{"missing_unit", "120", 20 * time.Second},
+		{"zero", "0s", 20 * time.Second},
+		{"negative", "-1s", 20 * time.Second},
+		{"overflow", "9223372036854775808ns", 20 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PULSE_VMWARE_POLL_TIMEOUT", tc.value)
+			if got := vmwarePollTimeout(); got != tc.want {
+				t.Fatalf("vmwarePollTimeout() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+type contextVMwarePollerProvider struct {
+	failingVMwarePollerProvider
+	refresh func(context.Context) error
+}
+
+func (p *contextVMwarePollerProvider) Refresh(ctx context.Context) error {
+	return p.refresh(ctx)
+}
+
+func TestVMwarePollerRefreshDeadline(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  time.Duration
+	}{
+		{"default", "", 20 * time.Second},
+		{"configured", "120s", 120 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PULSE_VMWARE_POLL_TIMEOUT", tc.value)
+			poller := NewVMwarePoller(nil, time.Minute)
+			var refreshCtx context.Context
+			before := time.Now()
+			provider := &contextVMwarePollerProvider{refresh: func(ctx context.Context) error {
+				refreshCtx = ctx
+				deadline, ok := ctx.Deadline()
+				if !ok || deadline.Before(before.Add(tc.want)) || deadline.After(time.Now().Add(tc.want)) {
+					t.Fatalf("refresh deadline = (%v, %t), want a %v budget", deadline, ok, tc.want)
+				}
+				return nil
+			}}
+			poller.pollConnection(context.Background(), vmwarePollerProviderEntry{
+				orgID: "default", connectionID: "vc-timeout", provider: provider,
+			})
+			if refreshCtx == nil || refreshCtx.Err() != context.Canceled {
+				t.Fatal("refresh context was not released after a successful poll")
+			}
+		})
+	}
+}
+
+func TestVMwarePollerRefreshHonoursEarlierParentDeadline(t *testing.T) {
+	t.Setenv("PULSE_VMWARE_POLL_TIMEOUT", "120s")
+	deadline := time.Now().Add(time.Second)
+	parent, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+	poller := NewVMwarePoller(nil, time.Minute)
+	provider := &contextVMwarePollerProvider{refresh: func(ctx context.Context) error {
+		if got, ok := ctx.Deadline(); !ok || !got.Equal(deadline) {
+			t.Fatalf("refresh deadline = (%v, %t), want parent deadline %v", got, ok, deadline)
+		}
+		return nil
+	}}
+	poller.pollConnection(parent, vmwarePollerProviderEntry{
+		orgID: "default", connectionID: "vc-timeout", provider: provider,
+	})
+}
+
+func TestVMwarePollerRefreshCancellation(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		value  string
+		cancel bool
+		want   error
+	}{
+		{"refresh_timeout", "10ms", false, context.DeadlineExceeded},
+		{"parent_cancel", "120s", true, context.Canceled},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PULSE_VMWARE_POLL_TIMEOUT", tc.value)
+			parent, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			poller := NewVMwarePoller(nil, time.Minute)
+			called := false
+			provider := &contextVMwarePollerProvider{refresh: func(ctx context.Context) error {
+				called = true
+				if tc.cancel {
+					cancel()
+				}
+				select {
+				case <-ctx.Done():
+					if !errors.Is(ctx.Err(), tc.want) {
+						t.Fatalf("refresh error = %v, want %v", ctx.Err(), tc.want)
+					}
+					return ctx.Err()
+				case <-time.After(5 * time.Second):
+					t.Fatal("refresh did not observe cancellation")
+					return nil
+				}
+			}}
+			poller.pollConnection(parent, vmwarePollerProviderEntry{
+				orgID: "default", connectionID: "vc-timeout", provider: provider,
+			})
+			if !called {
+				t.Fatal("poll did not refresh the provider")
+			}
+			status := poller.statusByOrg["default"]["vc-timeout"]
+			if status == nil || status.consecutiveFailures != 1 || status.lastError == nil {
+				t.Fatalf("cancelled refresh did not record a poll failure: %+v", status)
+			}
+		})
+	}
+}
+
 func TestVMwarePollerPollsConfiguredConnections(t *testing.T) {
 	previous := vmware.IsFeatureEnabled()
 	vmware.SetFeatureEnabled(true)
