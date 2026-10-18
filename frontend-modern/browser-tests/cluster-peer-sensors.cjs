@@ -63,7 +63,8 @@ const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).d
         const expected = ['denied','stale','foreign'].includes(state)?null:state==='local'?'70°C':'55°C';
         if (expected) { await current.getByText(expected,{exact:true}).waitFor(); }
         else { assert.equal(await current.count(),0, `${state} manufactured a reading`); }
-        assert.equal(await thermals.getByText('0°C',{exact:true}).count(),0);
+        // A zero axis tick is a scale mark, not a manufactured live reading.
+        assert.equal(await current.getByText('0°C',{exact:true}).count(),0);
         const dimensions = await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));
         assert.ok(dimensions.scroll<=dimensions.width+1,JSON.stringify(dimensions));
         // Retain complete success/failure/recovery pixels at both viewports.
