@@ -16,6 +16,36 @@
 
 ## Purpose
 
+### NAS boot registration does not erase unrelated startup work
+
+Installation/update on Unraid and QNAP removes only exactly recognised owned
+entries before emitting one canonical boot entry. The bounded complete-source,
+regular-file/owner and exact-bootstrap checks used by removal also govern
+registration. Unknown custom launchers, truncated/invalid scripts, symlinks and
+shell-expanding bootstrap paths are refused without evaluating boot text.
+Spaces are quoted. Repeating an already-converged registration is a no-op.
+
+Stage the filtered replacement beside the boot file and preserve its mode.
+Recheck the original before retiring it into an owned recovery directory, then
+create the destination exclusively and verify the complete bytes and owned-entry
+readback. FAT needs no hard-link support. An incomplete publication keeps its
+available original/retired/replacement files under `.pulse-install.*`; a later
+invocation must not replay it or overwrite a concurrent destination. This is a
+recoverable checked publication, not an atomic filesystem exchange or proof of
+reboot persistence. QNAP may claim confirmed flash configuration only after a
+successful unmount; failure still attempts unmount and stops before starting a
+new watchdog or reporting completion. It does not automatically restart a
+previously stopped collector.
+
+`TestInstallSHNASBootRegistrationPreservesUnrelatedCommands` runs
+`scripts/installtests/nas_boot_registration.py`: original-producer adverse
+controls, exact legacy/fresh/idempotent publication, preserved unrelated bytes,
+unknown-input refusal, concurrent/partial-write recovery and both consuming
+installer branches. `TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure`
+continues to test removal using these same production-generated boot entries.
+These are private local fixtures, not native QNAP/Unraid installation, reboot,
+upgrade or reporter recovery.
+
 ### TrueNAS agent completion requires confirmed boot persistence
 
 A running agent does not establish a persistent TrueNAS installation. The Unix

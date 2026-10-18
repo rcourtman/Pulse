@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### NAS installation preserves shared boot-file ownership
+
+Unraid and QNAP registration uses the same exact-entry parser as removal, not
+substring deletion. Unrelated commands and sibling launchers stay byte-for-byte
+intact; unknown/edited Pulse activation, malformed or unsafe files stop the
+operation. See the [boot publication contract](deployment-installability.md#nas-boot-registration-does-not-erase-unrelated-startup-work).
+Neither registration failure nor QNAP flash-unmount refusal may start a new
+watchdog or report completion. Existing runtime stops may already have occurred;
+this is not an automatic runtime rollback. `TestInstallSHNASBootRegistrationPreservesUnrelatedCommands`
+executes both production callers with private file/finite-watchdog fixtures and
+explicit filesystem race/refusal controls, not native appliance recovery.
+
 ### TrueNAS boot-task registration is separate from running-agent health
 
 Unix agent completion applies the [TrueNAS persistence contract](deployment-installability.md#truenas-agent-completion-requires-confirmed-boot-persistence):
