@@ -68,6 +68,9 @@ const { chromium } = require('playwright');
       };
       const capture = async label => {
         await page.evaluate(() => document.fonts.ready);
+        await page.evaluate(() => Promise.all(document.getAnimations()
+          .filter(animation => animation.effect?.getTiming().iterations !== Infinity)
+          .map(animation => animation.finished.catch(() => {}))));
         await page.screenshot({ path: path.join(out, `${width}-${label}.png`), fullPage: true });
       };
       const refresh = async () => {
@@ -90,7 +93,7 @@ const { chromium } = require('playwright');
       await checkRows(0);
       await refresh();
       await checkRows(0);
-      await page.getByText(/No restore points/).first().waitFor();
+      await page.getByText('No backups yet', { exact: true }).waitFor();
       await capture('retired');
       phase = 'current';
       await refresh();
