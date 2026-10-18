@@ -8661,6 +8661,21 @@ The fixture performs no DNS resolution, listener or network connection, and
 does not establish native Kubernetes or installed fleet recovery.
 ### Backup history collection carries completeness
 
+Each history page must bind every backup task's explicit node to the node
+whose task endpoint was read, before appending rows or deduplicating UPIDs.
+A foreign-node row makes that whole page `collection_failed`: none of its
+prefix can replace live outcomes, enter report history or qualify complete
+observation. Earlier admitted pages and independently readable nodes remain
+available. An omitted redundant node field still inherits the request's node.
+Correctly scoped later history can still update a live task's outcome; the
+existing window, page/log budgets, authority and no-guest-operation boundaries
+are unchanged. `TestBackupHistoryRejectsForeignNodePages` checks first/later
+pages, duplicate-UPID contamination and peer preservation;
+`TestPVEBackupHistoryForeignNodeCannotReplaceLiveFailure` joins direct/cluster
+HTTP readers, ordinary polling and the served Coverage projection without
+opening a database. This is evidence admission, not native backup/restore,
+independent guest thaw, filesystem liveness or installed recovery.
+
 `GetBackupTaskHistory` in `pkg/proxmox/backup_history.go` enumerates a bounded
 ninety-day PVE task window with pagination and a fixed collection cutoff. Offline
 nodes, failed reads, repeated/capped pages and unconfirmed `Sys.Audit` authority
