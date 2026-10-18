@@ -253,7 +253,11 @@ describe('shipped documentation build sync', () => {
       .sort();
     expect(actual).toEqual([...selected].sort());
     for (const relative of selected) {
-      expect(bytes(root, mirror(relative)), relative).toEqual(bytes(root, source(relative)));
+      // Compare every byte without making the assertion library enumerate
+      // large Buffer objects as individual JS properties.
+      expect(bytes(root, mirror(relative)).equals(bytes(root, source(relative))), relative).toBe(
+        true,
+      );
     }
   });
 });
