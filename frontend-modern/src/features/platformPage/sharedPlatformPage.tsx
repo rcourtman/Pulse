@@ -677,7 +677,7 @@ export function PlatformSortableTableHead<SortKey extends string>(props: {
         <button
           type="button"
           class="block min-h-6 w-full min-w-0 rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
-          style={{ 'text-align': 'inherit' }}
+          style={{ 'text-align': 'inherit', 'text-transform': 'inherit' }}
         >
           {props.children}
           <Show when={isSorted()}>
