@@ -84,8 +84,23 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
     const row = page.locator('tr').filter({ hasText: 'core-fixture' }).first();
     await row.waitFor();
     const rowText = await row.innerText();
-    if (['complete', 'recovered'].includes(phase)) check(rowText.includes('12') && rowText.includes('37.5'), 'native CPU and ARC-aware memory reach the table');
-    if (phase === 'rejected') check(!rowText.includes('%') || !rowText.includes('0%'), 'unavailable readings are not shown as idle');
+    if (['complete', 'recovered'].includes(phase)) check(rowText.includes('12%') && rowText.includes('38%'), 'native CPU and rounded ARC-aware memory reach the table');
+    if (phase === 'rejected' || phase === 'partial') {
+     const memoryCell = await row.locator('td').nth(2).innerText();
+     check(!memoryCell.includes('%'), 'unavailable memory is not shown as idle');
+     if (phase === 'rejected') check(!(await row.locator('td').nth(1).innerText()).includes('%'), 'unavailable CPU is not shown as idle');
+    }
+    if (width === 1440 && phase === 'complete') {
+     await row.locator('td').nth(2).locator('.relative').hover();
+     await page.getByText('Used with ARC cache', { exact: true }).waitFor();
+     const tooltip = page.getByText('Reclaimable cache', { exact: true }).locator('..').locator('..');
+     record.memoryTooltip = await tooltip.innerText();
+     check(['6.00 GB', '8.00 GB', '2.00 GB', '88%'].every((value) => record.memoryTooltip.includes(value)), 'free pages, ARC cache and used-with-cache comparison remain distinct');
+     const file = '1440-memory.png';
+     await page.screenshot({ path:path.join(output,file), animations:'disabled' });
+     result.screenshots.push({ file, width, phase, sha256:hash(fs.readFileSync(path.join(output,file))) });
+     await page.mouse.move(0,0);
+    }
     if (width === 320) await row.tap();
     else {
      const disclosure = row.getByRole('button', { name: /expand details/i });
@@ -119,7 +134,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
     if (phase !== 'rejected' && phase !== 'partial') {
      await io.getByRole('img').waitFor();
      record.io = await io.innerText();
-     check((await io.innerText()).includes(phase==='zero' ? '0 B/s' : '1.0 KB/s'), 'native disk I/O reaches its own chart');
+     check((await io.innerText()).includes(phase==='zero' ? '0 B/s' : '1.00 KB/s'), 'native disk I/O reaches its own chart');
     }
     check(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)), 'no document horizontal overflow');
     if (['complete','rejected','zero'].includes(phase)) {
