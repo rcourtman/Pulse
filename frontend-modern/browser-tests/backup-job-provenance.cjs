@@ -24,6 +24,7 @@ const result = {
   cases: [],
   captures: [],
   requests: [],
+  pve_responses: [],
   errors: [],
   unexpected: [],
   cleanup: {},
@@ -218,7 +219,15 @@ async function capture(page, name) {
         await button.focus();
         await page.keyboard.press('Enter');
       }
-      await response;
+      const observed = await response;
+      const body = await observed.body();
+      assert.deepEqual(JSON.parse(body), next);
+      result.pve_responses.push({ sha256: hash(body), browser: name });
+      await page.waitForFunction(() =>
+        [...document.querySelectorAll('button[aria-disabled="false"]')].some(
+          (button) => button.textContent === 'Refresh backups',
+        ),
+      );
       await page.waitForFunction(
         (value) => document.querySelector('[data-backup-task-detail] dd')?.textContent === value,
         expected,
