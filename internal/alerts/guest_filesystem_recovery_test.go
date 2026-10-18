@@ -3,7 +3,6 @@ package alerts
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -203,52 +202,38 @@ func TestGuestFilesystemTemporaryUseUnavailableRecovery(t *testing.T) {
 	}
 }
 
-func TestGuestFilesystemTemporaryUseRollingRecovery(t *testing.T) {
-	m, elapsed := filesystemRecoveryManager(t, 0, false)
+func TestGuestFilesystemTemporaryUseRejectsCapacityWindow(t *testing.T) {
+	m, _ := filesystemRecoveryManager(t, 0, false)
 	cfg := m.GetConfig()
-	cfg.MetricEvaluationWindows = map[string]map[string]int{"all": {"disk": 300}}
+	cfg.MetricEvaluationWindows = map[string]map[string]int{"all": {"disk": 300}, "vm": {"disk": 300}}
 	m.UpdateConfig(cfg)
+	for resourceType, metrics := range m.GetConfig().MetricEvaluationWindows {
+		if _, present := metrics["disk"]; present {
+			t.Fatalf("unsupported capacity window survived configuration normalization for %s", resourceType)
+		}
+	}
 	vm := filesystemRecoveryVM(105)
 	id := filesystemRecoveryID(vm)
-	_, _, key := guestDiskIdentity(vm.Disks[1], 1)
-	resourceID := vm.ID + "-disk-" + key
-	historyValue, historyState := 95.0, "complete"
+	var diskHistoryCalls atomic.Int32
 	m.SetMetricWindowProvider(func(r MetricWindowRequest) ([]MetricWindowPoint, error) {
-		value := 20.0 // The healthy root must not supply the backup series.
-		if r.ResourceID == resourceID {
-			value = historyValue
-			switch historyState {
-			case "empty":
-				return nil, nil
-			case "error":
-				return nil, errors.New("synthetic history unavailable")
-			case "partial":
-				return []MetricWindowPoint{{r.Start, value}}, nil
-			}
+		if r.Metric != "disk" {
+			return nil, nil
 		}
-		return []MetricWindowPoint{{r.Start, value}, {r.Start.Add(2 * time.Minute), value}, {r.Start.Add(4 * time.Minute), value}}, nil
+		diskHistoryCalls.Add(1)
+		// If the rejected rule were admitted, this old high history would
+		// incorrectly hold the incident after the temporary file is gone.
+		return []MetricWindowPoint{{r.Start, 95}, {r.Start.Add(2 * time.Minute), 95}, {r.Start.Add(4 * time.Minute), 95}}, nil
 	})
 	m.CheckGuest(vm, "site")
 	original := filesystemRecoveryActiveAlert(t, m, id)
+	if original.MetricStatus == nil || original.MetricStatus.EvaluationWindowSeconds != 0 || original.MetricStatus.RawValue != nil {
+		t.Fatalf("ordinary disk capacity was presented as an average: %+v", original.MetricStatus)
+	}
 	setBackupFilesystemUsage(&vm, 20)
-	elapsed.Add(int64(time.Minute))
-	m.CheckGuest(vm, "site")
-	held := filesystemRecoveryActiveAlert(t, m, id)
-	if held.MetricStatus == nil || held.MetricStatus.RawValue == nil || *held.MetricStatus.RawValue != 20 || held.MetricStatus.Value <= 80 {
-		t.Fatalf("low current usage must still respect the high rolling average: %+v", held.MetricStatus)
-	}
-	before := guestObservationBytes(t, m)
-	for _, state := range []string{"empty", "error", "partial"} {
-		historyState = state
-		elapsed.Add(int64(time.Minute))
-		m.CheckGuest(vm, "site")
-		if !bytes.Equal(before, guestObservationBytes(t, m)) {
-			t.Fatalf("%s history invented an evaluated recovery", state)
-		}
-	}
-	historyValue, historyState = 20, "complete"
-	elapsed.Add(int64(time.Minute))
 	m.CheckGuest(vm, "site")
 	m.CheckGuest(vm, "site")
 	requireFilesystemRecovery(t, m, original)
+	if diskHistoryCalls.Load() != 0 {
+		t.Fatal("ordinary filesystem capacity consulted a rejected rolling-window provider")
+	}
 }
