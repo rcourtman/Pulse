@@ -3421,3 +3421,34 @@ func TestVMwareInventoryRefreshBudgetContract(t *testing.T) {
 	t.Run("configuration", testVMwarePollTimeoutConfiguration)
 	t.Run("refresh-and-projection", testVMwarePollRefreshBudgetAndProjection)
 }
+
+// The REST seed must preserve the same resolved coordinates as the broadcast
+// generation, without consulting a later registry or editing a shared view.
+func TestUnifiedSnapshotPreservesCapturedHistoryTargets(t *testing.T) {
+	oldTarget := &unifiedresources.MetricsTarget{ResourceType: "agent", ResourceID: "old-connection"}
+	rows := []unifiedresources.Resource{
+		{ID: "canonical-row", Type: unifiedresources.ResourceTypeAgent, MetricsTarget: oldTarget},
+		{ID: "unknown-row", Type: unifiedresources.ResourceTypeAgent, MetricsTarget: oldTarget},
+	}
+	targets := projectionMetricsTargets{"canonical-row": {ResourceType: "agent", ResourceID: "native-connection"}}
+	view := monitorUnifiedStateView{resources: rows, metricsTargets: targets}
+	got := unifiedSnapshotResources(view)
+	if got[0].MetricsTarget == nil || got[0].MetricsTarget.ResourceID != "native-connection" || got[1].MetricsTarget != nil {
+		t.Fatalf("captured known/unknown targets lost: %+v", got)
+	}
+	if rows[0].MetricsTarget != oldTarget || rows[1].MetricsTarget != oldTarget || oldTarget.ResourceID != "old-connection" {
+		t.Fatal("snapshot decorated the shared read-state rows")
+	}
+	got[0].MetricsTarget.ResourceID = "caller-change"
+	got[0].Name = "caller-change"
+	again := unifiedSnapshotResources(view)
+	if again[0].Name != "" || again[0].MetricsTarget.ResourceID != "native-connection" || targets["canonical-row"].ResourceID != "native-connection" {
+		t.Fatal("returned snapshot changed the captured generation")
+	}
+	// A store without a captured target projection retains its existing
+	// source row; the snapshot does not invent a coordinate from its name.
+	fallback := unifiedSnapshotResources(monitorUnifiedStateView{resources: rows})
+	if fallback[0].MetricsTarget != oldTarget {
+		t.Fatal("projection-less fallback lost its supplied coordinate")
+	}
+}
