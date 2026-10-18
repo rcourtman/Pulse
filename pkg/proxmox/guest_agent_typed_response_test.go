@@ -144,7 +144,7 @@ func TestGuestAgentTypedSuccessFixtureIsolation(t *testing.T) {
 }
 
 func TestGuestAgentTypedSuccessSharesUnrenewedFenceAndResumes(t *testing.T) {
-	isolateGuestAgentCapacity(t)
+	isolateGuestAgentRegistry(t)
 	var commands atomic.Int32
 	var healthy atomic.Bool
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
