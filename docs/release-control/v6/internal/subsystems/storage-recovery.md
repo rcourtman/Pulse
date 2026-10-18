@@ -7573,3 +7573,22 @@ legacy controls. `TestPBSNamespaceInventoryAdmission` covers the client;
 `TestPBSNamespaceDiscoveryAdmissionAndRecovery` cover ordinary foreground ->
 background -> stored-protection -> deletion recovery. These are synthetic source
 and consuming-surface proofs, not installed guest safety or restore acceptance.
+
+### Coverage recognises explicit PVE failure statuses without losing the source
+
+The ordinary PVE poller can report `ERROR: <reason>` in `status`, with no
+separate `error`. Coverage treats that anchored, case-insensitive prefix as
+Failed (alongside the existing failed/error aliases). Its full, unchanged
+provider status remains plain text in the existing job disclosure and in
+search, so both Failed and the provider reason find the workload. Unknown
+lookalikes such as `ERROR-free` remain literal; a successful status plus a
+separate error remains Unknown. Job identity, chronology, observation time
+and server protection posture remain separate and unchanged. An ordinary OK
+replacement withdraws the old status/error without losing the open disclosure.
+
+`proxmoxBackupRecoveryModel.test.ts` covers verdict/raw-message search and tied
+OK/failure uncertainty. `ProxmoxCoverageTable.taskDetail.test.tsx` covers literal
+status/error separation, wrapping, markup-shaped text and same-open recovery.
+`backup-failure-status.cjs` exercises the actual HTTP reader, model, search and
+Coverage disclosure at desktop and 320px. This is failure visibility, not native
+backup completion, guest thaw, filesystem liveness or installed recovery.

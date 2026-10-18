@@ -8870,3 +8870,17 @@ JSON documents to the production resource decoder, TrueNAS systems table, inline
 drawer and chart client at desktop and narrow widths. The fixture does not
 require local History persistence or establish appliance, installed or released
 recovery. Original scan/cleanup facts and stopped guest monitoring are separate.
+
+### Backup failure summaries preserve attributed provider evidence
+
+Coverage recognises the ordinary poller's explicit `ERROR:` status prefix as
+Failed without merging equal names or VMIDs across connections. Its existing
+job disclosure keeps the exact status as plain text beside any separately
+reported error; search indexes both that status and the normalised verdict.
+The original job connection/node, chronology, observation age and server
+protection verdict remain independent. Unknown status strings are not assumed
+to have failed or succeeded, and contradictory successful status/error evidence
+stays Unknown. `ProxmoxCoverageTable.taskDetail.test.tsx` covers raw-status
+visibility and same-open withdrawal; the read-only `backup-failure-status.cjs`
+protocol checks actual HTTP/search/disclosure consumers at desktop and 320px.
+Neither establishes native backup, guest safety or installed fleet recovery.

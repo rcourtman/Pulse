@@ -624,7 +624,13 @@ export function ProxmoxCoverageTable(props: {
                                   >
                                     {task().label}
                                   </dd>
-                                  <Show when={task().statusErrorConflict}>
+                                  <Show
+                                    when={
+                                      task().statusErrorConflict ||
+                                      (task().label === 'Failed' &&
+                                        task().status.trim().toLowerCase() !== 'failed')
+                                    }
+                                  >
                                     <dt class="text-muted">Reported status</dt>
                                     <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
                                       {task().status}

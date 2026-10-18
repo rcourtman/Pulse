@@ -10368,3 +10368,16 @@ source/power boundaries and mounted transitions. The source-bound
 delta merger and Workloads mapper through row disclosures, guest details and both
 History surfaces at desktop and 320px, preserving stored paths. These synthetic
 read-only fixtures establish presentation, not native or installed recovery.
+
+### Backup job failure words retain the complete provider status
+
+Coverage's existing job summary and decorative status dot use Failed/danger
+for the PVE poller's explicit `ERROR:` status prefix, including compact layouts
+where the textual label remains available to assistive technology. The existing
+job disclosure renders the complete raw status as wrapping plain text, not
+hover-only text or HTML, separately from any reported error. Search accepts
+both the normalised Failed verdict and the source message. Unknown lookalikes
+remain literal; a successful status with a separate error stays Unknown.
+`ProxmoxCoverageTable.taskDetail.test.tsx` and `backup-failure-status.cjs` cover
+full status visibility, narrow wrapping, keyboard/touch refresh and stale-error
+withdrawal. No shared primitive, mutation control or provider operation is added.

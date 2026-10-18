@@ -8386,6 +8386,7 @@
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupSourcePresentation.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupsTableShared.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.taskDetail.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxPageSurface.contract.test.tsx",
               "tests/integration/tests/90-operational-trust-protection-posture.spec.ts"
@@ -8752,6 +8753,7 @@
               "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupServersTable.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.taskDetail.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxMailGatewayTable.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",
