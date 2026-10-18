@@ -79,27 +79,50 @@ const synthetic = (extra) => {
 async function geometry(page) {
   return page.evaluate(() => {
     const problems = [];
+    const fragmentOverhangsWithoutGlyphOverflow = [];
     for (const node of document.querySelectorAll('[data-backup-task-detail] dd')) {
       const box = node.getBoundingClientRect(),
         range = document.createRange();
       range.selectNodeContents(node);
-      if (
-        node.scrollWidth > node.clientWidth + 1 ||
-        [...range.getClientRects()].some((r) => r.left < box.left - 1 || r.right > box.right + 1)
-      )
-        problems.push({
-          text: node.textContent,
-          box: { left: box.left, right: box.right, width: box.width },
-          clientWidth: node.clientWidth,
-          scrollWidth: node.scrollWidth,
-          fragments: [...range.getClientRects()].map((r) => ({
-            left: r.left,
-            right: r.right,
-            width: r.width,
-          })),
-        });
+      const fragments = [...range.getClientRects()].map((r) => ({
+        left: r.left,
+        right: r.right,
+        width: r.width,
+      }));
+      const glyphOverflow = [];
+      // WebKit includes the preserved trailing space of a wrapped pre-wrap
+      // line in the full Range rectangle. Retain that raw measurement, but
+      // check non-whitespace glyphs and actual scroll overflow for clipping.
+      // The original one-pixel geometry tolerance is unchanged.
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const text = walker.currentNode;
+        for (let offset = 0; offset < text.textContent.length; offset++) {
+          if (/\s/u.test(text.textContent[offset])) continue;
+          range.setStart(text, offset);
+          range.setEnd(text, offset + 1);
+          for (const r of range.getClientRects())
+            if (r.left < box.left - 1 || r.right > box.right + 1)
+              glyphOverflow.push({ glyph: text.textContent[offset], left: r.left, right: r.right });
+        }
+      }
+      const measured = {
+        text: node.textContent,
+        box: { left: box.left, right: box.right, width: box.width },
+        clientWidth: node.clientWidth,
+        scrollWidth: node.scrollWidth,
+        fragments,
+        glyphOverflow,
+      };
+      if (node.scrollWidth > node.clientWidth + 1 || glyphOverflow.length) problems.push(measured);
+      else if (fragments.some((r) => r.left < box.left - 1 || r.right > box.right + 1))
+        fragmentOverhangsWithoutGlyphOverflow.push(measured);
     }
-    return { problems, overflow: document.documentElement.scrollWidth > innerWidth };
+    return {
+      problems,
+      overflow: document.documentElement.scrollWidth > innerWidth,
+      fragmentOverhangsWithoutGlyphOverflow,
+    };
   });
 }
 async function capture(page, name) {
@@ -261,7 +284,10 @@ async function capture(page, name) {
         await detail.scrollIntoViewIfNeeded();
         await capture(page, name + '-adverse-geometry');
       }
-      assert.deepEqual(measured, { problems: [], overflow: false });
+      assert.deepEqual(
+        { problems: measured.problems, overflow: measured.overflow },
+        { problems: [], overflow: false },
+      );
     };
     const checks = ['running job keeps original site/pve1 beside current guest node'];
     for (const phase of ['warning', 'cached']) {
