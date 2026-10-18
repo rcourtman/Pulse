@@ -8976,12 +8976,14 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 		"test_absent_stopped_and_repeated_removal_require_observed_manager_absence",
 		"test_source_selection_keeps_upstart_out_of_sysv_and_before_erasure",
 		"test_real_status_timeout_stops_owned_child_without_erasure",
+		"test_private_models_use_selected_isolated_interpreter",
+		"test_timing_reports_control_and_cumulative_progress",
 	} {
 		if !strings.Contains(string(output), name+" (__main__.AgentUpstartTeardown."+name+") ... ok") {
 			t.Fatalf("DSM Upstart control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 17 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 19 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete DSM Upstart verdict:\n%s", output)
 	}
 	t.Logf("%s", output)
