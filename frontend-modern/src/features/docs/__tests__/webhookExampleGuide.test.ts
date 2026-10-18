@@ -14,6 +14,23 @@ function render(): HTMLElement {
 }
 
 describe('copyable webhook example', () => {
+  it('keeps grouped primary selection separate from persistent-notification identity', () => {
+    const article = render();
+    const text = article.textContent?.replace(/\s+/g, ' ');
+    expect(text).toContain('For a single-alert notification');
+    expect(text).toContain('In a group it identifies only the primary alert');
+    expect(text).toContain(
+      'The primary can change between firing and recovery even when the members are the same',
+    );
+    expect(text).toContain('A Home Assistant persistent-notification bridge');
+    expect(text).toContain('Process each member on both events');
+    expect(text).toContain('using the same member identity for create and remove');
+    expect(article.querySelector('a[href="#receiver-correlation-and-deduplication"]')?.textContent).toBe(
+      'member-aware receiver correlation',
+    );
+    expect(article.querySelector('#receiver-correlation-and-deduplication')).not.toBeNull();
+  });
+
   it('ships and renders the escaped JSON template without changing copied source', () => {
     expect(readFileSync(path.join(root, 'frontend-modern/public/docs/WEBHOOKS.md'), 'utf8')).toBe(
       guide,
