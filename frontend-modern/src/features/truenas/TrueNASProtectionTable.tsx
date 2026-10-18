@@ -212,7 +212,7 @@ const ProtectionActivityTime: Component<{ point: RecoveryPoint }> = (props) => {
             <PlatformTableDateTimeValue value={value()} emptyText="-" />
           </span>
           <span class="platform-table-phone-only-inline flex-col items-end leading-none">
-            <span>{value().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+            <span>{value().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>{' '}
             <span>
               {value().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
             </span>
@@ -565,7 +565,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="numeric-value"
                       sort={sort}
                       sortKey="size"
-                      class="hidden lg:table-cell md:w-[8%]"
+                      class="platform-table-phone-hidden hidden lg:table-cell md:w-[8%]"
                     >
                       Size
                     </PlatformSortableTableHead>
@@ -640,7 +640,7 @@ export const TrueNASProtectionTable: Component<{
                                 <ProtectionActivityTime point={point} />
                               </TableCell>
                               <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden hidden text-base-content lg:table-cell`}
                               >
                                 {sizeLabel(point)}
                               </TableCell>

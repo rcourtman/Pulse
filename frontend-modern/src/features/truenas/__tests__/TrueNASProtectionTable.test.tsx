@@ -347,7 +347,7 @@ describe('TrueNAS protection phone summary', () => {
     );
     const row = document.querySelector('[data-truenas-protection-row="phone"]')!;
     const headers = document.querySelectorAll('thead th');
-    for (const index of [1, 2]) {
+    for (const index of [1, 2, 4]) {
       expect(headers[index]).toHaveClass('platform-table-phone-hidden');
       expect(row.children[index]).toHaveClass('platform-table-phone-hidden');
     }

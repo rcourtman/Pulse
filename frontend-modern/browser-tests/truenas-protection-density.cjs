@@ -156,8 +156,8 @@ const records = ['failed', 'warning', 'running', 'unknown', 'success'].map((outc
       entry.headers = await headers.allInnerTexts();
       if (narrow) {
         assert.deepEqual(
-          entry.headers.map((text) => text.trim()),
-          ['Dataset', 'Time', 'Outcome'],
+          entry.headers.map((text) => text.trim().toLowerCase()),
+          ['dataset', 'time', 'outcome'],
         );
         for (const outcome of ['failed', 'warning', 'running', 'unknown', 'success']) {
           const row = page.locator(`[data-truenas-protection-row="fixture-${outcome}"]`);
