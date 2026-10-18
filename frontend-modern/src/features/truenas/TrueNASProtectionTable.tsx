@@ -413,7 +413,7 @@ export const TrueNASProtectionTable: Component<{
               <div class="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
                 <p role="status" class="min-w-0 flex-1 basis-64">
                   Could not refresh TrueNAS protection. Showing the last loaded records. Counts and
-                  outcomes may be out of date; these records do not establish current protection.
+                  outcomes may be out of date. These records do not establish current protection.
                 </p>
                 <button
                   type="button"
