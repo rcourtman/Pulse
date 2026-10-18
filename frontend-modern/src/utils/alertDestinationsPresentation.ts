@@ -307,7 +307,7 @@ export function getAlertDestinationsDeliveryLogDescription(
   completedRetentionDays: number,
   deadLetterRetentionDays: number,
 ) {
-  return `Delivery attempts and held notifications for real alerts. Completed attempts are retained for ${completedRetentionDays} days. Failures that exhausted retries remain available for ${deadLetterRetentionDays} days. Test sends skip the queue and are not listed here.`;
+  return `Delivery attempts and held notifications for real alerts. Completed attempts are retained for ${completedRetentionDays} days. Deliveries Pulse has stopped retrying remain available for ${deadLetterRetentionDays} days. Test sends skip the queue and are not listed here.`;
 }
 
 export function getAlertDestinationsDeliveryLogEmpty() {
@@ -329,7 +329,7 @@ export function getAlertDeliveryLogOutcomeLabel(outcome: AlertDeliveryLogOutcome
     case 'retry':
       return 'Retrying';
     case 'dead_letter':
-      return 'Failed, retries exhausted';
+      return 'Failed, retries stopped';
     case 'cancelled':
       return 'Cancelled';
     default:

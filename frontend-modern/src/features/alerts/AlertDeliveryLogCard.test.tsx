@@ -67,7 +67,7 @@ describe('AlertDeliveryLogCard', () => {
 
     expect(screen.getByText('Ops Discord')).toBeInTheDocument();
     expect(screen.getByText('Email')).toBeInTheDocument();
-    expect(screen.getByText('Failed, retries exhausted')).toBeInTheDocument();
+    expect(screen.getByText('Failed, retries stopped')).toBeInTheDocument();
     expect(screen.getByText('Delivered')).toBeInTheDocument();
     expect(screen.getByText('vm-offline-101 +1 more')).toBeInTheDocument();
     expect(screen.getByText(/Authentication failure/)).toBeInTheDocument();
@@ -91,7 +91,7 @@ describe('AlertDeliveryLogCard', () => {
   it.each([
     ['retry', 'Retrying'],
     ['failed', 'Failed'],
-    ['dead_letter', 'Failed, retries exhausted'],
+    ['dead_letter', 'Failed, retries stopped'],
     ['cancelled', 'Cancelled'],
   ] as const)(
     'replaces a previous successful row with %s evidence on refresh',
@@ -156,7 +156,7 @@ describe('AlertDeliveryLogCard', () => {
 
     expect(screen.getByText(/Completed attempts are retained for 7 days/)).toBeInTheDocument();
     expect(
-      screen.getByText(/Failures that exhausted retries remain available for 30 days/),
+      screen.getByText(/Deliveries Pulse has stopped retrying remain available for 30 days/),
     ).toBeInTheDocument();
     const timestamps = Array.from(container.querySelectorAll('time'));
     expect(timestamps[0]).toHaveAttribute('datetime', log.entries[0].timestamp);

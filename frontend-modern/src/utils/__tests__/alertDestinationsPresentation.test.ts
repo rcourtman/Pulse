@@ -237,7 +237,7 @@ describe('alert destinations delivery log copy', () => {
     expect(getAlertDeliveryLogOutcomeLabel('retry')).toBe('Retrying');
     expect(getAlertDeliveryLogOutcomeLabel('failed')).toBe('Failed');
     // "Dead letter" is queue vocabulary; a user needs to know retries stopped.
-    expect(getAlertDeliveryLogOutcomeLabel('dead_letter')).toBe('Failed, retries exhausted');
+    expect(getAlertDeliveryLogOutcomeLabel('dead_letter')).toBe('Failed, retries stopped');
     expect(getAlertDeliveryLogOutcomeLabel('cancelled')).toBe('Cancelled');
   });
 
