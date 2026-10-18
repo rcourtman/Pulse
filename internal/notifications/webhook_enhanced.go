@@ -1,14 +1,12 @@
 package notifications
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -168,18 +166,6 @@ func (n *NotificationManager) prepareEnhancedWebhookExecution(webhook EnhancedWe
 		return webhook, nil, fmt.Errorf("prepare enhanced webhook context: %w", err)
 	}
 	webhook.WebhookConfig = canonical
-
-	if webhook.Service == "ntfy" && strings.TrimSpace(webhook.PayloadTemplate) != "" {
-		tmpl, err := template.New("enhanced-webhook-ntfy").Funcs(templateFuncMap()).Parse(webhook.PayloadTemplate)
-		if err != nil {
-			return webhook, nil, fmt.Errorf("parse ntfy payload template: %w", err)
-		}
-		var rendered bytes.Buffer
-		if err := tmpl.Execute(&rendered, data); err != nil {
-			return webhook, nil, fmt.Errorf("render ntfy payload template: %w", err)
-		}
-		return webhook, rendered.Bytes(), nil
-	}
 
 	payload, err := n.renderWebhookPayloadJSON(canonical, data, webhookRenderModeSingle, func() ([]byte, error) {
 		if strings.TrimSpace(webhook.PayloadTemplate) == "" {

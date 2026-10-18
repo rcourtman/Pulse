@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "98817ebce4e02545ca8870519ae929cee9c724c8",
+  "changed_paths": [
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "f7d9ba6b5fe5a698a14e966a68539de247b38d14781472e7a1d379a3cf765cd5"
+  },
+  "routes": [
+    "/browser-tests/notification-evidence.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1100
+    }
+  ],
+  "states": [
+    "Production Notifications tab with synthetic read responses for retained configuration, connectivity and opaque failures",
+    "Retries stopped label and matching retention description, safe diagnostics and preserved unclassified verdict",
+    "Desktop and narrow pixels inspected for readable wrapping, unclipped controls and all three activity rows",
+    "Retained retry confirmation cancelled, focus restored and reloaded verdicts preserved"
+  ],
+  "interactions": [
+    "Refresh delivery status and observe all retained verdicts",
+    "Open retained retry confirmation and dismiss it without an API mutation",
+    "Verify focus returns to the retry button",
+    "Reload and verify all three retries-stopped labels"
+  ],
+  "verified_at": "2026-10-18T14:02:03.002Z",
+  "evidence_scope": "Production components and API readers with synthetic local read responses. Separate real HTTP/SMTP and persistent-queue tests establish backend source verdicts. No native provider or installed-release acceptance is claimed."
+}
