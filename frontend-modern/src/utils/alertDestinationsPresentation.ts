@@ -329,7 +329,7 @@ export function getAlertDestinationsDeliveryLogDescription(
   completedRetentionDays: number,
   deadLetterRetentionDays: number,
 ) {
-  return `Delivery attempts and held notifications for real alerts. Completed attempts are retained for ${completedRetentionDays} days. Failures that exhausted retries remain available for ${deadLetterRetentionDays} days. Test sends skip the queue and are not listed here.`;
+  return `Delivery attempts and held notifications for real alerts. Entries marked "${getAlertDeliveryLogOutcomeLabel('dead_letter')}" remain available for ${deadLetterRetentionDays} days. Other completed attempts are retained for ${completedRetentionDays} days. Test sends skip the queue and are not listed here.`;
 }
 
 export function getAlertDestinationsDeliveryLogEmpty() {
@@ -343,7 +343,8 @@ export function getAlertDestinationsDeliveryLogUnavailable() {
 export type AlertDeliveryLogOutcome = 'sent' | 'retry' | 'failed' | 'dead_letter' | 'cancelled';
 
 // One plain-language label per outcome. "Dead letter" is queue jargon; what a
-// user needs to know is that Pulse stopped retrying.
+// user needs to know is that Pulse will not retry automatically. The outcome
+// does not say why: a failure can be terminal on its very first attempt.
 export function getAlertDeliveryLogOutcomeLabel(outcome: AlertDeliveryLogOutcome) {
   switch (outcome) {
     case 'sent':
@@ -351,7 +352,7 @@ export function getAlertDeliveryLogOutcomeLabel(outcome: AlertDeliveryLogOutcome
     case 'retry':
       return 'Retrying';
     case 'dead_letter':
-      return 'Failed, retries exhausted';
+      return 'Failed, no further retries';
     case 'cancelled':
       return 'Cancelled';
     default:

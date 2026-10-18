@@ -141,6 +141,7 @@ const workflowDestinations = [
     'A usage alert stays open after usage drops:',
     ['/docs/TROUBLESHOOTING#a-usage-alert-stays-open-after-usage-drops'],
   ],
+  ['The UI stalled after enabling Debug:', ['/docs/CONFIGURATION#if-debug-makes-the-ui-unusable']],
   [
     'Private information was posted:',
     ['/docs/TROUBLESHOOTING#if-you-already-posted-private-information'],

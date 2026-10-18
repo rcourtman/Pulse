@@ -237,8 +237,8 @@ describe('alert destinations delivery log copy', () => {
     expect(getAlertDeliveryLogOutcomeLabel('sent')).toBe('Delivered');
     expect(getAlertDeliveryLogOutcomeLabel('retry')).toBe('Retrying');
     expect(getAlertDeliveryLogOutcomeLabel('failed')).toBe('Failed');
-    // "Dead letter" is queue vocabulary; a user needs to know retries stopped.
-    expect(getAlertDeliveryLogOutcomeLabel('dead_letter')).toBe('Failed, retries exhausted');
+    // The outcome does not distinguish an early stop from an exhausted budget.
+    expect(getAlertDeliveryLogOutcomeLabel('dead_letter')).toBe('Failed, no further retries');
     expect(getAlertDeliveryLogOutcomeLabel('cancelled')).toBe('Cancelled');
   });
 
@@ -272,6 +272,11 @@ describe('alert destinations delivery log copy', () => {
     const description = getAlertDestinationsDeliveryLogDescription(7, 30);
     expect(description).toContain('retained for 7 days');
     expect(description).toContain('remain available for 30 days');
+    expect(description).toContain(
+      'Entries marked "Failed, no further retries" remain available for 30 days',
+    );
+    expect(description).toContain('Other completed attempts are retained for 7 days');
+    expect(description).not.toMatch(/exhaust/i);
     expect(description).toContain('held notifications');
     expect(description).toContain('Test sends skip the queue');
     expect(getAlertDestinationsDeliveryLogEmpty()).toContain('No alert deliveries were attempted');
