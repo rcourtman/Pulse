@@ -243,6 +243,9 @@ log_error() {
     fi
 }
 
+# Ignore ambient .curlrc settings on every installer request: a saved insecure,
+# request, extra URL or tracing option must not change explicit installer policy.
+# --disable must be curl's first argument, including before our private config.
 # Feed the API token to curl through a private config file. Passing a header
 # value with -H would expose the token in the transient curl process argv.
 curl_with_pulse_token() {
@@ -250,7 +253,7 @@ curl_with_pulse_token() {
     local curl_rc=0
 
     if [[ -z "$PULSE_TOKEN" ]]; then
-        curl "$@"
+        curl --disable "$@"
         return $?
     fi
     case "$PULSE_TOKEN" in
@@ -261,7 +264,7 @@ curl_with_pulse_token() {
     TMP_FILES+=("$config_file")
     chmod 600 "$config_file"
     printf 'header = "X-API-Token: %s"\n' "$PULSE_TOKEN" > "$config_file"
-    if curl --config "$config_file" "$@"; then
+    if curl --disable --config "$config_file" "$@"; then
         curl_rc=0
     else
         curl_rc=$?
@@ -950,7 +953,7 @@ verify_agent_started() {
 
     while [ $iteration -lt $max_iterations ]; do
         # Check the readiness endpoint first — this is the definitive signal
-        if curl -sf --max-time 2 "$health_url" >/dev/null 2>&1; then
+        if curl --disable -sf --max-time 2 "$health_url" >/dev/null 2>&1; then
             verify_agent_server_registration_with_retry
             local reg_rc=$?
             if [[ $reg_rc -eq 0 ]]; then
@@ -3091,7 +3094,7 @@ safe_profile_probe_helper_protocol() {
         printf "\\$(printf '%03o' $((request_length / 256 % 256)))"
         printf "\\$(printf '%03o' $((request_length % 256)))"
         printf '%s' "$request"
-    } | runuser -u "$LEAST_PRIVILEGE_USER" -- curl -sS --max-time 5 \
+    } | runuser -u "$LEAST_PRIVILEGE_USER" -- curl --disable -sS --max-time 5 \
         --unix-socket "$PRIVILEGED_HELPER_SOCKET_PATH" --upload-file - telnet://localhost > "$response_file"; then
         rm -f "$response_file"
         return 1
@@ -3127,7 +3130,7 @@ safe_profile_verify_declared_health() {
     # local floor a bounded window, then perform the (separately retried)
     # authoritative server-registration proof exactly once.
     for ((attempt = 1; attempt <= 30; attempt++)); do
-        if curl -sf --max-time 2 "$health_url" >/dev/null 2>&1 &&
+        if curl --disable -sf --max-time 2 "$health_url" >/dev/null 2>&1 &&
            systemctl is-active --quiet "${AGENT_NAME}.service" &&
            systemctl is-active --quiet "${PRIVILEGED_HELPER_NAME}.socket" &&
            safe_profile_verify_effective_target &&
@@ -4486,7 +4489,7 @@ system_docker_runtime_is_active() {
 
     if [[ -S "$socket_path" ]]; then
         if command -v curl &>/dev/null; then
-            if curl -sf --max-time 3 --unix-socket "$socket_path" http://localhost/_ping &>/dev/null; then
+            if curl --disable -sf --max-time 3 --unix-socket "$socket_path" http://localhost/_ping &>/dev/null; then
                 return 0
             fi
             return 1
@@ -7042,7 +7045,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         CURL_TEST_ARGS=(-sfL --connect-timeout 5 -o /dev/null)
         if [[ "$INSECURE" == "true" ]]; then CURL_TEST_ARGS+=(-k); fi
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_TEST_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
-        if curl "${CURL_TEST_ARGS[@]}" "${PULSE_URL}/api/health"; then
+        if curl --disable "${CURL_TEST_ARGS[@]}" "${PULSE_URL}/api/health"; then
             json_event "preflight" "pulse_reachable" "Pulse URL reachable"
         else
             json_event "preflight" "pulse_unreachable" "Pulse URL not reachable" "$EXIT_PREFLIGHT_FAILED"
@@ -7056,7 +7059,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
         DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${PF_ARCH_PARAM}"
-        if curl "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$DOWNLOAD_CHECK_URL"; then
+        if curl --disable "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$DOWNLOAD_CHECK_URL"; then
             PREFLIGHT_EXPECTED_SHA=$(final_response_header_value "$PREFLIGHT_HEADERS" "X-Checksum-Sha256" || true)
             if [[ -n "$PREFLIGHT_EXPECTED_SHA" ]]; then
                 json_event "preflight" "agent_download_available" "Agent binary available for ${PF_ARCH_PARAM}"
@@ -7072,7 +7075,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
             : > "$PREFLIGHT_HEADERS"
             HELPER_DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${PRIVILEGED_HELPER_BINARY_NAME}?arch=${PF_ARCH_PARAM}"
-            if curl "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$HELPER_DOWNLOAD_CHECK_URL"; then
+            if curl --disable "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$HELPER_DOWNLOAD_CHECK_URL"; then
                 PREFLIGHT_HELPER_SHA=$(final_response_header_value "$PREFLIGHT_HEADERS" "X-Checksum-Sha256" || true)
                 if [[ -n "$PREFLIGHT_HELPER_SHA" ]]; then
                     json_event "preflight" "helper_download_available" "Typed helper binary available for ${PF_ARCH_PARAM}"
@@ -7088,7 +7091,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         if [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
             : > "$PREFLIGHT_HEADERS"
             RUNNER_DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${ACTION_RUNNER_BINARY_NAME}?arch=${PF_ARCH_PARAM}"
-            if curl "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$RUNNER_DOWNLOAD_CHECK_URL"; then
+            if curl --disable "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$RUNNER_DOWNLOAD_CHECK_URL"; then
                 PREFLIGHT_RUNNER_SHA=$(final_response_header_value "$PREFLIGHT_HEADERS" "X-Checksum-Sha256" || true)
                 if [[ -n "$PREFLIGHT_RUNNER_SHA" ]]; then
                     json_event "preflight" "runner_download_available" "Typed action runner binary available for ${PF_ARCH_PARAM}"
@@ -7159,7 +7162,7 @@ SERVER_VERSION=""
 VERSION_CURL_ARGS=(-fsSL --connect-timeout 10 --max-time 30)
 if [[ "$INSECURE" == "true" ]]; then VERSION_CURL_ARGS+=(-k); fi
 if [[ -n "$CURL_CA_BUNDLE" ]]; then VERSION_CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
-if server_version_json="$(curl "${VERSION_CURL_ARGS[@]}" "${PULSE_URL}/api/version" 2>/dev/null)"; then
+if server_version_json="$(curl --disable "${VERSION_CURL_ARGS[@]}" "${PULSE_URL}/api/version" 2>/dev/null)"; then
     SERVER_VERSION="$(printf '%s' "$server_version_json" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
 fi
 
@@ -7172,7 +7175,7 @@ fi
 DOWNLOAD_URL="${PULSE_URL}/download/${BINARY_NAME}?${DOWNLOAD_QUERY}"
 log_info "Downloading agent from ${DOWNLOAD_URL}..."
 
-if ! curl "${CURL_ARGS[@]}" "$DOWNLOAD_URL"; then
+if ! curl --disable "${CURL_ARGS[@]}" "$DOWNLOAD_URL"; then
     fail "Download failed. Check URL and connectivity." "$EXIT_DOWNLOAD_FAILED"
 fi
 
@@ -7211,7 +7214,7 @@ download_verified_privileged_helper() {
 
     helper_url="${PULSE_URL}/download/${PRIVILEGED_HELPER_BINARY_NAME}?${DOWNLOAD_QUERY}"
     log_info "Downloading typed privileged helper from ${helper_url}..."
-    if ! curl "${helper_curl_args[@]}" "$helper_url"; then
+    if ! curl --disable "${helper_curl_args[@]}" "$helper_url"; then
         fail "Typed privileged helper download failed; the safe profile was not installed." "$EXIT_DOWNLOAD_FAILED"
     fi
     if [[ ! -s "$TMP_HELPER_BIN" ]]; then
@@ -7258,7 +7261,7 @@ download_verified_action_runner() {
 
     runner_url="${PULSE_URL}/download/${ACTION_RUNNER_BINARY_NAME}?${DOWNLOAD_QUERY}"
     log_info "Downloading typed action runner from ${runner_url}..."
-    if ! curl "${runner_curl_args[@]}" "$runner_url"; then
+    if ! curl --disable "${runner_curl_args[@]}" "$runner_url"; then
         fail "Typed action runner download failed; the existing runner and collector were not changed." "$EXIT_DOWNLOAD_FAILED"
     fi
     if [[ ! -s "$TMP_ACTION_RUNNER_BIN" ]]; then

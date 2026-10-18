@@ -16,6 +16,25 @@
 
 ## Purpose
 
+### Unix agent installer ignores ambient curl configuration
+
+Every direct curl invocation in `scripts/install.sh` puts `--disable` first,
+including preflight, downloads, local readiness/runtime checks and the separate
+private-token config. A user's `.curlrc` must not silently disable TLS checks,
+replace a read-only method, add another URL or enable tracing. Explicit installer
+CA/insecure flags, environment proxy settings, redirect behaviour, time limits,
+checksum/signature admission and private-file credential transport are unchanged.
+This does not extend the leaf-certificate pin or claim installed TLS recovery.
+
+`TestInstallSHPreflightIgnoresAmbientCurlConfiguration` runs the full read-only
+installer with real curl against disposable HTTP/HTTPS peers. Default-untrusted
+TLS remains refused despite ambient `insecure`; explicit CA and explicit
+insecure still work; successful requests are exactly health GET and download
+HEAD, with no extra URL, trace file or agent-state write. The registered
+`install_sh_test.go` verification also inventories all direct curl invocations
+and keeps `--disable` ahead of the private credential config. These are local
+transport controls, not native appliance or reporter recovery.
+
 ### NAS boot registration does not erase unrelated startup work
 
 Installation/update on Unraid and QNAP removes only exactly recognised owned
