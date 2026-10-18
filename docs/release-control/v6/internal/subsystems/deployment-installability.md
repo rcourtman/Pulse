@@ -7990,6 +7990,27 @@ fallback and unchanged-surface guidance. The production Docs/router browser
 fixture checks both API and MSP report sections on desktop and touch phone
 without API requests, mutations or provider calls.
 
+### Recovering immutable convergence after Actions history expires (18 October 2026)
+
+The immutable activation marker may outlive its original convergence run in
+Actions history. A definite run-specific HTTP 404 is recorded as
+`history-missing`, **not completed**. The reconciler may submit the existing
+bounded recovery workflow for that exact committed release. The workflow uses
+the same read-only owner observer only after verifying immutable release
+attestation, the exact consumed marker bytes and every expected marker field.
+Present owners must match the repository, workflow, event, run ID and display
+identity; active owners still wait. Refused, unavailable, malformed or unknown
+responses stop adoption, rather than becoming a missing or completed owner.
+
+All mutable surfaces still require the unchanged global repository-ref lease
+and committed-release monotonicity. Missing history does not permit stealing
+an unknown lease, rewriting the immutable marker, changing source/digests,
+skipping private credential containment, or resetting unchanged-control retry
+budgets. This repairs scheduled run 39112622024's missing-owner dead end; it is
+not a release decision or proof of operational convergence. Executable owner
+CLI and actual marker-waiter fixtures, failed-read controls, retry/containment
+regressions and the existing integrity/lease tests cover the boundary.
+
 ### Convergence log-reader compatibility (5 September 2026)
 
 Scheduled reconciliation run 33939926237 failed when `gh api` refused terminal
