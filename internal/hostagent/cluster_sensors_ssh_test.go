@@ -127,7 +127,21 @@ func TestClusterPeerSSHNative(t *testing.T) {
 			}
 		})
 	}
-	if len(reports) == 4 {
+	// Preserve a valid partial sensor result without calling it recovery.
+	commandErr := exec.Command("sh", "-c", "exit 1").Run()
+	if commandErr == nil {
+		t.Fatal("expected partial-command fixture exit")
+	}
+	var partialLogs bytes.Buffer
+	partialAgent := peerSensorFixtureAgent(&partialLogs, func(context.Context, string, ...string) (string, error) {
+		return peerTemperatureFixture, commandErr
+	})
+	partial := partialAgent.collectClusterSensors(context.Background())
+	if len(partial) != 1 || !strings.Contains(partialLogs.String(), `"level":"warn"`) || strings.Contains(partialLogs.String(), "recovered") {
+		t.Fatalf("partial producer result lost or falsely recovered: %+v %s", partial, &partialLogs)
+	}
+	reports["partial"] = partial
+	if len(reports) == 5 {
 		// Stable machine-readable producer bytes, safe synthetic values only.
 		payload, err := json.Marshal(reports)
 		if err != nil {

@@ -21,7 +21,7 @@ const Fixture = () => {
       <h1>Cluster peer sensor proof</h1>
       <p>Invented local keys and readings; production resource adapter and node drawer.</p>
       <nav class="flex flex-wrap gap-2" aria-label="Producer state">
-        <For each={['id_rsa', 'id_ed25519', 'denied', 'recovered', 'stale', 'foreign', 'local']}>
+        <For each={['id_rsa', 'id_ed25519', 'denied', 'recovered', 'partial', 'stale', 'foreign', 'local']}>
           {(name) => (
             <button
               class="min-h-11 border px-3"

@@ -15,7 +15,7 @@ const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).d
   for (const [file, expected] of Object.entries(binding.sources)) assert.equal(hash(path.join(root, 'frontend-modern', file)), expected, `source changed: ${file}`);
   for (const [file, expected] of Object.entries(binding.artifacts)) assert.equal(hash(path.join(staticRoot, file)), expected, `artifact changed: ${file}`);
   const states = JSON.parse(fs.readFileSync(path.join(dir, 'resources.json')));
-  assert.equal(Object.keys(states).length, 7);
+  assert.equal(Object.keys(states).length, 8);
   const server = http.createServer((req,res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     if (url.pathname === '/proof/states') { res.setHeader('Content-Type','application/json'); return res.end(JSON.stringify(states)); }
@@ -49,7 +49,7 @@ const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).d
         assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
       }
       const steps=[];
-      for (const state of ['id_rsa','denied','recovered','id_ed25519','stale','foreign','local']) {
+      for (const state of ['id_rsa','denied','recovered','id_ed25519','partial','stale','foreign','local']) {
         await page.getByRole('button',{name:state,exact:true}).click();
         const thermals = page.locator('[data-history-group="thermals"]');
         await thermals.scrollIntoViewIfNeeded();
@@ -62,7 +62,7 @@ const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).d
         const dimensions = await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));
         assert.ok(dimensions.scroll<=dimensions.width+1,JSON.stringify(dimensions));
         // Retain complete success/failure/recovery pixels at both viewports.
-        if (['id_rsa','denied','recovered'].includes(state)) await page.screenshot({path:path.join(artifacts,`${name}-${state}.png`),fullPage:true});
+        if (['id_rsa','denied','recovered','partial'].includes(state)) await page.screenshot({path:path.join(artifacts,`${name}-${state}.png`),fullPage:true});
         steps.push({state,expected,dimensions,current:await current.allTextContents()});
       }
       // Exercise the consuming drawer, not only text on a static image.
@@ -74,6 +74,6 @@ const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).d
       await browser.close(); browser=null;
     }
     fs.writeFileSync(path.join(artifacts,'result.json'),JSON.stringify({playwright:require('playwright/package.json').version,producer:hash(path.join(dir,'resources.json')),binding:hash(path.join(staticRoot,'binding.json')),journeys},null,2)+'\n');
-    console.log(JSON.stringify({result:'passed',journeys:journeys.length,states:14,captures:6}));
+    console.log(JSON.stringify({result:'passed',journeys:journeys.length,states:16,captures:8}));
   } finally {if(browser) await browser.close(); await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

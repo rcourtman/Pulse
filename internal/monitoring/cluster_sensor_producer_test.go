@@ -17,7 +17,7 @@ import (
 func TestClusterSensorProducerConsumer(t *testing.T) {
 	reports := map[string][]agentshost.ClusterNodeSensors{
 		"id_rsa": clusterSensorReport("peer", 55), "id_ed25519": clusterSensorReport("peer", 55),
-		"denied": nil, "recovered": clusterSensorReport("peer", 55),
+		"denied": nil, "recovered": clusterSensorReport("peer", 55), "partial": clusterSensorReport("peer", 55),
 	}
 	if input := os.Getenv("PULSE_PEER_SENSOR_REPORTS"); input != "" {
 		data, err := os.ReadFile(input)
@@ -28,11 +28,11 @@ func TestClusterSensorProducerConsumer(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if len(reports) != 4 {
-		t.Fatal("expected all four producer states")
+	if len(reports) != 5 {
+		t.Fatal("expected all five producer states")
 	}
 	resources := make(map[string]models.ResourceFrontend)
-	for _, name := range []string{"id_rsa", "id_ed25519", "denied", "recovered", "stale", "foreign", "local"} {
+	for _, name := range []string{"id_rsa", "id_ed25519", "denied", "recovered", "partial", "stale", "foreign", "local"} {
 		t.Run(name, func(t *testing.T) {
 			node := readStateTestNode("fixture", "peer")
 			node.Type = "node"
