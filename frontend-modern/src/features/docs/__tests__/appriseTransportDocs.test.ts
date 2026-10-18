@@ -30,8 +30,10 @@ const section = () => {
 describe('Apprise help keeps the two transports and recipient receipt separate', () => {
   it('routes the symptom chooser and TLS failure row to the rendered help', () => {
     const { guide } = section();
-    const links = [...guide.querySelectorAll<HTMLAnchorElement>(`a[href="#${target}"]`)];
+    const links = [...guide.querySelectorAll<HTMLAnchorElement>(`a[href$="#${target}"]`)];
     expect(links).toHaveLength(2);
+    expect(links[0].getAttribute('href')).toBe(`/docs/TROUBLESHOOTING#${target}`);
+    expect(links[1].getAttribute('href')).toBe(`#${target}`);
     expect(text(links[0].closest('li')!)).toContain('Apprise reports a TLS or connection error');
     expect(text(links[1].closest('tr')!)).toContain('do not disable verification');
     expect(readFileSync(resolve(process.cwd(), 'public/docs/TROUBLESHOOTING.md'), 'utf8')).toBe(
