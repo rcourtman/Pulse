@@ -16,6 +16,27 @@
 
 ## Purpose
 
+### Server installer ignores ambient HTTP-client configuration
+
+Every curl call in the server `install.sh`, including generated/manual commands,
+puts `--disable` first (ahead of any private config); every wget call puts
+`--no-config` first. Saved curl/wget defaults must not silently trust an
+untrusted TLS peer, change a read-only method, add another transfer/header or
+trace requests. Explicit trust/proxy environment, local HTTP readiness, existing
+timeouts, redirect/retry policy, pinned signatures and release/channel selection
+are unchanged. No additional source or native recovery is inferred.
+
+`TestRootInstallHTTPClientsIgnoreAmbientConfiguration` runs the real readiness,
+release discovery, signed container-installer, auto-update-helper and release
+archive functions with real curl/wget against inert loopback HTTP/TLS fixtures.
+It checks trusted and untrusted peers, hostile saved configs, both timeout-tool
+branches, exact GET inventories, no ambient traces/headers, unchanged signature
+refusal and local HTTP readiness; payloads are never executed or extracted. A
+whole-file inventory includes the Go source-build wget and generated commands.
+The existing macOS fixture-only tool supply includes GNU wget; it does not
+replace native agent runtime tools or relax any containing check.
+
+
 ### Unix agent installer ignores ambient curl configuration
 
 Every direct curl invocation in `scripts/install.sh` puts `--disable` first,
