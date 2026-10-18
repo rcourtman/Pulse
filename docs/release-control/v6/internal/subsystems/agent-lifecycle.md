@@ -15,6 +15,33 @@
 
 ## Purpose
 
+### Ordinary Unix installer executable publication
+
+After checksum and pinned-signature admission, `scripts/install.sh` prepares
+ordinary collector and optional typed-helper executables in private directories
+on their respective installation filesystems, with executable modes, before
+stopping the collector. A copy, allocation, mode or handled termination failure
+must leave the existing executable and collector stop state untouched. Download
+`TMPDIR` may be on another filesystem or mounted noexec; the version probe uses
+the prepared collector, not that temporary download.
+
+Publication renames the complete prepared basename into its containing
+directory. A directory at the executable path must not absorb the file or
+produce an install-success result. A refused final rename retains complete
+files, cleans owned preparation and reports failure without an automatic service
+restart. Collector/helper publication is not an all-or-nothing pair transaction;
+if the helper rename fails after the collector rename, the collector is new and
+the helper remains old. Existing safe-profile migration/snapshot and action-runner
+transactions retain their separate behaviour.
+
+`TestInstallSHOrdinaryBinaryPreparationPrecedesServiceStop` keeps both consuming
+callers ordered. Linux `TestInstallSHBinaryPublicationPreservesPreviousExecutable`
+runs `agent_binary_publication.py` against the actual signed-download/publication
+slice: real TLS/curl, SSH signatures, two filesystems, copy-size-limit failures,
+rename refusals, handled termination, directory races and old open readers.
+Service stop/kill and root ownership are explicit doubles. This is local source
+proof, not native systemd/appliance installation or reporter recovery.
+
 ### Explicit Unix installer transport policy wins over curl defaults
 
 All direct installer curl requests ignore `.curlrc` before processing their
