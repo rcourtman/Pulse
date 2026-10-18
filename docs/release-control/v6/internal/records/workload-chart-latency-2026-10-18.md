@@ -130,3 +130,75 @@ its measured allocation reduction. Executable hashes are
 native proof directory. This is not an idle-worker result. The strict proof
 for the resulting source remains the source-check run's retained artifact;
 the 90 ms verification and broader L10 headroom follow-up remain open.
+
+## Nullable candidate qualification and available capacity
+
+At head `ea3d71a7990798c026a39480635a43ae1f3ea6c0`, the strict hosted
+test reported p50 99.543808 ms, p95 126.435066 ms and p99 132.762651 ms.
+The 90 ms assertion failed. Idle qualification also failed: two measurement
+intervals had up to 25.373% competing CPU, with `provjobd3520822` consuming
+24.875–25.124% of the four-logical-CPU guest. See
+[job 117774534298](https://github.com/rcourtman/Pulse/actions/runs/39161106967/job/117774534298)
+and [artifact 12149191504](https://github.com/rcourtman/Pulse/actions/runs/39161106967/artifacts/12149191504).
+These percentiles are retained adverse evidence, not an idle-worker result.
+
+The paired hosted comparison for the same source passed its regression
+check. Against the PR base, cold-service time fell from 145.5 to 122.2 ms/op
+(-16.04%, p<0.001, n=10). Allocated bytes fell 3.89% and allocations fell
+24.59%. Warm-handler time increased 5.23% (1.137 to 1.197 microseconds,
+p=0.001); this adverse change remains recorded even though it is below the
+job's 10% regression threshold. Transfer time was not significantly changed.
+See [job 117774534268](https://github.com/rcourtman/Pulse/actions/runs/39161106967/job/117774534268).
+The earlier failed history-filter comparisons remain historical evidence;
+this passing run does not erase them or establish absolute latency.
+
+A fresh native proof for that exact committed source waited five minutes
+and reached at most 15.001675 continuous quiet seconds. It never admitted
+the test and produced zero SLO samples. Its final-native-proof metadata and
+60 capacity intervals remain in the native proof directory.
+
+The worker inventory has no registered self-hosted runner in the public
+repository. The legacy enterprise runner shares pulse-dev; the separate
+disposable CI pool was occupied or queued, and the cloud latency runner is
+not an installed, eligible capability. No workload was interrupted, reserved
+VM started, runner label changed or infrastructure provisioned for this proof.
+Capacity and the 90 ms result remain unresolved.
+
+## Canonical value-only chart reads
+
+Chart consumers use timestamp/value points, but persisted chart reads first
+transported retained extrema and built full metrics points, then discarded
+the extrema while copying every series into the existing canonical model.
+The store now exposes value-only single-resource and batch projections using
+`models.MetricPoint`. Both projections use the same retained-read engine for
+identity normalization, filters, chunking, tier reconciliation, snapshots,
+ordering, display buckets and Docker observation provenance. The full reader
+continues to return extrema. Query shape keys distinguish the projections
+within the existing bounded cache; no result cache or tier cache was added.
+Monitoring applies its existing LTTB sampling directly to fresh owned value
+results. Payloads, point budgets and sampling algorithms are unchanged.
+
+Verification passed all 48 query-plan shapes, mixed nullable/tier projections,
+Docker observation/filter cases and fresh snapshot/caller-mutation checks.
+The full metrics suite passed in 209.013 seconds and the full monitoring
+suite in 480.630 seconds. A 1,000-point fixture proves the sampled chart
+output equals the full-reader conversion reference for all/single/multiple
+metric filters and remains detached across calls. Targeted API/chart route
+contracts also passed.
+
+Ten fixed alternating native pairs compared only the three runtime files
+against `ea3d71a7990798c026a39480635a43ae1f3ea6c0`, with identical API tests,
+Go 1.26.9 and GOMAXPROCS=2. Allocated bytes fell from 28.59 to 21.47 MiB/op
+(-24.90%, p<0.001); allocations fell 0.10%. The shared-worker timing was
+162.0 versus 183.8 ms/op (p=0.393, n=10, both +/-24%), so neither a latency
+improvement nor a regression is established. The projection is retained for
+its measured memory reduction and removal of unused transport/copies.
+This diagnostic does not satisfy the 90 ms SLO.
+
+The baseline executable SHA-256 is
+`843ea5877f711966fdbdf590854b5f3dca96319c5a9d4cd1f5f2fa3b03f98856`;
+the value-projection executable is
+`e737a0db1ea10c44a491f3ff14311ef913271c8300306bab6e259370107fb4c8`.
+All eight source hashes matched after both verification and comparison.
+Raw results, metadata and logs are retained as `value-*` in the native proof
+directory. The 90 ms proof and broader L10 follow-up remain open.

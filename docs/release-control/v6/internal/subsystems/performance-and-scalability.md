@@ -2713,7 +2713,15 @@ including zero. SQL display aggregation applies the same fallback before
 MIN/MAX, and streamed buckets receive normalized bounds. Avoid materializing
 the same float three times for observations without stored extrema. Mixed
 nullable-bound tests cover single/fleet reads, metric filters and display
-buckets. Legacy databases keep their
+buckets. Value-only consumers must use the same retained read engine's
+`QueryMetricValues` / `QueryMetricValuesBatch` projection, returning the
+canonical `models.MetricPoint` timestamp/value type. That SQL form omits
+extrema columns and avoids materializing full points only to copy them into
+value points afterward. Full and value projections share scope normalization,
+filters, tier reconciliation, time ordering, display buckets and Docker
+observation provenance; their distinct SQL column shapes must have distinct
+keys within the existing bounded query cache. Neither mode caches results or
+tier presence. Full readers continue to preserve extrema. Legacy databases keep their
 existing unique index authoritative while the replacement index is built, but
 that O(rows) migration must run on deferred startup maintenance and swap indexes
 in one SQLite transaction so constructor latency, concurrent reads, uniqueness,

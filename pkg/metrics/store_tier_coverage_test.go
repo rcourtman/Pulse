@@ -320,6 +320,11 @@ func TestStoreRetainedNullableExtrema(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
+					values, err := store.QueryMetricValuesBatch("node", ids, filter, base.Add(-2*time.Hour), base.Add(6*time.Minute), step)
+					if err != nil {
+						t.Fatal(err)
+					}
+					assertMetricValueProjection(t, got, values)
 					for _, id := range ids {
 						metrics := filter
 						if len(metrics) == 0 {

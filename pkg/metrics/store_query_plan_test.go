@@ -178,7 +178,7 @@ func TestRetainedQueryPlansUseIndexes(t *testing.T) {
 						metrics = []string{"cpu", "memory"}
 					}
 					end := time.Unix(2000000000, 0)
-					sql, args := retainedQuerySQL("vm", []string{"vm-1", "vm-2", "vm-3"}, metrics, end.Add(-window), end, step, store.tierFallbacks(window), false)
+					sql, args := retainedQuerySQL("vm", []string{"vm-1", "vm-2", "vm-3"}, metrics, end.Add(-window), end, step, store.tierFallbacks(window), false, false)
 					plan := explainQueryPlan(t, db, sql, args)
 					searches := 0
 					for _, line := range strings.Split(plan, "\n") {
@@ -216,7 +216,7 @@ func TestRetainedSingleTierQueryPlansUseIndexes(t *testing.T) {
 				if filtered {
 					metrics = []string{"cpu"}
 				}
-				query, args := retainedQuerySQL("vm", []string{"vm-1"}, metrics, end.Add(-time.Hour), end, 60, []Tier{tier}, false)
+				query, args := retainedQuerySQL("vm", []string{"vm-1"}, metrics, end.Add(-time.Hour), end, 60, []Tier{tier}, false, false)
 				plan := explainQueryPlan(t, db, query, args)
 				if strings.Contains(plan, "SCAN m ") || !strings.Contains(plan, "SEARCH m ") {
 					t.Fatalf("single tier must use a bounded lookup: %s", plan)
@@ -539,18 +539,20 @@ func TestRetainedUnaggregatedQueryAvoidsMetricSort(t *testing.T) {
 	db := newPlanTestDB(t)
 	store := &Store{}
 	end := time.Unix(2000000040, 0)
-	for _, window := range []time.Duration{time.Hour, 24 * time.Hour, 7 * 24 * time.Hour, 30 * 24 * time.Hour} {
-		for _, ids := range [][]string{{"a"}, {"a", "b"}} {
-			for _, metrics := range [][]string{nil, {"cpu"}, {"cpu", "memory"}} {
-				t.Run(fmt.Sprintf("%s/resources_%d/metrics_%d", window, len(ids), len(metrics)), func(t *testing.T) {
-					query, args := retainedQuerySQL("node", ids, metrics, end.Add(-window), end, 0, store.tierFallbacks(window), false)
-					plan := explainQueryPlan(t, db, query, args)
-					for _, line := range strings.Split(plan, "\n") {
-						if strings.Contains(strings.ToUpper(line), "TEMP B-TREE") {
-							t.Fatalf("unaggregated read sorts despite time-ordered index: %s", plan)
+	for _, valuesOnly := range []bool{false, true} {
+		for _, window := range []time.Duration{time.Hour, 24 * time.Hour, 7 * 24 * time.Hour, 30 * 24 * time.Hour} {
+			for _, ids := range [][]string{{"a"}, {"a", "b"}} {
+				for _, metrics := range [][]string{nil, {"cpu"}, {"cpu", "memory"}} {
+					t.Run(fmt.Sprintf("values_%t/%s/resources_%d/metrics_%d", valuesOnly, window, len(ids), len(metrics)), func(t *testing.T) {
+						query, args := retainedQuerySQL("node", ids, metrics, end.Add(-window), end, 0, store.tierFallbacks(window), false, valuesOnly)
+						plan := explainQueryPlan(t, db, query, args)
+						for _, line := range strings.Split(plan, "\n") {
+							if strings.Contains(strings.ToUpper(line), "TEMP B-TREE") {
+								t.Fatalf("unaggregated read sorts despite time-ordered index: %s", plan)
+							}
 						}
-					}
-				})
+					})
+				}
 			}
 		}
 	}
