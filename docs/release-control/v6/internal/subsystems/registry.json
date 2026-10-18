@@ -5305,8 +5305,8 @@
               "scripts/tests/test-hot-dev-auth.sh",
               "scripts/tests/test-hot-dev-bg.sh",
               "scripts/tests/test-hot-dev-runtime.sh",
-              "scripts/tests/test_hot_dev_config.py",
               "scripts/tests/test-toggle-mock.sh",
+              "scripts/tests/test_hot_dev_config.py",
               "tests/integration/scripts/managed-local-backend.test.mjs",
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"
             ]
