@@ -18,7 +18,8 @@
 ### NAS installation preserves shared boot-file ownership
 
 Unraid and QNAP registration uses the same exact-entry parser as removal, not
-substring deletion. Unrelated commands and sibling launchers stay byte-for-byte
+substring deletion. QNAP retains execute enablement without discarding other
+permission bits. Unrelated commands and sibling launchers stay byte-for-byte
 intact; unknown/edited Pulse activation, malformed or unsafe files stop the
 operation. See the [boot publication contract](deployment-installability.md#nas-boot-registration-does-not-erase-unrelated-startup-work).
 Neither registration failure nor QNAP flash-unmount refusal may start a new

@@ -59,6 +59,8 @@ class NASBootRegistration(unittest.TestCase):
                 pass
             elif initial == 'symlink': boot.symlink_to(outside)
             elif initial == 'directory': boot.mkdir()
+            elif initial == 'parent-link':
+                flash.rename(root / 'real-flash'); flash.symlink_to(root / 'real-flash'); boot.write_text(untouched)
             else:
                 bad = {'ambiguous': '# Pulse Agent\necho do-not-delete\n',
                        'foreign': 'sh /other/start-pulse-agent.sh &\n',
@@ -159,7 +161,7 @@ disown() { wait; }
                     if initial != 'fresh':
                         self.assertTrue(r['after'].startswith(r['untouched']))
                         self.assertIn(b'echo after\n', r['after'])
-                        self.assertEqual(r['mode_after'], r['mode_before'])
+                        self.assertEqual(r['mode_after'], r['mode_before'] | (0o111 if platform == 'QNAP' else 0))
                     self.assertEqual(r['after'].count(b'# Pulse Agent\n') + r['after'].count(b'# Pulse Agent bootstrap begin\n'), 1)
 
     def test_converged_source_is_an_inode_preserving_noop(self):
@@ -178,7 +180,7 @@ disown() { wait; }
 
     def test_unknown_or_unsafe_source_is_not_rewritten(self):
         for platform in ('Unraid', 'QNAP'):
-            for initial in ('ambiguous', 'foreign', 'edited-block', 'truncated', 'no-newline', 'control', 'nul', 'oversized', 'syntax', 'symlink', 'directory'):
+            for initial in ('ambiguous', 'foreign', 'edited-block', 'truncated', 'no-newline', 'control', 'nul', 'oversized', 'syntax', 'symlink', 'directory', 'parent-link'):
                 with self.subTest(platform=platform, initial=initial):
                     r = self.exercise(platform, initial)
                     self.assertNotEqual(r['results'][0].returncode, 0)
@@ -252,7 +254,7 @@ def parent_control():
         assert b'bash /other/start-pulse-agent-prod.sh\n' not in boot.read_bytes()
         print('Exact parent Unraid installer returned 0 after deleting both unrelated boot commands.')
         # The original QNAP producer also removed another instance by basename.
-        boot.write_text(original + 'sh ' + str(state / 'start-pulse-agent.sh') + ' &\n')
+        boot.write_text(original + 'sh /other/start-pulse-agent.sh &\n' + 'sh ' + str(state / 'start-pulse-agent.sh') + ' &\n')
         code = definitions(source)
         if 'portable_sed_in_place() {' not in code:
             marker = 'portable_sed_in_place() {'
@@ -260,7 +262,8 @@ def parent_control():
         setup += 'STATE_DIR=' + shlex.quote(str(state)) + '\nAGENT_NAME=pulse-agent\n'
         result = subprocess.run(['bash', '-c', 'set -euo pipefail\n' + setup + code + '\nappend_qnap_autorun_block "$GO_SCRIPT" "$WRAPPER_SCRIPT" "$STATE_DIR"'], capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
-        assert b'bash /other/start-pulse-agent-prod.sh\n' not in boot.read_bytes()
+        assert b'sh /other/start-pulse-agent.sh &\n' not in boot.read_bytes()
+        assert b'bash /other/start-pulse-agent-prod.sh\n' in boot.read_bytes()
         print('Exact parent QNAP installer returned 0 after deleting the unrelated sibling launcher.')
 
 

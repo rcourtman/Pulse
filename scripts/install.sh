@@ -4169,7 +4169,7 @@ teardown_nas_agent_boot_owner() {
 # boot script is also the owner's script: a substring match is not permission
 # to erase an unrelated command, sibling agent or edited bootstrap.
 register_nas_agent_boot_file() {
-    local platform="$1" path="$2" parent="" directory="" mode=755 original=false observed="" uid=""
+    local platform="$1" path="$2" parent="" directory="" mode=755 original=false observed="" uid="" original_mode=""
     local wrapper="$STATE_DIR/start-pulse-agent.sh"
     [[ "$platform" == Unraid || "$platform" == QNAP ]] || return 1
     # Both generated forms use a double-quoted path. Refuse shell expansion,
@@ -4193,6 +4193,10 @@ register_nas_agent_boot_file() {
         original=true
         mode=$(portable_path_mode "$path") || return 1
         [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+        original_mode="$mode"
+        # QNAP previously enabled autorun execution with chmod +x. Preserve
+        # all other bits rather than silently dropping that boot requirement.
+        if [[ "$platform" == QNAP ]]; then printf -v mode '%o' "$((8#$mode | 0111))"; fi
     fi
     directory=$(mktemp -d "$path.pulse-install.XXXXXX") || return 1
     chmod 700 "$directory" || return 1
@@ -4216,7 +4220,7 @@ register_nas_agent_boot_file() {
     [[ "$observed" == present ]] || return 1
     if [[ "$original" == true ]]; then
         nas_agent_removal_file_safe "$path" && cmp -s "$path" "$directory/original" || return 1
-        if cmp -s "$path" "$directory/replacement"; then
+        if [[ "$original_mode" == "$mode" ]] && cmp -s "$path" "$directory/replacement"; then
             rm -f -- "$directory/original" "$directory/replacement" || return 1
             rmdir "$directory" || return 1
             return 0
@@ -4230,6 +4234,7 @@ register_nas_agent_boot_file() {
     fi
     (set -o noclobber; cat "$directory/replacement" > "$path") || return 1
     chmod "$mode" "$path" || return 1
+    [[ "$(portable_path_mode "$path")" == "$mode" ]] || return 1
     nas_agent_removal_file_safe "$path" && cmp -s "$path" "$directory/replacement" || return 1
     observed=$(filter_nas_agent_boot_file "$platform" "$path" status) || return 1
     [[ "$observed" == present ]] || return 1

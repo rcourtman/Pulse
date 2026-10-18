@@ -25,7 +25,9 @@ registration. Unknown custom launchers, truncated/invalid scripts, symlinks and
 shell-expanding bootstrap paths are refused without evaluating boot text.
 Spaces are quoted. Repeating an already-converged registration is a no-op.
 
-Stage the filtered replacement beside the boot file and preserve its mode.
+Stage the filtered replacement beside the boot file and preserve its permission
+bits, retaining QNAP's existing execute-bit enablement; verify the resulting
+mode as well as its bytes.
 Recheck the original before retiring it into an owned recovery directory, then
 create the destination exclusively and verify the complete bytes and owned-entry
 readback. FAT needs no hard-link support. An incomplete publication keeps its
