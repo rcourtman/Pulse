@@ -6282,7 +6282,9 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/monitoring/backup_history_scope_test.go",
               "internal/monitoring/backup_task_history_test.go",
+              "pkg/proxmox/backup_history_scope_test.go",
               "pkg/proxmox/backup_history_test.go"
             ]
           },

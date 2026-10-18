@@ -54,6 +54,19 @@ func (c *Client) GetBackupTaskHistory(ctx context.Context, since time.Time) (Bac
 				observation.Reason = "collection_failed"
 				break
 			}
+			// History may update a matching live task's outcome. Admit the
+			// whole page's node scope before appending any row or skipping
+			// already-seen UPIDs: a foreign task is not evidence from this
+			// node, even when it duplicates an earlier observed execution.
+			for _, task := range pageTasks {
+				if task.Type == "vzdump" && task.Node != "" && task.Node != node.Node {
+					observation.Reason = "collection_failed"
+					break
+				}
+			}
+			if observation.Reason != "" {
+				break
+			}
 			added := 0
 			for _, task := range pageTasks {
 				if task.Type != "vzdump" || task.UPID == "" || seen[task.UPID] {
