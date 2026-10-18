@@ -199,8 +199,10 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	backupStorageSuccess := map[pveBackupStorageScope]struct{}{}
 	readState := m.backupReadStateForInstance(instanceName)
 
-	// Build guest lookup map to find actual node for each VMID
-	snapshot := m.state.GetSnapshot()
+	// Tasks and held archives must share one detached primary-state read.
+	// No resource inventory is consumed here; guest placement comes from the
+	// canonical read view below. Avoid cloning the rest of the estate.
+	snapshot := models.StateSnapshot{PVEBackups: m.state.GetPVEBackups()}
 	// A failed/offline node cannot remove archives it previously supplied.
 	// Shared (and legacy unscoped) rows remain held unless another view really
 	// succeeded. In particular a same-named local store is not that view.
@@ -2095,9 +2097,10 @@ func runningPBSTaskMatchesBackup(tasks []pbs.RunningDataTask, backup models.PBSB
 }
 
 func (m *Monitor) buildPBSBackupCache(instanceName string) map[pbsBackupGroupKey]cachedPBSGroup {
-	snapshot := m.state.GetSnapshot()
 	cache := make(map[pbsBackupGroupKey]cachedPBSGroup)
-	for _, backup := range snapshot.PBSBackups {
+	// The primary PBS projection owns the same detached files/verification
+	// fields as a full snapshot, without copying unrelated estate branches.
+	for _, backup := range m.state.GetPBSBackups() {
 		if backup.Instance != instanceName {
 			continue
 		}

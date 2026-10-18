@@ -17,6 +17,25 @@
 
 ## Purpose
 
+### Backup inventory readers do not clone unrelated estate state
+
+PVE archive collection reads running tasks and held archives together through
+the existing detached primary PVE-backup projection. PBS cache construction
+uses the existing primary PBS-backup projection, including its detached files
+and verification fields. Neither metadata-only read copies resource inventory
+or consumes the separately cached backup aggregate. Full-state reads needed for
+canonical fallback rebuilding and guest backup-time synchronisation remain.
+
+`TestBackupReadProjectionDoesNotScaleWithUnrelatedEstate` holds canonical guests
+and backup inputs fixed while unrelated estate metadata grows. The companion
+cache/collector controls pin independent connections/namespaces, primary fields,
+newest-first limits, detached mutation, unread-node archive retention and running
+task/partial-file correlation. Existing HTTP/lifecycle tests retain cancellation,
+replacement and ordinary recovery coverage. Fixed old/new benchmarks measure
+source allocation cost, not installed CPU/RSS relief or frozen-guest recovery.
+Request scope, budgets, publication fences, evidence decisions and served fields
+are unchanged.
+
 ### Guest snapshot input reads avoid unrelated payload copies
 
 Snapshot polling retains typed canonical VM/container views for identity, name,
