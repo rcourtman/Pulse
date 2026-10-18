@@ -253,6 +253,51 @@ func TestPrivateBootstrapRealBusyBoxInput(t *testing.T) {
 	}
 }
 
+func TestPrivateBootstrapSignalWaitsForBlockedReader(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("blocked-reader observation uses Linux process state")
+	}
+	root := t.TempDir()
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Keep the prompt's owner running briefly after printing. Prompt visibility
+	// alone must not dispatch a signal before the reader is actually blocked.
+	program := `
+import os, pathlib, signal, sys, termios, time
+root = pathlib.Path(os.environ["FAKE_ROOT"])
+fd = os.open("/dev/tty", os.O_RDWR)
+original = termios.tcgetattr(fd)
+mode = termios.tcgetattr(fd)
+mode[3] &= ~(termios.ECHO | termios.ICANON)
+termios.tcsetattr(fd, termios.TCSANOW, mode)
+phase = "setting-up-reader"
+def terminate(signum, frame):
+    (root / "signal-phase").write_text(phase)
+    termios.tcsetattr(fd, termios.TCSANOW, original)
+    sys.exit(143)
+signal.signal(signal.SIGTERM, terminate)
+(root / "reader-pid").write_text(str(os.getpid()))
+os.write(fd, b"Pulse agent token (paste at this prompt, not in the command): ")
+until = time.monotonic() + 1
+while time.monotonic() < until:
+    pass
+phase = "blocked-reader"
+os.read(fd, 1)
+sys.exit("reader unexpectedly received input")
+`
+	command := posixShellQuote(python) + " -c " + posixShellQuote(program)
+	out, err := runPortableBootstrap(t, command, "", []string{"FAKE_ROOT=" + root}, "", "TERM")
+	if err == nil || strings.Contains(string(out), "PTY fixture deadline expired") || strings.Contains(string(out), "Bootstrap did not restore") {
+		t.Fatalf("controlled reader did not terminate with its terminal restored: %v\n%s", err, out)
+	}
+	phase, err := os.ReadFile(filepath.Join(root, "signal-phase"))
+	if err != nil || string(phase) != "blocked-reader" {
+		t.Fatalf("signal reached %q instead of a blocked reader: %v", phase, err)
+	}
+}
+
 func TestPrivateBootstrapStandalonePreferredAndBusyBoxHistory(t *testing.T) {
 	for _, caller := range portableBootstrapCallers() {
 		for _, mode := range []string{"prefer-standalone", "busybox"} {
