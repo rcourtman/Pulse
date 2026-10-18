@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"runtime"
 	"sort"
 	"testing"
 	"time"
@@ -46,6 +47,22 @@ func pollOfflineBackupProjection(m *Monitor) {
 	// returns without rebuilding canonical state or making a provider request.
 	m.pollStorageBackupsWithNodes(context.Background(), "site", &fakeSnapshotClient{},
 		[]proxmox.Node{{Node: "offline"}}, map[string]string{"offline": "offline"})
+	awaitBackupProjectionIngest(m)
+}
+
+func awaitBackupProjectionIngest(m *Monitor) {
+	// There is no recovery manager in this fixture: the ordinary asynchronous
+	// sink returns without storage I/O. Drain it so allocations from different
+	// samples cannot overlap or choose different queue/coalescing paths.
+	for {
+		m.recoveryIngestMu.Lock()
+		running := m.recoveryIngestRunning
+		m.recoveryIngestMu.Unlock()
+		if !running {
+			return
+		}
+		runtime.Gosched()
+	}
 }
 
 func TestBackupReadProjectionDoesNotScaleWithUnrelatedEstate(t *testing.T) {
@@ -134,6 +151,7 @@ func TestBackupReadProjectionKeepsLiveTaskAndHeldArchiveEvidence(t *testing.T) {
 		client := &backupReadProjectionClient{}
 		m.pollStorageBackupsWithNodes(context.Background(), "site", client,
 			[]proxmox.Node{{Node: "member"}, {Node: "offline"}}, map[string]string{"member": "online", "offline": "offline"})
+		awaitBackupProjectionIngest(m)
 		if !reflect.DeepEqual(client.calls, []string{"storage/member", "content/member/live"}) {
 			t.Fatalf("request set changed: %v", client.calls)
 		}
