@@ -6352,7 +6352,21 @@ binary-digest admission are unchanged. The real-client controls in
 installer with a loopback TLS peer and fixture signer, including preservation
 of a previous binary and cleanup on refused TLS, missing integrity inputs and
 changed bytes. They do not execute the downloaded binary or establish native
-platform or installed customer recovery. The
+platform or installed customer recovery. After signed admission, the Unix
+installer must copy into an owner-only staging directory on the destination
+filesystem before atomically renaming the complete executable to `pulse-mcp`.
+A failed copy, refused rename or handled interruption before publication must
+not destroy the previous executable or report installation success. Passing
+the containing directory to `mv` selects the basename exactly once: an existing
+directory cannot absorb the candidate, and symlink destinations are replaced
+without modifying their targets. Cleanup covers every allocated download and
+staging path, including partial temporary-file allocation failures. The
+release-asset acceptance control `TestBuildReleaseMCPInstallerPublication`
+exercises these complete signed flows using real TLS/curl/SSH/install/mv,
+a real file-size-limit copy failure, controlled termination/rename failure,
+existing open readers and file/directory/symlink destinations. It proves Linux
+fixture publication, not power-loss durability, native macOS/FreeBSD acceptance,
+Windows replacement, or customer recovery. The
 binary takes no version ldflags because it reads the manifest
 from the Pulse instance it points at. `scripts/build-release.sh`
 builds `pulse-mcp` for the same multi-OS matrix as the unified

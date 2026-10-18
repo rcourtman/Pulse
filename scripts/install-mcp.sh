@@ -34,6 +34,27 @@ tmp=""
 checksums_tmp=""
 signature_tmp=""
 allowed_signers=""
+staging_dir=""
+
+cleanup() {
+    local status=$? path
+    for path in "${tmp}" "${checksums_tmp}" "${signature_tmp}" "${allowed_signers}"; do
+        if [ -n "${path}" ]; then
+            rm -f -- "${path}" || status=1
+        fi
+    done
+    if [ -n "${staging_dir}" ]; then
+        rm -f -- "${staging_dir}/pulse-mcp" || status=1
+        rmdir -- "${staging_dir}" || status=1
+    fi
+    return "${status}"
+}
+
+# Register before the first allocation, so a later mktemp failure or handled
+# interruption also cleans the inputs that were already created.
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 log() {
     printf '[install-mcp] %s\n' "$*"
@@ -120,6 +141,8 @@ main() {
     require_cmd curl
     require_cmd uname
     require_cmd install
+    require_cmd mv
+    require_cmd rmdir
     require_cmd ssh-keygen
 
     local platform install_dir base bin_name url checksums_url
@@ -135,7 +158,6 @@ main() {
     log "downloading: ${url}"
 
     tmp="$(mktemp -t pulse-mcp.XXXXXX)"
-    trap 'rm -f "${tmp}"' EXIT
 
     # Keep saved curl settings out of every binary/integrity download. Explicit
     # CA trust and proxy environment still apply; signed admission is unchanged.
@@ -162,7 +184,6 @@ Build from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mc
     checksums_tmp="$(mktemp -t pulse-mcp-sums.XXXXXX)"
     signature_tmp="$(mktemp -t pulse-mcp-signature.XXXXXX)"
     allowed_signers="$(mktemp -t pulse-mcp-signers.XXXXXX)"
-    trap 'rm -f "${tmp}" "${checksums_tmp}" "${signature_tmp}" "${allowed_signers}"' EXIT
 
     if ! curl --disable -fsSL --retry 3 "${checksums_url}" -o "${checksums_tmp}"; then
         err "could not fetch checksums.txt; refusing unverified install"
@@ -193,7 +214,19 @@ Build from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mc
     fi
     log "sha256 verified"
 
-    install -m 0755 "${tmp}" "${install_dir}/pulse-mcp"
+    # install(1) can remove/truncate the old executable before a failed copy.
+    # Prepare privately on the destination filesystem, then publish in one
+    # rename. Existing readers retain the old inode until they reopen the path.
+    staging_dir="$(mktemp -d "${install_dir}/.pulse-mcp.XXXXXX")"
+    if ! install -m 0755 "${tmp}" "${staging_dir}/pulse-mcp"; then
+        err "could not stage the verified binary; installed executable was not replaced"
+    fi
+    # Supply the containing directory, not the final filename: mv selects the
+    # pulse-mcp basename once. A destination directory cannot absorb our file,
+    # and a destination symlink is replaced rather than followed (also on BSD).
+    if ! mv -f -- "${staging_dir}/pulse-mcp" "${install_dir}/"; then
+        err "could not publish the verified binary; check the install destination"
+    fi
     log "installed: ${install_dir}/pulse-mcp"
 
     case ":${PATH}:" in

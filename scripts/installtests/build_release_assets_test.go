@@ -2997,6 +2997,19 @@ func TestReleaseAssetCommonRejectsUnexpectedUpdateSigningPublicKey(t *testing.T)
 	}
 }
 
+func TestBuildReleaseMCPInstallerPublication(t *testing.T) {
+	// The packaging control below establishes that this exact Unix installer
+	// is shipped unchanged. Signed assets still need recoverable publication.
+	runMCPInstallerChecks(t,
+		"test_publication_preserves_previous_until_atomic_rename",
+		"test_copy_failure_preserves_previous_and_cleans_staging",
+		"test_termination_before_publication_preserves_previous",
+		"test_rename_refusal_preserves_previous",
+		"test_directory_destination_is_not_reported_as_installed",
+		"test_symlink_destinations_are_replaced_not_followed",
+		"test_temporary_allocation_failure_cleans_previous_inputs")
+}
+
 // TestBuildReleasePackagesPulseMcpForAllPlatforms pins the
 // distribution path for pulse-mcp: each Pulse release must build
 // the MCP adapter for the same multi-OS matrix as the unified
