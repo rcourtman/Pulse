@@ -174,9 +174,26 @@ const targetSecondaryLabel = (point: RecoveryPoint): string => {
 const sizeLabel = (point: RecoveryPoint): string =>
   formatPlatformTableBytesValue(point.sizeBytes ?? undefined, '-');
 
+// TrueNAS replication supplies LastRun, not independent start/end times. The
+// recovery mapper mirrors it into both transport fields, even while running.
+// Snapshot StartedAt carries creation, while a CompletedAt-only snapshot uses
+// the mapper's collection-time fallback. Keep those meanings at the consumer.
+const activityTime = (point: RecoveryPoint): { label: string; value: string | undefined } => {
+  const started = asTrimmedString(point.startedAt);
+  const completed = asTrimmedString(point.completedAt);
+  const kind = mapTrueNASProtectionKind(point);
+  if (kind === 'replication') return { label: 'Last run', value: completed || started };
+  if (kind === 'snapshot') {
+    return started ? { label: 'Created', value: started } : { label: 'Observed', value: completed };
+  }
+  return completed
+    ? { label: 'Completed', value: completed }
+    : { label: 'Started', value: started };
+};
+
 // Columns a user can sort by. Every protection column carries a scalar:
-// Completed orders chronologically and Size on raw bytes, both newest/biggest
-// first on the first click.
+// Reported time orders chronologically and Size on raw bytes, both newest/
+// biggest first on the first click. Retain the internal time key for saved sorts.
 const TRUENAS_PROTECTION_SORT_KEYS = [
   'dataset',
   'artifact',
@@ -202,9 +219,7 @@ const getTrueNASProtectionSortValue = (
       return target === '-' ? null : target;
     }
     case 'completed':
-      return getPlatformTableDateTimeSortValue(
-        asTrimmedString(point.completedAt) || asTrimmedString(point.startedAt),
-      );
+      return getPlatformTableDateTimeSortValue(activityTime(point).value);
     case 'size':
       return typeof point.sizeBytes === 'number' && Number.isFinite(point.sizeBytes)
         ? point.sizeBytes
@@ -229,7 +244,7 @@ const detailDateTime = (value?: string | null): string | null => {
   const raw = asTrimmedString(value);
   if (!raw) return null;
   const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return raw;
+  if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -257,6 +272,8 @@ const sourceDatasetsLabel = (point: RecoveryPoint): string | null => {
 
 const buildProtectionDetailSections = (point: RecoveryPoint): ProtectionDetailSection[] => {
   const kind = mapTrueNASProtectionKind(point);
+  const time = activityTime(point);
+  const reportedError = kind === 'replication' ? detailString(point, 'lastError') : '';
   const target = targetLabel(point);
   const targetSecondary = targetSecondaryLabel(point);
   const summaryRows = compactDetailRows([
@@ -266,8 +283,12 @@ const buildProtectionDetailSections = (point: RecoveryPoint): ProtectionDetailSe
     }),
     detailRow('Dataset', datasetLabel(point)),
     detailRow('Host', hostLabel(point)),
-    detailRow('Started', detailDateTime(point.startedAt)),
-    detailRow('Completed', detailDateTime(point.completedAt)),
+    ...(kind === 'other'
+      ? [
+          detailRow('Started', detailDateTime(point.startedAt)),
+          detailRow('Completed', detailDateTime(point.completedAt)),
+        ]
+      : [detailRow(time.label, detailDateTime(time.value) || 'Unknown')]),
     detailRow('Size', sizeLabel(point)),
     detailRow('Verified', detailBool(point.verified)),
     detailRow('Encrypted', detailBool(point.encrypted)),
@@ -282,6 +303,15 @@ const buildProtectionDetailSections = (point: RecoveryPoint): ProtectionDetailSe
     detailRow('Last snapshot', detailString(point, 'lastSnapshot')),
     detailRow('Task name', detailString(point, 'taskName')),
     detailRow('Task ID', detailString(point, 'taskId') || detailString(point, 'upid')),
+    detailRow('Reported error', reportedError, {
+      tone: outcomeTone(point),
+      layout: 'stacked',
+      valueContent: (
+        <span class="block whitespace-pre-wrap text-left leading-snug wrap-anywhere">
+          {reportedError}
+        </span>
+      ),
+    }),
   ]);
 
   const targetRows = compactDetailRows([
@@ -494,7 +524,7 @@ export const TrueNASProtectionTable: Component<{
                       sortKey="completed"
                       class="platform-table-mobile-w-15 md:w-[12%]"
                     >
-                      <PlatformResponsiveTableLabel compact="Finished" full="Completed" />
+                      <PlatformResponsiveTableLabel compact="Time" full="Reported time" />
                     </PlatformSortableTableHead>
                     <PlatformSortableTableHead
                       kind="numeric-value"
@@ -569,10 +599,7 @@ export const TrueNASProtectionTable: Component<{
                                 class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                               >
                                 <PlatformTableDateTimeValue
-                                  value={
-                                    asTrimmedString(point.completedAt) ||
-                                    asTrimmedString(point.startedAt)
-                                  }
+                                  value={activityTime(point).value}
                                   emptyText="-"
                                 />
                               </TableCell>

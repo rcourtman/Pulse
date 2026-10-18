@@ -23,6 +23,25 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### TrueNAS Protection preserves the meaning of reported task evidence
+
+The TrueNAS replication mapper mirrors its best-effort LastRun into both
+transport timestamp fields; the consuming table must not present those as
+independent start/end or successful-completion evidence, including for running
+tasks. Protection labels the date column Reported time and the replication
+detail Last run. A snapshot with creation in StartedAt uses Created; a
+CompletedAt-only collection fallback uses Observed. Sorting consumes the same
+selected time and retains the existing internal/persisted key. Unreadable time
+remains unknown rather than displaying invalid provider text as a date.
+
+The existing replication detail exposes nonblank `details.lastError` as
+Reported error, escaped and wrapping, even if it differs from the supplied
+outcome. Missing/non-text errors do not invent a clean result. Accepted refresh
+replaces/removes this text without retaining an old error in the open detail.
+`TrueNASProtectionTable.test.tsx` and the connected HTTP/browser regression
+`truenas-protection-evidence.cjs` cover these cases. No transport/collector,
+canonical identity, outcome evaluation or appliance/guest operation changes.
+
 ### TrueNAS protection-read failure does not replace inventory
 
 The existing TrueNAS Protection table consumes an all-or-nothing recovery-point

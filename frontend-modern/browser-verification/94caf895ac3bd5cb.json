@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "e2f8c4ee6d794e2ce7eaf15617e0af2b2fd0eee7",
+  "verified_at": "2026-10-18T12:02:29Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "2dfd2b7c06c6edd260d1a289eb6ab2ed0e8b7a3f4176c979c2bb9df1442c9b82"
+  },
+  "routes": [
+    "/browser-tests/truenas-protection-read.html (safe HTTP transport through real recovery reader/decoder/query cache and production TrueNAS Protection table/CSS)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Build and browser source e2f8c4ee6d794e2ce7eaf15617e0af2b2fd0eee7; all 2,989 source-input and five served-artifact hashes verified. Playwright 1.56.1 matches the integration lock, Chromium 141.0.7390.37. Desktop light and 320px dark touch.",
+    "Reported time replaces the false Completed/Finished column label. Replication detail says Last run, not separate start/end times; snapshots distinguish Created from collection-only Observed. Supplied outcomes are unchanged.",
+    "Reported error displays the exact multiline/long synthetic provider text, including literal markup, as escaped wrapping text. No injected image/script/link or page-side execution appears. Absence of an error does not invent a clean result.",
+    "Accepted HTTP replacements update the same open task, replace then remove obsolete error evidence and update its time/outcome. Existing Attention and error search reach that evidence without adding a control or route.",
+    "Six retained captures opened natively with view_image and visually inspected. Error and labelled times remain readable in the expanded narrow detail; existing compact summary-cell truncation is not claimed fixed.",
+    "Both viewport runs have no page errors, off-origin requests or writes; browser and local server close. Synthetic transport proof establishes no appliance, replication, guest recovery, publication or release availability."
+  ],
+  "interactions": [
+    "Select Attention and return to All, use the existing error-text search, then expand the failed task by keyboard on desktop and tap on the narrow viewport. First expand the existing phone Filters panel.",
+    "Refresh the actual HTTP reader twice while the same task remains open: replace its error, then accept success with the error removed. Inspect the running task and both creation/collection snapshot variants.",
+    "Inspect six settled native captures at desktop/320px, including the long escaped error, running Last run and collection-only Observed detail."
+  ]
+}
