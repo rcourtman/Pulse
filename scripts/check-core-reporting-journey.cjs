@@ -80,7 +80,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
    page.setDefaultTimeout(12000);
    page.on('pageerror', (e) => result.errors.push(e.message));
    await page.route('**/*', (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
-   for (phase of input.phases || ['complete', 'rejected', 'partial', 'zero', 'recovered', 'retained']) {
+   for (phase of input.phasesByWidth?.[width] || input.phases || ['complete', 'rejected', 'partial', 'zero', 'recovered', 'retained']) {
     const record = { phase, width, checks: [] };
     result.cases.push(record);
     const check = (condition, label) => { assert(condition, label); record.checks.push(label); };
