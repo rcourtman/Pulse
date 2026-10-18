@@ -30,7 +30,9 @@ establish safe recovery.
 - **Agent host is missing or reporting is rejected:** check the existing
   [agent authentication and reporting evidence](UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403)
   before replacing a token or reinstalling. Installer success is not an accepted
-  report.
+  report. If the agent is locally healthy but readings stop, distinguish
+  [local health from stale host reports](UNIFIED_AGENT.md#agent-is-healthy-locally-but-host-reports-are-stale);
+  an unavailable hard NFS mount is not an authentication failure.
 - **Proxmox or PBS reports a certificate error:** distinguish
   [certificate trust, renewal and saved-pin conflicts](TROUBLESHOOTING.md#proxmox-or-pbs-certificate-validation-failed).
   Keep verification enabled; a new certificate or a working browser is not

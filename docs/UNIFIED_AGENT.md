@@ -818,6 +818,20 @@ Include patterns use the same exact, prefix, and contains matching rules as
 exclusions. They only override automatic filesystem filtering. An explicit
 `--disk-exclude` match still wins.
 
+**Network filesystems are filtered too.** The current host collector skips NFS
+and CIFS/SMB mounts before asking for their usage, unless an include pattern
+matches. A broad include can therefore opt remote mounts into active filesystem
+calls, not just add rows to the display. Prefer the specific mount you need;
+do not remove a working exclusion simply because the agent was upgraded.
+Excluding a mount leaves its capacity unmonitored by this collector; exclusions
+can also suppress matching physical-disk health and wear alerts as described
+above. Arrange independent coverage for what you deliberately exclude.
+
+A probe timeout bounds the collector's wait, not the underlying kernel call.
+It does not cancel a hard NFS wait or prove storage recovery. For missing host
+reports, start with [local health versus reporting](#agent-is-healthy-locally-but-host-reports-are-stale)
+before changing filters or credentials.
+
 ## S.M.A.R.T. Disk Health
 
 The agent can report S.M.A.R.T. disk temperatures, health status, identity, and normalized health counters when running in Agent mode. This requires:
@@ -1162,6 +1176,45 @@ source instead; this journal recipe does not apply. Keep its read bounded and
 private, and report evidence as unavailable if safe collection is not possible.
 QNAP and Unraid log locations are described in the
 [space troubleshooting section](#installer-fails-with-not-enough-free-disk-space).
+
+### Agent is healthy locally but host reports are stale
+
+A running process or an already-observed `/healthz` success does **not** prove
+that host reports reach Pulse. In **Settings → Infrastructure**, compare the
+affected agent's existing **Last seen** with the age of its host readings.
+An old reading is not current health; missing filesystem usage is not zero.
+Use observations already available, not another health request or diagnostic run.
+
+Keep an explicit [HTTP 401 or 403](#agent-lookup-returns-http-401-or-403)
+separate from reports that stop without a rejection. Do not rotate tokens,
+repair authentication, reinstall or delete identity state just because reporting
+is stale. A working local endpoint does not establish network or server acceptance
+either; keep the original error and time when available.
+
+**On a host with hard-mounted NFS, an unavailable mount is one possible cause,
+not a diagnosis from staleness alone.** A [field report](https://github.com/rcourtman/Pulse/discussions/1747)
+describes blocked filesystem calls while local health stayed responsive. The
+current collector filters network mounts before usage calls unless explicitly
+included; inspect only the include/exclude settings you already have, using
+[filesystem filter guidance](#include-an-automatically-filtered-filesystem).
+Its bounded wait lets collection skip a stuck usage call, with at most one
+in-flight usage call per mountpoint; the kernel call can remain blocked.
+This is not proof of a recovered mount or accepted host reports.
+
+Do not run `df`, traverse the affected mount, force an unmount, change NFS
+hard/soft semantics, or repeatedly restart or kill the agent to diagnose this
+condition. Use the storage owner's established recovery procedure. Only make
+deliberate persistent filter changes during safe maintenance, preserving other
+settings, credentials and identity; do not use an exclusion to disguise an
+unexplained outage. Afterwards, verify advancing **Last seen** and ordinary
+host readings separately from storage recovery, with independent coverage for
+any excluded capacity or health alerts.
+
+If reporting the problem, retain the server and agent versions, last successful
+report time and any already-observed error or blocked-call evidence. Use
+consistent private mount aliases; keep literal paths, full service settings,
+tokens and raw process or kernel dumps private. Unknown evidence is valid;
+do not repeat a blocked operation or collect the same evidence again.
 
 ### Agent lookup returns HTTP 401 or 403
 
