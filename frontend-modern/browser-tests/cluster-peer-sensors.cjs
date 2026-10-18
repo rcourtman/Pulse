@@ -16,6 +16,10 @@ const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).d
   for (const [file, expected] of Object.entries(binding.artifacts)) assert.equal(hash(path.join(staticRoot, file)), expected, `artifact changed: ${file}`);
   const states = JSON.parse(fs.readFileSync(path.join(dir, 'resources.json')));
   assert.equal(Object.keys(states).length, 8);
+  // The backend's synthetic snapshot clock, not elapsed VM/queue transport,
+  // decides freshness in this field-rendering fixture. Do not rewrite data.
+  const receiptClock = Math.max(...Object.values(states).map(value => typeof value.lastSeen === 'number' ? value.lastSeen : Date.parse(value.lastSeen)));
+  assert.ok(Number.isFinite(receiptClock));
   const server = http.createServer((req,res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     if (url.pathname === '/proof/states') { res.setHeader('Content-Type','application/json'); return res.end(JSON.stringify(states)); }
@@ -38,6 +42,7 @@ const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).d
     for (const [name, engine, width, height] of [['desktop',chromium,1440,1000],['narrow',webkit,320,900]]) {
       browser = await engine.launch(engine===chromium?{headless:true,channel:'chromium',args:['--no-sandbox']}:{headless:true});
       const page = await browser.newPage({viewport:{width,height},isMobile:name==='narrow',hasTouch:name==='narrow'});
+      await page.clock.install({time:new Date(receiptClock)});
       const errors = [], requests = [];
       page.on('pageerror',e=>errors.push(e.message));
       await page.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
@@ -70,7 +75,7 @@ const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).d
       await page.getByRole('tab',{name:'Overview',exact:true}).click();
       assert.deepEqual(errors,[]);
       assert.ok(requests.length>0,'actual history consumer was not exercised');
-      journeys.push({name,width,height,browser:browser.version(),steps,requests,errors});
+      journeys.push({name,width,height,browser:browser.version(),receiptClock,steps,requests,errors});
       await browser.close(); browser=null;
     }
     fs.writeFileSync(path.join(artifacts,'result.json'),JSON.stringify({playwright:require('playwright/package.json').version,producer:hash(path.join(dir,'resources.json')),binding:hash(path.join(staticRoot,'binding.json')),journeys},null,2)+'\n');

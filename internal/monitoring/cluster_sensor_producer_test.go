@@ -24,6 +24,7 @@ func TestClusterSensorProducerConsumer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		reports = nil // Explicit producer bytes must not inherit synthetic defaults.
 		if err := json.Unmarshal(data, &reports); err != nil {
 			t.Fatal(err)
 		}
@@ -36,7 +37,7 @@ func TestClusterSensorProducerConsumer(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			node := readStateTestNode("fixture", "peer")
 			node.Type = "node"
-			node.Host = "peer"
+			node.Host = "https://peer.fixture.example:8006"
 			node.CPU = 0.1
 			node.Memory = models.Memory{Total: 8 << 30, Used: 2 << 30, Free: 6 << 30, Usage: 25}
 			node.Disk = models.Disk{Total: 100 << 30, Used: 20 << 30, Free: 80 << 30, Usage: 20}
@@ -59,6 +60,7 @@ func TestClusterSensorProducerConsumer(t *testing.T) {
 			m.applyClusterSensors("reporter", data, observedAt)
 			if name == "foreign" {
 				node.Instance, node.ID = "other", "other-peer"
+				node.Host = "https://peer.other.example:8006"
 			}
 			node.Temperature = m.getHostAgentTemperatureForNode(node)
 			missing := name == "denied" || name == "stale" || name == "foreign"
@@ -105,6 +107,16 @@ func TestClusterSensorProducerConsumer(t *testing.T) {
 		}
 		if !m.clusterSensorsCache["reporter\x00peer"].updatedAt.Equal(lastGood) {
 			t.Fatal("failed report renewed the cache timestamp")
+		}
+	})
+	t.Run("same endpoint alias keeps legitimate readings", func(t *testing.T) {
+		node := readStateTestNode("fixture", "peer")
+		node.Host = "https://peer.fixture.example:8006"
+		m := readStateMonitor([]models.Node{readStateTestNode("fixture", "source"), node}, []models.Host{reportingTestHost("reporter", "source", "fixture-source", 0)})
+		m.applyClusterSensors("reporter", reports["id_rsa"], time.Now())
+		node.Instance, node.ID = "alias", "alias-peer"
+		if got := m.getHostAgentTemperatureForNode(node); got == nil || got.CPUPackage != 55 {
+			t.Fatalf("proven same-machine alias lost its reading: %+v", got)
 		}
 	})
 	data, err := json.Marshal(resources)
