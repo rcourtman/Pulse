@@ -1953,6 +1953,44 @@ func expectRPCUnsubscribe(t *testing.T, conn *websocket.Conn, subscriptionID str
 	writeRPCResult(t, conn, request.ID, nil)
 }
 
+func TestClientFixtureClosesSessionAtTestBoundary(t *testing.T) {
+	var client *Client
+	var keepaliveDone <-chan struct{}
+	if !t.Run("fixture owner", func(t *testing.T) {
+		fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+			switch request.Method {
+			case "auth.login_ex":
+				return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+			case "system.info":
+				return protocolFixtureReply{result: map[string]any{"hostname": "fixture", "version": "TrueNAS-SCALE-25.10.4"}}
+			default:
+				t.Errorf("unexpected method %s", request.Method)
+				return protocolFixtureReply{close: true}
+			}
+		}, nil)
+		// Use the constructor under test, not protocolFixtureClient's separate
+		// cleanup, so this control detects a missing constructor-owned close.
+		client = mustClientForServer(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", InsecureSkipVerify: true})
+		if err := client.TestConnection(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if client.rpc == nil || client.rpc.keepaliveDone == nil {
+			t.Fatal("fixture did not establish a live RPC keepalive")
+		}
+		keepaliveDone = client.rpc.keepaliveDone
+	}) {
+		return
+	}
+	if !client.closed || client.rpc != nil {
+		t.Fatal("fixture retained a client/session after its owning test returned")
+	}
+	select {
+	case <-keepaliveDone:
+	default:
+		t.Fatal("fixture returned before its keepalive stopped")
+	}
+}
+
 func mustClientForServer(t *testing.T, serverURL string, config ClientConfig) *Client {
 	t.Helper()
 
@@ -1974,6 +2012,7 @@ func mustClientForServer(t *testing.T, serverURL string, config ClientConfig) *C
 		t.Fatalf("NewClient() error = %v", err)
 	}
 	client.allowInsecureRPC = true
+	t.Cleanup(client.Close)
 	return client
 }
 
