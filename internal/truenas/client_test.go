@@ -1970,7 +1970,7 @@ func TestClientFixtureClosesSessionAtTestBoundary(t *testing.T) {
 		}, nil)
 		// Use the constructor under test, not protocolFixtureClient's separate
 		// cleanup, so this control detects a missing constructor-owned close.
-		client = mustClientForServer(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", InsecureSkipVerify: true})
+		client = mustClientForServer(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", InsecureSkipVerify: true})
 		if err := client.TestConnection(context.Background()); err != nil {
 			t.Fatal(err)
 		}
