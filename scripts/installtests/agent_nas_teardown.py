@@ -708,4 +708,7 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
 
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2, testRunner=unittest.TextTestRunner(verbosity=2, resultclass=NASTimingResult))
+    if sys.argv[1:] == ['--list-controls']:
+        print(json.dumps(unittest.defaultTestLoader.getTestCaseNames(AgentNASTeardown)))
+    else:
+        unittest.main(verbosity=2, testRunner=unittest.TextTestRunner(verbosity=2, resultclass=NASTimingResult))

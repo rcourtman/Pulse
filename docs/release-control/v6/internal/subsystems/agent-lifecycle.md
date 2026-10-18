@@ -204,8 +204,16 @@ Unraid directories. Successful/absent/repeated removal still requires complete
 fresh observations. No automatic restart, credential churn or transport-policy
 change follows a partial operation.
 
-`TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` requires all eighteen
+`TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` requires all 23
 actual-function/full-uninstall caller controls in `agent_nas_teardown.py`. The
+fixture's discovered inventory must exactly match the required controls before
+execution. Each control runs once, serially, in its own two-minute invocation;
+the native runner retains its ten-minute package alarm and the production,
+transport and cleanup deadlines do not change. This prevents completed controls
+from consuming the observation budget of later controls. Missing, substituted,
+repeated or malformed inventories fail closed, covered by
+`TestNASControlInventoryRequiresEveryControlExactlyOnce`; a partial suite is not
+a pass. Native macOS completion still requires the containing CI result. The
 boot filesystem transformations are real private user operations; flash/kernel
 faults are closed models. Two generated watchdog/child controls use real private
 ordinary-user processes, not appliance mounts or root services. Native signed
