@@ -100,7 +100,7 @@ const records = ['failed', 'warning', 'running', 'unknown', 'success'].map((outc
       server.listen(5347, '127.0.0.1', resolve);
     });
     for (const config of [
-      { id: 'desktop', engine: 'chromium', width: 1440, locale: 'en-GB' },
+      { id: 'desktop', engine: 'chromium', width: 1440, container: 1280, locale: 'en-GB' },
       { id: 'phone-uk', engine: 'chromium', width: 320, locale: 'en-GB', dark: true },
       { id: 'phone-us', engine: 'chromium', width: 320, locale: 'en-US' },
       { id: 'tablet', engine: 'chromium', width: 600, locale: 'en-GB' },
@@ -114,7 +114,6 @@ const records = ['failed', 'warning', 'running', 'unknown', 'success'].map((outc
       },
       { id: 'firefox', engine: 'firefox', width: 1440, locale: 'en-GB' },
     ]) {
-      const narrow = Boolean(config.container || config.width === 320);
       reply = records;
       browser = await (config.engine === 'chromium' ? chromium : firefox).launch(
         config.engine === 'chromium'
@@ -152,7 +151,12 @@ const records = ['failed', 'warning', 'running', 'unknown', 'success'].map((outc
       const rows = page.locator('[data-truenas-protection-row]');
       await rows.nth(4).waitFor();
       const headers = page.locator('.platform-table > thead th:visible');
-      assert.equal(await headers.count(), narrow ? 3 : config.width < 1024 ? 5 : 6);
+      // Shared table styles reveal hidden lg tracks at a 76rem container,
+      // not a 1024px viewport. The fixture's ordinary max-width is only 72rem.
+      const tableWidth = (await page.locator('.platform-table').boundingBox()).width;
+      const narrow = tableWidth < 544;
+      entry.table_width = tableWidth;
+      assert.equal(await headers.count(), narrow ? 3 : tableWidth < 1216 ? 5 : 6);
       entry.headers = await headers.allInnerTexts();
       if (narrow) {
         assert.deepEqual(
