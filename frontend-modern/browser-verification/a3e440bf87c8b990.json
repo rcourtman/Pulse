@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "2510ee7ec0568d8c9de2a89f5e4d9de299363404",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "b1b4f7e23c4868c2b7e5c2b9113b53dae1b0eec4f23d30a7d8a24433fb63d566"
+  },
+  "routes": [
+    "/proxmox/replication",
+    "/docs/TROUBLESHOOTING#replication-jobs-are-pending-stale-or-missing"
+  ],
+  "states": [
+    "Reported last-sync OK, independently overdue Next sync",
+    "Reported error with OK alias and zero failures remains Failed",
+    "Missing and unrecognised results remain Unknown, not Pending",
+    "Explicit Pending and historical Disabled remain distinct",
+    "Normal HTTP replacement changes Unknown/OK counts and active filtered rows",
+    "Literal plain-text provider result, complete wrapping error and interpretation in the existing disclosure",
+    "Existing Docs fragment and matching Unknown/Pending/OK guidance"
+  ],
+  "interactions": [
+    "Actual ProxmoxPageSurface query, HTTP reader and table consuming synthetic GET /api/replication/jobs?platform=proxmox-pve. Unrelated APIs use explicit safe fixture responses; no guest, replication, backup or recovery operation.",
+    "Desktop keyboard activation; 320px touch opens the real Filters disclosure, selects states and taps the existing row disclosure. The ordinary 30-second poll updates counts and filtering without navigation.",
+    "Actual Docs fetch/router/Markdown/CSS renders the changed existing guide at its unchanged fragment.",
+    "Zero page/console errors and off-origin/mutating requests. Browser and server close.",
+    "All eight final captures opened natively and inspected. Status words, scope note, wrapping error, raw literal outcome and guide meanings are readable. Existing compact Route ellipsis is not repaired; full route remains available through the disclosure."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 980
+    }
+  ],
+  "verified_at": "2026-10-18T19:06:36Z",
+  "browser": {
+    "client": "Playwright 1.56.1",
+    "chromium": "141.0.7390.37",
+    "narrow": "Chromium touch emulation, dark theme"
+  },
+  "source_proof_receipt": "source-j47dicc8",
+  "fresh_preview_receipt": "source-daxoko2u",
+  "compiler_binding": {
+    "source_sha": "2510ee7ec0568d8c9de2a89f5e4d9de299363404",
+    "source_inputs": 2776,
+    "artifacts": 9,
+    "source_and_artifact_hashes_matched": true
+  },
+  "fixture_entry": "/browser-tests/replication-inventory.html",
+  "captures": [
+    {
+      "file": "desktop-reported-results.png",
+      "sha256": "4dc91d0e733717abfb0af6dca03229c3b0e2399213ec143b15a5e22097225c4a",
+      "bytes": 80712,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      }
+    },
+    {
+      "file": "desktop-zero-count-error.png",
+      "sha256": "ba7dd0ae2701d33f2621a438ce55796fe120687af85a5f4d3bf3bfb8ba956051",
+      "bytes": 75994,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      }
+    },
+    {
+      "file": "desktop-unknown-result.png",
+      "sha256": "ae718b470a9b1798c006de67dfda3ea3994ea7747891639d1672627c6d7a79b5",
+      "bytes": 69969,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      }
+    },
+    {
+      "file": "desktop-matching-guide.png",
+      "sha256": "a308c3a8cd08ebb3e1f9f1968a6065e2b001c33e8006be4e258ec2eab6d568cc",
+      "bytes": 246801,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      }
+    },
+    {
+      "file": "narrow-reported-results.png",
+      "sha256": "f9ce2dbc2e3c51d1ab77c0334041efe239155c4de0d40b3f587479e740a7d4da",
+      "bytes": 33627,
+      "viewport": {
+        "width": 320,
+        "height": 980
+      }
+    },
+    {
+      "file": "narrow-zero-count-error.png",
+      "sha256": "d5169b8aa821cb4cde209ba68466cac9cd295b85f2cf247064b210243f137bf9",
+      "bytes": 52958,
+      "viewport": {
+        "width": 320,
+        "height": 980
+      }
+    },
+    {
+      "file": "narrow-unknown-result.png",
+      "sha256": "f12155713ebc0de244ee4460cb5d6360ee47a404e2b52ef400638483c62c80a4",
+      "bytes": 49133,
+      "viewport": {
+        "width": 320,
+        "height": 980
+      }
+    },
+    {
+      "file": "narrow-matching-guide.png",
+      "sha256": "35b5f530d4c7e5eeb04b1006521e18f608a79505798149ab9be44f69da6df1a2",
+      "bytes": 95702,
+      "viewport": {
+        "width": 320,
+        "height": 980
+      }
+    }
+  ],
+  "limits": [
+    "Synthetic collected observations, not native sync, restore, thaw, filesystem liveness or installed recovery.",
+    "Chromium desktop and narrow touch emulation only. No Safari/WebKit, physical-device or screen-reader speech qualification.",
+    "Existing compact Route ellipsis remains; the complete route was inspected in the actual disclosure.",
+    "Narrow guide capture covers the heading and changed Unknown/Pending rows, not every below-fold row in one image."
+  ]
+}
