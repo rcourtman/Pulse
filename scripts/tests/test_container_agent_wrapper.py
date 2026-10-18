@@ -6,6 +6,7 @@ fixtures prove argument policy and complete-download-before-execution ordering,
 not a real TLS handshake or installed agent recovery.
 """
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -23,12 +24,16 @@ BASH = shutil.which("bash")
 PRIVATE = "synthetic-private-provider-detail"
 TOKEN = "synthetic-wrapper-token"
 INSTALLER = r'''#!/usr/bin/env bash
-python3 -I -c 'import json, os, pathlib, sys
+python3 -I -c 'import hashlib, json, os, pathlib, sys
 p = pathlib.Path(sys.argv[1])
 mask = os.umask(0)
 os.umask(mask)
+args = sys.argv[2:]
+token_file = pathlib.Path(args[args.index("--token-file") + 1]) if "--token-file" in args else None
 pathlib.Path(os.environ["INSTALL_LOG"]).write_text(json.dumps({
-    "args": sys.argv[2:], "file_mode": p.stat().st_mode & 0o777 if p.is_file() else None,
+    "args": args, "file_mode": p.stat().st_mode & 0o777 if p.is_file() else None,
+    "token_file_sha256": hashlib.sha256(token_file.read_bytes()).hexdigest() if token_file else None,
+    "token_file_mode": token_file.stat().st_mode & 0o777 if token_file else None,
     "parent_mode": p.parent.stat().st_mode & 0o777 if p.is_file() else None, "umask": mask}))
 ' "$0" "$@"
 exit "${INSTALL_EXIT:-0}"
@@ -80,19 +85,27 @@ class ContainerAgentWrapperTest(unittest.TestCase):
             (root / ".curlrc").write_text("insecure\nlocation\nverbose\n")
             ca = root / "verified private CA.pem"
             ca.write_text("synthetic CA fixture; never passed to real curl\n")
-            args = [str(ca) if arg == "{ca}" else arg for arg in args]
+            token = root / "private tokens" / "collector [*]; $(printf not-expanded).token"
+            token.parent.mkdir(mode=0o700)
+            token.write_text(TOKEN + "\n")
+            token.chmod(0o600)
+            replacements = {"{ca}": str(ca), "{token_file}": str(token),
+                            "{relative_token_file}": str(token.relative_to(root))}
+            args = [replacements.get(arg, arg) for arg in args]
             env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ["PATH"],
                        TMPDIR=str(scratch), HOME=str(root), CURL_HOME=str(root),
                        HTTPS_PROXY="http://ambient.invalid:99", ALL_PROXY="http://ambient.invalid:99",
                        WRAPPER_FIXTURE=str(root), INSTALL_LOG=str(root / "install.json"),
                        INSTALL_EXIT=str(install_exit), BASH_ENV="", ENV="")
-            result = subprocess.run([BASH, str(wrapper), *args], env=env,
+            result = subprocess.run([BASH, str(wrapper), *args], env=env, cwd=root,
                                     capture_output=True, text=True, timeout=5)
             output = result.stdout + result.stderr
             self.assertNotIn(PRIVATE, output)
             self.assertNotIn(TOKEN, output)
             calls = json.loads((root / "curl.json").read_text()) if (root / "curl.json").exists() else None
             installed = json.loads((root / "install.json").read_text()) if (root / "install.json").exists() else None
+            self.assertEqual(token.read_text(), TOKEN + "\n", "wrapper changed the caller's credential file")
+            self.assertEqual(stat.S_IMODE(token.stat().st_mode), 0o600)
             self.assertEqual(list(scratch.iterdir()), [], "bootstrap left owned temporary files")
             return result.returncode, output, calls, installed, args
 
@@ -137,6 +150,52 @@ class ContainerAgentWrapperTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertNotIn(TOKEN, " ".join(curl))
         self.assertIn(TOKEN, installed["args"])  # Legacy downstream interface is unchanged.
+
+    def test_private_token_file_forwards_only_the_exact_path(self):
+        for local in (False, True):
+            for path in ("{token_file}", "{relative_token_file}"):
+                with self.subTest(local=local, path=path):
+                    code, _, curl, installed, args = self.exercise([
+                        "--url", "https://pulse.invalid", "--token-file", path], local=local)
+                    self.assertEqual(code, 0)
+                    self.assertEqual(installed["args"], [*args, "--enable-docker", "--enable-host"])
+                    self.assertNotIn(TOKEN, json.dumps(installed))
+                    self.assertNotIn("--token", installed["args"])
+                    self.assertEqual(installed["token_file_sha256"],
+                                     hashlib.sha256((TOKEN + "\n").encode()).hexdigest())
+                    self.assertEqual(installed["token_file_mode"], 0o600)
+                    if curl is not None:
+                        self.assertNotIn(TOKEN, " ".join(curl))
+                        self.assertNotIn(args[-1], curl)
+
+    def test_private_token_file_survives_downstream_failure(self):
+        for local in (False, True):
+            with self.subTest(local=local):
+                code, _, _, installed, args = self.exercise([
+                    "--url", "https://pulse.invalid", "--token-file", "{token_file}"],
+                    local=local, install_exit=17)
+                self.assertEqual(code, 17)
+                self.assertEqual(installed["args"], [*args, "--enable-docker", "--enable-host"])
+
+    def test_private_token_file_uninstall_does_not_add_monitoring_modules(self):
+        for local in (False, True):
+            with self.subTest(local=local):
+                code, _, _, installed, args = self.exercise([
+                    "--url", "https://pulse.invalid", "--token-file", "{token_file}",
+                    "--uninstall"], local=local)
+                self.assertEqual(code, 0)
+                self.assertEqual(installed["args"], args)
+                self.assertNotIn(TOKEN, json.dumps(installed))
+
+    def test_ambiguous_token_sources_fail_before_execution_or_download(self):
+        for local in (False, True):
+            for credentials in (["--token", TOKEN, "--token-file", "{token_file}"],
+                                ["--token-file", "{token_file}", "--token", TOKEN]):
+                with self.subTest(local=local, order=credentials[0]):
+                    output, curl = self.assert_refused([
+                        "--url", "https://pulse.invalid", *credentials], local=local)
+                    self.assertIsNone(curl)
+                    self.assertIn("Use either --token-file or --token, not both.", output)
 
     def test_download_and_execution_paths_are_private(self):
         code, _, _, installed, _ = self.exercise(["--url", "https://pulse.invalid"])
@@ -224,18 +283,21 @@ class ContainerAgentWrapperTest(unittest.TestCase):
                 self.assertEqual(installed["args"], ["--url", "https://pulse.invalid", "--uninstall"])
 
     def test_missing_values_fail_before_local_execution_or_download(self):
-        for option in ("--url", "--token", "--interval", "--cacert"):
+        for option in ("--url", "--token", "--token-file", "--interval", "--cacert"):
             for value in ([], [""], ["--uninstall"]):
-                with self.subTest(option=option, value=value):
-                    output, curl = self.assert_refused([option, *value], local=True)
-                    self.assertIsNone(curl)
-                    self.assertIn("requires a non-empty value", output)
+                for local in (False, True):
+                    with self.subTest(option=option, value=value, local=local):
+                        output, curl = self.assert_refused([option, *value], local=local)
+                        self.assertIsNone(curl)
+                        self.assertIn("requires a non-empty value", output)
 
     def test_help_is_an_early_read_only_exit(self):
         code, output, curl, installed, _ = self.exercise(["--help"])
         self.assertEqual(code, 0)
         self.assertIn("--enable-host=false for an intentional", output)
         self.assertIn("complete HTTP 200", output)
+        self.assertIn("--token-file", output)
+        self.assertIn("caller owns the file and its cleanup", output)
         self.assertIsNone(curl)
         self.assertIsNone(installed)
 
