@@ -17,7 +17,7 @@ const { chromium } = require('playwright');
     assert.equal(producer.retired[kind].length, 0);
     assert.equal(producer.current[kind].length, 1);
   }
-  const { createServer } = await import('../frontend-modern/node_modules/vite/dist/node/index.js');
+  const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
   process.chdir(root);
   const server = await createServer({
     root,
