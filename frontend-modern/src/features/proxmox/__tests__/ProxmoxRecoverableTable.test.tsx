@@ -64,7 +64,10 @@ describe('ProxmoxRecoverableTable responsive columns', () => {
     expect(location).toHaveTextContent('main / pve1');
     expect(location).toHaveClass('whitespace-normal', 'wrap-anywhere');
     expect(location?.closest('td')).toHaveAttribute('colspan', '4');
-    expect(document.body.textContent).not.toContain('5 PBS files');
+    const details = document.querySelector('[data-backup-artifact-details]');
+    expect(details).toHaveTextContent('5 PBS files');
+    expect(details).toHaveClass('whitespace-normal', 'wrap-anywhere');
+    expect(details?.closest('td')).toBe(location?.closest('td'));
   });
 
   it('restores every metadata column when the table has full width', () => {
