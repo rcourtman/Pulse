@@ -366,6 +366,7 @@ describe('TrueNAS protection phone summary', () => {
       for (const element of detail.getAllByText(value)) {
         expect(element).toHaveClass('whitespace-normal', 'wrap-break-word');
         expect(element).not.toHaveClass('truncate');
+        expect(element.closest('td')).toHaveAttribute('colspan', '2');
       }
     }
     expect(detail.getAllByText('vault/family/photos').length).toBeGreaterThan(0);

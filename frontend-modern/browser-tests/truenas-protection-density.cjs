@@ -288,7 +288,7 @@ const records = ['failed', 'warning', 'running', 'unknown', 'success'].map((outc
           .count(),
         1,
       );
-      if (config.id === 'desktop' || config.id === 'phone-uk') await capture('detail');
+      if (['desktop', 'phone-uk', 'nested'].includes(config.id)) await capture('detail');
       reply = records.map((record) =>
         record.id === 'fixture-failed'
           ? { ...record, startedAt: '2026-10-18T10:30:00Z', completedAt: '2026-10-18T10:30:00Z' }
