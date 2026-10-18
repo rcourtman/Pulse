@@ -19,11 +19,15 @@ const { chromium } = require('playwright');
     complete: producer.transient_complete,
   };
   const counts = { initial: 3, partial: 2, denied: 1, complete: 1 };
-  const summaries = { initial: '3 protected', partial: '3 unknown', denied: '3 attention', complete: '2 unprotected' };
+  const summaries = { initial: '3 protected', partial: '3 unknown', denied: '3 attention', complete: '1 protected' };
   for (const [name, data] of Object.entries(phases)) {
     assert.equal(data.backups.length, counts[name]);
     assert.equal(data.postures.length, 3);
   }
+  assert.deepEqual(phases.initial.postures.map(row => row.state).sort(), ['protected', 'protected', 'protected']);
+  assert.deepEqual(phases.partial.postures.map(row => row.state).sort(), ['unknown', 'unknown', 'unknown']);
+  assert.deepEqual(phases.denied.postures.map(row => row.state).sort(), ['attention', 'attention', 'attention']);
+  assert.deepEqual(phases.complete.postures.map(row => row.state).sort(), ['protected', 'unknown', 'unknown']);
   const held = phases.initial.backups.find(row => row.vmid === '100');
   assert.equal(held.namespace, 'team/production');
   assert.deepEqual(phases.partial.backups.find(row => row.vmid === '100'), held, 'transient loss retains exact original artifact');

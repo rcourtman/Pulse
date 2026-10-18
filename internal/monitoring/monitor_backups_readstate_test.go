@@ -1652,6 +1652,7 @@ func exercisePBSNamespaceDiscovery(t *testing.T, status int, response string, de
 	}
 	poll(0)
 	f.assertProtected(t, instance)
+	initialPoints := f.points(t, instance)
 	project("initial")
 	key := pbsBackupGroupKey{datastore: "archive", namespace: "team/production", backupType: "vm", backupID: "100"}
 	at := f.m.pbsBackupCacheTimeFor(instance, key)
@@ -1659,7 +1660,7 @@ func exercisePBSNamespaceDiscovery(t *testing.T, status int, response string, de
 	poll(1)
 	raw := f.m.PBSBackupsSnapshot()
 	project("partial")
-	wantRaw, wantPoints := 2, 3
+	wantRaw, wantPoints := 2, 4
 	if denied || complete {
 		wantRaw = 1
 	}
@@ -1682,13 +1683,31 @@ func exercisePBSNamespaceDiscovery(t *testing.T, status int, response string, de
 	for _, b := range raw {
 		require.NotEqual(t, "101", b.VMID, "a successful empty root must still replace its own raw scope")
 	}
-	require.Len(t, f.points(t, instance), wantPoints, "incomplete discovery cannot delete stored history")
+	points := f.points(t, instance)
+	require.Len(t, points, wantPoints, "incomplete discovery retains old history plus the newly observed sibling point")
+	if !complete {
+		for _, before := range initialPoints {
+			found := false
+			for _, after := range points {
+				if after.ID == before.ID {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "incomplete discovery deleted original point %s", before.ID)
+		}
+	}
 	if denied || complete {
 		require.Zero(t, f.m.pbsBackupCacheTimeFor(instance, key), "withdrawn raw scope cannot retain a reusable cache age")
 	} else {
 		require.Equal(t, at, f.m.pbsBackupCacheTimeFor(instance, key), "unread namespace cannot renew or lose its original cache age")
 	}
 	for _, p := range f.postures(t) {
+		if complete && p.SubjectResourceID != f.ids[2] {
+			require.Equal(t, recovery.ProtectionStateUnknown, p.State, "a workload without remaining evidence is not healthy")
+			require.Empty(t, p.ProviderStates)
+			continue
+		}
 		require.Len(t, p.ProviderStates, 1)
 		provider := p.ProviderStates[0]
 		if complete {
@@ -1716,6 +1735,16 @@ func exercisePBSNamespaceDiscovery(t *testing.T, status int, response string, de
 	require.Len(t, f.m.PBSBackupsSnapshot(), 1, "complete discovery and empty nested enumeration confirm deletion")
 	require.Len(t, f.points(t, instance), 1, "only a complete scan may reconcile old points")
 	require.Zero(t, f.m.pbsBackupCacheTimeFor(instance, key))
+	for _, posture := range f.postures(t) {
+		if posture.SubjectResourceID == f.ids[2] {
+			require.Equal(t, recovery.ProtectionStateProtected, posture.State)
+			require.Len(t, posture.ProviderStates, 1)
+			require.Equal(t, recovery.ProtectionHistoryComplete, posture.ProviderStates[0].HistoryCompleteness)
+		} else {
+			require.Equal(t, recovery.ProtectionStateUnknown, posture.State)
+			require.Empty(t, posture.ProviderStates)
+		}
+	}
 	project("complete")
 	t.Logf("namespace_status=%d complete=%t denied=%t retained_raw=%d stored=%d recovered_raw=1 recovered_stored=1", status, complete, denied, len(raw), wantPoints)
 }
