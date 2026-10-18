@@ -1953,6 +1953,28 @@ func expectRPCUnsubscribe(t *testing.T, conn *websocket.Conn, subscriptionID str
 	writeRPCResult(t, conn, request.ID, nil)
 }
 
+func TestClientFixtureClosesSessionAtTestBoundary(t *testing.T) {
+	var client *Client
+	var keepaliveDone <-chan struct{}
+	t.Run("fixture owner", func(t *testing.T) {
+		server := newMockServer(t, defaultAPIResponses(), nil)
+		t.Cleanup(server.Close)
+		client = mustClientForServer(t, server.URL, ClientConfig{APIKey: "fixture-key"})
+		if err := client.TestConnection(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		keepaliveDone = client.rpc.keepaliveDone
+	})
+	if !client.closed || client.rpc != nil {
+		t.Fatal("fixture retained a client/session after its owning test returned")
+	}
+	select {
+	case <-keepaliveDone:
+	default:
+		t.Fatal("fixture returned before its keepalive stopped")
+	}
+}
+
 func mustClientForServer(t *testing.T, serverURL string, config ClientConfig) *Client {
 	t.Helper()
 
@@ -1974,6 +1996,7 @@ func mustClientForServer(t *testing.T, serverURL string, config ClientConfig) *C
 		t.Fatalf("NewClient() error = %v", err)
 	}
 	client.allowInsecureRPC = true
+	t.Cleanup(client.Close)
 	return client
 }
 
