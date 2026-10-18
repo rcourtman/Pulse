@@ -261,14 +261,19 @@ func TestGuestSnapshotWorkersKeepCompletedProgressWhenQueueIsCancelled(t *testin
 	release, done := make(chan struct{}), make(chan struct{})
 	var unblock sync.Once
 	var reads atomic.Int32
+	var freshVMID, emptyVMID atomic.Int32
 	client := &snapshotWorkerClient{read: func(ctx context.Context, _ string, vmid int) ([]proxmox.Snapshot, error) {
-		reads.Add(1)
-		switch vmid {
-		case 1001:
+		// Read-state views are sorted by name, not the seed's VMID order.
+		// Assign outcomes to actual admissions so cancellation follows three
+		// completed observations regardless of registry enumeration or scheduling.
+		switch reads.Add(1) {
+		case 1:
+			freshVMID.Store(int32(vmid))
 			return []proxmox.Snapshot{{Name: "fresh", SnapTime: 1792028460}}, nil
-		case 1002:
+		case 2:
+			emptyVMID.Store(int32(vmid))
 			return nil, nil // An observed empty list may replace this guest only.
-		case 1003:
+		case 3:
 			return nil, fmt.Errorf("fixture inventory unavailable")
 		}
 		entered <- struct{}{}
@@ -288,11 +293,15 @@ func TestGuestSnapshotWorkersKeepCompletedProgressWhenQueueIsCancelled(t *testin
 	}
 	want := make([]models.GuestSnapshot, 0, count-1)
 	for _, snapshot := range previous {
-		if snapshot.VMID != 1001 && snapshot.VMID != 1002 {
+		if snapshot.VMID != int(freshVMID.Load()) && snapshot.VMID != int(emptyVMID.Load()) {
 			want = append(want, snapshot)
 		}
 	}
-	want = append(want, models.GuestSnapshot{ID: "site-member-1001-fresh", VMID: 1001, Name: "fresh", Node: "member", Instance: "site", Type: "qemu", Time: time.Unix(1792028460, 0), VMState: true})
+	freshType := "qemu"
+	if freshVMID.Load()%4 == 0 {
+		freshType = "lxc"
+	}
+	want = append(want, models.GuestSnapshot{ID: fmt.Sprintf("site-member-%d-fresh", freshVMID.Load()), VMID: int(freshVMID.Load()), Name: "fresh", Node: "member", Instance: "site", Type: freshType, Time: time.Unix(1792028460, 0), VMState: freshType == "qemu"})
 	got := m.state.GetSnapshot().PVEBackups.GuestSnapshots
 	sort.Slice(want, func(i, j int) bool { return want[i].ID < want[j].ID })
 	sort.Slice(got, func(i, j int) bool { return got[i].ID < got[j].ID })
