@@ -20,6 +20,20 @@
 
 ## Purpose
 
+### TrueNAS activity does not claim completion from a last-run timestamp
+
+The existing Protection table calls its sortable date column Reported time
+(Time on phones). Its disclosure distinguishes replication Last run from
+snapshot Created or collection-only Observed time, without repeating a mirrored
+timestamp as separate start and completion evidence. Missing/invalid dates stay
+unknown. Nonblank replication errors render as labelled, escaped, multiline
+text with unbroken-string wrapping, not hover-only detail or executable markup.
+Accepted replacements update/remove that evidence in the same open disclosure;
+the supplied outcome, existing filters/search and saved sort key are unchanged.
+`TrueNASProtectionTable.test.tsx` and `truenas-protection-evidence.cjs` cover
+these source/consumer transitions at desktop and narrow touch widths. This
+changes no shared primitive API, provider operation or recovery verdict.
+
 ### TrueNAS Protection keeps read failures visible beside retained records
 
 The existing Protection consumer composes a wrapping status notice and labelled
