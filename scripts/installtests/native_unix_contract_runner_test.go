@@ -15,7 +15,7 @@ import (
 func TestNativeUnixContractRunnerPartitionsWithoutDroppingChecks(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", "-I", "-S", repoFile("scripts", "installtests", "native_unix_contract_runner_test.py"))
+	cmd := exec.CommandContext(ctx, "python3", "-I", "-S", repoFile("scripts", "tests", "test_native_installer_contract_runner.py"))
 	output, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {
 		t.Fatalf("native installer runner control deadline: %v", ctx.Err())

@@ -1,157 +1,149 @@
 #!/usr/bin/env python3
-"""Exercise the actual inventory partition and fail-closed Go invocations."""
-
+"""Execution controls for the native installer runner, including real Go exits."""
+import contextlib
 import importlib.util
+import io
 from pathlib import Path
-import re
 import subprocess
+import tempfile
+from types import SimpleNamespace
 import unittest
-from unittest import mock
-
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location(
-    "runner", ROOT / "scripts/installtests/run_unix_contracts.py")
+spec = importlib.util.spec_from_file_location("native_runner", ROOT / "scripts/installtests/run_unix_contracts.py")
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 
 
-class NativeInstallerRunnerTest(unittest.TestCase):
-    inventory = "TestInstaller\nTestRootInstallResetSafety\nExample\nFuzzInput\nTestFuture\nTestRootInstallResetFuture\nTestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure\nok\tpackage\n"
-    expected_groups = (
-        ["TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure"],
-        ["Example", "TestFuture", "TestInstaller"],
-        ["FuzzInput"],
-        ["TestRootInstallResetFuture", "TestRootInstallResetSafety"],
-    )
+class InventoryControls(unittest.TestCase):
+    def setUp(self):
+        self.names = [f"TestFixture{i:03d}" for i in range(500)]
+        self.names += ["ExampleInstaller", "FuzzInstaller", "TestFutureFixture",
+                       "TestRootInstallResetSafety", "TestΣ", *runner.PREFLIGHT]
+        self.inventory = "\n".join(self.names + ["BenchmarkIgnored", "ok package 0.1s"])
 
-    def test_every_discovered_check_runs_once_in_one_group(self):
-        groups = runner.partition(self.inventory)
-        self.assertEqual(runner.GROUPS, ("nas-preflight", "general-0", "general-1", "reset"))
-        self.assertEqual(groups, self.expected_groups)
-        selected = [name for group in groups for name in group]
-        self.assertEqual(len(selected), 7)
-        self.assertEqual(len(set(selected)), 7)
+    def test_growing_inventory_is_exhaustive_disjoint_and_ordered(self):
+        early, remaining = runner.partition(self.inventory)
+        self.assertEqual(early, list(runner.PREFLIGHT))
+        self.assertEqual(remaining, [name for name in self.names if name not in runner.PREFLIGHT])
+        self.assertEqual(sorted(early + remaining), sorted(self.names))
+        for invalid in ["", "TestOnly", "TestOne\nTestTwo", self.inventory + "\nTestFixture000",
+                        self.inventory + "\nTestUnsafe|TestInjected", self.inventory + "\nFuzzBad.*",
+                        self.inventory + "\nTest(name)", self.inventory + "\nTestX --skip TestY",
+                        self.inventory.replace("TestRootInstallResetSafety\n", ""),
+                        "\n".join(self.names[:-1])]:
+            with self.subTest(invalid=invalid[-60:]), self.assertRaises(ValueError):
+                runner.partition(invalid)
 
-    def test_partition_order_and_odd_inventory_are_exhaustive(self):
-        reversed_inventory = "\n".join(reversed(self.inventory.splitlines()))
-        self.assertEqual(runner.partition(reversed_inventory), self.expected_groups)
-        self.assertEqual(runner.partition(self.inventory + "TestZ\n"), (
-            self.expected_groups[0],
-            self.expected_groups[1],
-            ["FuzzInput", "TestZ"],
-            self.expected_groups[3],
-        ))
+    def test_discovery_order_survives_reversed_and_odd_inventories(self):
+        for names in (list(reversed(self.names)), self.names + ["TestFutureOdd"]):
+            with self.subTest(last=names[-1]):
+                early, remaining = runner.partition("\n".join(names))
+                self.assertEqual(early, [name for name in names if name in runner.PREFLIGHT])
+                self.assertEqual(remaining, [name for name in names if name not in runner.PREFLIGHT])
 
-    def test_other_checks_keep_their_previous_group_and_order(self):
-        general = sorted(name for name in self.inventory.splitlines()
-                         if name.startswith(("Test", "Example", "Fuzz"))
-                         and not name.startswith("TestRootInstallReset"))
-        groups = runner.partition(self.inventory)
-        for group, previous in zip(groups[1:3], (general[::2], general[1::2])):
-            self.assertEqual(group, [name for name in previous if name not in runner.PREFLIGHT])
-
-    def test_missing_inventory_is_not_a_passing_empty_run(self):
-        for inventory in ("", "ok\tpackage\n", "TestInstaller\n", "TestRootInstallResetSafety\n",
-                          "TestInstaller\nTestRootInstallResetSafety\n",
-                          self.inventory.replace(runner.PREFLIGHT[0] + "\n", "")):
-            with self.subTest(inventory=inventory), self.assertRaises(ValueError):
-                runner.partition(inventory)
-
-    def test_repeated_or_invalid_identity_stops(self):
-        for name in ("TestInstaller", "TestX|.*", "Test(name)", "TestX --skip TestY"):
-            with self.subTest(name=name), self.assertRaises(ValueError):
-                runner.partition(self.inventory + name + "\n")
-
-    def test_unicode_go_identifiers_remain_included(self):
-        groups = runner.partition(self.inventory + "TestΣ\n")
-        self.assertIn("TestΣ", [name for group in groups[1:3] for name in group])
-
-    def run_main(self, fault=None, phase="all"):
-        calls = []
-
-        def run(command, **kwargs):
-            calls.append((command, kwargs))
-            if fault == len(calls):
-                raise subprocess.CalledProcessError(23, command)
-            return subprocess.CompletedProcess(command, 0, stdout=self.inventory)
-
-        with mock.patch.object(runner.subprocess, "run", side_effect=run), mock.patch("builtins.print"):
-            if fault:
-                with self.assertRaises(subprocess.CalledProcessError) as raised:
+    def execute(self, phase, failure_at=None):
+        calls, checks = [], []
+        def command(argv, **kwargs):
+            calls.append(argv)
+            self.assertTrue(kwargs["check"])
+            self.assertEqual(kwargs["cwd"], runner.ROOT if len(calls) == 1 else runner.ROOT / "scripts/installtests")
+            if len(calls) == failure_at:
+                raise subprocess.CalledProcessError(23, argv)
+            return SimpleNamespace(stdout=self.inventory)
+        def check(binary, name, **kwargs):
+            checks.append(name)
+            self.assertEqual(kwargs["cwd"], runner.ROOT / "scripts/installtests")
+            if len(checks) + 2 == failure_at:
+                raise subprocess.CalledProcessError(23, [str(binary), name])
+        with patch.object(runner.subprocess, "run", side_effect=command), patch.object(runner, "run_check", side_effect=check), contextlib.redirect_stdout(io.StringIO()):
+            if failure_at:
+                with self.assertRaises(subprocess.CalledProcessError):
                     runner.main(phase)
-                self.assertEqual(raised.exception.returncode, 23)
             else:
                 runner.main(phase)
-        return calls
+        if failure_at:
+            self.assertEqual(len(calls) + len(checks), failure_at)
+        self.assertEqual(calls[0][:4], ["go", "test", "-c", "-o"])
+        if len(calls) > 1:
+            self.assertEqual(Path(calls[0][4]).name, "installtests.test")
+            self.assertEqual(calls[1], [calls[0][4], "-test.list=."])
+            self.assertEqual(calls[0][-1], runner.PACKAGE)
+        return checks
 
-    def test_actual_commands_preserve_deadlines_count_and_complete_selection(self):
-        calls = self.run_main()
-        self.assertEqual(calls[0][0], ["go", "test", "-list", ".", runner.PACKAGE])
-        self.assertTrue(calls[0][1]["capture_output"])
-        self.assertTrue(calls[0][1]["text"])
-        # Check the count before zip: a missing final reset invocation must not
-        # silently truncate the comparison and become a passing control.
-        self.assertEqual(len(calls), 5)
-        for (command, kwargs), names in zip(calls[1:], self.expected_groups):
-            self.assertEqual(command, ["go", "test", "-count=1", "-timeout", "10m", "-run", "^(" + "|".join(names) + ")$", runner.PACKAGE])
-            self.assertTrue(kwargs["check"])
-            self.assertEqual(kwargs["cwd"], ROOT)
+    def test_workflow_phases_execute_every_check_once_and_propagate_failure(self):
+        all_checks = self.execute("all")
+        self.assertEqual(self.execute("preflight") + self.execute("remaining"), all_checks)
+        self.assertEqual(len(all_checks), len(set(all_checks)))
+        self.assertEqual(set(all_checks), set(self.names))
+        # Exercise every possible failure position, including the final reset,
+        # without replaying 500 mocked checks for each injected failure.
+        self.names = ["TestOne", "ExampleInstaller", "FuzzInstaller", "TestRootInstallResetSafety", *runner.PREFLIGHT]
+        self.inventory = "\n".join(self.names)
+        for phase in ("all", "preflight", "remaining"):
+            expected = self.execute(phase)
+            for failure in range(1, len(expected) + 3):
+                with self.subTest(phase=phase, failure=failure):
+                    attempted = self.execute(phase, failure_at=failure)
+                    self.assertEqual(attempted, expected[:max(0, failure - 2)])
 
-    def test_command_selectors_do_not_broaden_the_inventory(self):
-        calls = self.run_main()
-        self.assertEqual(len(calls), 5)
-        patterns = [re.compile(command[6]) for command, _ in calls[1:]]
-        for name in (name for group in self.expected_groups for name in group):
-            with self.subTest(name=name):
-                self.assertEqual(sum(bool(pattern.fullmatch(name)) for pattern in patterns), 1)
-        for name in ("TestInstaller/child", "TestInstallerExtra", "TestInjected", "BenchmarkIgnored"):
-            with self.subTest(name=name):
-                self.assertFalse(any(pattern.fullmatch(name) for pattern in patterns))
-
-    def test_inventory_failure_does_not_run_any_group(self):
-        self.assertEqual(len(self.run_main(1)), 1)
-
-    def test_preflight_failure_cannot_be_hidden_by_later_groups(self):
-        self.assertEqual(len(self.run_main(2)), 2)
-
-    def test_first_general_failure_remains_terminal(self):
-        self.assertEqual(len(self.run_main(3)), 3)
-
-    def test_second_general_failure_remains_terminal(self):
-        self.assertEqual(len(self.run_main(4)), 4)
-
-    def test_reset_failure_remains_terminal(self):
-        self.assertEqual(len(self.run_main(5)), 5)
-
-    def test_workflow_phases_execute_the_same_inventory_once(self):
-        early = self.run_main(phase="preflight")
-        remaining = self.run_main(phase="remaining")
-        self.assertEqual(len(early), 2)
-        self.assertEqual(len(remaining), 4)
-        self.assertEqual(early[1][0], self.run_main()[1][0])
-        self.assertEqual(remaining[1:], self.run_main()[2:])
-        patterns = [re.compile(command[6]) for command, _ in early[1:] + remaining[1:]]
-        for name in (name for group in self.expected_groups for name in group):
-            with self.subTest(name=name):
-                self.assertEqual(sum(bool(pattern.fullmatch(name)) for pattern in patterns), 1)
-
-    def test_each_phased_failure_stops_without_retry(self):
-        for phase, count in (("preflight", 2), ("remaining", 4)):
-            for fault in range(1, count + 1):
-                with self.subTest(phase=phase, fault=fault):
-                    self.assertEqual(len(self.run_main(fault, phase)), fault)
-
-    def test_unknown_phase_cannot_start_go_or_hide_checks(self):
-        with mock.patch.object(runner.subprocess, "run") as run:
+    def test_unknown_phase_starts_no_go_process(self):
+        with patch.object(runner.subprocess, "run") as run:
             with self.assertRaises(ValueError):
                 runner.main("skip")
             run.assert_not_called()
-        result = subprocess.run(["python3", str(ROOT / "scripts/installtests/run_unix_contracts.py"),
+        result = subprocess.run(["python3", "-I", "-S", str(ROOT / "scripts/installtests/run_unix_contracts.py"),
                                  "--phase", "skip"], capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
         self.assertIn("invalid choice", result.stderr)
 
 
+class CompiledGoControls(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.directory = tempfile.TemporaryDirectory(prefix="native-runner-control-")
+        cls.cwd = Path(cls.directory.name)
+        cls.binary = cls.cwd / "controls.test"
+        (cls.cwd / "go.mod").write_text("module native.runner.controls\n\ngo 1.24\n")
+        (cls.cwd / "controls_test.go").write_text('''package controls
+import ("fmt"; "os"; "testing"; "time")
+func TestPass(t *testing.T) { t.Run("child", func(t *testing.T) {}) }
+func TestPassExtra(t *testing.T) { t.Fatal("selector must stay anchored") }
+func TestSkip(t *testing.T) { t.Skip("explicit platform skip") }
+func TestFail(t *testing.T) { t.Fatal("real failure") }
+func TestExitZero(t *testing.T) { os.Exit(0) }
+func TestTimeout(t *testing.T) { time.Sleep(time.Hour) }
+func FuzzSeeds(f *testing.F) { f.Add("seed"); f.Fuzz(func(t *testing.T, s string) {}) }
+func Example_output() { fmt.Println("installer"); /* Output: installer */ }
+''')
+        subprocess.run(["go", "test", "-c", "-o", str(cls.binary), "."], cwd=cls.cwd, check=True, timeout=90)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.directory.cleanup()
+
+    def test_real_test_skip_example_and_fuzz_seed_complete(self):
+        for name in ("TestPass", "TestSkip", "Example_output", "FuzzSeeds"):
+            with self.subTest(name=name), contextlib.redirect_stdout(io.StringIO()):
+                runner.run_check(self.binary, name, cwd=self.cwd)
+
+    def test_actual_command_retains_deadline_count_and_exact_selection(self):
+        with patch.object(runner.subprocess, "Popen", wraps=subprocess.Popen) as popen, contextlib.redirect_stdout(io.StringIO()):
+            runner.run_check(self.binary, "TestPass", cwd=self.cwd)
+        self.assertEqual(popen.call_args.args[0], [str(self.binary), "-test.count=1", "-test.timeout=10m",
+                                                  "-test.paniconexit0", "-test.v", "-test.run=^TestPass$"])
+        self.assertEqual(popen.call_args.kwargs["cwd"], self.cwd)
+
+    def test_failure_exit_zero_and_timeout_cannot_pass(self):
+        for name in ("TestFail", "TestExitZero", "TestTimeout"):
+            with self.subTest(name=name), contextlib.redirect_stdout(io.StringIO()), self.assertRaises(subprocess.CalledProcessError):
+                runner.run_check(self.binary, name, cwd=self.cwd, timeout="100ms")
+
+    def test_no_matching_test_cannot_pass(self):
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(RuntimeError):
+            runner.run_check(self.binary, "TestMissing", cwd=self.cwd)
+
+
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(verbosity=2)

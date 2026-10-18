@@ -5379,7 +5379,7 @@
             "test_prefixes": [],
             "exact_files": [
               "scripts/installtests/native_unix_contract_runner_test.go",
-              "scripts/installtests/native_unix_contract_runner_test.py"
+              "scripts/tests/test_native_installer_contract_runner.py"
             ]
           }
         ],
