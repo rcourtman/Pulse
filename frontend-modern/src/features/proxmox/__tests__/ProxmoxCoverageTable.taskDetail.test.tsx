@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BackupTask } from '@/types/api';
 import { ProxmoxCoverageTable } from '../ProxmoxCoverageTable';
 import { buildProxmoxBackupRecoveryModel } from '../proxmoxBackupRecoveryModel';
@@ -46,7 +46,10 @@ function mount(tasks: BackupTask[], width = 1365) {
   return { container, toggle, setInventory };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('expanded Coverage backup job evidence', () => {
   it.each([320, 640, 1365])('exposes the selected job and full error at %i px', (width) => {
@@ -144,4 +147,74 @@ describe('expanded Coverage backup job evidence', () => {
       if (kind !== 'empty') expect(screen.getByText(/Latest backup job unknown:/)).toBeVisible();
     },
   );
+});
+
+describe('Coverage job observation age', () => {
+  const observedAt = '2026-10-04T11:15:00Z';
+  const lastObserved = () =>
+    screen.getByRole('region', { name: 'Latest backup job' }).querySelector('dt:last-of-type')
+      ?.nextElementSibling;
+
+  it.each([320, 640, 1365])(
+    'shows source age and full time at %i px, not a fresh job verdict',
+    (width) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(BACKUP_IDENTITY_NOW);
+      const { toggle, container } = mount([identityTask({ status: 'warning', observedAt })], width);
+      expect(screen.getByText('Job observed 45m ago')).toBeVisible();
+      fireEvent.click(toggle);
+      expect(lastObserved()).toHaveTextContent('45m ago');
+      expect(lastObserved()?.querySelector('time')).toHaveAttribute('datetime', observedAt);
+      expect(screen.getByRole('region', { name: 'Latest backup job' })).toHaveTextContent(
+        'not when the job finished',
+      );
+      vi.advanceTimersByTime(2 * 60 * 60 * 1000);
+      expect(screen.getByText('Job observed 2h ago')).toBeVisible();
+      expect(lastObserved()).toHaveTextContent('2h ago');
+      expect(container.querySelectorAll('[data-backup-task-observed]')).toHaveLength(2);
+      expect(screen.getByRole('region', { name: 'Latest backup job' })).toHaveTextContent(
+        'Warning',
+      );
+    },
+  );
+
+  it.each([
+    undefined,
+    '',
+    '0001-01-01T00:00:00Z',
+    'invalid',
+    '2027-01-01T00:00:00Z',
+    '<img src="/unexpected">',
+  ])('keeps observation %j unknown, without a misleading just-now age or markup', (observedAt) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(BACKUP_IDENTITY_NOW);
+    const { toggle, container } = mount([identityTask({ observedAt })]);
+    expect(screen.getByText('Job observation unknown')).toBeVisible();
+    fireEvent.click(toggle);
+    expect(lastObserved()).toHaveTextContent(/^Unknown$/);
+    expect(lastObserved()?.querySelector('time')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.queryByText(/Job observed 0s ago/)).not.toBeInTheDocument();
+  });
+
+  it('retains the original source age through a same-open refresh, then replaces or withdraws it', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(BACKUP_IDENTITY_NOW);
+    const { toggle, setInventory } = mount([identityTask({ observedAt })]);
+    fireEvent.click(toggle);
+    toggle.focus();
+    vi.advanceTimersByTime(2 * 60 * 60 * 1000);
+    setInventory([identityTask({ observedAt })]);
+    expect(lastObserved()).toHaveTextContent('2h ago');
+    expect(lastObserved()?.querySelector('time')).toHaveAttribute('datetime', observedAt);
+    const fresh = new Date(Date.now() - 60_000).toISOString();
+    setInventory([identityTask({ observedAt: fresh })]);
+    expect(lastObserved()).toHaveTextContent('1m ago');
+    expect(lastObserved()?.querySelector('time')).toHaveAttribute('datetime', fresh);
+    setInventory([identityTask()]);
+    expect(lastObserved()).toHaveTextContent(/^Unknown$/);
+    expect(lastObserved()?.querySelector('time')).toBeNull();
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  });
 });

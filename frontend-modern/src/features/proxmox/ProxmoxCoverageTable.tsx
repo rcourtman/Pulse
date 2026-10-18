@@ -8,6 +8,7 @@ import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   formatPlatformTableBytesValue,
   formatPlatformTableDateTimeValue,
+  formatPlatformTableRelativeTimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformDetailTable,
@@ -22,6 +23,7 @@ import {
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 import {
   getWorkloadRecoveryPostureLabel,
@@ -57,6 +59,36 @@ const coverageTaskExplanation = (row: WorkloadCoverageRow): string =>
   row.taskOutcomeConflict
     ? 'Latest backup job unknown: jobs with the same newest start time report different outcomes. Check the job history in Proxmox.'
     : COVERAGE_TASK_CHRONOLOGY_EXPLANATION;
+// The page reads collected state, not Proxmox. Never renew a retained job's
+// observation with the page clock or clamp a future provider time to "just now".
+function CoverageTaskObservation(props: { value?: string; detailed?: boolean }) {
+  const now = useRelativeTimeNow();
+  const observedMs = createMemo(() => {
+    const ms = Date.parse(props.value ?? '');
+    return Number.isFinite(ms) && ms > 0 && ms <= now() ? ms : undefined;
+  });
+  return (
+    <span data-backup-task-observed>
+      <Show when={observedMs()} fallback={props.detailed ? 'Unknown' : 'Job observation unknown'}>
+        {(ms) => (
+          <>
+            <Show when={!props.detailed}>Job observed </Show>
+            <time dateTime={props.value} title={formatPlatformTableDateTimeValue(ms())}>
+              {props.detailed
+                ? formatPlatformTableDateTimeValue(ms())
+                : formatPlatformTableRelativeTimeValue(ms(), { now: now() })}
+            </time>
+            <Show when={props.detailed}>
+              {' · '}
+              {formatPlatformTableRelativeTimeValue(ms(), { now: now() })}
+            </Show>
+          </>
+        )}
+      </Show>
+    </span>
+  );
+}
+
 const COVERAGE_NO_BACKUP_TITLE = 'No PBS snapshot or PVE backup file';
 // Matches the posture engine's own wording for a snapshot-only subject.
 const COVERAGE_SNAPSHOT_ONLY_TITLE =
@@ -351,6 +383,13 @@ export function ProxmoxCoverageTable(props: {
                                   </div>
                                 )}
                               </Show>
+                              <Show when={layoutMode() === 'compact' && row.latestTask}>
+                                {(task) => (
+                                  <div class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted">
+                                    <CoverageTaskObservation value={task().observedAt} />
+                                  </div>
+                                )}
+                              </Show>
                               <Show
                                 when={
                                   !columnVisible('node') &&
@@ -469,36 +508,43 @@ export function ProxmoxCoverageTable(props: {
                                   }
                                 >
                                   {(task) => (
-                                    <Show
-                                      when={layoutMode() !== 'compact'}
-                                      fallback={
-                                        <div class="flex justify-center">
+                                    <>
+                                      <Show
+                                        when={layoutMode() !== 'compact'}
+                                        fallback={
+                                          <div class="flex justify-center">
+                                            <StatusDot
+                                              size="sm"
+                                              variant={taskWordVariant(task().label)}
+                                              title={`Latest task: ${task().label}`}
+                                              ariaHidden
+                                            />
+                                            <span class="sr-only">Latest task: {task().label}</span>
+                                          </div>
+                                        }
+                                      >
+                                        <div class="flex items-center gap-2">
                                           <StatusDot
                                             size="sm"
                                             variant={taskWordVariant(task().label)}
-                                            title={`Latest task: ${task().label}`}
+                                            title={task().label}
                                             ariaHidden
                                           />
-                                          <span class="sr-only">Latest task: {task().label}</span>
+                                          <span
+                                            class={`truncate ${statusWordToneClass(
+                                              taskWordVariant(task().label),
+                                            )}`}
+                                          >
+                                            {task().label}
+                                          </span>
                                         </div>
-                                      }
-                                    >
-                                      <div class="flex items-center gap-2">
-                                        <StatusDot
-                                          size="sm"
-                                          variant={taskWordVariant(task().label)}
-                                          title={task().label}
-                                          ariaHidden
-                                        />
-                                        <span
-                                          class={`truncate ${statusWordToneClass(
-                                            taskWordVariant(task().label),
-                                          )}`}
-                                        >
-                                          {task().label}
-                                        </span>
-                                      </div>
-                                    </Show>
+                                      </Show>
+                                      <Show when={layoutMode() !== 'compact'}>
+                                        <div class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted">
+                                          <CoverageTaskObservation value={task().observedAt} />
+                                        </div>
+                                      </Show>
+                                    </>
                                   )}
                                 </Show>
                               }
@@ -588,6 +634,10 @@ export function ProxmoxCoverageTable(props: {
                                       {formatPlatformTableDateTimeValue(task().startedAt)}
                                     </time>
                                   </dd>
+                                  <dt class="text-muted">Last observed</dt>
+                                  <dd class="min-w-0 whitespace-normal wrap-anywhere">
+                                    <CoverageTaskObservation value={task().observedAt} detailed />
+                                  </dd>
                                   <Show when={task().error?.trim()}>
                                     {(error) => (
                                       <>
@@ -603,6 +653,12 @@ export function ProxmoxCoverageTable(props: {
                                     )}
                                   </Show>
                                 </dl>
+                                <p class="mt-2 text-muted">
+                                  Last observed is when Pulse read this job's history from Proxmox,
+                                  not when the job finished. Refreshing this page does not make
+                                  retained results current. An unknown observation time is not a
+                                  fresh result.
+                                </p>
                                 <p class="mt-2 text-muted">
                                   The job location is recorded at the time of the backup. The
                                   workload may now be on another node.

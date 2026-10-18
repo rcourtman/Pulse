@@ -851,3 +851,37 @@ describe('latest backup job outcome ties', () => {
     expect(row.taskOutcomeConflict).not.toBe(true);
   });
 });
+
+describe('backup job observation provenance', () => {
+  const model = (tasks: BackupTask[]) =>
+    buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [],
+      archives: [],
+      snapshots: [],
+      tasks,
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+  it('keeps the selected job observation, not another job or the page evaluation time', () => {
+    const observedAt = '2026-05-25T03:00:00.123456789Z';
+    const jobs = [
+      task({ id: 'older', startTime: '2026-05-24T01:00:00Z', observedAt: '2026-05-26T07:59:00Z' }),
+      task({ observedAt }),
+    ];
+    const original = structuredClone(jobs);
+    expect(model(jobs).coverageRows[0].latestTask?.observedAt).toBe(observedAt);
+    expect(model([...jobs].reverse()).coverageRows[0].latestTask?.observedAt).toBe(observedAt);
+    expect(jobs).toEqual(original);
+  });
+
+  it.each([undefined, '', '0001-01-01T00:00:00Z', 'invalid', '2027-01-01T00:00:00Z'])(
+    'does not manufacture an observation when its recorded value is %j',
+    (observedAt) => {
+      const result = model([task({ observedAt })]).coverageRows[0];
+      expect(result.latestTask?.observedAt).toBe(observedAt);
+      expect(result.latestTask?.label).toBe('OK');
+      expect(result.posture).toBe('checking');
+    },
+  );
+});

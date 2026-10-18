@@ -7399,6 +7399,24 @@ durable task collection while reporting continues reading the original store.
 `internal/api/recovery_monitor_reload_test.go` and a live connection-reload report
 exercise dependency retention and actual history persistence.
 
+### Backup job observation age stays with the source
+
+Coverage retains each job's optional `observedAt` independently of its start,
+end, current workload placement and page read. Summary rows show the source
+observation age; expanded job details show its exact local time and age. A
+page refresh cannot renew a retained observation. Missing, zero, invalid and
+future observation dates stay explicitly unknown rather than reading as
+just observed. The shared presentation clock advances displayed ages without
+polling Proxmox or starting a guest operation. Job ordering and server-owned
+protection posture remain unchanged; observation time is not completion or
+independent thaw/filesystem-liveness evidence.
+
+The inventory wire boundary rejects non-text observation values. Recovery-model
+and consuming Coverage tests cover selection, legacy unknowns and same-open
+replacement. `backup-job-observation.cjs` consumes real offline-node polling
+projections and synthetic clock/invalid-date controls through the existing HTTP
+reader, model, Coverage UI and styles at desktop and narrow widths.
+
 ### Live backup inventory and report backfill have separate admission
 
 The unwindowed, bounded live task read remains separate from report backfill:

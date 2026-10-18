@@ -737,6 +737,8 @@ export interface BackupTask {
   status: string;
   startTime: string;
   endTime?: string;
+  /** Last provider history observation, not the job start/end or page read. */
+  observedAt?: string;
   size?: number;
   error?: string;
 }

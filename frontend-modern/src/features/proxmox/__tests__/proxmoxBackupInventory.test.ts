@@ -17,6 +17,7 @@ describe('backup inventory response boundary', () => {
   it('keeps observed rows, missing optional facts and future fields without coercion', () => {
     const data = {
       ...pveData,
+      backupTasks: [{ ...task, observedAt: '2026-10-18T01:00:00Z' }],
       storageBackups: [
         { ...archive, storageNode: 'local-node', inProgress: true, futureField: { enabled: true } },
       ],
@@ -103,6 +104,8 @@ describe('backup inventory response boundary', () => {
     ['backupTasks', task, 'status', {}],
     ['backupTasks', task, 'startTime', null],
     ['backupTasks', task, 'endTime', 1],
+    ['backupTasks', task, 'observedAt', 1],
+    ['backupTasks', task, 'observedAt', null],
     ['backupTasks', task, 'error', []],
     ['storageBackups', archive, 'id', ' '],
     ['storageBackups', archive, 'vmid', '112'],

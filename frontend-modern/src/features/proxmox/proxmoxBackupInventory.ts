@@ -46,6 +46,7 @@ const taskShape: RowShape = {
   status: isString,
   startTime: isString,
   endTime: optional(isString),
+  observedAt: optional(isString),
   error: optional(isString),
 };
 const archiveShape: RowShape = {

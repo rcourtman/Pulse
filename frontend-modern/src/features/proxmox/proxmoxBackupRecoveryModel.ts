@@ -76,6 +76,8 @@ export interface CoverageTask {
   label: string;
   startedAt: string;
   startedMs?: number;
+  /** Original provider history read, which does not advance on a UI refresh. */
+  observedAt?: string;
   durationSeconds?: number;
   error?: string;
   /** A successful status cannot settle a result that also reports an error. */
@@ -814,6 +816,7 @@ export function buildProxmoxBackupRecoveryModel(
       label: taskLabel(task),
       startedAt: task.startTime,
       startedMs,
+      observedAt: task.observedAt,
       durationSeconds: taskDurationSeconds(task),
       error: task.error,
       statusErrorConflict: taskStatusErrorConflict(task),
