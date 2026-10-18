@@ -46,7 +46,7 @@ describe('ProxmoxReplicationTable', () => {
       emptyDescription="Replication jobs appear here."
     />
   );
-  const jobRow = () => screen.getByRole('cell', { name: '100 (web)', exact: true }).closest('tr')!;
+  const jobRow = () => screen.getByRole('cell', { name: '100 (web)' }).closest('tr')!;
 
   it.each([
     ['ok', { lastSyncStatus: 'ok' }, 'OK'],
