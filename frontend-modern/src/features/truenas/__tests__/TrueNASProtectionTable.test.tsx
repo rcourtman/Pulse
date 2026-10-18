@@ -321,3 +321,87 @@ describe('TrueNAS protection activity evidence', () => {
     expect(detail.getByText('Last run').closest('tr')).toHaveTextContent('2026');
   });
 });
+
+describe('TrueNAS protection phone summary', () => {
+  const mount = (point: RecoveryPoint) =>
+    render(() => (
+      <TrueNASProtectionTable
+        points={[point]}
+        emptyIcon={<span />}
+        emptyTitle="No activity"
+        emptyDescription="No activity"
+        showToolbar={false}
+      />
+    ));
+
+  it('hides lower-priority headers and cells together without removing their detail', async () => {
+    mount(
+      makeRecoveryPoint({
+        id: 'phone',
+        kind: 'backup',
+        mode: 'remote',
+        outcome: 'unknown',
+        display: { itemLabel: 'tank/photos' },
+        details: { taskName: 'Replicate family photos', targetDataset: 'vault/family/photos' },
+      }),
+    );
+    const row = document.querySelector('[data-truenas-protection-row="phone"]')!;
+    const headers = document.querySelectorAll('thead th');
+    for (const index of [1, 2]) {
+      expect(headers[index]).toHaveClass('platform-table-phone-hidden');
+      expect(row.children[index]).toHaveClass('platform-table-phone-hidden');
+    }
+    for (const index of [0, 3, 5]) {
+      expect(headers[index]).not.toHaveClass('platform-table-phone-hidden');
+      expect(row.children[index]).not.toHaveClass('platform-table-phone-hidden');
+    }
+    expect(within(row as HTMLElement).getByText('Replication')).toHaveClass(
+      'platform-table-phone-only-inline',
+    );
+    expect(within(row as HTMLElement).getByText('Unknown')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for tank/photos' }));
+    const detail = within(screen.getByTestId('truenas-protection-detail'));
+    expect(detail.getAllByText('Replicate family photos').length).toBeGreaterThan(0);
+    expect(detail.getAllByText('vault/family/photos').length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    { kind: 'backup', mode: 'remote', startedAt: null, label: 'Last run' },
+    { kind: 'snapshot', mode: 'snapshot', startedAt: '2026-05-20T00:00:00Z', label: 'Created' },
+    { kind: 'snapshot', mode: 'snapshot', startedAt: null, label: 'Observed' },
+  ])('keeps $label and the exact instant behind both date projections', (testCase) => {
+    mount(makeRecoveryPoint({ id: 'phone', ...testCase }));
+    const time = document.querySelector('[data-truenas-protection-row] time')!;
+    expect(time).toHaveAttribute('datetime', '2026-05-20T00:00:00.000Z');
+    expect(time.querySelector('.sr-only')).toHaveTextContent(`${testCase.label}:`);
+    const narrow = time.querySelector('.platform-table-phone-only-inline')!;
+    expect(narrow).toHaveClass('flex-col');
+    const date = new Date('2026-05-20T00:00:00Z');
+    expect(narrow.children[0]).toHaveTextContent(
+      date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    );
+    expect(narrow.children[1]).toHaveTextContent(
+      date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+    );
+  });
+
+  it.each([null, '', 'unreadable'])(
+    'does not manufacture a native time or clock from %s',
+    (completedAt) => {
+      mount(
+        makeRecoveryPoint({
+          id: 'phone',
+          kind: 'backup',
+          mode: 'remote',
+          startedAt: null,
+          completedAt,
+        }),
+      );
+      const row = document.querySelector('[data-truenas-protection-row]')!;
+      expect(row.querySelector('time')).toBeNull();
+      expect(row.children[3]).toHaveTextContent('-');
+      expect(row).not.toHaveTextContent('Invalid Date');
+      expect(row).not.toHaveTextContent('unreadable');
+    },
+  );
+});

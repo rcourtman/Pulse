@@ -23,6 +23,24 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Phone protection summaries prioritise readable evidence
+
+Below the existing 34rem table-container breakpoint, TrueNAS Protection keeps
+Dataset (with Snapshot/Replication kind), Time and Outcome visible, rather than
+squeezing Artifact and Target into unreadable tracks. Artifact and Target remain
+in the existing expandable detail and return as columns when the container has
+room. Headers and cells hide together, including keyboard sort targets. Desktop
+columns, persisted sort keys, filters and row identity are unchanged.
+
+The narrow timestamp uses separate localised date and clock lines for the same
+reported instant used by sorting and detail. Its native time element retains
+that instant and labels Last run, Created or Observed without inventing completion;
+missing/invalid times remain unavailable. Outcome labels must fit in full at
+320px. `TrueNASProtectionTable.test.tsx` covers meaning and disclosure, and
+`truenas-protection-density.cjs` exercises the actual HTTP reader/decoder and
+production table/CSS at desktop, phone and constrained-container widths. This
+is read-only presentation, not appliance, backup or guest recovery.
+
 ### TrueNAS Protection preserves the meaning of reported task evidence
 
 The TrueNAS replication mapper mirrors its best-effort LastRun into both

@@ -191,6 +191,38 @@ const activityTime = (point: RecoveryPoint): { label: string; value: string | un
     : { label: 'Started', value: started };
 };
 
+// Keep a readable date and clock on phones instead of an ellipsised timestamp.
+// Both projections use the same instant as sorting and the existing detail;
+// a LastRun is still not independent successful-completion evidence.
+const ProtectionActivityTime: Component<{ point: RecoveryPoint }> = (props) => {
+  const date = createMemo(() => {
+    const value = getPlatformTableDateTimeSortValue(activityTime(props.point).value);
+    return value === null ? undefined : new Date(value);
+  });
+  return (
+    <Show when={date()} fallback={<span>-</span>}>
+      {(value) => (
+        <time
+          dateTime={value().toISOString()}
+          title={`${activityTime(props.point).label}: ${value().toLocaleString()}`}
+          class="tabular-nums"
+        >
+          <span class="sr-only">{activityTime(props.point).label}: </span>
+          <span class="platform-table-phone-hidden-inline">
+            <PlatformTableDateTimeValue value={value()} emptyText="-" />
+          </span>
+          <span class="platform-table-phone-only-inline flex-col items-end leading-none">
+            <span>{value().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+            <span>
+              {value().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </span>
+        </time>
+      )}
+    </Show>
+  );
+};
+
 // Columns a user can sort by. Every protection column carries a scalar:
 // Reported time orders chronologically and Size on raw bytes, both newest/
 // biggest first on the first click. Retain the internal time key for saved sorts.
@@ -348,13 +380,16 @@ const DatasetCell: Component<{ point: RecoveryPoint; detailToggle?: JSX.Element 
         pulse={status() === 'running'}
         title={getRecoveryOutcomeLabel(normalizeRecoveryOutcome(props.point.outcome))}
       />
-      <div class="min-w-0">
+      <div class="min-w-0 leading-none">
         <div
           class="truncate font-medium text-base-content"
           title={[name(), subtitle()].filter(Boolean).join(' · ')}
         >
           {name()}
         </div>
+        <span class="platform-table-phone-only-inline text-[10px] text-muted">
+          {kindLabel(kind())}
+        </span>
       </div>
     </div>
   );
@@ -506,7 +541,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="text"
                       sort={sort}
                       sortKey="artifact"
-                      class="platform-table-mobile-w-25 md:w-[25%]"
+                      class="platform-table-phone-hidden md:w-[25%]"
                     >
                       Artifact
                     </PlatformSortableTableHead>
@@ -514,7 +549,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="text"
                       sort={sort}
                       sortKey="target"
-                      class="platform-table-mobile-w-15 md:w-[23%]"
+                      class="platform-table-phone-hidden md:w-[23%]"
                     >
                       Target
                     </PlatformSortableTableHead>
@@ -522,7 +557,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="numeric-value"
                       sort={sort}
                       sortKey="completed"
-                      class="platform-table-mobile-w-15 md:w-[12%]"
+                      class="platform-table-mobile-w-30 md:w-[12%]"
                     >
                       <PlatformResponsiveTableLabel compact="Time" full="Reported time" />
                     </PlatformSortableTableHead>
@@ -538,7 +573,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="badge"
                       sort={sort}
                       sortKey="outcome"
-                      class="platform-table-mobile-w-15 md:w-[9%]"
+                      class="platform-table-mobile-w-30 md:w-[9%]"
                     >
                       Outcome
                     </PlatformSortableTableHead>
@@ -577,7 +612,9 @@ export const TrueNASProtectionTable: Component<{
                                   }
                                 />
                               </TableCell>
-                              <TableCell class={getPlatformTableCellClassForKind('text')}>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                              >
                                 <span
                                   class="block truncate text-base-content"
                                   title={[artifact(), artifactSecondary()]
@@ -587,7 +624,9 @@ export const TrueNASProtectionTable: Component<{
                                   {artifact()}
                                 </span>
                               </TableCell>
-                              <TableCell class={getPlatformTableCellClassForKind('text')}>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                              >
                                 <span
                                   class="block truncate text-base-content"
                                   title={[target(), targetSecondary()].filter(Boolean).join(' · ')}
@@ -598,10 +637,7 @@ export const TrueNASProtectionTable: Component<{
                               <TableCell
                                 class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                               >
-                                <PlatformTableDateTimeValue
-                                  value={activityTime(point).value}
-                                  emptyText="-"
-                                />
+                                <ProtectionActivityTime point={point} />
                               </TableCell>
                               <TableCell
                                 class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
