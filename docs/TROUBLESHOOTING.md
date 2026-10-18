@@ -84,6 +84,9 @@ establish safe recovery.
 - **Notification Test works but alerts do not arrive:** follow
   [ordinary delivery checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
   Do not trigger an alert or replay the queue just to complete a report.
+- **A usage alert stays open after usage drops:** compare
+  [the affected reading, clear level and recovery delay](TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops).
+  Acknowledgement is not recovery; an old notification is not a current reading.
 - **Private information was posted:** follow
   [disclosure containment](TROUBLESHOOTING.md#if-you-already-posted-private-information).
   Deleting the public copy does not revoke a credential.
@@ -1257,6 +1260,48 @@ measurements, workload, versions and a relevant manually redacted error; follow
 [Getting Help](#-getting-help) for any additional evidence.
 
 ### Notifications
+
+#### A usage alert stays open after usage drops
+
+Disk, CPU and memory alerts can remain open below their trigger. Distinguish
+an expected recovery hold from a stale reading or an alert that failed to clear:
+
+1. **Find the same incident.** In **Alerts → Overview**, check the resource and
+   metric; for a disk, match the filesystem or mountpoint too. Space freed on
+   `/data` does not establish recovery for `/`. **Alerts → History** and an old
+   email or webhook describe recorded events, not necessarily an active alert.
+   [Acknowledge](CONFIGURATION.md#acknowledge-and-snooze-existing-alerts) marks an
+   incident as seen and can hide it from the default list; it does not repair
+   or clear the condition. Use **Show acknowledged** to inspect it.
+2. **Check the reading's age and meaning.** Compare the same connection,
+   resource and metric using its existing monitoring view. An alert's recorded
+   breach value can differ from the latest reading. If your version shows a
+   live evaluation or average, use that value and its timestamp, not just the
+   original message or a single lower sample. **Last known**, **unavailable**
+   or an old reading is not measured recovery. For guest disks, follow the
+   [current and retained reading guidance](VM_DISK_MONITORING.md#current-retained-and-unavailable-disk-readings);
+   do not force a guest-agent probe or repeat a backup.
+3. **Read the saved clear level and timing.** The trigger opens the alert; the
+   lower clear level prevents repeated open/close notifications near it. For
+   example, with a **90% trigger and 85% clear**, 88% can leave an alert open;
+   an evaluated 85% or lower is eligible to clear it. These are example values,
+   not every rule's settings. Any configured averaging window and recovery
+   delay still apply. Read the [threshold and timing explanation](CONFIGURATION.md#metric-thresholds-off-and-inheritance)
+   without changing the rule to make the alert disappear.
+
+If fresh matching readings remain at or below the saved clear level beyond
+the configured recovery delay and ordinary evaluations, but the same incident
+stays active, keep that as an unresolved symptom. In the [existing report](#-getting-help),
+include only details not already supplied: the affected versions, metric and
+filesystem, trigger/clear levels, reading times and how long the lower value
+persisted. A locally reviewed, redacted capture can show the conflicting view;
+do not post full configuration or diagnostics. Unknown settings or times can
+remain unknown.
+
+Do not acknowledge, disable monitoring, alter thresholds, restart Pulse or
+delete history just to demonstrate recovery. If the incident cleared but no
+all-clear arrived, check [recovery notification eligibility](CONFIGURATION.md#alert-reminders-and-recovery-notifications)
+separately; absence of a message does not prove the condition is still active.
 
 #### No alert when Pulse, power or internet goes down
 
