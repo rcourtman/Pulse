@@ -108,6 +108,7 @@ let browser, server;
     const errors = [],
       reads = [],
       checks = [];
+    result.cases.push({ ...spec, checks, reads, errors });
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
@@ -218,6 +219,7 @@ let browser, server;
         };
       } else if (url.pathname === '/api/license/runtime-capabilities')
         body = { capabilities: [], limits: [], max_history_days: 7 };
+      else if (url.pathname === '/api/alerts/active') body = [];
       else if (url.pathname === '/api/alerts/config')
         body = { guestDefaults: {}, hostDefaults: {} };
       else body = { data: [], meta: { totalPages: 1 }, alerts: [], anomalies: [] };
@@ -322,7 +324,6 @@ let browser, server;
     await capture('matching-guide', false);
     checks.push('The real Docs fetch/Markdown/router consumer retains the existing fragment and explains Unknown, explicit Pending and last-result OK consistently with the table.');
     assert.deepEqual(errors, []);
-    result.cases.push({ ...spec, checks, reads, errors });
     await context.close();
   }
   assert.deepEqual(result.unexpected, []);
