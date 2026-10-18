@@ -296,15 +296,26 @@ Only a successful, non-empty HTTP 200 download in this invocation's private
 directory can reach Bash. Partial executable bytes, transfer errors, redirects,
 other statuses and empty bodies execute nothing; ordinary success/failure removes
 only the owned temporary file/directory. Provider output and invalid option/URL
-values are not printed. Existing legacy inline token forwarding is unchanged;
-the download receives no token. Missing option values fail without executing an
-installer. This is authenticated transport, not new installer-signature policy.
+values are not printed. The recommended `--token-file` passes only the exact
+caller-owned path to the canonical installer, never the file's token bytes in
+process arguments or download inputs. Paths may be relative and contain shell
+metacharacters without expansion. The wrapper neither reads nor removes the
+credential file; private-file validation remains with the canonical installer.
+Legacy inline `--token` forwarding remains available but is labelled as visible
+in process arguments. Combining the two sources is refused before download or
+local execution, without printing either value. Missing option values fail
+before either path. This is authenticated transport and private-file forwarding,
+not new installer-signature or credential-admission policy.
 
 `TestContainerAgentCompatibilityWrapperAuthenticatesBeforeExecuting` runs all
-21 methods in `scripts/tests/test_container_agent_wrapper.py`. They execute the
+25 methods in `scripts/tests/test_container_agent_wrapper.py`. They execute the
 complete wrapper with a closed curl fixture and inert canonical installer,
 checking transfer-before-execution, refusal/cleanup, private modes, exact curl
-policy, CA/argument forwarding, defaults, uninstall and downstream exits.
+policy, CA/argument forwarding, defaults, uninstall and downstream exits. The
+private-file controls check exact local/remote path forwarding, downstream
+readability without token-bearing arguments, preserved caller bytes/modes after
+success or failure, missing values and mixed-source refusal. They use synthetic
+credentials, not a real collector or server.
 The exact-parent controls must detect the streaming/unauthenticated bootstrap.
 They do not establish a real TLS handshake, installed agent recovery or native
 Proxmox renewal. Existing canonical installer, signing and lifecycle checks are

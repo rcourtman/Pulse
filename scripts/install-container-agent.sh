@@ -16,7 +16,8 @@ Usage:
 
 Supported options:
   --url <url>             Pulse server URL (required when local install.sh is unavailable)
-  --token <token>         API token
+  --token-file <path>     Read API token from a private file (recommended)
+  --token <token>         API token (legacy; visible in process arguments)
   --interval <duration>   Reporting interval (forwarded)
   --cacert <path>         Verified CA bundle (used for bootstrap and forwarded)
   --insecure             Forward to a local install.sh only; never disable bootstrap TLS
@@ -30,6 +31,10 @@ Notes:
   Use install.sh directly with --enable-host=false for an intentional
   workload-only deployment.
 
+  Prefer --token-file to keep the token out of shell history and process
+  arguments. The caller owns the file and its cleanup; do not combine it
+  with --token. File validation remains with install.sh.
+
   Without a local install.sh, bootstrap requires authenticated HTTPS and a
   complete HTTP 200 download. Redirects are not followed. For a private CA,
   use --cacert with a bundle verified independently; do not disable TLS checks.
@@ -39,6 +44,7 @@ USAGE
 
 URL=""
 TOKEN=""
+TOKEN_FILE=""
 INTERVAL=""
 CA_CERT=""
 INSECURE="false"
@@ -73,6 +79,11 @@ while [[ $# -gt 0 ]]; do
       TOKEN="${2:-}"
       shift 2
       ;;
+    --token-file)
+      require_value "$1" "${2:-}"
+      TOKEN_FILE="$2"
+      shift 2
+      ;;
     --interval)
       require_value "$1" "${2:-}"
       INTERVAL="${2:-}"
@@ -100,12 +111,20 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -n "$TOKEN" && -n "$TOKEN_FILE" ]]; then
+  echo "[ERROR] Use either --token-file or --token, not both." >&2
+  exit 1
+fi
+
 forward_args=()
 if [[ -n "$URL" ]]; then
   forward_args+=(--url "$URL")
 fi
 if [[ -n "$TOKEN" ]]; then
   forward_args+=(--token "$TOKEN")
+fi
+if [[ -n "$TOKEN_FILE" ]]; then
+  forward_args+=(--token-file "$TOKEN_FILE")
 fi
 if [[ -n "$INTERVAL" ]]; then
   forward_args+=(--interval "$INTERVAL")
