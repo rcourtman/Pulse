@@ -6709,7 +6709,7 @@
             "exact_files": [
               "internal/monitoring/backup_task_history_test.go",
               "internal/monitoring/guest_snapshot_projection_test.go",
-          "internal/monitoring/guest_snapshot_workers_test.go",
+              "internal/monitoring/guest_snapshot_workers_test.go",
               "internal/monitoring/monitor_alert_intent_test.go",
               "internal/monitoring/monitor_backups_dir_storage_test.go",
               "internal/monitoring/monitor_full_coverage_test.go",
