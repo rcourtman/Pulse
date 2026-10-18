@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -73,7 +74,12 @@ func TestGuestSnapshotProjectionDoesNotCopyUnconsumedPayload(t *testing.T) {
 			if grown > base+8 {
 				t.Errorf("unconsumed %s increased snapshot scan allocations: %.0f -> %.0f", payload, base, grown)
 			}
-			if !reflect.DeepEqual(small.state.GetPVEBackups(), large.state.GetPVEBackups()) {
+			// Equal-time snapshots are emitted from a map with no tie-order
+			// contract. Compare every field by identity, not map iteration.
+			smallRows, largeRows := small.state.GetPVEBackups().GuestSnapshots, large.state.GetPVEBackups().GuestSnapshots
+			sort.Slice(smallRows, func(i, j int) bool { return smallRows[i].ID < smallRows[j].ID })
+			sort.Slice(largeRows, func(i, j int) bool { return largeRows[i].ID < largeRows[j].ID })
+			if !reflect.DeepEqual(smallRows, largeRows) {
 				t.Fatal("irrelevant payload changed the published snapshot inventory")
 			}
 		})
