@@ -24,6 +24,12 @@ whether a fix is available. Community reconciles comments, images and releases.
   supply a release version; do not borrow a later number from adjacent prose.
   This parses supplied metadata, not proof that the image is running or that
   a tag currently resolves to those bytes. It performs no registry lookup.
+- For a free-form report without a body declaration, accept only an explicitly
+  named Pulse server version/image or a concise release title such as
+  `Bug on v6.5.0`. Platform, agent and chart versions are not server versions;
+  upgrade/migration titles do not establish the failing executable. An unknown
+  body declaration remains authoritative. This conservative fallback neither
+  clears established whole-thread labels nor sends a diagnostic question.
 - Preserve the immediate pre-write check of issue identity, open state, title,
   body, update time and label set. Separate GitHub label APIs are not atomic;
   this check narrows that race but cannot eliminate it.

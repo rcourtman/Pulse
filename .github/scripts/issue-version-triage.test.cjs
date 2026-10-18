@@ -1221,6 +1221,63 @@ test("structured Pulse version never falls back to an upgrade source or agent ve
   assert.equal(extractPulseVersion("bug on v5.1.35", "### Pulse version"), null);
 });
 
+test("free-form titles cannot turn platform, agent or upgrade versions into Pulse evidence", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const title of [
+    "[Bug]: Unraid 7.3.2 reports missing disks",
+    "[Bug]: TrueNAS SCALE 25.04.2.6 has no CPU history",
+    "[Bug]: vCenter 8.0.3 collection times out",
+    "[Bug]: Docker 27.0.0 loses readings",
+    "[Bug]: Pulse Agent v6.5.0 does not report",
+    "[Bug]: pulse-agent-v6.5.0-linux-amd64.tar.gz fails",
+    "[Bug]: helm-chart-6.5.0 fails",
+    "[Bug]: Upgrade 6.4.5 → 6.5.0 stopped the LXC",
+    "[Bug]: Upgrading Pulse 6.4.5 to 6.5.0 failed",
+    "[Bug]: Migration to Pulse 6.5.0 failed",
+    "[Bug]: Migrate to Pulse 6.5.0 failed",
+    "[Bug]: 6.4.5 → 6.5.0 stops",
+    "[Bug]: Pulse 6.4.5 or Pulse 6.5.0",
+    "[Bug]: Pulse 6.5.0.4 readings",
+  ]) {
+    assert.equal(extractPulseVersion(title, "Legacy free-form report."), null, title);
+    // The explicit running-instance field is still authoritative.
+    assert.equal(extractPulseVersion(title, "### Pulse version\n6.5.0\n"), "6.5.0", title);
+  }
+});
+
+test("free-form titles retain explicit server and concise legacy release evidence", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const [title, version] of [
+    ["Pulse 6.5.0 on Unraid 7.3.2 reports missing disks", "6.5.0"],
+    ["[Bug]: Pulse server version: V6.5.0 on Docker 27.0.0", "6.5.0"],
+    ["[Bug]: Pulse Pro v6.6.0-rc.3 login", "6.6.0-rc.3"],
+    ["[Bug]: rcourtman/pulse:6.5.0 on Unraid 7.3.2", "6.5.0"],
+    ["[Bug]: license.pulserelay.pro/pulse-pro:6.6.0-rc.3 login", "6.6.0-rc.3"],
+    ["[Bug]: v6.5.0 readings are missing", "6.5.0"],
+    ["bug on v6.4.1", "6.4.1"],
+    ["6.5.0", "6.5.0"],
+  ]) {
+    assert.equal(extractPulseVersion(title, "Legacy free-form report."), version, title);
+    assert.equal(extractPulseVersion(title, "### Pulse version\nunknown\n"), null, title);
+  }
+});
+
+test("title-only platform evidence stays silent and preserves whole-thread metadata", async () => {
+  for (const established of [false, true]) {
+    const { github, calls } = createGithub();
+    const labels = ["bug", "needs-retest-on-latest", "operator-reviewed",
+      ...(established ? ["affects-6.5.0"] : [])].map(name => ({ name }));
+    const issue = { number: 2805, title: "[Bug]: vCenter 8.0.3 collection times out",
+      body: "Legacy free-form report.", labels };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), established ? [] : [["needs-version-info"]]);
+    assert.deepEqual(calls.createLabel.map(call => call.name), established ? [] : ["needs-version-info"]);
+    assert.equal(calls.removeLabel.length, 0);
+    assert.equal(calls.getLatestRelease.length, 0);
+    assert.equal(calls.createComment.length, 0);
+  }
+});
+
 test("legacy version fields keep unknown and incomplete values authoritative", () => {
   const { extractPulseVersion } = triage.internals;
   for (const field of ["Pulse version:", "**Pulse Version:**", "Pulse | Version", "## Pulse - Version"]) {
