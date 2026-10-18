@@ -9470,7 +9470,7 @@
     },
     {
       "id": "storage-recovery-post-rc-hardening",
-      "summary": "Track broader storage health UX polish and recovery timeline hardening beyond the current RC floor, including additional filter coherence edge cases and storage panel presentation improvements.",
+      "summary": "Track broader storage health UX polish and recovery timeline hardening beyond the current RC floor, including additional filter coherence edge cases and storage panel presentation improvements. Post-reliability recovery priorities are orders 1, 3 and 5 in docs/release-control/v6/internal/RECOVERY_AND_CHANGE_INVESTIGATION_PLAN.md: cross-system backup task outcomes under docs/BACKUP_TASK_TIMELINE_CONTRACT.md, one understandable workload protection assessment, then demand-dependent retained recovery-test evidence. Pick up through planned target v6-product-lane-expansion only when v6-release-reliability explicitly yields priority. Reconcile the existing task-timeline demand entry and stable-delivery prerequisite before activation. Recovery-test execution remains a separate L20 admission decision.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-14",
@@ -9553,7 +9553,7 @@
     },
     {
       "id": "resource-change-intelligence-post-rc-hardening",
-      "summary": "Track broader resource-change intelligence hardening beyond the current canonical timeline and relationship-map floor, including surfaced cross-resource timeline IA, enterprise correlation depth, and investigation workflows that promote relationship-aware timelines from backend foundation into deeper operator workflows.",
+      "summary": "Track broader resource-change intelligence hardening beyond the current canonical timeline and relationship-map floor, including surfaced cross-resource timeline IA, enterprise correlation depth, and investigation workflows that promote relationship-aware timelines from backend foundation into deeper operator workflows. Post-reliability change priorities are orders 2 and 4 in docs/release-control/v6/internal/RECOVERY_AND_CHANGE_INVESTIGATION_PLAN.md: explicit incident-focused access to retained history with preserved resource/time context and continuation, then safe provider configuration diffs on canonical change records. Pick up through planned target v6-product-lane-expansion only when v6-release-reliability explicitly yields priority. The broader infrastructure lifecycle timeline retains its existing demand-ledger threshold.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-04-25",
