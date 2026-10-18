@@ -46,7 +46,7 @@ const { chromium } = require('playwright');
       let phase = 'current';
       const reads = { current: 0, retired: 0 };
       await page.route('**/fixture/workloads', (route) => route.fulfill({ json: phase === 'retired' ? [] : [{
-        id: 'site:node:100', type: 'virtual-machine', name: 'fixture-guest', displayName: 'fixture-guest',
+        id: 'site:node:100', type: 'vm', name: 'fixture-guest', displayName: 'fixture-guest',
         platformId: 'site', platformType: 'proxmox-pve', sourceType: 'api', status: 'running',
         lastSeen: Date.now(), proxmox: { vmid: 100, node: 'node', instance: 'site' },
       }] }));
