@@ -7804,6 +7804,8 @@
         "pkg/auth/rbac_manager.go",
         "pkg/auth/sqlite_manager.go",
         "pkg/extensions/audit_admin.go",
+        "pkg/securityutil/outbound_http.go",
+        "pkg/securityutil/pinned_dial.go",
         "pkg/server/server.go",
         "pkg/server/service_health.go",
         "pkg/server/telemetry_licensed_features.go",
@@ -7818,6 +7820,22 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "pinned-outbound-http",
+            "label": "restricted outbound policy and pinned connection proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/securityutil/outbound_http.go",
+              "pkg/securityutil/pinned_dial.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/notifications/pinned_connectivity_linux_test.go",
+              "pkg/securityutil/outbound_http_test.go",
+              "pkg/securityutil/pinned_dial_test.go"
+            ]
+          },
           {
             "id": "system-settings-state",
             "label": "system settings state proof",

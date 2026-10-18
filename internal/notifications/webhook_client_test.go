@@ -273,7 +273,7 @@ func TestSecureWebhookClientDialContextTriesAllPermittedResolvedIPs(t *testing.T
 	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.0/8,::1/128"); err != nil {
 		t.Fatalf("failed to set allowlist: %v", err)
 	}
-	nm.resolveWebhookIPs = func(host string) ([]net.IP, error) {
+	nm.resolveWebhookIPs = func(_ context.Context, host string) ([]net.IP, error) {
 		return []net.IP{net.ParseIP("::1"), net.ParseIP("127.0.0.1")}, nil
 	}
 

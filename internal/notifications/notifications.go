@@ -33,10 +33,11 @@ import (
 // Webhook configuration constants
 const (
 	// HTTP client settings
-	WebhookTimeout         = 30 * time.Second
-	WebhookMaxResponseSize = 1 * 1024 * 1024 // 1 MB max response size
-	WebhookMaxRedirects    = 3               // Maximum number of redirects to follow
-	WebhookTestTimeout     = 10 * time.Second
+	WebhookTimeout          = 30 * time.Second
+	WebhookMaxResponseSize  = 1 * 1024 * 1024 // 1 MB max response size
+	WebhookMaxRedirects     = 3               // Maximum number of redirects to follow
+	WebhookTestTimeout      = 10 * time.Second
+	webhookDNSLookupTimeout = 5 * time.Second
 
 	// Retry settings
 	WebhookInitialBackoff = 1 * time.Second
@@ -131,13 +132,11 @@ func (n *NotificationManager) createSecureWebhookClientWithURLDiagnostics(timeou
 				if isPrivateIP(ip) && !n.isIPInAllowlist(ip) {
 					return nil, fmt.Errorf("blocked private IP: %s", ip)
 				}
-				// It's an IP, dial directly
-				d := net.Dialer{Timeout: 10 * time.Second}
-				return d.DialContext(ctx, network, addr)
+				return pkgsecurityutil.DialPinnedIPs(ctx, network, port, []net.IP{ip}, 10*time.Second)
 			}
 
 			// Resolve hostname
-			ips, err := n.lookupWebhookHostIPs(host)
+			ips, err := n.lookupWebhookHostIPs(ctx, host)
 			if err != nil {
 				return nil, fmt.Errorf("resolve webhook host %q: %w", host, err)
 			}
@@ -163,24 +162,7 @@ func (n *NotificationManager) createSecureWebhookClientWithURLDiagnostics(timeou
 					Msg("dns resolution pinned for webhook security")
 			}
 
-			// Try every permitted IP from the validating resolution, not just the
-			// first: a hostname can resolve to ::1 ahead of 127.0.0.1 while the
-			// webhook receiver listens only on one loopback family, and a
-			// multi-A-record host can lead with a dead address. Each candidate was
-			// validated above, so rebinding protection is unchanged.
-			d := net.Dialer{Timeout: 10 * time.Second}
-			var dialErr error
-			for _, permittedIP := range permittedIPs {
-				conn, err := d.DialContext(ctx, network, net.JoinHostPort(permittedIP.String(), port))
-				if err == nil {
-					return conn, nil
-				}
-				dialErr = err
-				if ctx.Err() != nil {
-					break
-				}
-			}
-			return nil, dialErr
+			return pkgsecurityutil.DialPinnedIPs(ctx, network, port, permittedIPs, 10*time.Second)
 		},
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
@@ -209,7 +191,7 @@ func (n *NotificationManager) createSecureWebhookClientWithURLDiagnostics(timeou
 			}
 			// Re-validate strictly on an admitted redirect, including DNS/IP
 			// changes. Foreign origins are rejected before resolution or logging.
-			return n.validateWebhookURL(req.URL.String(), diagnosticURL)
+			return n.validateWebhookURLWithContext(req.Context(), req.URL.String(), diagnosticURL)
 		},
 	}
 }
@@ -270,16 +252,16 @@ type NotificationManager struct {
 	webhookRateMu      sync.Mutex                   // Separate mutex for webhook rate limiting
 	webhookRateCleanup time.Time                    // Last cleanup time for webhook rate limit entries
 	appriseExec        appriseExecFunc
-	queue              *NotificationQueue                  // Persistent notification queue
-	tenantID           string                              // Tenant identity stamped into webhook payloads (env default)
-	tenantName         string                              // Tenant display name stamped into webhook payloads (env default)
-	tenantResolver     func() (id string, name string)     // Org-backed tenant identity override (multi-tenant)
-	webhookClient      *http.Client                        // Shared HTTP client for webhooks
-	stopCleanup        chan struct{}                       // Signal to stop cleanup goroutine
-	cleanupDone        chan struct{}                       // Signals cleanup goroutine exit during shutdown
-	allowedPrivateNets []*net.IPNet                        // Parsed CIDR ranges allowed for private webhook targets
-	allowedPrivateMu   sync.RWMutex                        // Protects allowedPrivateNets
-	resolveWebhookIPs  func(host string) ([]net.IP, error) // Test seam for webhook dialer DNS resolution; nil means net.LookupIP
+	queue              *NotificationQueue                              // Persistent notification queue
+	tenantID           string                                          // Tenant identity stamped into webhook payloads (env default)
+	tenantName         string                                          // Tenant display name stamped into webhook payloads (env default)
+	tenantResolver     func() (id string, name string)                 // Org-backed tenant identity override (multi-tenant)
+	webhookClient      *http.Client                                    // Shared HTTP client for webhooks
+	stopCleanup        chan struct{}                                   // Signal to stop cleanup goroutine
+	cleanupDone        chan struct{}                                   // Signals cleanup goroutine exit during shutdown
+	allowedPrivateNets []*net.IPNet                                    // Parsed CIDR ranges allowed for private webhook targets
+	allowedPrivateMu   sync.RWMutex                                    // Protects allowedPrivateNets
+	resolveWebhookIPs  func(context.Context, string) ([]net.IP, error) // Test seam; nil uses the context-aware default resolver
 }
 
 type webhookHTTPResult struct {
@@ -3702,6 +3684,10 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 // Validation and redirect security are shared; only diagnostic URL rendering
 // differs for Apprise, whose endpoint path may itself be a configuration key.
 func (n *NotificationManager) validateWebhookURL(webhookURL string, diagnosticURL func(string) string) error {
+	return n.validateWebhookURLWithContext(context.Background(), webhookURL, diagnosticURL)
+}
+
+func (n *NotificationManager) validateWebhookURLWithContext(ctx context.Context, webhookURL string, diagnosticURL func(string) string) error {
 	if webhookURL == "" {
 		return fmt.Errorf("webhook URL cannot be empty")
 	}
@@ -3747,7 +3733,7 @@ func (n *NotificationManager) validateWebhookURL(webhookURL string, diagnosticUR
 	}
 
 	// Resolve hostname to IPs and check for private ranges (DNS rebinding protection)
-	ips, err := net.LookupIP(host)
+	ips, err := n.lookupWebhookHostIPs(ctx, host)
 	if err != nil {
 		// DNS resolution failed - reject for security
 		return fmt.Errorf("failed to resolve webhook hostname %s: %w (DNS resolution required for security)", host, err)
@@ -3934,12 +3920,27 @@ func (n *NotificationManager) UpdateAllowedPrivateCIDRs(cidrsString string) erro
 	return nil
 }
 
-// lookupWebhookHostIPs resolves a webhook hostname for the SSRF-pinned dialer.
-func (n *NotificationManager) lookupWebhookHostIPs(host string) ([]net.IP, error) {
-	if n.resolveWebhookIPs != nil {
-		return n.resolveWebhookIPs(host)
+// lookupWebhookHostIPs bounds DNS work for both admission and pinned dialing.
+func (n *NotificationManager) lookupWebhookHostIPs(ctx context.Context, host string) ([]net.IP, error) {
+	if ip := net.ParseIP(host); ip != nil {
+		return []net.IP{ip}, nil
 	}
-	return net.LookupIP(host)
+	resolveCtx, cancel := context.WithTimeout(ctx, webhookDNSLookupTimeout)
+	defer cancel()
+	var ips []net.IP
+	var err error
+	if n.resolveWebhookIPs != nil {
+		ips, err = n.resolveWebhookIPs(resolveCtx, host)
+	} else {
+		ips, err = net.DefaultResolver.LookupIP(resolveCtx, "ip", host)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(ips) == 0 {
+		return nil, &net.DNSError{Err: "no addresses", Name: host, IsNotFound: true}
+	}
+	return ips, nil
 }
 
 // isIPInAllowlist checks if an IP is in the configured allowlist

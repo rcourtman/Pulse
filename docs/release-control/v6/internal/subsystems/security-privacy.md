@@ -18,6 +18,29 @@
 
 ## Purpose
 
+### Restricted outbound connections keep approved destinations pinned
+
+`pkg/securityutil/outbound_http.go` owns restricted HTTP destination validation,
+redirect policy and DNS pinning. `pkg/securityutil/pinned_dial.go` owns shared
+numeric-address connection scheduling, including notification callers. The
+dialer never resolves a hostname or expands destination permissions. Callers
+must validate every candidate before handing it over.
+
+The primitive validates and normalises numeric IPs, rejects malformed input,
+deduplicates equivalent IPv4 forms, respects the requested TCP address family,
+and races at most two staggered serial workers under one positive connection
+timeout. Remaining time is shared among each worker's remaining candidates.
+Caller cancellation cancels in-flight work. A successful connection cancels
+competitors and closes any late successful loser without writing an HTTP
+payload to it. Transport TLS and destination-policy checks remain in place.
+
+`pkg/securityutil/pinned_dial_test.go` verifies family fallback, later-address
+budget, concurrency, cancellation, late-connection closure, numeric-only input
+and error preservation. Notification loopback controls exercise both clients
+against a real stalled TCP address and a healthy receiver. The registry routes
+both shared runtime files to these controls and the existing outbound policy
+tests, keeping this primitive owned without moving notification allowlisting.
+
 ### Reporting usage remains content-free and distinguishable from missing measurements
 
 `internal/config/reporting_activity.go` is the canonical durable count store.
@@ -502,6 +525,8 @@ invisible to operators reviewing exactly what Pulse sends.
 53. `pkg/auth/rbac_manager.go`
 54. `pkg/auth/sqlite_manager.go`
 55. `pkg/server/server.go`
+56. `pkg/securityutil/outbound_http.go`
+57. `pkg/securityutil/pinned_dial.go`
 
 ## Shared Boundaries
 
