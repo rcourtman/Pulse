@@ -81,6 +81,14 @@ func (m *Monitor) cancelPVEBackupPollLocked(instance string) {
 	}
 }
 
+// A child collection deadline is not connection withdrawal. Unread nodes and
+// stores must still retain their earlier evidence when a live scan runs out of
+// budget; an invalidated owner cannot admit any of that scan's effects.
+func pveBackupPollWithdrawn(ctx context.Context) bool {
+	owner, _ := ctx.Value(pveBackupPollContextKey{}).(*pveBackupPoll)
+	return owner != nil && owner.ctx.Err() != nil
+}
+
 func (m *Monitor) applyPVEBackupEffect(ctx context.Context, instance string, effect func()) {
 	owner, _ := ctx.Value(pveBackupPollContextKey{}).(*pveBackupPoll)
 	if owner == nil {

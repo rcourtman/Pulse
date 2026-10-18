@@ -239,8 +239,8 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	// For each node, get storage and check content
 	for _, node := range nodes {
-		if ctx.Err() != nil {
-			break
+		if pveBackupPollWithdrawn(ctx) {
+			return
 		}
 		if nodeEffectiveStatus[node.Node] != "online" {
 			preserveNodeBackups(node.Node)
@@ -256,6 +256,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		var storages []proxmox.Storage
 		var err error
 
+	storageAttempts:
 		for attempt := 1; attempt <= 2; attempt++ {
 			storages, err = client.GetStorage(ctx, node.Node)
 			if err == nil || ctx.Err() != nil {
@@ -274,7 +275,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					select {
 					case <-time.After(2 * time.Second):
 					case <-ctx.Done():
-						return
+						break storageAttempts
 					}
 					continue
 				}
@@ -308,8 +309,8 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 		// For each storage that can contain backups or templates
 		for _, storage := range storages {
-			if ctx.Err() != nil {
-				break
+			if pveBackupPollWithdrawn(ctx) {
+				return
 			}
 			// Check if storage supports backup content
 			if !strings.Contains(storage.Content, "backup") {

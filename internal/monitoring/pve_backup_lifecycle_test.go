@@ -137,3 +137,50 @@ func TestPVEBackupLifecycleRefusesUnregisteredClient(t *testing.T) {
 	}
 	t.Log("BACKUP_LIFECYCLE_UNREGISTERED requests=0")
 }
+
+type partialBudgetBackupClient struct {
+	*lifecycleBackupClient
+}
+
+func (c *partialBudgetBackupClient) GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error) {
+	if node != "readable" {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return c.lifecycleBackupClient.GetStorage(ctx, node)
+}
+
+func TestPVEBackupLifecyclePartialBudgetKeepsUnreadCopies(t *testing.T) {
+	client := &partialBudgetBackupClient{lifecycleBackupClient: &lifecycleBackupClient{label: "current"}}
+	m := backupLifecycleMonitor(client)
+	held := []models.StorageBackup{
+		{ID: "held-slow", Instance: "site", Storage: "local", StorageNode: "slow", VMID: 100, Time: time.Unix(1700000000, 0), Size: 2048},
+		{ID: "held-unvisited", Instance: "site", Storage: "local", StorageNode: "unvisited", VMID: 100, Time: time.Unix(1700000000, 0), Size: 4096},
+	}
+	m.state.UpdateStorageBackupsForInstance("site", held)
+	owner, _ := m.beginPVEBackupPoll("site", time.Now(), client)
+	require.NotNil(t, owner)
+	defer m.finishPVEBackupPoll("site", owner)
+	parent := context.WithValue(owner.ctx, pveBackupPollContextKey{}, owner)
+	ctx, cancel := context.WithTimeout(parent, 100*time.Millisecond)
+	defer cancel()
+	m.pollStorageBackupsWithNodes(ctx, "site", client,
+		[]proxmox.Node{{Node: "readable"}, {Node: "slow"}, {Node: "unvisited"}},
+		map[string]string{"readable": "online", "slow": "online", "unvisited": "online"})
+	require.ErrorIs(t, ctx.Err(), context.DeadlineExceeded)
+	require.NoError(t, owner.ctx.Err(), "collection budget must not withdraw its live connection")
+	after := m.PVEBackupsSnapshot().StorageBackups
+	require.Len(t, after, 3, "completed peers refresh while every unread local copy is retained")
+	byID := make(map[string]models.StorageBackup)
+	for _, backup := range after {
+		byID[backup.ID] = backup
+	}
+	for _, original := range held {
+		got, exists := byID[original.ID]
+		require.True(t, exists)
+		require.Equal(t, original.Time, got.Time)
+		require.Equal(t, original.Size, got.Size)
+		require.Equal(t, original.StorageNode, got.StorageNode)
+	}
+	t.Log("BACKUP_PARTIAL_BUDGET readable=1 held=2 original_times_and_sizes=true")
+}
