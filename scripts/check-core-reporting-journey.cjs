@@ -96,7 +96,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
      check(!memoryCell.includes('%'), 'unavailable memory is not shown as idle');
      if (phase === 'rejected' || phase === 'retained') check(!(await row.locator('td').nth(1).innerText()).includes('%'), 'unavailable CPU is not shown as idle');
     }
-    if (width === 1440 && phase === 'complete') {
+    if (width === 1440 && phase === 'complete' && input.verifyMemoryTooltip !== false) {
      await row.locator('td').nth(2).locator('.relative').hover();
      await page.getByText('Used with ARC cache', { exact: true }).waitFor();
      const tooltip = page.getByText('Reclaimable cache', { exact: true }).locator('..').locator('..');
@@ -109,7 +109,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
     }
     if (width === 320) await row.tap();
     else {
-     const disclosure = row.getByRole('button', { name: /expand details/i });
+     const disclosure = row.getByRole('button', { name: /details for core-fixture/i });
      await disclosure.focus(); await page.keyboard.press('Enter');
      check(await disclosure.getAttribute('aria-expanded') === 'true', 'keyboard opens the existing inline drawer');
     }
