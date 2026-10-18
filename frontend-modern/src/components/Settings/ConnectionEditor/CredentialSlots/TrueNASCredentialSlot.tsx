@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, createMemo, on, onCleanup } from 'solid-js';
+import { Component, Show, createEffect, createMemo, createUniqueId, on, onCleanup } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import {
@@ -9,7 +9,8 @@ import {
   formLabel,
 } from '@/components/shared/Form';
 import { FormSelect } from '@/components/shared/FormSelect';
-import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificationWarningBanner';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import { getTrueNASTlsPolicy } from '../../trueNASTlsPresentation';
 import { MonitoredSystemImpactPreview } from '../../MonitoredSystemImpactPreview';
 import type { TrueNASConnection } from '@/api/truenas';
 import type { TrueNASSettingsPanelState } from '../../useTrueNASSettingsPanelState';
@@ -46,6 +47,8 @@ const describeTransport = (transport: NonNullable<TrueNASConnection['transport']
 
 export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (props) => {
   let primed = false;
+  const trustId = createUniqueId();
+  const tlsPolicy = createMemo(() => getTrueNASTlsPolicy(props.state.form()));
   // Settings owns the state longer than this slot. Leaving the consuming
   // editor retires feedback even if its request cannot be cancelled.
   onCleanup(() => props.state.retireFormEvidence());
@@ -106,6 +109,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
           <label class={formField}>
             <span class={formLabel}>Host</span>
             <input
+              aria-describedby={`${trustId}-transport-help ${trustId}-policy`}
               class={formControl}
               value={props.state.form().host}
               onInput={(event) => props.state.updateForm({ host: event.currentTarget.value })}
@@ -115,6 +119,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
           <label class={formField}>
             <span class={formLabel}>Port</span>
             <input
+              aria-describedby={`${trustId}-transport-help ${trustId}-policy`}
               class={formControl}
               inputMode="numeric"
               value={props.state.form().port}
@@ -221,6 +226,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
           <label class={formField}>
             <span class={formLabel}>TLS fingerprint</span>
             <input
+              aria-describedby={`${trustId}-pin-help ${trustId}-policy`}
               class={formControl}
               value={props.state.form().fingerprint}
               onInput={(event) =>
@@ -228,19 +234,18 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               }
               placeholder="Optional SHA256 fingerprint"
             />
-            <span class={formHelpText}>Optional certificate pin for HTTPS connections.</span>
+            <span id={`${trustId}-pin-help`} class={formHelpText}>
+              Optional SHA-256 certificate pin for HTTPS. Renewal can change the pin. Independently
+              verify a replacement through an already-trusted administration channel before updating
+              it. Do not clear a pin or skip verification to bypass an error.
+            </span>
           </label>
           <div class="space-y-3 rounded-md border border-border bg-surface-alt px-4 py-3">
-            <Show when={props.state.form().insecureSkipVerify}>
-              <TlsVerificationWarningBanner
-                subject="this TrueNAS connection"
-                remediation="Install a trusted certificate or configure the TLS fingerprint before using this in production."
-              />
-            </Show>
-            <label class="flex items-center gap-3">
+            <label class="flex min-h-11 items-center gap-3">
               <input
                 type="checkbox"
                 class={formCheckbox}
+                aria-describedby={`${trustId}-transport-help ${trustId}-policy`}
                 checked={props.state.form().useHttps}
                 onChange={(event) =>
                   props.state.updateForm({ useHttps: event.currentTarget.checked })
@@ -248,10 +253,11 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               />
               <span class="text-sm text-base-content">Use HTTPS</span>
             </label>
-            <label class="flex items-center gap-3">
+            <label class="flex min-h-11 items-center gap-3">
               <input
                 type="checkbox"
                 class={formCheckbox}
+                aria-describedby={`${trustId}-pin-help ${trustId}-policy`}
                 checked={props.state.form().insecureSkipVerify}
                 onChange={(event) =>
                   props.state.updateForm({ insecureSkipVerify: event.currentTarget.checked })
@@ -259,7 +265,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               />
               <span class="text-sm text-base-content">Skip TLS verification</span>
             </label>
-            <label class="flex items-center gap-3">
+            <label class="flex min-h-11 items-center gap-3">
               <input
                 type="checkbox"
                 class={formCheckbox}
@@ -272,6 +278,21 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             </label>
           </div>
         </div>
+
+        <InlineNotice
+          tone={tlsPolicy().tone}
+          role="status"
+          aria-label="TrueNAS form TLS policy"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <p class="font-medium">{tlsPolicy().title}</p>
+          <p id={`${trustId}-policy`}>{tlsPolicy().description}</p>
+        </InlineNotice>
+        <p id={`${trustId}-transport-help`} class={formHelpText}>
+          The scheme in Host takes precedence over Use HTTPS. With no separate port, the client
+          defaults to HTTPS. Form settings only, not a connection-test result or proof of collection.
+        </p>
 
         <Show when={props.editingConnection?.transport}>
           {(transport) => (
