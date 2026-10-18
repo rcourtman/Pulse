@@ -8599,14 +8599,7 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 	if runtime.GOOS == "windows" {
 		t.Skip("TrueNAS SCALE shell controls; Windows has its own native SCM gate")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_truenas_teardown.py"))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("TrueNAS SCALE boot-task ownership/retirement controls: %v\n%s", err, output)
-	}
-	for _, name := range []string{
+	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_truenas_teardown.py"), "AgentTrueNASTeardown", []string{
 		"test_unavailable_or_untrusted_task_inventory_cannot_remove_recovery",
 		"test_foreign_or_indirect_bootstrap_is_not_mutated",
 		"test_missing_activation_target_cannot_hide_an_owned_task",
@@ -8623,29 +8616,14 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 		"test_disabled_absent_missing_bootstrap_and_repeated_removal_are_observed",
 		"test_ordinary_linux_state_is_not_appliance_evidence",
 		"test_process_read_exposes_only_roles_and_real_timeout_child_is_stopped",
-	} {
-		if !strings.Contains(string(output), name+" (__main__.AgentTrueNASTeardown."+name+") ... ok") {
-			t.Fatalf("TrueNAS SCALE control %s did not pass:\n%s", name, output)
-		}
-	}
-	if !strings.Contains(string(output), "\nRan 16 tests in ") || !strings.Contains(string(output), "\nOK\n") {
-		t.Fatalf("incomplete TrueNAS SCALE verdict:\n%s", output)
-	}
-	t.Logf("%s", output)
+	}, 2*time.Minute)
 }
 
 func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix NAS shell controls; Windows retains its separate native SCM gate")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_nas_teardown.py"))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("NAS boot-owner/watchdog production caller controls: %v\n%s", err, output)
-	}
-	for _, name := range []string{
+	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_nas_teardown.py"), "AgentNASTeardown", []string{
 		"test_complete_process_evidence_is_required_before_boot_or_remote_mutation",
 		"test_unknown_relative_foreign_or_deferred_boot_owners_are_not_signalled",
 		"test_non_regular_foreign_wrapper_and_unselected_state_preserve_recovery",
@@ -8669,13 +8647,5 @@ func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
 		"test_private_process_reader_requests_native_basename_and_full_argv",
 		"test_generated_collector_observation_keeps_exact_identity_on_both_unix_formats",
 		"test_caller_has_no_blanket_nas_or_legacy_tree_deletion",
-	} {
-		if !strings.Contains(string(output), name+" (__main__.AgentNASTeardown."+name+") ... ok") {
-			t.Fatalf("NAS removal control %s did not pass:\n%s", name, output)
-		}
-	}
-	if !strings.Contains(string(output), "\nRan 23 tests in ") || !strings.Contains(string(output), "\nOK\n") {
-		t.Fatalf("incomplete NAS removal verdict:\n%s", output)
-	}
-	t.Logf("%s", output)
+	}, 2*time.Minute)
 }

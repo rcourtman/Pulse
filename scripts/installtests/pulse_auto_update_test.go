@@ -162,18 +162,7 @@ func TestAutoUpdateDownloadFailures(t *testing.T) {
 // Service-state admission is independent of the signed/metadata transaction
 // matrix below; no native service or published input is used by this fixture.
 func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateServiceState")
-	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("unattended service state/rollback controls: %v\n%s", err, out)
-	}
-	// Keep the manager/collector controls part of actual package acceptance, not just
-	// an optional Python check. A green fixture with these methods removed
-	// would otherwise silently lose early-failure and final-line coverage.
-	required := []string{
+	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceState", []string{
 		"test_manager_diagnostics_refuse_initial_update_and_restart",
 		"test_manager_diagnostics_after_install_retain_backup_without_mutation",
 		"test_manager_diagnostics_after_stop_retain_backup_without_restart",
@@ -181,46 +170,17 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 		"test_rollback_keeps_backup_until_restored_running_executable_matches",
 		"test_early_collector_failure_survives_later_success_and_drains_installer",
 		"test_unterminated_final_installer_line_is_collected_and_its_failure_retained",
-	}
-	for _, name := range required {
-		passed := false
-		for _, line := range strings.Split(string(out), "\n") {
-			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
-				passed = true
-			}
-		}
-		if !passed {
-			t.Fatalf("required updater collector control %s did not pass:\n%s", name, out)
-		}
-	}
+	}, 45*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
 
 // Keep the full real-sink matrix mandatory, but give it its own existing-size
 // bound rather than exhausting the service-state suite's manager deadlines.
 func TestAutoUpdateLogSinkFailures(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateLogSinks")
-	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("unattended real-log sink controls: %v\n%s", err, out)
-	}
-	for _, name := range []string{
+	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateLogSinks", []string{
 		"test_logger_double_keeps_complete_argument_frames_and_exit_sequence",
 		"test_real_log_retains_each_sink_failure_in_conditional_calls",
 		"test_real_logger_failure_drains_installer_and_preserves_recovery",
-	} {
-		passed := false
-		for _, line := range strings.Split(string(out), "\n") {
-			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
-				passed = true
-			}
-		}
-		if !passed {
-			t.Fatalf("required real-log sink control %s did not pass:\n%s", name, out)
-		}
-	}
+	}, 45*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
 
 // A real owned process retains its old executable after its disk path changes.
