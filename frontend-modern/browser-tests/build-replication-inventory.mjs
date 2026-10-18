@@ -65,6 +65,7 @@ try {
     'package.json',
     'package-lock.json',
     'browser-tests/build-replication-inventory.mjs',
+    'browser-tests/replication-result-verdicts.cjs',
   ])
     sources[file] = hash(fs.readFileSync(path.join(root, file)));
   scan(outDir, artifacts);

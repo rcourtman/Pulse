@@ -74,6 +74,13 @@ describe('ProxmoxReplicationTable', () => {
     },
   );
 
+  it('keeps an absent result unreported despite a retained sync timestamp', async () => {
+    render(() => table([replicationJob({ lastSyncStatus: undefined })]));
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for replication job 100-0' }));
+    expect(screen.getByText('Reported last result', { selector: 'dt' }).nextElementSibling).toHaveTextContent('Not reported');
+    expect(within(jobRow()).getByText('Unknown', { exact: true })).toBeVisible();
+  });
+
   it('keeps unknown counts and filtering aligned with the same live verdict', async () => {
     const [jobs, setJobs] = createSignal([
       replicationJob({ lastSyncStatus: undefined }),
