@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, renderHook, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +9,7 @@ import { showErrorWithDetail } from '@/utils/toast';
 
 import { useAlertDestinationsTabState } from '../useAlertDestinationsTabState';
 import type { UIAppriseConfig, UIEmailConfig } from '../types';
+import { AlertDeliveryLogCard } from '../AlertDeliveryLogCard';
 
 vi.mock('@/api/notifications', () => ({
   NotificationsAPI: {
@@ -78,6 +79,104 @@ const buildAppriseConfig = (): UIAppriseConfig => ({
 });
 
 describe('useAlertDestinationsTabState', () => {
+  it('keeps expanded activity inspectable without retaining old identities through failed reads', async () => {
+    const attempt = {
+      notificationId: 'grouped-delivery',
+      type: 'email',
+      outcome: 'failed' as const,
+      alertIds: ['west:101:memory', 'east:101:memory'],
+      alertCount: 2,
+      attempts: 3,
+      success: false,
+      timestamp: '2026-10-18T05:00:00Z',
+      errorMessage: 'Fixture rejected',
+    };
+    vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+    vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
+      queue: { status: 'healthy' },
+    } as never);
+    vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({
+      entries: [attempt],
+      windowDays: 30,
+      completedRetentionDays: 7,
+      deadLetterRetentionDays: 30,
+    });
+    vi.mocked(AlertsAPI.getEvents).mockResolvedValue([
+      {
+        id: 9,
+        occurredAt: '2026-10-18T05:01:00Z',
+        type: 'notification_deferred',
+        alertId: 'held-memory',
+        reason: 'quiet_hours:performance',
+        message: 'Held until the configured quiet hours end; monitoring continues.',
+      },
+    ]);
+    let state!: ReturnType<typeof useAlertDestinationsTabState>;
+    const mounted = render(() => {
+      const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());
+      state = useAlertDestinationsTabState({
+        appriseConfig,
+        setAppriseConfig,
+        configLoadError: () => null,
+        emailConfig: () => buildEmailConfig(),
+        isLoadingDestinations: () => false,
+        isRetrying: () => false,
+        onRetryLoad: vi.fn(),
+      });
+      return (
+        <AlertDeliveryLogCard
+          log={state.deliveryLog()}
+          unavailable={state.deliveryLogUnavailable()}
+          refreshing={state.refreshingDeliveryLog()}
+          onRefresh={() => void state.loadDeliveryLog()}
+          webhooks={state.webhooks()}
+          heldEvents={state.heldEvents()}
+          heldEventsUnavailable={state.heldEventsUnavailable()}
+          refreshingHeldEvents={state.refreshingHeldEvents()}
+        />
+      );
+    });
+    try {
+      await waitFor(() => expect(screen.getByText('west:101:memory +1 more')).toBeVisible());
+      expect(screen.getByRole('list', { name: 'Notification activity' })).toHaveAttribute(
+        'tabindex',
+        '0',
+      );
+      expect(screen.getByText(/Held until the configured quiet hours end/)).toBeVisible();
+      fireEvent.click(screen.getByText('west:101:memory +1 more'));
+      expect(screen.getByText(/west:101:memory\s+east:101:memory/)).toBeVisible();
+
+      vi.mocked(NotificationsAPI.getDeliveryLog).mockRejectedValueOnce(
+        new Error('Fixture log unavailable'),
+      );
+      vi.mocked(AlertsAPI.getEvents).mockRejectedValueOnce(new Error('Fixture events unavailable'));
+      await state.loadDeliveryLog();
+      expect(screen.queryByRole('list', { name: 'Notification activity' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/west:101:memory/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/No alert deliveries were attempted/)).not.toBeInTheDocument();
+
+      vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValueOnce({
+        entries: [{ ...attempt, alertIds: ['fresh:202:disk'], alertCount: 1 }],
+        windowDays: 30,
+        completedRetentionDays: 7,
+        deadLetterRetentionDays: 30,
+      });
+      vi.mocked(AlertsAPI.getEvents).mockResolvedValueOnce([]);
+      await state.loadDeliveryLog();
+      expect(screen.getByText('fresh:202:disk')).toBeVisible();
+      expect(screen.queryByText(/west:101:memory/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/Held until the configured quiet hours end/),
+      ).not.toBeInTheDocument();
+      expect(mounted.container.querySelector('details')).not.toBeInTheDocument();
+      expect(NotificationsAPI.retryTerminalFailures).not.toHaveBeenCalled();
+      expect(NotificationsAPI.dismissTerminalFailures).not.toHaveBeenCalled();
+      expect(NotificationsAPI.testNotification).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   describe.each(['retryTerminalFailures', 'dismissTerminalFailures'] as const)(
     '%s view replacement',
     (action) => {

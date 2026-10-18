@@ -20,6 +20,22 @@
 
 ## Purpose
 
+### Bounded notification evidence is accessible on keyboard and touch
+
+Notification activity retains list semantics and a stable accessible name while
+explicitly admitting keyboard focus for its bounded scroll area. Full identities,
+held explanations and unbroken diagnostic strings stay within the card width.
+Grouped IDs use native `details`/`summary` with visible keyboard focus and a
+narrow-screen touch target; missing/empty/unavailable data does not leave a
+focusable empty list or earlier expanded identities behind. This changes only
+inspection of existing evidence, not delivery controls, read bounds or health.
+
+Component and mounted state/consumer regressions accompany the alert contract.
+`browser-tests/delivery-activity.cjs` binds the production Notifications-tab build
+and API adapters, checks desktop/320px focus, scrolling, wrapping, disclosures
+and unavailable/empty/recovered reads, and retains before/after captures for
+native image inspection. Synthetic reads are not installed delivery recovery.
+
 ### Unconfirmed VM power does not make filesystem values current
 
 The shared filesystem presenter qualifies platform-owned VM values as last
