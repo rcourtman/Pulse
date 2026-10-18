@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### TrueNAS boot-task registration is separate from running-agent health
+
+Unix agent completion applies the [TrueNAS persistence contract](deployment-installability.md#truenas-agent-completion-requires-confirmed-boot-persistence):
+complete owned inventory, one bounded registration without uncertain replay and
+an enabled exact-ID readback precede any persistence/success claim. Unknown boot
+state leaves runtime start and saved recovery available but produces incomplete
+installation exit **1** / `persistence_unconfirmed`; startup **13** and rejected
+credentials **18** keep their existing meanings. The actual-function/caller
+controls in `TestInstallSHTrueNASBootRegistrationRequiresReadback` cover these
+outcomes on Linux/FreeBSD branches without claiming native reboot/upgrade proof.
+
+
 ### Unix installation completion requires observed local startup
 
 Every Unix agent platform uses the shared `complete_installation_flow` helper.
