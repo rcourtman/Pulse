@@ -102,9 +102,17 @@ func TestCORE13RESTReportingChartJourney(t *testing.T) {
 		Timestamp       int64 `json:"timestamp"`
 		Value, Min, Max float64
 	}
+	publish := func() {
+		setUnexportedField(t, poller, "cachedRecordsByOrg", map[string]map[string][]unifiedresources.IngestRecord{"org-core": {"core-rest-fixture": provider.Records()}})
+		monitor.SetResourceStoreAndProviders(unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)), map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{unifiedresources.SourceTrueNAS: poller})
+	}
 	var lastCollected time.Time
 	for i, phase := range []string{"complete", "rejected", "partial", "zero", "recovered"} {
 		t.Run(phase, func(t *testing.T) {
+			// Independent cold-cache phases distinguish missing observations from
+			// genuinely retained History. The warm-failure control below keeps
+			// the existing cache intact instead of mistaking it for fresh data.
+			setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(20, time.Hour))
 			fixture.Phase.Store(int64(i))
 			beforePosts := fixture.Posts.Load()
 			if err := provider.Refresh(context.Background()); err != nil {
@@ -115,9 +123,7 @@ func TestCORE13RESTReportingChartJourney(t *testing.T) {
 				t.Fatal("collection stopped advancing")
 			}
 			lastCollected = snapshot.CollectedAt
-			setUnexportedField(t, poller, "cachedRecordsByOrg", map[string]map[string][]unifiedresources.IngestRecord{"org-core": {"core-rest-fixture": provider.Records()}})
-			// Publish the refreshed canonical records through the normal wiring boundary.
-			monitor.SetResourceStoreAndProviders(unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)), map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{unifiedresources.SourceTrueNAS: poller})
+			publish()
 			resources := request(token, "org-core", resourcePath)
 			var listed struct {
 				Data []unifiedresources.Resource `json:"data"`
@@ -163,49 +169,93 @@ func TestCORE13RESTReportingChartJourney(t *testing.T) {
 			if history24.Code != history.Code {
 				t.Fatal("default-range chart status disagrees with selected range")
 			}
-			if i == 1 {
-				if history.Code != 503 || snapshot.System.Telemetry.ErrorCategory != "request_rejected" {
-					t.Fatalf("rejection disguised as healthy History: %d %s", history.Code, history.Body.String())
+			if i == 1 && snapshot.System.Telemetry.ErrorCategory != "request_rejected" {
+				t.Fatal("reporting rejection lost its diagnostic category")
+			}
+			var data struct {
+				ResourceType, ResourceID string
+				Metrics                  map[string][]point
+			}
+			if history.Code != 200 || json.Unmarshal(history.Body.Bytes(), &data) != nil || data.ResourceType != "agent" || data.ResourceID != "core-rest-fixture" {
+				t.Fatalf("chart response %d: %s", history.Code, history.Body.String())
+			}
+			expected := map[string]float64{"cpu": 12, "memory": 37.5, "diskread": 1024, "diskwrite": 2048, "netin": 32, "netout": 64, "temperature": 42}
+			for metric, value := range expected {
+				known := knownMemory || (metric == "cpu" && knownCPU)
+				if !known {
+					if len(data.Metrics[metric]) != 0 {
+						t.Fatalf("cold chart fabricated %s: %+v", metric, data.Metrics[metric])
+					}
+					continue
 				}
-			} else {
-				var data struct {
-					ResourceType, ResourceID string
-					Metrics                  map[string][]point
+				if i == 3 && metric != "temperature" {
+					value = 0
 				}
-				if history.Code != 200 || json.Unmarshal(history.Body.Bytes(), &data) != nil || data.ResourceType != "agent" || data.ResourceID != "core-rest-fixture" {
-					t.Fatalf("chart response %d: %s", history.Code, history.Body.String())
+				points := data.Metrics[metric]
+				if len(points) != 4 {
+					t.Fatalf("native %s observations lost: %+v", metric, points)
 				}
-				expected := map[string]float64{"cpu": 12, "memory": 37.5, "diskread": 1024, "diskwrite": 2048, "netin": 32, "netout": 64, "temperature": 42}
-				for metric, value := range expected {
-					known := knownMemory || metric == "cpu"
-					if !known {
-						if len(data.Metrics[metric]) != 0 {
-							t.Fatalf("partial chart fabricated %s", metric)
-						}
-						continue
+				for j, p := range points {
+					if p.Value != value || p.Min != value || p.Max != value || (j > 0 && p.Timestamp <= points[j-1].Timestamp) {
+						t.Fatalf("native sample/bounds/order changed for %s: %+v", metric, points)
 					}
-					if i == 3 && metric != "temperature" {
-						value = 0
-					}
-					points := data.Metrics[metric]
-					if len(points) != 4 {
-						t.Fatalf("native %s observations lost: %+v", metric, points)
-					}
-					for j, p := range points {
-						if p.Value != value || p.Min != value || p.Max != value || (j > 0 && p.Timestamp <= points[j-1].Timestamp) {
-							t.Fatalf("native sample/bounds/order changed for %s: %+v", metric, points)
-						}
-					}
-					if points[3].Timestamp-points[0].Timestamp < 57*60*1000 {
-						t.Fatal("hour chart became a current-value shortcut")
-					}
+				}
+				if points[3].Timestamp-points[0].Timestamp < 57*60*1000 {
+					t.Fatal("hour chart became a current-value shortcut")
 				}
 			}
+			// Pool capacity is independent of reporting and remains valid even
+			// when every optional CPU/memory/IO graph is rejected.
+			if len(data.Metrics["disk"]) != 1 || data.Metrics["disk"][0].Value != 40 {
+				t.Fatal("reporting failure erased independent capacity history")
+			}
+
 			payload, err := json.Marshal(map[string]any{"phase": phase, "resources": json.RawMessage(resources.Body.Bytes()), "history": map[string]any{"status": history.Code, "body": json.RawMessage(history.Body.Bytes())}, "history24": map[string]any{"status": history24.Code, "body": json.RawMessage(history24.Body.Bytes())}, "telemetry": snapshot.System.Telemetry})
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Logf("CORE_CHART_BROWSER %s", payload)
+			if i == 0 {
+				retained := monitor.GetGuestMetrics("agent:core-rest-fixture", time.Hour)
+				before := fixture.Posts.Load()
+				fixture.Phase.Store(1)
+				if err := provider.Refresh(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				publish()
+				resources := request(token, "org-core", resourcePath)
+				var current struct{ Data []unifiedresources.Resource }
+				if resources.Code != 200 || json.Unmarshal(resources.Body.Bytes(), &current) != nil {
+					t.Fatal("warm resource read failed")
+				}
+				for _, row := range current.Data {
+					if row.Type == unifiedresources.ResourceTypeAgent && (row.Metrics.CPU != nil || row.Metrics.Memory != nil) {
+						t.Fatal("retained History became current telemetry")
+					}
+				}
+				history24 := request(token, "org-core", strings.Replace(historyPath, "range=1h", "range=24h", 1))
+				history := request(token, "org-core", historyPath)
+				var warm struct{ Metrics map[string][]point }
+				if history.Code != 200 || history24.Code != 200 || json.Unmarshal(history.Body.Bytes(), &warm) != nil || fixture.Posts.Load()-before != 21 {
+					t.Fatal("warm native failure discarded valid History or escaped its request bound")
+				}
+				for metric, points := range retained {
+					if len(points) != 1 || len(warm.Metrics[metric]) != 1 {
+						t.Fatalf("warm %s history changed cardinality", metric)
+					}
+					old, got := points[0], warm.Metrics[metric][0]
+					wantTime := (old.Timestamp.Unix()/15*15 + 7) * 1000
+					if got.Timestamp != wantTime || got.Value != old.Value || got.Min != old.Value || got.Max != old.Value {
+						t.Fatalf("warm %s changed observation time/value: old %+v, returned %+v", metric, old, got)
+					}
+				}
+				payload, err := json.Marshal(map[string]any{"phase": "retained", "resources": json.RawMessage(resources.Body.Bytes()), "history": map[string]any{"status": history.Code, "body": json.RawMessage(history.Body.Bytes())}, "history24": map[string]any{"status": history24.Code, "body": json.RawMessage(history24.Body.Bytes())}, "telemetry": provider.Snapshot().System.Telemetry})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("CORE_CHART_BROWSER %s", payload)
+			}
+
 		})
 	}
 	before := fixture.Posts.Load()

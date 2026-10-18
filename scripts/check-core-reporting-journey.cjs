@@ -74,7 +74,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
    page.setDefaultTimeout(12000);
    page.on('pageerror', (e) => result.errors.push(e.message));
    await page.route('**/*', (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
-   for (phase of ['complete', 'rejected', 'partial', 'zero', 'recovered']) {
+   for (phase of ['complete', 'rejected', 'partial', 'zero', 'recovered', 'retained']) {
     const record = { phase, width, checks: [] };
     result.cases.push(record);
     const check = (condition, label) => { assert(condition, label); record.checks.push(label); };
@@ -85,10 +85,10 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
     await row.waitFor();
     const rowText = await row.innerText();
     if (['complete', 'recovered'].includes(phase)) check(rowText.includes('12%') && rowText.includes('38%'), 'native CPU and rounded ARC-aware memory reach the table');
-    if (phase === 'rejected' || phase === 'partial') {
+    if (phase === 'rejected' || phase === 'partial' || phase === 'retained') {
      const memoryCell = await row.locator('td').nth(2).innerText();
      check(!memoryCell.includes('%'), 'unavailable memory is not shown as idle');
-     if (phase === 'rejected') check(!(await row.locator('td').nth(1).innerText()).includes('%'), 'unavailable CPU is not shown as idle');
+     if (phase === 'rejected' || phase === 'retained') check(!(await row.locator('td').nth(1).innerText()).includes('%'), 'unavailable CPU is not shown as idle');
     }
     if (width === 1440 && phase === 'complete') {
      await row.locator('td').nth(2).locator('.relative').hover();
@@ -111,24 +111,26 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
     await drawer.waitFor();
     const select = drawer.getByTestId('guest-history-range-control');
     check(await select.inputValue() === '24h', 'the existing drawer opens on its default day range');
-    if (phase === 'rejected') await drawer.getByText('Failed to load history data', { exact:true }).waitFor();
-    else await drawer.locator('[data-history-group="utilization"]').getByRole('img').waitFor();
+    await drawer.locator('[data-history-group="utilization"]').getByRole('img').waitFor();
     await select.selectOption('1h');
     await page.waitForTimeout(400);
     const utilization = drawer.locator('[data-history-group="utilization"]');
-    if (phase !== 'rejected') {
+    { 
      await utilization.waitFor();
      const chart = utilization.getByRole('img');
      await chart.waitFor();
+     if (phase !== 'rejected' && phase !== 'retained') {
+      const inspection = utilization.getByRole('slider', { name:'Inspect Utilization history' });
+      await inspection.focus(); await page.keyboard.press('Home');
+      check(await inspection.inputValue() === '0', 'keyboard inspection selects the first actual native observation, not the later independent capacity sample');
+     }
+     if (phase === 'retained') check((await utilization.innerText()).includes('Single observation. No trend yet.'), 'warm rejection preserves a recorded observation without inventing a trend');
      const description = await chart.evaluate((node) => document.getElementById(node.getAttribute('aria-describedby'))?.textContent || '');
      record.utilization = description;
-     check(description.includes(phase==='zero' ? '0.0%' : '12.0%'), 'CPU History keeps its native value including measured zero');
+     if (phase === 'rejected') check(!description.includes('CPU 0.0%') && !description.includes('Memory 0.0%') && !description.includes('12.0%') && !description.includes('37.5%'), 'missing CPU and memory are not idle, while capacity remains independently charted');
+     else check(description.includes(phase==='zero' ? '0.0%' : '12.0%'), 'CPU History keeps its native value including measured zero');
      if (phase === 'partial') check(!description.includes('37.5%'), 'CPU-only history does not invent sibling memory');
-     else check(description.includes(phase==='zero' ? '0.0%' : '37.5%'), 'memory History uses the same ARC-aware reading');
-    } else {
-     await drawer.getByText('Failed to load history data', { exact: true }).waitFor();
-     record.drawer = await drawer.innerText();
-     check(await utilization.getByRole('img').count() === 0, 'rejected reporting has no fabricated utilization chart');
+     else if (phase !== 'rejected') check(description.includes(phase==='zero' ? '0.0%' : '37.5%'), 'memory History uses the same ARC-aware reading');
     }
     // At narrow widths the existing more-charts control reveals I/O/thermals.
     const more = drawer.getByTestId('history-phone-toggle');
@@ -140,8 +142,8 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
      check((await io.innerText()).includes(phase==='zero' ? '0 B/s' : '1.00 KB/s'), 'native disk I/O reaches its own chart');
     }
     check(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)), 'no document horizontal overflow');
-    if (['complete','rejected','zero'].includes(phase)) {
-     await (phase === 'rejected' ? drawer.getByRole('status', { name: 'History refresh status' }) : utilization).scrollIntoViewIfNeeded();
+    if (['complete','rejected','zero','retained'].includes(phase)) {
+     await utilization.scrollIntoViewIfNeeded();
      const file = `${width}-${phase}.png`;
      await page.screenshot({ path: path.join(output, file), animations:'disabled' });
      result.screenshots.push({ file, width, phase, sha256:hash(fs.readFileSync(path.join(output,file))) });
