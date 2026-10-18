@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "5575b8dccf6ca017112043cd41f6a6e69ad060d6",
+  "verified_at": "2026-10-18T05:44:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/public/docs/TROUBLESHOOTING.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "b2819677cccba9f2663f71c1af82cae59b9999c4e7e501d424651c4943984ec9"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING#choose-the-affected-workflow",
+    "/docs/TROUBLESHOOTING#apprise-api-reports-a-tls-or-connection-error",
+    "/docs/TROUBLESHOOTING#recover-retained-delivery-failures",
+    "/docs/TROUBLESHOOTING#inspect-notification-logs"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Real production Docs/router/Markdown/PageHeader/styles consume the committed shipped guide, compiled offline at 5575b8dc by source-4wultty0. All 3003 inputs and 30 artifacts hash-match. Playwright 1.56.1 / Chromium 141.0.7390.37.",
+    "Desktop light and narrow dark; eight native screenshots opened with view_image. Distinct HTTPS trust/bypass, HTTP plaintext, CLI and onward-recipient boundaries remain legible without page overflow.",
+    "Exact parent guide lacks the new section and entry routes under the same real Docs consumer. This is parent-document comparison, not execution of parent runtime source."
+  ],
+  "interactions": [
+    "Desktop keyboard and narrow touch follow chooser and TLS-row links, focus target headings and preserve the SPA shell.",
+    "Follow queue recovery and private log guidance, Back and reload; changed served document bytes match. No backend/external requests, no errors, browser and server closed."
+  ],
+  "limits": [
+    "Documentation-only proof; no actual Apprise server, delivery recipient, trust-store provisioning, native Safari or installed recovery is claimed."
+  ]
+}
