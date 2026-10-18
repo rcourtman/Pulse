@@ -25,9 +25,9 @@ describe('copyable webhook example', () => {
     expect(text).toContain('A Home Assistant persistent-notification bridge');
     expect(text).toContain('Process each member on both events');
     expect(text).toContain('using the same member identity for create and remove');
-    expect(article.querySelector('a[href="#receiver-correlation-and-deduplication"]')?.textContent).toBe(
-      'member-aware receiver correlation',
-    );
+    expect(
+      article.querySelector('a[href="#receiver-correlation-and-deduplication"]')?.textContent,
+    ).toBe('member-aware receiver correlation');
     expect(article.querySelector('#receiver-correlation-and-deduplication')).not.toBeNull();
   });
 
