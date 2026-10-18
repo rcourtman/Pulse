@@ -1370,6 +1370,7 @@ type Monitor struct {
 	lastPhysicalDiskPoll       map[string]time.Time                       // Track last physical disk poll time per instance
 	pveReplicationPolls        map[string]*pveReplicationPoll             // Owned runtime/client-scoped replication reads; guarded by mu
 	lastPVEBackupPoll          map[string]time.Time                       // Track last PVE backup poll per instance
+	pveBackupPollInFlight      map[string]bool                            // Hold scan ownership until it returns, independently of cadence resets
 	vzdumpJobTaskCache         map[string]vzdumpJobTaskCacheEntry         // Cache synthesized per-guest tasks for multi-guest vzdump job runs, keyed by instance|UPID
 	lastPBSBackupPoll          map[string]time.Time                       // Track last PBS backup poll per instance
 	pveBackupInventoryReady    map[string]map[string]bool                 // Track PVE guest inventory readiness for backup orphan detection
@@ -2002,6 +2003,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		lastClusterCheck:           make(map[string]time.Time),
 		lastPhysicalDiskPoll:       make(map[string]time.Time),
 		lastPVEBackupPoll:          make(map[string]time.Time),
+		pveBackupPollInFlight:      make(map[string]bool),
 		vzdumpJobTaskCache:         make(map[string]vzdumpJobTaskCacheEntry),
 		lastPBSBackupPoll:          make(map[string]time.Time),
 		pveBackupInventoryReady:    make(map[string]map[string]bool),
