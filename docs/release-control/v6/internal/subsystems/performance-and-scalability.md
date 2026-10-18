@@ -2774,7 +2774,17 @@ nullable bounds and all tiers, metadata, concurrent old snapshots and queued
 writes, cross-Store cached reads, cancellation after swap, crash before commit,
 conflicting replacement tables and primary-table range plans. Historical write
 profiles reconstruct their original rowid tables; `clustered` profiles exercise
-the current production schema. The
+the current production schema. Clustered rollups first discover resource
+identities within the bounded source window through the covering tier/time
+index, then read each resource through its primary-key time range. They must
+not seek the primary table once per source observation through the secondary
+index. A statement-local resource number gives the aggregate an integer group
+key without changing stored resource identity, bucket boundaries, nullable
+extrema fallback or `INSERT OR IGNORE` idempotence. It is neither persisted nor
+cached. Legacy rowid databases retain their existing aggregate query until
+physical migration. The clustered rollup plan must preserve covering discovery
+and bounded primary ranges; full-table scans and extra write indexes are not
+accepted substitutes. The
 deterministic issue-1124 profile must continue to attribute writes by logical
 payload, table/index `dbstat` pages, page-cache writes/spills, WAL frames,
 checkpoint frames, process write bytes where the host exposes them, and traced

@@ -16,6 +16,32 @@ import (
 // Keep the time-major key shared by ingestion, reconciliation and range reads.
 const clusteredMetricsIndex = "sqlite_autoindex_metrics_1"
 
+// The tier/time tree covers resource identity, but fetching every value through
+// it would seek the composite primary tree once per source point. Discover
+// only the resources in this bounded window, then read their contiguous primary
+// ranges. Group by a statement-local resource number to avoid comparing both
+// identity strings for every input row; the number is unique within this query
+// and never becomes a persisted or externally visible resource identity.
+const clusteredMetricsRollupSQL = `
+	WITH selected_resources AS MATERIALIZED (
+		SELECT DISTINCT resource_type, resource_id FROM metrics
+		WHERE tier = ? AND timestamp >= ? AND timestamp < ?
+	), resources AS MATERIALIZED (
+		SELECT ROW_NUMBER() OVER (ORDER BY resource_type, resource_id) AS resource_number,
+			resource_type, resource_id FROM selected_resources
+	)
+	INSERT OR IGNORE INTO metrics
+		(resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
+	SELECT r.resource_type, r.resource_id, m.metric_type, AVG(m.value),
+		MIN(COALESCE(m.min_value, m.value)), MAX(COALESCE(m.max_value, m.value)),
+		(m.timestamp / ?) * ? AS bucket_ts, ?
+	FROM resources AS r CROSS JOIN metrics AS m
+	WHERE m.resource_type = r.resource_type AND m.resource_id = r.resource_id
+		AND m.tier = ? AND m.timestamp >= ? AND m.timestamp < ?
+	GROUP BY r.resource_number, bucket_ts, m.metric_type
+	ORDER BY r.resource_number, bucket_ts, m.metric_type
+`
+
 const metricsTableColumns = `
 	resource_type TEXT NOT NULL,
 	resource_id TEXT NOT NULL,

@@ -60,6 +60,135 @@ func assertClusteredStore(t *testing.T, store *Store) {
 	}
 }
 
+func TestClusteredMetricsRollupPlanUsesBoundedPrimaryRanges(t *testing.T) {
+	store, err := NewStore(DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	rows, err := store.db.Query("EXPLAIN QUERY PLAN "+clusteredMetricsRollupSQL,
+		"raw", int64(1_700_000_000), int64(1_700_000_120),
+		int64(60), int64(60), "minute", "raw", int64(1_700_000_000), int64(1_700_000_120))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var plan []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(plan, "\n")
+	for _, want := range []string{
+		"SEARCH metrics USING COVERING INDEX idx_metrics_tier_time (tier=? AND timestamp>? AND timestamp<?)",
+		"SEARCH m USING PRIMARY KEY (resource_type=? AND resource_id=? AND tier=? AND timestamp>? AND timestamp<?)",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("rollup lost its bounded covering discovery/primary range: missing %q in\n%s", want, joined)
+		}
+	}
+	if strings.Contains(joined, "SCAN metrics") || strings.Contains(joined, "SCAN m ") {
+		t.Fatalf("rollup scans observations outside its indexed window:\n%s", joined)
+	}
+}
+
+func TestClusteredMetricsRollupsMatchLegacyAggregation(t *testing.T) {
+	suppressLogs(t)
+	stores := make([]*Store, 2)
+	for i := range stores {
+		cfg := DefaultConfig(t.TempDir())
+		cfg.FlushInterval, cfg.RollupInterval = time.Hour, time.Hour
+		store, err := NewStore(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = store.Close() })
+		if err := store.WaitForMaintenance(30 * time.Second); err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			issue1124InstallRowidSchema(t, store)
+		}
+		stores[i] = store
+	}
+	base := int64(1_700_006_400) // Aligned to a day, hour and minute.
+	for _, store := range stores {
+		for _, resourceType := range []string{"vm", "node", "dockercontainer"} {
+			for _, resourceID := range []string{"same-id", "same-id:child", "z"} {
+				for _, metric := range []string{"cpu", "memory", "bytes_total"} {
+					for i, offset := range []int64{-1, 0, 5, 59, 60, 65, 119, 120} {
+						var low, high any
+						if i%2 == 0 {
+							low = 0.0 // Explicit zero must remain a bound.
+						}
+						if i%3 == 0 {
+							high = 60.0
+						}
+						if _, err := store.db.Exec(`INSERT INTO metrics
+							(resource_type,resource_id,metric_type,value,min_value,max_value,timestamp,tier)
+							VALUES (?,?,?,?,?,?,?,'raw')`, resourceType, resourceID, metric,
+							float64(i*6), low, high, base+offset); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+			}
+		}
+		// A completed output is authoritative. Re-running a window must retain it.
+		if _, err := store.db.Exec(`INSERT INTO metrics
+			(resource_type,resource_id,metric_type,value,min_value,max_value,timestamp,tier)
+			VALUES ('vm','same-id','cpu',900,0,1000,?,'minute')`, base); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := func(store *Store) []string {
+		t.Helper()
+		rows, err := store.db.Query(`SELECT resource_type,resource_id,metric_type,
+			quote(value),quote(min_value),quote(max_value),timestamp,tier
+			FROM metrics ORDER BY resource_type,resource_id,tier,timestamp,metric_type`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var result []string
+		for rows.Next() {
+			var rt, id, metric, value, low, high, tier string
+			var ts int64
+			if err := rows.Scan(&rt, &id, &metric, &value, &low, &high, &ts, &tier); err != nil {
+				t.Fatal(err)
+			}
+			result = append(result, fmt.Sprint(rt, id, metric, value, low, high, ts, tier))
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	for _, stage := range []struct {
+		from, to Tier
+		bucket   int64
+		end      int64
+	}{{TierRaw, TierMinute, 60, base + 120}, {TierMinute, TierHourly, 3600, base + 3600}, {TierHourly, TierDaily, 86400, base + 86400}} {
+		for repeat := 0; repeat < 2; repeat++ {
+			for _, store := range stores {
+				if !store.rollupTierWindow(stage.from, stage.to, stage.bucket, base, stage.end) {
+					t.Fatalf("%s -> %s rollup failed", stage.from, stage.to)
+				}
+			}
+			if old, current := read(stores[0]), read(stores[1]); !reflect.DeepEqual(old, current) {
+				t.Fatalf("%s -> %s changed nullable bounds, identity, bucket edges or idempotence\nlegacy=%v\nclustered=%v", stage.from, stage.to, old, current)
+			}
+		}
+	}
+}
+
 func TestClusteredMetricsFreshAndRestart(t *testing.T) {
 	cfg := DefaultConfig(t.TempDir())
 	for i := 0; i < 2; i++ {

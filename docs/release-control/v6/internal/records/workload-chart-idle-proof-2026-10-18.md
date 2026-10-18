@@ -117,3 +117,79 @@ benchmark reported 111.005964 ms/op, 22,262,176 B/op and 508,181 allocs/op on th
 shared AMD Ryzen worker. That timing is retained without treating it as a
 90 ms SLO proof. Status and contract audits passed; the new explicitly routed
 test must be staged before the registry audit can recognize its tracked path.
+
+## First paired CI result and rollup correction
+
+[Run 39174382045](https://github.com/rcourtman/Pulse/actions/runs/39174382045)
+compared baseline `ed4a2c6b54ee1d139d5f198950c53b403596c17c` with PR head
+`5c37e620b45b50426c159a8a68af8e7bea04896e` through synthetic merge
+`1b5a54e8a050217d84ae5ea0ddb64058840a5f63` (tree
+`c7ecd028d86d4fafc8854f05182048e1f2bc2163`). All nine required source checks
+passed. Source landing was paused after the optional paired benchmark exposed
+a related production regression.
+
+Ten paired 100 ms samples measured the four-hour cold chart at 124.37 ms
+versus 83.75 ms, a 32.66% improvement (p < 0.001). Allocation volume remained
+21.47 MiB and about 508,200 allocations per request. The warm handler and HTTP
+transfer comparisons were not statistically significant. The same comparison
+flagged `RollupTierBatched` at 3.919 versus 4.899 ms (+25.03%) and its 500-node
+counterpart at 115.8 versus 145.7 ms (+25.78%), both p < 0.001. These are real
+same-source production paths, not the earlier unchanged history-filter
+benchmark signal. Artifact
+[12154581287](https://github.com/rcourtman/Pulse/actions/runs/39174382045/artifacts/12154581287)
+has GitHub digest
+`5f9c9eeb9cfe3d3e67d07e5d50245f15dc1df19a937639e4d58b90227ae2c56c`.
+
+The separate hosted strict job measured p50 84.827550 ms, p95 119.864148 ms and
+p99 124.118998 ms. It failed both the explicit 90 ms assertion and capacity
+validation: four proof intervals included a process named `provjobd4100855`
+using 12.69% to 25.31% of total CPU. No matching process source was found in
+the chart proof, its tests or reviewed runner scripts; its origin is not
+established. The runner exposed four AMD EPYC 7763 CPUs, with GOMAXPROCS=2 and
+real Actions identity. Admission and after samples were quiet; the interfering
+intervals remain retained. Fixed executable SHA-256:
+`f2d2dc6f86bd9e0a064d52d61df377bb4d3d71d0ac148c3e8ec18c48585a1085`.
+Artifact
+[12153956818](https://github.com/rcourtman/Pulse/actions/runs/39174382045/artifacts/12153956818)
+has GitHub digest
+`7ae238c3982119d122f1eb1a5b3c67c7059894bd61b2e1ecd602b43b2ad82b1a`.
+Neither the faster cold benchmark nor this invalid-capacity SLO run establishes
+the idle-worker 90 ms budget.
+
+A fixed-executable native rollup profile attributed 34.09% cumulative CPU to
+`BtreeIndexMoveto` and 17.18% to text comparisons in the aggregate sorter.
+The old rollup scanned the tier/time secondary index, then sought the wider
+composite primary tree once for every value. Clustered rollups now discover
+only the resource identities in the source window through that covering
+index, then read each resource's contiguous primary range. A query-local
+integer resource number reduces repeated identity-string group comparisons.
+It never changes persisted resource identity. The legacy aggregate remains
+in use while the physical table is rowid-based. No extra index, cached data,
+changed bucket limit or wider write budget is introduced.
+
+Two retained native SQL probes compared the original aggregate, primary-order
+grouping, resource ranges and integer resource grouping. Every variant
+returned the same 4,000 rows from 40,000 source points on both schemas, digest
+`eb61ee4816ff653ad69d7415d28fd234f04496a1c257bc4aad3ad31be8c1e288`.
+In eight alternating rounds of the second probe, the clustered original and
+integer-grouped medians were 161.180 and 103.572 ms. The legacy original median
+was 123.433 ms. Shared-worker timing is diagnostic only; the retained paired
+CI comparison must establish whether the rollup regression is removed.
+Both temporary probes were hash-checked and moved outside the package before
+compiling the revised production test executable.
+
+The revised fixed executable passed targeted rollup tests, the full metrics
+suite and the rollup race suite (3.866 s). Its SHA-256 is
+`b439f1c36464ad14f6ea1392b31dbb83ced8f66948af3c06a504bd24856e2867`;
+five-file source hashes are retained in `clustered-rollup/source.sha256`.
+Tests compare legacy and clustered aggregates across three resource types,
+reused resource names, three metrics, all rollup tiers, nullable/zero bounds,
+window edges and authoritative pre-existing outputs. The query-plan guard
+requires covering time-window discovery and a primary-key resource/time range.
+
+Ten native 100 ms samples per benchmark gave revised/previous clustered
+medians of 4.735637/5.7315405 ms for the small rollup and
+118.3057575/165.052439 ms for the 500-node rollup. These sequential diagnostics
+are retained without substituting for the revised paired CI result or the
+still-pending strict idle-worker chart proof. The previous executable and
+initial adverse CI results are preserved.

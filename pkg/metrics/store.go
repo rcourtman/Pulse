@@ -2359,7 +2359,7 @@ func (s *Store) rollupTierWindow(fromTier, toTier Tier, bucketSecs, startTs, end
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	_, err = tx.Exec(`
+	query := `
 		INSERT OR IGNORE INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
 		SELECT
 			resource_type,
@@ -2373,7 +2373,13 @@ func (s *Store) rollupTierWindow(fromTier, toTier Tier, bucketSecs, startTs, end
 		FROM metrics
 		WHERE tier = ? AND timestamp >= ? AND timestamp < ?
 		GROUP BY resource_type, resource_id, metric_type, bucket_ts
-	`, bucketSecs, bucketSecs, string(toTier), string(fromTier), startTs, endTs)
+	`
+	params := []interface{}{bucketSecs, bucketSecs, string(toTier), string(fromTier), startTs, endTs}
+	if s.clusteredMetrics.Load() {
+		query = clusteredMetricsRollupSQL
+		params = append([]interface{}{string(fromTier), startTs, endTs}, params...)
+	}
+	_, err = tx.Exec(query, params...)
 	if err != nil {
 		log.Warn().Err(err).
 			Str("from", string(fromTier)).
