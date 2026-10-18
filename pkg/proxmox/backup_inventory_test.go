@@ -39,8 +39,9 @@ func TestBackupTaskInventoryScopesOfflineNodes(t *testing.T) {
 			require.Equal(t, "a", result.Tasks[0].Node)
 			require.Equal(t, 1, requests)
 			tasks, err := c.GetBackupTasks(context.Background())
-			require.Error(t, err, "legacy all-or-nothing callers cannot erase an unread scope")
-			require.Nil(t, tasks)
+			require.NoError(t, err, "the compatibility helper retains its readable-node view")
+			require.Len(t, tasks, 1)
+			require.Equal(t, "a", tasks[0].Node)
 		})
 	}
 }

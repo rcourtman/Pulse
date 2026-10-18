@@ -1394,15 +1394,13 @@ func (c *Client) GetNodeTasks(ctx context.Context, node string) ([]Task, error) 
 // busy nodes; filtering server-side keeps the window useful.
 const backupTaskListLimit = 200
 
-// GetBackupTasks returns a complete live inventory. Callers which can retain
-// unread node scopes separately may use GetBackupTaskInventory instead.
+// GetBackupTasks preserves the compatibility view of readable online nodes.
+// It supplies no replacement authority for skipped nodes. Live state consumers
+// use GetBackupTaskInventory to retain unread scopes separately.
 func (c *Client) GetBackupTasks(ctx context.Context) ([]Task, error) {
 	inventory, err := c.GetBackupTaskInventory(ctx)
 	if err != nil {
 		return nil, err
-	}
-	if len(inventory.OfflineNodes) > 0 {
-		return nil, fmt.Errorf("Proxmox backup task inventory includes unread offline nodes")
 	}
 	return inventory.Tasks, nil
 }
