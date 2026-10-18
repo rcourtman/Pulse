@@ -600,7 +600,10 @@ function taskLabel(task: BackupTask): string {
   if (taskStatusErrorConflict(task)) return 'Unknown';
   const normalized = normalizeKey(task.status);
   if (normalized === 'ok' || normalized === 'success' || normalized === 'completed') return 'OK';
-  if (normalized === 'failed' || normalized === 'error') return 'Failed';
+  // PVE passes its exit status through, commonly with the reason after ERROR:.
+  // Only that explicit prefix is a failure; arbitrary status text stays literal.
+  if (normalized === 'failed' || normalized === 'error' || /^error\s*:/.test(normalized))
+    return 'Failed';
   if (normalized === 'warning') return 'Warning';
   if (normalized === 'running') return 'Running';
   return task.status || 'Unknown';
@@ -914,6 +917,7 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     row.workload.instance,
     getWorkloadRecoveryPostureLabel(row.posture),
     row.latestTask?.label,
+    row.latestTask?.status,
     row.latestTask?.instance,
     row.latestTask?.node,
     row.latestTask?.error,

@@ -52,6 +52,54 @@ afterEach(() => {
 });
 
 describe('expanded Coverage backup job evidence', () => {
+  it.each([320, 640, 1365])(
+    'identifies a raw provider ERROR as Failed and retains its full status at %i px',
+    (width) => {
+      const status = 'ERROR: archive unavailable\n' + 'repository-path-'.repeat(20);
+      const { toggle, setInventory } = mount([identityTask({ status })], width);
+      fireEvent.click(toggle);
+      toggle.focus();
+      const detail = screen.getByRole('region', { name: 'Latest backup job' });
+      const result = within(detail).getByText('Result').nextElementSibling;
+      expect(result).toHaveTextContent(/^Failed$/);
+      expect(result).toHaveClass('text-red-600');
+      const reported = within(detail).getByText('Reported status').nextElementSibling;
+      expect(reported?.textContent).toBe(status);
+      expect(reported).toHaveClass('whitespace-pre-wrap', 'wrap-anywhere');
+      expect(within(detail).queryByText('Reported error')).not.toBeInTheDocument();
+      setInventory([identityTask({ status: 'OK' })]);
+      expect(result).toHaveTextContent(/^OK$/);
+      expect(result).not.toHaveClass('text-red-600');
+      expect(within(detail).queryByText('Reported status')).not.toBeInTheDocument();
+      expect(detail).not.toHaveTextContent('archive unavailable');
+      expect(toggle).toHaveFocus();
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    },
+  );
+
+  it('keeps a normalised raw failure literal, including markup-shaped provider text', () => {
+    const status = 'ERROR: <img src="/unexpected" onerror="unsafe()"><script>unsafe()</script>';
+    const { toggle } = mount([identityTask({ status })]);
+    fireEvent.click(toggle);
+    const detail = screen.getByRole('region', { name: 'Latest backup job' });
+    expect(within(detail).getByText('Result').nextElementSibling).toHaveTextContent(/^Failed$/);
+    expect(within(detail).getByText(status)).toBeVisible();
+    expect(detail.querySelector('img, script')).toBeNull();
+  });
+
+  it('does not replace a separately reported error with the raw provider status', () => {
+    const status = 'ERROR: task failed';
+    const { toggle } = mount([identityTask({ status, error: 'archive unavailable' })]);
+    fireEvent.click(toggle);
+    const detail = screen.getByRole('region', { name: 'Latest backup job' });
+    expect(within(detail).getByText('Reported status').nextElementSibling).toHaveTextContent(
+      status,
+    );
+    expect(within(detail).getByText('Reported error').nextElementSibling).toHaveTextContent(
+      'archive unavailable',
+    );
+  });
+
   it.each([320, 640, 1365])('exposes the selected job and full error at %i px', (width) => {
     const { toggle } = mount(
       [

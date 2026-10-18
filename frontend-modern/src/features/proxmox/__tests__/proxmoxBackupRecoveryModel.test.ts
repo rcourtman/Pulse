@@ -608,6 +608,59 @@ describe('proxmoxBackupRecoveryModel', () => {
   });
 });
 
+describe('raw PVE backup failure status', () => {
+  it.each(['ERROR: archive unavailable', ' error : archive unavailable\nrepository path '])(
+    'makes %j findable as Failed without dropping the provider status',
+    (status) => {
+      const { coverageRows } = buildProxmoxBackupRecoveryModel({
+        workloads: [workload({})],
+        pbsBackups: [],
+        archives: [],
+        snapshots: [],
+        tasks: [task({ status, error: undefined })],
+        nowMs: Date.parse('2026-05-26T08:00:00Z'),
+      });
+      const row = coverageRows[0];
+      expect(row.latestTask?.label).toBe('Failed');
+      expect(row.latestTask?.status).toBe(status);
+      expect(row.latestTask?.error).toBeUndefined();
+      expect(coverageRowMatchesSearch(row, 'failed')).toBe(true);
+      expect(coverageRowMatchesSearch(row, 'archive unavailable')).toBe(true);
+      expect(coverageRowMatchesSearch(row, 'error :')).toBe(status.includes('error :'));
+      expect(row.posture).toBe('unknown'); // a failed job is not a restore verdict
+    },
+  );
+
+  it.each(['ERROR-free', 'no error: reported', 'stopped', 'WARNINGS: 1'])(
+    'does not infer failure from an unrecognised status %j',
+    (status) => {
+      const { coverageRows } = buildProxmoxBackupRecoveryModel({
+        workloads: [workload({})],
+        pbsBackups: [],
+        archives: [],
+        snapshots: [],
+        tasks: [task({ status })],
+        nowMs: Date.parse('2026-05-26T08:00:00Z'),
+      });
+      expect(coverageRows[0].latestTask?.label).toBe(status);
+    },
+  );
+
+  it.each([false, true])('does not hide a tied OK/ERROR conflict (reversed=%s)', (reversed) => {
+    const tasks = [task(), task({ id: 'failed', status: 'ERROR: archive unavailable' })];
+    const { coverageRows } = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [],
+      archives: [],
+      snapshots: [],
+      tasks: reversed ? tasks.reverse() : tasks,
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+    expect(coverageRows[0].taskOutcomeConflict).toBe(true);
+    expect(coverageRows[0].latestTask).toBeUndefined();
+  });
+});
+
 describe('backup-date-evidence model', () => {
   const nowMs = Date.parse('2026-10-04T12:00:00Z');
   const invalidDates = ['', 'not-a-date', '0001-01-01T00:00:00Z', '2026-10-04T12:00:01Z'];
